@@ -1,0 +1,14 @@
+import type { NextApiRequest } from "next";
+import { renderTrpcPanel } from "trpc-ui";
+import { appRouter } from "../../../server/api/root";
+
+async function handler(_: NextApiRequest) {
+  return new Response(
+    renderTrpcPanel(appRouter, {
+      url: "http://localhost:3000/api/trpc",
+      transformer: "superjson",
+    }),
+    { status: 200, headers: { "Content-Type": "text/html" } },
+  );
+}
+export { handler as GET, handler as POST };
