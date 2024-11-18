@@ -1,7 +1,6 @@
 "use client";
 
 import { api } from "~/trpc/react";
-// import JsonRenderer from "./json";
 
 export function RecipeList() {
   const [recipes] = api.recipe.list.useSuspenseQuery();
