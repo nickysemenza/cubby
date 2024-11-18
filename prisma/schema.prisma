@@ -44,13 +44,12 @@ model RecipeSection {
 }
 
 model Ingredient {
-    id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name              String
-    createdAt         DateTime                  @default(now())
-    updatedAt         DateTime                  @default(now()) @updatedAt
-    deletedAt         DateTime?
-    // RecipeSectionIngredient RecipeSectionIngredient[]
-    sectionIngredient RecipeSectionIngredient[]
+    id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name                    String
+    createdAt               DateTime                  @default(now())
+    updatedAt               DateTime                  @default(now()) @updatedAt
+    deletedAt               DateTime?
+    appearsInRecipeSections RecipeSectionIngredient[]
 }
 
 model RecipeSectionIngredient {
@@ -70,4 +69,32 @@ model RecipeSectionIngredient {
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
+}
+
+model InventoryItem {
+    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name      String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    location   Location @relation("LocationToItem", fields: [locationId], references: [id])
+    locationId String   @db.Uuid
+
+    @@index([name])
+}
+
+model Location {
+    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name      String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+
+    parent   Location?       @relation("LocationToLocation", fields: [parentId], references: [id])
+    parentId String?         @db.Uuid
+    children Location[]      @relation("LocationToLocation")
+    items    InventoryItem[] @relation("LocationToItem")
+
+    @@index([name])
 }
