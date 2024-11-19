@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { z } from "zod";
 
 import { env } from "~/env";
 
@@ -15,3 +16,8 @@ const globalForPrisma = globalThis as unknown as {
 export const db = globalForPrisma.prisma ?? createPrismaClient();
 
 if (env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+
+export const dbTimestamps = z.object({
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});

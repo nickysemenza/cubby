@@ -6,6 +6,10 @@ generator client {
     previewFeatures = ["postgresqlExtensions"]
 }
 
+generator json {
+    provider = "prisma-json-types-generator"
+}
+
 datasource db {
     provider   = "postgresql"
     url        = env("DATABASE_URL")
@@ -13,43 +17,25 @@ datasource db {
     extensions = [pgcrypto]
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    @@index([name])
-}
-
 model Recipe {
-    id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name              String
-    createdAt         DateTime                  @default(now())
-    updatedAt         DateTime                  @default(now()) @updatedAt
-    deletedAt         DateTime?
-    sections          RecipeSection[]
-    sectionIngredient RecipeSectionIngredient[]
+    id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name      String
+    createdAt DateTime        @default(now())
+    updatedAt DateTime        @default(now()) @updatedAt
+    deletedAt DateTime?
+    sections  RecipeSection[]
+    Item      Item[]
 }
 
 model RecipeSection {
-    id                String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    recipe            Recipe                    @relation(fields: [recipeId], references: [id])
-    recipeId          String                    @db.Uuid
-    name              String?
-    createdAt         DateTime                  @default(now())
-    updatedAt         DateTime                  @default(now()) @updatedAt
-    deletedAt         DateTime?
-    sectionIngredient RecipeSectionIngredient[]
-}
-
-model Ingredient {
-    id                      String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name                    String
-    createdAt               DateTime                  @default(now())
-    updatedAt               DateTime                  @default(now()) @updatedAt
-    deletedAt               DateTime?
-    appearsInRecipeSections RecipeSectionIngredient[]
+    id          String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    recipe      Recipe                    @relation(fields: [recipeId], references: [id])
+    recipeId    String                    @db.Uuid
+    name        String?
+    createdAt   DateTime                  @default(now())
+    updatedAt   DateTime                  @default(now()) @updatedAt
+    deletedAt   DateTime?
+    ingredients RecipeSectionIngredient[]
 }
 
 model RecipeSectionIngredient {
@@ -57,31 +43,58 @@ model RecipeSectionIngredient {
     recipeSection   RecipeSection @relation(fields: [recipeSectionId], references: [id])
     recipeSectionId String        @db.Uuid
 
-    // one
-    recipe       Recipe?     @relation(fields: [recipeId], references: [id])
-    recipeId     String?     @db.Uuid
-    // or the other
-    ingredient   Ingredient? @relation(fields: [ingredientId], references: [id])
-    ingredientId String?     @db.Uuid
+    ingredient   Item   @relation(fields: [ingredientId], references: [id])
+    ingredientId String @db.Uuid
 
-    // quantity        Float
-    // unit            String
+    /// [Amount]
+    amounts   Json[]
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 }
 
-model InventoryItem {
+model Item {
+    id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name          String
+    type          ItemType
+    createdAt     DateTime        @default(now())
+    updatedAt     DateTime        @updatedAt
+    deletedAt     DateTime?
+    InventoryItem InventoryItem[]
+    Product       Product?        @relation(fields: [productId], references: [id])
+    productId     String?         @db.Uuid
+
+    Recipe                  Recipe?                   @relation(fields: [recipeId], references: [id])
+    recipeId                String?                   @db.Uuid
+    RecipeSectionIngredient RecipeSectionIngredient[]
+
+    @@unique([name, type])
+}
+
+model Product {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     name      String
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    deletedAt DateTime?
+    Item      Item[]
+}
+
+model InventoryItem {
+    id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    // name      String
+
+    /// [Amount]
+    amount Json
+    Item   Item   @relation(fields: [itemId], references: [id])
+    itemId String @db.Uuid
+
     createdAt DateTime  @default(now())
     updatedAt DateTime  @updatedAt
     deletedAt DateTime?
 
     location   Location @relation("LocationToItem", fields: [locationId], references: [id])
     locationId String   @db.Uuid
-
-    @@index([name])
 }
 
 model Location {
@@ -97,4 +110,10 @@ model Location {
     items    InventoryItem[] @relation("LocationToItem")
 
     @@index([name])
+}
+
+enum ItemType {
+    Ingredient
+    Recipe
+    Item
 }

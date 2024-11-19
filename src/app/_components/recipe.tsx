@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "~/trpc/react";
+import JsonRenderer from "./json";
 
 export function RecipeList() {
   const [recipes] = api.recipe.list.useSuspenseQuery();
@@ -16,7 +17,12 @@ export function RecipeList() {
                 {section.name}
                 <ul className="ml-4 list-inside list-disc">
                   {section.ingredients.map((ingredient) => (
-                    <li key={ingredient.id}>{ingredient.ingredient?.name}</li>
+                    <li key={ingredient.id}>
+                      <div>
+                        {ingredient.ingredient?.name}
+                        <JsonRenderer input={ingredient.amounts} />
+                      </div>
+                    </li>
                   ))}
                 </ul>
               </li>
