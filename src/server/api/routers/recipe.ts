@@ -43,7 +43,7 @@ const recipeOut = z
   })
   .merge(recipeTopLevel);
 
-type RecipeOut = z.infer<typeof recipeOut>;
+export type RecipeOut = z.infer<typeof recipeOut>;
 
 type RecipeDeepDB = Prisma.RecipeGetPayload<{
   include: {
@@ -105,6 +105,7 @@ const getRecipeByID = async (
 export const recipeRouter = createTRPCRouter({
   list: publicProcedure.output(z.array(recipeOut)).query(async ({ ctx }) => {
     const res = await ctx.db.recipe.findMany({
+      orderBy: { createdAt: "desc" },
       include: {
         sections: {
           include: {

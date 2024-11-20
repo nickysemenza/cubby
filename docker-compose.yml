@@ -18,3 +18,12 @@ services:
         "-c",
         "log_line_prefix=%t [%p]:[%l] user=%u, db=%d "
       ]
+  jaeger-all-in-one:
+    image: jaegertracing/all-in-one:latest
+    restart: always
+    ports:
+      - "16686:16686"
+      - "14268"
+      - "14250"
+      - "4318:4318"
+      - "4317:4317"
