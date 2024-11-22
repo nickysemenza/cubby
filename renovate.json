@@ -20,5 +20,5 @@
       "matchUpdateTypes": ["patch", "digest"],
       "enabled": false
     }
-  ],
+  ]
 }
