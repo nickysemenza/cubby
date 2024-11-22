@@ -3,10 +3,7 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 
 import { z } from "zod";
 import { type PrismaClient, type Prisma, Recipe } from "@prisma/client";
-import { insertRecipeFromCompact } from "~/server/compactrecipe";
 import { amount } from "~/codec/codec";
-import { parseCompactRecipe } from "~/codec/parser";
-import { exampleRecipesCompact } from "~/testdata/recipes";
 import {
   createPaginatedResponseSchema,
   dbTimestamps,
@@ -14,6 +11,8 @@ import {
   sortParams,
   buildTakeSkip,
 } from "./util";
+import { seedRealRecipes } from "~/testdata/seed";
+import { scrapeRecipe } from "./scraper";
 
 const ingredientOut = z
   .object({
@@ -35,11 +34,13 @@ const sectionIngredientOut = z
     amounts: z.array(amount),
   })
   .merge(dbTimestamps);
+export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 const recipeSectionOut = z
   .object({
     id: z.string().uuid(),
     name: z.string().nullable(),
     ingredients: z.array(sectionIngredientOut),
+    instructions: z.array(z.object({ instruction: z.string() })),
   })
   .merge(dbTimestamps);
 
@@ -81,16 +82,19 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
   return {
     ...restOfRecipe,
     sections: sections.map((section) => {
-      const { ingredients, ...restOfSection } = section;
+      const { ingredients, instructions, ...restOfSection } = section;
       return {
         ...restOfSection,
         ingredients: ingredients.map(secitonIngredienttoAPI),
+        instructions: instructions.map((instruction) => {
+          return { instruction: instruction.text };
+        }),
       };
     }),
   };
 };
 
-const getRecipeByID = async (
+export const getRecipeByID = async (
   id: string,
   prismaClient: PrismaClient,
 ): Promise<RecipeOut | null> => {
@@ -166,19 +170,13 @@ export const recipeRouter = createTRPCRouter({
       return res;
     }),
 
-  seed: publicProcedure.output(z.array(recipeOut)).mutation(async ({ ctx }) => {
-    const results = [];
-    for (const recipe of exampleRecipesCompact) {
-      const parsed = parseCompactRecipe(recipe);
-      console.log(parsed);
-      const id = await insertRecipeFromCompact(parsed, ctx.db);
-      const res = await getRecipeByID(id, ctx.db);
-
-      if (res === null) {
-        throw new Error("Recipe not found");
-      }
-      results.push(res);
-    }
-    return results;
+  seed: publicProcedure.mutation(async ({ ctx }) => {
+    await seedRealRecipes(ctx.db);
   }),
+  scrape: publicProcedure
+    .input(z.string().url())
+    .output(z.any())
+    .query(async ({ input }) => {
+      return await scrapeRecipe(input);
+    }),
 });

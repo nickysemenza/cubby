@@ -800,6 +800,20 @@
           "maxLength": null
         },
         {
+          "id": "public.RecipeSection.instructions",
+          "name": "instructions",
+          "columnName": "instructions",
+          "type": "jsonb[]",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
           "name": "Recipe",
           "type": "Recipe",
           "isRequired": true,

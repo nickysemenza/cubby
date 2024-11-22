@@ -10,7 +10,7 @@ import { api } from "~/trpc/react";
 import JsonRenderer from "../_components/json";
 import { JsonEditor } from "json-edit-react";
 
-import { useForm, SubmitHandler } from "react-hook-form";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { Input } from "@headlessui/react";
 
 export default function Page() {
@@ -40,7 +40,7 @@ type Inputs = {
   exampleRequired: string;
 };
 
-function WASMTest() {
+export function WASMTest() {
   const {
     register,
     handleSubmit,

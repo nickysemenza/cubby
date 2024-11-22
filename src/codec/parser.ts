@@ -10,7 +10,7 @@ export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
         return {
           name: parsed.name,
           amounts: parsed.amounts.map((amount) => ({
-            quantity: amount.value,
+            value: amount.value,
             unit: amount.unit,
           })),
         };

@@ -1,10 +1,6 @@
 import { createSeedClient } from "@snaplet/seed";
 import { copycat } from "@snaplet/copycat";
 import { faker } from "@faker-js/faker";
-import { Prisma, PrismaClient } from "@prisma/client";
-import { exampleRecipesCompact } from "~/testdata/recipes";
-import { parseCompactRecipe } from "~/codec/parser";
-import { insertRecipeFromCompact } from "~/server/compactrecipe";
 
 const main = async () => {
   const seed = await createSeedClient();
@@ -30,7 +26,7 @@ const main = async () => {
     for (const rs of recipeSection) {
       for (let i = 0; i < 3; i++) {
         const amount: PrismaJson.Amount = {
-          quantity: faker.number.int({ min: 1, max: 10 }),
+          value: faker.number.int({ min: 1, max: 10 }),
           unit: faker.helpers.arrayElement([
             "cup",
             "tbsp",

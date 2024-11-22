@@ -21,7 +21,8 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "wasm": "cd recipebridge && wasm-pack build"
+    "wasm": "cd recipebridge && wasm-pack build",
+    "regenerate": "npm run db:rebuild && npm run wasm"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",

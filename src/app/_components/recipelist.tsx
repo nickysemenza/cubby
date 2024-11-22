@@ -1,7 +1,6 @@
 "use client";
 
 import { api } from "~/trpc/react";
-import JsonRenderer from "./json";
 import {
   type ColumnFiltersState,
   createColumnHelper,
@@ -28,7 +27,7 @@ export function RecipeList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const sortParams: SortParams = {
     direction: sorting[0]?.desc ? "desc" : "asc",
-    orderBy: (sorting[0]?.id ?? initialSort) as SortParams["orderBy"],
+    orderBy: sorting[0]?.id ?? initialSort,
   };
   const [pagination, setPagination] = useState({
     pageIndex: 0, //initial page index
@@ -57,26 +56,26 @@ export function RecipeList() {
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
-    columnHelper.display({
-      id: "sections",
-      cell: (info) => {
-        return info.row.original.sections.map((section) => (
-          <li key={section.id}>
-            {section.name}
-            <ul className="ml-4 list-inside list-disc">
-              {section.ingredients.map((ingredient) => (
-                <li key={ingredient.id}>
-                  <div>
-                    {ingredient.ingredient?.name}
-                    <JsonRenderer input={ingredient.amounts} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </li>
-        ));
-      },
-    }),
+    // columnHelper.display({
+    //   id: "sections",
+    //   cell: (info) => {
+    //     return info.row.original.sections.map((section) => (
+    //       <li key={section.id}>
+    //         {section.name}
+    //         <ul className="ml-4 list-inside list-disc">
+    //           {section.ingredients.map((ingredient) => (
+    //             <li key={ingredient.id}>
+    //               <div>
+    //                 {ingredient.ingredient?.name}
+    //                 <JsonRenderer input={ingredient.amounts} />
+    //               </div>
+    //             </li>
+    //           ))}
+    //         </ul>
+    //       </li>
+    //     ));
+    //   },
+    // }),
 
     columnHelper.accessor("createdAt", {
       cell: (info) => dayjs(info.getValue()).fromNow(),

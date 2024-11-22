@@ -1,5 +1,6 @@
 import { api } from "~/trpc/server";
 import RecipeDetail from "~/app/_components/RecipeDetail";
+import { NYTView } from "~/app/_components/recipe/NYTView";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
@@ -16,6 +17,7 @@ export default async function Page({ params }: PageParams) {
   console.log({ recipe });
   return (
     <div>
+      <NYTView recipe={recipe} />
       <RecipeDetail recipe={recipe} />
     </div>
   );

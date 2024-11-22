@@ -32,14 +32,16 @@ model Recipe {
 }
 
 model RecipeSection {
-    id          String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    recipe      Recipe                    @relation(fields: [recipeId], references: [id])
-    recipeId    String                    @db.Uuid
-    name        String?
-    createdAt   DateTime                  @default(now())
-    updatedAt   DateTime                  @default(now()) @updatedAt
-    deletedAt   DateTime?
-    ingredients RecipeSectionIngredient[]
+    id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    recipe       Recipe                    @relation(fields: [recipeId], references: [id])
+    recipeId     String                    @db.Uuid
+    name         String?
+    createdAt    DateTime                  @default(now())
+    updatedAt    DateTime                  @default(now()) @updatedAt
+    deletedAt    DateTime?
+    ingredients  RecipeSectionIngredient[]
+    /// [Instruction]  
+    instructions Json[]
 }
 
 model RecipeSectionIngredient {

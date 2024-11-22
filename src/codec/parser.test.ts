@@ -16,8 +16,8 @@ test("parsing works", () => {
     sections: [
       {
         ingredients: [
-          { name: "flour", amounts: [{ quantity: 1, unit: "Cup" }] },
-          { name: "milk", amounts: [{ quantity: 1, unit: "Cup" }] },
+          { name: "flour", amounts: [{ value: 1, unit: "Cup" }] },
+          { name: "milk", amounts: [{ value: 1, unit: "Cup" }] },
         ],
         instructions: ["Mix ingredients", "Cook on griddle"],
       },

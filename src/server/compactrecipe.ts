@@ -15,6 +15,9 @@ export const insertRecipeFromCompact = async (
         data: {
           recipeId: newRecipe.id,
           name: null,
+          instructions: section.instructions.map((text) => {
+            return { text };
+          }),
         },
       });
 

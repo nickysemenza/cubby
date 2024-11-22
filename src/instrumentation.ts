@@ -4,7 +4,7 @@ import { PrismaInstrumentation } from "@prisma/instrumentation";
 export function register() {
   console.log("foo");
   registerOTel({
-    serviceName: "next-app",
+    serviceName: "recipehub",
     instrumentations: [new PrismaInstrumentation(), new FetchInstrumentation()],
   });
 }
