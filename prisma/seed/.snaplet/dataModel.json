@@ -1,12 +1,12 @@
 {
   "models": {
-    "Ingredient": {
-      "id": "public.Ingredient",
+    "InventoryItem": {
+      "id": "public.InventoryItem",
       "schemaName": "public",
-      "tableName": "Ingredient",
+      "tableName": "InventoryItem",
       "fields": [
         {
-          "id": "public.Ingredient.id",
+          "id": "public.InventoryItem.id",
           "name": "id",
           "columnName": "id",
           "type": "uuid",
@@ -20,10 +20,10 @@
           "maxLength": null
         },
         {
-          "id": "public.Ingredient.name",
-          "name": "name",
-          "columnName": "name",
-          "type": "text",
+          "id": "public.InventoryItem.amount",
+          "name": "amount",
+          "columnName": "amount",
+          "type": "jsonb",
           "isRequired": true,
           "kind": "scalar",
           "isList": false,
@@ -34,7 +34,21 @@
           "maxLength": null
         },
         {
-          "id": "public.Ingredient.createdAt",
+          "id": "public.InventoryItem.itemId",
+          "name": "itemId",
+          "columnName": "itemId",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.InventoryItem.createdAt",
           "name": "createdAt",
           "columnName": "createdAt",
           "type": "timestamp",
@@ -48,7 +62,7 @@
           "maxLength": null
         },
         {
-          "id": "public.Ingredient.updatedAt",
+          "id": "public.InventoryItem.updatedAt",
           "name": "updatedAt",
           "columnName": "updatedAt",
           "type": "timestamp",
@@ -57,12 +71,12 @@
           "isList": false,
           "isGenerated": false,
           "sequence": false,
-          "hasDefaultValue": true,
+          "hasDefaultValue": false,
           "isId": false,
           "maxLength": null
         },
         {
-          "id": "public.Ingredient.deletedAt",
+          "id": "public.InventoryItem.deletedAt",
           "name": "deletedAt",
           "columnName": "deletedAt",
           "type": "timestamp",
@@ -76,14 +90,50 @@
           "maxLength": null
         },
         {
-          "name": "RecipeSectionIngredient",
-          "type": "RecipeSectionIngredient",
-          "isRequired": false,
+          "id": "public.InventoryItem.locationId",
+          "name": "locationId",
+          "columnName": "locationId",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "Item",
+          "type": "Item",
+          "isRequired": true,
           "kind": "object",
-          "relationName": "RecipeSectionIngredientToIngredient",
-          "relationFromFields": [],
-          "relationToFields": [],
-          "isList": true,
+          "relationName": "InventoryItemToItem",
+          "relationFromFields": [
+            "itemId"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "Location",
+          "type": "Location",
+          "isRequired": true,
+          "kind": "object",
+          "relationName": "InventoryItemToLocation",
+          "relationFromFields": [
+            "locationId"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
           "isId": false,
           "isGenerated": false,
           "sequence": false,
@@ -92,7 +142,7 @@
       ],
       "uniqueConstraints": [
         {
-          "name": "Ingredient_pkey",
+          "name": "InventoryItem_pkey",
           "fields": [
             "id"
           ],
@@ -100,31 +150,27 @@
         }
       ]
     },
-    "Post": {
-      "id": "public.Post",
+    "Item": {
+      "id": "public.Item",
       "schemaName": "public",
-      "tableName": "Post",
+      "tableName": "Item",
       "fields": [
         {
-          "id": "public.Post.id",
+          "id": "public.Item.id",
           "name": "id",
           "columnName": "id",
-          "type": "int4",
+          "type": "uuid",
           "isRequired": true,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
-          "sequence": {
-            "identifier": "\"public\".\"Post_id_seq\"",
-            "increment": 1,
-            "start": 1
-          },
+          "sequence": false,
           "hasDefaultValue": true,
           "isId": true,
           "maxLength": null
         },
         {
-          "id": "public.Post.name",
+          "id": "public.Item.name",
           "name": "name",
           "columnName": "name",
           "type": "text",
@@ -138,7 +184,21 @@
           "maxLength": null
         },
         {
-          "id": "public.Post.createdAt",
+          "id": "public.Item.type",
+          "name": "type",
+          "columnName": "type",
+          "type": "ItemType",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Item.createdAt",
           "name": "createdAt",
           "columnName": "createdAt",
           "type": "timestamp",
@@ -152,7 +212,7 @@
           "maxLength": null
         },
         {
-          "id": "public.Post.updatedAt",
+          "id": "public.Item.updatedAt",
           "name": "updatedAt",
           "columnName": "updatedAt",
           "type": "timestamp",
@@ -164,11 +224,371 @@
           "hasDefaultValue": false,
           "isId": false,
           "maxLength": null
+        },
+        {
+          "id": "public.Item.deletedAt",
+          "name": "deletedAt",
+          "columnName": "deletedAt",
+          "type": "timestamp",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Item.productId",
+          "name": "productId",
+          "columnName": "productId",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Item.recipeId",
+          "name": "recipeId",
+          "columnName": "recipeId",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "Product",
+          "type": "Product",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ItemToProduct",
+          "relationFromFields": [
+            "productId"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "Recipe",
+          "type": "Recipe",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ItemToRecipe",
+          "relationFromFields": [
+            "recipeId"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "InventoryItem",
+          "type": "InventoryItem",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "InventoryItemToItem",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "RecipeSectionIngredient",
+          "type": "RecipeSectionIngredient",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "RecipeSectionIngredientToItem",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
         }
       ],
       "uniqueConstraints": [
         {
-          "name": "Post_pkey",
+          "name": "Item_pkey",
+          "fields": [
+            "id"
+          ],
+          "nullNotDistinct": false
+        },
+        {
+          "name": "Item_name_type_key",
+          "fields": [
+            "name",
+            "type"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "Location": {
+      "id": "public.Location",
+      "schemaName": "public",
+      "tableName": "Location",
+      "fields": [
+        {
+          "id": "public.Location.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.Location.name",
+          "name": "name",
+          "columnName": "name",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Location.createdAt",
+          "name": "createdAt",
+          "columnName": "createdAt",
+          "type": "timestamp",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Location.updatedAt",
+          "name": "updatedAt",
+          "columnName": "updatedAt",
+          "type": "timestamp",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Location.deletedAt",
+          "name": "deletedAt",
+          "columnName": "deletedAt",
+          "type": "timestamp",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Location.parentId",
+          "name": "parentId",
+          "columnName": "parentId",
+          "type": "uuid",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "Location",
+          "type": "Location",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "LocationToLocation",
+          "relationFromFields": [
+            "parentId"
+          ],
+          "relationToFields": [
+            "id"
+          ],
+          "isList": false,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "InventoryItem",
+          "type": "InventoryItem",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "InventoryItemToLocation",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        },
+        {
+          "name": "Location",
+          "type": "Location",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "LocationToLocation",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "Location_pkey",
+          "fields": [
+            "id"
+          ],
+          "nullNotDistinct": false
+        }
+      ]
+    },
+    "Product": {
+      "id": "public.Product",
+      "schemaName": "public",
+      "tableName": "Product",
+      "fields": [
+        {
+          "id": "public.Product.id",
+          "name": "id",
+          "columnName": "id",
+          "type": "uuid",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": true,
+          "maxLength": null
+        },
+        {
+          "id": "public.Product.name",
+          "name": "name",
+          "columnName": "name",
+          "type": "text",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Product.createdAt",
+          "name": "createdAt",
+          "columnName": "createdAt",
+          "type": "timestamp",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": true,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Product.updatedAt",
+          "name": "updatedAt",
+          "columnName": "updatedAt",
+          "type": "timestamp",
+          "isRequired": true,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "id": "public.Product.deletedAt",
+          "name": "deletedAt",
+          "columnName": "deletedAt",
+          "type": "timestamp",
+          "isRequired": false,
+          "kind": "scalar",
+          "isList": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
+        },
+        {
+          "name": "Item",
+          "type": "Item",
+          "isRequired": false,
+          "kind": "object",
+          "relationName": "ItemToProduct",
+          "relationFromFields": [],
+          "relationToFields": [],
+          "isList": true,
+          "isId": false,
+          "isGenerated": false,
+          "sequence": false,
+          "hasDefaultValue": false
+        }
+      ],
+      "uniqueConstraints": [
+        {
+          "name": "Product_pkey",
           "fields": [
             "id"
           ],
@@ -252,11 +672,11 @@
           "maxLength": null
         },
         {
-          "name": "RecipeSection",
-          "type": "RecipeSection",
+          "name": "Item",
+          "type": "Item",
           "isRequired": false,
           "kind": "object",
-          "relationName": "RecipeSectionToRecipe",
+          "relationName": "ItemToRecipe",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -266,11 +686,11 @@
           "hasDefaultValue": false
         },
         {
-          "name": "RecipeSectionIngredient",
-          "type": "RecipeSectionIngredient",
+          "name": "RecipeSection",
+          "type": "RecipeSection",
           "isRequired": false,
           "kind": "object",
-          "relationName": "RecipeSectionIngredientToRecipe",
+          "relationName": "RecipeSectionToRecipe",
           "relationFromFields": [],
           "relationToFields": [],
           "isList": true,
@@ -456,25 +876,11 @@
           "maxLength": null
         },
         {
-          "id": "public.RecipeSectionIngredient.recipeId",
-          "name": "recipeId",
-          "columnName": "recipeId",
-          "type": "uuid",
-          "isRequired": false,
-          "kind": "scalar",
-          "isList": false,
-          "isGenerated": false,
-          "sequence": false,
-          "hasDefaultValue": false,
-          "isId": false,
-          "maxLength": null
-        },
-        {
           "id": "public.RecipeSectionIngredient.ingredientId",
           "name": "ingredientId",
           "columnName": "ingredientId",
           "type": "uuid",
-          "isRequired": false,
+          "isRequired": true,
           "kind": "scalar",
           "isList": false,
           "isGenerated": false,
@@ -526,31 +932,27 @@
           "maxLength": null
         },
         {
-          "name": "Ingredient",
-          "type": "Ingredient",
+          "id": "public.RecipeSectionIngredient.amounts",
+          "name": "amounts",
+          "columnName": "amounts",
+          "type": "jsonb[]",
           "isRequired": false,
-          "kind": "object",
-          "relationName": "RecipeSectionIngredientToIngredient",
-          "relationFromFields": [
-            "ingredientId"
-          ],
-          "relationToFields": [
-            "id"
-          ],
+          "kind": "scalar",
           "isList": false,
-          "isId": false,
           "isGenerated": false,
           "sequence": false,
-          "hasDefaultValue": false
+          "hasDefaultValue": false,
+          "isId": false,
+          "maxLength": null
         },
         {
-          "name": "Recipe",
-          "type": "Recipe",
-          "isRequired": false,
+          "name": "Item",
+          "type": "Item",
+          "isRequired": true,
           "kind": "object",
-          "relationName": "RecipeSectionIngredientToRecipe",
+          "relationName": "RecipeSectionIngredientToItem",
           "relationFromFields": [
-            "recipeId"
+            "ingredientId"
           ],
           "relationToFields": [
             "id"
@@ -719,5 +1121,20 @@
       ]
     }
   },
-  "enums": {}
+  "enums": {
+    "ItemType": {
+      "schemaName": "public",
+      "values": [
+        {
+          "name": "Ingredient"
+        },
+        {
+          "name": "Item"
+        },
+        {
+          "name": "Recipe"
+        }
+      ]
+    }
+  }
 }

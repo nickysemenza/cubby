@@ -1,5 +1,5 @@
 import { HydrateClient } from "~/trpc/server";
-import { RecipeList } from "../_components/recipelist";
+import { ItemList } from "../_components/itemlist";
 import { type Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -11,7 +11,7 @@ export default function Page() {
     <HydrateClient>
       <div>
         <h1>Hello, Dashboard Page!</h1>
-        <RecipeList />
+        <ItemList />
       </div>
     </HydrateClient>
   );

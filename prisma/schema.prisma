@@ -3,11 +3,15 @@
 
 generator client {
     provider        = "prisma-client-js"
-    previewFeatures = ["postgresqlExtensions", "tracing"]
+    previewFeatures = ["postgresqlExtensions", "tracing", "fullTextSearch"]
 }
 
 generator json {
     provider = "prisma-json-types-generator"
+}
+
+generator dbml {
+    provider = "prisma-dbml-generator"
 }
 
 datasource db {

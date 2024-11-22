@@ -21,6 +21,11 @@ const NavItems: NavItem[] = [
     isActive: (pathname) => pathname.startsWith("/recipes"),
   },
   {
+    href: "/items",
+    label: "items",
+    isActive: (pathname) => pathname.startsWith("/items"),
+  },
+  {
     href: "/demo",
     label: "Demo",
     isActive: (pathname) => pathname === "/demo",

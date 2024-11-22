@@ -1,6 +1,10 @@
 import { createSeedClient } from "@snaplet/seed";
 import { copycat } from "@snaplet/copycat";
 import { faker } from "@faker-js/faker";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { exampleRecipesCompact } from "~/testdata/recipes";
+import { parseCompactRecipe } from "~/codec/parser";
+import { insertRecipeFromCompact } from "~/server/compactrecipe";
 
 const main = async () => {
   const seed = await createSeedClient();
@@ -20,21 +24,37 @@ const main = async () => {
         connect: { recipe: [r] },
       },
     );
-    const { ingredient } = await seed.ingredient((x) =>
+    const { item } = await seed.item((x) =>
       x(50, { name: () => faker.food.ingredient() }),
     );
     for (const rs of recipeSection) {
       for (let i = 0; i < 3; i++) {
-        await seed.recipeSectionIngredient((x) => x(1, { deletedAt: null }), {
-          connect: {
-            recipeSection: [rs],
-            ingredient: [copycat.oneOf(`${rs.name}${i}`, ingredient)],
+        const amount: PrismaJson.Amount = {
+          quantity: faker.number.int({ min: 1, max: 10 }),
+          unit: faker.helpers.arrayElement([
+            "cup",
+            "tbsp",
+            "tsp",
+            "oz",
+            "lb",
+            "g",
+            "kg",
+          ]),
+        };
+        await seed.recipeSectionIngredient(
+          (x) => x(1, { deletedAt: null, amounts: [amount] }),
+          {
+            connect: {
+              recipeSection: [rs],
+              recipeSectionIngredient: [copycat.oneOf(`${rs.name}${i}`, item)],
+            },
           },
-        });
+        );
       }
     }
   }
   console.log("Database seeded successfully!");
+
   process.exit();
 };
 

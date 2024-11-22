@@ -6,8 +6,14 @@ import { type PrismaClient, type Prisma, Recipe } from "@prisma/client";
 import { insertRecipeFromCompact } from "~/server/compactrecipe";
 import { amount } from "~/codec/codec";
 import { parseCompactRecipe } from "~/codec/parser";
-import { exampleRecipes } from "~/testdata/recipes";
-import { dbTimestamps } from "~/server/db";
+import { exampleRecipesCompact } from "~/testdata/recipes";
+import {
+  createPaginatedResponseSchema,
+  dbTimestamps,
+  paginationParams,
+  sortParams,
+  buildTakeSkip,
+} from "./util";
 
 const ingredientOut = z
   .object({
@@ -102,22 +108,52 @@ const getRecipeByID = async (
   });
   return res === null ? null : dbRecipeToAPI(res);
 };
+
 export const recipeRouter = createTRPCRouter({
-  list: publicProcedure.output(z.array(recipeOut)).query(async ({ ctx }) => {
-    const res = await ctx.db.recipe.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        sections: {
-          include: {
-            ingredients: {
-              include: { ingredient: { include: { Recipe: true } } },
+  list: publicProcedure
+    .input(
+      z.object({
+        sort: sortParams,
+        pagination: paginationParams,
+        nameFilter: z.string().optional(),
+      }),
+    )
+    .output(createPaginatedResponseSchema(recipeOut))
+    .query(async ({ ctx, input }) => {
+      const orderBy: Prisma.RecipeOrderByWithAggregationInput = {
+        createdAt:
+          input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
+        name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
+      };
+      const where: Prisma.RecipeWhereInput = {
+        name: input.nameFilter != "" ? { search: input.nameFilter } : undefined,
+      };
+      const res = await ctx.db.recipe.findMany({
+        orderBy,
+        where,
+        ...buildTakeSkip(input.pagination),
+        include: {
+          sections: {
+            include: {
+              ingredients: {
+                include: { ingredient: { include: { Recipe: true } } },
+              },
             },
           },
         },
-      },
-    });
-    return res.map(dbRecipeToAPI);
-  }),
+      });
+      const totalCount = await ctx.db.recipe.count({ where });
+      const items = res.map(dbRecipeToAPI);
+      return {
+        meta: {
+          pageIndex: 0,
+          pageSize: items.length,
+          totalCount,
+          // totalPages: 1,
+        },
+        items,
+      };
+    }),
   get: publicProcedure
     .input(z.object({ id: z.string().uuid() }))
     .output(recipeOut)
@@ -132,7 +168,7 @@ export const recipeRouter = createTRPCRouter({
 
   seed: publicProcedure.output(z.array(recipeOut)).mutation(async ({ ctx }) => {
     const results = [];
-    for (const recipe of exampleRecipes) {
+    for (const recipe of exampleRecipesCompact) {
       const parsed = parseCompactRecipe(recipe);
       console.log(parsed);
       const id = await insertRecipeFromCompact(parsed, ctx.db);
