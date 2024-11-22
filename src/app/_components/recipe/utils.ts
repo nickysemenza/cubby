@@ -1,4 +1,7 @@
-import { SectionIngredient, type RecipeOut } from "~/server/api/routers/recipe";
+import {
+  type SectionIngredient,
+  type RecipeOut,
+} from "~/server/api/routers/recipe";
 
 // returns the 1-indexed count of the instruction, across all sections.
 export const getGlobalInstructionNumber = (

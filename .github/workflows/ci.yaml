@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+
+      - name: Install dependencies and playwright binaries
+        run: npm install
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install wasm pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - run: npm run wasm
+      - name: Setup environment variables
+        run: |
+          cp .env.example .env
+          echo "NEXTAUTH_SECRET=supersecret" >> .env
+      - name: Push schema to database
+        run: npm run db:push
+      - run: npm test
+      - run: npm run lint
+
+  # lint:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #     - run: npm install
+  #     #   linter needs valid .env vars
+  #     - run: cp .env.example .env
+  #     - run: npx prisma generate
+  #     - name: Run linter
+  #       run: |
+  #         npm run lint
+  #         npm run format:check
+
+  # typecheck:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #     - run: npm install
+  #     - run: npm run db:snapletseed
+  #     - name: Run typecheck
+  #       run: npm run typecheck

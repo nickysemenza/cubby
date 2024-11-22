@@ -27,7 +27,7 @@ export function ItemList() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const sortParams: SortParams = {
     direction: sorting[0]?.desc ? "desc" : "asc",
-    orderBy: (sorting[0]?.id ?? initialSort) as SortParams["orderBy"],
+    orderBy: sorting[0]?.id ?? initialSort,
   };
   const [pagination, setPagination] = useState({
     pageIndex: 0, //initial page index

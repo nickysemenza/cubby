@@ -2,7 +2,7 @@ import { parseCompactRecipe } from "~/codec/parser";
 import { exampleRecipesCompact } from "./recipes";
 import { insertRecipeFromCompact } from "~/server/compactrecipe";
 import { getRecipeByID } from "~/server/api/routers/recipe";
-import { PrismaClient } from "@prisma/client";
+import { type PrismaClient } from "@prisma/client";
 
 export const seedRealRecipes = async (db: PrismaClient) => {
   for (const recipe of exampleRecipesCompact) {

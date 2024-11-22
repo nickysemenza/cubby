@@ -7,7 +7,6 @@ import {
   Table,
   TableBody,
   TableHeader,
-  Checkbox,
   type ColumnProps,
   type RowProps,
   type CellProps,
@@ -21,10 +20,8 @@ import {
   MenuItem,
 } from "react-aria-components";
 import {
-  Check,
   ArrowUp,
   ArrowDown,
-  Minus,
   ArrowUpDown,
   SlidersHorizontal,
   CheckIcon,
@@ -34,7 +31,7 @@ import {
   flexRender,
   type Table as ITable,
 } from "@tanstack/react-table";
-import { ReactNode, useState } from "react";
+import { type ReactNode } from "react";
 interface TTableProps<TItem> {
   table: ITable<TItem>;
   sorting: SortingState;
@@ -143,32 +140,32 @@ function TableCell(props: CellProps) {
   );
 }
 
-function SelectionCheckbox() {
-  return (
-    <Checkbox
-      slot="selection"
-      className="block h-4 w-4 shrink-0 rounded border border-black ring-offset-1 data-[disabled]:cursor-not-allowed data-[indeterminate]:bg-black data-[selected]:bg-black data-[indeterminate]:text-white data-[selected]:text-white data-[disabled]:opacity-50 data-[focus-visible]:outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2"
-    >
-      {({ isSelected, isIndeterminate }) => (
-        <div className="flex items-center justify-center text-current">
-          {isSelected ? (
-            <Check className="h-4 w-4" aria-hidden="true" />
-          ) : isIndeterminate ? (
-            <Minus className="h-4 w-4" aria-hidden="true" />
-          ) : null}
-        </div>
-      )}
-    </Checkbox>
-  );
-}
+// function SelectionCheckbox() {
+//   return (
+//     <Checkbox
+//       slot="selection"
+//       className="block h-4 w-4 shrink-0 rounded border border-black ring-offset-1 data-[disabled]:cursor-not-allowed data-[indeterminate]:bg-black data-[selected]:bg-black data-[indeterminate]:text-white data-[selected]:text-white data-[disabled]:opacity-50 data-[focus-visible]:outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2"
+//     >
+//       {({ isSelected, isIndeterminate }) => (
+//         <div className="flex items-center justify-center text-current">
+//           {isSelected ? (
+//             <Check className="h-4 w-4" aria-hidden="true" />
+//           ) : isIndeterminate ? (
+//             <Minus className="h-4 w-4" aria-hidden="true" />
+//           ) : null}
+//         </div>
+//       )}
+//     </Checkbox>
+//   );
+// }
 
-function Badge({ children }: { children: ReactNode }) {
-  return (
-    <div className="focus:ring-ring inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2">
-      {children}
-    </div>
-  );
-}
+// function Badge({ children }: { children: ReactNode }) {
+//   return (
+//     <div className="focus:ring-ring inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2">
+//       {children}
+//     </div>
+//   );
+// }
 export function BottomToolbar<TItem>({ table }: { table: ITable<TItem> }) {
   return (
     <div>
