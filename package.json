@@ -66,7 +66,7 @@
     "@faker-js/faker": "^9.2.0",
     "@snaplet/copycat": "^5.1.0",
     "@snaplet/seed": "^0.98.0",
-    "@types/eslint": "^8.56.10",
+    "@types/eslint": "^9.0.0",
     "@types/node": "^20.14.10",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
