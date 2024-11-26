@@ -15,7 +15,11 @@ const main = async () => {
   for (const r of recipe) {
     const { recipeSection } = await seed.recipeSection(
       (x) =>
-        x(2, { deletedAt: null, name: () => "section " + faker.lorem.word() }),
+        x(2, {
+          deletedAt: null,
+          name: () => "section " + faker.lorem.word(),
+          instructions: () => [{ instruction: faker.lorem.sentence() }],
+        }),
       {
         connect: { recipe: [r] },
       },

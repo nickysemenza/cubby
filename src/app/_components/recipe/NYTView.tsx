@@ -1,6 +1,6 @@
 "use client";
 
-import { type RecipeOut } from "~/server/api/routers/recipe";
+import { RecipeOut } from "~/server/api/apiSchema";
 import { getGlobalInstructionNumber, getIngredientName } from "./utils";
 import { format_amount } from "recipebridge/pkg/recipebridge";
 export const NYTView: React.FC<{

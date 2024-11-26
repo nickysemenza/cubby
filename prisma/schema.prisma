@@ -22,13 +22,15 @@ datasource db {
 }
 
 model Recipe {
-    id        String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name      String
-    createdAt DateTime        @default(now())
-    updatedAt DateTime        @default(now()) @updatedAt
-    deletedAt DateTime?
-    sections  RecipeSection[]
-    Item      Item[]
+    id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name       String
+    createdAt  DateTime        @default(now())
+    updatedAt  DateTime        @default(now()) @updatedAt
+    deletedAt  DateTime?
+    sections   RecipeSection[]
+    Item       Item[]
+    SourceType RecipeSource?
+    SourceData String?
 }
 
 model RecipeSection {
@@ -73,6 +75,10 @@ model Item {
     Recipe                  Recipe?                   @relation(fields: [recipeId], references: [id])
     recipeId                String?                   @db.Uuid
     RecipeSectionIngredient RecipeSectionIngredient[]
+
+    children     Item[]  @relation("SameAsItem")
+    parent       Item?   @relation("SameAsItem", fields: [parentItemId], references: [id])
+    parentItemId String? @db.Uuid
 
     @@unique([name, type])
 }
@@ -122,4 +128,10 @@ enum ItemType {
     Ingredient
     Recipe
     Item
+}
+
+enum RecipeSource {
+    Book
+    Website
+    Other
 }

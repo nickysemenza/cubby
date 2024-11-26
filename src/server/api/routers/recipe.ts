@@ -2,8 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
 import { z } from "zod";
-import { type PrismaClient, type Prisma, Recipe } from "@prisma/client";
-import { amount } from "~/codec/codec";
+import { type PrismaClient, type Prisma } from "@prisma/client";
+import { amount, type CompactRecipe } from "~/codec/codec";
 import {
   createPaginatedResponseSchema,
   dbTimestamps,
@@ -13,44 +13,10 @@ import {
 } from "./util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeRecipe } from "./scraper";
-
-const ingredientOut = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string(),
-  })
-  .merge(dbTimestamps);
-const recipeTopLevel = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string(),
-  })
-  .merge(dbTimestamps);
-const sectionIngredientOut = z
-  .object({
-    id: z.string().uuid(),
-    recipe: recipeTopLevel.nullable(),
-    ingredient: ingredientOut.nullable(),
-    amounts: z.array(amount),
-  })
-  .merge(dbTimestamps);
-export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
-const recipeSectionOut = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string().nullable(),
-    ingredients: z.array(sectionIngredientOut),
-    instructions: z.array(z.object({ instruction: z.string() })),
-  })
-  .merge(dbTimestamps);
-
-const recipeOut = z
-  .object({
-    sections: z.array(recipeSectionOut),
-  })
-  .merge(recipeTopLevel);
-
-export type RecipeOut = z.infer<typeof recipeOut>;
+import { insertRecipeFromCompact } from "~/server/compactrecipe";
+import { type WCompactRecipe } from "recipebridge/pkg/recipebridge";
+import { parseCompactRecipe } from "~/codec/parser";
+import { recipeOut, RecipeOut, SectionIngredient } from "../apiSchema";
 
 type RecipeDeepDB = Prisma.RecipeGetPayload<{
   include: {
@@ -67,7 +33,7 @@ const secitonIngredienttoAPI: (
   sectionIngredient: Prisma.RecipeSectionIngredientGetPayload<{
     include: { ingredient: { include: { Recipe: true } } };
   }>,
-) => z.infer<typeof sectionIngredientOut> = (sectionIngredient) => {
+) => SectionIngredient = (sectionIngredient) => {
   return {
     ...sectionIngredient,
     recipe: null,
@@ -176,7 +142,23 @@ export const recipeRouter = createTRPCRouter({
   scrape: publicProcedure
     .input(z.string().url())
     .output(z.any())
-    .query(async ({ input }) => {
-      return await scrapeRecipe(input);
+    .query(async ({ ctx, input }) => {
+      const scraped = await scrapeRecipe(input);
+
+      const parsed = parseCompactRecipe(WCompactToCompact(scraped));
+      const insert = await insertRecipeFromCompact(parsed, ctx.db);
+      return { scraped, insert };
     }),
 });
+
+const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
+  return {
+    name: wCompact.name ?? "",
+    sections: [
+      {
+        ingredients: wCompact.ingredients,
+        instructions: wCompact.instructions,
+      },
+    ],
+  };
+};

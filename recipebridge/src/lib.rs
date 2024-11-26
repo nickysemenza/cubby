@@ -74,8 +74,9 @@ interface WIngredient {
     modifier?: string;
     name: string;
 }
+type OtherUnitEnum = {"Other": string};
 interface WMeasure {
-  unit: string;
+  unit: string | OtherUnitEnum;
   value: number;
   upper_value?: number;
 }

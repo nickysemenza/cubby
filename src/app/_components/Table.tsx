@@ -45,7 +45,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         aria-label="Tasks"
         selectionMode="multiple"
         sortDescriptor={
-          sorting?.length
+          sorting?.length && sorting[0]
             ? {
                 column: sorting[0]?.id,
                 direction: sorting[0]?.desc ? "descending" : "ascending",
@@ -250,11 +250,11 @@ export function Toolbar<TItem>({ table }: { table: ITable<TItem> }) {
           onChange={(event) =>
             table.getColumn("name")?.setFilterValue(event.target.value)
           }
-          className="h-8 w-[150px] rounded-md border border-gray-400 px-2 text-sm text-gray-700 outline-none focus:ring focus:ring-[2px] focus:ring-black focus:ring-offset-2 lg:w-[250px]"
+          className="h-8 w-[150px] rounded-md border border-gray-400 px-2 text-sm text-gray-700 outline-none focus:ring focus:ring-black focus:ring-offset-2 lg:w-[250px]"
         />
       </TextField>
       <MenuTrigger>
-        <Button className="flex cursor-default items-center rounded-md border border-gray-300 px-2 py-1 text-sm outline-none data-[hovered]:bg-gray-100 data-[pressed]:bg-gray-200 data-[focus-visible]:ring data-[focus-visible]:ring-[2px] data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2">
+        <Button className="flex cursor-default items-center rounded-md border border-gray-300 px-2 py-1 text-sm outline-none data-[hovered]:bg-gray-100 data-[pressed]:bg-gray-200 data-[focus-visible]:ring data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2">
           <SlidersHorizontal className="mr-2 h-4 w-4" />
           View
         </Button>
@@ -291,7 +291,7 @@ export function Toolbar<TItem>({ table }: { table: ITable<TItem> }) {
                   <MenuItem
                     id={column.id}
                     key={column.id}
-                    className="flex cursor-default items-center gap-2 rounded px-2 py-1 text-sm capitalize outline-none data-[focused]:bg-gray-100 data-[focus-visible]:ring data-[focus-visible]:ring-[2px] data-[focus-visible]:ring-black"
+                    className="flex cursor-default items-center gap-2 rounded px-2 py-1 text-sm capitalize outline-none data-[focused]:bg-gray-100 data-[focus-visible]:ring data-[focus-visible]:ring-black"
                   >
                     {({ isSelected }) => (
                       <>

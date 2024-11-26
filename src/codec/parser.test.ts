@@ -1,5 +1,8 @@
 import { expect, test } from "vitest";
 import { parseCompactRecipe } from "./parser";
+import { format } from "path";
+import { format_amount, parse_ingredient } from "recipebridge/pkg/recipebridge";
+import { getIngredientUnit } from "~/app/_components/recipe/utils";
 
 test("parsing works", () => {
   const out = parseCompactRecipe({
@@ -23,4 +26,26 @@ test("parsing works", () => {
       },
     ],
   });
+});
+
+test("formatting with wasm", () => {
+  expect(format_amount({ value: 1, unit: "Cup" })).toEqual("1 cup");
+  // expect(format_amount({ value: 1, unit: "cup" })).toEqual("1 cup");
+});
+
+test("wasm unknown ingrecient", () => {
+  const parseA = parse_ingredient("1 foo bar");
+  expect(parseA).toEqual({
+    name: "foo bar",
+    amounts: [{ value: 1, unit: "Whole" }],
+  });
+  expect(getIngredientUnit(parseA.amounts[0]!)).toEqual("Whole");
+
+  const parseB = parse_ingredient("1 clove garlic");
+
+  expect(parseB).toEqual({
+    name: "garlic",
+    amounts: [{ value: 1, unit: { Other: "clove" } }],
+  });
+  expect(getIngredientUnit(parseB.amounts[0]!)).toEqual("clove");
 });

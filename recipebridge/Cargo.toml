@@ -21,6 +21,6 @@ wee_alloc = { version = "0.4.5", optional = true }
 default = ["wee_alloc"]
 
 
-# [patch."https://github.com/nickysemenza/ingredient-parser"]
-# recipe-scraper = { path = "../../ingredient-parser/recipe-scraper" }
-# ingredient = { path = "../../ingredient-parser/ingredient-parser" }
+[patch."https://github.com/nickysemenza/ingredient-parser"]
+recipe-scraper = { path = "../../ingredient-parser/recipe-scraper" }
+ingredient = { path = "../../ingredient-parser/ingredient-parser" }

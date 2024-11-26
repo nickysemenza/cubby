@@ -49,6 +49,9 @@ Table Item {
   Recipe Recipe
   recipeId String
   RecipeSectionIngredient RecipeSectionIngredient [not null]
+  children Item [not null]
+  parent Item
+  parentItemId String
 
   indexes {
     (name, type) [unique]
@@ -103,6 +106,8 @@ Ref: RecipeSectionIngredient.ingredientId > Item.id
 Ref: Item.productId > Product.id
 
 Ref: Item.recipeId > Recipe.id
+
+Ref: Item.parentItemId > Item.id
 
 Ref: InventoryItem.itemId > Item.id
 

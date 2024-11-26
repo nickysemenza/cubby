@@ -55,6 +55,22 @@ export function ItemList() {
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
+    columnHelper.accessor("children", {
+      cell: (info) => (
+        <div>
+          {info.getValue().map((child) => (
+            <div key={child.id}>
+              <Link
+                className="text-blue-600 hover:underline dark:text-blue-500"
+                href={`items/${child.id}`}
+              >
+                {child.name}
+              </Link>
+            </div>
+          ))}
+        </div>
+      ),
+    }),
     columnHelper.accessor("type", {
       cell: (info) => info.getValue(),
     }),
@@ -72,6 +88,24 @@ export function ItemList() {
           >
             {info.getValue()}
           </Link>
+        </div>
+      ),
+    }),
+    columnHelper.accessor("appearsInRecipes", {
+      cell: (info) => (
+        <div>
+          <ul className="">
+            {info.getValue().map((recipe) => (
+              <li key={recipe.id}>
+                <Link
+                  className="text-blue-600 hover:underline dark:text-blue-500"
+                  href={`recipes/${recipe.id}`}
+                >
+                  {recipe.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       ),
     }),

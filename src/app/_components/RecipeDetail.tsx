@@ -2,7 +2,7 @@
 
 import React from "react";
 import { JsonEditor } from "json-edit-react";
-import { type RecipeOut } from "~/server/api/routers/recipe";
+import { RecipeOut } from "~/server/api/apiSchema";
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;

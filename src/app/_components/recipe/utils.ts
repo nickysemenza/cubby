@@ -1,7 +1,5 @@
-import {
-  type SectionIngredient,
-  type RecipeOut,
-} from "~/server/api/routers/recipe";
+import { WMeasure } from "recipebridge/pkg/recipebridge";
+import { RecipeOut, SectionIngredient } from "~/server/api/apiSchema";
 
 // returns the 1-indexed count of the instruction, across all sections.
 export const getGlobalInstructionNumber = (
@@ -18,4 +16,12 @@ export const getGlobalInstructionNumber = (
 
 export const getIngredientName = (ingredient: SectionIngredient) => {
   return ingredient.ingredient?.name ?? ingredient.recipe?.name ?? "unknown";
+};
+
+export const getIngredientUnit = (amount: WMeasure): string => {
+  // if typeof is OtherUnit
+  if (typeof amount.unit === "object" && "Other" in amount.unit) {
+    return amount.unit.Other;
+  }
+  return amount.unit;
 };
