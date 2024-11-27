@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const compactRecipeSchema = z.object({
+export const compactRecipeSchema = z.object({
   name: z.string(),
   sections: z.array(
     z.object({

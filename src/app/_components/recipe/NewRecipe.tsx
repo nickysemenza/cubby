@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import JsonRenderer from "../json";
 import {
   parse_ingredient,
@@ -11,35 +11,105 @@ import {
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
 import { twMerge } from "tailwind-merge";
-
-const NewRecipe: React.FC = () => {
-  const [text, setText] = useState<string>("");
-  const lines = text
+import { CompactRecipe } from "~/codec/codec";
+import { scrapeRecipe, scrapeToCompact } from "~/server/api/routers/scraper";
+import { Button } from "../Button";
+const cleanupLinesToArray = (lines: string) =>
+  lines
     .split("\n")
     .map((line) => line.trim())
     .filter((l) => l.length > 0);
+const NewRecipe: React.FC = () => {
+  const [url, setURL] = useState<string>(
+    "https://cooking.nytimes.com/recipes/1022674-chewy-gingerbread-cookies",
+  );
+  const [name, setName] = useState<string>("");
+  const [ingredientsText, setIngredients] = useState<string>("");
+  const [instructionsText, setInstructions] = useState<string>("");
+  const ingredientLines = useMemo(
+    () => cleanupLinesToArray(ingredientsText),
+    [ingredientsText],
+  );
 
-  const linesParsed = lines.map((line) => parse_ingredient(line));
+  const ingredientsParsed = useMemo(
+    () => ingredientLines.map((line) => parse_ingredient(line)),
+    [ingredientLines],
+  );
+
+  const instructionLines = useMemo(
+    () => cleanupLinesToArray(instructionsText),
+    [instructionsText],
+  );
+  const scrape = api.recipe.scrape.useMutation();
+  const onScrape = async () => {
+    const res = await scrape.mutateAsync(url);
+    if (res && res.sections[0]) {
+      setName(res.name);
+      setIngredients(res.sections[0].ingredients.join("\n"));
+      setInstructions(res.sections[0].instructions.join("\n"));
+    }
+  };
+  const insert = api.recipe.insertCompact.useMutation();
+  const onCreate = async () => {
+    const compact: CompactRecipe = {
+      name,
+      sections: [
+        {
+          ingredients: ingredientLines,
+          instructions: instructionLines,
+        },
+      ],
+    };
+    const res = await insert.mutateAsync(compact);
+  };
 
   return (
-    <div>
-      <div className="flex">
+    <div className="container mx-auto">
+      <div className="my-4">
+        <input
+          className="w-1/2 rounded-md border-2"
+          value={url}
+          onChange={(e) => setURL(e.target.value)}
+        />
+        <Button onPress={() => onScrape()}>Scrape</Button>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
+          value={ingredientsText}
+          onChange={(e) => setIngredients(e.target.value)}
           rows={10}
           cols={50}
           placeholder="Enter your recipe here..."
+          className="border border-gray-300"
         />
         <div>
-          {linesParsed.map((l, x) => (
+          {ingredientsParsed.map((l, x) => (
             <div key={`${l.name}${x}`}>
               <RenderWIngredient amount={l} />
             </div>
           ))}
         </div>
       </div>
-      <JsonRenderer input={{ lines, linesParsed }} />
+      <hr className="my-4" />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <textarea
+          value={instructionsText}
+          onChange={(e) => setInstructions(e.target.value)}
+          rows={10}
+          cols={50}
+          placeholder="Enter your instructions here..."
+          className="border border-gray-300 leading-relaxed"
+        />
+        <div>
+          <ol className="list-decimal pl-5 leading-relaxed">
+            {instructionLines.map((line, x) => (
+              <li key={x}>{line}</li>
+            ))}
+          </ol>
+        </div>
+      </div>
+      {/* <JsonRenderer input={{ lines, linesParsed }} /> */}
+      <Button onPress={() => onCreate()}>Create</Button>
     </div>
   );
 };

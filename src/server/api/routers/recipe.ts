@@ -3,7 +3,7 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 
 import { z } from "zod";
 import { type PrismaClient, type Prisma } from "@prisma/client";
-import { amount, type CompactRecipe } from "~/codec/codec";
+import { amount, compactRecipeSchema, type CompactRecipe } from "~/codec/codec";
 import {
   createPaginatedResponseSchema,
   dbTimestamps,
@@ -12,7 +12,7 @@ import {
   buildTakeSkip,
 } from "./util";
 import { seedRealRecipes } from "~/testdata/seed";
-import { scrapeRecipe } from "./scraper";
+import { scrapeRecipe, scrapeToCompact } from "./scraper";
 import { insertRecipeFromCompact } from "~/server/compactrecipe";
 import { type WCompactRecipe } from "recipebridge/pkg/recipebridge";
 import { parseCompactRecipe } from "~/codec/parser";
@@ -141,24 +141,23 @@ export const recipeRouter = createTRPCRouter({
   }),
   scrape: publicProcedure
     .input(z.string().url())
+    .output(compactRecipeSchema)
+    .mutation(async ({ ctx, input }) => {
+      return scrapeToCompact(input);
+    }),
+  insertCompact: publicProcedure
+    .input(compactRecipeSchema)
     .output(z.any())
-    .query(async ({ ctx, input }) => {
-      const scraped = await scrapeRecipe(input);
-
-      const parsed = parseCompactRecipe(WCompactToCompact(scraped));
-      const insert = await insertRecipeFromCompact(parsed, ctx.db);
-      return { scraped, insert };
+    .mutation(async ({ ctx, input }) => {
+      const insert = await insertCompactRecipe(input, ctx.db);
+      return { insert };
     }),
 });
 
-const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
-  return {
-    name: wCompact.name ?? "",
-    sections: [
-      {
-        ingredients: wCompact.ingredients,
-        instructions: wCompact.instructions,
-      },
-    ],
-  };
+const insertCompactRecipe = async (
+  recipe: CompactRecipe,
+  prismaClient: PrismaClient,
+) => {
+  const parsed = parseCompactRecipe(recipe);
+  return await insertRecipeFromCompact(parsed, prismaClient);
 };

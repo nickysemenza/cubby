@@ -11,6 +11,7 @@ ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", branch
 recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", branch = "main" }
 serde = { version = "1.0", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
+serde_json = "1.0"
 # https://docs.rs/getrandom/#webassembly-support
 getrandom = { version = "0.2", features = ["js"] }
 wasm-tracing = "0.2.1"

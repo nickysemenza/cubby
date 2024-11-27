@@ -530,6 +530,7 @@ dependencies = [
  "recipe-scraper",
  "serde",
  "serde-wasm-bindgen",
+ "serde_json",
  "wasm-bindgen",
  "wasm-tracing",
  "wee_alloc",
