@@ -8,7 +8,9 @@ export const insertRecipeFromCompact = async (
 ) => {
   return await prismaClient.$transaction(async (tx) => {
     const newRecipe = await tx.recipe.create({
-      data: { name: recipe.name },
+      data: {
+        name: recipe.name,
+      },
     });
     for (const section of recipe.sections) {
       const newSection = await tx.recipeSection.create({

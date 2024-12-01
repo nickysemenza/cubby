@@ -1,4 +1,4 @@
-use ingredient::{self, unit::Measure};
+use ingredient::{self, rich_text::RichParser, unit::Measure, IngredientParser};
 use wasm_bindgen::prelude::*;
 
 extern crate wee_alloc;
@@ -8,19 +8,6 @@ extern crate wee_alloc;
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[wasm_bindgen]
-pub fn greet(name: &str) -> String {
-    format!("Hello, {}!", name)
-}
-
-#[wasm_bindgen]
-pub fn fibonacci(n: u32) -> u32 {
-    match n {
-        0 => 0,
-        1 => 1,
-        _ => fibonacci(n - 1) + fibonacci(n - 2),
-    }
-}
-#[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "WIngredient")]
     pub type WIngredient;
@@ -28,6 +15,8 @@ extern "C" {
     pub type WMeasure;
     #[wasm_bindgen(typescript_type = "WCompactRecipe")]
     pub type WCompactRecipe;
+    #[wasm_bindgen(typescript_type = "RichItem[]")]
+    pub type RichItems;
 }
 
 #[wasm_bindgen]
@@ -53,11 +42,6 @@ pub fn format_amount(amount: &WMeasure) -> String {
 fn setup() {
     console_error_panic_hook::set_once();
     let _ = wasm_tracing::try_set_as_global_default();
-    // use std::sync::Once;
-    // static SET_HOOK: Once = Once::new();
-    // SET_HOOK.call_once(|| {
-    //     wasm_tracing::set_as_global_default();
-    // });
 }
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> WCompactRecipe {
@@ -66,7 +50,18 @@ pub fn parse_scraped_recipe(body: &str, url: &str) -> WCompactRecipe {
     let js_value = serde_wasm_bindgen::to_value(&r).unwrap();
     js_value.into()
 }
-
+#[wasm_bindgen]
+pub fn parse_rich_text(r: String, ingredient_names: Vec<String>) -> Result<RichItems, JsValue> {
+    setup();
+    let rtp = RichParser {
+        ingredient_names,
+        ip: IngredientParser::new(true),
+    };
+    match rtp.parse(r.as_str()) {
+        Ok(r) => Ok(serde_wasm_bindgen::to_value(&r).unwrap().into()),
+        Err(e) => Err(JsValue::from_str(&e)),
+    }
+}
 #[wasm_bindgen(typescript_custom_section)]
 const ITEXT_STYLE: &'static str = r#"
 interface WIngredient {
@@ -87,4 +82,8 @@ interface WCompactRecipe{
   url?: string;
   image?: string;
 }
+type RichItem =
+| { kind: "Text"; value: string }
+| { kind: "Ing"; value: string }
+| { kind: "Measure"; value: WMeasure[] }
 "#;

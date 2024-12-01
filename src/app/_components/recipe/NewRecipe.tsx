@@ -7,6 +7,7 @@ import {
   WIngredient,
   WMeasure,
   OtherUnitEnum,
+  parse_rich_text,
 } from "recipebridge/pkg/recipebridge";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
@@ -14,6 +15,7 @@ import { twMerge } from "tailwind-merge";
 import { CompactRecipe } from "~/codec/codec";
 import { scrapeRecipe, scrapeToCompact } from "~/server/api/routers/scraper";
 import { Button } from "../Button";
+import { formatRichText } from "./richtext";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
@@ -103,7 +105,17 @@ const NewRecipe: React.FC = () => {
         <div>
           <ol className="list-decimal pl-5 leading-relaxed">
             {instructionLines.map((line, x) => (
-              <li key={x}>{line}</li>
+              <>
+                {/* <li key={x}>{line}</li> */}
+                <li key={x + "2"}>
+                  {formatRichText(
+                    parse_rich_text(
+                      line,
+                      ingredientsParsed.map((l) => l.name),
+                    ),
+                  )}
+                </li>
+              </>
             ))}
           </ol>
         </div>

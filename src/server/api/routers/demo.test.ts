@@ -15,5 +15,5 @@ test("example router", async () => {
 
   const example = await caller.demo.hello(input);
 
-  expect(example).toMatchObject({ greeting: "Hello, test!", fib: 6765 });
+  expect(example).toMatchObject({ greeting: "Hello, test", fib: 42 });
 });
