@@ -28,7 +28,7 @@ export const seedRealRecipes = async (db: PrismaClient) => {
       },
     });
 
-    for (const alias of ingredient.aliases || []) {
+    for (const alias of ingredient.aliases ?? []) {
       await db.item.upsert({
         where: {
           name_type: { name: alias, type: ItemType.Ingredient },

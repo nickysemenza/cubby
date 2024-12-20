@@ -7,12 +7,14 @@
       "matchUpdateTypes": ["minor", "pin"],
       "matchDatasources": ["cargo"],
       "groupName": "cargo minor and pin",
+      "automerge": true,
       "groupSlug": "all-deps"
     },
     {
       "matchUpdateTypes": ["minor", "pin"],
       "matchDatasources": ["npm"],
       "groupName": "npm minor and pin",
+      "automerge": true,
       "groupSlug": "all-deps"
     },
     {

@@ -7,11 +7,10 @@
     "build": "next build",
     "check": "next lint && tsc --noEmit",
     "db:generate": "prisma migrate dev",
-    "db:snapletseed": "npx @snaplet/seed sync",
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:rebuild": "npm run db:push && npm run db:snapletseed && prisma db seed",
+    "db:rebuild": "npm run db:push",
     "dev": "next dev --turbo",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
@@ -35,7 +34,7 @@
     "@opentelemetry/sdk-trace-base": "^1.28.0",
     "@opentelemetry/sdk-trace-node": "^1.28.0",
     "@opentelemetry/semantic-conventions": "^1.28.0",
-    "@prisma/client": "^6.0.0",
+    "@prisma/client": "^6.1.0",
     "@prisma/instrumentation": "^6.0.0",
     "@t3-oss/env-nextjs": "^0.11.1",
     "@tanstack/react-query": "^5.62.0",
@@ -67,7 +66,6 @@
   "devDependencies": {
     "@faker-js/faker": "^9.2.0",
     "@snaplet/copycat": "^5.1.0",
-    "@snaplet/seed": "^0.98.0",
     "@types/eslint": "^9.6.1",
     "@types/node": "^22.10.1",
     "@types/react": "^18.3.12",
@@ -82,7 +80,7 @@
     "postcss": "^8.4.49",
     "prettier": "^3.4.1",
     "prettier-plugin-tailwindcss": "^0.6.9",
-    "prisma": "^6.0.0",
+    "prisma": "^6.1.0",
     "prisma-dbml-generator": "^0.12.0",
     "prisma-json-types-generator": "^3.2.1",
     "tailwindcss": "^3.4.15",
@@ -93,11 +91,5 @@
   "ct3aMetadata": {
     "initVersion": "7.38.1"
   },
-  "packageManager": "npm@10.9.0",
-  "@snaplet/seed": {
-    "config": "prisma/seed/seed.config.ts"
-  },
-  "prisma": {
-    "seed": "npx tsx prisma/seed/seed.ts"
-  }
+  "packageManager": "npm@10.9.0"
 }

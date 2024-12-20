@@ -6,7 +6,6 @@ import { type Span, trace } from "@opentelemetry/api";
 import { CompactRecipe } from "~/codec/codec";
 
 export const scrapeRecipe = async (url: string) => {
-  let json = false;
   if (url.includes("chefsteps.com")) {
     // transform https://www.chefsteps.com/activities/rich-and-moist-cornbread
     // into https://www.chefsteps.com/api/v0/activities/rich-and-moist-cornbread
