@@ -15,7 +15,7 @@ export const formatRichText = (text: RichItem[]) => {
           </div>
         );
       case "Measure":
-        let val = t.value.pop();
+        const val = t.value.pop();
         if (!val) {
           return null;
         }
@@ -30,9 +30,6 @@ export const formatRichText = (text: RichItem[]) => {
             {format_amount(val)}
           </div>
         );
-      default:
-        const exhaustiveCheck: never = t;
-        throw new Error(`Unhandled case: ${exhaustiveCheck}`);
     }
   });
 };

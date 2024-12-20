@@ -2,7 +2,7 @@ import React from "react";
 import {
   composeRenderProps,
   Button as RACButton,
-  ButtonProps as RACButtonProps,
+  type ButtonProps as RACButtonProps,
 } from "react-aria-components";
 import { tv } from "tailwind-variants";
 import { focusRing } from "./utils";
@@ -11,7 +11,7 @@ export interface ButtonProps extends RACButtonProps {
   variant?: "primary" | "secondary" | "destructive" | "icon";
 }
 
-let button = tv({
+const button = tv({
   extend: focusRing,
   base: "px-5 py-2 text-sm text-center transition rounded-lg border border-black/10 dark:border-white/10 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] dark:shadow-none cursor-default",
   variants: {

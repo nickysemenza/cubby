@@ -1,19 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import JsonRenderer from "../json";
+import React, { useState, useMemo } from "react";
 import {
   parse_ingredient,
-  WIngredient,
-  WMeasure,
-  OtherUnitEnum,
+  type WIngredient,
   parse_rich_text,
 } from "recipebridge/pkg/recipebridge";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
 import { twMerge } from "tailwind-merge";
-import { CompactRecipe } from "~/codec/codec";
-import { scrapeRecipe, scrapeToCompact } from "~/server/api/routers/scraper";
+import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "../Button";
 import { formatRichText } from "./richtext";
 const cleanupLinesToArray = (lines: string) =>
@@ -45,7 +41,7 @@ const NewRecipe: React.FC = () => {
   const scrape = api.recipe.scrape.useMutation();
   const onScrape = async () => {
     const res = await scrape.mutateAsync(url);
-    if (res && res.sections[0]) {
+    if (res?.sections[0]) {
       setName(res.name);
       setIngredients(res.sections[0].ingredients.join("\n"));
       setInstructions(res.sections[0].instructions.join("\n"));
@@ -62,7 +58,7 @@ const NewRecipe: React.FC = () => {
         },
       ],
     };
-    const res = await insert.mutateAsync(compact);
+    await insert.mutateAsync(compact);
   };
 
   return (
@@ -144,7 +140,7 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
     <div className="inline">
       <div className="inline">
         {amounts.map((a, x) => (
-          <div key={`${a.unit}${x}`} className="inline">
+          <div key={getIngredientUnit(a)} className="inline">
             <div className="inline text-blue-600">{a.value}</div>{" "}
             <div className="inline text-green-800">{getIngredientUnit(a)}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}

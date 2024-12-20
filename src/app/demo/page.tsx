@@ -2,7 +2,6 @@
 
 import { parse_ingredient } from "../../../recipebridge/pkg/recipebridge";
 import { api } from "~/trpc/react";
-import JsonRenderer from "../_components/json";
 import { JsonEditor } from "json-edit-react";
 
 import { useForm, type SubmitHandler } from "react-hook-form";
@@ -13,8 +12,7 @@ export default function Page() {
 
   return (
     <div>
-      <JsonRenderer input={res.data} />
-      <JsonEditor data={{ data: res.data }} />
+      <JsonEditor data={{ data: res }} />
       <WASMTest />
     </div>
   );
