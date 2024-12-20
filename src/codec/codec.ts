@@ -14,9 +14,10 @@ export const amount = z.object({
   value: z.number(),
   unit: z.string(),
 });
-const parsedIngredient = z.object({
+export const parsedIngredient = z.object({
   name: z.string(),
   amounts: z.array(amount),
+  modifier: z.string().optional(),
 });
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const parsedCompactRecipeSchema = z.object({
