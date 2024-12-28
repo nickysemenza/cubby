@@ -101,17 +101,14 @@ const NewRecipe: React.FC = () => {
         <div>
           <ol className="list-decimal pl-5 leading-relaxed">
             {instructionLines.map((line, x) => (
-              <>
-                {/* <li key={x}>{line}</li> */}
-                <li key={x + "2"}>
-                  {formatRichText(
-                    parse_rich_text(
-                      line,
-                      ingredientsParsed.map((l) => l.name),
-                    ),
-                  )}
-                </li>
-              </>
+              <li key={x + "2"}>
+                {formatRichText(
+                  parse_rich_text(
+                    line,
+                    ingredientsParsed.map((l) => l.name),
+                  ),
+                )}
+              </li>
             ))}
           </ol>
         </div>

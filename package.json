@@ -21,7 +21,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "wasm": "cd recipebridge && wasm-pack build",
+    "wasm": "make wasm",
     "regenerate": "npm run db:rebuild && npm run wasm"
   },
   "dependencies": {

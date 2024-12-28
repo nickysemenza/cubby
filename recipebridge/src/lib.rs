@@ -43,6 +43,7 @@ fn setup() {
     console_error_panic_hook::set_once();
     let _ = wasm_tracing::try_set_as_global_default();
 }
+
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> WCompactRecipe {
     setup();
