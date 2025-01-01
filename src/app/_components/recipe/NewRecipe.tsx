@@ -12,6 +12,7 @@ import { twMerge } from "tailwind-merge";
 import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "../Button";
 import { formatRichText } from "./richtext";
+import useDebounce from "../useDebounce";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
@@ -24,9 +25,11 @@ const NewRecipe: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [ingredientsText, setIngredients] = useState<string>("");
   const [instructionsText, setInstructions] = useState<string>("");
+
+  const debouncedText = useDebounce(ingredientsText, 300);
   const ingredientLines = useMemo(
-    () => cleanupLinesToArray(ingredientsText),
-    [ingredientsText],
+    () => cleanupLinesToArray(debouncedText),
+    [debouncedText],
   );
 
   const ingredientsParsed = useMemo(
@@ -71,6 +74,11 @@ const NewRecipe: React.FC = () => {
         />
         <Button onPress={() => onScrape()}>Scrape</Button>
       </div>
+      <input
+        className="w-100 rounded-md border-2"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <textarea
           value={ingredientsText}
