@@ -95,16 +95,22 @@ export function ItemList() {
       cell: (info) => (
         <div>
           <ul className="">
-            {info.getValue().map((recipe) => (
-              <li key={recipe.id}>
-                <Link
-                  className="text-blue-600 hover:underline dark:text-blue-500"
-                  href={`recipes/${recipe.id}`}
-                >
-                  {recipe.name}
-                </Link>
-              </li>
-            ))}
+            {info
+              .getValue()
+              .filter(
+                (obj1, i, arr) =>
+                  arr.findIndex((obj2) => obj2.id === obj1.id) === i,
+              )
+              .map((recipe) => (
+                <li key={recipe.id}>
+                  <Link
+                    className="text-blue-600 hover:underline dark:text-blue-500"
+                    href={`recipes/${recipe.id}`}
+                  >
+                    {recipe.name}
+                  </Link>
+                </li>
+              ))}
           </ul>
         </div>
       ),

@@ -41,6 +41,6 @@ export const insertRecipeFromCompact = async (
         });
       }
     }
-    return newRecipe.id;
+    return { id: newRecipe.id };
   });
 };

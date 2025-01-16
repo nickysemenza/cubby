@@ -95,120 +95,141 @@ const itemOutWithChildren = z
   .object({ children: z.array(itemOut) })
   .merge(itemOut);
 
-export const itemRouter = createTRPCRouter({
-  getByName: publicProcedure
-    .input(
-      z.object({
-        nameFilter: z.string(),
-        itemTypeFilter: z.nativeEnum(ItemType).optional(),
-      }),
-    )
-    .output(itemOut.nullable())
-    .query(async ({ ctx, input }) => {
-      const res = await ctx.db.item.findFirst({
-        where: {
-          name: { equals: input.nameFilter, mode: "insensitive" },
-          type: input.itemTypeFilter,
-        },
+const foo = {
+  Product: true,
+  Recipe: true,
+  children: {
+    include: {
+      Product: true,
+      Recipe: true,
+      RecipeSectionIngredient: {
         include: {
-          Product: true,
-          Recipe: true,
-          children: {
+          recipeSection: {
             include: {
-              Product: true,
-              Recipe: true,
-              RecipeSectionIngredient: {
-                include: {
-                  recipeSection: {
-                    include: {
-                      recipe: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          RecipeSectionIngredient: {
-            include: {
-              recipeSection: {
-                include: {
-                  recipe: true,
-                },
-              },
+              recipe: true,
             },
           },
         },
-      });
-      return res ? dbItemToAPI(res) : null;
+      },
+    },
+  },
+  RecipeSectionIngredient: {
+    include: {
+      recipeSection: {
+        include: {
+          recipe: true,
+        },
+      },
+    },
+  },
+};
+const getByName = publicProcedure
+  .input(
+    z.object({
+      nameFilter: z.string(),
+      itemTypeFilter: z.nativeEnum(ItemType).optional(),
     }),
-
-  list: publicProcedure
-    .input(
-      z.object({
-        sort: sortParams,
-        pagination: paginationParams,
-        nameFilter: z.string().optional(),
-        itemTypeFilter: z.nativeEnum(ItemType).optional(),
-      }),
-    )
-    .output(createPaginatedResponseSchema(itemOutWithChildren))
-    .query(async ({ ctx, input }) => {
-      const orderBy: Prisma.ItemOrderByWithAggregationInput = {
-        createdAt:
-          input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
-        name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
-      };
-      const where: Prisma.ItemWhereInput = {
-        name:
-          input.nameFilter != ""
-            ? { search: input.nameFilter, mode: "insensitive" }
-            : undefined,
+  )
+  .output(itemOut.nullable())
+  .query(async ({ ctx, input }) => {
+    const res = await ctx.db.item.findFirst({
+      where: {
+        name: { equals: input.nameFilter, mode: "insensitive" },
         type: input.itemTypeFilter,
-        parentItemId: null,
-      };
-      const res = await ctx.db.item.findMany({
-        orderBy,
-        where,
-        ...buildTakeSkip(input.pagination),
-        include: {
-          Product: true,
-          Recipe: true,
-          children: {
-            include: {
-              Product: true,
-              Recipe: true,
-              RecipeSectionIngredient: {
-                include: {
-                  recipeSection: {
-                    include: {
-                      recipe: true,
-                    },
+      },
+      include: foo,
+    });
+    return res ? dbItemToAPI(res) : null;
+  });
+
+const getByID = publicProcedure
+  .input(
+    z.object({
+      id: z.string(),
+    }),
+  )
+  .output(itemOut)
+  .query(async ({ ctx, input }) => {
+    const res = await ctx.db.item.findFirstOrThrow({
+      where: {
+        id: input.id,
+      },
+      include: foo,
+    });
+    return dbItemToAPI(res);
+  });
+
+const list = publicProcedure
+  .input(
+    z.object({
+      sort: sortParams,
+      pagination: paginationParams,
+      nameFilter: z.string().optional(),
+      itemTypeFilter: z.nativeEnum(ItemType).optional(),
+    }),
+  )
+  .output(createPaginatedResponseSchema(itemOutWithChildren))
+  .query(async ({ ctx, input }) => {
+    const orderBy: Prisma.ItemOrderByWithAggregationInput = {
+      createdAt:
+        input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
+      name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
+    };
+    const where: Prisma.ItemWhereInput = {
+      name:
+        input.nameFilter != ""
+          ? { search: input.nameFilter, mode: "insensitive" }
+          : undefined,
+      type: input.itemTypeFilter,
+      parentItemId: null,
+    };
+    const res = await ctx.db.item.findMany({
+      orderBy,
+      where,
+      ...buildTakeSkip(input.pagination),
+      include: {
+        Product: true,
+        Recipe: true,
+        children: {
+          include: {
+            Product: true,
+            Recipe: true,
+            RecipeSectionIngredient: {
+              include: {
+                recipeSection: {
+                  include: {
+                    recipe: true,
                   },
                 },
               },
             },
           },
-          RecipeSectionIngredient: {
-            include: {
-              recipeSection: {
-                include: {
-                  recipe: true,
-                },
+        },
+        RecipeSectionIngredient: {
+          include: {
+            recipeSection: {
+              include: {
+                recipe: true,
               },
             },
           },
         },
-      });
-      const totalCount = await ctx.db.item.count({ where });
-      const items = res.map(dbItemToAPIWithChildren);
-      return {
-        meta: {
-          pageIndex: input.pagination.pageIndex,
-          pageSize: items.length,
-          totalCount,
-          // totalPages: 1,
-        },
-        items,
-      };
-    }),
+      },
+    });
+    const totalCount = await ctx.db.item.count({ where });
+    const items = res.map(dbItemToAPIWithChildren);
+    return {
+      meta: {
+        pageIndex: input.pagination.pageIndex,
+        pageSize: items.length,
+        totalCount,
+        // totalPages: 1,
+      },
+      items,
+    };
+  });
+export const itemRouter = createTRPCRouter({
+  getByName,
+  getByID,
+  list,
 });

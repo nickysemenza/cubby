@@ -1,6 +1,5 @@
 import { expect, test } from "vitest";
 import { parseCompactRecipe } from "./parser";
-import { format } from "path";
 import { format_amount, parse_ingredient } from "recipebridge/pkg/recipebridge";
 import { getIngredientUnit } from "~/app/_components/recipe/utils";
 

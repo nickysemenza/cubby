@@ -147,10 +147,10 @@ export const recipeRouter = createTRPCRouter({
     }),
   insertCompact: publicProcedure
     .input(compactRecipeSchema)
-    .output(z.any())
+    .output(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const insert = await insertCompactRecipe(input, ctx.db);
-      return { insert };
+      return insert;
     }),
 });
 

@@ -5,6 +5,7 @@ import { type Metadata } from "next";
 
 import { TRPCReactProvider } from "~/trpc/react";
 import Navbar from "./_components/navbar";
+import { ToastContainer } from "react-toastify";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -21,6 +22,7 @@ export default function RootLayout({
     <html lang="en" className={`${GeistSans.variable}`}>
       <body>
         <Navbar />
+        <ToastContainer />
         <TRPCReactProvider>{children}</TRPCReactProvider>
       </body>
     </html>

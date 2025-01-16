@@ -9,8 +9,8 @@ export const seedRealRecipes = async (db: PrismaClient) => {
   for (const recipe of exampleRecipesCompact) {
     const parsed = parseCompactRecipe(recipe);
     console.log(parsed);
-    const id = await insertRecipeFromCompact(parsed, db);
-    const res = await getRecipeByID(id, db);
+    const recipeOut = await insertRecipeFromCompact(parsed, db);
+    const res = await getRecipeByID(recipeOut.id, db);
 
     if (res === null) {
       throw new Error("Recipe not found");

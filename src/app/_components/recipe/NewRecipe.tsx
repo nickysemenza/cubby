@@ -13,6 +13,8 @@ import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "../Button";
 import { formatRichText } from "./richtext";
 import useDebounce from "../useDebounce";
+import { useRouter } from "next/navigation";
+import { toast } from "react-toastify";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
@@ -25,6 +27,7 @@ const NewRecipe: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [ingredientsText, setIngredients] = useState<string>("");
   const [instructionsText, setInstructions] = useState<string>("");
+  const router = useRouter();
 
   const debouncedText = useDebounce(ingredientsText, 300);
   const ingredientLines = useMemo(
@@ -61,7 +64,9 @@ const NewRecipe: React.FC = () => {
         },
       ],
     };
-    await insert.mutateAsync(compact);
+    const res = await insert.mutateAsync(compact);
+    toast(`Recipe ${name} created`, { type: "success" });
+    router.push(`/recipes/${res.id}`);
   };
 
   return (
