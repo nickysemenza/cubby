@@ -5,7 +5,7 @@ export default function SelectionCheckbox() {
   return (
     <Checkbox
       slot="selection"
-      className="block h-4 w-4 shrink-0 rounded border border-black ring-offset-1 data-[disabled]:cursor-not-allowed data-[indeterminate]:bg-black data-[selected]:bg-black data-[indeterminate]:text-white data-[selected]:text-white data-[disabled]:opacity-50 data-[focus-visible]:outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2"
+      className="block h-4 w-4 shrink-0 rounded-sm border border-black ring-offset-1 data-disabled:cursor-not-allowed data-indeterminate:bg-black data-selected:bg-black data-indeterminate:text-white data-selected:text-white data-disabled:opacity-50 data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-black data-focus-visible:ring-offset-2"
     >
       {({ isSelected, isIndeterminate }) => (
         <div className="flex items-center justify-center text-current">

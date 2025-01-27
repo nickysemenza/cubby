@@ -85,7 +85,7 @@ export function RecipeList() {
       cell: (info) => (
         <div>
           <Link
-            className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
+            className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
             href={`recipes/${info.getValue()}`}
           >
             {info.getValue()}

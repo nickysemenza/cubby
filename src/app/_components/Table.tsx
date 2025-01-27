@@ -103,10 +103,10 @@ function TableColumn(
   return (
     <Column
       {...props}
-      className="group h-12 cursor-default text-left align-middle font-medium text-gray-700 outline-none data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-black"
+      className="group h-12 cursor-default text-left align-middle font-medium text-gray-700 outline-hidden data-focus-visible:-outline-offset-2 data-focus-visible:outline-black"
     >
       {({ allowsSorting, sortDirection }) => (
-        <div className="inline-flex gap-2 rounded px-4 py-1 transition-colors group-[&[aria-sort]]:hover:bg-gray-100">
+        <div className="inline-flex gap-2 rounded-sm px-4 py-1 transition-colors hover:group-aria-[sort]:bg-gray-100">
           {props.children}
           {allowsSorting &&
             (sortDirection === "descending" ? (
@@ -126,7 +126,7 @@ function TableRow<T extends object>(props: RowProps<T>) {
   return (
     <Row
       {...props}
-      className="cursor-default border-b outline-none transition-colors aria-selected:bg-gray-100 data-[hovered]:bg-gray-100/50 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-black"
+      className="cursor-default border-b outline-hidden transition-colors aria-selected:bg-gray-100 data-hovered:bg-gray-100/50 data-focus-visible:-outline-offset-2 data-focus-visible:outline-black"
     />
   );
 }
@@ -135,7 +135,7 @@ function TableCell(props: CellProps) {
   return (
     <Cell
       {...props}
-      className="p-4 align-middle outline-none first:pr-0 data-[focus-visible]:-outline-offset-2 data-[focus-visible]:outline-black"
+      className="p-4 align-middle outline-hidden first:pr-0 data-focus-visible:-outline-offset-2 data-focus-visible:outline-black"
     />
   );
 }
@@ -144,7 +144,7 @@ function TableCell(props: CellProps) {
 //   return (
 //     <Checkbox
 //       slot="selection"
-//       className="block h-4 w-4 shrink-0 rounded border border-black ring-offset-1 data-[disabled]:cursor-not-allowed data-[indeterminate]:bg-black data-[selected]:bg-black data-[indeterminate]:text-white data-[selected]:text-white data-[disabled]:opacity-50 data-[focus-visible]:outline-none data-[focus-visible]:ring-2 data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2"
+//       className="block h-4 w-4 shrink-0 rounded-sm border border-black ring-offset-1 data-disabled:cursor-not-allowed data-indeterminate:bg-black data-selected:bg-black data-indeterminate:text-white data-selected:text-white data-disabled:opacity-50 data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-black data-focus-visible:ring-offset-2"
 //     >
 //       {({ isSelected, isIndeterminate }) => (
 //         <div className="flex items-center justify-center text-current">
@@ -161,7 +161,7 @@ function TableCell(props: CellProps) {
 
 // function Badge({ children }: { children: ReactNode }) {
 //   return (
-//     <div className="focus:ring-ring inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2">
+//     <div className="focus:ring-ring inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2">
 //       {children}
 //     </div>
 //   );
@@ -171,28 +171,28 @@ export function BottomToolbar<TItem>({ table }: { table: ITable<TItem> }) {
     <div>
       <div className="flex items-center gap-2">
         <button
-          className="rounded border p-1"
+          className="rounded-sm border p-1"
           onClick={() => table.firstPage()}
           disabled={!table.getCanPreviousPage()}
         >
           {"<<"}
         </button>
         <button
-          className="rounded border p-1"
+          className="rounded-sm border p-1"
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
         >
           {"<"}
         </button>
         <button
-          className="rounded border p-1"
+          className="rounded-sm border p-1"
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
         >
           {">"}
         </button>
         <button
-          className="rounded border p-1"
+          className="rounded-sm border p-1"
           onClick={() => table.lastPage()}
           disabled={!table.getCanNextPage()}
         >
@@ -216,7 +216,7 @@ export function BottomToolbar<TItem>({ table }: { table: ITable<TItem> }) {
               const page = e.target.value ? Number(e.target.value) - 1 : 0;
               table.setPageIndex(page);
             }}
-            className="w-16 rounded border p-1"
+            className="w-16 rounded-sm border p-1"
           />
         </span>
         <select
@@ -250,17 +250,17 @@ export function Toolbar<TItem>({ table }: { table: ITable<TItem> }) {
           onChange={(event) =>
             table.getColumn("name")?.setFilterValue(event.target.value)
           }
-          className="h-8 w-[150px] rounded-md border border-gray-400 px-2 text-sm text-gray-700 outline-none focus:ring focus:ring-black focus:ring-offset-2 lg:w-[250px]"
+          className="h-8 w-[150px] rounded-md border border-gray-400 px-2 text-sm text-gray-700 outline-hidden focus:ring-3 focus:ring-black focus:ring-offset-2 lg:w-[250px]"
         />
       </TextField>
       <MenuTrigger>
-        <Button className="flex cursor-default items-center rounded-md border border-gray-300 px-2 py-1 text-sm outline-none data-[hovered]:bg-gray-100 data-[pressed]:bg-gray-200 data-[focus-visible]:ring data-[focus-visible]:ring-black data-[focus-visible]:ring-offset-2">
+        <Button className="flex cursor-default items-center rounded-md border border-gray-300 px-2 py-1 text-sm outline-hidden data-hovered:bg-gray-100 data-pressed:bg-gray-200 data-focus-visible:ring-3 data-focus-visible:ring-black data-focus-visible:ring-offset-2">
           <SlidersHorizontal className="mr-2 h-4 w-4" />
           View
         </Button>
         <Popover className="rounded-md border border-gray-300 bg-white p-2">
           <Menu
-            className="outline-none"
+            className="outline-hidden"
             selectionMode="multiple"
             selectedKeys={table
               .getVisibleFlatColumns()
@@ -291,7 +291,7 @@ export function Toolbar<TItem>({ table }: { table: ITable<TItem> }) {
                   <MenuItem
                     id={column.id}
                     key={column.id}
-                    className="flex cursor-default items-center gap-2 rounded px-2 py-1 text-sm capitalize outline-none data-[focused]:bg-gray-100 data-[focus-visible]:ring data-[focus-visible]:ring-black"
+                    className="flex cursor-default items-center gap-2 rounded-sm px-2 py-1 text-sm capitalize outline-hidden data-focused:bg-gray-100 data-focus-visible:ring-3 data-focus-visible:ring-black"
                   >
                     {({ isSelected }) => (
                       <>

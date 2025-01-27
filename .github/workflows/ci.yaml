@@ -36,6 +36,9 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - run: npm run wasm
+        env:
+          # todo: why is cargo.toml not good enough?
+          RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       - name: Setup environment variables
         run: |
           cp .env.example .env
