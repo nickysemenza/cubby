@@ -57,7 +57,7 @@
     "react-toastify": "^11.0.2",
     "server-only": "^0.0.1",
     "superjson": "^2.2.1",
-    "tailwind-merge": "^2.5.5",
+    "tailwind-merge": "^3.0.0",
     "tailwind-variants": "^0.3.0",
     "trpc-ui": "^1.0.4",
     "vite-plugin-wasm": "^3.3.0",
