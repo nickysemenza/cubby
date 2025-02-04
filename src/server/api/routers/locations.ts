@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publicProcedure, createTRPCRouter } from "../trpc";
-import { type Prisma } from "@prisma/client";
+import { PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
   dbTimestamps,
@@ -9,14 +9,82 @@ import {
   buildTakeSkip,
   sortParams,
 } from "./util";
+import { type InfLocationConfig } from "~/server/config";
 
-const locationType = z.string();
+export const loadLocations = async (
+  db: PrismaClient,
+  data: InfLocationConfig[],
+) => {
+  const now = new Date();
+  const load = async (
+    parent: Prisma.LocationCreateInput | null,
+    children: InfLocationConfig[],
+  ): Promise<void> => {
+    for (const child of children) {
+      const res = await db.location.upsert({
+        where: {
+          name: child.name,
+        },
+        create: {
+          name: child.name,
+          type: child.type,
+          updatedAt: now,
+          parent: parent
+            ? {
+                connect: {
+                  id: parent.id,
+                },
+              }
+            : undefined,
+        },
+        update: {
+          name: child.name,
+          type: child.type,
+          updatedAt: now,
+          parent: parent
+            ? {
+                connect: {
+                  id: parent.id,
+                },
+              }
+            : undefined,
+        },
+      });
+      await load(res, child.children ?? []);
+    }
+  };
+
+  await load(null, data);
+
+  const stale = await db.location.findMany({
+    where: {
+      updatedAt: {
+        not: now,
+      },
+    },
+  });
+  for (const s of stale) {
+    await db.location.delete({
+      where: {
+        id: s.id,
+      },
+    });
+  }
+};
+
+export const locationType = z
+  .string()
+  .describe("type of location (room, container, etc)");
+
+export const locationBase = z.object({
+  name: z.string().describe("name of location"),
+  type: locationType,
+});
 const locationOut = z
   .object({
     id: z.string().uuid(),
-    name: z.string(),
-    type: locationType,
   })
+  .merge(locationBase)
   .merge(dbTimestamps);
 const locationOutWithParentChildren = z
   .object({
@@ -138,7 +206,6 @@ const list = publicProcedure
           ? { search: input.nameFilter, mode: "insensitive" }
           : undefined,
       type: input.itemTypeFilter,
-      // parentItemId: null,
     };
     const res = await ctx.db.location.findMany({
       orderBy,

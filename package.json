@@ -22,6 +22,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "wasm": "make wasm",
+    "foo": "tsx scripts/generate-json-schemas.ts",
+    "bar": "tsx scripts/load-data.ts",
     "regenerate": "npm run db:rebuild && npm run wasm"
   },
   "dependencies": {
@@ -62,8 +64,9 @@
     "tailwind-variants": "^0.3.0",
     "trpc-ui": "^1.0.4",
     "vite-plugin-wasm": "^3.3.0",
+    "yaml": "^2.7.0",
     "zod": "^3.23.8",
-    "zod-to-json-schema": "^3.23.5"
+    "zod-to-json-schema": "^3.24.1"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.2.0",
@@ -87,6 +90,7 @@
     "prisma-dbml-generator": "^0.12.0",
     "prisma-json-types-generator": "^3.2.1",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite-plugin-top-level-await": "^1.4.4",
     "vitest": "^3.0.0"

@@ -7,7 +7,7 @@ locations:
         children:
           - name: "bin A"
             type: "crate"
-          - name: "bin B"
+          - name: "bin C"
             type: "crate"
   - name: "kitchen"
     type: "room"
@@ -19,3 +19,38 @@ locations:
             type: "drawer"
           - name: "coffee drawer"
             type: "drawer"
+products:
+  - name: "White sugar"
+    upc: "015800030621"
+    manufacturer: "C&H"
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 4
+        b:
+          unit: dollars
+          value: 3
+        source: whole foods
+  - name: "All Purpose Flour"
+    upc: "071012010509"
+    manufacturer: "King Arthur"
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 5
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+  - name: M18 Hackzall
+    upc: "045242502776"
+    manufacturer: "Milwaukee"
+    model: "2719-20"
+    unit_mappings:
+      - a:
+          unit: dollars
+          value: 169
+        b:
+          unit: each
+          value: 1
+        source: home depot

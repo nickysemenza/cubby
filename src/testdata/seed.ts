@@ -20,25 +20,20 @@ export const seedRealRecipes = async (db: PrismaClient) => {
   for (const ingredient of exampleIngredients) {
     const res = await db.item.upsert({
       where: {
-        name_type: { name: ingredient.name, type: ItemType.Ingredient },
+        name_type: {
+          name: ingredient.name,
+          type: ItemType.Ingredient,
+        },
       },
-      create: { name: ingredient.name, type: ItemType.Ingredient },
+      create: {
+        name: ingredient.name,
+        type: ItemType.Ingredient,
+        aliases: ingredient.aliases ?? undefined,
+      },
       update: {
-        parentItemId: null,
+        aliases: ingredient.aliases ?? undefined,
       },
     });
-
-    for (const alias of ingredient.aliases ?? []) {
-      await db.item.upsert({
-        where: {
-          name_type: { name: alias, type: ItemType.Ingredient },
-        },
-        create: { name: alias, type: ItemType.Ingredient },
-        update: {
-          parentItemId: res.id,
-        },
-      });
-    }
 
     console.log(res);
   }

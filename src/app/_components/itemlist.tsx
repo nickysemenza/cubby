@@ -41,18 +41,11 @@ export function ItemList() {
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
-    columnHelper.accessor("children", {
+    columnHelper.accessor("aliases", {
       cell: (info) => (
         <div>
-          {info.getValue().map((child) => (
-            <div key={child.id}>
-              <Link
-                className="text-blue-600 hover:underline dark:text-blue-500"
-                href={`items/${child.id}`}
-              >
-                {child.name}
-              </Link>
-            </div>
+          {info.getValue().map((alias) => (
+            <div key={alias}>{alias}</div>
           ))}
         </div>
       ),

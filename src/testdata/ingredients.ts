@@ -71,7 +71,7 @@ const dairy = [
     null,
   ),
   new Ing("milk", [], null),
-  new Ing("egg", [], null),
+  new Ing("egg", [], ["eggs"]),
 ];
 const spices = [
   new Ing("salt", [unitValuePair(1, "tsp", 5, "g")], null),

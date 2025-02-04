@@ -14,21 +14,7 @@ type ItemDeepDBWithChildren = Prisma.ItemGetPayload<{
   include: {
     Product: true;
     Recipe: true;
-    children: {
-      include: {
-        Product: true;
-        Recipe: true;
-        RecipeSectionIngredient: {
-          include: {
-            recipeSection: {
-              include: {
-                recipe: true;
-              };
-            };
-          };
-        };
-      };
-    };
+
     RecipeSectionIngredient: {
       include: {
         recipeSection: {
@@ -68,32 +54,19 @@ const dbItemToAPI: (item: ItemDeepDB) => ItemOut = (item) => {
     ),
   };
 };
-const dbItemToAPIWithChildren: (
-  item: ItemDeepDBWithChildren,
-) => ItemOutWithChldren = (item) => {
-  const { children, ...restOfItem } = item;
-
-  return {
-    ...dbItemToAPI(restOfItem),
-    children: children.map(dbItemToAPI),
-  };
-};
 
 export type ItemOut = z.infer<typeof itemOut>;
-export type ItemOutWithChldren = z.infer<typeof itemOutWithChildren>;
 const itemOut = z
   .object({
     id: z.string().uuid(),
     name: z.string(),
     type: z.nativeEnum(ItemType),
+    aliases: z.array(z.string()),
     recipe: recipeTopLevel.nullable(),
     appearsInRecipes: z.array(recipeTopLevel),
     product: z.any().nullable(), //todo
   })
   .merge(dbTimestamps);
-const itemOutWithChildren = z
-  .object({ children: z.array(itemOut) })
-  .merge(itemOut);
 
 const foo = {
   Product: true,
@@ -168,7 +141,7 @@ const list = publicProcedure
       itemTypeFilter: z.nativeEnum(ItemType).optional(),
     }),
   )
-  .output(createPaginatedResponseSchema(itemOutWithChildren))
+  .output(createPaginatedResponseSchema(itemOut))
   .query(async ({ ctx, input }) => {
     const orderBy: Prisma.ItemOrderByWithAggregationInput = {
       createdAt:
@@ -176,12 +149,29 @@ const list = publicProcedure
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
     };
     const where: Prisma.ItemWhereInput = {
-      name:
-        input.nameFilter != ""
-          ? { search: input.nameFilter, mode: "insensitive" }
-          : undefined,
-      type: input.itemTypeFilter,
-      parentItemId: null,
+      AND: [
+        {
+          OR: [
+            {
+              name:
+                input.nameFilter != ""
+                  ? { search: input.nameFilter, mode: "insensitive" }
+                  : undefined,
+            },
+            {
+              aliases:
+                input.nameFilter !== undefined
+                  ? {
+                      has: input.nameFilter,
+                    }
+                  : undefined,
+            },
+          ],
+        },
+        {
+          type: input.itemTypeFilter,
+        },
+      ],
     };
     const res = await ctx.db.item.findMany({
       orderBy,
@@ -190,21 +180,6 @@ const list = publicProcedure
       include: {
         Product: true,
         Recipe: true,
-        children: {
-          include: {
-            Product: true,
-            Recipe: true,
-            RecipeSectionIngredient: {
-              include: {
-                recipeSection: {
-                  include: {
-                    recipe: true,
-                  },
-                },
-              },
-            },
-          },
-        },
         RecipeSectionIngredient: {
           include: {
             recipeSection: {
@@ -217,7 +192,7 @@ const list = publicProcedure
       },
     });
     const totalCount = await ctx.db.item.count({ where });
-    const items = res.map(dbItemToAPIWithChildren);
+    const items = res.map(dbItemToAPI);
     return {
       meta: {
         pageIndex: input.pagination.pageIndex,

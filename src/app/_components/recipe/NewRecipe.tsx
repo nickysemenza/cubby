@@ -163,7 +163,7 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
       {amount.modifier && (
         <div className="inline">
           {", "}
-          <div className="inline italic text-gray-400">{amount.modifier}</div>
+          <div className="inline text-gray-400 italic">{amount.modifier}</div>
         </div>
       )}
     </div>

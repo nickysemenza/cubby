@@ -41,19 +41,16 @@ Table RecipeSectionIngredient {
 Table Item {
   id String [pk]
   name String [not null]
+  aliases String[] [not null]
   type ItemType [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
   InventoryItem InventoryItem [not null, note: 'items appear in inventory reports']
-  Product Product [note: 'some items are products']
-  productId String
   Recipe Recipe [note: 'some items are ingredients']
   recipeId String
   RecipeSectionIngredient RecipeSectionIngredient [not null]
-  children Item [not null]
-  parent Item
-  parentItemId String
+  Product Product [not null]
 
   indexes {
     (name, type) [unique]
@@ -62,11 +59,15 @@ Table Item {
 
 Table Product {
   id String [pk]
-  name String [not null]
+  name String [unique, not null]
+  manufacturer String [not null]
+  upc String [unique, not null]
+  model String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  Item Item [not null, note: 'Items that are this product']
+  Item Item
+  itemId String
 }
 
 Table InventoryItem {
@@ -85,7 +86,7 @@ Table InventoryItem {
 
 Table Location {
   id String [pk]
-  name String [not null]
+  name String [unique, not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
@@ -114,11 +115,9 @@ Ref: RecipeSectionIngredient.recipeSectionId > RecipeSection.id
 
 Ref: RecipeSectionIngredient.ingredientId > Item.id
 
-Ref: Item.productId > Product.id
-
 Ref: Item.recipeId > Recipe.id
 
-Ref: Item.parentItemId > Item.id
+Ref: Product.itemId > Item.id
 
 Ref: InventoryItem.itemId > Item.id
 

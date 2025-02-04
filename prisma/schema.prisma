@@ -65,6 +65,7 @@ model RecipeSectionIngredient {
 model Item {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     name      String
+    aliases   String[]
     type      ItemType
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
@@ -73,30 +74,35 @@ model Item {
     /// items appear in inventory reports
     InventoryItem InventoryItem[]
 
-    /// some items are products
-    Product   Product? @relation(fields: [productId], references: [id])
-    productId String?  @db.Uuid
-
     /// some items are ingredients
     Recipe                  Recipe?                   @relation(fields: [recipeId], references: [id])
     recipeId                String?                   @db.Uuid
     RecipeSectionIngredient RecipeSectionIngredient[]
 
-    children     Item[]  @relation("SameAsItem")
-    parent       Item?   @relation("SameAsItem", fields: [parentItemId], references: [id])
-    parentItemId String? @db.Uuid
+    // hierarchy, parent can have equivalent children
+    // children Item[] @relation("SameAsItem")
+    // parent   Item?  @relation("SameAsItem", fields: [parentItemId], references: [id])
+    // parentItemId String?   @db.Uuid
+
+    // what product(s) point to this item
+    Product Product[]
 
     @@unique([name, type])
 }
 
 model Product {
-    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name      String
+    id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name         String  @unique
+    manufacturer String
+    upc          String  @unique
+    model        String?
+
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
-    /// Items that are this product
-    Item      Item[]
+
+    Item   Item?   @relation(fields: [itemId], references: [id])
+    itemId String? @db.Uuid
 }
 
 /// holds a mapping between an item and a location
@@ -122,7 +128,7 @@ model InventoryItem {
 
 model Location {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name      String
+    name      String    @unique
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?

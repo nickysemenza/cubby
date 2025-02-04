@@ -1,32 +1,125 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Generated schema for Root",
-  "type": "object",
-  "$defs": {
-    "Location": {
+  "$ref": "#/definitions/configuration",
+  "definitions": {
+    "configuration": {
       "type": "object",
       "properties": {
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "children": {
+        "locations": {
           "type": "array",
-          "items": { "$ref": "#/$defs/Location" }
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "name of location"
+              },
+              "type": {
+                "type": "string",
+                "description": "type of location (room, container, etc)"
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/configuration/properties/locations/items"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          "description": "locations that have inventoryable items"
+        },
+        "products": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "upc": {
+                "type": "string",
+                "minLength": 12,
+                "maxLength": 12
+              },
+              "manufacturer": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "unit_mappings": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "unit"
+                      ],
+                      "additionalProperties": false,
+                      "description": "first of pair"
+                    },
+                    "b": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "$ref": "#/definitions/configuration/properties/products/items/properties/unit_mappings/items/properties/a/properties/value"
+                        },
+                        "unit": {
+                          "$ref": "#/definitions/configuration/properties/products/items/properties/unit_mappings/items/properties/a/properties/unit"
+                        }
+                      },
+                      "required": [
+                        "value",
+                        "unit"
+                      ],
+                      "additionalProperties": false,
+                      "description": "second of pair"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "a",
+                    "b"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "name",
+              "upc",
+              "manufacturer",
+              "unit_mappings"
+            ],
+            "additionalProperties": false
+          },
+          "description": "products that can be purchased"
         }
       },
-      "required": ["name", "type"]
+      "required": [
+        "locations",
+        "products"
+      ],
+      "additionalProperties": false,
+      "description": "system config"
     }
   },
-  "properties": {
-    "locations": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/Location"
-      }
-    }
-  },
-  "required": ["locations"]
+  "$schema": "http://json-schema.org/draft-07/schema#"
 }
