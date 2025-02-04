@@ -30,7 +30,7 @@ Table RecipeSectionIngredient {
   id String [pk]
   recipeSection RecipeSection [not null]
   recipeSectionId String [not null]
-  ingredient Item [not null]
+  ingredient Item [not null, note: 'each ingredient is an item']
   ingredientId String [not null]
   amounts Json[] [not null, note: '[Amount]']
   createdAt DateTime [default: `now()`, not null]
@@ -43,12 +43,12 @@ Table Item {
   name String [not null]
   type ItemType [not null]
   createdAt DateTime [default: `now()`, not null]
-  updatedAt DateTime [not null]
+  updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  InventoryItem InventoryItem [not null]
-  Product Product
+  InventoryItem InventoryItem [not null, note: 'items appear in inventory reports']
+  Product Product [note: 'some items are products']
   productId String
-  Recipe Recipe
+  Recipe Recipe [note: 'some items are ingredients']
   recipeId String
   RecipeSectionIngredient RecipeSectionIngredient [not null]
   children Item [not null]
@@ -64,33 +64,36 @@ Table Product {
   id String [pk]
   name String [not null]
   createdAt DateTime [default: `now()`, not null]
-  updatedAt DateTime [not null]
+  updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  Item Item [not null]
+  Item Item [not null, note: 'Items that are this product']
 }
 
 Table InventoryItem {
   id String [pk]
-  amount Json [not null, note: '[Amount]']
-  Item Item [not null]
+  Item Item [not null, note: 'what is the item']
   itemId String [not null]
+  amount Json [not null, note: '[Amount]']
   createdAt DateTime [default: `now()`, not null]
-  updatedAt DateTime [not null]
+  updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  location Location [not null]
+  location Location [not null, note: 'where is the item']
   locationId String [not null]
+
+  Note: 'holds a mapping between an item and a location'
 }
 
 Table Location {
   id String [pk]
   name String [not null]
   createdAt DateTime [default: `now()`, not null]
-  updatedAt DateTime [not null]
+  updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
   parent Location
   parentId String
   children Location [not null]
-  items InventoryItem [not null]
+  items InventoryItem [not null, note: 'items that are in this location']
+  type String [not null]
 }
 
 Enum ItemType {

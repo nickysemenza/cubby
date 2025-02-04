@@ -126,7 +126,7 @@ function TableRow<T extends object>(props: RowProps<T>) {
   return (
     <Row
       {...props}
-      className="cursor-default border-b outline-hidden transition-colors aria-selected:bg-gray-100 data-hovered:bg-gray-100/50 data-focus-visible:-outline-offset-2 data-focus-visible:outline-black"
+      className="cursor-default border-b outline-hidden transition-colors aria-selected:bg-gray-100 data-focus-visible:-outline-offset-2 data-focus-visible:outline-black data-hovered:bg-gray-100/50"
     />
   );
 }
@@ -140,32 +140,6 @@ function TableCell(props: CellProps) {
   );
 }
 
-// function SelectionCheckbox() {
-//   return (
-//     <Checkbox
-//       slot="selection"
-//       className="block h-4 w-4 shrink-0 rounded-sm border border-black ring-offset-1 data-disabled:cursor-not-allowed data-indeterminate:bg-black data-selected:bg-black data-indeterminate:text-white data-selected:text-white data-disabled:opacity-50 data-focus-visible:outline-hidden data-focus-visible:ring-2 data-focus-visible:ring-black data-focus-visible:ring-offset-2"
-//     >
-//       {({ isSelected, isIndeterminate }) => (
-//         <div className="flex items-center justify-center text-current">
-//           {isSelected ? (
-//             <Check className="h-4 w-4" aria-hidden="true" />
-//           ) : isIndeterminate ? (
-//             <Minus className="h-4 w-4" aria-hidden="true" />
-//           ) : null}
-//         </div>
-//       )}
-//     </Checkbox>
-//   );
-// }
-
-// function Badge({ children }: { children: ReactNode }) {
-//   return (
-//     <div className="focus:ring-ring inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2">
-//       {children}
-//     </div>
-//   );
-// }
 export function BottomToolbar<TItem>({ table }: { table: ITable<TItem> }) {
   return (
     <div>
@@ -254,7 +228,7 @@ export function Toolbar<TItem>({ table }: { table: ITable<TItem> }) {
         />
       </TextField>
       <MenuTrigger>
-        <Button className="flex cursor-default items-center rounded-md border border-gray-300 px-2 py-1 text-sm outline-hidden data-hovered:bg-gray-100 data-pressed:bg-gray-200 data-focus-visible:ring-3 data-focus-visible:ring-black data-focus-visible:ring-offset-2">
+        <Button className="flex cursor-default items-center rounded-md border border-gray-300 px-2 py-1 text-sm outline-hidden data-focus-visible:ring-3 data-focus-visible:ring-black data-focus-visible:ring-offset-2 data-hovered:bg-gray-100 data-pressed:bg-gray-200">
           <SlidersHorizontal className="mr-2 h-4 w-4" />
           View
         </Button>
@@ -291,7 +265,7 @@ export function Toolbar<TItem>({ table }: { table: ITable<TItem> }) {
                   <MenuItem
                     id={column.id}
                     key={column.id}
-                    className="flex cursor-default items-center gap-2 rounded-sm px-2 py-1 text-sm capitalize outline-hidden data-focused:bg-gray-100 data-focus-visible:ring-3 data-focus-visible:ring-black"
+                    className="flex cursor-default items-center gap-2 rounded-sm px-2 py-1 text-sm capitalize outline-hidden data-focus-visible:ring-3 data-focus-visible:ring-black data-focused:bg-gray-100"
                   >
                     {({ isSelected }) => (
                       <>

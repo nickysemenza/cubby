@@ -51,6 +51,7 @@ model RecipeSectionIngredient {
     recipeSection   RecipeSection @relation(fields: [recipeSectionId], references: [id])
     recipeSectionId String        @db.Uuid
 
+    /// each ingredient is an item
     ingredient   Item   @relation(fields: [ingredientId], references: [id])
     ingredientId String @db.Uuid
 
@@ -62,16 +63,21 @@ model RecipeSectionIngredient {
 }
 
 model Item {
-    id            String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name          String
-    type          ItemType
-    createdAt     DateTime        @default(now())
-    updatedAt     DateTime        @updatedAt
-    deletedAt     DateTime?
-    InventoryItem InventoryItem[]
-    Product       Product?        @relation(fields: [productId], references: [id])
-    productId     String?         @db.Uuid
+    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name      String
+    type      ItemType
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @default(now()) @updatedAt
+    deletedAt DateTime?
 
+    /// items appear in inventory reports
+    InventoryItem InventoryItem[]
+
+    /// some items are products
+    Product   Product? @relation(fields: [productId], references: [id])
+    productId String?  @db.Uuid
+
+    /// some items are ingredients
     Recipe                  Recipe?                   @relation(fields: [recipeId], references: [id])
     recipeId                String?                   @db.Uuid
     RecipeSectionIngredient RecipeSectionIngredient[]
@@ -87,24 +93,29 @@ model Product {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     name      String
     createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
+    updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
+    /// Items that are this product
     Item      Item[]
 }
 
+/// holds a mapping between an item and a location
 model InventoryItem {
     id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     // name      String
 
-    /// [Amount]
-    amount Json
+    /// what is the item
     Item   Item   @relation(fields: [itemId], references: [id])
     itemId String @db.Uuid
 
+    /// [Amount]
+    amount Json
+
     createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
+    updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
+    /// where is the item
     location   Location @relation("LocationToItem", fields: [locationId], references: [id])
     locationId String   @db.Uuid
 }
@@ -113,15 +124,19 @@ model Location {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     name      String
     createdAt DateTime  @default(now())
-    updatedAt DateTime  @updatedAt
+    updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
     parent   Location?       @relation("LocationToLocation", fields: [parentId], references: [id])
     parentId String?         @db.Uuid
     children Location[]      @relation("LocationToLocation")
+    /// items that are in this location
     items    InventoryItem[] @relation("LocationToItem")
 
+    type String
+
     @@index([name])
+    @@index([type])
 }
 
 enum ItemType {

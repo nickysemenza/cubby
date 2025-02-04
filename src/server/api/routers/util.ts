@@ -21,6 +21,14 @@ export const dbTimestamps = z.object({
   createdAt: z.date(),
   updatedAt: z.date(),
 });
+export function extractDbTimestampsFromDBRec<
+  T extends { createdAt: Date; updatedAt: Date },
+>(dbRec: T): z.infer<typeof dbTimestamps> {
+  return {
+    createdAt: dbRec.createdAt,
+    updatedAt: dbRec.updatedAt,
+  };
+}
 
 export function createPaginatedResponseSchema<ItemType extends z.ZodTypeAny>(
   itemSchema: ItemType,

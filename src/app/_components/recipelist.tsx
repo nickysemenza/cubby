@@ -6,7 +6,6 @@ import {
   createColumnHelper,
   getCoreRowModel,
   getPaginationRowModel,
-  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
 import { type Flatten } from "~/util";
@@ -15,36 +14,28 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
 import { useState } from "react";
-import { type SortParams } from "~/server/api/routers/util";
+import {
+  defaultPagination,
+  buildSortParams,
+  defaultSortState,
+} from "./recipe/tableUtils";
 
 dayjs.extend(relativeTime);
 
 export function RecipeList() {
   const initialSort = "createdAt";
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: initialSort, desc: true },
-  ]);
+  const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const sortParams: SortParams = {
-    direction: sorting[0]?.desc ? "desc" : "asc",
-    orderBy: sorting[0]?.id ?? initialSort,
-  };
-  const [pagination, setPagination] = useState({
-    pageIndex: 0, //initial page index
-    pageSize: 10, //default page size
-  });
-
+  const [pagination, setPagination] = useState(defaultPagination);
   const [recipesResp] = api.recipe.list.useSuspenseQuery({
-    sort: sortParams,
+    sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
       | string
       | undefined,
   });
-  const recipes = recipesResp.items;
-
-  const columnHelper = createColumnHelper<Flatten<typeof recipes>>();
-  console.log({ sorting, columnFilters });
+  const data = recipesResp.items;
+  const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     // {
     //   id: "select",
@@ -95,7 +86,7 @@ export function RecipeList() {
     }),
   ];
   const table = useReactTable({
-    data: recipes,
+    data: data,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),

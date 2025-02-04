@@ -1,0 +1,21 @@
+locations:
+  - name: "garage"
+    type: "room"
+    children:
+      - name: "chrome wire shelf"
+        type: "cabinet"
+        children:
+          - name: "bin A"
+            type: "crate"
+          - name: "bin B"
+            type: "crate"
+  - name: "kitchen"
+    type: "room"
+    children:
+      - name: "pantry"
+        type: "cabinet"
+        children:
+          - name: "spice drawer"
+            type: "drawer"
+          - name: "coffee drawer"
+            type: "drawer"

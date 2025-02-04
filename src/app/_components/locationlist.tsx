@@ -22,12 +22,12 @@ import {
 
 dayjs.extend(relativeTime);
 
-export function ItemList() {
+export function LocationList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState(defaultPagination);
-  const [itemsResp] = api.item.list.useSuspenseQuery({
+  const [itemsResp] = api.location.list.useSuspenseQuery({
     sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
@@ -48,7 +48,7 @@ export function ItemList() {
             <div key={child.id}>
               <Link
                 className="text-blue-600 hover:underline dark:text-blue-500"
-                href={`items/${child.id}`}
+                href={`locations/${child.id}`}
               >
                 {child.name}
               </Link>
@@ -56,6 +56,23 @@ export function ItemList() {
           ))}
         </div>
       ),
+    }),
+    columnHelper.accessor("parent", {
+      cell: (info) => {
+        const item = info.getValue();
+        return (
+          <div>
+            {item && (
+              <Link
+                className="text-blue-600 hover:underline dark:text-blue-500"
+                href={`locations/${item.id}`}
+              >
+                {item.name}
+              </Link>
+            )}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor("type", {
       cell: (info) => info.getValue(),
@@ -74,30 +91,6 @@ export function ItemList() {
           >
             {info.getValue()}
           </Link>
-        </div>
-      ),
-    }),
-    columnHelper.accessor("appearsInRecipes", {
-      cell: (info) => (
-        <div>
-          <ul className="">
-            {info
-              .getValue()
-              .filter(
-                (obj1, i, arr) =>
-                  arr.findIndex((obj2) => obj2.id === obj1.id) === i,
-              )
-              .map((recipe) => (
-                <li key={recipe.id}>
-                  <Link
-                    className="text-blue-600 hover:underline dark:text-blue-500"
-                    href={`recipes/${recipe.id}`}
-                  >
-                    {recipe.name}
-                  </Link>
-                </li>
-              ))}
-          </ul>
         </div>
       ),
     }),
