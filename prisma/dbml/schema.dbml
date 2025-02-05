@@ -40,7 +40,7 @@ Table RecipeSectionIngredient {
 
 Table Item {
   id String [pk]
-  name String [not null]
+  name String [unique, not null]
   aliases String[] [not null]
   type ItemType [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -51,10 +51,6 @@ Table Item {
   recipeId String
   RecipeSectionIngredient RecipeSectionIngredient [not null]
   Product Product [not null]
-
-  indexes {
-    (name, type) [unique]
-  }
 }
 
 Table Product {

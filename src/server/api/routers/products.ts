@@ -1,6 +1,28 @@
-import { PrismaClient, Prisma } from "@prisma/client";
-import { ProductConfigItem } from "~/server/config";
+import { type PrismaClient, type Prisma } from "@prisma/client";
+import { type ProductConfigItem } from "~/server/config";
+import { findOrCreateItem } from "./item";
+import { z } from "zod";
+import { dbTimestamps } from "./util";
+import { createTRPCRouter, publicProcedure } from "../trpc";
+import { productBase } from "~/schemas/product";
 
+export const productTopLevel = z
+  .object({
+    id: z.string().uuid(),
+  })
+  .merge(productBase)
+  .merge(dbTimestamps);
+
+const productWithItem = productTopLevel.merge(
+  z.object({
+    item: z
+      .object({
+        id: z.string().uuid(),
+        name: z.string(),
+      })
+      .nullable(),
+  }),
+);
 export const loadProducts = async (
   db: PrismaClient,
   data: ProductConfigItem[],
@@ -9,7 +31,15 @@ export const loadProducts = async (
 
   for (const product of data) {
     const { name, manufacturer, upc, model } = product;
-    const upsertFields = { name, manufacturer, upc, model, updatedAt: now };
+    const item = await findOrCreateItem(db, product.name, product.productType);
+    const upsertFields: Prisma.ProductCreateInput = {
+      name,
+      manufacturer,
+      upc,
+      model,
+      updatedAt: now,
+      Item: { connect: { id: item.id } },
+    };
     await db.product.upsert({
       where: {
         name,
@@ -32,3 +62,41 @@ export const loadProducts = async (
     console.log({ stale: stale.map((s) => s.id) });
   }
 };
+
+const getByID = publicProcedure
+  .input(
+    z.object({
+      id: z.string(),
+    }),
+  )
+  .output(productWithItem)
+  .query(async ({ ctx, input }) => {
+    const res = await ctx.db.product.findFirstOrThrow({
+      where: {
+        id: input.id,
+      },
+      include: { Item: true },
+    });
+    return dbProductoToAPI(res);
+  });
+
+type ProductDeepDB = Prisma.ProductGetPayload<{
+  include: {
+    Item: true;
+  };
+}>;
+
+const dbProductoToAPI: (
+  item: ProductDeepDB,
+) => z.infer<typeof productWithItem> = (item) => {
+  const { Item, ...restOfItem } = item;
+
+  return {
+    ...restOfItem,
+    item: Item,
+  };
+};
+
+export const productRouter = createTRPCRouter({
+  getByID,
+});

@@ -64,7 +64,7 @@ model RecipeSectionIngredient {
 
 model Item {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name      String
+    name      String    @unique
     aliases   String[]
     type      ItemType
     createdAt DateTime  @default(now())
@@ -86,8 +86,6 @@ model Item {
 
     // what product(s) point to this item
     Product Product[]
-
-    @@unique([name, type])
 }
 
 model Product {

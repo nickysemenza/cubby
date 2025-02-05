@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { locationBase } from "./api/routers/locations";
 import { amount } from "~/codec/codec";
-import { b } from "vitest/dist/chunks/suite.BJU7kdY9.js";
+import { ItemType } from "@prisma/client";
+import { productBase } from "~/schemas/product";
 
 const locationConfigBase = locationBase;
 
@@ -14,11 +15,8 @@ const locationConfigEntry: z.ZodType<InfLocationConfig> =
     children: z.lazy(() => locationConfigEntry.array().optional()),
   });
 
-const productConfigEntry = z.object({
-  name: z.string(),
-  upc: z.string().length(12),
-  manufacturer: z.string(),
-  model: z.string().optional(),
+const productAddonConf = z.object({
+  productType: z.nativeEnum(ItemType),
   unit_mappings: z.array(
     z.object({
       a: amount.describe("first of pair"),
@@ -27,6 +25,7 @@ const productConfigEntry = z.object({
     }),
   ),
 });
+const productConfigEntry = productBase.merge(productAddonConf);
 
 export type ProductConfigItem = z.infer<typeof productConfigEntry>;
 

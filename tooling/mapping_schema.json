@@ -40,6 +40,14 @@
               "name": {
                 "type": "string"
               },
+              "productType": {
+                "type": "string",
+                "enum": [
+                  "Ingredient",
+                  "Recipe",
+                  "Item"
+                ]
+              },
               "upc": {
                 "type": "string",
                 "minLength": 12,
@@ -104,6 +112,7 @@
             },
             "required": [
               "name",
+              "productType",
               "upc",
               "manufacturer",
               "unit_mappings"

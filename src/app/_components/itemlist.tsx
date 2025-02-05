@@ -94,6 +94,24 @@ export function ItemList() {
         </div>
       ),
     }),
+    columnHelper.accessor("product", {
+      cell: (info) => (
+        <div>
+          <ul className="">
+            {info.getValue().map((product) => (
+              <li key={product.id}>
+                <Link
+                  className="text-blue-600 hover:underline dark:text-blue-500"
+                  href={`products/${product.id}`}
+                >
+                  {product.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ),
+    }),
   ];
   const table = useReactTable({
     data: data,

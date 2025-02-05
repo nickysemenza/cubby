@@ -1,6 +1,7 @@
 import { type db } from "./db";
 import { ItemType } from "@prisma/client";
 import { type ParsedCompactRecipe } from "~/codec/codec";
+import { findOrCreateItem } from "./api/routers/item";
 
 export const insertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
@@ -24,13 +25,12 @@ export const insertRecipeFromCompact = async (
       });
 
       for (const ingredient of section.ingredients) {
-        const newIngredient = await tx.item.upsert({
-          where: {
-            name_type: { name: ingredient.name, type: ItemType.Ingredient },
-          },
-          create: { name: ingredient.name, type: ItemType.Ingredient },
-          update: {},
-        });
+        const newIngredient = await findOrCreateItem(
+          tx,
+          ingredient.name,
+          ItemType.Ingredient,
+        );
+
         const amounts: PrismaJson.Amount[] = ingredient.amounts;
         await tx.recipeSectionIngredient.create({
           data: {

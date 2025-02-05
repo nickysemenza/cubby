@@ -20,10 +20,8 @@ export const seedRealRecipes = async (db: PrismaClient) => {
   for (const ingredient of exampleIngredients) {
     const res = await db.item.upsert({
       where: {
-        name_type: {
-          name: ingredient.name,
-          type: ItemType.Ingredient,
-        },
+        name: ingredient.name,
+        type: ItemType.Ingredient,
       },
       create: {
         name: ingredient.name,

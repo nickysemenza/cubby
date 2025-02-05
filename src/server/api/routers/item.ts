@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { ItemType, type Prisma } from "@prisma/client";
+import { ItemType, type PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
   dbTimestamps,
@@ -9,23 +9,8 @@ import {
   buildTakeSkip,
 } from "./util";
 import { recipeTopLevel } from "../apiSchema";
+import { productTopLevel } from "./products";
 
-type ItemDeepDBWithChildren = Prisma.ItemGetPayload<{
-  include: {
-    Product: true;
-    Recipe: true;
-
-    RecipeSectionIngredient: {
-      include: {
-        recipeSection: {
-          include: {
-            recipe: true;
-          };
-        };
-      };
-    };
-  };
-}>;
 type ItemDeepDB = Prisma.ItemGetPayload<{
   include: {
     Product: true;
@@ -41,6 +26,20 @@ type ItemDeepDB = Prisma.ItemGetPayload<{
     };
   };
 }>;
+
+const itemInclude = {
+  Product: true,
+  Recipe: true,
+  RecipeSectionIngredient: {
+    include: {
+      recipeSection: {
+        include: {
+          recipe: true,
+        },
+      },
+    },
+  },
+};
 
 const dbItemToAPI: (item: ItemDeepDB) => ItemOut = (item) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfItem } = item;
@@ -64,38 +63,10 @@ const itemOut = z
     aliases: z.array(z.string()),
     recipe: recipeTopLevel.nullable(),
     appearsInRecipes: z.array(recipeTopLevel),
-    product: z.any().nullable(), //todo
+    product: z.array(productTopLevel),
   })
   .merge(dbTimestamps);
 
-const foo = {
-  Product: true,
-  Recipe: true,
-  children: {
-    include: {
-      Product: true,
-      Recipe: true,
-      RecipeSectionIngredient: {
-        include: {
-          recipeSection: {
-            include: {
-              recipe: true,
-            },
-          },
-        },
-      },
-    },
-  },
-  RecipeSectionIngredient: {
-    include: {
-      recipeSection: {
-        include: {
-          recipe: true,
-        },
-      },
-    },
-  },
-};
 const getByName = publicProcedure
   .input(
     z.object({
@@ -110,7 +81,7 @@ const getByName = publicProcedure
         name: { equals: input.nameFilter, mode: "insensitive" },
         type: input.itemTypeFilter,
       },
-      include: foo,
+      include: itemInclude,
     });
     return res ? dbItemToAPI(res) : null;
   });
@@ -127,10 +98,68 @@ const getByID = publicProcedure
       where: {
         id: input.id,
       },
-      include: foo,
+      include: itemInclude,
     });
     return dbItemToAPI(res);
   });
+
+export const findOrCreateItem = async (
+  db: PrismaClient | Prisma.TransactionClient,
+  name: string,
+  itemType: ItemType,
+) => {
+  const existing = await db.item.findFirst({
+    where: buildItemWhere(true, name, itemType),
+  });
+  if (existing !== null) {
+    return existing;
+  }
+  const created = await db.item.create({
+    data: {
+      name: name,
+      type: itemType,
+    },
+  });
+  return created;
+};
+
+// exact:
+//  true -> exact match on name or aliases
+//  false -> search on name, exact match on aliases
+export const buildItemWhere = (
+  exact: boolean,
+  name?: string,
+  itemType?: ItemType,
+) => {
+  const where: Prisma.ItemWhereInput = {
+    AND: [
+      {
+        OR: [
+          {
+            name:
+              name != ""
+                ? exact
+                  ? { equals: name, mode: "insensitive" }
+                  : { search: name, mode: "insensitive" }
+                : undefined,
+          },
+          {
+            aliases:
+              name !== undefined
+                ? {
+                    has: name,
+                  }
+                : undefined,
+          },
+        ],
+      },
+      {
+        type: itemType,
+      },
+    ],
+  };
+  return where;
+};
 
 const list = publicProcedure
   .input(
@@ -148,48 +177,12 @@ const list = publicProcedure
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
     };
-    const where: Prisma.ItemWhereInput = {
-      AND: [
-        {
-          OR: [
-            {
-              name:
-                input.nameFilter != ""
-                  ? { search: input.nameFilter, mode: "insensitive" }
-                  : undefined,
-            },
-            {
-              aliases:
-                input.nameFilter !== undefined
-                  ? {
-                      has: input.nameFilter,
-                    }
-                  : undefined,
-            },
-          ],
-        },
-        {
-          type: input.itemTypeFilter,
-        },
-      ],
-    };
+    const where = buildItemWhere(false, input.nameFilter, input.itemTypeFilter);
     const res = await ctx.db.item.findMany({
       orderBy,
       where,
       ...buildTakeSkip(input.pagination),
-      include: {
-        Product: true,
-        Recipe: true,
-        RecipeSectionIngredient: {
-          include: {
-            recipeSection: {
-              include: {
-                recipe: true,
-              },
-            },
-          },
-        },
-      },
+      include: itemInclude,
     });
     const totalCount = await ctx.db.item.count({ where });
     const items = res.map(dbItemToAPI);
