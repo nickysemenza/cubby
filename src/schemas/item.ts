@@ -1,7 +1,12 @@
+import { ItemType } from "@prisma/client";
 import { z } from "zod";
+import { recipeTopLevel } from "~/schemas/recipes";
+import { dbTimestamps } from "~/schemas/util";
+import { productTopLevel } from "./product";
 
 export type ItemOut = z.infer<typeof itemOut>;
-const itemOut = z
+
+export const itemOut = z
   .object({
     id: z.string().uuid(),
     name: z.string(),

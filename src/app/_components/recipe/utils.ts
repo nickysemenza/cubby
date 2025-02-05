@@ -1,5 +1,5 @@
 import { WMeasure } from "recipebridge/pkg/recipebridge";
-import { RecipeOut, SectionIngredient } from "~/server/api/apiSchema";
+import { RecipeOut, SectionIngredient } from "~/schemas/recipes";
 
 // returns the 1-indexed count of the instruction, across all sections.
 export const getGlobalInstructionNumber = (

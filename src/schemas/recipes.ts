@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dbTimestamps } from "./routers/util";
+import { dbTimestamps } from "./util";
 import { amount } from "~/codec/codec";
 
 const ingredientOut = z

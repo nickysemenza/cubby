@@ -1,6 +1,6 @@
 "use client";
 
-import { RecipeOut } from "~/server/api/apiSchema";
+import { RecipeOut } from "~/schemas/recipes";
 import { getGlobalInstructionNumber, getIngredientName } from "./utils";
 import { format_amount } from "recipebridge/pkg/recipebridge";
 export const NYTView: React.FC<{
@@ -11,7 +11,7 @@ export const NYTView: React.FC<{
       <div className="flex flex-col pt-2 md:flex-row">
         <div className="md:w-5/12">
           <hr className="border-t-4 border-black" />
-          <div className="text-m justify-end font-serif font-bold uppercase text-black">
+          <div className="text-m justify-end font-serif font-bold text-black uppercase">
             Ingredients
           </div>
           {recipe.sections.map((section) =>
@@ -30,7 +30,7 @@ export const NYTView: React.FC<{
         </div>
         <div className="pl-8 md:w-9/12">
           <hr className="border-t-4 border-black" />
-          <div className="text-m font-serif font-bold uppercase text-black">
+          <div className="text-m font-serif font-bold text-black uppercase">
             Instructions
           </div>
           {recipe.sections.map((section, x) =>

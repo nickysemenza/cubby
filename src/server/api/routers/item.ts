@@ -3,13 +3,11 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 import { ItemType, type PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
-  dbTimestamps,
   paginationParams,
   sortParams,
   buildTakeSkip,
-} from "./util";
-import { recipeTopLevel } from "../apiSchema";
-import { productTopLevel } from "./products";
+} from "../../../schemas/util";
+import { type ItemOut, itemOut } from "~/schemas/item";
 
 type ItemDeepDB = Prisma.ItemGetPayload<{
   include: {
@@ -53,19 +51,6 @@ const dbItemToAPI: (item: ItemDeepDB) => ItemOut = (item) => {
     ),
   };
 };
-
-export type ItemOut = z.infer<typeof itemOut>;
-const itemOut = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string(),
-    type: z.nativeEnum(ItemType),
-    aliases: z.array(z.string()),
-    recipe: recipeTopLevel.nullable(),
-    appearsInRecipes: z.array(recipeTopLevel),
-    product: z.array(productTopLevel),
-  })
-  .merge(dbTimestamps);
 
 const getByName = publicProcedure
   .input(

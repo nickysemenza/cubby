@@ -1,8 +1,5 @@
 import { type SortingState } from "@tanstack/react-table";
-import {
-  type PaginationParams,
-  type SortParams,
-} from "~/server/api/routers/util";
+import { type PaginationParams, type SortParams } from "~/schemas/util";
 
 export const buildSortParams = (
   sorting: SortingState,

@@ -9,7 +9,7 @@ import {
   paginationParams,
   sortParams,
   buildTakeSkip,
-} from "./util";
+} from "../../../schemas/util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
 import { insertRecipeFromCompact } from "~/server/compactrecipe";
@@ -18,7 +18,7 @@ import {
   recipeOut,
   type RecipeOut,
   type SectionIngredient,
-} from "../apiSchema";
+} from "../../../schemas/recipes";
 
 type RecipeDeepDB = Prisma.RecipeGetPayload<{
   include: {

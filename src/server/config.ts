@@ -1,19 +1,16 @@
 import { z } from "zod";
-import { locationBase } from "./api/routers/locations";
 import { amount } from "~/codec/codec";
 import { ItemType } from "@prisma/client";
 import { productBase } from "~/schemas/product";
+import { locationBase } from "~/schemas/locations";
 
-const locationConfigBase = locationBase;
-
-export type InfLocationConfig = z.infer<typeof locationConfigBase> & {
+export type InfLocationConfig = z.infer<typeof locationBase> & {
   children?: InfLocationConfig[];
 };
 
-const locationConfigEntry: z.ZodType<InfLocationConfig> =
-  locationConfigBase.extend({
-    children: z.lazy(() => locationConfigEntry.array().optional()),
-  });
+const locationConfigEntry: z.ZodType<InfLocationConfig> = locationBase.extend({
+  children: z.lazy(() => locationConfigEntry.array().optional()),
+});
 
 const productAddonConf = z.object({
   productType: z.nativeEnum(ItemType),

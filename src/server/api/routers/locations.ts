@@ -3,13 +3,20 @@ import { publicProcedure, createTRPCRouter } from "../trpc";
 import { PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
-  dbTimestamps,
   extractDbTimestampsFromDBRec,
   paginationParams,
   buildTakeSkip,
   sortParams,
-} from "./util";
+} from "~/schemas/util";
 import { type InfLocationConfig } from "~/server/config";
+import {
+  type InfLocation,
+  infLocation,
+  type LocationOut,
+  type LocationOutWithParentChildren,
+  locationOutWithParentChildren,
+  locationType,
+} from "~/schemas/locations";
 
 export const loadLocations = async (
   db: PrismaClient,
@@ -71,40 +78,6 @@ export const loadLocations = async (
     });
   }
 };
-
-export const locationType = z
-  .string()
-  .describe("type of location (room, container, etc)");
-
-export const locationBase = z.object({
-  name: z.string().describe("name of location"),
-  type: locationType,
-});
-const locationOut = z
-  .object({
-    id: z.string().uuid(),
-  })
-  .merge(locationBase)
-  .merge(dbTimestamps);
-const locationOutWithParentChildren = z
-  .object({
-    children: z.array(locationOut),
-    parent: locationOut.nullable(),
-  })
-  .merge(locationOut);
-
-type InfLocation = z.infer<typeof locationOut> & {
-  children: InfLocation[];
-};
-
-const infLocation: z.ZodType<InfLocation> = locationOut.extend({
-  children: z.lazy(() => infLocation.array()),
-});
-
-export type LocationOutWithParentChildren = z.infer<
-  typeof locationOutWithParentChildren
->;
-export type LocationOut = z.infer<typeof locationOut>;
 
 const foo = {
   parent: true,

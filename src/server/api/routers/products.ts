@@ -2,27 +2,9 @@ import { type PrismaClient, type Prisma } from "@prisma/client";
 import { type ProductConfigItem } from "~/server/config";
 import { findOrCreateItem } from "./item";
 import { z } from "zod";
-import { dbTimestamps } from "./util";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { productBase } from "~/schemas/product";
+import { productWithItem } from "~/schemas/product";
 
-export const productTopLevel = z
-  .object({
-    id: z.string().uuid(),
-  })
-  .merge(productBase)
-  .merge(dbTimestamps);
-
-const productWithItem = productTopLevel.merge(
-  z.object({
-    item: z
-      .object({
-        id: z.string().uuid(),
-        name: z.string(),
-      })
-      .nullable(),
-  }),
-);
 export const loadProducts = async (
   db: PrismaClient,
   data: ProductConfigItem[],

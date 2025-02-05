@@ -1,0 +1,36 @@
+import { z } from "zod";
+import { dbTimestamps } from "./util";
+
+export const locationType = z
+  .string()
+  .describe("type of location (room, container, etc)");
+
+export const locationBase = z.object({
+  name: z.string().describe("name of location"),
+  type: locationType,
+});
+const locationOut = z
+  .object({
+    id: z.string().uuid(),
+  })
+  .merge(locationBase)
+  .merge(dbTimestamps);
+export const locationOutWithParentChildren = z
+  .object({
+    children: z.array(locationOut),
+    parent: locationOut.nullable(),
+  })
+  .merge(locationOut);
+
+export type InfLocation = z.infer<typeof locationOut> & {
+  children: InfLocation[];
+};
+
+export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
+  children: z.lazy(() => infLocation.array()),
+});
+
+export type LocationOutWithParentChildren = z.infer<
+  typeof locationOutWithParentChildren
+>;
+export type LocationOut = z.infer<typeof locationOut>;
