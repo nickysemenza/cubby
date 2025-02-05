@@ -12,4 +12,10 @@ export default defineConfig({
       "~/": join(__dirname, "./src/"),
     },
   },
+  test: {
+    typecheck: {
+      enabled: true,
+      ignoreSourceErrors: true, // wasm files throw errors
+    },
+  },
 });

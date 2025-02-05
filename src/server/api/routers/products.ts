@@ -1,10 +1,16 @@
 import { type PrismaClient, type Prisma } from "@prisma/client";
 import { type ProductConfigItem } from "~/server/config";
 import { findOrCreateItem } from "./item";
-import { type z } from "zod";
+import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import { productWithItemOut } from "~/schemas/item";
-import { IDInput } from "~/schemas/util";
+import {
+  createPaginatedResponseSchema,
+  IDInput,
+  paginationParams,
+  sortParams,
+  buildTakeSkip,
+} from "~/schemas/util";
 
 export const loadProducts = async (
   db: PrismaClient,
@@ -24,7 +30,7 @@ export const loadProducts = async (
       updatedAt: now,
       Item: { connect: { id: item.id } },
     };
-    await db.product.upsert({
+    const productRow = await db.product.upsert({
       where: {
         name,
       },
@@ -36,15 +42,29 @@ export const loadProducts = async (
       },
     });
 
-    const stale = await db.product.findMany({
-      where: {
-        updatedAt: {
-          not: now,
-        },
-      },
+    await db.productUnitMappings.deleteMany({
+      where: { productId: productRow.id },
     });
-    console.log({ stale: stale.map((s) => s.id) });
+    await db.productUnitMappings.createMany({
+      data: product.unit_mappings.map(
+        (unitMapping): Prisma.ProductUnitMappingsCreateManyInput => ({
+          productId: productRow.id,
+          a: unitMapping.a,
+          b: unitMapping.b,
+          source: unitMapping.source,
+        }),
+      ),
+    });
   }
+
+  const stale = await db.product.findMany({
+    where: {
+      updatedAt: {
+        not: now,
+      },
+    },
+  });
+  console.log({ stale: stale.map((s) => s.id) });
 };
 
 const getByID = publicProcedure
@@ -77,6 +97,44 @@ const dbProductoToAPI: (
   };
 };
 
+const list = publicProcedure
+  .input(
+    z.object({
+      sort: sortParams,
+      pagination: paginationParams,
+      nameFilter: z.string().optional(),
+    }),
+  )
+  .output(createPaginatedResponseSchema(productWithItemOut))
+  .query(async ({ ctx, input }) => {
+    const orderBy: Prisma.ProductOrderByWithAggregationInput = {
+      createdAt:
+        input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
+      name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
+    };
+    const where: Prisma.ProductWhereInput = {
+      name: input.nameFilter != "" ? { search: input.nameFilter } : undefined,
+    };
+    const res = await ctx.db.product.findMany({
+      orderBy,
+      where,
+      ...buildTakeSkip(input.pagination),
+      include: { Item: true },
+    });
+    const totalCount = await ctx.db.product.count({ where });
+    const products = res.map(dbProductoToAPI);
+    return {
+      meta: {
+        pageIndex: input.pagination.pageIndex,
+        pageSize: products.length,
+        totalCount,
+        // totalPages: 1,
+      },
+      items: products,
+    };
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
+  list,
 });

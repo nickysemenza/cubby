@@ -99,8 +99,23 @@ model Product {
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
-    Item   Item?   @relation(fields: [itemId], references: [id])
-    itemId String? @db.Uuid
+    Item         Item?                 @relation(fields: [itemId], references: [id])
+    itemId       String?               @db.Uuid
+    unitMappings ProductUnitMappings[]
+}
+
+model ProductUnitMappings {
+    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    product   Product   @relation(fields: [productId], references: [id])
+    productId String    @db.Uuid
+    /// [Amount]
+    a         Json
+    /// [Amount]
+    b         Json
+    source    String?
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @default(now()) @updatedAt
+    deletedAt DateTime?
 }
 
 /// holds a mapping between an item and a location

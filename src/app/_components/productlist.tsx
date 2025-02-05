@@ -23,12 +23,12 @@ import { PillLink } from "./Pill";
 
 dayjs.extend(relativeTime);
 
-export function LocationList() {
+export function ProductList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState(defaultPagination);
-  const [itemsResp] = api.location.list.useSuspenseQuery({
+  const [productsResp] = api.product.list.useSuspenseQuery({
     sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
@@ -36,28 +36,13 @@ export function LocationList() {
       | undefined,
   });
 
-  const data = itemsResp.items;
+  const data = productsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
-    columnHelper.accessor("children", {
-      cell: (info) => (
-        <div>
-          {info.getValue().map((child) => (
-            <div key={child.id}>
-              <PillLink
-                text={child.name}
-                label="location"
-                href={`locations/${child.id}`}
-              />
-            </div>
-          ))}
-        </div>
-      ),
-    }),
-    columnHelper.accessor("parent", {
+    columnHelper.accessor("item", {
       cell: (info) => {
         const item = info.getValue();
         return (
@@ -65,16 +50,13 @@ export function LocationList() {
             {item && (
               <PillLink
                 text={item.name}
-                label="location"
-                href={`locations/${item.id}`}
+                label="item"
+                href={`items/${item.id}`}
               />
             )}
           </div>
         );
       },
-    }),
-    columnHelper.accessor("type", {
-      cell: (info) => info.getValue(),
     }),
 
     columnHelper.accessor("createdAt", {
@@ -86,7 +68,7 @@ export function LocationList() {
         <div>
           <Link
             className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`items/${info.getValue()}`}
+            href={`products/${info.getValue()}`}
           >
             {info.getValue()}
           </Link>
@@ -105,7 +87,7 @@ export function LocationList() {
     manualSorting: true,
     manualFiltering: true,
     manualPagination: true,
-    rowCount: itemsResp.meta.totalCount,
+    rowCount: productsResp.meta.totalCount,
     state: {
       sorting,
       columnFilters,

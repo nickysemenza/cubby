@@ -15,27 +15,14 @@ const NavItems: NavItem[] = [
     label: "Home",
     isActive: (pathname) => pathname === "/",
   },
-  {
-    href: "/recipes",
-    label: "recipes",
-    isActive: (pathname) => pathname.startsWith("/recipes"),
-  },
-  {
-    href: "/items",
-    label: "items",
-    isActive: (pathname) => pathname.startsWith("/items"),
-  },
-  {
-    href: "/locations",
-    label: "locations",
-    isActive: (pathname) => pathname.startsWith("/locations"),
-  },
-  {
-    href: "/demo",
-    label: "Demo",
-    isActive: (pathname) => pathname === "/demo",
-  },
-  { href: "/api/panel", label: "API Panel", isActive: (_pathname) => false },
+  ...["recipes", "items", "locations", "products", "demo"].map(
+    (item): NavItem => ({
+      href: `/${item}`,
+      label: item,
+      isActive: (pathname) => pathname.startsWith(`/${item}`),
+    }),
+  ),
+  { href: "/api/panel", label: "API Panel", isActive: () => false },
 ];
 export default function Navbar() {
   const pathName = usePathname();

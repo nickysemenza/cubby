@@ -64,6 +64,19 @@ Table Product {
   deletedAt DateTime
   Item Item
   itemId String
+  unitMappings ProductUnitMappings [not null]
+}
+
+Table ProductUnitMappings {
+  id String [pk]
+  product Product [not null]
+  productId String [not null]
+  a Json [not null, note: '[Amount]']
+  b Json [not null, note: '[Amount]']
+  source String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [default: `now()`, not null]
+  deletedAt DateTime
 }
 
 Table InventoryItem {
@@ -114,6 +127,8 @@ Ref: RecipeSectionIngredient.ingredientId > Item.id
 Ref: Item.recipeId > Recipe.id
 
 Ref: Product.itemId > Item.id
+
+Ref: ProductUnitMappings.productId > Product.id
 
 Ref: InventoryItem.itemId > Item.id
 

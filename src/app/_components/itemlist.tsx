@@ -19,6 +19,7 @@ import {
   defaultPagination,
   defaultSortState,
 } from "./recipe/tableUtils";
+import { PillLink } from "./Pill";
 
 dayjs.extend(relativeTime);
 
@@ -82,12 +83,11 @@ export function ItemList() {
               )
               .map((recipe) => (
                 <li key={recipe.id}>
-                  <Link
-                    className="text-blue-600 hover:underline dark:text-blue-500"
+                  <PillLink
+                    text={recipe.name}
+                    label="recipe"
                     href={`recipes/${recipe.id}`}
-                  >
-                    {recipe.name}
-                  </Link>
+                  />
                 </li>
               ))}
           </ul>
@@ -100,12 +100,11 @@ export function ItemList() {
           <ul className="">
             {info.getValue().map((product) => (
               <li key={product.id}>
-                <Link
-                  className="text-blue-600 hover:underline dark:text-blue-500"
+                <PillLink
+                  text={product.name}
+                  label="product"
                   href={`products/${product.id}`}
-                >
-                  {product.name}
-                </Link>
+                />
               </li>
             ))}
           </ul>

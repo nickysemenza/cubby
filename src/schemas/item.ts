@@ -7,7 +7,11 @@ export const productBase = z.object({
   name: z.string(),
   upc: z.string().length(12),
   manufacturer: z.string(),
-  model: z.string().nullable(),
+  model: z
+    .string()
+    .nullish()
+    // yaml parsing loads these as undefined, but need them to be null to play nice with db + json
+    .transform((x) => x ?? null),
 });
 
 export const productTopLevelOut = z
