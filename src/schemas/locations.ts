@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dbTimestamps } from "./util";
+import { dbTimestampsOut } from "./util";
 
 export const locationType = z
   .string()
@@ -14,7 +14,7 @@ const locationOut = z
     id: z.string().uuid(),
   })
   .merge(locationBase)
-  .merge(dbTimestamps);
+  .merge(dbTimestampsOut);
 export const locationOutWithParentChildren = z
   .object({
     children: z.array(locationOut),
@@ -22,7 +22,9 @@ export const locationOutWithParentChildren = z
   })
   .merge(locationOut);
 
-export type InfLocation = z.infer<typeof locationOut> & {
+export type LocationOut = z.infer<typeof locationOut>;
+
+export type InfLocation = LocationOut & {
   children: InfLocation[];
 };
 
@@ -33,4 +35,3 @@ export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
 export type LocationOutWithParentChildren = z.infer<
   typeof locationOutWithParentChildren
 >;
-export type LocationOut = z.infer<typeof locationOut>;

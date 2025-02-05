@@ -35,7 +35,7 @@ const NavItems: NavItem[] = [
     label: "Demo",
     isActive: (pathname) => pathname === "/demo",
   },
-  { href: "/api/panel", label: "API Panel", isActive: (pathname) => false },
+  { href: "/api/panel", label: "API Panel", isActive: (_pathname) => false },
 ];
 export default function Navbar() {
   const pathName = usePathname();

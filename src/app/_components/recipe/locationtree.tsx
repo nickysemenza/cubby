@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type Ref, useCallback, useState } from "react";
-import Tree, { CustomNodeElementProps, type Point } from "react-d3-tree";
+import Tree, { type CustomNodeElementProps, type Point } from "react-d3-tree";
 import { api } from "~/trpc/react";
 
 const nodeSize = { x: 100, y: 200 };

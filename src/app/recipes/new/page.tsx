@@ -1,4 +1,4 @@
-import { Metadata } from "next";
+import { type Metadata } from "next";
 import NewRecipe from "~/app/_components/recipe/NewRecipe";
 
 export const metadata: Metadata = {

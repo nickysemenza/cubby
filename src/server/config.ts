@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { amount } from "~/codec/codec";
 import { ItemType } from "@prisma/client";
-import { productBase } from "~/schemas/product";
+import { productBase } from "~/schemas/item";
 import { locationBase } from "~/schemas/locations";
 
 export type InfLocationConfig = z.infer<typeof locationBase> & {

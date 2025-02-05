@@ -1,9 +1,10 @@
 import { type PrismaClient, type Prisma } from "@prisma/client";
 import { type ProductConfigItem } from "~/server/config";
 import { findOrCreateItem } from "./item";
-import { z } from "zod";
+import { type z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { productWithItem } from "~/schemas/product";
+import { productWithItemOut } from "~/schemas/item";
+import { IDInput } from "~/schemas/util";
 
 export const loadProducts = async (
   db: PrismaClient,
@@ -14,6 +15,7 @@ export const loadProducts = async (
   for (const product of data) {
     const { name, manufacturer, upc, model } = product;
     const item = await findOrCreateItem(db, product.name, product.productType);
+    //todo: do something with product.unit_mappings
     const upsertFields: Prisma.ProductCreateInput = {
       name,
       manufacturer,
@@ -46,12 +48,8 @@ export const loadProducts = async (
 };
 
 const getByID = publicProcedure
-  .input(
-    z.object({
-      id: z.string(),
-    }),
-  )
-  .output(productWithItem)
+  .input(IDInput)
+  .output(productWithItemOut)
   .query(async ({ ctx, input }) => {
     const res = await ctx.db.product.findFirstOrThrow({
       where: {
@@ -70,7 +68,7 @@ type ProductDeepDB = Prisma.ProductGetPayload<{
 
 const dbProductoToAPI: (
   item: ProductDeepDB,
-) => z.infer<typeof productWithItem> = (item) => {
+) => z.infer<typeof productWithItemOut> = (item) => {
   const { Item, ...restOfItem } = item;
 
   return {

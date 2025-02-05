@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { publicProcedure, createTRPCRouter } from "../trpc";
-import { PrismaClient, type Prisma } from "@prisma/client";
+import { type PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
   extractDbTimestampsFromDBRec,
   paginationParams,
   buildTakeSkip,
   sortParams,
+  IDInput,
 } from "~/schemas/util";
 import { type InfLocationConfig } from "~/server/config";
 import {
@@ -203,11 +204,7 @@ const list = publicProcedure
   });
 
 const getByID = publicProcedure
-  .input(
-    z.object({
-      id: z.string(),
-    }),
-  )
+  .input(IDInput)
   .output(locationOutWithParentChildren)
   .query(async ({ ctx, input }) => {
     const res = await ctx.db.location.findFirstOrThrow({

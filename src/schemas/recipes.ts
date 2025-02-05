@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dbTimestamps } from "./util";
+import { dbTimestampsOut } from "./util";
 import { amount } from "~/codec/codec";
 
 const ingredientOut = z
@@ -7,13 +7,13 @@ const ingredientOut = z
     id: z.string().uuid(),
     name: z.string(),
   })
-  .merge(dbTimestamps);
+  .merge(dbTimestampsOut);
 export const recipeTopLevel = z
   .object({
     id: z.string().uuid(),
     name: z.string(),
   })
-  .merge(dbTimestamps);
+  .merge(dbTimestampsOut);
 const sectionIngredientOut = z
   .object({
     id: z.string().uuid(),
@@ -21,7 +21,7 @@ const sectionIngredientOut = z
     ingredient: ingredientOut.nullable(),
     amounts: z.array(amount),
   })
-  .merge(dbTimestamps);
+  .merge(dbTimestampsOut);
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 const recipeSectionOut = z
   .object({
@@ -30,7 +30,7 @@ const recipeSectionOut = z
     ingredients: z.array(sectionIngredientOut),
     instructions: z.array(z.object({ instruction: z.string() })),
   })
-  .merge(dbTimestamps);
+  .merge(dbTimestampsOut);
 
 export const recipeOut = z
   .object({

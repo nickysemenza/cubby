@@ -144,7 +144,7 @@ export const recipeRouter = createTRPCRouter({
   scrape: publicProcedure
     .input(z.string().url())
     .output(compactRecipeSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(async ({ input }) => {
       return scrapeToCompact(input);
     }),
   insertCompact: publicProcedure

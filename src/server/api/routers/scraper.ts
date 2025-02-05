@@ -1,9 +1,9 @@
 import {
   parse_scraped_recipe,
-  WCompactRecipe,
+  type WCompactRecipe,
 } from "recipebridge/pkg/recipebridge";
 import { type Span, trace } from "@opentelemetry/api";
-import { CompactRecipe } from "~/codec/codec";
+import { type CompactRecipe } from "~/codec/codec";
 
 export const scrapeRecipe = async (url: string) => {
   if (url.includes("chefsteps.com")) {

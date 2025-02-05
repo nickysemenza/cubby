@@ -6,6 +6,7 @@ import {
   paginationParams,
   sortParams,
   buildTakeSkip,
+  IDInput,
 } from "../../../schemas/util";
 import { type ItemOut, itemOut } from "~/schemas/item";
 
@@ -72,11 +73,7 @@ const getByName = publicProcedure
   });
 
 const getByID = publicProcedure
-  .input(
-    z.object({
-      id: z.string(),
-    }),
-  )
+  .input(IDInput)
   .output(itemOut)
   .query(async ({ ctx, input }) => {
     const res = await ctx.db.item.findFirstOrThrow({
