@@ -31,7 +31,10 @@ export const loadProducts = async (
     };
     const productRow = await db.product.upsert({
       where: {
-        name,
+        name_manufacturer: {
+          name: name,
+          manufacturer: manufacturer,
+        },
       },
       create: {
         ...upsertFields,

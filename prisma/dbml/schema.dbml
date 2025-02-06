@@ -55,9 +55,9 @@ Table Item {
 
 Table Product {
   id String [pk]
-  name String [unique, not null]
+  name String [not null]
   manufacturer String [not null]
-  upc String [unique, not null]
+  upc String [unique]
   model String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
@@ -65,6 +65,10 @@ Table Product {
   Item Item
   itemId String
   unitMappings ProductUnitMappings [not null]
+
+  indexes {
+    (name, manufacturer) [unique]
+  }
 }
 
 Table ProductUnitMappings {

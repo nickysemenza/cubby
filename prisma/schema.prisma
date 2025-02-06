@@ -90,9 +90,9 @@ model Item {
 
 model Product {
     id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name         String  @unique
+    name         String
     manufacturer String
-    upc          String  @unique
+    upc          String? @unique
     model        String?
 
     createdAt DateTime  @default(now())
@@ -102,6 +102,8 @@ model Product {
     Item         Item?                 @relation(fields: [itemId], references: [id])
     itemId       String?               @db.Uuid
     unitMappings ProductUnitMappings[]
+
+    @@unique([name, manufacturer])
 }
 
 model ProductUnitMappings {

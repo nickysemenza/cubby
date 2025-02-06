@@ -6,7 +6,7 @@ import { amount } from "~/codec/codec";
 
 export const productBase = z.object({
   name: z.string(),
-  upc: z.string().length(12),
+  upc: z.string().length(12).nullable(),
   manufacturer: z.string(),
   model: z
     .string()
