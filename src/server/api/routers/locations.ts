@@ -168,7 +168,7 @@ const list = publicProcedure
   )
   .output(createPaginatedResponseSchema(locationOutWithParentChildren))
   .query(async ({ ctx, input }) => {
-    const orderBy: Prisma.ItemOrderByWithAggregationInput = {
+    const orderBy: Prisma.LocationOrderByWithAggregationInput = {
       createdAt:
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,

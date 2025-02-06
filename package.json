@@ -21,7 +21,7 @@
     "preview": "next build && next start",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "wasm": "make wasm",
+    "wasm": "wasm-pack build --out-dir pkg recipebridge",
     "foo": "tsx scripts/generate-json-schemas.ts",
     "bar": "tsx scripts/load-data.ts",
     "regenerate": "npm run db:rebuild && npm run wasm"
@@ -48,6 +48,7 @@
     "dayjs": "^1.11.13",
     "flat": "^6.0.1",
     "geist": "^1.3.1",
+    "graphviz-react": "^1.2.5",
     "json-edit-react": "^1.17.1",
     "lucide-react": "^0.474.0",
     "next": "^15.0.3",

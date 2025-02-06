@@ -21,6 +21,11 @@ import {
 } from "./recipe/tableUtils";
 import { PillLink } from "./Pill";
 import JsonRenderer from "./json";
+import { graph_pairing } from "recipebridge/pkg/recipebridge";
+
+// https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
+import dynamic from "next/dynamic";
+const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
@@ -44,7 +49,27 @@ export function ProductList() {
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("unitMappings", {
-      cell: (info) => <JsonRenderer input={info.getValue()} />,
+      cell: (info) => (
+        <>
+          <JsonRenderer input={info.getValue()} />
+          {info.getValue().map((unitMapping, x) => {
+            const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
+              "digraph {",
+              "digraph { rankdir=LR; nodesep=0.5;",
+            );
+            return (
+              <div key={x}>
+                <Graphviz
+                  dot={graph}
+                  options={{ width: 300, height: null }}
+                  className="w-full"
+                />
+                {graph}
+              </div>
+            );
+          })}
+        </>
+      ),
     }),
     columnHelper.accessor("ingredient", {
       cell: (info) => {

@@ -5,17 +5,17 @@ type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
 export async function generateMetadata({ params }: PageParams) {
   const id = (await params).id;
-  const item = await api.location.getByID({ id });
+  const location = await api.location.getByID({ id });
   return {
-    title: `Location | ${item.name}`,
+    title: `Location | ${location.name}`,
   };
 }
 export default async function Page({ params }: PageParams) {
   const id = (await params).id;
-  const item = await api.location.getByID({ id });
+  const location = await api.location.getByID({ id });
   return (
     <div>
-      <JsonRenderer input={item} />
+      <JsonRenderer input={location} />
     </div>
   );
 }

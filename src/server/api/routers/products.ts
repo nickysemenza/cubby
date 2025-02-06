@@ -100,9 +100,9 @@ type ProductDeepDB = Prisma.ProductGetPayload<{
 }>;
 
 const dbProductoToAPI: (
-  item: ProductDeepDB,
-) => z.infer<typeof productWithIngredientOut> = (item) => {
-  const { Ingredient, unitMappings, ...restOfIngredient } = item;
+  product: ProductDeepDB,
+) => z.infer<typeof productWithIngredientOut> = (product) => {
+  const { Ingredient, unitMappings, ...restOfIngredient } = product;
 
   return {
     ...restOfIngredient,

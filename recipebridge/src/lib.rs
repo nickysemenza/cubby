@@ -1,4 +1,7 @@
-use ingredient::{self, rich_text::RichParser, unit::Measure, IngredientParser};
+use ingredient::{
+    self, rich_text::RichParser, unit::make_graph, unit::print_graph, unit::Measure,
+    IngredientParser,
+};
 use wasm_bindgen::prelude::*;
 
 extern crate wee_alloc;
@@ -37,6 +40,17 @@ pub fn format_amount(amount: &WMeasure) -> String {
             format!("{e}")
         }
     }
+}
+
+#[wasm_bindgen]
+pub fn graph_pairing(a: &WMeasure, b: &WMeasure) -> String {
+    setup();
+    //todo: this only works if the units are strict parsed
+    let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(a.into());
+    let b1: Result<Measure, _> = serde_wasm_bindgen::from_value(b.into());
+    let pair: Vec<(Measure, Measure)> = vec![(a1.unwrap(), b1.unwrap())];
+    let g = make_graph(pair);
+    print_graph(g)
 }
 
 fn setup() {
