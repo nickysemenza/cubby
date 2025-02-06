@@ -4,10 +4,9 @@ import { type PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
   extractDbTimestampsFromDBRec,
-  paginationParams,
   buildTakeSkip,
-  sortParams,
   IDInput,
+  sortPaginationCombo,
 } from "~/schemas/util";
 import { type InfLocationConfig } from "~/server/config";
 import {
@@ -160,12 +159,12 @@ const makeTree = publicProcedure
 
 const list = publicProcedure
   .input(
-    z.object({
-      sort: sortParams,
-      pagination: paginationParams,
-      nameFilter: z.string().optional(),
-      itemTypeFilter: locationType.optional(),
-    }),
+    z
+      .object({
+        nameFilter: z.string().optional(),
+        itemTypeFilter: locationType.optional(),
+      })
+      .merge(sortPaginationCombo),
   )
   .output(createPaginatedResponseSchema(locationOutWithParentChildren))
   .query(async ({ ctx, input }) => {

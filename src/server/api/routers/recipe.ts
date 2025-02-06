@@ -6,9 +6,8 @@ import { type PrismaClient, type Prisma } from "@prisma/client";
 import { compactRecipeSchema, type CompactRecipe } from "~/codec/codec";
 import {
   createPaginatedResponseSchema,
-  paginationParams,
-  sortParams,
   buildTakeSkip,
+  sortPaginationCombo,
 } from "~/schemas/util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
@@ -84,11 +83,11 @@ export const getRecipeByID = async (
 export const recipeRouter = createTRPCRouter({
   list: publicProcedure
     .input(
-      z.object({
-        sort: sortParams,
-        pagination: paginationParams,
-        nameFilter: z.string().optional(),
-      }),
+      z
+        .object({
+          nameFilter: z.string().optional(),
+        })
+        .merge(sortPaginationCombo),
     )
     .output(createPaginatedResponseSchema(recipeOut))
     .query(async ({ ctx, input }) => {

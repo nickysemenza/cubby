@@ -7,9 +7,8 @@ import { productWithItemOut } from "~/schemas/item";
 import {
   createPaginatedResponseSchema,
   IDInput,
-  paginationParams,
-  sortParams,
   buildTakeSkip,
+  sortPaginationCombo,
 } from "~/schemas/util";
 
 export const loadProducts = async (
@@ -107,11 +106,11 @@ const dbProductoToAPI: (
 
 const list = publicProcedure
   .input(
-    z.object({
-      sort: sortParams,
-      pagination: paginationParams,
-      nameFilter: z.string().optional(),
-    }),
+    z
+      .object({
+        nameFilter: z.string().optional(),
+      })
+      .merge(sortPaginationCombo),
   )
   .output(createPaginatedResponseSchema(productWithItemOut))
   .query(async ({ ctx, input }) => {

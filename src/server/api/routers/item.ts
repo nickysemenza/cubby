@@ -3,10 +3,9 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 import { ItemType, type PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
-  paginationParams,
-  sortParams,
   buildTakeSkip,
   IDInput,
+  sortPaginationCombo,
 } from "../../../schemas/util";
 import { type ItemOut, itemOut } from "~/schemas/item";
 
@@ -145,12 +144,12 @@ export const buildItemWhere = (
 
 const list = publicProcedure
   .input(
-    z.object({
-      sort: sortParams,
-      pagination: paginationParams,
-      nameFilter: z.string().optional(),
-      itemTypeFilter: z.nativeEnum(ItemType).optional(),
-    }),
+    z
+      .object({
+        nameFilter: z.string().optional(),
+        itemTypeFilter: z.nativeEnum(ItemType).optional(),
+      })
+      .merge(sortPaginationCombo),
   )
   .output(createPaginatedResponseSchema(itemOut))
   .query(async ({ ctx, input }) => {
