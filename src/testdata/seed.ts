@@ -2,7 +2,7 @@ import { parseCompactRecipe } from "~/codec/parser";
 import { exampleRecipesCompact } from "./fakeRecipes";
 import { insertRecipeFromCompact } from "~/server/compactrecipe";
 import { getRecipeByID } from "~/server/api/routers/recipe";
-import { ItemType, type PrismaClient } from "@prisma/client";
+import { type PrismaClient } from "@prisma/client";
 import { exampleIngredients } from "./ingredients";
 
 export const seedRealRecipes = async (db: PrismaClient) => {
@@ -18,14 +18,12 @@ export const seedRealRecipes = async (db: PrismaClient) => {
   }
 
   for (const ingredient of exampleIngredients) {
-    const res = await db.item.upsert({
+    const res = await db.ingredient.upsert({
       where: {
         name: ingredient.name,
-        type: ItemType.Ingredient,
       },
       create: {
         name: ingredient.name,
-        type: ItemType.Ingredient,
         aliases: ingredient.aliases ?? undefined,
       },
       update: {

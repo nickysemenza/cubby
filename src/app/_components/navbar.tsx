@@ -15,7 +15,7 @@ const NavItems: NavItem[] = [
     label: "Home",
     isActive: (pathname) => pathname === "/",
   },
-  ...["recipes", "items", "locations", "products", "demo"].map(
+  ...["recipes", "ingredients", "locations", "products", "demo"].map(
     (item): NavItem => ({
       href: `/${item}`,
       label: item,

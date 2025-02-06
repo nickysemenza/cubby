@@ -50,7 +50,7 @@ locations:
             type: "drawer"
 products:
   - name: "White sugar"
-    productType: "Ingredient"
+    ingredient: true
     upc: "015800030621"
     manufacturer: "C&H"
     unit_mappings:
@@ -62,7 +62,7 @@ products:
           value: 3
         source: whole foods
   - name: "All Purpose Flour"
-    productType: "Ingredient"
+    ingredient: true
     upc: "071012010509"
     manufacturer: "King Arthur"
     unit_mappings:
@@ -74,7 +74,7 @@ products:
           value: 8
         source: whole foods
   - name: "All Purpose Flour"
-    productType: "Ingredient"
+    ingredient: true
     upc: "039978533012"
     manufacturer: "Bob's Red Mill"
     unit_mappings:
@@ -86,7 +86,6 @@ products:
           value: 7
         source: whole foods
   - name: M18 Hackzall
-    productType: "Item"
     upc: "045242502776"
     manufacturer: "Milwaukee"
     model: "2719-20"

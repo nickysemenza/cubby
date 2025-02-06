@@ -1,9 +1,9 @@
 import { type PrismaClient, type Prisma } from "@prisma/client";
 import { type ProductConfigItem } from "~/server/config";
-import { findOrCreateItem } from "./item";
+import { findOrCreateIngredient } from "./ingredients";
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { productWithItemOut } from "~/schemas/item";
+import { productWithIngredientOut } from "~/schemas/ingredient";
 import {
   createPaginatedResponseSchema,
   IDInput,
@@ -19,15 +19,19 @@ export const loadProducts = async (
 
   for (const product of data) {
     const { name, manufacturer, upc, model } = product;
-    const item = await findOrCreateItem(db, product.name, product.productType);
-    //todo: do something with product.unit_mappings
+    let item = undefined;
+    if (product.ingredient) {
+      //  only link item if its an ingredient
+
+      item = await findOrCreateIngredient(db, product.name);
+    }
     const upsertFields: Prisma.ProductCreateInput = {
       name,
       manufacturer,
       upc,
       model,
       updatedAt: now,
-      Item: { connect: { id: item.id } },
+      Ingredient: item ? { connect: { id: item.id } } : undefined,
     };
     const productRow = await db.product.upsert({
       where: {
@@ -72,7 +76,7 @@ export const loadProducts = async (
 
 const getByID = publicProcedure
   .input(IDInput)
-  .output(productWithItemOut)
+  .output(productWithIngredientOut)
   .query(async ({ ctx, input }) => {
     const res = await ctx.db.product.findFirstOrThrow({
       where: {
@@ -84,25 +88,25 @@ const getByID = publicProcedure
   });
 
 const productInclude: Prisma.ProductInclude = {
-  Item: true,
+  Ingredient: true,
   unitMappings: true,
 };
 
 type ProductDeepDB = Prisma.ProductGetPayload<{
   include: {
-    Item: true;
+    Ingredient: true;
     unitMappings: true;
   };
 }>;
 
 const dbProductoToAPI: (
   item: ProductDeepDB,
-) => z.infer<typeof productWithItemOut> = (item) => {
-  const { Item, unitMappings, ...restOfItem } = item;
+) => z.infer<typeof productWithIngredientOut> = (item) => {
+  const { Ingredient, unitMappings, ...restOfIngredient } = item;
 
   return {
-    ...restOfItem,
-    item: Item,
+    ...restOfIngredient,
+    ingredient: Ingredient,
     unitMappings,
   };
 };
@@ -115,7 +119,7 @@ const list = publicProcedure
       })
       .merge(sortPaginationCombo),
   )
-  .output(createPaginatedResponseSchema(productWithItemOut))
+  .output(createPaginatedResponseSchema(productWithIngredientOut))
   .query(async ({ ctx, input }) => {
     const orderBy: Prisma.ProductOrderByWithAggregationInput = {
       createdAt:

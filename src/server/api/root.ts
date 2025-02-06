@@ -1,7 +1,7 @@
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { recipeRouter } from "./routers/recipe";
 import { demoRouter } from "./routers/demo";
-import { itemRouter } from "./routers/item";
+import { ingredientRouter } from "./routers/ingredients";
 import { locationRouter } from "./routers/locations";
 import { productRouter } from "./routers/products";
 
@@ -12,7 +12,7 @@ import { productRouter } from "./routers/products";
  */
 export const appRouter = createTRPCRouter({
   recipe: recipeRouter,
-  item: itemRouter,
+  ingredient: ingredientRouter,
   demo: demoRouter,
   location: locationRouter,
   product: productRouter,

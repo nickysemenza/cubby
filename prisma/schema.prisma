@@ -22,15 +22,15 @@ datasource db {
 }
 
 model Recipe {
-    id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name       String
-    createdAt  DateTime        @default(now())
-    updatedAt  DateTime        @default(now()) @updatedAt
-    deletedAt  DateTime?
-    sections   RecipeSection[]
-    Item       Item[]
-    SourceType RecipeSource?
-    SourceData String?
+    id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    name              String
+    createdAt         DateTime        @default(now())
+    updatedAt         DateTime        @default(now()) @updatedAt
+    deletedAt         DateTime?
+    sections          RecipeSection[]
+    pointerIngredient Ingredient? // what ingredients are actually this recipe
+    SourceType        RecipeSource?
+    SourceData        String?
 }
 
 model RecipeSection {
@@ -51,9 +51,9 @@ model RecipeSectionIngredient {
     recipeSection   RecipeSection @relation(fields: [recipeSectionId], references: [id])
     recipeSectionId String        @db.Uuid
 
-    /// each ingredient is an item
-    ingredient   Item   @relation(fields: [ingredientId], references: [id])
-    ingredientId String @db.Uuid
+    /// pointer to an ingredient
+    ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+    ingredientId String     @db.Uuid
 
     /// [Amount]
     amounts   Json[]
@@ -62,29 +62,22 @@ model RecipeSectionIngredient {
     deletedAt DateTime?
 }
 
-model Item {
+model Ingredient {
     id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     name      String    @unique
     aliases   String[]
-    type      ItemType
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
-    /// items appear in inventory reports
-    InventoryItem InventoryItem[]
+    /// can be a placeholder of sorts that points to a recipe
+    Recipe   Recipe? @relation(fields: [recipeId], references: [id])
+    recipeId String? @unique @db.Uuid
 
-    /// some items are ingredients
-    Recipe                  Recipe?                   @relation(fields: [recipeId], references: [id])
-    recipeId                String?                   @db.Uuid
+    // all ingredient appear in a recipe
     RecipeSectionIngredient RecipeSectionIngredient[]
 
-    // hierarchy, parent can have equivalent children
-    // children Item[] @relation("SameAsItem")
-    // parent   Item?  @relation("SameAsItem", fields: [parentItemId], references: [id])
-    // parentItemId String?   @db.Uuid
-
-    // what product(s) point to this item
+    // what product(s) point to this ingredient
     Product Product[]
 }
 
@@ -99,9 +92,16 @@ model Product {
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
-    Item         Item?                 @relation(fields: [itemId], references: [id])
-    itemId       String?               @db.Uuid
+    // some products can point to an ingredient
+    // multiple products can point to the same ingredient
+    Ingredient   Ingredient? @relation(fields: [ingredientId], references: [id])
+    ingredientId String?     @db.Uuid
+
+    // products have mappings (such as price)
     unitMappings ProductUnitMappings[]
+
+    // products are inventoried
+    InventoryEntry InventoryEntry[]
 
     @@unique([name, manufacturer])
 }
@@ -120,14 +120,14 @@ model ProductUnitMappings {
     deletedAt DateTime?
 }
 
-/// holds a mapping between an item and a location
-model InventoryItem {
+/// holds a mapping between an product and a location
+model InventoryEntry {
     id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
     // name      String
 
-    /// what is the item
-    Item   Item   @relation(fields: [itemId], references: [id])
-    itemId String @db.Uuid
+    /// what is the product
+    Product   Product @relation(fields: [productId], references: [id])
+    productId String  @db.Uuid
 
     /// [Amount]
     amount Json
@@ -136,8 +136,8 @@ model InventoryItem {
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
-    /// where is the item
-    location   Location @relation("LocationToItem", fields: [locationId], references: [id])
+    /// where is the product
+    location   Location @relation("LocationToProduct", fields: [locationId], references: [id])
     locationId String   @db.Uuid
 }
 
@@ -148,22 +148,16 @@ model Location {
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
-    parent   Location?       @relation("LocationToLocation", fields: [parentId], references: [id])
-    parentId String?         @db.Uuid
-    children Location[]      @relation("LocationToLocation")
-    /// items that are in this location
-    items    InventoryItem[] @relation("LocationToItem")
+    parent   Location?        @relation("LocationToLocation", fields: [parentId], references: [id])
+    parentId String?          @db.Uuid
+    children Location[]       @relation("LocationToLocation")
+    /// products that are in this location
+    products InventoryEntry[] @relation("LocationToProduct")
 
     type String
 
     @@index([name])
     @@index([type])
-}
-
-enum ItemType {
-    Ingredient
-    Recipe
-    Item
 }
 
 enum RecipeSource {

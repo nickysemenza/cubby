@@ -40,24 +40,30 @@
               "name": {
                 "type": "string"
               },
-              "productType": {
-                "type": "string",
-                "enum": [
-                  "Ingredient",
-                  "Recipe",
-                  "Item"
-                ]
-              },
               "upc": {
-                "type": "string",
-                "minLength": 12,
-                "maxLength": 12
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 12
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "manufacturer": {
                 "type": "string"
               },
               "model": {
-                "type": "string"
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ingredient": {
+                "type": "boolean",
+                "default": false
               },
               "unit_mappings": {
                 "type": "array",
@@ -99,12 +105,16 @@
                       "description": "second of pair"
                     },
                     "source": {
-                      "type": "string"
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "required": [
                     "a",
-                    "b"
+                    "b",
+                    "source"
                   ],
                   "additionalProperties": false
                 }
@@ -112,7 +122,6 @@
             },
             "required": [
               "name",
-              "productType",
               "upc",
               "manufacturer",
               "unit_mappings"

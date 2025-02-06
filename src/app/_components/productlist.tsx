@@ -46,16 +46,16 @@ export function ProductList() {
     columnHelper.accessor("unitMappings", {
       cell: (info) => <JsonRenderer input={info.getValue()} />,
     }),
-    columnHelper.accessor("item", {
+    columnHelper.accessor("ingredient", {
       cell: (info) => {
-        const item = info.getValue();
+        const ingredient = info.getValue();
         return (
           <div>
-            {item && (
+            {ingredient && (
               <PillLink
-                text={item.name}
-                label="item"
-                href={`items/${item.id}`}
+                text={ingredient.name}
+                label="ingredient"
+                href={`ingredients/${ingredient.id}`}
               />
             )}
           </div>

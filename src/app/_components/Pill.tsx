@@ -3,7 +3,7 @@ import type React from "react";
 
 interface PillProps {
   text: string;
-  label?: "item" | "product" | "recipe" | "location";
+  label?: "ingredient" | "product" | "recipe" | "location";
 }
 
 const Pill: React.FC<PillProps> = ({ text, label }) => {

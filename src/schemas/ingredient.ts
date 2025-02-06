@@ -1,4 +1,3 @@
-import { ItemType } from "@prisma/client";
 import { z } from "zod";
 import { recipeTopLevel } from "~/schemas/recipes";
 import { dbTimestampsOut } from "~/schemas/util";
@@ -22,23 +21,22 @@ export const productTopLevelOut = z
   .merge(productBase)
   .merge(dbTimestampsOut);
 
-export type ItemOut = z.infer<typeof itemOut>;
-export const itemBase = z
+export type IngredientOut = z.infer<typeof ingredientOut>;
+export const ingredientBase = z
   .object({
     id: z.string().uuid(),
     name: z.string(),
-    type: z.nativeEnum(ItemType),
     aliases: z.array(z.string()),
   })
   .merge(dbTimestampsOut);
 
-export const itemOut = z
+export const ingredientOut = z
   .object({
     recipe: recipeTopLevel.nullable(),
     appearsInRecipes: z.array(recipeTopLevel),
     product: z.array(productTopLevelOut),
   })
-  .merge(itemBase);
+  .merge(ingredientBase);
 
 export const unitMappingBase = z.object({
   a: amount.describe("first of pair"),
@@ -53,9 +51,9 @@ const unitMappingOut = z
   .merge(unitMappingBase)
   .merge(dbTimestampsOut);
 
-export const productWithItemOut = productTopLevelOut.merge(
+export const productWithIngredientOut = productTopLevelOut.merge(
   z.object({
-    item: itemBase.nullable(),
+    ingredient: ingredientBase.nullable(),
     unitMappings: z.array(unitMappingOut),
   }),
 );

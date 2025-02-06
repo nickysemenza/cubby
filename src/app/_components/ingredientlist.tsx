@@ -23,12 +23,12 @@ import { PillLink } from "./Pill";
 
 dayjs.extend(relativeTime);
 
-export function ItemList() {
+export function IngredientList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState(defaultPagination);
-  const [itemsResp] = api.item.list.useSuspenseQuery({
+  const [ingredientsResp] = api.ingredient.list.useSuspenseQuery({
     sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
@@ -36,7 +36,7 @@ export function ItemList() {
       | undefined,
   });
 
-  const data = itemsResp.items;
+  const data = ingredientsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("name", {
@@ -51,9 +51,6 @@ export function ItemList() {
         </div>
       ),
     }),
-    columnHelper.accessor("type", {
-      cell: (info) => info.getValue(),
-    }),
 
     columnHelper.accessor("createdAt", {
       cell: (info) => dayjs(info.getValue()).fromNow(),
@@ -64,7 +61,7 @@ export function ItemList() {
         <div>
           <Link
             className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`items/${info.getValue()}`}
+            href={`ingredients/${info.getValue()}`}
           >
             {info.getValue()}
           </Link>
@@ -123,7 +120,7 @@ export function ItemList() {
     manualSorting: true,
     manualFiltering: true,
     manualPagination: true,
-    rowCount: itemsResp.meta.totalCount,
+    rowCount: ingredientsResp.meta.totalCount,
     state: {
       sorting,
       columnFilters,

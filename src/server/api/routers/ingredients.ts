@@ -1,15 +1,15 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { ItemType, type PrismaClient, type Prisma } from "@prisma/client";
+import { type PrismaClient, type Prisma } from "@prisma/client";
 import {
   createPaginatedResponseSchema,
   buildTakeSkip,
   IDInput,
   sortPaginationCombo,
 } from "../../../schemas/util";
-import { type ItemOut, itemOut } from "~/schemas/item";
+import { type IngredientOut, ingredientOut } from "~/schemas/ingredient";
 
-type ItemDeepDB = Prisma.ItemGetPayload<{
+type IngredientDeepDB = Prisma.IngredientGetPayload<{
   include: {
     Product: true;
     Recipe: true;
@@ -25,7 +25,7 @@ type ItemDeepDB = Prisma.ItemGetPayload<{
   };
 }>;
 
-const itemInclude = {
+const ingredientInclude = {
   Product: true,
   Recipe: true,
   RecipeSectionIngredient: {
@@ -39,11 +39,14 @@ const itemInclude = {
   },
 };
 
-const dbItemToAPI: (item: ItemDeepDB) => ItemOut = (item) => {
-  const { Product, Recipe, RecipeSectionIngredient, ...restOfItem } = item;
+const dbIngredientToAPI: (ingredient: IngredientDeepDB) => IngredientOut = (
+  ingredient,
+) => {
+  const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
+    ingredient;
 
   return {
-    ...restOfItem,
+    ...restOfIngredient,
     recipe: Recipe,
     product: Product,
     appearsInRecipes: RecipeSectionIngredient.map(
@@ -56,49 +59,45 @@ const getByName = publicProcedure
   .input(
     z.object({
       nameFilter: z.string(),
-      itemTypeFilter: z.nativeEnum(ItemType).optional(),
     }),
   )
-  .output(itemOut.nullable())
+  .output(ingredientOut.nullable())
   .query(async ({ ctx, input }) => {
-    const res = await ctx.db.item.findFirst({
+    const res = await ctx.db.ingredient.findFirst({
       where: {
         name: { equals: input.nameFilter, mode: "insensitive" },
-        type: input.itemTypeFilter,
       },
-      include: itemInclude,
+      include: ingredientInclude,
     });
-    return res ? dbItemToAPI(res) : null;
+    return res ? dbIngredientToAPI(res) : null;
   });
 
 const getByID = publicProcedure
   .input(IDInput)
-  .output(itemOut)
+  .output(ingredientOut)
   .query(async ({ ctx, input }) => {
-    const res = await ctx.db.item.findFirstOrThrow({
+    const res = await ctx.db.ingredient.findFirstOrThrow({
       where: {
         id: input.id,
       },
-      include: itemInclude,
+      include: ingredientInclude,
     });
-    return dbItemToAPI(res);
+    return dbIngredientToAPI(res);
   });
 
-export const findOrCreateItem = async (
+export const findOrCreateIngredient = async (
   db: PrismaClient | Prisma.TransactionClient,
   name: string,
-  itemType: ItemType,
 ) => {
-  const existing = await db.item.findFirst({
-    where: buildItemWhere(true, name, itemType),
+  const existing = await db.ingredient.findFirst({
+    where: buildIngredientWhere(true, name),
   });
   if (existing !== null) {
     return existing;
   }
-  const created = await db.item.create({
+  const created = await db.ingredient.create({
     data: {
       name: name,
-      type: itemType,
     },
   });
   return created;
@@ -107,12 +106,8 @@ export const findOrCreateItem = async (
 // exact:
 //  true -> exact match on name or aliases
 //  false -> search on name, exact match on aliases
-export const buildItemWhere = (
-  exact: boolean,
-  name?: string,
-  itemType?: ItemType,
-) => {
-  const where: Prisma.ItemWhereInput = {
+export const buildIngredientWhere = (exact: boolean, name?: string) => {
+  const where: Prisma.IngredientWhereInput = {
     AND: [
       {
         OR: [
@@ -135,7 +130,8 @@ export const buildItemWhere = (
         ],
       },
       {
-        type: itemType,
+        // ingredients only, not recipes? todo: check this
+        recipeId: { equals: null },
       },
     ],
   };
@@ -147,37 +143,36 @@ const list = publicProcedure
     z
       .object({
         nameFilter: z.string().optional(),
-        itemTypeFilter: z.nativeEnum(ItemType).optional(),
       })
       .merge(sortPaginationCombo),
   )
-  .output(createPaginatedResponseSchema(itemOut))
+  .output(createPaginatedResponseSchema(ingredientOut))
   .query(async ({ ctx, input }) => {
-    const orderBy: Prisma.ItemOrderByWithAggregationInput = {
+    const orderBy: Prisma.IngredientOrderByWithAggregationInput = {
       createdAt:
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
     };
-    const where = buildItemWhere(false, input.nameFilter, input.itemTypeFilter);
-    const res = await ctx.db.item.findMany({
+    const where = buildIngredientWhere(false, input.nameFilter);
+    const res = await ctx.db.ingredient.findMany({
       orderBy,
       where,
       ...buildTakeSkip(input.pagination),
-      include: itemInclude,
+      include: ingredientInclude,
     });
-    const totalCount = await ctx.db.item.count({ where });
-    const items = res.map(dbItemToAPI);
+    const totalCount = await ctx.db.ingredient.count({ where });
+    const ingredients = res.map(dbIngredientToAPI);
     return {
       meta: {
         pageIndex: input.pagination.pageIndex,
-        pageSize: items.length,
+        pageSize: ingredients.length,
         totalCount,
         // totalPages: 1,
       },
-      items,
+      items: ingredients,
     };
   });
-export const itemRouter = createTRPCRouter({
+export const ingredientRouter = createTRPCRouter({
   getByName,
   getByID,
   list,

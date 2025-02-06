@@ -9,7 +9,7 @@ Table Recipe {
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
   sections RecipeSection [not null]
-  Item Item [not null]
+  pointerIngredient Ingredient
   SourceType RecipeSource
   SourceData String
 }
@@ -30,7 +30,7 @@ Table RecipeSectionIngredient {
   id String [pk]
   recipeSection RecipeSection [not null]
   recipeSectionId String [not null]
-  ingredient Item [not null, note: 'each ingredient is an item']
+  ingredient Ingredient [not null, note: 'pointer to an ingredient']
   ingredientId String [not null]
   amounts Json[] [not null, note: '[Amount]']
   createdAt DateTime [default: `now()`, not null]
@@ -38,17 +38,15 @@ Table RecipeSectionIngredient {
   deletedAt DateTime
 }
 
-Table Item {
+Table Ingredient {
   id String [pk]
   name String [unique, not null]
   aliases String[] [not null]
-  type ItemType [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  InventoryItem InventoryItem [not null, note: 'items appear in inventory reports']
-  Recipe Recipe [note: 'some items are ingredients']
-  recipeId String
+  Recipe Recipe [note: 'can be a placeholder of sorts that points to a recipe']
+  recipeId String [unique]
   RecipeSectionIngredient RecipeSectionIngredient [not null]
   Product Product [not null]
 }
@@ -62,9 +60,10 @@ Table Product {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  Item Item
-  itemId String
+  Ingredient Ingredient
+  ingredientId String
   unitMappings ProductUnitMappings [not null]
+  InventoryEntry InventoryEntry [not null]
 
   indexes {
     (name, manufacturer) [unique]
@@ -83,18 +82,18 @@ Table ProductUnitMappings {
   deletedAt DateTime
 }
 
-Table InventoryItem {
+Table InventoryEntry {
   id String [pk]
-  Item Item [not null, note: 'what is the item']
-  itemId String [not null]
+  Product Product [not null, note: 'what is the product']
+  productId String [not null]
   amount Json [not null, note: '[Amount]']
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
-  location Location [not null, note: 'where is the item']
+  location Location [not null, note: 'where is the product']
   locationId String [not null]
 
-  Note: 'holds a mapping between an item and a location'
+  Note: 'holds a mapping between an product and a location'
 }
 
 Table Location {
@@ -106,14 +105,8 @@ Table Location {
   parent Location
   parentId String
   children Location [not null]
-  items InventoryItem [not null, note: 'items that are in this location']
+  products InventoryEntry [not null, note: 'products that are in this location']
   type String [not null]
-}
-
-Enum ItemType {
-  Ingredient
-  Recipe
-  Item
 }
 
 Enum RecipeSource {
@@ -126,16 +119,16 @@ Ref: RecipeSection.recipeId > Recipe.id
 
 Ref: RecipeSectionIngredient.recipeSectionId > RecipeSection.id
 
-Ref: RecipeSectionIngredient.ingredientId > Item.id
+Ref: RecipeSectionIngredient.ingredientId > Ingredient.id
 
-Ref: Item.recipeId > Recipe.id
+Ref: Ingredient.recipeId - Recipe.id
 
-Ref: Product.itemId > Item.id
+Ref: Product.ingredientId > Ingredient.id
 
 Ref: ProductUnitMappings.productId > Product.id
 
-Ref: InventoryItem.itemId > Item.id
+Ref: InventoryEntry.productId > Product.id
 
-Ref: InventoryItem.locationId > Location.id
+Ref: InventoryEntry.locationId > Location.id
 
 Ref: Location.parentId - Location.id

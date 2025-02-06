@@ -40,8 +40,8 @@ export function extractDbTimestampsFromDBRec<
   };
 }
 
-export function createPaginatedResponseSchema<ItemType extends z.ZodTypeAny>(
-  itemSchema: ItemType,
+export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
+  entrySchema: Entry,
 ) {
   return z.object({
     meta: z.object({
@@ -50,7 +50,7 @@ export function createPaginatedResponseSchema<ItemType extends z.ZodTypeAny>(
       totalCount: z.number(),
       // totalPages: z.number(),
     }),
-    items: z.array(itemSchema),
+    items: z.array(entrySchema),
   });
 }
 

@@ -15,7 +15,8 @@ export default function EntityCount() {
         {api.product.list.useSuspenseQuery({})[0].meta.totalCount}
       </li>
       <li>
-        item count: {api.item.list.useSuspenseQuery({})[0].meta.totalCount}
+        item count:{" "}
+        {api.ingredient.list.useSuspenseQuery({})[0].meta.totalCount}
       </li>
       <li>
         recipe count: {api.recipe.list.useSuspenseQuery({})[0].meta.totalCount}

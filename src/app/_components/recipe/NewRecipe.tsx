@@ -132,7 +132,7 @@ const NewRecipe: React.FC = () => {
   );
 };
 const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
-  const itemsResp = api.item.getByName.useQuery({
+  const itemsResp = api.ingredient.getByName.useQuery({
     itemTypeFilter: "Ingredient",
     nameFilter: name,
   });

@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { ItemType } from "@prisma/client";
-import { productBase, unitMappingBase } from "~/schemas/item";
+import { productBase, unitMappingBase } from "~/schemas/ingredient";
 import { locationBase } from "~/schemas/locations";
 
 export type InfLocationConfig = z.infer<typeof locationBase> & {
@@ -12,7 +11,7 @@ const locationConfigEntry: z.ZodType<InfLocationConfig> = locationBase.extend({
 });
 
 const productAddonConf = z.object({
-  productType: z.nativeEnum(ItemType),
+  ingredient: z.boolean().optional().default(false),
   unit_mappings: z.array(unitMappingBase),
 });
 const productConfigEntry = productBase.merge(productAddonConf);
