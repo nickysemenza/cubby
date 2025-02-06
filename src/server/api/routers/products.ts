@@ -42,6 +42,7 @@ export const loadProducts = async (
       },
     });
 
+    // todo: don't delete mappings managed outside of yaml
     await db.productUnitMappings.deleteMany({
       where: { productId: productRow.id },
     });
@@ -75,25 +76,32 @@ const getByID = publicProcedure
       where: {
         id: input.id,
       },
-      include: { Item: true },
+      include: productInclude,
     });
     return dbProductoToAPI(res);
   });
 
+const productInclude: Prisma.ProductInclude = {
+  Item: true,
+  unitMappings: true,
+};
+
 type ProductDeepDB = Prisma.ProductGetPayload<{
   include: {
     Item: true;
+    unitMappings: true;
   };
 }>;
 
 const dbProductoToAPI: (
   item: ProductDeepDB,
 ) => z.infer<typeof productWithItemOut> = (item) => {
-  const { Item, ...restOfItem } = item;
+  const { Item, unitMappings, ...restOfItem } = item;
 
   return {
     ...restOfItem,
     item: Item,
+    unitMappings,
   };
 };
 
@@ -119,7 +127,7 @@ const list = publicProcedure
       orderBy,
       where,
       ...buildTakeSkip(input.pagination),
-      include: { Item: true },
+      include: productInclude,
     });
     const totalCount = await ctx.db.product.count({ where });
     const products = res.map(dbProductoToAPI);

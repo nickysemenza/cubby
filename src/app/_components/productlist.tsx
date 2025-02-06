@@ -20,6 +20,7 @@ import {
   defaultSortState,
 } from "./recipe/tableUtils";
 import { PillLink } from "./Pill";
+import JsonRenderer from "./json";
 
 dayjs.extend(relativeTime);
 
@@ -41,6 +42,9 @@ export function ProductList() {
   const columns = [
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("unitMappings", {
+      cell: (info) => <JsonRenderer input={info.getValue()} />,
     }),
     columnHelper.accessor("item", {
       cell: (info) => {
