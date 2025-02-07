@@ -21,14 +21,28 @@ import {
 } from "./recipe/tableUtils";
 import { PillLink } from "./Pill";
 import JsonRenderer from "./json";
-import { graph_pairing } from "recipebridge/pkg/recipebridge";
+import { format_amount, graph_pairing } from "recipebridge/pkg/recipebridge";
 
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
+import { UnitMappingOut } from "~/schemas/ingredient";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
+const buildunitMappingGraph = (unitMapping: UnitMappingOut) => {
+  try {
+    const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
+      "digraph {",
+      "digraph { rankdir=LR; nodesep=0.5;",
+    );
+
+    return <Graphviz dot={graph} className="w-full" />;
+  } catch (e) {
+    const error = e as string;
+    return <div className="text-red-400">{error}</div>;
+  }
+};
 export function ProductList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
@@ -48,35 +62,28 @@ export function ProductList() {
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
+    columnHelper.accessor("manufacturer", {
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("upc", {
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("model", {
+      cell: (info) => info.getValue(),
+    }),
     columnHelper.accessor("unitMappings", {
       cell: (info) => (
         <>
-          <JsonRenderer input={info.getValue()} />
           {info.getValue().map((unitMapping, x) => {
-            try {
-              const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
-                "digraph {",
-                "digraph { rankdir=LR; nodesep=0.5;",
-              );
-
-              return (
-                <div key={x}>
-                  <Graphviz
-                    dot={graph}
-                    // options={{ width: 300, height: null }}
-                    className="w-full"
-                  />
-                  {/* {graph} */}
-                </div>
-              );
-            } catch (e) {
-              const error = e as string;
-              return (
-                <div key={x} className="text-red-400">
-                  {error}
-                </div>
-              );
-            }
+            return (
+              <div key={x}>
+                <JsonRenderer input={unitMapping} />
+                {format_amount(unitMapping.a) +
+                  " = " +
+                  format_amount(unitMapping.b)}
+                {buildunitMappingGraph(unitMapping)}
+              </div>
+            );
           })}
         </>
       ),

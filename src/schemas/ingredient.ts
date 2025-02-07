@@ -56,6 +56,7 @@ const unitMappingOut = z
   .merge(unitMappingBase)
   .merge(dbTimestampsOut);
 
+export type UnitMappingOut = z.infer<typeof unitMappingOut>;
 export const productWithIngredientOut = productTopLevelOut.merge(
   z.object({
     ingredient: ingredientBase.nullable(),
