@@ -24,6 +24,14 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+      integresql:
+        image: ghcr.io/allaboutapps/integresql:latest
+        ports:
+          - 5000:5000
+        env:
+          PGHOST: postgres
+          PGUSER: postgres
+          PGPASSWORD: password
 
     steps:
       - uses: actions/checkout@v4
@@ -45,5 +53,13 @@ jobs:
           echo "NEXTAUTH_SECRET=supersecret" >> .env
       - name: Push schema to database
         run: npm run db:push
-      - run: npm test
+      - run: npm test -- --project=unit
       - run: npm run lint
+      # - name: start postgres setup for tests
+      #   run: docker compose up -d db integresql
+      # - name: Wait for PostgreSQL db
+      #   uses: MaximeGoyette/wait-for-it-action@master
+      #   with:
+      #     host: localhost
+      # port: 5555
+      - run: npm test -- --project=integration

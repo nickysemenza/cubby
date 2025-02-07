@@ -92,7 +92,6 @@ export const findOrCreateIngredient = async (
     const existing = await db.ingredient.findFirst({
       where: buildIngredientWhere(true, name, aliases),
     });
-    console.log({ existing, name, aliases });
     if (existing !== null) {
       return existing;
     }
@@ -105,7 +104,6 @@ export const findOrCreateIngredient = async (
   };
 
   const entry = await findOrCreate();
-  console.log({ entry });
 
   // add in aliases, but dedupe and make sure they don't include the name
   const aliasesToAdd = aliases

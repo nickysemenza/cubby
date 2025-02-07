@@ -13,10 +13,31 @@ export default defineConfig({
     },
   },
   test: {
-    typecheck: {
-      enabled: true,
-      ignoreSourceErrors: true, // wasm files throw errors
-    },
+    workspace: [
+      {
+        // will inherit options from this config like plugins and pool
+        extends: true,
+        test: {
+          name: "unit",
+          include: ["**/*.unit.test.ts", "**/*.{test,spec}-d.?(c|m)[jt]s?(x)"],
+          typecheck: {
+            enabled: true,
+            ignoreSourceErrors: true, // wasm files throw errors
+          },
+        },
+      },
+      {
+        // won't inherit any options from this config
+        // this is the default behaviour
+        extends: true,
+        test: {
+          globalSetup: ["./tooling/test-setup.ts"],
+          name: "integration",
+          include: ["**/*.integration.test.ts"],
+        },
+      },
+    ],
+
     env: {
       NODE_ENV: "test",
     },

@@ -27,6 +27,7 @@
     "regenerate": "npm run db:rebuild && npm run wasm"
   },
   "dependencies": {
+    "@devoxa/integresql-client": "^2.1.1",
     "@headlessui/react": "^2.2.0",
     "@opentelemetry/api-logs": "^0.57.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",

@@ -1,4 +1,14 @@
 services:
+  integresql:
+    image: ghcr.io/allaboutapps/integresql:latest
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+    environment: 
+      PGHOST: db
+      PGUSER: recipehub
+      PGPASSWORD: example
   db:
     image: postgres:17.2
     restart: always
