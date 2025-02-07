@@ -36,9 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-
       - name: Install dependencies and playwright binaries
-        run: npm install
+        run: npm ci
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Install wasm pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
@@ -53,13 +52,21 @@ jobs:
           echo "NEXTAUTH_SECRET=supersecret" >> .env
       - name: Push schema to database
         run: npm run db:push
-      - run: npm test -- --project=unit
+      - run: npm test -- --coverage
+        name: "run unit and integration tests"
       - run: npm run lint
-      # - name: start postgres setup for tests
-      #   run: docker compose up -d db integresql
-      # - name: Wait for PostgreSQL db
-      #   uses: MaximeGoyette/wait-for-it-action@master
-      #   with:
-      #     host: localhost
-      # port: 5555
-      - run: npm test -- --project=integration
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+      - name: Run Playwright tests
+        run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/recipehub

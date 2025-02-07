@@ -24,7 +24,8 @@
     "wasm": "wasm-pack build --out-dir pkg recipebridge",
     "foo": "tsx scripts/generate-json-schemas.ts",
     "bar": "tsx scripts/load-data.ts",
-    "regenerate": "npm run db:rebuild && npm run wasm"
+    "regenerate": "npm run db:rebuild && npm run wasm",
+    "test:e2e": " NODE_ENV=test playwright test"
   },
   "dependencies": {
     "@devoxa/integresql-client": "^2.1.1",
@@ -74,6 +75,7 @@
   },
   "devDependencies": {
     "@faker-js/faker": "^9.2.0",
+    "@playwright/test": "^1.50.1",
     "@snaplet/copycat": "^6.0.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/eslint": "^9.6.1",
@@ -82,7 +84,7 @@
     "@types/react-dom": "^19.0.0",
     "@typescript-eslint/eslint-plugin": "^8.16.0",
     "@typescript-eslint/parser": "^8.16.0",
-    "@vitest/coverage-v8": "^3.0.0",
+    "@vitest/coverage-v8": "^3.0.5",
     "@vitest/ui": "^3.0.0",
     "eslint": "^9.16.0",
     "eslint-config-next": "^15.0.3",
@@ -97,7 +99,7 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vite-plugin-top-level-await": "^1.4.4",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.5"
   },
   "ct3aMetadata": {
     "initVersion": "7.38.1"
