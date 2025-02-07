@@ -122,7 +122,6 @@
             },
             "required": [
               "name",
-              "upc",
               "manufacturer",
               "unit_mappings"
             ],

@@ -43,7 +43,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     <div>
       <Table
         aria-label="Tasks"
-        selectionMode="multiple"
+        // selectionMode="multiple"
         sortDescriptor={
           sorting?.length && sorting[0]
             ? {

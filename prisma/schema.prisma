@@ -10,6 +10,14 @@ generator json {
     provider = "prisma-json-types-generator"
 }
 
+// generator zod {
+//     provider                  = "zod-prisma-types"
+//     useMultipleFiles          = true
+//     // https://github.com/chrishoermann/zod-prisma-types/issues/282#issuecomment-2513516941
+//     createInputTypes          = false
+//     createRelationValuesTypes = true
+// }
+
 generator dbml {
     provider = "prisma-dbml-generator"
 }
@@ -23,7 +31,7 @@ datasource db {
 
 model Recipe {
     id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    name              String
+    name              String          @unique
     createdAt         DateTime        @default(now())
     updatedAt         DateTime        @default(now()) @updatedAt
     deletedAt         DateTime?
@@ -107,13 +115,14 @@ model Product {
 }
 
 model ProductUnitMappings {
-    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-    product   Product   @relation(fields: [productId], references: [id])
-    productId String    @db.Uuid
+    id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    product   Product @relation(fields: [productId], references: [id])
+    productId String  @db.Uuid
     /// [Amount]
-    a         Json
+    a         Json /// @zod.import(["import { amount } from '../../../../src/codec/codec';"]).custom.use(amount)
+
     /// [Amount]
-    b         Json
+    b         Json /// @zod.import(["import { amount } from '../../../../src/codec/codec';"]).custom.use(amount)
     source    String?
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
@@ -130,7 +139,7 @@ model InventoryEntry {
     productId String  @db.Uuid
 
     /// [Amount]
-    amount Json
+    amount Json /// @zod.import(["import { amount } from '../../../../src/codec/codec';"]).custom.use(amount)
 
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt

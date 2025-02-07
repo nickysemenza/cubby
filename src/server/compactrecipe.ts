@@ -2,15 +2,29 @@ import { type db } from "./db";
 import { type ParsedCompactRecipe } from "~/codec/codec";
 import { findOrCreateIngredient } from "./api/routers/ingredients";
 
-export const insertRecipeFromCompact = async (
+export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
   prismaClient: typeof db,
 ) => {
   return await prismaClient.$transaction(async (tx) => {
-    const newRecipe = await tx.recipe.create({
-      data: {
+    const newRecipe = await tx.recipe.upsert({
+      where: { name: recipe.name },
+      update: {},
+      create: {
         name: recipe.name,
       },
+      include: { sections: { include: { ingredients: true } } },
+    });
+    // delete all existing sections and sectioningredients (in reverse order)
+    await tx.recipeSectionIngredient.deleteMany({
+      where: {
+        recipeSectionId: {
+          in: newRecipe.sections.map((section) => section.id),
+        },
+      },
+    });
+    await tx.recipeSection.deleteMany({
+      where: { recipeId: newRecipe.id },
     });
     for (const section of recipe.sections) {
       const newSection = await tx.recipeSection.create({

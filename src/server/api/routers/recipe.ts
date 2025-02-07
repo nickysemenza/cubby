@@ -11,7 +11,7 @@ import {
 } from "~/schemas/util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
-import { insertRecipeFromCompact } from "~/server/compactrecipe";
+import { upsertRecipeFromCompact } from "~/server/compactrecipe";
 import { parseCompactRecipe } from "~/codec/parser";
 import {
   recipeOut,
@@ -160,5 +160,5 @@ const insertCompactRecipe = async (
   prismaClient: PrismaClient,
 ) => {
   const parsed = parseCompactRecipe(recipe);
-  return await insertRecipeFromCompact(parsed, prismaClient);
+  return await upsertRecipeFromCompact(parsed, prismaClient);
 };

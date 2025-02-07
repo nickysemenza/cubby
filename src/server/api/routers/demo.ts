@@ -9,6 +9,7 @@ export const demoRouter = createTRPCRouter({
     .input(z.object({ text: z.string() }))
     .output(z.any())
     .query(async ({ input }) => {
+      return "ok";
       const rawResponse = await ollama.chat({
         model: "llama3.1",
         messages: [
@@ -19,11 +20,9 @@ export const demoRouter = createTRPCRouter({
         ],
         format: zodToJsonSchema(parsedIngredient),
       });
-
       const response = parsedIngredient.parse(
         JSON.parse(rawResponse.message.content),
       );
-
       return {
         response,
       };

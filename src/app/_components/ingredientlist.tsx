@@ -98,7 +98,7 @@ export function IngredientList() {
             {info.getValue().map((product) => (
               <li key={product.id}>
                 <PillLink
-                  text={product.name}
+                  text={`${product.name} (${product.manufacturer})`}
                   label="product"
                   href={`products/${product.id}`}
                 />

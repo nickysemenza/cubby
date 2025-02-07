@@ -68,6 +68,7 @@
     "vite-plugin-wasm": "^3.3.0",
     "yaml": "^2.7.0",
     "zod": "^3.23.8",
+    "zod-prisma-types": "^3.2.3",
     "zod-to-json-schema": "^3.24.1"
   },
   "devDependencies": {

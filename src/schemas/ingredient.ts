@@ -5,7 +5,12 @@ import { amount } from "~/codec/codec";
 
 export const productBase = z.object({
   name: z.string(),
-  upc: z.string().length(12).nullable(),
+  upc: z
+    .string()
+    .length(12)
+    .nullish()
+    // yaml parsing loads these as undefined, but need them to be null to play nice with db + json
+    .transform((x) => x ?? null),
   manufacturer: z.string(),
   model: z
     .string()

@@ -43,14 +43,26 @@ pub fn format_amount(amount: &WMeasure) -> String {
 }
 
 #[wasm_bindgen]
-pub fn graph_pairing(a: &WMeasure, b: &WMeasure) -> String {
+pub fn graph_pairing(a: &WMeasure, b: &WMeasure) -> Result<String, String> {
     setup();
-    //todo: this only works if the units are strict parsed
+    //todo: this only works if the units are strict parsed (normalized)
     let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(a.into());
     let b1: Result<Measure, _> = serde_wasm_bindgen::from_value(b.into());
-    let pair: Vec<(Measure, Measure)> = vec![(a1.unwrap(), b1.unwrap())];
+    let a2 = match a1 {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(format!("failed to parse measure on side a: {e}"));
+        }
+    };
+    let b2 = match b1 {
+        Ok(a) => a,
+        Err(e) => {
+            return Err(format!("failed to parse measure on side b: {e}"));
+        }
+    };
+    let pair: Vec<(Measure, Measure)> = vec![(a2, b2)];
     let g = make_graph(pair);
-    print_graph(g)
+    Ok(print_graph(g))
 }
 
 fn setup() {

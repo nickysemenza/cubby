@@ -13,7 +13,7 @@ class Ing {
   }
   public name: string;
   public mappings: Mapping[];
-  public aliases: string[] | null;
+  public aliases?: string[] | null;
 }
 
 const unitValue = (value: number, unit: string): UnitValue => ({ unit, value });
@@ -71,7 +71,11 @@ const dairy = [
     null,
   ),
   new Ing("milk", [], null),
-  new Ing("egg", [], ["eggs"]),
+  new Ing(
+    "egg",
+    [],
+    ["eggs", "large egg", "large eggs", "large brown eggs", "large brown egg"],
+  ),
 ];
 const spices = [
   new Ing("salt", [unitValuePair(1, "tsp", 5, "g")], null),

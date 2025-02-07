@@ -53,20 +53,30 @@ export function ProductList() {
         <>
           <JsonRenderer input={info.getValue()} />
           {info.getValue().map((unitMapping, x) => {
-            const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
-              "digraph {",
-              "digraph { rankdir=LR; nodesep=0.5;",
-            );
-            return (
-              <div key={x}>
-                <Graphviz
-                  dot={graph}
-                  options={{ width: 300, height: null }}
-                  className="w-full"
-                />
-                {graph}
-              </div>
-            );
+            try {
+              const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
+                "digraph {",
+                "digraph { rankdir=LR; nodesep=0.5;",
+              );
+
+              return (
+                <div key={x}>
+                  <Graphviz
+                    dot={graph}
+                    // options={{ width: 300, height: null }}
+                    className="w-full"
+                  />
+                  {/* {graph} */}
+                </div>
+              );
+            } catch (e) {
+              const error = e as string;
+              return (
+                <div key={x} className="text-red-400">
+                  {error}
+                </div>
+              );
+            }
           })}
         </>
       ),

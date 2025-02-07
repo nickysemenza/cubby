@@ -1,0 +1,27 @@
+{
+	"folders": [
+		{
+	      // https://code.visualstudio.com/docs/editor/multi-root-workspaces
+	      "name": "next",
+	      "path": ".",
+	    },
+	    {
+	      "name": "rust",
+	      "path": "recipebridge",
+	    },
+		{
+			"path": "../ingredient-parser"
+		}
+	],
+	"settings": {
+		"yaml.schemas": {
+			"tooling/mapping_schema.json": "config.yaml"
+		},
+		"workbench.colorCustomizations": {
+			"titleBar.activeBackground": "#7236ff",
+			"titleBar.activeForeground": "#e2e8f0",
+			"titleBar.inactiveBackground": "#181239",
+			"titleBar.inactiveForeground": "#b1b6bd"
+		}
+	}
+}

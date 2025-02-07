@@ -64,9 +64,7 @@ const getByName = publicProcedure
   .output(ingredientOut.nullable())
   .query(async ({ ctx, input }) => {
     const res = await ctx.db.ingredient.findFirst({
-      where: {
-        name: { equals: input.nameFilter, mode: "insensitive" },
-      },
+      where: buildIngredientWhere(true, input.nameFilter),
       include: ingredientInclude,
     });
     return res ? dbIngredientToAPI(res) : null;
@@ -88,44 +86,69 @@ const getByID = publicProcedure
 export const findOrCreateIngredient = async (
   db: PrismaClient | Prisma.TransactionClient,
   name: string,
+  aliases?: string[],
 ) => {
-  const existing = await db.ingredient.findFirst({
-    where: buildIngredientWhere(true, name),
-  });
-  if (existing !== null) {
-    return existing;
+  const findOrCreate = async () => {
+    const existing = await db.ingredient.findFirst({
+      where: buildIngredientWhere(true, name, aliases),
+    });
+    console.log({ existing, name, aliases });
+    if (existing !== null) {
+      return existing;
+    }
+
+    return await db.ingredient.create({
+      data: {
+        name: name,
+      },
+    });
+  };
+
+  const entry = await findOrCreate();
+  console.log({ entry });
+
+  // add in aliases, but dedupe and make sure they don't include the name
+  const aliasesToAdd = aliases
+    ?.filter((alias) => alias !== name)
+    ?.filter((alias) => !entry.aliases.includes(alias));
+
+  if (aliasesToAdd === undefined || aliasesToAdd.length === 0) {
+    return entry;
   }
-  const created = await db.ingredient.create({
+
+  return await db.ingredient.update({
+    where: { id: entry.id },
     data: {
       name: name,
+      aliases: {
+        set: [...entry.aliases, ...aliasesToAdd],
+      },
     },
   });
-  return created;
 };
 
 // exact:
 //  true -> exact match on name or aliases
 //  false -> search on name, exact match on aliases
-export const buildIngredientWhere = (exact: boolean, name?: string) => {
+export const buildIngredientWhere = (
+  exact: boolean,
+  name: string,
+  otherSearchNames?: string[],
+) => {
+  const list = [name, ...(otherSearchNames ?? [])];
   const where: Prisma.IngredientWhereInput = {
     AND: [
       {
         OR: [
           {
-            name:
-              name != ""
-                ? exact
-                  ? { equals: name, mode: "insensitive" }
-                  : { search: name, mode: "insensitive" }
-                : undefined,
+            name: exact
+              ? { in: list, mode: "insensitive" }
+              : { search: name, mode: "insensitive" },
           },
           {
-            aliases:
-              name !== undefined
-                ? {
-                    has: name,
-                  }
-                : undefined,
+            aliases: {
+              hasSome: list,
+            },
           },
         ],
       },
@@ -153,7 +176,9 @@ const list = publicProcedure
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
     };
-    const where = buildIngredientWhere(false, input.nameFilter);
+    const where = input.nameFilter
+      ? buildIngredientWhere(false, input.nameFilter)
+      : undefined;
     const res = await ctx.db.ingredient.findMany({
       orderBy,
       where,

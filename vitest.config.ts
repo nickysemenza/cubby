@@ -17,5 +17,8 @@ export default defineConfig({
       enabled: true,
       ignoreSourceErrors: true, // wasm files throw errors
     },
+    env: {
+      NODE_ENV: "test",
+    },
   },
 });
