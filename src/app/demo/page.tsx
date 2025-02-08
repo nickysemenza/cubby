@@ -5,7 +5,7 @@ import { api } from "~/trpc/react";
 import { JsonEditor } from "json-edit-react";
 
 import { useForm, type SubmitHandler } from "react-hook-form";
-import { Input } from "@headlessui/react";
+import { Input } from "~/components/ui/input";
 
 export default function Page() {
   const res = api.demo.hello.useQuery({ text: "Hello, tRPC!" });

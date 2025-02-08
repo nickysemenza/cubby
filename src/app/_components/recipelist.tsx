@@ -9,7 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { type Flatten } from "~/util";
-import RTable, { Toolbar } from "./Table";
+import RTable from "./data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
@@ -99,7 +99,6 @@ export function RecipeList() {
 
   return (
     <div>
-      <Toolbar table={table} />
       <RTable table={table} sorting={sorting} />
     </div>
   );
