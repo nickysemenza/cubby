@@ -25,7 +25,7 @@ import { format_amount, graph_pairing } from "recipebridge/pkg/recipebridge";
 
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
-import { UnitMappingOut } from "~/schemas/ingredient";
+import { type UnitMappingOut } from "~/schemas/ingredient";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);

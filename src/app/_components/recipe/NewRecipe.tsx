@@ -8,7 +8,6 @@ import {
 } from "recipebridge/pkg/recipebridge";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
-import { twMerge } from "tailwind-merge";
 import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "../Button";
 import { formatRichText } from "./richtext";
@@ -77,7 +76,7 @@ const NewRecipe: React.FC = () => {
           value={url}
           onChange={(e) => setURL(e.target.value)}
         />
-        <Button onPress={() => onScrape()}>Scrape</Button>
+        <Button onClick={() => onScrape()}>Scrape</Button>
       </div>
       <input
         className="w-100 rounded-md border-2"
@@ -127,18 +126,17 @@ const NewRecipe: React.FC = () => {
         </div>
       </div>
       {/* <JsonRenderer input={{ lines, linesParsed }} /> */}
-      <Button onPress={() => onCreate()}>Create</Button>
+      <Button onClick={() => onCreate()}>Create</Button>
     </div>
   );
 };
 const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
   const itemsResp = api.ingredient.getByName.useQuery({
-    itemTypeFilter: "Ingredient",
     nameFilter: name,
   });
   const resultName = itemsResp.data?.name;
   return (
-    <div className={twMerge(`inline`, resultName && "underline")}>
+    <div className={resultName ? "inline underline" : "inline"}>
       {resultName ?? name}
     </div>
   );
