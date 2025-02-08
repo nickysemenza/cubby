@@ -9,11 +9,13 @@ import {
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
 import { type CompactRecipe } from "~/codec/codec";
-import { Button } from "../Button";
+import { Button } from "~/components/ui/button";
 import { formatRichText } from "./richtext";
 import useDebounce from "../useDebounce";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
+import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
@@ -71,20 +73,16 @@ const NewRecipe: React.FC = () => {
   return (
     <div className="container mx-auto">
       <div className="my-4">
-        <input
-          className="w-1/2 rounded-md border-2"
+        <Input
+          type="url"
           value={url}
           onChange={(e) => setURL(e.target.value)}
         />
         <Button onClick={() => onScrape()}>Scrape</Button>
       </div>
-      <input
-        className="w-100 rounded-md border-2"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <Input value={name} onChange={(e) => setName(e.target.value)} />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <textarea
+        <Textarea
           value={ingredientsText}
           onChange={(e) => setIngredients(e.target.value)}
           rows={10}
@@ -102,7 +100,7 @@ const NewRecipe: React.FC = () => {
       </div>
       <hr className="my-4" />
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <textarea
+        <Textarea
           value={instructionsText}
           onChange={(e) => setInstructions(e.target.value)}
           rows={10}

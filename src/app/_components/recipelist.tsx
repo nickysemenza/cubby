@@ -37,13 +37,6 @@ export function RecipeList() {
   const data = recipesResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
-    // {
-    //   id: "select",
-    //   header: () => <SelectionCheckbox />,
-    //   cell: () => <SelectionCheckbox />,
-    //   enableSorting: false,
-    //   enableHiding: false,
-    // },
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
