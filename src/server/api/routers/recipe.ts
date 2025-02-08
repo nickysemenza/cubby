@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
 import { z } from "zod";
-import { type PrismaClient, type Prisma } from "@prisma/client";
+import { type PrismaClient, type Prisma, RecipeSource } from "@prisma/client";
 import { compactRecipeSchema, type CompactRecipe } from "~/codec/codec";
 import {
   createPaginatedResponseSchema,
@@ -44,10 +44,13 @@ const secitonIngredienttoAPI: (
 };
 
 const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
-  const { sections, ...restOfRecipe } = recipe;
+  const { sections, SourceData, SourceType, ...restOfRecipe } = recipe;
 
   return {
     ...restOfRecipe,
+    meta: {
+      url: SourceType === RecipeSource.Website ? SourceData : null,
+    },
     sections: sections.map((section) => {
       const { ingredients, instructions, ...restOfSection } = section;
       return {

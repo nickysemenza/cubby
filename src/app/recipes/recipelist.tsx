@@ -64,6 +64,9 @@ export function RecipeList() {
     columnHelper.accessor("createdAt", {
       cell: (info) => dayjs(info.getValue()).fromNow(),
     }),
+    columnHelper.accessor("meta", {
+      cell: (info) => info.getValue()?.url,
+    }),
     columnHelper.accessor("id", {
       enableSorting: false,
       cell: (info) => (

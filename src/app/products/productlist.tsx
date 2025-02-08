@@ -20,8 +20,10 @@ import {
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
-import JsonRenderer from "../_components/json";
-import { format_amount, graph_pairing } from "recipebridge/pkg/recipebridge";
+import {
+  format_amount,
+  graph_unit_mappings,
+} from "recipebridge/pkg/recipebridge";
 
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
@@ -30,14 +32,20 @@ const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
-const buildunitMappingGraph = (unitMapping: UnitMappingOut) => {
+const buildunitMappingsGraph = (unitMapping: UnitMappingOut[]) => {
   try {
-    const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
+    const graph = graph_unit_mappings(unitMapping).replace(
       "digraph {",
-      "digraph { rankdir=LR; nodesep=0.5;",
+      `digraph { rankdir=LR; nodesep=0.5;bgcolor="transparent";`,
     );
 
-    return <Graphviz dot={graph} className="w-full" />;
+    return (
+      <Graphviz
+        dot={graph}
+        options={{ width: 200, height: 100, background: "transparent" }}
+        className="w-full"
+      />
+    );
   } catch (e) {
     const error = e as string;
     return <div className="text-red-400">{error}</div>;
@@ -74,14 +82,13 @@ export function ProductList() {
     columnHelper.accessor("unitMappings", {
       cell: (info) => (
         <>
+          {buildunitMappingsGraph(info.getValue())}
           {info.getValue().map((unitMapping, x) => {
             return (
               <div key={x}>
-                <JsonRenderer input={unitMapping} />
                 {format_amount(unitMapping.a) +
                   " = " +
                   format_amount(unitMapping.b)}
-                {buildunitMappingGraph(unitMapping)}
               </div>
             );
           })}

@@ -96,6 +96,13 @@ products:
           unit: dollars
           value: 7
         source: whole foods
+      - a:
+          unit: whole
+          value: 1
+        b:
+          unit: grams
+          value: 50
+        source: whole foods
   - name: M18 Hackzall
     upc: "045242502776"
     manufacturer: "Milwaukee"

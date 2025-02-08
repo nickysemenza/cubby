@@ -20,6 +20,7 @@ serde_json = "1.0"
 # https://docs.rs/getrandom/#webassembly-support
 getrandom = { version = "0.3", features = ["wasm_js"] }
 wasm-tracing = "1.0.0"
+tracing = "0.1.41"
 console_error_panic_hook = "0.1.7"
 wee_alloc = { version = "0.4.5", optional = true }
 

@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+const compactMeta = z.object({ url: z.string().url().optional() }).optional();
 export const compactRecipeSchema = z.object({
   name: z.string(),
+  meta: compactMeta,
   sections: z.array(
     z.object({
       ingredients: z.array(z.string()),
@@ -22,6 +24,7 @@ export const parsedIngredient = z.object({
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const parsedCompactRecipeSchema = z.object({
   name: z.string(),
+  meta: compactMeta,
   sections: z.array(
     z.object({
       ingredients: z.array(parsedIngredient),

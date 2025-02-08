@@ -5,6 +5,7 @@ import { getIngredientUnit } from "~/app/_components/recipe/utils";
 export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
   return {
     name: raw.name,
+    meta: raw.meta,
     sections: raw.sections.map((section) => ({
       ingredients: section.ingredients.map((ingredient) => {
         const parsed = parse_ingredient(ingredient);

@@ -1,6 +1,7 @@
 import { type db } from "./db";
 import { type ParsedCompactRecipe } from "~/codec/codec";
 import { findOrCreateIngredient } from "./api/routers/ingredients";
+import { RecipeSource } from "@prisma/client";
 
 export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
@@ -12,6 +13,8 @@ export const upsertRecipeFromCompact = async (
       update: {},
       create: {
         name: recipe.name,
+        SourceData: recipe.meta?.url ?? null,
+        SourceType: recipe.meta?.url ? RecipeSource.Website : null,
       },
       include: { sections: { include: { ingredients: true } } },
     });

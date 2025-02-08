@@ -58,6 +58,7 @@ const NewRecipe: React.FC = () => {
   const onCreate = async () => {
     const compact: CompactRecipe = {
       name,
+      meta: { url },
       sections: [
         {
           ingredients: ingredientLines,

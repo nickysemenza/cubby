@@ -12,6 +12,11 @@ export const recipeTopLevel = z
   .object({
     id: z.string().uuid(),
     name: z.string(),
+    meta: z
+      .object({
+        url: z.string().nullable(),
+      })
+      .nullable(),
   })
   .merge(dbTimestampsOut);
 const sectionIngredientOut = z

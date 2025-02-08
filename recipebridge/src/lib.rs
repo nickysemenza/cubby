@@ -1,10 +1,26 @@
 use ingredient::{
-    self, rich_text::RichParser, unit::make_graph, unit::print_graph, unit::Measure,
+    self,
+    rich_text::RichParser,
+    unit::{make_graph, print_graph, Measure, MeasureKind},
     IngredientParser,
 };
+use serde::{Deserialize, Serialize};
+use tracing::info;
 use wasm_bindgen::prelude::*;
 
 extern crate wee_alloc;
+
+#[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct RawAmount {
+    unit: String,
+    value: f64,
+    upper_value: Option<f64>,
+}
+#[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
+pub struct UnitMapping {
+    a: RawAmount,
+    b: RawAmount,
+}
 
 // Use `wee_alloc` as the global allocator.
 #[global_allocator]
@@ -16,6 +32,10 @@ extern "C" {
     pub type WIngredient;
     #[wasm_bindgen(typescript_type = "WMeasure")]
     pub type WMeasure;
+    #[wasm_bindgen(typescript_type = "WRawAmount")]
+    pub type WRawAmount;
+    #[wasm_bindgen(typescript_type = "WUnitMapping")]
+    pub type WUnitMapping;
     #[wasm_bindgen(typescript_type = "WCompactRecipe")]
     pub type WCompactRecipe;
     #[wasm_bindgen(typescript_type = "RichItem[]")]
@@ -30,38 +50,47 @@ pub fn parse_ingredient(input: &str) -> WIngredient {
 }
 
 #[wasm_bindgen]
-pub fn format_amount(amount: &WMeasure) -> String {
+pub fn format_amount(amount: &WRawAmount) -> String {
     // utils::set_panic_hook();
-    let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(amount.into());
+    let a1: Result<RawAmount, _> = serde_wasm_bindgen::from_value(amount.into());
     match a1 {
-        Ok(a) => format!("{a}"),
+        Ok(a) => {
+            let a2 = Measure::from_parts(a.unit.as_str(), a.value, a.upper_value);
+            format!("{}", a2)
+        }
         Err(e) => {
-            // error!("failed to format {:#?}: {:?}", amount, e);
             format!("{e}")
         }
     }
 }
-
+fn raw_amount_to_measure(a: RawAmount) -> Measure {
+    Measure::from_parts(a.unit.as_str(), a.value, a.upper_value)
+}
 #[wasm_bindgen]
-pub fn graph_pairing(a: &WMeasure, b: &WMeasure) -> Result<String, String> {
+pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String> {
     setup();
-    //todo: this only works if the units are strict parsed (normalized)
-    let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(a.into());
-    let b1: Result<Measure, _> = serde_wasm_bindgen::from_value(b.into());
-    let a2 = match a1 {
-        Ok(a) => a,
-        Err(e) => {
-            return Err(format!("failed to parse measure on side a: {e}"));
-        }
-    };
-    let b2 = match b1 {
-        Ok(a) => a,
-        Err(e) => {
-            return Err(format!("failed to parse measure on side b: {e}"));
-        }
-    };
-    let pair: Vec<(Measure, Measure)> = vec![(a2, b2)];
-    let g = make_graph(pair);
+    let mut mapping_pairs: Vec<(Measure, Measure)> = Vec::new();
+    for m in mappings {
+        let mapping_rs: Result<UnitMapping, _> = serde_wasm_bindgen::from_value(m.into());
+        let mapping = match mapping_rs {
+            Ok(mapping) => mapping,
+            Err(e) => {
+                return Err(format!("failed to parse unit mapping: {e}"));
+            }
+        };
+
+        mapping_pairs.push((
+            raw_amount_to_measure(mapping.a),
+            raw_amount_to_measure(mapping.b),
+        ));
+    }
+    let g = make_graph(mapping_pairs.clone());
+    let converted_measure = Measure::from_string("100 grams".to_string())
+        .convert_measure_via_mappings(MeasureKind::Money, mapping_pairs);
+    info!("converted measure: {:?}", converted_measure);
+
+    info!("Graph: {:?}", g);
+
     Ok(print_graph(g))
 }
 
@@ -101,6 +130,15 @@ interface WMeasure {
   unit: string | OtherUnitEnum;
   value: number;
   upper_value?: number;
+}
+interface WUnitMapping {
+    a: WRawAmount;
+    b: WRawAmount;
+}
+interface WRawAmount {
+    unit: string;
+    value: number;
+    upper_value?: number;
 }
 interface WCompactRecipe{
   ingredients: string[];
