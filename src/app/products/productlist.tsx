@@ -66,10 +66,10 @@ export function ProductList() {
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("upc", {
-      cell: (info) => info.getValue(),
+      cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
     }),
     columnHelper.accessor("model", {
-      cell: (info) => info.getValue(),
+      cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
     }),
     columnHelper.accessor("unitMappings", {
       cell: (info) => (

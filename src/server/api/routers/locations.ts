@@ -79,11 +79,6 @@ export const loadLocations = async (
   }
 };
 
-const foo = {
-  parent: true,
-  children: true,
-};
-
 type LocationDeepDB = Prisma.LocationGetPayload<{
   include: {
     parent: true;
@@ -128,6 +123,40 @@ function recursiveLocationChildren(level: number): Prisma.LocationFindManyArgs {
     },
   };
 }
+function recursiveLocationParent(level: number): Prisma.LocationFindManyArgs {
+  if (level === 0) {
+    return {
+      include: {
+        parent: true,
+      },
+    };
+  }
+  return {
+    include: {
+      parent: recursiveLocationParent(level - 1),
+    },
+  };
+}
+
+const buildLocationWithChildren = (
+  x: Prisma.LocationGetPayload<{
+    include: {
+      children: true;
+      parent: true;
+    };
+  }>,
+): InfLocation => {
+  return {
+    name: x.name,
+    id: x.id,
+    type: x.type,
+    //@ts-expect-error WIP
+    children: (x.children || []).map(buildLocationWithChildren),
+    //@ts-expect-error WIP
+    parent: x.parent ? buildLocationWithChildren(x.parent) : undefined,
+    ...extractDbTimestampsFromDBRec(x),
+  };
+};
 
 const makeTree = publicProcedure
   .output(z.array(infLocation))
@@ -135,24 +164,15 @@ const makeTree = publicProcedure
     const res = await ctx.db.location.findMany({
       include: {
         children: recursiveLocationChildren(10),
+        parent: true,
       },
       where: {
         parentId: null,
       },
     });
-    const foo = (x: (typeof res)[0]): InfLocation => {
-      return {
-        name: x.name,
-        id: x.id,
-        type: x.type,
-        //@ts-expect-error WIP
-        children: x.children.map(foo),
-        ...extractDbTimestampsFromDBRec(x),
-      };
-    };
 
     const tree: InfLocation[] = res.map((x) => {
-      return foo(x);
+      return buildLocationWithChildren(x);
     });
     return tree;
   });
@@ -203,17 +223,22 @@ const list = publicProcedure
   });
 
 const getByID = publicProcedure
+  .meta({ description: "location with infiinte parent and 1 child" })
+
   .input(IDInput)
-  .output(locationOutWithParentChildren)
+  .output(infLocation)
   .query(async ({ ctx, input }) => {
     const res = await ctx.db.location.findFirstOrThrow({
       where: {
         id: input.id,
       },
-      include: foo,
+      include: {
+        parent: recursiveLocationParent(10),
+        children: true,
+      },
     });
 
-    return dbLocationToAPIWithChildren(res);
+    return buildLocationWithChildren(res);
   });
 const getLocationTypesCount = publicProcedure
   .output(z.record(locationType, z.number()))

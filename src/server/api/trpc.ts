@@ -100,16 +100,19 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 
 const tracingMiddleWare = t.middleware(async (opts) => {
   const tracer = trace.getTracer("trpc");
-  return tracer.startActiveSpan(`TRPC ${opts.type}`, async (span: Span) => {
-    const input = await opts.getRawInput();
-    if (true && typeof input === "object") {
-      span.setAttributes(flatten({ input }));
-    }
-    span.setAttributes({ path: opts.path });
-    const result = await opts.next();
-    span.setAttributes({ ok: result.ok });
-    return result;
-  });
+  return tracer.startActiveSpan(
+    `TRPC ${opts.type}: ${opts.path}`,
+    async (span: Span) => {
+      const input = await opts.getRawInput();
+      if (true && typeof input === "object") {
+        span.setAttributes(flatten({ input }));
+      }
+      span.setAttributes({ path: opts.path });
+      const result = await opts.next();
+      span.setAttributes({ ok: result.ok });
+      return result;
+    },
+  );
 });
 
 /**

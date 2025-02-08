@@ -26,12 +26,24 @@ export type LocationOut = z.infer<typeof locationOut>;
 
 export type InfLocation = LocationOut & {
   children: InfLocation[];
+  parent?: InfLocation;
 };
 
 export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
   children: z.lazy(() => infLocation.array()),
+  parent: z.lazy(() => infLocation.optional()),
 });
 
 export type LocationOutWithParentChildren = z.infer<
   typeof locationOutWithParentChildren
 >;
+
+export const collectInfiniteParents = (location: InfLocation) => {
+  const parentHierarchy = [];
+  let parent = location.parent;
+  while (parent) {
+    parentHierarchy.push(parent);
+    parent = parent.parent;
+  }
+  return parentHierarchy;
+};

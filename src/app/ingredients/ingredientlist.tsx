@@ -44,11 +44,11 @@ export function IngredientList() {
     }),
     columnHelper.accessor("aliases", {
       cell: (info) => (
-        <div>
+        <ul>
           {info.getValue().map((alias) => (
-            <div key={alias}>{alias}</div>
+            <li key={alias}>{alias}</li>
           ))}
-        </div>
+        </ul>
       ),
     }),
 
