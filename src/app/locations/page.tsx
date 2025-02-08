@@ -1,5 +1,5 @@
 import { HydrateClient } from "~/trpc/server";
-import { LocationList } from "../_components/locationlist";
+import { LocationList } from "./locationlist";
 import { type Metadata } from "next";
 import LocationTree from "../_components/recipe/locationtree";
 import LocationTreeView from "../_components/recipe/locationtreeview";

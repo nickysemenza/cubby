@@ -1,5 +1,5 @@
 import { api } from "~/trpc/server";
-import RecipeDetail from "~/app/_components/RecipeDetail";
+import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
 import { NYTView } from "~/app/_components/recipe/NYTView";
 
 type DetailParams = { id: string };

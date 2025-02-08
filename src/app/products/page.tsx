@@ -1,5 +1,5 @@
 import { HydrateClient } from "~/trpc/server";
-import { ProductList } from "../_components/productlist";
+import { ProductList } from "./productlist";
 import { type Metadata } from "next";
 
 export const metadata: Metadata = {

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type React from "react";
+import { type Entity } from "~/entities/types";
 
 interface PillProps {
   text: string;
-  label?: "ingredient" | "product" | "recipe" | "location";
+  label?: Entity;
 }
 
 const Pill: React.FC<PillProps> = ({ text, label }) => {

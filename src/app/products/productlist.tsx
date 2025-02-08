@@ -9,7 +9,7 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { type Flatten } from "~/util";
-import RTable from "./data-table/Table";
+import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
@@ -18,17 +18,37 @@ import {
   buildSortParams,
   defaultPagination,
   defaultSortState,
-} from "./recipe/tableUtils";
-import { PillLink } from "./Pill";
+} from "../_components/data-table/tableUtils";
+import { PillLink } from "../_components/EntityPill";
+import JsonRenderer from "../_components/json";
+import { format_amount, graph_pairing } from "recipebridge/pkg/recipebridge";
+
+// https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
+import dynamic from "next/dynamic";
+import { type UnitMappingOut } from "~/schemas/ingredient";
+const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
-export function LocationList() {
+const buildunitMappingGraph = (unitMapping: UnitMappingOut) => {
+  try {
+    const graph = graph_pairing(unitMapping.a, unitMapping.b).replace(
+      "digraph {",
+      "digraph { rankdir=LR; nodesep=0.5;",
+    );
+
+    return <Graphviz dot={graph} className="w-full" />;
+  } catch (e) {
+    const error = e as string;
+    return <div className="text-red-400">{error}</div>;
+  }
+};
+export function ProductList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState(defaultPagination);
-  const [itemsResp] = api.location.list.useSuspenseQuery({
+  const [productsResp] = api.product.list.useSuspenseQuery({
     sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
@@ -36,45 +56,53 @@ export function LocationList() {
       | undefined,
   });
 
-  const data = itemsResp.items;
+  const data = productsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
-    columnHelper.accessor("children", {
+    columnHelper.accessor("manufacturer", {
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("upc", {
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("model", {
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("unitMappings", {
       cell: (info) => (
-        <div>
-          {info.getValue().map((child) => (
-            <div key={child.id}>
-              <PillLink
-                text={child.name}
-                label="location"
-                href={`locations/${child.id}`}
-              />
-            </div>
-          ))}
-        </div>
+        <>
+          {info.getValue().map((unitMapping, x) => {
+            return (
+              <div key={x}>
+                <JsonRenderer input={unitMapping} />
+                {format_amount(unitMapping.a) +
+                  " = " +
+                  format_amount(unitMapping.b)}
+                {buildunitMappingGraph(unitMapping)}
+              </div>
+            );
+          })}
+        </>
       ),
     }),
-    columnHelper.accessor("parent", {
+    columnHelper.accessor("ingredient", {
       cell: (info) => {
-        const item = info.getValue();
+        const ingredient = info.getValue();
         return (
           <div>
-            {item && (
+            {ingredient && (
               <PillLink
-                text={item.name}
-                label="location"
-                href={`locations/${item.id}`}
+                text={ingredient.name}
+                label="ingredient"
+                href={`ingredients/${ingredient.id}`}
               />
             )}
           </div>
         );
       },
-    }),
-    columnHelper.accessor("type", {
-      cell: (info) => info.getValue(),
     }),
 
     columnHelper.accessor("createdAt", {
@@ -86,7 +114,7 @@ export function LocationList() {
         <div>
           <Link
             className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`items/${info.getValue()}`}
+            href={`products/${info.getValue()}`}
           >
             {info.getValue()}
           </Link>
@@ -105,7 +133,7 @@ export function LocationList() {
     manualSorting: true,
     manualFiltering: true,
     manualPagination: true,
-    rowCount: itemsResp.meta.totalCount,
+    rowCount: productsResp.meta.totalCount,
     state: {
       sorting,
       columnFilters,

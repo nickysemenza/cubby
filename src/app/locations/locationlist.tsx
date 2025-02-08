@@ -9,57 +9,73 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { type Flatten } from "~/util";
-import RTable from "./data-table/Table";
+import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
 import { useState } from "react";
 import {
-  defaultPagination,
   buildSortParams,
+  defaultPagination,
   defaultSortState,
-} from "./recipe/tableUtils";
+} from "../_components/data-table/tableUtils";
+import { PillLink } from "../_components/EntityPill";
 
 dayjs.extend(relativeTime);
 
-export function RecipeList() {
+export function LocationList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState(defaultPagination);
-  const [recipesResp] = api.recipe.list.useSuspenseQuery({
+  const [itemsResp] = api.location.list.useSuspenseQuery({
     sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
       | string
       | undefined,
   });
-  const data = recipesResp.items;
+
+  const data = itemsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
-    // columnHelper.display({
-    //   id: "sections",
-    //   cell: (info) => {
-    //     return info.row.original.sections.map((section) => (
-    //       <li key={section.id}>
-    //         {section.name}
-    //         <ul className="ml-4 list-inside list-disc">
-    //           {section.ingredients.map((ingredient) => (
-    //             <li key={ingredient.id}>
-    //               <div>
-    //                 {ingredient.ingredient?.name}
-    //                 <JsonRenderer input={ingredient.amounts} />
-    //               </div>
-    //             </li>
-    //           ))}
-    //         </ul>
-    //       </li>
-    //     ));
-    //   },
-    // }),
+    columnHelper.accessor("children", {
+      cell: (info) => (
+        <div>
+          {info.getValue().map((child) => (
+            <div key={child.id}>
+              <PillLink
+                text={child.name}
+                label="location"
+                href={`locations/${child.id}`}
+              />
+            </div>
+          ))}
+        </div>
+      ),
+    }),
+    columnHelper.accessor("parent", {
+      cell: (info) => {
+        const item = info.getValue();
+        return (
+          <div>
+            {item && (
+              <PillLink
+                text={item.name}
+                label="location"
+                href={`locations/${item.id}`}
+              />
+            )}
+          </div>
+        );
+      },
+    }),
+    columnHelper.accessor("type", {
+      cell: (info) => info.getValue(),
+    }),
 
     columnHelper.accessor("createdAt", {
       cell: (info) => dayjs(info.getValue()).fromNow(),
@@ -70,7 +86,7 @@ export function RecipeList() {
         <div>
           <Link
             className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`recipes/${info.getValue()}`}
+            href={`items/${info.getValue()}`}
           >
             {info.getValue()}
           </Link>
@@ -89,7 +105,7 @@ export function RecipeList() {
     manualSorting: true,
     manualFiltering: true,
     manualPagination: true,
-    rowCount: recipesResp.meta.totalCount,
+    rowCount: itemsResp.meta.totalCount,
     state: {
       sorting,
       columnFilters,

@@ -1,5 +1,5 @@
 import { HydrateClient } from "~/trpc/server";
-import { RecipeList } from "../_components/recipelist";
+import { RecipeList } from "./recipelist";
 import { type Metadata } from "next";
 import Link from "next/link";
 
