@@ -5,11 +5,10 @@ use ingredient::{
     IngredientParser,
 };
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use wasm_bindgen::prelude::*;
 
 extern crate wee_alloc;
-
+type UnitMappings = Vec<(Measure, Measure)>;
 #[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct RawAmount {
     unit: String,
@@ -66,32 +65,43 @@ pub fn format_amount(amount: &WRawAmount) -> String {
 fn raw_amount_to_measure(a: RawAmount) -> Measure {
     Measure::from_parts(a.unit.as_str(), a.value, a.upper_value)
 }
+fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappings {
+    let mut mapping_pairs: UnitMappings = Vec::new();
+    for m in mappings {
+        mapping_pairs.push((raw_amount_to_measure(m.a), raw_amount_to_measure(m.b)));
+    }
+    mapping_pairs
+}
+pub fn mappings_from_w(mappings: Vec<WUnitMapping>) -> UnitMappings {
+    let parsed_mappings: Result<Vec<UnitMapping>, String> = mappings
+        .iter()
+        .map(|m| {
+            let mapping_rs: Result<UnitMapping, _> = serde_wasm_bindgen::from_value(m.into());
+            match mapping_rs {
+                Ok(mapping) => Ok(mapping),
+                Err(e) => Err(format!("failed to parse unit mapping: {e}")),
+            }
+        })
+        .collect();
+    mappings_to_pairs(parsed_mappings.unwrap())
+}
 #[wasm_bindgen]
 pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String> {
     setup();
-    let mut mapping_pairs: Vec<(Measure, Measure)> = Vec::new();
-    for m in mappings {
-        let mapping_rs: Result<UnitMapping, _> = serde_wasm_bindgen::from_value(m.into());
-        let mapping = match mapping_rs {
-            Ok(mapping) => mapping,
-            Err(e) => {
-                return Err(format!("failed to parse unit mapping: {e}"));
-            }
-        };
+    Ok(print_graph(make_graph(mappings_from_w(mappings))))
+}
 
-        mapping_pairs.push((
-            raw_amount_to_measure(mapping.a),
-            raw_amount_to_measure(mapping.b),
-        ));
+#[wasm_bindgen]
+pub fn test_convert_to_target(mappings: Vec<WUnitMapping>) -> String {
+    setup();
+    let mapping_pairs = mappings_from_w(mappings);
+    let target_measure = Measure::from_string("100 grams".to_string());
+    let converted_measure =
+        target_measure.convert_measure_via_mappings(MeasureKind::Money, mapping_pairs);
+    match converted_measure {
+        Some(m) => format!("{}={}", target_measure, m),
+        None => "".to_string(),
     }
-    let g = make_graph(mapping_pairs.clone());
-    let converted_measure = Measure::from_string("100 grams".to_string())
-        .convert_measure_via_mappings(MeasureKind::Money, mapping_pairs);
-    info!("converted measure: {:?}", converted_measure);
-
-    info!("Graph: {:?}", g);
-
-    Ok(print_graph(g))
 }
 
 fn setup() {

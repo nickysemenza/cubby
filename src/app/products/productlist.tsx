@@ -21,6 +21,7 @@ import {
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
 import {
+  foo,
   format_amount,
   graph_unit_mappings,
 } from "recipebridge/pkg/recipebridge";
@@ -83,6 +84,7 @@ export function ProductList() {
       cell: (info) => (
         <>
           {buildunitMappingsGraph(info.getValue())}
+          {test_convert_to_target(info.getValue())}
           {info.getValue().map((unitMapping, x) => {
             return (
               <div key={x}>
