@@ -10,9 +10,8 @@ const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 export let hash = "";
 
 export async function setup() {
-  console.log("GLOBAL SETUP");
+  console.log("TEST GLOBAL SETUP");
   hash = await integreSQL.hashFiles(["./prisma/schema.prisma"]);
-  console.log({ hash });
 
   // Initialize the template database
   await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
@@ -48,9 +47,8 @@ export async function setup() {
 export async function buildTestDB() {
   const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
   const hash = await integreSQL.hashFiles(["./prisma/schema.prisma"]);
-  console.log({ hash });
   const databaseConfig = await integreSQL.getTestDatabase(hash);
-  console.log("TESTING WITH DATABASE CONFIG", databaseConfig.database);
+  console.log("testdb:", databaseConfig.database);
   const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
     remapDBConfig(databaseConfig),
   );
@@ -58,7 +56,6 @@ export async function buildTestDB() {
     datasourceUrl: connectionUrl,
   });
   const teardown = async () => {
-    console.log("disconnecting");
     await prisma.$disconnect();
   };
   return { prisma, teardown };
@@ -67,10 +64,8 @@ export async function buildTestDB() {
 const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
-  const remapDbPort = process.env.DATABASE_URL?.includes("5555");
-  console.log({ remapDbPort });
   databaseConfig.host = "localhost";
-  if (remapDbPort) {
+  if (process.env.DATABASE_URL?.includes("5555")) {
     databaseConfig.port = 5555;
   }
   return databaseConfig;
