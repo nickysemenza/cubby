@@ -19,6 +19,10 @@ const Pill: React.FC<PillProps> = ({ text, label }) => {
     </span>
   );
 };
+export const IngredientPillLink: React.FC<{ name: string; id: string }> = ({
+  name,
+  id,
+}) => <PillLink href={`/ingredients/${id}`} text={name} label="ingredient" />;
 
 export const PillLink: React.FC<PillProps & { href: string }> = ({
   href,

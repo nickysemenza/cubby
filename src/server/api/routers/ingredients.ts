@@ -9,6 +9,7 @@ import {
 } from "../../../schemas/util";
 import { type IngredientOut, ingredientOut } from "~/schemas/ingredient";
 import { dbRecipeToAPIShallow } from "./recipe";
+import { dedupe } from "~/util";
 
 type IngredientDeepDB = Prisma.IngredientGetPayload<{
   include: {
@@ -55,6 +56,69 @@ const dbIngredientToAPI: (ingredient: IngredientDeepDB) => IngredientOut = (
     ),
   };
 };
+export const mergeIngredients = async (
+  db: PrismaClient,
+  target: string,
+  aliases: string[],
+) => {
+  return await db.$transaction(async (tx) => {
+    const targetRec = await tx.ingredient.findFirstOrThrow({
+      where: { id: target },
+    });
+    const aliasRecs = await tx.ingredient.findMany({
+      where: { id: { in: aliases } },
+    });
+
+    // update target ingredient to have new aliases
+    await tx.ingredient.update({
+      where: { id: target },
+      data: {
+        aliases: {
+          set: dedupe([
+            ...targetRec.aliases,
+            ...aliasRecs.map((a) => a.name),
+            ...aliasRecs.flatMap((a) => a.aliases ?? []),
+          ]),
+        },
+      },
+    });
+
+    // update all recipeSectionIngredients to point to the target
+    await tx.recipeSectionIngredient.updateMany({
+      where: {
+        ingredientId: { in: aliases },
+      },
+      data: {
+        ingredientId: target,
+      },
+    });
+
+    // delete stale
+    await tx.ingredient.deleteMany({
+      where: {
+        id: { in: aliases },
+      },
+    });
+  });
+};
+const merge = publicProcedure
+  .input(
+    z.object({
+      target: z.string().uuid(),
+      aliases: z.array(z.string().uuid()).min(1),
+    }),
+  )
+  .output(ingredientOut)
+  .mutation(async ({ ctx, input }) => {
+    await mergeIngredients(ctx.db, input.target, input.aliases);
+    const res = await ctx.db.ingredient.findFirstOrThrow({
+      where: {
+        id: input.target,
+      },
+      include: ingredientInclude,
+    });
+    return dbIngredientToAPI(res);
+  });
 
 const getByName = publicProcedure
   .input(
@@ -200,4 +264,5 @@ export const ingredientRouter = createTRPCRouter({
   getByName,
   getByID,
   list,
+  merge,
 });

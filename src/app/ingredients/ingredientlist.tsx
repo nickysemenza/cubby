@@ -20,6 +20,8 @@ import {
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
+import { buildSelectColumn } from "../_components/data-table/row-selection";
+import { IngredientMerger } from "./ingredient-merger";
 
 dayjs.extend(relativeTime);
 
@@ -39,6 +41,7 @@ export function IngredientList() {
   const data = ingredientsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
+    buildSelectColumn<Flatten<typeof data>>(),
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
@@ -130,6 +133,7 @@ export function IngredientList() {
 
   return (
     <div>
+      <IngredientMerger table={table} />
       <RTable table={table} sorting={sorting} />
     </div>
   );

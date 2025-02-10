@@ -15,7 +15,7 @@ import { upsertRecipeFromCompact } from "~/server/compactrecipe";
 import { parseCompactRecipe } from "~/codec/parser";
 import {
   recipeOut,
-  recipeTopLevel,
+  type recipeTopLevel,
   type RecipeOut,
   type SectionIngredient,
 } from "~/schemas/recipes";
@@ -169,7 +169,7 @@ export const recipeRouter = createTRPCRouter({
     }),
 });
 
-const insertCompactRecipe = async (
+export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   prismaClient: PrismaClient,
 ) => {
