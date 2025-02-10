@@ -9,8 +9,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <HydrateClient>
-      <div>
-        <h1>Hello, Dashboard Page!</h1>
+      <div className="container mx-auto">
         <IngredientList />
       </div>
     </HydrateClient>

@@ -10,7 +10,6 @@ export default function Page() {
   return (
     <HydrateClient>
       <div>
-        <h1>Hello, Dashboard Page!</h1>
         <ProductList />
       </div>
     </HydrateClient>

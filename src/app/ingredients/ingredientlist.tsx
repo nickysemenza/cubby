@@ -6,6 +6,7 @@ import {
   createColumnHelper,
   getCoreRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import { type Flatten } from "~/util";
@@ -37,12 +38,13 @@ export function IngredientList() {
       | string
       | undefined,
   });
-
+  console.log({ sorting });
   const data = ingredientsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     buildSelectColumn<Flatten<typeof data>>(),
     columnHelper.accessor("name", {
+      enableSorting: true,
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("aliases", {
@@ -72,6 +74,7 @@ export function IngredientList() {
       ),
     }),
     columnHelper.accessor("appearsInRecipes", {
+      enableSorting: false,
       cell: (info) => (
         <div>
           <ul className="">
@@ -95,6 +98,7 @@ export function IngredientList() {
       ),
     }),
     columnHelper.accessor("product", {
+      enableSorting: false,
       cell: (info) => (
         <div>
           <ul className="">
@@ -119,6 +123,7 @@ export function IngredientList() {
     getPaginationRowModel: getPaginationRowModel(),
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     manualSorting: true,
     manualFiltering: true,

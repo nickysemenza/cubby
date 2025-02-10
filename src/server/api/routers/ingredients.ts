@@ -238,6 +238,8 @@ const list = publicProcedure
       createdAt:
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
+      aliases:
+        input.sort.orderBy === "aliases" ? input.sort.direction : undefined,
     };
     const where = input.nameFilter
       ? buildIngredientWhere(false, input.nameFilter)

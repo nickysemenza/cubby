@@ -81,6 +81,7 @@ export function ProductList() {
       cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
     }),
     columnHelper.accessor("unitMappings", {
+      enableSorting: false,
       cell: (info) => (
         <>
           {buildunitMappingsGraph(info.getValue())}
@@ -98,6 +99,7 @@ export function ProductList() {
       ),
     }),
     columnHelper.accessor("ingredient", {
+      enableSorting: false,
       cell: (info) => {
         const ingredient = info.getValue();
         return (

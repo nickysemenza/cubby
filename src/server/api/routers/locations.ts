@@ -192,6 +192,7 @@ const list = publicProcedure
       createdAt:
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
+      type: input.sort.orderBy === "type" ? input.sort.direction : undefined,
     };
     const where: Prisma.LocationWhereInput = {
       name:

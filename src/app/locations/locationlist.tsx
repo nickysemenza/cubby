@@ -43,6 +43,7 @@ export function LocationList() {
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("children", {
+      enableSorting: false,
       cell: (info) => (
         <div>
           {info.getValue().map((child) => (
@@ -58,6 +59,7 @@ export function LocationList() {
       ),
     }),
     columnHelper.accessor("parent", {
+      enableSorting: false,
       cell: (info) => {
         const item = info.getValue();
         return (

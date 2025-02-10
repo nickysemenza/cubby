@@ -125,6 +125,12 @@ const list = publicProcedure
       createdAt:
         input.sort.orderBy === "createdAt" ? input.sort.direction : undefined,
       name: input.sort.orderBy === "name" ? input.sort.direction : undefined,
+      manufacturer:
+        input.sort.orderBy === "manufacturer"
+          ? input.sort.direction
+          : undefined,
+      model: input.sort.orderBy === "model" ? input.sort.direction : undefined,
+      upc: input.sort.orderBy === "upc" ? input.sort.direction : undefined,
     };
     const where: Prisma.ProductWhereInput = {
       name: input.nameFilter != "" ? { search: input.nameFilter } : undefined,
