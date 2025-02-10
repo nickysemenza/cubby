@@ -8,6 +8,7 @@ import {
   sortPaginationCombo,
 } from "../../../schemas/util";
 import { type IngredientOut, ingredientOut } from "~/schemas/ingredient";
+import { dbRecipeToAPIShallow } from "./recipe";
 
 type IngredientDeepDB = Prisma.IngredientGetPayload<{
   include: {
@@ -47,10 +48,10 @@ const dbIngredientToAPI: (ingredient: IngredientDeepDB) => IngredientOut = (
 
   return {
     ...restOfIngredient,
-    recipe: Recipe,
+    recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
     product: Product,
-    appearsInRecipes: RecipeSectionIngredient.map(
-      (section) => section.recipeSection.recipe,
+    appearsInRecipes: RecipeSectionIngredient.map((section) =>
+      dbRecipeToAPIShallow(section.recipeSection.recipe),
     ),
   };
 };

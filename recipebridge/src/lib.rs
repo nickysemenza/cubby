@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use ingredient::{
     self,
     rich_text::RichParser,
@@ -92,15 +94,18 @@ pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String
 }
 
 #[wasm_bindgen]
-pub fn test_convert_to_target(mappings: Vec<WUnitMapping>) -> String {
+pub fn test_convert_to_target(mappings: Vec<WUnitMapping>, mk: String) -> String {
     setup();
     let mapping_pairs = mappings_from_w(mappings);
     let target_measure = Measure::from_string("100 grams".to_string());
-    let converted_measure =
-        target_measure.convert_measure_via_mappings(MeasureKind::Money, mapping_pairs);
+    let converted_measure = target_measure
+        .convert_measure_via_mappings(MeasureKind::from_str(&mk).unwrap(), mapping_pairs);
     match converted_measure {
         Some(m) => format!("{}={}", target_measure, m),
-        None => "".to_string(),
+        None => format!(
+            "failed to convert {} to {} target measure",
+            target_measure, mk
+        ),
     }
 }
 

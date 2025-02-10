@@ -15,6 +15,7 @@ import { upsertRecipeFromCompact } from "~/server/compactrecipe";
 import { parseCompactRecipe } from "~/codec/parser";
 import {
   recipeOut,
+  recipeTopLevel,
   type RecipeOut,
   type SectionIngredient,
 } from "~/schemas/recipes";
@@ -42,7 +43,17 @@ const secitonIngredienttoAPI: (
     amounts: sectionIngredient.amounts,
   };
 };
-
+export const dbRecipeToAPIShallow: (
+  recipe: Prisma.RecipeGetPayload<object>,
+) => z.infer<typeof recipeTopLevel> = (recipe) => {
+  const { SourceType, SourceData, ...restOfRecipe } = recipe;
+  return {
+    meta: {
+      url: SourceType === RecipeSource.Website ? SourceData : null,
+    },
+    ...restOfRecipe,
+  };
+};
 const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
   const { sections, SourceData, SourceType, ...restOfRecipe } = recipe;
 
