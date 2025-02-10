@@ -1,0 +1,228 @@
+import { type PrismaClient, type Prisma } from "@prisma/client";
+import {
+  type LocationOutWithParentChildren,
+  type LocationOut,
+  type InfLocation,
+} from "~/schemas/locations";
+import {
+  type SortParams,
+  type PaginationParams,
+  buildTakeSkip,
+  extractDbTimestampsFromDBRec,
+} from "~/schemas/util";
+import { type InfLocationConfig } from "../config";
+
+export const loadLocations = async (
+  db: PrismaClient,
+  data: InfLocationConfig[],
+) => {
+  const now = new Date();
+  const load = async (
+    parent: Prisma.LocationCreateInput | null,
+    children: InfLocationConfig[],
+  ): Promise<void> => {
+    for (const child of children) {
+      const res = await db.location.upsert({
+        where: {
+          name: child.name,
+        },
+        create: {
+          name: child.name,
+          type: child.type,
+          updatedAt: now,
+          parent: parent
+            ? {
+                connect: {
+                  id: parent.id,
+                },
+              }
+            : undefined,
+        },
+        update: {
+          name: child.name,
+          type: child.type,
+          updatedAt: now,
+          parent: parent
+            ? {
+                connect: {
+                  id: parent.id,
+                },
+              }
+            : undefined,
+        },
+      });
+      await load(res, child.children ?? []);
+    }
+  };
+
+  await load(null, data);
+
+  const stale = await db.location.findMany({
+    where: {
+      updatedAt: {
+        not: now,
+      },
+    },
+  });
+  for (const s of stale) {
+    await db.location.delete({
+      where: {
+        id: s.id,
+      },
+    });
+  }
+};
+
+type LocationDeepDB = Prisma.LocationGetPayload<{
+  include: {
+    parent: true;
+    children: true;
+  };
+}>;
+
+const dbLocationToAPIWithChildren: (
+  location: LocationDeepDB,
+) => LocationOutWithParentChildren = (location) => {
+  const { parent, children, ...restOfLocation } = location;
+
+  return {
+    parent: parent ? dbLocationToAPI(parent) : null,
+    children: children.map(dbLocationToAPI),
+    ...dbLocationToAPI(restOfLocation),
+  };
+};
+
+const dbLocationToAPI: (
+  location: Prisma.LocationGetPayload<object>,
+) => LocationOut = (location) => {
+  return {
+    id: location.id,
+    name: location.name,
+    type: location.type,
+    ...extractDbTimestampsFromDBRec(location),
+  };
+};
+
+function recursiveLocationChildren(level: number): Prisma.LocationFindManyArgs {
+  if (level === 0) {
+    return {
+      include: {
+        children: true,
+      },
+    };
+  }
+  return {
+    include: {
+      children: recursiveLocationChildren(level - 1),
+    },
+  };
+}
+function recursiveLocationParent(level: number): Prisma.LocationFindManyArgs {
+  if (level === 0) {
+    return {
+      include: {
+        parent: true,
+      },
+    };
+  }
+  return {
+    include: {
+      parent: recursiveLocationParent(level - 1),
+    },
+  };
+}
+
+const buildLocationWithChildren = (
+  x: Prisma.LocationGetPayload<{
+    include: {
+      children: true;
+      parent: true;
+    };
+  }>,
+): InfLocation => {
+  return {
+    name: x.name,
+    id: x.id,
+    type: x.type,
+    //@ts-expect-error WIP
+    children: (x.children || []).map(buildLocationWithChildren),
+    //@ts-expect-error WIP
+    parent: x.parent ? buildLocationWithChildren(x.parent) : undefined,
+    ...extractDbTimestampsFromDBRec(x),
+  };
+};
+export const buildLocationTypeCount = async (db: PrismaClient) => {
+  const types = await db.location.groupBy({
+    by: ["type"],
+    _count: {
+      type: true,
+    },
+    orderBy: {
+      _count: {
+        type: "desc",
+      },
+    },
+  });
+  const res = Object.fromEntries(types.map((t) => [t.type, t._count.type]));
+  return res;
+};
+export const buildLocationTree = async (db: PrismaClient) => {
+  const res = await db.location.findMany({
+    include: {
+      children: recursiveLocationChildren(10),
+      parent: true,
+    },
+    where: {
+      parentId: null,
+    },
+  });
+
+  const tree: InfLocation[] = res.map((x) => {
+    return buildLocationWithChildren(x);
+  });
+  return tree;
+};
+
+export const locationList = async (
+  db: PrismaClient,
+  name: string | undefined,
+  itemType: string | undefined,
+  sort: SortParams,
+  pagination: PaginationParams,
+) => {
+  const orderBy: Prisma.LocationOrderByWithAggregationInput = {
+    createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
+    name: sort.orderBy === "name" ? sort.direction : undefined,
+    type: sort.orderBy === "type" ? sort.direction : undefined,
+  };
+  const where: Prisma.LocationWhereInput = {
+    name: name != "" ? { search: name, mode: "insensitive" } : undefined,
+    type: itemType,
+  };
+  const res = await db.location.findMany({
+    orderBy,
+    where,
+    ...buildTakeSkip(pagination),
+    include: {
+      parent: true,
+      children: true,
+    },
+  });
+  const totalCount = await db.location.count({ where });
+  const items = res.map(dbLocationToAPIWithChildren);
+  return { data: items, count: totalCount };
+};
+
+export const getLocationById = async (db: PrismaClient, id: string) => {
+  const res = await db.location.findFirstOrThrow({
+    where: {
+      id,
+    },
+    include: {
+      parent: recursiveLocationParent(10),
+      children: true,
+    },
+  });
+
+  return buildLocationWithChildren(res);
+};

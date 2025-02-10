@@ -1,12 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { findOrCreateIngredient, mergeIngredients } from "./ingredients";
+import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
-import { insertCompactRecipe } from "./recipe";
+import { insertCompactRecipe } from "~/server/repo/recipe";
 
 let prisma: PrismaClient;
 
-// todo: point at test DB in CI
 describe("ingredient", () => {
   beforeEach(async () => {
     // Get a isolated test database

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { SectionIngredient, type RecipeOut } from "~/schemas/recipes";
+import { type SectionIngredient, type RecipeOut } from "~/schemas/recipes";
 import {
   getGlobalInstructionNumber,
   getIngredientName,

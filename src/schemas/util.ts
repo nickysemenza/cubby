@@ -39,7 +39,20 @@ export function extractDbTimestampsFromDBRec<
     updatedAt: dbRec.updatedAt,
   };
 }
-
+export function buildPaginatedResponse<T>(
+  pagination: PaginationParams,
+  data: T[],
+  count: number,
+) {
+  return {
+    meta: {
+      pageIndex: pagination.pageIndex,
+      pageSize: data.length, //todo: is this wrong (if len is shorter than req)
+      totalCount: count,
+    },
+    items: data,
+  };
+}
 export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
   entrySchema: Entry,
 ) {

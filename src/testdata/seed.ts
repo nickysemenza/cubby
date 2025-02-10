@@ -1,10 +1,10 @@
 import { parseCompactRecipe } from "~/codec/parser";
 import { exampleRecipesCompact } from "./fakeRecipes";
-import { upsertRecipeFromCompact } from "~/server/compactrecipe";
-import { getRecipeByID } from "~/server/api/routers/recipe";
+import { upsertRecipeFromCompact } from "~/server/repo/compactrecipe";
 import { type PrismaClient } from "@prisma/client";
 import { exampleIngredients } from "./ingredients";
-import { findOrCreateIngredient } from "~/server/api/routers/ingredients";
+import { getRecipeByID } from "~/server/repo/recipe";
+import { findOrCreateIngredient } from "~/server/repo/ingredient";
 
 export const seedRealRecipes = async (db: PrismaClient) => {
   for (const ingredient of exampleIngredients) {

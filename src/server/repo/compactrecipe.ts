@@ -1,7 +1,7 @@
-import { type db } from "./db";
+import { type db } from "../db";
 import { type ParsedCompactRecipe } from "~/codec/codec";
-import { findOrCreateIngredient } from "./api/routers/ingredients";
 import { RecipeSource } from "@prisma/client";
+import { findOrCreateIngredient } from "./ingredient";
 
 export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
