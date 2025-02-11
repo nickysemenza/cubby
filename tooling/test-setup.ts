@@ -7,7 +7,7 @@ import { execSync } from "child_process";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
-export let hash = "";
+let hash = "";
 
 export async function setup() {
   console.log("TEST GLOBAL SETUP");

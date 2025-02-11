@@ -28,5 +28,3 @@ export const configSchema = z
       .describe("products that can be purchased"),
   })
   .describe("system config");
-
-export type Config = z.infer<typeof configSchema>;

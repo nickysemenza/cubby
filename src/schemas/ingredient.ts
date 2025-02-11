@@ -19,7 +19,7 @@ export const productBase = z.object({
     .transform((x) => x ?? null),
 });
 
-export const productTopLevelOut = z
+const productTopLevelOut = z
   .object({
     id: z.string().uuid(),
   })
@@ -27,7 +27,7 @@ export const productTopLevelOut = z
   .merge(dbTimestampsOut);
 
 export type IngredientOut = z.infer<typeof ingredientOut>;
-export const ingredientBase = z
+const ingredientBase = z
   .object({
     id: z.string().uuid(),
     name: z.string(),

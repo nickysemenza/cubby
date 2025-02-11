@@ -32,4 +32,3 @@ export const PillLink: React.FC<PillProps & { href: string }> = ({
     <Pill {...pillProps} />
   </Link>
 );
-export default Pill;

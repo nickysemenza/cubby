@@ -40,7 +40,7 @@ export default function LocationTree() {
   );
 }
 // cf https://github.com/bkrem/react-d3-tree/issues/394#issuecomment-1150687311
-export const useCenteredTree = () => {
+const useCenteredTree = () => {
   const [translate, setTranslate] = useState<Point>({ x: 0, y: 0 });
   const containerRef: Ref<HTMLElement> = useCallback(
     (containerElem: HTMLElement) => {

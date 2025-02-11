@@ -1,9 +1,9 @@
 import fs from "fs";
 import YAML from "yaml";
-import { loadLocations } from "~/server/api/routers/locations";
-import { loadProducts } from "~/server/api/routers/products";
 import { configSchema } from "~/server/config";
 import { db } from "~/server/db";
+import { loadLocations } from "~/server/repo/location";
+import { loadProducts } from "~/server/repo/product";
 
 const file = fs.readFileSync("config.yaml", "utf8");
 const parsed = YAML.parse(file) as unknown;

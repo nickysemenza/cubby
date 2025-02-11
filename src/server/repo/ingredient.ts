@@ -70,7 +70,7 @@ type IngredientDeepDB = Prisma.IngredientGetPayload<{
   };
 }>;
 
-export const ingredientInclude = {
+const ingredientInclude = {
   Product: true,
   Recipe: true,
   RecipeSectionIngredient: {
@@ -84,7 +84,7 @@ export const ingredientInclude = {
   },
 };
 
-export const dbIngredientToAPI: (
+const dbIngredientToAPI: (
   ingredient: IngredientDeepDB,
 ) => IngredientOut = (ingredient) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
@@ -160,7 +160,7 @@ export const findOrCreateIngredient = async (
 // exact:
 //  true -> exact match on name or aliases
 //  false -> search on name, exact match on aliases
-export const buildIngredientWhere = (
+const buildIngredientWhere = (
   exact: boolean,
   name: string,
   otherSearchNames?: string[],

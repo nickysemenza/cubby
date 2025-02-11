@@ -68,7 +68,7 @@ export const dbRecipeToAPIShallow: (
     ...restOfRecipe,
   };
 };
-export const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
+const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
   const { sections, SourceData, SourceType, ...restOfRecipe } = recipe;
 
   return {
