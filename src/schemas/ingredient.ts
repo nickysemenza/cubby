@@ -39,6 +39,7 @@ export const unitMappingBase = z.object({
   b: amount.describe("second of pair"),
   source: z.string().nullable(),
 });
+export type UnitMapping = z.infer<typeof unitMappingBase>;
 
 const unitMappingOut = z
   .object({

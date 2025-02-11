@@ -4,11 +4,14 @@ import SuperJSON from "superjson";
 import YAML from "yaml";
 import { type AppRouter } from "~/server/api/root";
 import { configSchema } from "~/schemas/config";
+import { config } from "~/testdata/data-config";
 
-const file = fs.readFileSync("config.yaml", "utf8");
-const parsed = YAML.parse(file) as unknown;
-const config = configSchema.parse(parsed);
-console.log(config);
+if (false) {
+  const file = fs.readFileSync("config.yaml", "utf8");
+  const parsed = YAML.parse(file) as unknown;
+  const config = configSchema.parse(parsed);
+  console.log(JSON.stringify(config, null, 2));
+}
 
 const client = createTRPCClient<AppRouter>({
   links: [
