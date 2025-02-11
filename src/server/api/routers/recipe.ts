@@ -10,7 +10,7 @@ import {
 } from "~/schemas/util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
-import { recipeOut } from "~/schemas/recipes";
+import { recipeOut } from "~/schemas/recipe";
 import {
   getRecipeByID,
   insertCompactRecipe,

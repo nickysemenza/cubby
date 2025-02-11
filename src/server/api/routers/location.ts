@@ -10,7 +10,7 @@ import {
   infLocation,
   locationOutWithParentChildren,
   locationType,
-} from "~/schemas/locations";
+} from "~/schemas/location";
 import {
   buildLocationTree,
   buildLocationTypeCount,

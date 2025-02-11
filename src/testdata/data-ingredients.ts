@@ -1,4 +1,4 @@
-import { Amount } from "~/codec/codec";
+import { type Amount } from "~/codec/codec";
 
 type Mapping = [Amount, Amount];
 

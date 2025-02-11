@@ -1,9 +1,9 @@
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
 import { recipeRouter } from "./routers/recipe";
 import { demoRouter } from "./routers/demo";
-import { ingredientRouter } from "./routers/ingredients";
-import { locationRouter } from "./routers/locations";
-import { productRouter } from "./routers/products";
+import { ingredientRouter } from "./routers/ingredient";
+import { locationRouter } from "./routers/location";
+import { productRouter } from "./routers/product";
 import { systemRouter } from "./routers/system";
 
 /**

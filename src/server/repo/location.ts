@@ -3,7 +3,7 @@ import {
   type LocationOutWithParentChildren,
   type LocationOut,
   type InfLocation,
-} from "~/schemas/locations";
+} from "~/schemas/location";
 import {
   type SortParams,
   type PaginationParams,
@@ -61,7 +61,7 @@ export const loadLocations = async (
   ): Promise<void> => {
     for (const child of children) {
       const res = await upsertChild(db, now, parent, child);
-      let productsAtLocation = [];
+      const productsAtLocation = [];
       for (const product of child.products ?? []) {
         console.log("product", product.name);
         const productRow = await findOrCreateProduct(db, now, product);
@@ -80,9 +80,6 @@ export const loadLocations = async (
           amount: { value: 1, unit: "each" },
         })),
       });
-      console.log(
-        `inventory: 1 ${productsAtLocation.map((x) => x.name)} at ${res.name}`,
-      );
 
       await loadRecursive(res, child.children ?? []);
     }

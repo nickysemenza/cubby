@@ -1,9 +1,9 @@
-import { Config, configSchema } from "~/schemas/config";
+import { type Config, configSchema } from "~/schemas/config";
 import { publicProcedure, createTRPCRouter } from "../trpc";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { Prisma, PrismaClient } from "@prisma/client";
+import { type PrismaClient } from "@prisma/client";
 
 const loadConfig = publicProcedure
   .input(configSchema)

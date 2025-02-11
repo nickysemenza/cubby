@@ -6,7 +6,7 @@ import {
   type RecipeOut,
   type recipeTopLevel,
   type SectionIngredient,
-} from "~/schemas/recipes";
+} from "~/schemas/recipe";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import {
   type SortParams,

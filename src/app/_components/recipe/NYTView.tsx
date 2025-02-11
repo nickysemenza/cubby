@@ -1,6 +1,6 @@
 "use client";
 
-import { type RecipeOut } from "~/schemas/recipes";
+import { type RecipeOut } from "~/schemas/recipe";
 import { getGlobalInstructionNumber, getIngredientName } from "./utils";
 import { format_amount } from "recipebridge/pkg";
 export const NYTView: React.FC<{

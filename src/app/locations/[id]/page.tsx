@@ -7,7 +7,7 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
-import { collectInfiniteParents } from "~/schemas/locations";
+import { collectInfiniteParents } from "~/schemas/location";
 import { api } from "~/trpc/server";
 
 type DetailParams = { id: string };

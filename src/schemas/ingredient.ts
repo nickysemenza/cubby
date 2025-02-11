@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { recipeTopLevel } from "~/schemas/recipes";
+import { recipeTopLevel } from "~/schemas/recipe";
 import { dbTimestampsOut } from "~/schemas/util";
 import { amount } from "~/codec/codec";
 

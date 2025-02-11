@@ -1,6 +1,10 @@
-import { Amount } from "~/codec/codec";
-import { Config, InfLocationConfig, ProductConfigItem } from "~/schemas/config";
-import { UnitMapping } from "~/schemas/ingredient";
+import { type Amount } from "~/codec/codec";
+import {
+  type Config,
+  type InfLocationConfig,
+  type ProductConfigItem,
+} from "~/schemas/config";
+import { type UnitMapping } from "~/schemas/ingredient";
 
 const uv = (value: number, unit: string): Amount => ({ unit, value });
 const uvp = (

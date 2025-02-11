@@ -24,5 +24,6 @@
       "titleBar.inactiveForeground": "#b1b6bd",
     },
     "css.validate": false,
+    "eslint.useFlatConfig": true,
   },
 }

@@ -2,7 +2,7 @@ import { type Prisma, type PrismaClient } from "@prisma/client";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
 import {
-  unitMappingBase,
+  type unitMappingBase,
   type productWithIngredientOut,
 } from "~/schemas/ingredient";
 import { type z } from "zod";
@@ -22,7 +22,6 @@ export const findOrCreateProduct = async (
   if (product.ingredient) {
     //  only link item if its an ingredient
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     ingredient = await findOrCreateIngredient(db, product.name);
   }
   const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
@@ -86,7 +85,7 @@ export const loadProducts = async (
   const now = new Date();
 
   for (const product of data) {
-    const productRow = await findOrCreateProduct(db, now, product);
+    await findOrCreateProduct(db, now, product);
   }
 
   const stale = await db.product.findMany({
