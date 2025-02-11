@@ -1,9 +1,6 @@
-type UnitValue = {
-  unit: string;
-  value: number;
-};
+import { Amount } from "~/codec/codec";
 
-type Mapping = [UnitValue, UnitValue];
+type Mapping = [Amount, Amount];
 
 class Ing {
   constructor(name: string, mappings: Mapping[], aliases: string[] | null) {
@@ -16,7 +13,7 @@ class Ing {
   public aliases?: string[] | null;
 }
 
-const unitValue = (value: number, unit: string): UnitValue => ({ unit, value });
+const unitValue = (value: number, unit: string): Amount => ({ unit, value });
 const unitValuePair = (
   valueA: number,
   unitA: string,

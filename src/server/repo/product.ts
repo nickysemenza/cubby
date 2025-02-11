@@ -1,5 +1,5 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
-import { type ProductConfigItem } from "../config";
+import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
 import {
   unitMappingBase,

@@ -3,7 +3,7 @@ import fs from "fs";
 import SuperJSON from "superjson";
 import YAML from "yaml";
 import { type AppRouter } from "~/server/api/root";
-import { configSchema } from "~/server/config";
+import { configSchema } from "~/schemas/config";
 
 const file = fs.readFileSync("config.yaml", "utf8");
 const parsed = YAML.parse(file) as unknown;

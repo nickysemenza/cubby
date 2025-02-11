@@ -1,4 +1,4 @@
-import { configSchema } from "~/server/config";
+import { configSchema } from "~/schemas/config";
 import zodToJsonSchema from "zod-to-json-schema";
 
 const jsonSchema = zodToJsonSchema(configSchema, "configuration");

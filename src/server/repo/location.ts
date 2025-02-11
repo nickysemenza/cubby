@@ -10,7 +10,7 @@ import {
   buildTakeSkip,
   extractDbTimestampsFromDBRec,
 } from "~/schemas/util";
-import { type InfLocationConfig } from "../config";
+import { type InfLocationConfig } from "../../schemas/config";
 import { findOrCreateProduct } from "./product";
 
 const upsertChild = async (

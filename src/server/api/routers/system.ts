@@ -1,4 +1,4 @@
-import { configSchema } from "~/server/config";
+import { configSchema } from "~/schemas/config";
 import { publicProcedure, createTRPCRouter } from "../trpc";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
