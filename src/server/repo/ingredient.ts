@@ -84,9 +84,9 @@ const ingredientInclude = {
   },
 };
 
-const dbIngredientToAPI: (
-  ingredient: IngredientDeepDB,
-) => IngredientOut = (ingredient) => {
+const dbIngredientToAPI: (ingredient: IngredientDeepDB) => IngredientOut = (
+  ingredient,
+) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
     ingredient;
 

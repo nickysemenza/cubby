@@ -11,51 +11,66 @@ import {
   extractDbTimestampsFromDBRec,
 } from "~/schemas/util";
 import { type InfLocationConfig } from "../config";
+import { findOrCreateProduct } from "./product";
 
+const upsertChild = async (
+  db: PrismaClient,
+  now: Date,
+  parent: Prisma.LocationCreateInput | null,
+  child: InfLocationConfig,
+) => {
+  const res = await db.location.upsert({
+    where: {
+      name: child.name,
+    },
+    create: {
+      name: child.name,
+      type: child.type,
+      updatedAt: now,
+      parent: parent
+        ? {
+            connect: {
+              id: parent.id,
+            },
+          }
+        : undefined,
+    },
+    update: {
+      name: child.name,
+      type: child.type,
+      updatedAt: now,
+      parent: parent
+        ? {
+            connect: {
+              id: parent.id,
+            },
+          }
+        : undefined,
+    },
+  });
+  return res;
+};
 export const loadLocations = async (
   db: PrismaClient,
   data: InfLocationConfig[],
 ) => {
   const now = new Date();
-  const load = async (
+  const loadRecursive = async (
     parent: Prisma.LocationCreateInput | null,
     children: InfLocationConfig[],
   ): Promise<void> => {
     for (const child of children) {
-      const res = await db.location.upsert({
-        where: {
-          name: child.name,
-        },
-        create: {
-          name: child.name,
-          type: child.type,
-          updatedAt: now,
-          parent: parent
-            ? {
-                connect: {
-                  id: parent.id,
-                },
-              }
-            : undefined,
-        },
-        update: {
-          name: child.name,
-          type: child.type,
-          updatedAt: now,
-          parent: parent
-            ? {
-                connect: {
-                  id: parent.id,
-                },
-              }
-            : undefined,
-        },
-      });
-      await load(res, child.children ?? []);
+      const res = await upsertChild(db, now, parent, child);
+      for (const product of child.products ?? []) {
+        console.log("product", product.name);
+        const productRow = await findOrCreateProduct(db, now, product);
+        console.log(`inventory: 1 ${productRow.name} at ${res.name}`);
+      }
+      await loadRecursive(res, child.children ?? []);
     }
   };
 
-  await load(null, data);
+  await loadRecursive(null, data);
 
   const stale = await db.location.findMany({
     where: {

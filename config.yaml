@@ -2,11 +2,34 @@ locations:
   - name: "garage"
     type: "room"
     children:
+      - name: "toolbag"
+        type: "bag"
+        products:
+          - name: "Packout toolbag"
+            manufacturer: "Milwaukee"
+            price_per: 99
+            upc: "045242505296"
+            model: "48-22-8315"
       - name: "chrome wire shelf"
         type: "shelf"
         children:
-          - name: "bin A"
-            type: "crate"
+          - name: "oscillating and grinder"
+            type: "half-crate"
+            products:
+              - name: "Ryobi Angle Grinder"
+                manufacturer: "Ryobi"
+                price_per: 129
+                upc: "033287188048"
+                model: "PBLAG01B"
+              - name: "Ryobi Oscillating Tool"
+                manufacturer: "Ryobi"
+                price_per: 129
+                upc: "033287190706"
+                model: "PBLMT50B"
+              - name: "angle grinder discs"
+                manufacturer: "generic"
+              - name: "oscillating toolblades"
+                manufacturer: "generic"
           - name: "bin B"
             type: "crate"
           - name: "bin C"

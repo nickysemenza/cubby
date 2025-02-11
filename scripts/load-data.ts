@@ -1,14 +1,22 @@
+import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import fs from "fs";
+import SuperJSON from "superjson";
 import YAML from "yaml";
+import { type AppRouter } from "~/server/api/root";
 import { configSchema } from "~/server/config";
-import { db } from "~/server/db";
-import { loadLocations } from "~/server/repo/location";
-import { loadProducts } from "~/server/repo/product";
 
 const file = fs.readFileSync("config.yaml", "utf8");
 const parsed = YAML.parse(file) as unknown;
 const config = configSchema.parse(parsed);
 console.log(config);
 
-await loadLocations(db, config.locations);
-await loadProducts(db, config.products);
+const client = createTRPCClient<AppRouter>({
+  links: [
+    httpBatchLink({
+      url: "http://localhost:3000/api/trpc",
+      transformer: SuperJSON,
+    }),
+  ],
+});
+const foo = await client.system.loadConfig.mutate(config);
+console.log(foo);

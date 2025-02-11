@@ -17,6 +17,93 @@
                 "type": "string",
                 "description": "type of location (room, container, etc)"
               },
+              "products": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "upc": {
+                      "type": "string",
+                      "minLength": 12,
+                      "maxLength": 12
+                    },
+                    "manufacturer": {
+                      "type": "string"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "ingredient": {
+                      "type": "boolean"
+                    },
+                    "unit_mappings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "a": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "number"
+                              },
+                              "unit": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "value",
+                              "unit"
+                            ],
+                            "additionalProperties": false,
+                            "description": "first of pair"
+                          },
+                          "b": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "$ref": "#/definitions/configuration/properties/locations/items/properties/products/items/properties/unit_mappings/items/properties/a/properties/value"
+                              },
+                              "unit": {
+                                "$ref": "#/definitions/configuration/properties/locations/items/properties/products/items/properties/unit_mappings/items/properties/a/properties/unit"
+                              }
+                            },
+                            "required": [
+                              "value",
+                              "unit"
+                            ],
+                            "additionalProperties": false,
+                            "description": "second of pair"
+                          },
+                          "source": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "a",
+                          "b",
+                          "source"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "price_per": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "manufacturer"
+                  ],
+                  "additionalProperties": false
+                }
+              },
               "children": {
                 "type": "array",
                 "items": {
@@ -35,97 +122,7 @@
         "products": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "upc": {
-                "anyOf": [
-                  {
-                    "type": "string",
-                    "minLength": 12,
-                    "maxLength": 12
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "manufacturer": {
-                "type": "string"
-              },
-              "model": {
-                "type": [
-                  "string",
-                  "null"
-                ]
-              },
-              "ingredient": {
-                "type": "boolean",
-                "default": false
-              },
-              "unit_mappings": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "a": {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "type": "number"
-                        },
-                        "unit": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "value",
-                        "unit"
-                      ],
-                      "additionalProperties": false,
-                      "description": "first of pair"
-                    },
-                    "b": {
-                      "type": "object",
-                      "properties": {
-                        "value": {
-                          "$ref": "#/definitions/configuration/properties/products/items/properties/unit_mappings/items/properties/a/properties/value"
-                        },
-                        "unit": {
-                          "$ref": "#/definitions/configuration/properties/products/items/properties/unit_mappings/items/properties/a/properties/unit"
-                        }
-                      },
-                      "required": [
-                        "value",
-                        "unit"
-                      ],
-                      "additionalProperties": false,
-                      "description": "second of pair"
-                    },
-                    "source": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "a",
-                    "b",
-                    "source"
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            },
-            "required": [
-              "name",
-              "manufacturer",
-              "unit_mappings"
-            ],
-            "additionalProperties": false
+            "$ref": "#/definitions/configuration/properties/locations/items/properties/products/items"
           },
           "description": "products that can be purchased"
         }

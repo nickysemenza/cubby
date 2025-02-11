@@ -1,30 +1,38 @@
 import { z } from "zod";
-import { productBase, unitMappingBase } from "~/schemas/ingredient";
+import { unitMappingBase } from "~/schemas/ingredient";
 import { locationBase } from "~/schemas/locations";
 
-export type InfLocationConfig = z.infer<typeof locationBase> & {
+export const productConfig = z.object({
+  name: z.string(),
+  upc: z.string().length(12).optional(),
+  manufacturer: z.string(),
+  model: z.string().optional(),
+
+  ingredient: z.boolean().optional(),
+  unit_mappings: z.array(unitMappingBase).optional(),
+
+  price_per: z.number().optional(),
+});
+
+const locationWithProductHint = locationBase.extend({
+  products: z.lazy(() => productConfig.array().optional()),
+});
+export type InfLocationConfig = z.infer<typeof locationWithProductHint> & {
   children?: InfLocationConfig[];
 };
 
-const locationConfigEntry: z.ZodType<InfLocationConfig> = locationBase.extend({
-  children: z.lazy(() => locationConfigEntry.array().optional()),
-});
+const locationConfigEntry: z.ZodType<InfLocationConfig> =
+  locationWithProductHint.extend({
+    children: z.lazy(() => locationConfigEntry.array().optional()),
+  });
 
-const productAddonConf = z.object({
-  ingredient: z.boolean().optional().default(false),
-  unit_mappings: z.array(unitMappingBase),
-});
-const productConfigEntry = productBase.merge(productAddonConf);
-
-export type ProductConfigItem = z.infer<typeof productConfigEntry>;
+export type ProductConfigItem = z.infer<typeof productConfig>;
 
 export const configSchema = z
   .object({
     locations: locationConfigEntry
       .array()
       .describe("locations that have inventoryable items"),
-    products: productConfigEntry
-      .array()
-      .describe("products that can be purchased"),
+    products: productConfig.array().describe("products that can be purchased"),
   })
   .describe("system config");

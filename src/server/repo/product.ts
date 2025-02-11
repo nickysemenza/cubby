@@ -1,13 +1,83 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
 import { type ProductConfigItem } from "../config";
 import { findOrCreateIngredient } from "./ingredient";
-import { type productWithIngredientOut } from "~/schemas/ingredient";
+import {
+  unitMappingBase,
+  type productWithIngredientOut,
+} from "~/schemas/ingredient";
 import { type z } from "zod";
 import {
   type SortParams,
   type PaginationParams,
   buildTakeSkip,
 } from "~/schemas/util";
+
+export const findOrCreateProduct = async (
+  db: PrismaClient,
+  now: Date,
+  product: ProductConfigItem,
+) => {
+  const { name, manufacturer, upc, model } = product;
+  let ingredient = undefined;
+  if (product.ingredient) {
+    //  only link item if its an ingredient
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    ingredient = await findOrCreateIngredient(db, product.name);
+  }
+  const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
+    product.price_per !== undefined
+      ? {
+          a: { value: 1, unit: "each" },
+          b: { value: product.price_per, unit: "dollar" },
+          source: "config",
+        }
+      : undefined;
+  const upsertFields: Prisma.ProductCreateInput = {
+    name,
+    manufacturer,
+    upc,
+    model,
+    updatedAt: now,
+    Ingredient: ingredient ? { connect: { id: ingredient.id } } : undefined,
+  };
+  const productRow = await db.product.upsert({
+    where: {
+      name_manufacturer: {
+        name: name,
+        manufacturer: manufacturer,
+      },
+    },
+    create: {
+      ...upsertFields,
+    },
+    update: {
+      ...upsertFields,
+    },
+  });
+
+  // todo: don't delete mappings managed outside of yaml
+  await db.productUnitMappings.deleteMany({
+    where: { productId: productRow.id },
+  });
+  const mappings = [
+    ...(product.unit_mappings ?? []),
+    ...(pricePerMapping ? [pricePerMapping] : []),
+  ];
+
+  await db.productUnitMappings.createMany({
+    data: mappings.map(
+      (unitMapping): Prisma.ProductUnitMappingsCreateManyInput => ({
+        productId: productRow.id,
+        a: unitMapping.a,
+        b: unitMapping.b,
+        source: unitMapping.source,
+      }),
+    ),
+  });
+
+  return productRow;
+};
 
 export const loadProducts = async (
   db: PrismaClient,
@@ -16,51 +86,7 @@ export const loadProducts = async (
   const now = new Date();
 
   for (const product of data) {
-    const { name, manufacturer, upc, model } = product;
-    let item = undefined;
-    if (product.ingredient) {
-      //  only link item if its an ingredient
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      item = await findOrCreateIngredient(db, product.name);
-    }
-    const upsertFields: Prisma.ProductCreateInput = {
-      name,
-      manufacturer,
-      upc,
-      model,
-      updatedAt: now,
-      Ingredient: item ? { connect: { id: item.id } } : undefined,
-    };
-    const productRow = await db.product.upsert({
-      where: {
-        name_manufacturer: {
-          name: name,
-          manufacturer: manufacturer,
-        },
-      },
-      create: {
-        ...upsertFields,
-      },
-      update: {
-        ...upsertFields,
-      },
-    });
-
-    // todo: don't delete mappings managed outside of yaml
-    await db.productUnitMappings.deleteMany({
-      where: { productId: productRow.id },
-    });
-    await db.productUnitMappings.createMany({
-      data: product.unit_mappings.map(
-        (unitMapping): Prisma.ProductUnitMappingsCreateManyInput => ({
-          productId: productRow.id,
-          a: unitMapping.a,
-          b: unitMapping.b,
-          source: unitMapping.source,
-        }),
-      ),
-    });
+    const productRow = await findOrCreateProduct(db, now, product);
   }
 
   const stale = await db.product.findMany({
