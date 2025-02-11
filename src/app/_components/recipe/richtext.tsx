@@ -1,4 +1,4 @@
-import { format_amount, type RichItem } from "recipebridge/pkg/recipebridge";
+import { format_amount, type RichItem } from "recipebridge/pkg";
 
 export const formatRichText = (text: RichItem[]) => {
   return text.map((t, x) => {

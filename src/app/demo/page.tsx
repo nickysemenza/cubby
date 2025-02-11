@@ -1,6 +1,6 @@
 "use client";
 
-import { parse_ingredient } from "../../../recipebridge/pkg/recipebridge";
+import { parse_ingredient } from "../../../recipebridge/pkg";
 import { api } from "~/trpc/react";
 import { JsonEditor } from "json-edit-react";
 
@@ -23,7 +23,7 @@ type Inputs = {
   exampleRequired: string;
 };
 
-export function WASMTest() {
+function WASMTest() {
   const {
     register,
     handleSubmit,

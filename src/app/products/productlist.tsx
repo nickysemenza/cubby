@@ -24,7 +24,7 @@ import {
   test_convert_to_target,
   format_amount,
   graph_unit_mappings,
-} from "recipebridge/pkg/recipebridge";
+} from "recipebridge/pkg";
 
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";

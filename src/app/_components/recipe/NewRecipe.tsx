@@ -6,7 +6,7 @@ import {
   type WIngredient,
   parse_rich_text,
   format_measure_value,
-} from "recipebridge/pkg/recipebridge";
+} from "recipebridge/pkg";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
 import { type CompactRecipe } from "~/codec/codec";

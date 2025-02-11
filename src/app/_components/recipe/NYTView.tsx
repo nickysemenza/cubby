@@ -2,7 +2,7 @@
 
 import { type RecipeOut } from "~/schemas/recipes";
 import { getGlobalInstructionNumber, getIngredientName } from "./utils";
-import { format_amount } from "recipebridge/pkg/recipebridge";
+import { format_amount } from "recipebridge/pkg";
 export const NYTView: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {

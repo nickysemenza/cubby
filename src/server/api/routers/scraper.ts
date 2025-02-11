@@ -1,7 +1,4 @@
-import {
-  parse_scraped_recipe,
-  type WCompactRecipe,
-} from "recipebridge/pkg/recipebridge";
+import { parse_scraped_recipe, type WCompactRecipe } from "recipebridge/pkg";
 import { type Span, trace } from "@opentelemetry/api";
 import { type CompactRecipe } from "~/codec/codec";
 

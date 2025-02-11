@@ -1,4 +1,4 @@
-import { type WMeasure } from "recipebridge/pkg/recipebridge";
+import { type WMeasure } from "recipebridge/pkg";
 import { type RecipeOut, type SectionIngredient } from "~/schemas/recipes";
 
 // returns the 1-indexed count of the instruction, across all sections.

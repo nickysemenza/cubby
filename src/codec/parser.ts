@@ -1,4 +1,4 @@
-import { parse_ingredient } from "recipebridge/pkg/recipebridge";
+import { parse_ingredient } from "recipebridge/pkg";
 import { type CompactRecipe, type ParsedCompactRecipe } from "./codec";
 import { getIngredientUnit } from "~/app/_components/recipe/utils";
 
