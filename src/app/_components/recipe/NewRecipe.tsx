@@ -5,6 +5,7 @@ import {
   parse_ingredient,
   type WIngredient,
   parse_rich_text,
+  format_measure_value,
 } from "recipebridge/pkg/recipebridge";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
@@ -148,7 +149,9 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
       <div className="inline">
         {amounts.map((a, x) => (
           <div key={getIngredientUnit(a)} className="inline">
-            <div className="inline text-blue-600">{a.value}</div>{" "}
+            <div className="inline text-blue-600">
+              {format_measure_value(a)}
+            </div>{" "}
             <div className="inline text-green-800">{getIngredientUnit(a)}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}
           </div>

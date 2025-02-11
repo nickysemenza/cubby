@@ -44,6 +44,13 @@ extern "C" {
 }
 
 #[wasm_bindgen]
+pub fn format_measure_value(input: &WMeasure) -> f64 {
+    let measure: Measure = serde_wasm_bindgen::from_value(input.into()).unwrap();
+    // truncate2_decimals
+    f64::trunc(measure.values().0 * 1000.0) / 1000.0
+}
+
+#[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> WIngredient {
     let i = dbg!(ingredient::from_str(input));
     let js_value = serde_wasm_bindgen::to_value(&i).unwrap();
