@@ -158,11 +158,11 @@ model Location {
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
 
-    parent   Location?        @relation("LocationToLocation", fields: [parentId], references: [id])
-    parentId String?          @db.Uuid
-    children Location[]       @relation("LocationToLocation")
+    parent           Location?        @relation("LocationToLocation", fields: [parentId], references: [id])
+    parentId         String?          @db.Uuid
+    children         Location[]       @relation("LocationToLocation")
     /// products that are in this location
-    products InventoryEntry[] @relation("LocationToProduct")
+    InventoryEntries InventoryEntry[] @relation("LocationToProduct")
 
     type String
 

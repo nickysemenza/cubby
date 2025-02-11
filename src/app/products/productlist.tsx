@@ -24,16 +24,17 @@ import {
   test_convert_to_target,
   format_amount,
   graph_unit_mappings,
+  type WUnitMapping,
 } from "recipebridge/pkg";
 
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
-import { type UnitMappingOut } from "~/schemas/ingredient";
+import JsonRenderer from "../_components/json";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
-const buildunitMappingsGraph = (unitMapping: UnitMappingOut[]) => {
+const buildunitMappingsGraph = (unitMapping: WUnitMapping[]) => {
   try {
     const graph = graph_unit_mappings(unitMapping).replace(
       "digraph {",
@@ -113,6 +114,12 @@ export function ProductList() {
             )}
           </div>
         );
+      },
+    }),
+    columnHelper.accessor("inventoryEntry", {
+      enableSorting: false,
+      cell: (info) => {
+        return <JsonRenderer input={info.getValue()} />;
       },
     }),
 

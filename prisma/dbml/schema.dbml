@@ -108,7 +108,7 @@ Table Location {
   parent Location
   parentId String
   children Location [not null]
-  products InventoryEntry [not null, note: 'products that are in this location']
+  InventoryEntries InventoryEntry [not null, note: 'products that are in this location']
   type String [not null]
 }
 

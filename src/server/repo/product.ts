@@ -1,16 +1,14 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
-import {
-  type unitMappingBase,
-  type productWithIngredientOut,
-} from "~/schemas/ingredient";
 import { type z } from "zod";
 import {
   type SortParams,
   type PaginationParams,
   buildTakeSkip,
 } from "~/schemas/util";
+import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
+import { type unitMappingBase } from "~/schemas/unitmapping";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
@@ -98,27 +96,33 @@ export const loadProducts = async (
   console.log({ stale: stale.map((s) => s.id) });
 };
 
-const productInclude: Prisma.ProductInclude = {
+const productInclude = {
   Ingredient: true,
   unitMappings: true,
+  InventoryEntry: { include: { location: true } },
 };
 
 type ProductDeepDB = Prisma.ProductGetPayload<{
   include: {
     Ingredient: true;
     unitMappings: true;
+    InventoryEntry: { include: { location: true } };
   };
 }>;
 
 const dbProductoToAPI: (
   product: ProductDeepDB,
-) => z.infer<typeof productWithIngredientOut> = (product) => {
-  const { Ingredient, unitMappings, ...restOfIngredient } = product;
+) => z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> = (
+  product,
+) => {
+  const { Ingredient, unitMappings, InventoryEntry, ...restOfIngredient } =
+    product;
 
   return {
     ...restOfIngredient,
     ingredient: Ingredient,
     unitMappings,
+    inventoryEntry: InventoryEntry,
   };
 };
 

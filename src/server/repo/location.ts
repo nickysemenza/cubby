@@ -107,17 +107,25 @@ type LocationDeepDB = Prisma.LocationGetPayload<{
   include: {
     parent: true;
     children: true;
+    InventoryEntries: { include: { Product: true } };
   };
 }>;
 
 const dbLocationToAPIWithChildren: (
   location: LocationDeepDB,
 ) => LocationOutWithParentChildren = (location) => {
-  const { parent, children, ...restOfLocation } = location;
+  const { parent, children, InventoryEntries, ...restOfLocation } = location;
 
   return {
     parent: parent ? dbLocationToAPI(parent) : null,
     children: children.map(dbLocationToAPI),
+    inventoryEntries: InventoryEntries.map((x) => {
+      const { Product, ...rest } = x;
+      return {
+        ...rest,
+        product: Product,
+      };
+    }),
     ...dbLocationToAPI(restOfLocation),
   };
 };
@@ -236,6 +244,7 @@ export const locationList = async (
     include: {
       parent: true,
       children: true,
+      InventoryEntries: { include: { Product: true } },
     },
   });
   const totalCount = await db.location.count({ where });

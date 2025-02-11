@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { unitMappingBase } from "~/schemas/ingredient";
+import { unitMappingBase } from "~/schemas/unitmapping";
 import { locationBase } from "~/schemas/location";
 
 export const productConfig = z.object({

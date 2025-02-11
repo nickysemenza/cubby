@@ -1,10 +1,10 @@
 import { type Table } from "@tanstack/react-table";
 
 import { Button } from "~/components/ui/button";
-import { type IngredientOut } from "~/schemas/ingredient";
 import { api } from "~/trpc/react";
 import { toast } from "react-toastify";
 import { IngredientPillLink } from "../_components/EntityPill";
+import { type IngredientOut } from "~/schemas/combo";
 
 interface IngredientMergerProps {
   table: Table<IngredientOut>;

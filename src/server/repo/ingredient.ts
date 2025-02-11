@@ -1,5 +1,4 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
-import { type IngredientOut } from "~/schemas/ingredient";
 import { dedupe } from "~/util";
 import { dbRecipeToAPIShallow } from "./recipe";
 import {
@@ -7,6 +6,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "~/schemas/util";
+import { type IngredientOut } from "~/schemas/combo";
 
 export const mergeIngredients = async (
   db: PrismaClient,

@@ -4,7 +4,7 @@ import {
   type InfLocationConfig,
   type ProductConfigItem,
 } from "~/schemas/config";
-import { type UnitMapping } from "~/schemas/ingredient";
+import { type UnitMapping } from "~/schemas/unitmapping";
 
 const uv = (value: number, unit: string): Amount => ({ unit, value });
 const uvp = (

@@ -20,6 +20,7 @@ import {
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
+import JsonRenderer from "../_components/json";
 
 dayjs.extend(relativeTime);
 
@@ -94,6 +95,12 @@ export function LocationList() {
           </Link>
         </div>
       ),
+    }),
+    columnHelper.accessor("inventoryEntries", {
+      enableSorting: false,
+      cell: (info) => {
+        return <JsonRenderer input={info.getValue()} />;
+      },
     }),
   ];
   const table = useReactTable({

@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { productWithIngredientOut } from "~/schemas/ingredient";
 import {
   createPaginatedResponseSchema,
   IDInput,
@@ -8,10 +7,11 @@ import {
   buildPaginatedResponse,
 } from "~/schemas/util";
 import { getProductByID, productList } from "~/server/repo/product";
+import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 
 const getByID = publicProcedure
   .input(IDInput)
-  .output(productWithIngredientOut)
+  .output(productWithIngredientAndInventoryAndMappingsOut)
   .query(async ({ ctx, input }) => await getProductByID(ctx.db, input.id));
 
 const list = publicProcedure
@@ -22,7 +22,11 @@ const list = publicProcedure
       })
       .merge(sortPaginationCombo),
   )
-  .output(createPaginatedResponseSchema(productWithIngredientOut))
+  .output(
+    createPaginatedResponseSchema(
+      productWithIngredientAndInventoryAndMappingsOut,
+    ),
+  )
   .query(async ({ ctx, input }) => {
     const { data, count } = await productList(
       ctx.db,

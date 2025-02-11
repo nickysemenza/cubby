@@ -6,17 +6,14 @@ import {
   sortPaginationCombo,
   buildPaginatedResponse,
 } from "~/schemas/util";
-import {
-  infLocation,
-  locationOutWithParentChildren,
-  locationType,
-} from "~/schemas/location";
+import { infLocation, locationType } from "~/schemas/location";
 import {
   buildLocationTree,
   buildLocationTypeCount,
   getLocationById,
   locationList,
 } from "~/server/repo/location";
+import { locationOutWithParentChildrenAndInventoryOut } from "~/schemas/combo";
 
 const list = publicProcedure
   .input(
@@ -27,7 +24,9 @@ const list = publicProcedure
       })
       .merge(sortPaginationCombo),
   )
-  .output(createPaginatedResponseSchema(locationOutWithParentChildren))
+  .output(
+    createPaginatedResponseSchema(locationOutWithParentChildrenAndInventoryOut),
+  )
   .query(async ({ ctx, input }) => {
     const { data, count } = await locationList(
       ctx.db,
