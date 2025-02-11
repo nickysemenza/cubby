@@ -34,6 +34,7 @@ export const configSchema = z
       .array()
       .describe("locations that have inventoryable items"),
     products: productConfig.array().describe("products that can be purchased"),
+    aliases: z.record(z.array(z.string())).optional(),
   })
   .describe("system config");
 

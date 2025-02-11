@@ -14,7 +14,7 @@ import { type InfLocationConfig } from "../../schemas/config";
 import { findOrCreateProduct } from "./product";
 
 const upsertChild = async (
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   now: Date,
   parent: Prisma.LocationCreateInput | null,
   child: InfLocationConfig,
@@ -51,7 +51,7 @@ const upsertChild = async (
   return res;
 };
 export const loadLocations = async (
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   data: InfLocationConfig[],
 ) => {
   const now = new Date();
@@ -61,11 +61,29 @@ export const loadLocations = async (
   ): Promise<void> => {
     for (const child of children) {
       const res = await upsertChild(db, now, parent, child);
+      let productsAtLocation = [];
       for (const product of child.products ?? []) {
         console.log("product", product.name);
         const productRow = await findOrCreateProduct(db, now, product);
-        console.log(`inventory: 1 ${productRow.name} at ${res.name}`);
+        productsAtLocation.push(productRow);
       }
+
+      await db.inventoryEntry.deleteMany({
+        where: {
+          locationId: res.id,
+        },
+      });
+      await db.inventoryEntry.createMany({
+        data: productsAtLocation.map((product) => ({
+          locationId: res.id,
+          productId: product.id,
+          amount: { value: 1, unit: "each" },
+        })),
+      });
+      console.log(
+        `inventory: 1 ${productsAtLocation.map((x) => x.name)} at ${res.name}`,
+      );
+
       await loadRecursive(res, child.children ?? []);
     }
   };

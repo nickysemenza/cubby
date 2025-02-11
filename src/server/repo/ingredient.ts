@@ -116,7 +116,7 @@ export const getIngredientByName = async (db: PrismaClient, name: string) => {
 };
 
 export const findOrCreateIngredient = async (
-  db: PrismaClient | Prisma.TransactionClient,
+  db: Prisma.TransactionClient,
   name: string,
   aliases?: string[],
 ) => {

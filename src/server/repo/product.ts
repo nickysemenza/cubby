@@ -13,7 +13,7 @@ import {
 } from "~/schemas/util";
 
 export const findOrCreateProduct = async (
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   now: Date,
   product: ProductConfigItem,
 ) => {
@@ -80,7 +80,7 @@ export const findOrCreateProduct = async (
 };
 
 export const loadProducts = async (
-  db: PrismaClient,
+  db: Prisma.TransactionClient,
   data: ProductConfigItem[],
 ) => {
   const now = new Date();
