@@ -18,6 +18,13 @@ export const inventoryWithLocationOut = inventoryEntryOut.merge(
   }),
 );
 
+export const inventoryWithLocationAndProductOut = inventoryEntryOut.merge(
+  z.object({
+    product: productTopLevelOut,
+    location: locationOut,
+  }),
+);
+
 export const productWithIngredientAndInventoryAndMappingsOut =
   productTopLevelOut.merge(
     z.object({
