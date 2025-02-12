@@ -36,7 +36,7 @@ const recipeSectionOut = z
     instructions: z.array(z.object({ instruction: z.string() })),
   })
   .merge(dbTimestampsOut);
-
+export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export const recipeOut = z
   .object({
     sections: z.array(recipeSectionOut),

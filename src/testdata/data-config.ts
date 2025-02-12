@@ -87,6 +87,7 @@ const flourDensity = uvp(1, "cup", 120, "g", "unk");
 export const aliases: Record<string, string[]> = {
   "all purpose flour": ["AP flour", "flour", "white flour"],
   "olive oil": ["Extra Virgin Olive Oil", "evoo"],
+  butter: ["unsalted butter"],
   egg: [
     "eggs",
     "large egg",
