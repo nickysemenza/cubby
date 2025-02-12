@@ -1,12 +1,15 @@
 import { type Amount } from "~/codec/codec";
 import {
-  type Config,
+  type DataConfig,
   type InfLocationConfig,
   type ProductConfigItem,
 } from "~/schemas/config";
+import { type LocationBase } from "~/schemas/location";
 import { type UnitMapping } from "~/schemas/unitmapping";
 
+// amount from unit and value
 const uv = (value: number, unit: string): Amount => ({ unit, value });
+// unit mappings from unit value pair
 const uvp = (
   valueA: number,
   unitA: string,
@@ -18,10 +21,12 @@ const uvp = (
   b: uv(valueB, unitB),
   source: source,
 });
+// generic product
 const gp = (name: string): ProductConfigItem => ({
   name,
   manufacturer: "generic",
 });
+// product (non-ingredient)
 const p = (
   name: string,
   upc: string,
@@ -35,6 +40,7 @@ const p = (
   model,
   price_per,
 });
+// product (ingredient)
 const i = (
   name: string,
   upc: string,
@@ -47,15 +53,15 @@ const i = (
   upc,
   unit_mappings,
 });
-
+// product (generic ingredient
 const gi = (name: string, unit_mappings: UnitMapping[]): ProductConfigItem => ({
   name,
   ingredient: true,
   manufacturer: "generic",
   unit_mappings,
 });
-
-const l = (name: string, type: string) => ({
+// location
+const l = (name: string, type: string): LocationBase => ({
   name,
   type,
 });
@@ -197,7 +203,7 @@ const products: ProductConfigItem[] = [
   },
 ];
 
-export const config: Config = {
+export const config: DataConfig = {
   locations,
   products,
   aliases,

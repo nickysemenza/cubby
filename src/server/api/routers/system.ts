@@ -1,4 +1,4 @@
-import { type Config, configSchema } from "~/schemas/config";
+import { type DataConfig, configSchema } from "~/schemas/config";
 import { publicProcedure, createTRPCRouter } from "../trpc";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
@@ -7,9 +7,9 @@ import { type PrismaClient } from "@prisma/client";
 
 const loadConfig = publicProcedure
   .input(configSchema)
-  .mutation(async ({ ctx, input }) => await insertConfig(ctx.db, input));
+  .mutation(async ({ ctx, input }) => await insertDataConfig(ctx.db, input));
 
-const insertConfig = async (db: PrismaClient, input: Config) => {
+export const insertDataConfig = async (db: PrismaClient, input: DataConfig) => {
   return await db.$transaction(async (tx) => {
     await loadLocations(tx, input.locations);
     await loadProducts(tx, input.products);

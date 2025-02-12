@@ -38,4 +38,4 @@ export const configSchema = z
   })
   .describe("system config");
 
-export type Config = z.infer<typeof configSchema>;
+export type DataConfig = z.infer<typeof configSchema>;
