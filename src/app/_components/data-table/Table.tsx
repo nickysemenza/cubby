@@ -44,25 +44,34 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   ) : (
                     <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
                   );
+
+                const contents = (
+                  <>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                    {canSort && sortingArrows}
+                  </>
+                );
                 return (
                   <TableHead key={header.id} colSpan={header.colSpan}>
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        canSort &&
-                        header.column.toggleSorting(
-                          header.column.getIsSorted() === "asc",
-                        )
-                      }
-                    >
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                      {canSort && sortingArrows}
-                    </Button>
+                    {canSort ? (
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          header.column.toggleSorting(
+                            header.column.getIsSorted() === "asc",
+                          )
+                        }
+                      >
+                        {contents}
+                      </Button>
+                    ) : (
+                      contents
+                    )}
                   </TableHead>
                 );
               })}
