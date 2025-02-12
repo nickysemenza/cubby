@@ -3,9 +3,20 @@ import { dbTimestampsOut } from "./util";
 import { type locationOutWithParentChildrenAndInventoryOut } from "./combo";
 
 export const locationType = z
-  .string()
+  //todo: remove this in the future to make it more flexible?
+  .enum([
+    "room",
+    "bag",
+    "shelf",
+    "crate",
+    "half-crate",
+    "table",
+    "drawer",
+    "cart",
+    "cabinet",
+  ])
   .describe("type of location (room, container, etc)");
-
+export type LocationType = z.infer<typeof locationType>;
 export const locationBase = z.object({
   name: z.string().describe("name of location"),
   type: locationType,

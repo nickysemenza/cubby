@@ -4,7 +4,7 @@ import {
   type InfLocationConfig,
   type ProductConfigItem,
 } from "~/schemas/config";
-import { type LocationBase } from "~/schemas/location";
+import { type LocationType } from "~/schemas/location";
 import { type UnitMapping } from "~/schemas/unitmapping";
 
 // amount from unit and value
@@ -61,9 +61,23 @@ const gi = (name: string, unit_mappings: UnitMapping[]): ProductConfigItem => ({
   unit_mappings,
 });
 // location
-const l = (name: string, type: string): LocationBase => ({
+const lp = (
+  name: string,
+  type: LocationType,
+  products: ProductConfigItem[],
+): InfLocationConfig => ({
   name,
   type,
+  products,
+});
+const lc = (
+  name: string,
+  type: LocationType,
+  children: InfLocationConfig[],
+): InfLocationConfig => ({
+  name,
+  type,
+  children,
 });
 
 const densityOil = uvp(1, "ml", 0.9, "g", "unk");
@@ -82,86 +96,45 @@ export const aliases: Record<string, string[]> = {
   ],
 };
 
-const garage: InfLocationConfig = {
-  ...l("garage", "room"),
-  children: [
-    {
-      ...l("toolbag", "bag"),
-      products: [
-        p("Packout toolbag", "045242505296", "Milwaukee", "48-22-8315", 99),
-      ],
-    },
-    {
-      ...l("chrome wire shelf", "shelf"),
-      children: [
-        {
-          ...l("oscillating and grinder", "half-crate"),
-          products: [
-            p("Ryobi Angle Grinder", "033287188048", "Ryobi", "PBLAG01B", 129),
-            p(
-              "Ryobi Oscillating Tool",
-              "033287190706",
-              "Ryobi",
-              "PBLMT50B",
-              129,
-            ),
-            gp("angle grinder discs"),
-            gp("oscillating toolblades"),
-          ],
-        },
-        l("bin B", "crate"),
-        l("bin C", "crate"),
-      ],
-    },
-    {
-      ...l("black wire shelf", "shelf"),
-    },
-    {
-      ...l("white metal shelf", "shelf"),
-    },
-    {
-      ...l("packout wall", "shelf"),
-    },
-    {
-      ...l("butcher block workbench", "table"),
-    },
-    {
-      ...l("rolling cart", "cart"),
-      children: [
-        {
-          ...l("top drawer", "drawer"),
-        },
-        {
-          ...l("MFT drawer", "drawer"),
-        },
-        {
-          ...l("hex drawer", "drawer"),
-        },
-      ],
-    },
-    {
-      ...l("wooden cabinets", "cabinet"),
-    },
-  ],
-};
+const garage: InfLocationConfig = lc("garage", "room", [
+  lp("toolbag", "bag", [
+    p("Packout toolbag", "045242505296", "Milwaukee", "48-22-8315", 99),
+  ]),
+  lc("chrome wire shelf", "shelf", [
+    lp("oscillating and grinder", "half-crate", [
+      p("Ryobi Angle Grinder", "033287188048", "Ryobi", "PBLAG01B", 129),
+      p("Ryobi Oscillating Tool", "033287190706", "Ryobi", "PBLMT50B", 129),
+      gp("angle grinder discs"),
+      gp("oscillating toolblades"),
+    ]),
+
+    lp("bin B", "crate", []),
+    lp("bin C", "crate", []),
+  ]),
+  lc("black wire shelf", "shelf", []),
+  lc("white metal shelf", "shelf", []),
+  lc("packout wall", "shelf", []),
+  lc("butcher block workbench", "table", []),
+  lc("rolling cart", "cart", [
+    lp("top drawer", "drawer", []),
+    lp("MFT drawer", "drawer", []),
+    lp("hex drawer", "drawer", []),
+  ]),
+  lc("wooden cabinets", "cabinet", []),
+]);
 const locations: InfLocationConfig[] = [
   garage,
-  {
-    ...l("kitchen", "room"),
-    children: [
-      {
-        ...l("pantry", "cabinet"),
-        children: [l("spice drawer", "drawer"), l("coffee drawer", "drawer")],
-      },
-      {
-        ...l("peninsula drawers", "cabinet"),
-        children: [
-          l("small dry goods", "drawer"),
-          l("large dry goods", "drawer"),
-        ],
-      },
-    ],
-  },
+  lc("kitchen", "room", [
+    lc("pantry", "cabinet", [
+      lp("spice drawer", "drawer", []),
+      lp("coffee drawer", "drawer", []),
+    ]),
+
+    lc("peninsula drawers", "cabinet", [
+      lp("small dry goods", "drawer", []),
+      lp("large dry goods", "drawer", []),
+    ]),
+  ]),
 ];
 const products: ProductConfigItem[] = [
   i("White sugar", "015800030621", "C&H", [
