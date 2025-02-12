@@ -139,7 +139,7 @@ export function IngredientList() {
   return (
     <div>
       <IngredientMerger table={table} />
-      <RTable table={table} sorting={sorting} />
+      <RTable table={table} />
     </div>
   );
 }

@@ -92,7 +92,7 @@ export function InventoryItemList() {
 
   return (
     <div>
-      <RTable table={table} sorting={sorting} />
+      <RTable table={table} />
     </div>
   );
 }

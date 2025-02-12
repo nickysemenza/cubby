@@ -124,7 +124,7 @@ export function LocationList() {
 
   return (
     <div>
-      <RTable table={table} sorting={sorting} />
+      <RTable table={table} />
     </div>
   );
 }

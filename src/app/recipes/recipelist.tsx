@@ -83,7 +83,7 @@ export function RecipeList() {
 
   return (
     <div>
-      <RTable table={table} sorting={sorting} />
+      <RTable table={table} />
     </div>
   );
 }

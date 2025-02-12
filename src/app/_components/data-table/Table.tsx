@@ -1,11 +1,7 @@
 "use client";
 
 // cf https://ui.shadcn.com/docs/components/data-table
-import {
-  type SortingState,
-  flexRender,
-  type Table as ITable,
-} from "@tanstack/react-table";
+import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import {
   Table,
   TableBody,
@@ -21,7 +17,6 @@ import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
-  sorting: SortingState;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
