@@ -1,7 +1,6 @@
-import { describe, expect, it, test, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import RootLayout from "./layout";
-import Home from "./page";
 
 describe("App Router: Works with Client Components", () => {
   vi.mock("geist/font/sans", () => {

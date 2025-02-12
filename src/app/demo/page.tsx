@@ -1,18 +1,14 @@
 "use client";
 
-import { parse_ingredient } from "../../../recipebridge/pkg";
-import { api } from "~/trpc/react";
+import { parse_ingredient } from "recipebridge/pkg/recipebridge";
 import { JsonEditor } from "json-edit-react";
 
 import { useForm, type SubmitHandler } from "react-hook-form";
 import { Input } from "~/components/ui/input";
 
 export default function Page() {
-  const res = api.demo.hello.useQuery({ text: "Hello, tRPC!" });
-
   return (
     <div>
-      <JsonEditor data={{ data: res }} />
       <WASMTest />
     </div>
   );

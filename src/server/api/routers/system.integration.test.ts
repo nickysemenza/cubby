@@ -4,7 +4,6 @@ import { buildTestDB } from "tooling/test-setup";
 import { insertDataConfig } from "./system";
 import { config } from "~/testdata/data-config";
 import { createCallerFactory } from "../trpc";
-import { ingredientRouter } from "./ingredient";
 import { appRouter } from "../root";
 
 let prisma: PrismaClient;
