@@ -1,72 +1,33 @@
-import { fixupConfigRules, fixupPluginRules } from "@eslint/compat";
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import tsParser from "@typescript-eslint/parser";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import js from "@eslint/js";
+// import { dirname } from "path";
+// import { fileURLToPath } from "url";
+// import { FlatCompat } from "@eslint/eslintrc";
+
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = dirname(__filename);
+
+// const compat = new FlatCompat({
+//   baseDirectory: __dirname,
+// });
+
+// const eslintConfig = [
+//   ...compat.extends("next/core-web-vitals", "next/typescript"),
+// ];
+
+// export default eslintConfig;
+
+import { dirname } from "path";
+import { fileURLToPath } from "url";
 import { FlatCompat } from "@eslint/eslintrc";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
+
 const compat = new FlatCompat({
   baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
 });
 
-export default [
-  ...fixupConfigRules(
-    compat.extends(
-      "next/core-web-vitals",
-      "plugin:react-hooks/recommended",
-      "plugin:@typescript-eslint/recommended-type-checked",
-      "plugin:@typescript-eslint/stylistic-type-checked",
-    ),
-  ),
-  {
-    plugins: {
-      "@typescript-eslint": fixupPluginRules(typescriptEslint),
-    },
-
-    languageOptions: {
-      parser: tsParser,
-      ecmaVersion: 5,
-      sourceType: "script",
-
-      parserOptions: {
-        project: true,
-      },
-    },
-
-    rules: {
-      "@typescript-eslint/array-type": "off",
-      "@typescript-eslint/consistent-type-definitions": "off",
-
-      "@typescript-eslint/consistent-type-imports": [
-        "warn",
-        {
-          prefer: "type-imports",
-          fixStyle: "inline-type-imports",
-        },
-      ],
-
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        {
-          argsIgnorePattern: "^_",
-        },
-      ],
-
-      "@typescript-eslint/require-await": "off",
-
-      "@typescript-eslint/no-misused-promises": [
-        "error",
-        {
-          checksVoidReturn: {
-            attributes: false,
-          },
-        },
-      ],
-    },
-  },
+const eslintConfig = [
+  ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
+
+export default eslintConfig;

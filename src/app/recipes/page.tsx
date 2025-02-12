@@ -6,7 +6,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Recipes",
 };
-
+export const dynamic = "force-dynamic";
 export default function Page() {
   return (
     <HydrateClient>

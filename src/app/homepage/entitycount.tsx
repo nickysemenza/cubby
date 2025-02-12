@@ -3,28 +3,18 @@
 import { api } from "~/trpc/react";
 
 export default function EntityCount() {
-  // const productData = ;
+  const location = api.location.list.useQuery({});
+  const product = api.product.list.useQuery({});
+  const ingredient = api.ingredient.list.useQuery({});
+  const recipe = api.recipe.list.useQuery({});
+  const inventoryItem = api.inventoryItem.list.useQuery({});
   return (
     <ul>
-      <li>
-        location count:{" "}
-        {api.location.list.useSuspenseQuery({})[0].meta.totalCount}
-      </li>
-      <li>
-        product count:{" "}
-        {api.product.list.useSuspenseQuery({})[0].meta.totalCount}
-      </li>
-      <li>
-        item count:{" "}
-        {api.ingredient.list.useSuspenseQuery({})[0].meta.totalCount}
-      </li>
-      <li>
-        recipe count: {api.recipe.list.useSuspenseQuery({})[0].meta.totalCount}
-      </li>
-      <li>
-        inventory count:{" "}
-        {api.inventoryItem.list.useSuspenseQuery({})[0].meta.totalCount}
-      </li>
+      <li>location count: {location.data?.meta.totalCount}</li>
+      <li>product count: {product.data?.meta.totalCount}</li>
+      <li>item count: {ingredient.data?.meta.totalCount}</li>
+      <li>recipe count: {recipe.data?.meta.totalCount}</li>
+      <li>inventory count: {inventoryItem.data?.meta.totalCount}</li>
     </ul>
   );
 }

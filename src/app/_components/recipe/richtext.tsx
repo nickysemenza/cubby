@@ -1,6 +1,7 @@
-import { format_amount, type RichItem } from "recipebridge/pkg";
+import { type RichItem } from "recipebridge/pkg/recipebridge";
+import { wasm } from "~/wasmContext";
 
-export const formatRichText = (text: RichItem[]) => {
+export const formatRichText = (w: wasm, text: RichItem[]) => {
   return text.map((t, x) => {
     switch (t.kind) {
       case "Text":
@@ -27,7 +28,8 @@ export const formatRichText = (text: RichItem[]) => {
             className="decoration-grey m-0 inline text-green-800 underline decoration-solid"
             key={x}
           >
-            {format_amount(val)}
+            TODO
+            {/* {w.format_amount(val)} */}
           </div>
         );
     }

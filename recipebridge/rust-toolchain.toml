@@ -1,0 +1,5 @@
+[toolchain]
+channel = "1.81"
+# https://github.com/rustwasm/wasm-bindgen/issues/4211
+# https://github.com/vercel/next.js/issues/75807
+# https://github.com/vercel/next.js/issues/74265

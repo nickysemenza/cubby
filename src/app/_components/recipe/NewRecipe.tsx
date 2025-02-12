@@ -1,12 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
-import {
-  parse_ingredient,
-  type WIngredient,
-  parse_rich_text,
-  format_measure_value,
-} from "recipebridge/pkg";
+import React, { useState, useMemo, useContext } from "react";
+import { type WIngredient } from "recipebridge/pkg";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
 import { type CompactRecipe } from "~/codec/codec";
@@ -17,12 +12,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { WasmContext } from "~/wasmContext";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
     .map((line) => line.trim())
     .filter((l) => l.length > 0);
 const NewRecipe: React.FC = () => {
+  const w = useContext(WasmContext);
   const [url, setURL] = useState<string>(
     "https://cooking.nytimes.com/recipes/1022674-chewy-gingerbread-cookies",
   );
@@ -38,8 +35,8 @@ const NewRecipe: React.FC = () => {
   );
 
   const ingredientsParsed = useMemo(
-    () => ingredientLines.map((line) => parse_ingredient(line)),
-    [ingredientLines],
+    () => ingredientLines.map((line) => w.parse_ingredient(line)),
+    [ingredientLines, w],
   );
 
   const instructionLines = useMemo(
@@ -115,7 +112,8 @@ const NewRecipe: React.FC = () => {
             {instructionLines.map((line, x) => (
               <li key={x + "2"}>
                 {formatRichText(
-                  parse_rich_text(
+                  w,
+                  w.parse_rich_text(
                     line,
                     ingredientsParsed.map((l) => l.name),
                   ),
@@ -144,13 +142,14 @@ const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
 
 const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   const amounts = amount.amounts;
+  const w = useContext(WasmContext);
   return (
     <div className="inline">
       <div className="inline">
         {amounts.map((a, x) => (
           <div key={getIngredientUnit(a)} className="inline">
             <div className="inline text-blue-600">
-              {format_measure_value(a)}
+              {w.format_measure_value(a)}
             </div>{" "}
             <div className="inline text-green-800">{getIngredientUnit(a)}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}

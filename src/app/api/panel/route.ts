@@ -1,8 +1,7 @@
 import { renderTrpcPanel } from "trpc-ui";
 import { appRouter } from "../../../server/api/root";
-import { type NextRequest } from "next/server";
 
-async function handler(_: NextRequest) {
+async function handler() {
   return new Response(
     renderTrpcPanel(appRouter, {
       url: "http://localhost:3000/api/trpc",

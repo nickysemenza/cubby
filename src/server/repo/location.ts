@@ -3,6 +3,7 @@ import {
   type LocationOutWithParentChildren,
   type LocationOut,
   type InfLocation,
+  locationType,
 } from "~/schemas/location";
 import {
   type SortParams,
@@ -135,7 +136,7 @@ const dbLocationToAPI: (
   return {
     id: location.id,
     name: location.name,
-    type: location.type,
+    type: locationType.parse(location.type),
     ...extractDbTimestampsFromDBRec(location),
   };
 };
@@ -180,7 +181,7 @@ const buildLocationWithChildren = (
   return {
     name: x.name,
     id: x.id,
-    type: x.type,
+    type: locationType.parse(x.type),
     //@ts-expect-error WIP
     children: (x.children || []).map(buildLocationWithChildren),
     //@ts-expect-error WIP

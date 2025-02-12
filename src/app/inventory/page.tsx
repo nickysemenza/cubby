@@ -2,6 +2,8 @@ import { HydrateClient } from "~/trpc/server";
 import { InventoryItemList } from "./inventoryitemlist";
 import { type Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Inventory Items",
 };

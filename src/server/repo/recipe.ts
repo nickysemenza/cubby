@@ -93,7 +93,7 @@ export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   prismaClient: PrismaClient,
 ) => {
-  const parsed = parseCompactRecipe(recipe);
+  const parsed = await parseCompactRecipe(recipe);
   return await upsertRecipeFromCompact(parsed, prismaClient);
 };
 

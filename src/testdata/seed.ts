@@ -6,7 +6,7 @@ import { getRecipeByID } from "~/server/repo/recipe";
 
 export const seedRealRecipes = async (db: PrismaClient) => {
   for (const recipe of exampleRecipesCompact) {
-    const parsed = parseCompactRecipe(recipe);
+    const parsed = await parseCompactRecipe(recipe);
     const recipeOut = await upsertRecipeFromCompact(parsed, db);
     const res = await getRecipeByID(recipeOut.id, db);
 

@@ -6,6 +6,7 @@ import {
   buildTakeSkip,
 } from "~/schemas/util";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { locationType } from "~/schemas/location";
 
 const inventoryentryInclude = {
   Product: true,
@@ -24,9 +25,13 @@ const dbInventoryEntryoToAPI: (
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
   const { Product, location, ...restOfIngredient } = inventoryentry;
 
+  const { type, ...restOfLocation } = location;
   return {
     ...restOfIngredient,
-    location,
+    location: {
+      ...restOfLocation,
+      type: locationType.parse(type),
+    },
     product: Product,
   };
 };

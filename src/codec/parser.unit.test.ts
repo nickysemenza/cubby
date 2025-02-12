@@ -3,8 +3,8 @@ import { parseCompactRecipe } from "./parser";
 import { format_amount, parse_ingredient } from "recipebridge/pkg";
 import { getIngredientUnit } from "~/app/_components/recipe/utils";
 
-test("parsing works", () => {
-  const out = parseCompactRecipe({
+test("parsing works", async () => {
+  const out = await parseCompactRecipe({
     name: "Pancakes",
     sections: [
       {

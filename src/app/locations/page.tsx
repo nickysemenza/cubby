@@ -3,7 +3,7 @@ import { LocationList } from "./locationlist";
 import { type Metadata } from "next";
 import LocationTree from "../_components/recipe/locationtree";
 import LocationTreeView from "../_components/recipe/locationtreeview";
-
+export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Recipes",
 };

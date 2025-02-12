@@ -13,33 +13,31 @@ import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import {
   buildSortParams,
   defaultPagination,
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
-import {
-  test_convert_to_target,
-  format_amount,
-  graph_unit_mappings,
-  type WUnitMapping,
-} from "recipebridge/pkg";
+import { type WUnitMapping } from "recipebridge/pkg";
 
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
 import JsonRenderer from "../_components/json";
+import { wasm, WasmContext } from "~/wasmContext";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
-const buildunitMappingsGraph = (unitMapping: WUnitMapping[]) => {
+const buildunitMappingsGraph = (w: wasm, unitMapping: WUnitMapping[]) => {
   try {
-    const graph = graph_unit_mappings(unitMapping).replace(
-      "digraph {",
-      `digraph { rankdir=LR; nodesep=0.5;bgcolor="transparent";`,
-    );
+    const graph = w
+      .graph_unit_mappings(unitMapping)
+      .replace(
+        "digraph {",
+        `digraph { rankdir=LR; nodesep=0.5;bgcolor="transparent";`,
+      );
 
     return (
       <Graphviz
@@ -65,6 +63,7 @@ export function ProductList() {
       | string
       | undefined,
   });
+  const w = useContext(WasmContext);
 
   const data = productsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
@@ -85,14 +84,14 @@ export function ProductList() {
       enableSorting: false,
       cell: (info) => (
         <>
-          {buildunitMappingsGraph(info.getValue())}
-          {test_convert_to_target(info.getValue(), "money")}
+          {buildunitMappingsGraph(w, info.getValue())}
+          {w.test_convert_to_target(info.getValue(), "money")}
           {info.getValue().map((unitMapping, x) => {
             return (
               <div key={x}>
-                {format_amount(unitMapping.a) +
+                {w.format_amount(unitMapping.a) +
                   " = " +
-                  format_amount(unitMapping.b)}
+                  w.format_amount(unitMapping.b)}
               </div>
             );
           })}

@@ -9,6 +9,7 @@ import {
 } from "~/schemas/util";
 import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
+import { locationType } from "~/schemas/location";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
@@ -122,7 +123,13 @@ const dbProductoToAPI: (
     ...restOfIngredient,
     ingredient: Ingredient,
     unitMappings,
-    inventoryEntry: InventoryEntry,
+    inventoryEntry: InventoryEntry.map((entry) => ({
+      ...entry,
+      location: {
+        ...entry.location,
+        type: locationType.parse(entry.location.type),
+      },
+    })),
   };
 };
 
