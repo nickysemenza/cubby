@@ -63,7 +63,6 @@ export const loadLocations = async (
       const res = await upsertChild(db, now, parent, child);
       const productsAtLocation = [];
       for (const product of child.products ?? []) {
-        console.log("product", product.name);
         const productRow = await findOrCreateProduct(db, now, product);
         productsAtLocation.push(productRow);
       }

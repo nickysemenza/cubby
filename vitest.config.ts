@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
 import { join } from "path";
+import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   // https://github.com/Menci/vite-plugin-wasm#usage
@@ -20,6 +21,20 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["**/*.unit.test.ts", "**/*.{test,spec}-d.?(c|m)[jt]s?(x)"],
+          typecheck: {
+            enabled: true,
+            ignoreSourceErrors: true, // wasm files throw errors
+          },
+        },
+      },
+      {
+        // will inherit options from this config like plugins and pool
+        extends: true,
+        plugins: [react()],
+        test: {
+          name: "ui",
+          environment: "jsdom",
+          include: ["**/*.unit.test.tsx"],
           typecheck: {
             enabled: true,
             ignoreSourceErrors: true, // wasm files throw errors
