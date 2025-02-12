@@ -59,12 +59,24 @@ pub fn parse_ingredient(input: &str) -> WIngredient {
 
 #[wasm_bindgen]
 pub fn format_amount(amount: &WRawAmount) -> String {
-    // utils::set_panic_hook();
+    setup();
     let a1: Result<RawAmount, _> = serde_wasm_bindgen::from_value(amount.into());
     match a1 {
         Ok(a) => {
-            let a2 = Measure::from_parts(a.unit.as_str(), a.value, a.upper_value);
-            format!("{}", a2)
+            format!("{}", raw_amount_to_measure(a))
+        }
+        Err(e) => {
+            format!("{e}")
+        }
+    }
+}
+#[wasm_bindgen]
+pub fn format_measure(amount: &WMeasure) -> String {
+    setup();
+    let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(amount.into());
+    match a1 {
+        Ok(a) => {
+            format!("{}", a)
         }
         Err(e) => {
             format!("{e}")

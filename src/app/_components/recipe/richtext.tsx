@@ -28,8 +28,7 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
             className="decoration-grey m-0 inline text-green-800 underline decoration-solid"
             key={x}
           >
-            TODO
-            {/* {w.format_amount(val)} */}
+            {w.format_measure(val)}
           </div>
         );
     }
