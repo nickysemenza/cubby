@@ -11,14 +11,6 @@ generator json {
     provider = "prisma-json-types-generator"
 }
 
-// generator zod {
-//     provider                  = "zod-prisma-types"
-//     useMultipleFiles          = true
-//     // https://github.com/chrishoermann/zod-prisma-types/issues/282#issuecomment-2513516941
-//     createInputTypes          = false
-//     createRelationValuesTypes = true
-// }
-
 generator dbml {
     provider = "prisma-dbml-generator"
 }
@@ -120,10 +112,10 @@ model ProductUnitMappings {
     product   Product @relation(fields: [productId], references: [id])
     productId String  @db.Uuid
     /// [Amount]
-    a         Json /// @zod.import(["import { amount } from '../../../../src/codec/codec';"]).custom.use(amount)
+    a         Json
 
     /// [Amount]
-    b         Json /// @zod.import(["import { amount } from '../../../../src/codec/codec';"]).custom.use(amount)
+    b         Json
     source    String?
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
@@ -140,7 +132,7 @@ model InventoryEntry {
     productId String  @db.Uuid
 
     /// [Amount]
-    amount Json /// @zod.import(["import { amount } from '../../../../src/codec/codec';"]).custom.use(amount)
+    amount Json
 
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
@@ -174,4 +166,73 @@ enum RecipeSource {
     Book
     Website
     Other
+}
+
+model usda_branded_food {
+    fdc_id                      Int       @id
+    brand_owner                 String?
+    brand_name                  String?
+    subbrand_name               String?
+    gtin_upc                    String
+    ingredients                 String?
+    not_a_significant_source_of String?
+    serving_size                Decimal?
+    serving_size_unit           String?
+    household_serving_fulltext  String?
+    branded_food_category       String?
+    data_source                 String?
+    package_weight              String?
+    modified_date               String?
+    available_date              String?
+    market_country              String?
+    discontinued_date           String?
+    preparation_state_code      String?
+    trade_channel               String?
+    short_description           String?
+    material_code               String?
+    food                        usda_food @relation(fields: [fdc_id], references: [fdc_id], onDelete: NoAction, onUpdate: NoAction)
+
+    @@index([fdc_id], map: "branded_food_fdc_id")
+    @@index([gtin_upc], map: "branded_food_upc")
+}
+
+model usda_food {
+    fdc_id           Int                  @id
+    data_type        String
+    description      String
+    food_category_id String
+    publication_date String
+    branded_food     usda_branded_food?
+    food_nutrient    usda_food_nutrient[]
+
+    @@index([fdc_id], map: "food_fdc_id")
+}
+
+model usda_food_nutrient {
+    id                  Int           @id
+    fdc_id              Int
+    nutrient_id         Int
+    amount              Decimal
+    data_points         String
+    derivation_id       String
+    min                 String
+    max                 String
+    median              String
+    loq                 String
+    footnote            String
+    min_year_acquired   String
+    percent_daily_value String
+    nutrient            usda_nutrient @relation(fields: [nutrient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    food                usda_food     @relation(fields: [fdc_id], references: [fdc_id], onDelete: NoAction, onUpdate: NoAction)
+
+    @@index([fdc_id], map: "food_nutrient_fdc_id")
+}
+
+model usda_nutrient {
+    id            Int                  @id
+    name          String
+    unit_name     String
+    nutrient_nbr  String
+    rank          String
+    food_nutrient usda_food_nutrient[]
 }

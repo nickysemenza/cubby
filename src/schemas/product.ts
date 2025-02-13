@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./util";
+import { dbTimestampsOut, upc } from "./util";
 
 export const productBase = z.object({
   name: z.string(),
-  upc: z.string().length(12).nullable(),
+  upc: upc.nullable(),
   manufacturer: z.string(),
   model: z.string().nullable(),
 });

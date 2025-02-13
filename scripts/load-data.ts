@@ -21,5 +21,7 @@ const client = createTRPCClient<AppRouter>({
     }),
   ],
 });
-const foo = await client.system.loadConfig.mutate(config);
-console.log(foo);
+const loadCnofig = await client.system.loadConfig.mutate(config);
+console.log({ loadCnofig });
+const seed = await client.recipe.seed.mutate();
+console.log({ seed });

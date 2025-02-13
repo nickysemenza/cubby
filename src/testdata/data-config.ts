@@ -159,6 +159,8 @@ const products: ProductConfigItem[] = [
     uvp(12, "whole", 7, "dollars", "whole foods"),
     uvp(1, "whole", 50, "grams", "general"),
   ]),
+  i("large brown eggs", "815652004142", "Pete & Gerry's", []),
+
   gi("butter", [
     uvp(1, "stick", 113, "g", "whole foods"),
     uvp(4, "stick", 8, "dollars", "whole foods"),

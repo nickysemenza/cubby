@@ -13,7 +13,7 @@ import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
-import { useContext, useState } from "react";
+import React, { useContext, useState } from "react";
 import {
   buildSortParams,
   defaultPagination,
@@ -25,7 +25,16 @@ import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import JsonRenderer from "../_components/json";
 
 dayjs.extend(relativeTime);
-
+export const UPCView: React.FC<{ upc: string }> = ({ upc }) => {
+  const { data } = api.usda.getByID.useQuery({ upc: upc });
+  return (
+    <div className="flex flex-col">
+      <code>{upc}</code>
+      {data?.foodInfo?.description || "❌"}
+      {/* You can display additional data from the query if needed */}
+    </div>
+  );
+};
 export function ProductList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
@@ -50,7 +59,10 @@ export function ProductList() {
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("upc", {
-      cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
+      cell: (info) => {
+        const upc = info.getValue();
+        return upc && <UPCView upc={upc} />;
+      },
     }),
     columnHelper.accessor("model", {
       cell: (info) => info.getValue() && <code>{info.getValue()}</code>,

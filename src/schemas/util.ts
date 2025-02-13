@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+export const upc = z.string().length(12).describe("12 digit UPC code");
 const sortParams = z.object({
   orderBy: z.string().default("createdAt"),
   direction: z.enum(["asc", "desc"]).default("asc"),
