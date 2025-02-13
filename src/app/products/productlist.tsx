@@ -20,37 +20,12 @@ import {
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
-import { type WUnitMapping } from "recipebridge/pkg";
-
-// https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
-import dynamic from "next/dynamic";
+import { WasmContext } from "~/wasmContext";
+import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import JsonRenderer from "../_components/json";
-import { wasm, WasmContext } from "~/wasmContext";
-const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 dayjs.extend(relativeTime);
 
-const buildunitMappingsGraph = (w: wasm, unitMapping: WUnitMapping[]) => {
-  try {
-    const graph = w
-      .graph_unit_mappings(unitMapping)
-      .replace(
-        "digraph {",
-        `digraph { rankdir=LR; nodesep=0.5;bgcolor="transparent";`,
-      );
-
-    return (
-      <Graphviz
-        dot={graph}
-        options={{ width: 200, height: 100, background: "transparent" }}
-        className="w-full"
-      />
-    );
-  } catch (e) {
-    const error = e as string;
-    return <div className="text-red-400">{error}</div>;
-  }
-};
 export function ProductList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));

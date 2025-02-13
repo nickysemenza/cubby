@@ -56,7 +56,11 @@ export const mergeIngredients = async (
 
 type IngredientDeepDB = Prisma.IngredientGetPayload<{
   include: {
-    Product: true;
+    Product: {
+      include: {
+        unitMappings: true;
+      };
+    };
     Recipe: true;
     RecipeSectionIngredient: {
       include: {
@@ -71,7 +75,11 @@ type IngredientDeepDB = Prisma.IngredientGetPayload<{
 }>;
 
 const ingredientInclude = {
-  Product: true,
+  Product: {
+    include: {
+      unitMappings: true,
+    },
+  },
   Recipe: true,
   RecipeSectionIngredient: {
     include: {
