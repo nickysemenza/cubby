@@ -11,6 +11,23 @@ export const exampleRecipesCompact: CompactRecipe[] = [
     ],
   },
   {
+    name: "Pancakes 2",
+    sections: [
+      {
+        ingredients: [
+          "1/2 cup flour",
+          "100g flour",
+          "1/3 cup milk",
+          "2 eggs",
+          "1 tsp salt",
+          "100g white sugar",
+          "1 tsp baking powder",
+        ],
+        instructions: ["Mix ingredients", "Cook on griddle"],
+      },
+    ],
+  },
+  {
     name: "Scrambled Eggs",
     sections: [
       {

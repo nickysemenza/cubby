@@ -168,6 +168,11 @@ const products: ProductConfigItem[] = [
   gi("canola oil", [densityOil]),
   gi("avocado oil", [densityOil]),
   gi("water", [densityWater]),
+  gi("milk", [
+    densityWater,
+    uvp(0.5, "Quart", 3, "dollars", "general"),
+    uvp(1, "Cup", 236.588, "ml", "TEST, should be part of unit/lib.rs"),
+  ]),
   {
     name: "M18 Hackzall",
     upc: "045242502776",

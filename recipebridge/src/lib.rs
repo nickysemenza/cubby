@@ -128,6 +128,31 @@ pub fn test_convert_to_target(mappings: Vec<WUnitMapping>, mk: String) -> String
     }
 }
 
+#[wasm_bindgen]
+pub fn convert_to_target_via_mappings(
+    mappings: Vec<WUnitMapping>,
+    input_amount: WMeasure,
+    dest_measure_kind: String,
+) -> String {
+    setup();
+    let mapping_pairs = mappings_from_w(mappings);
+
+    let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(input_amount.into());
+    let target_measure = a1.unwrap();
+
+    let converted_measure = target_measure.convert_measure_via_mappings(
+        MeasureKind::from_str(&dest_measure_kind).unwrap(),
+        mapping_pairs,
+    );
+    match converted_measure {
+        Some(m) => format!("{}={}", target_measure, m),
+        None => format!(
+            "failed to convert {} to {} target measure",
+            target_measure, dest_measure_kind
+        ),
+    }
+}
+
 fn setup() {
     console_error_panic_hook::set_once();
     let _ = wasm_tracing::try_set_as_global_default();

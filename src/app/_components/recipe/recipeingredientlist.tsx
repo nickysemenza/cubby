@@ -14,11 +14,30 @@ import JsonRenderer from "../json";
 import RTable from "../data-table/Table";
 import { IngredientOut } from "~/schemas/combo";
 import { useContext } from "react";
-import { WasmContext } from "~/wasmContext";
+import { wasm, WasmContext } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../UnitMappingGraph";
 
 dayjs.extend(relativeTime);
+const sumPrice = (
+  w: wasm,
+  ingredients: SectionIngredientOut[],
+  ingMap: Record<string, IngredientOut>,
+) => {
+  const prices = [];
+  for (const ingredient of ingredients) {
+    const id = ingredient.ingredient?.id;
+    const entry = id ? ingMap[id] : undefined;
+    const mappings = entry?.product?.flatMap((p) => p.unitMappings) || [];
+    const firstAmount = ingredient.amounts[0];
+    const price =
+      firstAmount &&
+      w.convert_to_target_via_mappings(mappings, firstAmount, "money");
 
+    prices.push(price);
+  }
+  // return prices.reduce((acc, curr) => acc + (curr || 0), 0);
+  return prices;
+};
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientOut>;
@@ -50,9 +69,11 @@ export const RecipeIngredientList: React.FC<{
         const id = props.row.original.ingredient?.id;
         const entry = id ? ingMap[id] : undefined;
         const mappings = entry?.product?.flatMap((p) => p.unitMappings) || [];
+        const firstAmount = props.row.original.amounts[0];
         return (
           <div>
-            {w.test_convert_to_target(mappings, "money")}
+            {firstAmount &&
+              w.convert_to_target_via_mappings(mappings, firstAmount, "money")}
             {buildunitMappingsGraph(w, mappings)}
             {/* <JsonRenderer input={entry?.product} />; */}
           </div>
@@ -83,8 +104,11 @@ export const RecipeIngredientList: React.FC<{
     },
   });
 
+  const totalPrice = sumPrice(w, ingredients, ingMap);
   return (
     <div>
+      a
+      <JsonRenderer input={totalPrice} />
       <RTable table={table} />
     </div>
   );
