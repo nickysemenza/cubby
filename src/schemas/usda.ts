@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { upc } from "./util";
+import { unitMappingBase } from "./unitmapping";
 
 // select distinct unit_name from nutrient;
 export const nutrient_unit_name = z.enum([
@@ -28,6 +29,21 @@ export const branded_food_serving_size_unit = z.enum([
   "ml",
   "MLT",
 ]);
+export const normalize_branded_food_serving_size_unit = (
+  unit: z.infer<typeof branded_food_serving_size_unit>,
+) => {
+  switch (unit) {
+    case "GM":
+    case "GRM":
+      return "g";
+    case "MC":
+    case "MLT":
+      return "ml";
+    default:
+      return unit;
+  }
+};
+
 const nutrientSummary = z.object({
   amount: z.number(),
   name: z.string(),
@@ -38,6 +54,9 @@ const foodInfo = z.object({
   description: z.string(),
 });
 
+const nutrientsPer100 = z.object({
+  protein: z.number(),
+});
 const BrandedFoodServingInfo = z.object({
   serving_size: z.number().optional(),
   serving_size_unit: z.string().nullable(),
@@ -53,6 +72,8 @@ export const brandedFoodSummary = z.object({
   serving: BrandedFoodServingInfo,
   foodInfo: foodInfo.nullable(),
   nutrientSummary: z.array(nutrientSummary),
+  nutrientsPer100: nutrientsPer100,
+  test123: unitMappingBase.optional(),
 });
 
 export type NutrientSummary = z.infer<typeof nutrientSummary>;

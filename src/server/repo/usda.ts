@@ -1,10 +1,15 @@
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
+import { getIngredientUnit } from "~/app/_components/recipe/utils";
+import { UnitMapping } from "~/schemas/unitmapping";
 import {
   FoodInfo,
   NutrientSummary,
   nutrient_unit_name,
   BrandedFoodSummary,
+  branded_food_serving_size_unit,
+  normalize_branded_food_serving_size_unit,
 } from "~/schemas/usda";
+import { wasm } from "~/wasmContext";
 
 const getFoodInfo = async (
   db: PrismaClient,
@@ -44,6 +49,19 @@ const getNutrientSummary = async (
     };
   });
 };
+
+const calcNutrientsPer100 = (nutrientSummary: NutrientSummary[]) => {
+  let protein = 0;
+  for (const nutrient of nutrientSummary) {
+    if (nutrient.name === "Protein" && nutrient.unit === "G") {
+      protein = nutrient.amount;
+    }
+  }
+  return {
+    protein,
+  };
+};
+
 export const getBrandedFoodSummary = async (
   db: PrismaClient,
   gtin_upc: string,
@@ -59,11 +77,46 @@ export const getBrandedFoodSummary = async (
   if (brandedFood === null) {
     return null;
   }
+  const pullAmounts = (
+    w: wasm,
+    brandedFood: Prisma.usda_branded_foodGetPayload<object>,
+  ): UnitMapping | undefined => {
+    if (
+      brandedFood.serving_size === null ||
+      brandedFood.serving_size_unit === null ||
+      brandedFood.household_serving_fulltext === null
+    ) {
+      return undefined;
+    }
+
+    const p = w.parse_ingredient(brandedFood.household_serving_fulltext);
+
+    const b = p.amounts.pop();
+    if (b === undefined) {
+      return undefined;
+    }
+    const servingSizeUnit = branded_food_serving_size_unit.parse(
+      brandedFood.serving_size_unit,
+    );
+    return {
+      a: {
+        value: brandedFood.serving_size.toNumber(),
+        unit: normalize_branded_food_serving_size_unit(servingSizeUnit),
+      },
+      b: {
+        value: b.value,
+        unit: getIngredientUnit(b),
+      },
+      source: `USDA FDC ${brandedFood.fdc_id}`,
+    };
+  };
 
   const nutrientSummary: NutrientSummary[] = await getNutrientSummary(
     db,
     brandedFood.fdc_id,
   );
+  const w = await import("recipebridge/pkg");
+
   return {
     fdc_id: brandedFood.fdc_id,
     brand_owner: brandedFood.brand_owner,
@@ -78,5 +131,7 @@ export const getBrandedFoodSummary = async (
     },
     foodInfo: await getFoodInfo(db, brandedFood.fdc_id),
     nutrientSummary,
+    nutrientsPer100: calcNutrientsPer100(nutrientSummary),
+    test123: pullAmounts(w, brandedFood),
   };
 };

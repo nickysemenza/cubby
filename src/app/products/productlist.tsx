@@ -23,6 +23,7 @@ import { PillLink } from "../_components/EntityPill";
 import { WasmContext } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import JsonRenderer from "../_components/json";
+import { UnitMapping } from "~/schemas/unitmapping";
 
 dayjs.extend(relativeTime);
 export const UPCView: React.FC<{ upc: string }> = ({ upc }) => {
@@ -67,23 +68,44 @@ export function ProductList() {
     columnHelper.accessor("model", {
       cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
     }),
+    columnHelper.accessor("food", {
+      id: "nutrients",
+      cell: (info) => {
+        const food = info.getValue();
+        return <JsonRenderer input={food?.nutrientsPer100} />;
+      },
+    }),
+    columnHelper.accessor("food", {
+      id: "test123",
+      cell: (info) => {
+        const food = info.getValue();
+        return <JsonRenderer input={food?.test123} />;
+      },
+    }),
     columnHelper.accessor("unitMappings", {
       enableSorting: false,
-      cell: (info) => (
-        <>
-          {buildunitMappingsGraph(w, info.getValue())}
-          {w.test_convert_to_target(info.getValue(), "money")}
-          {info.getValue().map((unitMapping, x) => {
-            return (
-              <div key={x}>
-                {w.format_amount(unitMapping.a) +
-                  " = " +
-                  w.format_amount(unitMapping.b)}
-              </div>
-            );
-          })}
-        </>
-      ),
+      cell: (info) => {
+        const mappings: UnitMapping[] = info.getValue();
+        const usdaMapping = info.row.original.food?.test123;
+        if (usdaMapping) {
+          mappings.push(usdaMapping);
+        }
+        return (
+          <>
+            {buildunitMappingsGraph(w, mappings)}
+            {w.test_convert_to_target(mappings, "money")}
+            {mappings.map((unitMapping, x) => {
+              return (
+                <div key={x}>
+                  {w.format_amount(unitMapping.a) +
+                    " = " +
+                    w.format_amount(unitMapping.b)}
+                </div>
+              );
+            })}
+          </>
+        );
+      },
     }),
     columnHelper.accessor("ingredient", {
       enableSorting: false,

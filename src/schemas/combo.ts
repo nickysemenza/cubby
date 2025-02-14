@@ -5,6 +5,7 @@ import { productTopLevelOut } from "./product";
 import { ingredientBase } from "./ingredient";
 import { unitMappingOut } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
+import { brandedFoodSummary } from "./usda";
 
 export const inventoryWithProductOut = inventoryEntryOut.merge(
   z.object({
@@ -31,6 +32,7 @@ export const productWithIngredientAndInventoryAndMappingsOut =
       ingredient: ingredientBase.nullable(),
       unitMappings: z.array(unitMappingOut),
       inventoryEntry: z.array(inventoryWithLocationOut),
+      food: brandedFoodSummary.nullable(),
     }),
   );
 

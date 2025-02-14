@@ -10,6 +10,7 @@ import {
 import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
+import { getBrandedFoodSummary } from "./usda";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
@@ -112,17 +113,22 @@ type ProductDeepDB = Prisma.ProductGetPayload<{
 }>;
 
 const dbProductoToAPI: (
+  db: PrismaClient,
   product: ProductDeepDB,
-) => z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> = (
-  product,
-) => {
+) => Promise<
+  z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>
+> = async (db, product) => {
   const { Ingredient, unitMappings, InventoryEntry, ...restOfIngredient } =
     product;
 
+  const food = product.upc
+    ? await getBrandedFoodSummary(db, product.upc)
+    : null;
   return {
     ...restOfIngredient,
     ingredient: Ingredient,
     unitMappings,
+    food,
     inventoryEntry: InventoryEntry.map((entry) => ({
       ...entry,
       location: {
@@ -140,7 +146,7 @@ export const getProductByID = async (db: PrismaClient, id: string) => {
     },
     include: productInclude,
   });
-  return dbProductoToAPI(res);
+  return dbProductoToAPI(db, res);
 };
 
 export const productList = async (
@@ -166,6 +172,8 @@ export const productList = async (
     include: productInclude,
   });
   const totalCount = await db.product.count({ where });
-  const products = res.map(dbProductoToAPI);
+  const products = await Promise.all(
+    res.map(async (product) => await dbProductoToAPI(db, product)),
+  );
   return { data: products, count: totalCount };
 };
