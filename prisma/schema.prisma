@@ -204,6 +204,7 @@ model usda_food {
     publication_date String
     branded_food     usda_branded_food?
     food_nutrient    usda_food_nutrient[]
+    food_portion     usda_food_portion[]
 
     @@index([fdc_id], map: "food_fdc_id")
 }
@@ -235,4 +236,28 @@ model usda_nutrient {
     nutrient_nbr  String
     rank          String
     food_nutrient usda_food_nutrient[]
+}
+
+model usda_measure_unit {
+    id                Int                 @id
+    name              String
+    usda_food_portion usda_food_portion[]
+}
+
+model usda_food_portion {
+    id                  Int               @id
+    fdc_id              Int
+    food                usda_food         @relation(fields: [fdc_id], references: [fdc_id], onDelete: NoAction, onUpdate: NoAction)
+    seq_num             String?
+    amount              Decimal
+    measure_unit_id     Int
+    measure_unit        usda_measure_unit @relation(fields: [measure_unit_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+    portion_description String?
+    modifier            String?
+    gram_weight         Decimal
+    data_points         String?
+    footnote            String?
+    min_year_acquired   String?
+
+    @@index([fdc_id], map: "food_portion_fdc_id")
 }

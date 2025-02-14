@@ -142,6 +142,7 @@ Table usda_food {
   publication_date String [not null]
   branded_food usda_branded_food
   food_nutrient usda_food_nutrient [not null]
+  food_portion usda_food_portion [not null]
 }
 
 Table usda_food_nutrient {
@@ -169,6 +170,28 @@ Table usda_nutrient {
   nutrient_nbr String [not null]
   rank String [not null]
   food_nutrient usda_food_nutrient [not null]
+}
+
+Table usda_measure_unit {
+  id Int [pk]
+  name String [not null]
+  usda_food_portion usda_food_portion [not null]
+}
+
+Table usda_food_portion {
+  id Int [pk]
+  fdc_id Int [not null]
+  food usda_food [not null]
+  seq_num String
+  amount Decimal [not null]
+  measure_unit_id Int [not null]
+  measure_unit usda_measure_unit [not null]
+  portion_description String
+  modifier String
+  gram_weight Decimal [not null]
+  data_points String
+  footnote String
+  min_year_acquired String
 }
 
 Enum RecipeSource {
@@ -200,3 +223,7 @@ Ref: usda_branded_food.fdc_id - usda_food.fdc_id [delete: No Action]
 Ref: usda_food_nutrient.nutrient_id > usda_nutrient.id [delete: No Action]
 
 Ref: usda_food_nutrient.fdc_id > usda_food.fdc_id [delete: No Action]
+
+Ref: usda_food_portion.fdc_id > usda_food.fdc_id [delete: No Action]
+
+Ref: usda_food_portion.measure_unit_id > usda_measure_unit.id [delete: No Action]

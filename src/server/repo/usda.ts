@@ -11,7 +11,7 @@ import {
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
 
-const getFoodInfo = async (
+const getFoodByID = async (
   db: PrismaClient,
   fdc_id: number,
 ): Promise<FoodInfo | null> => {
@@ -27,6 +27,26 @@ const getFoodInfo = async (
     data_type: foodInfo.data_type,
     description: foodInfo.description,
   };
+};
+export const getFoodByIDDeep = async (db: PrismaClient, fdc_id: number) => {
+  return await db.usda_food.findFirst({
+    where: {
+      fdc_id: fdc_id,
+    },
+    include: {
+      food_portion: {
+        include: {
+          measure_unit: true,
+        },
+      },
+      branded_food: true,
+      food_nutrient: {
+        include: {
+          nutrient: true,
+        },
+      },
+    },
+  });
 };
 
 const getNutrientSummary = async (
@@ -144,7 +164,7 @@ export const getBrandedFoodSummary = async (
       serving_size_unit: brandedFood.serving_size_unit,
       household_serving_fulltext: brandedFood.household_serving_fulltext,
     },
-    foodInfo: await getFoodInfo(db, brandedFood.fdc_id),
+    foodInfo: await getFoodByID(db, brandedFood.fdc_id),
     nutrientSummary,
     nutrientsPer100: calcNutrientsPer100(nutrientSummary),
     test123: pullAmounts(w, brandedFood),

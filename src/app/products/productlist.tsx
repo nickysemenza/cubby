@@ -28,7 +28,7 @@ import { unitMappignsFromProduct } from "~/schemas/combo";
 
 dayjs.extend(relativeTime);
 export const UPCView: React.FC<{ upc: string }> = ({ upc }) => {
-  const { data } = api.usda.getByID.useQuery({ upc: upc });
+  const { data } = api.usda.getByUPC.useQuery({ upc: upc });
   return (
     <div className="flex flex-col">
       <code>{upc}</code>
