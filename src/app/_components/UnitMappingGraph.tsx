@@ -19,12 +19,17 @@ export const buildunitMappingsGraph = (
     return (
       <Graphviz
         dot={graph}
-        options={{ width: 200, height: 100, background: "transparent" }}
+        options={{
+          width: 200,
+          height: 100,
+          background: "transparent",
+          useWorker: false,
+        }}
         className="w-full"
       />
     );
   } catch (e) {
-    const error = e as string;
-    return <div className="text-red-400">{error}</div>;
+    console.log({ e });
+    return <div className="text-red-400">{JSON.stringify(e)}</div>;
   }
 };

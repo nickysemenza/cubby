@@ -7,6 +7,7 @@ import {
   type SortParams,
 } from "~/schemas/util";
 import { type IngredientOut } from "~/schemas/combo";
+import { getBrandedFoodSummary } from "./usda";
 
 export const mergeIngredients = async (
   db: PrismaClient,
@@ -92,16 +93,26 @@ const ingredientInclude = {
   },
 };
 
-const dbIngredientToAPI: (ingredient: IngredientDeepDB) => IngredientOut = (
-  ingredient,
-) => {
+const dbIngredientToAPI: (
+  db: PrismaClient,
+  ingredient: IngredientDeepDB,
+) => Promise<IngredientOut> = async (db, ingredient) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
     ingredient;
+
+  const productWithFood = await Promise.all(
+    Product.map(async (product) => {
+      return {
+        ...product,
+        food: product.upc ? await getBrandedFoodSummary(db, product.upc) : null,
+      };
+    }),
+  );
 
   return {
     ...restOfIngredient,
     recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
-    product: Product,
+    product: productWithFood,
     appearsInRecipes: RecipeSectionIngredient.map((section) =>
       dbRecipeToAPIShallow(section.recipeSection.recipe),
     ),
@@ -113,14 +124,14 @@ export const getIngredientByID = async (db: PrismaClient, id: string) => {
     where: { id: id },
     include: ingredientInclude,
   });
-  return dbIngredientToAPI(ingredient);
+  return await dbIngredientToAPI(db, ingredient);
 };
 export const getIngredientByName = async (db: PrismaClient, name: string) => {
   const res = await db.ingredient.findFirst({
     where: buildIngredientWhere(true, name),
     include: ingredientInclude,
   });
-  return res ? dbIngredientToAPI(res) : null;
+  return res ? await dbIngredientToAPI(db, res) : null;
 };
 
 export const findOrCreateIngredient = async (
@@ -217,6 +228,8 @@ export const ingredientList = async (
     include: ingredientInclude,
   });
   const totalCount = await db.ingredient.count({ where });
-  const ingredients = res.map(dbIngredientToAPI);
+  const ingredients = await Promise.all(
+    res.map((ingredient) => dbIngredientToAPI(db, ingredient)),
+  );
   return { data: ingredients, count: totalCount };
 };

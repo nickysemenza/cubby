@@ -36,9 +36,10 @@ export const productWithIngredientAndInventoryAndMappingsOut =
     }),
   );
 
-export const productWithMappingsOut = productTopLevelOut.merge(
+const productWithMappingsAndFoodOut = productTopLevelOut.merge(
   z.object({
     unitMappings: z.array(unitMappingOut),
+    food: brandedFoodSummary.nullable(),
   }),
 );
 export type IngredientOut = z.infer<typeof ingredientWithRecipesAndProductOut>;
@@ -47,7 +48,7 @@ export const ingredientWithRecipesAndProductOut = z
   .object({
     recipe: recipeTopLevel.nullable(),
     appearsInRecipes: z.array(recipeTopLevel),
-    product: z.array(productWithMappingsOut),
+    product: z.array(productWithMappingsAndFoodOut),
   })
   .merge(ingredientBase);
 

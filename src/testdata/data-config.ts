@@ -166,6 +166,9 @@ const products: ProductConfigItem[] = [
     uvp(4, "stick", 8, "dollars", "whole foods"),
   ]),
   gi("olive oil", [densityOil]),
+  i("olive oil", "850687100339", "CA olive range", [
+    uvp(15, "dollars", 500, "ml", "whole foods"),
+  ]),
   gi("vegetable oil", [densityOil]),
   gi("canola oil", [densityOil]),
   gi("avocado oil", [densityOil]),

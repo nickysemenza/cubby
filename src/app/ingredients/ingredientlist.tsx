@@ -13,7 +13,7 @@ import { type Flatten } from "~/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import {
   buildSortParams,
   defaultPagination,
@@ -23,6 +23,9 @@ import { PillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
+import { UnitMapping } from "~/schemas/unitmapping";
+import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
+import { WasmContext } from "~/wasmContext";
 
 dayjs.extend(relativeTime);
 
@@ -38,9 +41,9 @@ export function IngredientList() {
       | string
       | undefined,
   });
-  console.log({ sorting });
   const data = ingredientsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  const w = useContext(WasmContext);
   const columns = [
     buildSelectColumn<Flatten<typeof data>>(),
     columnHelper.accessor("name", {
@@ -114,6 +117,39 @@ export function IngredientList() {
           </ul>
         </div>
       ),
+    }),
+    columnHelper.accessor("product", {
+      id: "product2",
+      enableSorting: false,
+      cell: (info) => {
+        const product = info.getValue();
+        const mappings: UnitMapping[] = [];
+        product.forEach((product) => {
+          mappings.push(...product.unitMappings);
+
+          const usdaMapping = product.food?.test123;
+          if (usdaMapping) {
+            mappings.push(usdaMapping);
+          }
+        });
+        const foo = buildunitMappingsGraph(w, mappings);
+        return (
+          <div>
+            {foo}
+            <ul className="">
+              {product.map((product) => (
+                <li key={product.id}>
+                  <PillLink
+                    text={`${product.name} (${product.manufacturer})`}
+                    label="product"
+                    href={`products/${product.id}`}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      },
     }),
   ];
   const table = useReactTable({
