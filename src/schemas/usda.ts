@@ -44,15 +44,19 @@ export const normalize_branded_food_serving_size_unit = (
   }
 };
 
-const nutrientSummary = z.object({
-  amount: z.number(),
-  name: z.string(),
-  unit: nutrient_unit_name,
-});
-const foodInfo = z.object({
-  data_type: z.string(),
-  description: z.string(),
-});
+const nutrientSummary = z
+  .object({
+    amount: z.number(),
+    name: z.string(),
+    unit: nutrient_unit_name,
+  })
+  .describe("usda food_nutrient and nutrient tables");
+const foodInfo = z
+  .object({
+    data_type: z.string(),
+    description: z.string(),
+  })
+  .describe("usda food table");
 
 const nutrientsPer100 = z.object({
   protein: z.number(),
@@ -62,18 +66,29 @@ const BrandedFoodServingInfo = z.object({
   serving_size_unit: z.string().nullable(),
   household_serving_fulltext: z.string().nullable(),
 });
-export const brandedFoodSummary = z.object({
-  fdc_id: z.number(),
+
+const brandedFoodInfo = z.object({
   brand_owner: z.string().nullable(),
   brand_name: z.string().nullable(),
   branded_food_category: z.string().nullable(),
   gtin_upc: upc,
   ingredients: z.string().nullable(),
   serving: BrandedFoodServingInfo,
-  foodInfo: foodInfo.nullable(),
+  serving_as_amount: unitMappingBase.optional(),
+});
+
+const nutritionInfo = z.object({
   nutrientSummary: z.array(nutrientSummary),
   nutrientsPer100: nutrientsPer100,
-  test123: unitMappingBase.optional(),
+});
+
+export type NutritionInfo = z.infer<typeof nutritionInfo>;
+
+export const brandedFoodSummary = z.object({
+  fdc_id: z.number(),
+  brandedFoodInfo: brandedFoodInfo,
+  foodInfo: foodInfo.nullable(),
+  nutritionInfo,
 });
 
 export type NutrientSummary = z.infer<typeof nutrientSummary>;

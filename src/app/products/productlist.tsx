@@ -25,18 +25,11 @@ import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import JsonRenderer from "../_components/json";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappignsFromProduct } from "~/schemas/combo";
+import { NutritionInfoTable } from "../_components/usda/nutrition";
+import { UnitMappingsTable } from "../_components/unitmappingstable";
 
 dayjs.extend(relativeTime);
-export const UPCView: React.FC<{ upc: string }> = ({ upc }) => {
-  const { data } = api.usda.getByUPC.useQuery({ upc: upc });
-  return (
-    <div className="flex flex-col">
-      <code>{upc}</code>
-      {data?.foodInfo?.description || "❌"}
-      {/* You can display additional data from the query if needed */}
-    </div>
-  );
-};
+
 export function ProductList() {
   const initialSort = "createdAt";
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
@@ -63,24 +56,24 @@ export function ProductList() {
     columnHelper.accessor("upc", {
       cell: (info) => {
         const upc = info.getValue();
-        return upc && <UPCView upc={upc} />;
+        return upc && <code>{upc}</code>;
       },
     }),
     columnHelper.accessor("model", {
       cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
     }),
     columnHelper.accessor("food", {
-      id: "nutrients",
+      id: "food info",
       cell: (info) => {
         const food = info.getValue();
-        return <JsonRenderer input={food?.nutrientsPer100} />;
-      },
-    }),
-    columnHelper.accessor("food", {
-      id: "test123",
-      cell: (info) => {
-        const food = info.getValue();
-        return <JsonRenderer input={food} />;
+        if (!food) return "❌";
+        const { nutritionInfo, brandedFoodInfo, ...rest } = food;
+        return (
+          <div className="w-64">
+            <NutritionInfoTable n={nutritionInfo} />
+            <JsonRenderer input={{ rest, ing: brandedFoodInfo.ingredients }} />
+          </div>
+        );
       },
     }),
     columnHelper.accessor("unitMappings", {
@@ -92,16 +85,9 @@ export function ProductList() {
         return (
           <>
             {buildunitMappingsGraph(w, mappings)}
-            {w.test_convert_to_target(mappings, "money")}
-            {mappings.map((unitMapping, x) => {
-              return (
-                <div key={x}>
-                  {w.format_amount(unitMapping.a) +
-                    " = " +
-                    w.format_amount(unitMapping.b)}
-                </div>
-              );
-            })}
+            <div className="w-80">
+              <UnitMappingsTable mappings={mappings} w={w} />
+            </div>
           </>
         );
       },

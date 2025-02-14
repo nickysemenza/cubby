@@ -63,10 +63,6 @@ export const locationOutWithParentChildrenAndInventoryOut = z
 export const unitMappignsFromProduct = (
   product: z.infer<typeof productWithMappingsAndFoodOut>,
 ): UnitMapping[] => {
-  const mappings: UnitMapping[] = product.unitMappings;
-  const usdaMapping = product.food?.test123;
-  if (usdaMapping) {
-    mappings.push(usdaMapping);
-  }
-  return mappings;
+  const serving = product.food?.brandedFoodInfo?.serving_as_amount;
+  return [...product.unitMappings, ...(serving ? [serving] : [])];
 };

@@ -26,6 +26,7 @@ import { IngredientMerger } from "./ingredient-merger";
 import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import { WasmContext } from "~/wasmContext";
 import { unitMappignsFromProduct } from "~/schemas/combo";
+import { UnitMappingsTable } from "../_components/unitmappingstable";
 
 dayjs.extend(relativeTime);
 
@@ -126,10 +127,10 @@ export function IngredientList() {
         const mappings = product.flatMap((product) =>
           unitMappignsFromProduct(product),
         );
-        const foo = buildunitMappingsGraph(w, mappings);
         return (
           <div>
-            {foo}
+            <UnitMappingsTable mappings={mappings} w={w} />
+            {buildunitMappingsGraph(w, mappings)}
             <ul className="">
               {product.map((product) => (
                 <li key={product.id}>
