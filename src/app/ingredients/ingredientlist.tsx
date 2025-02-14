@@ -23,9 +23,9 @@ import { PillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
-import { UnitMapping } from "~/schemas/unitmapping";
 import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import { WasmContext } from "~/wasmContext";
+import { unitMappignsFromProduct } from "~/schemas/combo";
 
 dayjs.extend(relativeTime);
 
@@ -123,15 +123,9 @@ export function IngredientList() {
       enableSorting: false,
       cell: (info) => {
         const product = info.getValue();
-        const mappings: UnitMapping[] = [];
-        product.forEach((product) => {
-          mappings.push(...product.unitMappings);
-
-          const usdaMapping = product.food?.test123;
-          if (usdaMapping) {
-            mappings.push(usdaMapping);
-          }
-        });
+        const mappings = product.flatMap((product) =>
+          unitMappignsFromProduct(product),
+        );
         const foo = buildunitMappingsGraph(w, mappings);
         return (
           <div>

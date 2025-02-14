@@ -12,7 +12,7 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import JsonRenderer from "../json";
 import RTable from "../data-table/Table";
-import { IngredientOut } from "~/schemas/combo";
+import { IngredientOut, unitMappignsFromProduct } from "~/schemas/combo";
 import { useContext } from "react";
 import { wasm, WasmContext } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../UnitMappingGraph";
@@ -24,23 +24,31 @@ const sumPrice = (
   ingMap: Record<string, IngredientOut>,
 ) => {
   const prices = [];
+  const missing = [];
   for (const ingredient of ingredients) {
-    const id = ingredient.ingredient?.id;
-    const entry = id ? ingMap[id] : undefined;
-    const mappings = entry?.product?.flatMap((p) => p.unitMappings) || [];
-    const firstAmount = ingredient.amounts[0];
-    const price =
-      firstAmount &&
-      w.convert_to_target_via_mappings(mappings, firstAmount, "money");
-
-    prices.push(price);
+    try {
+      const id = ingredient.ingredient?.id;
+      const entry = id ? ingMap[id] : undefined;
+      const mappings =
+        entry?.product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
+      const firstAmount = ingredient.amounts[0];
+      if (firstAmount) {
+        prices.push(w.convert_to_dollars_via_mappings(mappings, firstAmount));
+        continue;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {}
+    missing.push(ingredient.ingredient?.name);
   }
-  // return prices.reduce((acc, curr) => acc + (curr || 0), 0);
-  return prices;
+  return {
+    price: prices.reduce((acc, curr) => acc + (curr.value || 0), 0),
+    missing,
+  };
+  // return prices;
 };
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
-  ingMap: Record<string, IngredientOut>;
+  ingMap: Record<string, IngredientOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
   const w = useContext(WasmContext);
   const data = ingredients;
@@ -66,16 +74,19 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "actions",
       cell: (props) => {
+        if (ingMap === undefined) {
+          return "loading";
+        }
         const id = props.row.original.ingredient?.id;
         const entry = id ? ingMap[id] : undefined;
-        const mappings = entry?.product?.flatMap((p) => p.unitMappings) || [];
+        const mappings =
+          entry?.product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
         const firstAmount = props.row.original.amounts[0];
         return (
           <div>
             {firstAmount &&
               w.convert_to_target_via_mappings(mappings, firstAmount, "money")}
             {buildunitMappingsGraph(w, mappings)}
-            {/* <JsonRenderer input={entry?.product} />; */}
           </div>
         );
       },
@@ -104,7 +115,7 @@ export const RecipeIngredientList: React.FC<{
     },
   });
 
-  const totalPrice = sumPrice(w, ingredients, ingMap);
+  const totalPrice = ingMap && sumPrice(w, ingredients, ingMap);
   return (
     <div>
       a

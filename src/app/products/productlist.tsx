@@ -24,6 +24,7 @@ import { WasmContext } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import JsonRenderer from "../_components/json";
 import { UnitMapping } from "~/schemas/unitmapping";
+import { unitMappignsFromProduct } from "~/schemas/combo";
 
 dayjs.extend(relativeTime);
 export const UPCView: React.FC<{ upc: string }> = ({ upc }) => {
@@ -79,17 +80,15 @@ export function ProductList() {
       id: "test123",
       cell: (info) => {
         const food = info.getValue();
-        return <JsonRenderer input={food?.test123} />;
+        return <JsonRenderer input={food} />;
       },
     }),
     columnHelper.accessor("unitMappings", {
       enableSorting: false,
       cell: (info) => {
-        const mappings: UnitMapping[] = info.getValue();
-        const usdaMapping = info.row.original.food?.test123;
-        if (usdaMapping) {
-          mappings.push(usdaMapping);
-        }
+        const mappings: UnitMapping[] = unitMappignsFromProduct(
+          info.row.original,
+        );
         return (
           <>
             {buildunitMappingsGraph(w, mappings)}

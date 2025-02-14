@@ -88,6 +88,7 @@ export const aliases: Record<string, string[]> = {
   "all purpose flour": ["AP flour", "flour", "white flour"],
   "olive oil": ["Extra Virgin Olive Oil", "evoo"],
   butter: ["unsalted butter"],
+  salt: ["kosher salt"],
   egg: [
     "eggs",
     "large egg",
@@ -177,6 +178,16 @@ const products: ProductConfigItem[] = [
     densityWater,
     uvp(0.5, "Quart", 3, "dollars", "general"),
     uvp(1, "Cup", 236.588, "ml", "TEST, should be part of unit/lib.rs"),
+  ]),
+  i("kosher salt", "013600020019", "Diamond Crystal", [
+    uvp(3, "lb", 8, "dollars", "whole foods"),
+  ]),
+  i("baking soda", "033200011408", "Arm & Hammer", [
+    uvp(10, "oz", 3, "dollars", "whole foods"),
+    uvp(1, "cup", 520.49, "grams", "google search"),
+  ]),
+  i("baking powder", "019900003202", "Clabber Girl", [
+    uvp(10, "oz", 3, "dollars", "whole foods"),
   ]),
   {
     name: "M18 Hackzall",

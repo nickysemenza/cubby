@@ -81,26 +81,39 @@ export const getBrandedFoodSummary = async (
     w: wasm,
     brandedFood: Prisma.usda_branded_foodGetPayload<object>,
   ): UnitMapping | undefined => {
+    const { serving_size, serving_size_unit, household_serving_fulltext } =
+      brandedFood;
     if (
-      brandedFood.serving_size === null ||
-      brandedFood.serving_size_unit === null ||
-      brandedFood.household_serving_fulltext === null
+      serving_size === null ||
+      serving_size_unit === null ||
+      household_serving_fulltext === null
     ) {
+      console.log(
+        `branded food ${brandedFood.fdc_id} missing serving info`,
+        brandedFood,
+      );
       return undefined;
     }
 
-    const p = w.parse_ingredient(brandedFood.household_serving_fulltext);
-
+    const p = w.parse_ingredient(household_serving_fulltext);
+    console.log(
+      `branded food ${brandedFood.fdc_id} parsed household_serving_fulltext`,
+      p,
+    );
     const b = p.amounts.pop();
     if (b === undefined) {
+      console.log(
+        `branded food ${brandedFood.fdc_id} missing amounts`,
+        brandedFood,
+      );
       return undefined;
     }
     const servingSizeUnit = branded_food_serving_size_unit.parse(
       brandedFood.serving_size_unit,
     );
-    return {
+    const inferredMapping = {
       a: {
-        value: brandedFood.serving_size.toNumber(),
+        value: serving_size.toNumber(),
         unit: normalize_branded_food_serving_size_unit(servingSizeUnit),
       },
       b: {
@@ -109,6 +122,8 @@ export const getBrandedFoodSummary = async (
       },
       source: `USDA FDC ${brandedFood.fdc_id}`,
     };
+    console.log({ inferredMapping });
+    return inferredMapping;
   };
 
   const nutrientSummary: NutrientSummary[] = await getNutrientSummary(

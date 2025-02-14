@@ -3,7 +3,7 @@ import { inventoryEntryOut } from "./inventory";
 import { locationOut } from "./location";
 import { productTopLevelOut } from "./product";
 import { ingredientBase } from "./ingredient";
-import { unitMappingOut } from "./unitmapping";
+import { UnitMapping, unitMappingOut } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
 import { brandedFoodSummary } from "./usda";
 
@@ -59,3 +59,14 @@ export const locationOutWithParentChildrenAndInventoryOut = z
     inventoryEntries: z.array(inventoryWithProductOut),
   })
   .merge(locationOut);
+
+export const unitMappignsFromProduct = (
+  product: z.infer<typeof productWithMappingsAndFoodOut>,
+): UnitMapping[] => {
+  const mappings: UnitMapping[] = product.unitMappings;
+  const usdaMapping = product.food?.test123;
+  if (usdaMapping) {
+    mappings.push(usdaMapping);
+  }
+  return mappings;
+};

@@ -18,7 +18,9 @@ const RecipeDetail: React.FC<{
       ),
     [recipe.sections],
   );
-  const [data, dataSet] = useState<Record<string, IngredientOut>>({});
+  const [data, dataSet] = useState<Record<string, IngredientOut> | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
     const getBulkIngredients = async (ids: string[]) => {
