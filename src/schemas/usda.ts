@@ -87,10 +87,10 @@ export type NutritionInfo = z.infer<typeof nutritionInfo>;
 export const brandedFoodSummary = z.object({
   fdc_id: z.number(),
   brandedFoodInfo: brandedFoodInfo,
-  foodInfo: foodInfo.nullable(),
+  foodInfo: foodInfo,
   nutritionInfo,
 });
-
+export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;
 export type FoodInfo = z.infer<typeof foodInfo>;
 export type BrandedFoodSummary = z.infer<typeof brandedFoodSummary>;

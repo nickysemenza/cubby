@@ -9,21 +9,19 @@ import {
   branded_food_serving_size_unit,
   normalize_branded_food_serving_size_unit,
   NutritionInfo,
+  BrandedFoodInfo,
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
 
 const getFoodByID = async (
   db: PrismaClient,
   fdc_id: number,
-): Promise<FoodInfo | null> => {
-  const foodInfo = await db.usda_food.findFirst({
+): Promise<FoodInfo> => {
+  const foodInfo = await db.usda_food.findUniqueOrThrow({
     where: {
       fdc_id: fdc_id,
     },
   });
-  if (foodInfo === null) {
-    return null;
-  }
   return {
     data_type: foodInfo.data_type,
     description: foodInfo.description,
@@ -126,6 +124,24 @@ const getAmountFromBrandedFoodServingSize = (
   console.log({ inferredMapping });
   return inferredMapping;
 };
+const brandedFoodDBToAPI = async (
+  brandedFood: Prisma.usda_branded_foodGetPayload<object>,
+): Promise<BrandedFoodInfo> => {
+  const w = await import("recipebridge/pkg");
+  return {
+    brand_owner: brandedFood.brand_owner,
+    brand_name: brandedFood.brand_name,
+    branded_food_category: brandedFood.branded_food_category,
+    gtin_upc: brandedFood.gtin_upc,
+    ingredients: brandedFood.ingredients,
+    serving: {
+      serving_size: brandedFood.serving_size?.toNumber(),
+      serving_size_unit: brandedFood.serving_size_unit,
+      household_serving_fulltext: brandedFood.household_serving_fulltext,
+    },
+    serving_as_amount: getAmountFromBrandedFoodServingSize(w, brandedFood),
+  };
+};
 const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
   const brandedFood = await db.usda_branded_food.findFirst({
     where: {
@@ -139,23 +155,11 @@ const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
     return null;
   }
   const { fdc_id } = brandedFood;
-  const w = await import("recipebridge/pkg");
+  // const w = await import("recipebridge/pkg");
 
   return {
     fdc_id,
-    brandedFoodInfo: {
-      brand_owner: brandedFood.brand_owner,
-      brand_name: brandedFood.brand_name,
-      branded_food_category: brandedFood.branded_food_category,
-      gtin_upc: brandedFood.gtin_upc,
-      ingredients: brandedFood.ingredients,
-      serving: {
-        serving_size: brandedFood.serving_size?.toNumber(),
-        serving_size_unit: brandedFood.serving_size_unit,
-        household_serving_fulltext: brandedFood.household_serving_fulltext,
-      },
-      serving_as_amount: getAmountFromBrandedFoodServingSize(w, brandedFood),
-    },
+    brandedFoodInfo: await brandedFoodDBToAPI(brandedFood),
   };
 };
 export const getBrandedFoodSummary = async (
