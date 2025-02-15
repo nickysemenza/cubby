@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { unitMappingBase } from "~/schemas/unitmapping";
 import { locationBase } from "~/schemas/location";
-import { upc } from "./util";
+import { ndb, upc } from "./util";
 
 export const productConfig = z.object({
   name: z.string(),
   upc: upc.optional(),
+  ndb_number: ndb.optional(),
   manufacturer: z.string(),
   model: z.string().optional(),
 

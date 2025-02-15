@@ -16,3 +16,4 @@ TRUNCATE usda_branded_food cascade;
 
 \copy usda_measure_unit FROM './measure_unit.csv' DELIMITER ',' CSV header;
 \copy usda_food_portion FROM './food_portion_cleaned.csv' DELIMITER ',' CSV header;
+\copy usda_sr_legacy_food FROM './sr_legacy_food.csv' DELIMITER ',' CSV header;

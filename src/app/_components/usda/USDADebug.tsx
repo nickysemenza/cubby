@@ -1,7 +1,7 @@
 "use client";
 
 import { useContext } from "react";
-import { BrandedFoodSummary } from "~/schemas/usda";
+import { FoodSummary } from "~/schemas/usda";
 import { WasmContext } from "~/wasmContext";
 import JsonRenderer from "../json";
 import { UnitMappingsTable } from "../unitmappingstable";
@@ -10,7 +10,7 @@ import { unitMappingsFromFood } from "~/schemas/combo";
 import { Pill } from "../EntityPill";
 import { buildunitMappingsGraph } from "../UnitMappingGraph";
 
-export const USDADebug: React.FC<{ id: number; food: BrandedFoodSummary }> = ({
+export const USDADebug: React.FC<{ id: number; food: FoodSummary }> = ({
   food,
 }) => {
   const {

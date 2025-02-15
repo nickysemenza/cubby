@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { upc } from "./util";
+import { ndb, upc } from "./util";
 import { unitMappingBase } from "./unitmapping";
 
 // select distinct unit_name from nutrient;
@@ -59,7 +59,7 @@ const foodInfo = z
   .describe("usda food table");
 
 const nutrientsPer100 = z.object({
-  protein: z.number(),
+  protein: z.number().optional(),
 });
 const BrandedFoodServingInfo = z.object({
   serving_size: z.number().optional(),
@@ -90,7 +90,7 @@ const foodPortion = z.object({
   gram_weight: z.number(),
 });
 
-export const brandedFoodSummary = z.object({
+export const foodSummary = z.object({
   fdc_id: z.number(),
   brandedFoodInfo: brandedFoodInfo.nullable(),
   foodInfo: foodInfo,
@@ -103,5 +103,12 @@ export const brandedFoodSummary = z.object({
 export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;
 export type FoodInfo = z.infer<typeof foodInfo>;
-export type BrandedFoodSummary = z.infer<typeof brandedFoodSummary>;
+export type FoodSummary = z.infer<typeof foodSummary>;
 export type FoodPortion = z.infer<typeof foodPortion>;
+
+export const foodLookupParam = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("upc"), gtin_upc: upc }),
+  z.object({ kind: z.literal("ndb"), ndb_number: ndb }),
+]);
+
+export type FoodLookupParam = z.infer<typeof foodLookupParam>;

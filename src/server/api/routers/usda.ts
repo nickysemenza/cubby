@@ -1,19 +1,12 @@
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import { brandedFoodSummary } from "~/schemas/usda";
+import { foodLookupParam, foodSummary } from "~/schemas/usda";
 import { z } from "zod";
-import { upc } from "~/schemas/util";
-import { getBrandedFoodSummary, getFoodSummaryByID } from "~/server/repo/usda";
+import { findFood, getFoodSummaryByID } from "~/server/repo/usda";
 
 const getByUPC = publicProcedure
-  .input(
-    z.object({
-      upc: upc,
-    }),
-  )
-  .output(brandedFoodSummary.nullable())
-  .query(
-    async ({ ctx, input }) => await getBrandedFoodSummary(ctx.db, input.upc),
-  );
+  .input(foodLookupParam)
+  .output(foodSummary.nullable())
+  .query(async ({ ctx, input }) => await findFood(ctx.db, input));
 
 const getByID = publicProcedure
   .input(
@@ -21,7 +14,7 @@ const getByID = publicProcedure
       id: z.number(),
     }),
   )
-  .output(brandedFoodSummary.nullable())
+  .output(foodSummary.nullable())
   .query(async ({ ctx, input }) => await getFoodSummaryByID(ctx.db, input.id));
 
 export const usdaRouter = createTRPCRouter({

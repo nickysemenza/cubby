@@ -56,6 +56,7 @@ Table Product {
   name String [not null]
   manufacturer String [not null]
   upc String [unique]
+  ndb_number Int [unique]
   model String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
@@ -192,6 +193,11 @@ Table usda_food_portion {
   data_points String
   footnote String
   min_year_acquired String
+}
+
+Table usda_sr_legacy_food {
+  fdc_id Int [pk]
+  NDB_number Int [unique, not null]
 }
 
 Enum RecipeSource {

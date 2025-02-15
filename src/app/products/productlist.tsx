@@ -48,7 +48,26 @@ export function ProductList() {
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("name", {
-      cell: (info) => info.getValue(),
+      cell: (info) => {
+        const ingredient = info.row.original.ingredient;
+        return (
+          <div className="flex flex-col">
+            <Link
+              className="font-medium text-blue-600 hover:underline dark:text-blue-500"
+              href={`products/${info.getValue()}`}
+            >
+              {info.getValue()}
+            </Link>
+            {ingredient && (
+              <PillLink
+                text={ingredient.name}
+                label="ingredient"
+                href={`ingredients/${ingredient.id}`}
+              />
+            )}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor("manufacturer", {
       cell: (info) => info.getValue(),
@@ -59,6 +78,10 @@ export function ProductList() {
         return upc && <code>{upc}</code>;
       },
     }),
+    columnHelper.accessor("ndb_number", {
+      header: "NDB",
+      cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
+    }),
     columnHelper.accessor("model", {
       cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
     }),
@@ -67,11 +90,10 @@ export function ProductList() {
       cell: (info) => {
         const food = info.getValue();
         if (!food) return "❌";
-        const { nutritionInfo, brandedFoodInfo, ...rest } = food;
+        const { nutritionInfo } = food;
         return (
           <div className="w-64">
-            <NutritionInfoTable n={nutritionInfo} />
-            <JsonRenderer input={{ rest, ing: brandedFoodInfo?.ingredients }} />
+            <NutritionInfoTable n={nutritionInfo} limit={5} />
           </div>
         );
       },
@@ -85,30 +107,14 @@ export function ProductList() {
         return (
           <>
             {buildunitMappingsGraph(w, mappings)}
-            <div className="w-80">
+            <div className="w-60">
               <UnitMappingsTable mappings={mappings} w={w} />
             </div>
           </>
         );
       },
     }),
-    columnHelper.accessor("ingredient", {
-      enableSorting: false,
-      cell: (info) => {
-        const ingredient = info.getValue();
-        return (
-          <div>
-            {ingredient && (
-              <PillLink
-                text={ingredient.name}
-                label="ingredient"
-                href={`ingredients/${ingredient.id}`}
-              />
-            )}
-          </div>
-        );
-      },
-    }),
+
     columnHelper.accessor("inventoryEntry", {
       enableSorting: false,
       cell: (info) => {
@@ -118,19 +124,6 @@ export function ProductList() {
 
     columnHelper.accessor("createdAt", {
       cell: (info) => dayjs(info.getValue()).fromNow(),
-    }),
-    columnHelper.accessor("id", {
-      enableSorting: false,
-      cell: (info) => (
-        <div>
-          <Link
-            className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`products/${info.getValue()}`}
-          >
-            {info.getValue()}
-          </Link>
-        </div>
-      ),
     }),
   ];
   const table = useReactTable({

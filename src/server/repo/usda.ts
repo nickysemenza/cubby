@@ -5,14 +5,16 @@ import {
   FoodInfo,
   NutrientSummary,
   nutrient_unit_name,
-  BrandedFoodSummary,
+  FoodSummary,
   branded_food_serving_size_unit,
   normalize_branded_food_serving_size_unit,
   NutritionInfo,
   BrandedFoodInfo,
   FoodPortion,
+  FoodLookupParam,
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
+import { type Span, trace } from "@opentelemetry/api";
 
 const getFoodByID = async (
   db: PrismaClient,
@@ -28,26 +30,7 @@ const getFoodByID = async (
     description: foodInfo.description,
   };
 };
-// const getFoodByIDDeep = async (db: PrismaClient, fdc_id: number) => {
-//   return await db.usda_food.findFirst({
-//     where: {
-//       fdc_id: fdc_id,
-//     },
-//     include: {
-//       food_portion: {
-//         include: {
-//           measure_unit: true,
-//         },
-//       },
-//       branded_food: true,
-//       food_nutrient: {
-//         include: {
-//           nutrient: true,
-//         },
-//       },
-//     },
-//   });
-// };
+
 const getFoodPortion = async (
   db: PrismaClient,
   fdc_id: number,
@@ -81,19 +64,23 @@ const getNutrientSummary = async (
       nutrient: true,
     },
   });
-  let protein = 0;
+  let protein = undefined;
 
-  const nutrientSummary = nutrients.map((n) => {
+  const nutrientSummary: NutrientSummary[] = [];
+  nutrients.forEach((n) => {
     const nutrient: NutrientSummary = {
       amount: n.amount.toNumber(),
       name: n.nutrient.name,
       unit: nutrient_unit_name.parse(n.nutrient.unit_name),
     };
+    if (nutrient.amount === 0) {
+      return;
+    }
 
     if (nutrient.name === "Protein" && nutrient.unit === "G") {
       protein = nutrient.amount;
     }
-    return nutrient;
+    nutrientSummary.push(nutrient);
   });
   return {
     nutrientSummary,
@@ -196,7 +183,7 @@ const getBrandedFoodByID = async (db: PrismaClient, fdc_id: number) => {
   return await brandedFoodDBToAPI(brandedFood);
 };
 
-const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
+const getBrandedFoodIDByUPC = async (db: PrismaClient, gtin_upc: string) => {
   const brandedFood = await db.usda_branded_food.findFirst({
     where: {
       gtin_upc,
@@ -211,20 +198,41 @@ const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
 
   return brandedFood?.fdc_id;
 };
-export const getBrandedFoodSummary = async (
+export const getLegacyFoodIDByNDBNumber = async (
   db: PrismaClient,
-  gtin_upc: string,
-): Promise<BrandedFoodSummary | null> => {
-  const fdc_id = await getBrandedFoodByUPC(db, gtin_upc);
-  if (fdc_id === undefined) {
-    return null;
-  }
-  return getFoodSummaryByID(db, fdc_id);
+  ndb_number: number,
+) => {
+  console.log("getLegacyFoodIDByNDBNumber", ndb_number);
+  const food = await db.usda_sr_legacy_food.findUnique({
+    where: {
+      NDB_number: ndb_number,
+    },
+  });
+  return food?.fdc_id;
+};
+
+export const findFood = async (
+  db: PrismaClient,
+  lookup: FoodLookupParam,
+): Promise<FoodSummary | null> => {
+  return trace
+    .getTracer("repo")
+    .startActiveSpan(`findFood`, async (span: Span) => {
+      span.setAttributes(lookup);
+      const fdc_id =
+        lookup.kind === "upc"
+          ? await getBrandedFoodIDByUPC(db, lookup.gtin_upc)
+          : await getLegacyFoodIDByNDBNumber(db, lookup.ndb_number);
+      if (fdc_id === undefined) {
+        return null;
+      }
+      return getFoodSummaryByID(db, fdc_id);
+    });
 };
 export const getFoodSummaryByID = async (
   db: PrismaClient,
   fdc_id: number,
-): Promise<BrandedFoodSummary | null> => {
+): Promise<FoodSummary | null> => {
   const portionInfoRaw = await getFoodPortion(db, fdc_id);
   const w = await import("recipebridge/pkg");
   return {

@@ -54,11 +54,16 @@ const i = (
   unit_mappings,
 });
 // product (generic ingredient
-const gi = (name: string, unit_mappings: UnitMapping[]): ProductConfigItem => ({
+const gi = (
+  name: string,
+  ndb_number: number | undefined,
+  unit_mappings: UnitMapping[],
+): ProductConfigItem => ({
   name,
   ingredient: true,
   manufacturer: "generic",
   unit_mappings,
+  ndb_number,
 });
 // location
 const lp = (
@@ -96,6 +101,7 @@ export const aliases: Record<string, string[]> = {
     "large brown eggs",
     "large brown egg",
   ],
+  pepper: ["black pepper"],
 };
 
 const garage: InfLocationConfig = lc("garage", "room", [
@@ -150,31 +156,49 @@ const products: ProductConfigItem[] = [
     uvp(5, "lb", 7, "dollars", "whole foods"),
     flourDensity,
   ]),
-  gi("pastry flour", [uvp(5, "lb", 8, "dollars", "whole foods"), flourDensity]),
-  gi("cake flour", [uvp(5, "lb", 8, "dollars", "whole foods"), flourDensity]),
-  gi("whole wheat flour", [
+  i("pastry flour", "075211436504", "generic", [
     uvp(5, "lb", 8, "dollars", "whole foods"),
     flourDensity,
   ]),
-  gi("large brown eggs", [
+  gi("cake flour", 20084, [
+    uvp(5, "lb", 8, "dollars", "whole foods"),
+    flourDensity,
+  ]),
+  gi("whole wheat flour", 20649, [
+    uvp(5, "lb", 8, "dollars", "whole foods"),
+    flourDensity,
+  ]),
+  gi("large brown eggs", 1123, [
     uvp(12, "whole", 7, "dollars", "whole foods"),
     uvp(1, "whole", 50, "grams", "general"),
   ]),
   i("large brown eggs", "815652004142", "Pete & Gerry's", []),
 
-  gi("butter", [
+  gi("butter", 1145, [
     uvp(1, "stick", 113, "g", "whole foods"),
     uvp(4, "stick", 8, "dollars", "whole foods"),
   ]),
-  gi("olive oil", [densityOil]),
+  gi("olive oil", 4053, [densityOil, uvp(2, "liter", 23, "dollars", "costco")]),
   i("olive oil", "850687100339", "CA olive range", [
     uvp(15, "dollars", 500, "ml", "whole foods"),
   ]),
-  gi("vegetable oil", [densityOil]),
-  gi("canola oil", [densityOil]),
-  gi("avocado oil", [densityOil]),
-  gi("water", [densityWater]),
-  gi("milk", [
+  gi("vegetable oil", 44005, [
+    densityOil,
+    uvp(1, "liter", 6, "dollars", "whole foods"),
+  ]),
+  gi("canola oil", 4582, [
+    densityOil,
+    uvp(1, "liter", 6, "dollars", "whole foods"),
+  ]),
+  gi("avocado oil", 4581, [
+    densityOil,
+    uvp(2, "liter", 23, "dollars", "costco"),
+  ]),
+  gi("water", 14411, [
+    densityWater,
+    uvp(11968, "cups", 11.4, "dollars", "sf puc"),
+  ]),
+  gi("milk", 1077, [
     densityWater,
     uvp(0.5, "Quart", 3, "dollars", "general"),
     uvp(1, "Cup", 236.588, "ml", "TEST, should be part of unit/lib.rs"),
@@ -182,13 +206,24 @@ const products: ProductConfigItem[] = [
   i("kosher salt", "013600020019", "Diamond Crystal", [
     uvp(3, "lb", 8, "dollars", "whole foods"),
   ]),
-  i("baking soda", "033200011408", "Arm & Hammer", [
-    uvp(10, "oz", 3, "dollars", "whole foods"),
-    uvp(1, "cup", 520.49, "grams", "google search"),
+  {
+    ...i("baking soda", "033200011408", "Arm & Hammer", [
+      uvp(10, "oz", 3, "dollars", "whole foods"),
+      uvp(1, "cup", 520.49, "grams", "google search"),
+    ]),
+    ndb_number: 18372, //redundant
+  },
+  {
+    ...i("baking powder", "019900003202", "Clabber Girl", [
+      uvp(10, "oz", 3, "dollars", "whole foods"),
+    ]),
+    ndb_number: 18369, //redundant
+  },
+  gi("cilantro", 11165, [
+    uvp(1, "bunch", 2, "dollars", "whole foods"),
+    uvp(1, "bunch", 100, "sprig", "general"),
   ]),
-  i("baking powder", "019900003202", "Clabber Girl", [
-    uvp(10, "oz", 3, "dollars", "whole foods"),
-  ]),
+  gi("black pepper", 2030, [uvp(2, "oz", 8, "dollars", "whole foods")]),
   {
     name: "M18 Hackzall",
     upc: "045242502776",

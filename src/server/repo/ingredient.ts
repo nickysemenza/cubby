@@ -7,7 +7,8 @@ import {
   type SortParams,
 } from "~/schemas/util";
 import { type IngredientOut } from "~/schemas/combo";
-import { getBrandedFoodSummary } from "./usda";
+import { findFood } from "./usda";
+import { foodLookupParamFromProduct } from "./product";
 
 export const mergeIngredients = async (
   db: PrismaClient,
@@ -102,9 +103,11 @@ const dbIngredientToAPI: (
 
   const productWithFood = await Promise.all(
     Product.map(async (product) => {
+      const lookupParam = foodLookupParamFromProduct(product);
+      const food = lookupParam ? await findFood(db, lookupParam) : null;
       return {
         ...product,
-        food: product.upc ? await getBrandedFoodSummary(db, product.upc) : null,
+        food,
       };
     }),
   );

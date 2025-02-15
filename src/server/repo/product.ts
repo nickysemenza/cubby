@@ -10,14 +10,15 @@ import {
 import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
-import { getBrandedFoodSummary } from "./usda";
+import { findFood } from "./usda";
+import { FoodLookupParam } from "~/schemas/usda";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
   now: Date,
   product: ProductConfigItem,
 ) => {
-  const { name, manufacturer, upc, model } = product;
+  const { name, manufacturer, upc, model, ndb_number } = product;
   let ingredient = undefined;
   if (product.ingredient) {
     //  only link item if its an ingredient
@@ -36,6 +37,7 @@ export const findOrCreateProduct = async (
     name,
     manufacturer,
     upc,
+    ndb_number,
     model,
     updatedAt: now,
     Ingredient: ingredient ? { connect: { id: ingredient.id } } : undefined,
@@ -112,6 +114,19 @@ type ProductDeepDB = Prisma.ProductGetPayload<{
   };
 }>;
 
+export const foodLookupParamFromProduct = (product: {
+  upc: string | null;
+  ndb_number: number | null;
+}): FoodLookupParam | null => {
+  if (product.upc !== null) {
+    return { kind: "upc", gtin_upc: product.upc };
+  }
+  if (product.ndb_number !== null) {
+    return { kind: "ndb", ndb_number: product.ndb_number };
+  }
+  return null;
+};
+
 const dbProductoToAPI: (
   db: PrismaClient,
   product: ProductDeepDB,
@@ -121,9 +136,8 @@ const dbProductoToAPI: (
   const { Ingredient, unitMappings, InventoryEntry, ...restOfIngredient } =
     product;
 
-  const food = product.upc
-    ? await getBrandedFoodSummary(db, product.upc)
-    : null;
+  const lookupParam = foodLookupParamFromProduct(product);
+  const food = lookupParam ? await findFood(db, lookupParam) : null;
   return {
     ...restOfIngredient,
     ingredient: Ingredient,

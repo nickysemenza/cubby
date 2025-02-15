@@ -87,6 +87,7 @@ model Product {
     name         String
     manufacturer String
     upc          String? @unique
+    ndb_number   Int?    @unique
     model        String?
 
     createdAt DateTime  @default(now())
@@ -260,4 +261,9 @@ model usda_food_portion {
     min_year_acquired   String?
 
     @@index([fdc_id], map: "food_portion_fdc_id")
+}
+
+model usda_sr_legacy_food {
+    fdc_id     Int @id
+    NDB_number Int @unique
 }
