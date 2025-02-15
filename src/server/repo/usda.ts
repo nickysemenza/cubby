@@ -10,6 +10,7 @@ import {
   normalize_branded_food_serving_size_unit,
   NutritionInfo,
   BrandedFoodInfo,
+  FoodPortion,
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
 
@@ -27,27 +28,47 @@ const getFoodByID = async (
     description: foodInfo.description,
   };
 };
-export const getFoodByIDDeep = async (db: PrismaClient, fdc_id: number) => {
-  return await db.usda_food.findFirst({
+// const getFoodByIDDeep = async (db: PrismaClient, fdc_id: number) => {
+//   return await db.usda_food.findFirst({
+//     where: {
+//       fdc_id: fdc_id,
+//     },
+//     include: {
+//       food_portion: {
+//         include: {
+//           measure_unit: true,
+//         },
+//       },
+//       branded_food: true,
+//       food_nutrient: {
+//         include: {
+//           nutrient: true,
+//         },
+//       },
+//     },
+//   });
+// };
+const getFoodPortion = async (
+  db: PrismaClient,
+  fdc_id: number,
+): Promise<FoodPortion[]> => {
+  const portions = await db.usda_food_portion.findMany({
     where: {
-      fdc_id: fdc_id,
+      fdc_id,
     },
-    include: {
-      food_portion: {
-        include: {
-          measure_unit: true,
-        },
-      },
-      branded_food: true,
-      food_nutrient: {
-        include: {
-          nutrient: true,
-        },
-      },
-    },
+    // include: {
+    //   measure_unit: true,
+    // },
+  });
+  // portions.
+  return portions.map((p) => {
+    return {
+      amount: p.amount.toNumber(),
+      modifier: p.modifier,
+      gram_weight: p.gram_weight.toNumber(),
+    };
   });
 };
-
 const getNutrientSummary = async (
   db: PrismaClient,
   fdc_id: number,
@@ -81,7 +102,23 @@ const getNutrientSummary = async (
     },
   };
 };
-
+const unitMappingFromPortionInfo = (
+  w: wasm,
+  portionInfo: FoodPortion,
+): UnitMapping => {
+  const inferredMapping = {
+    a: {
+      value: portionInfo.amount,
+      unit: portionInfo.modifier ?? "portion",
+    },
+    b: {
+      value: portionInfo.gram_weight,
+      unit: "g",
+    },
+    source: "USDA portion",
+  };
+  return inferredMapping;
+};
 const getAmountFromBrandedFoodServingSize = (
   w: wasm,
   brandedFood: Prisma.usda_branded_foodGetPayload<object>,
@@ -142,10 +179,11 @@ const brandedFoodDBToAPI = async (
     serving_as_amount: getAmountFromBrandedFoodServingSize(w, brandedFood),
   };
 };
-const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
+
+const getBrandedFoodByID = async (db: PrismaClient, fdc_id: number) => {
   const brandedFood = await db.usda_branded_food.findFirst({
     where: {
-      gtin_upc,
+      fdc_id,
     },
     orderBy: {
       modified_date: "desc",
@@ -154,28 +192,49 @@ const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
   if (brandedFood === null) {
     return null;
   }
-  const { fdc_id } = brandedFood;
-  // const w = await import("recipebridge/pkg");
 
-  return {
-    fdc_id,
-    brandedFoodInfo: await brandedFoodDBToAPI(brandedFood),
-  };
+  return await brandedFoodDBToAPI(brandedFood);
+};
+
+const getBrandedFoodByUPC = async (db: PrismaClient, gtin_upc: string) => {
+  const brandedFood = await db.usda_branded_food.findFirst({
+    where: {
+      gtin_upc,
+    },
+    orderBy: {
+      modified_date: "desc",
+    },
+    select: {
+      fdc_id: true,
+    },
+  });
+
+  return brandedFood?.fdc_id;
 };
 export const getBrandedFoodSummary = async (
   db: PrismaClient,
   gtin_upc: string,
 ): Promise<BrandedFoodSummary | null> => {
-  const res = await getBrandedFoodByUPC(db, gtin_upc);
-  if (res === null) {
+  const fdc_id = await getBrandedFoodByUPC(db, gtin_upc);
+  if (fdc_id === undefined) {
     return null;
   }
-  const { fdc_id, brandedFoodInfo } = res;
-
+  return getFoodSummaryByID(db, fdc_id);
+};
+export const getFoodSummaryByID = async (
+  db: PrismaClient,
+  fdc_id: number,
+): Promise<BrandedFoodSummary | null> => {
+  const portionInfoRaw = await getFoodPortion(db, fdc_id);
+  const w = await import("recipebridge/pkg");
   return {
     fdc_id,
-    brandedFoodInfo,
+    brandedFoodInfo: await getBrandedFoodByID(db, fdc_id),
     foodInfo: await getFoodByID(db, fdc_id),
     nutritionInfo: await getNutrientSummary(db, fdc_id),
+    portionInfo: {
+      raw: portionInfoRaw,
+      parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
+    },
   };
 };

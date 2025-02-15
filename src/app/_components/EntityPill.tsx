@@ -7,7 +7,7 @@ interface PillProps {
   label?: Entity;
 }
 
-const Pill: React.FC<PillProps> = ({ text, label }) => {
+export const Pill: React.FC<PillProps> = ({ text, label }) => {
   return (
     <span className="text-primary-foreground hover:bg-primary/90 inline-flex items-center rounded-full bg-blue-500 px-3 py-1 text-sm font-medium transition-colors">
       <span className="truncate">{text}</span>

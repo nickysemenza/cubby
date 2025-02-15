@@ -84,13 +84,24 @@ const nutritionInfo = z.object({
 
 export type NutritionInfo = z.infer<typeof nutritionInfo>;
 
+const foodPortion = z.object({
+  amount: z.number(),
+  modifier: z.string().nullable(),
+  gram_weight: z.number(),
+});
+
 export const brandedFoodSummary = z.object({
   fdc_id: z.number(),
-  brandedFoodInfo: brandedFoodInfo,
+  brandedFoodInfo: brandedFoodInfo.nullable(),
   foodInfo: foodInfo,
   nutritionInfo,
+  portionInfo: z.object({
+    raw: z.array(foodPortion),
+    parsed: z.array(unitMappingBase),
+  }),
 });
 export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;
 export type FoodInfo = z.infer<typeof foodInfo>;
 export type BrandedFoodSummary = z.infer<typeof brandedFoodSummary>;
+export type FoodPortion = z.infer<typeof foodPortion>;

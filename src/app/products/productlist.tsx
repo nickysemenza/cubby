@@ -71,7 +71,7 @@ export function ProductList() {
         return (
           <div className="w-64">
             <NutritionInfoTable n={nutritionInfo} />
-            <JsonRenderer input={{ rest, ing: brandedFoodInfo.ingredients }} />
+            <JsonRenderer input={{ rest, ing: brandedFoodInfo?.ingredients }} />
           </div>
         );
       },
