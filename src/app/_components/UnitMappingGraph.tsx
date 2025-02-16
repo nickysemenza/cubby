@@ -20,8 +20,8 @@ export const buildunitMappingsGraph = (
       <Graphviz
         dot={graph}
         options={{
-          width: 200,
-          height: 100,
+          width: 300,
+          height: 150,
           background: "transparent",
           useWorker: false,
         }}

@@ -88,20 +88,28 @@ const lc = (
 const densityOil = uvp(1, "ml", 0.9, "g", "unk");
 const densityWater = uvp(1, "ml", 1, "g", "unk");
 const flourDensity = uvp(1, "cup", 120, "g", "unk");
+const spiceJarPrice = uvp(2, "oz", 8, "dollars", "whole foods");
 
 export const aliases: Record<string, string[]> = {
-  "all purpose flour": ["AP flour", "flour", "white flour"],
+  "all purpose flour": [
+    "AP flour",
+    "flour",
+    "white flour",
+    "all-purpose flour",
+  ],
+  "white sugar": ["sugar", "granulated sugar"],
+  "powdered sugar": ["confectioner's sugar", "confectioners sugar"],
   "olive oil": ["Extra Virgin Olive Oil", "evoo"],
   butter: ["unsalted butter"],
   salt: ["kosher salt"],
-  egg: [
+  "large brown eggs": [
     "eggs",
     "large egg",
     "large eggs",
-    "large brown eggs",
+    "egg",
     "large brown egg",
   ],
-  pepper: ["black pepper"],
+  "black pepper": ["pepper"],
 };
 
 const garage: InfLocationConfig = lc("garage", "room", [
@@ -146,8 +154,10 @@ const locations: InfLocationConfig[] = [
 ];
 const products: ProductConfigItem[] = [
   i("White sugar", "015800030621", "C&H", [
-    uvp(4, "lb", 3, "dollars", "whole foods"),
+    uvp(4, "lb", 5, "dollars", "whole foods"),
   ]),
+  gi("powdered sugar", 19336, [uvp(2, "lb", 5, "dollars", "whole foods")]),
+
   i("All Purpose Flour", "071012010509", "King Arthur", [
     uvp(5, "lb", 8, "dollars", "whole foods"),
     flourDensity,
@@ -182,6 +192,7 @@ const products: ProductConfigItem[] = [
   i("olive oil", "850687100339", "CA olive range", [
     uvp(15, "dollars", 500, "ml", "whole foods"),
   ]),
+
   gi("vegetable oil", 44005, [
     densityOil,
     uvp(1, "liter", 6, "dollars", "whole foods"),
@@ -223,7 +234,11 @@ const products: ProductConfigItem[] = [
     uvp(1, "bunch", 2, "dollars", "whole foods"),
     uvp(1, "bunch", 100, "sprig", "general"),
   ]),
-  gi("black pepper", 2030, [uvp(2, "oz", 8, "dollars", "whole foods")]),
+  gi("salsa", 6164, [uvp(2, "cups", 6, "dollars", "whole foods")]),
+  gi("black pepper", 2030, [
+    uvp(2, "oz", 8, "dollars", "whole foods"),
+    uvp(1, "tsp", 1, "tsp, ground", "tmp"),
+  ]),
   {
     name: "M18 Hackzall",
     upc: "045242502776",
@@ -231,6 +246,12 @@ const products: ProductConfigItem[] = [
     model: "2719-20",
     unit_mappings: [uvp(1, "each", 169, "dollars", "home depot")],
   },
+  gi("ginger", 11216, [uvp(1, "lb", 4, "dollars", "safeway")]),
+  gi("ground ginger", 2021, [spiceJarPrice]),
+  gi("ground cinnamon", 2010, [spiceJarPrice]),
+  gi("nutmeg", 2025, [spiceJarPrice]),
+  gi("molasses", 19304, [spiceJarPrice]),
+  gi("vanilla extract", 2050, [spiceJarPrice]),
 ];
 
 export const config: DataConfig = {

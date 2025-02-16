@@ -28,6 +28,6 @@ describe("system test", () => {
     if (eggs === null) {
       return;
     }
-    expect(eggs.name).toBe("egg");
+    expect(eggs.name).toBe("large brown eggs");
   });
 });

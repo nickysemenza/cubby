@@ -131,6 +131,7 @@ pub fn test_convert_to_target(mappings: Vec<WUnitMapping>, mk: String) -> String
 #[wasm_bindgen]
 pub fn convert_to_dollars_via_mappings(
     mappings: Vec<WUnitMapping>,
+    mk: String,
     input_amount: WMeasure,
 ) -> Result<WMeasure, String> {
     setup();
@@ -139,7 +140,7 @@ pub fn convert_to_dollars_via_mappings(
     let a1: Result<Measure, _> = serde_wasm_bindgen::from_value(input_amount.into());
     let target_measure = a1.map_err(|e| format!("failed to parse input amount: {e}"))?;
 
-    let mk = MeasureKind::Money;
+    let mk = MeasureKind::from_str(&mk).unwrap();
     let converted_measure = target_measure.convert_measure_via_mappings(mk, mapping_pairs);
     match converted_measure {
         Some(m) => {

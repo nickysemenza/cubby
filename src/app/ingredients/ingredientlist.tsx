@@ -131,17 +131,6 @@ export function IngredientList() {
           <div>
             <UnitMappingsTable mappings={mappings} w={w} />
             {buildunitMappingsGraph(w, mappings)}
-            <ul className="">
-              {product.map((product) => (
-                <li key={product.id}>
-                  <PillLink
-                    text={`${product.name} (${product.manufacturer})`}
-                    label="product"
-                    href={`products/${product.id}`}
-                  />
-                </li>
-              ))}
-            </ul>
           </div>
         );
       },

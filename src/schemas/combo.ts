@@ -5,7 +5,7 @@ import { productTopLevelOut } from "./product";
 import { ingredientBase } from "./ingredient";
 import { UnitMapping, unitMappingOut } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
-import { FoodSummary, foodSummary } from "./usda";
+import { FoodSummary, foodSummary, NutrientsPer100 } from "./usda";
 
 export const inventoryWithProductOut = inventoryEntryOut.merge(
   z.object({
@@ -71,4 +71,10 @@ export const unitMappignsFromProduct = (
 export const unitMappingsFromFood = (food: FoodSummary) => {
   const serving = food.brandedFoodInfo?.serving_as_amount;
   return [...food.portionInfo.parsed, ...(serving ? [serving] : [])];
+};
+
+export const test123 = (
+  product: z.infer<typeof productWithMappingsAndFoodOut>,
+): NutrientsPer100 | undefined => {
+  return product.food?.nutritionInfo?.nutrientsPer100;
 };
