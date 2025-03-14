@@ -1,89 +1,9 @@
-import { type Amount } from "~/codec/codec";
 import {
-  type DataConfig,
-  type InfLocationConfig,
-  type ProductConfigItem,
+  InfLocationConfig,
+  ProductConfigItem,
+  DataConfig,
 } from "~/schemas/config";
-import { type LocationType } from "~/schemas/location";
-import { type UnitMapping } from "~/schemas/unitmapping";
-
-// amount from unit and value
-const uv = (value: number, unit: string): Amount => ({ unit, value });
-// unit mappings from unit value pair
-const uvp = (
-  valueA: number,
-  unitA: string,
-  valueB: number,
-  unitB: string,
-  source: string,
-): UnitMapping => ({
-  a: uv(valueA, unitA),
-  b: uv(valueB, unitB),
-  source: source,
-});
-// generic product
-const gp = (name: string): ProductConfigItem => ({
-  name,
-  manufacturer: "generic",
-});
-// product (non-ingredient)
-const p = (
-  name: string,
-  upc: string,
-  manufacturer: string,
-  model: string,
-  price_per: number,
-): ProductConfigItem => ({
-  name,
-  manufacturer,
-  upc,
-  model,
-  price_per,
-});
-// product (ingredient)
-const i = (
-  name: string,
-  upc: string,
-  manufacturer: string,
-  unit_mappings: UnitMapping[],
-): ProductConfigItem => ({
-  name,
-  ingredient: true,
-  manufacturer,
-  upc,
-  unit_mappings,
-});
-// product (generic ingredient
-const gi = (
-  name: string,
-  ndb_number: number | undefined,
-  unit_mappings: UnitMapping[],
-): ProductConfigItem => ({
-  name,
-  ingredient: true,
-  manufacturer: "generic",
-  unit_mappings,
-  ndb_number,
-});
-// location
-const lp = (
-  name: string,
-  type: LocationType,
-  products: ProductConfigItem[],
-): InfLocationConfig => ({
-  name,
-  type,
-  products,
-});
-const lc = (
-  name: string,
-  type: LocationType,
-  children: InfLocationConfig[],
-): InfLocationConfig => ({
-  name,
-  type,
-  children,
-});
+import { uvp, lc, lp, p, gp, i, gi } from "./data-helpers";
 
 const densityOil = uvp(1, "ml", 0.9, "g", "unk");
 const densityWater = uvp(1, "ml", 1, "g", "unk");
@@ -152,12 +72,13 @@ const locations: InfLocationConfig[] = [
     ]),
   ]),
 ];
-const products: ProductConfigItem[] = [
+const sugars = [
   i("White sugar", "015800030621", "C&H", [
     uvp(4, "lb", 5, "dollars", "whole foods"),
   ]),
   gi("powdered sugar", 19336, [uvp(2, "lb", 5, "dollars", "whole foods")]),
-
+];
+const flours = [
   i("All Purpose Flour", "071012010509", "King Arthur", [
     uvp(5, "lb", 8, "dollars", "whole foods"),
     flourDensity,
@@ -178,6 +99,9 @@ const products: ProductConfigItem[] = [
     uvp(5, "lb", 8, "dollars", "whole foods"),
     flourDensity,
   ]),
+];
+
+const dairy = [
   gi("large brown eggs", 1123, [
     uvp(12, "whole", 7, "dollars", "whole foods"),
     uvp(1, "whole", 50, "grams", "general"),
@@ -188,6 +112,14 @@ const products: ProductConfigItem[] = [
     uvp(1, "stick", 113, "g", "whole foods"),
     uvp(4, "stick", 8, "dollars", "whole foods"),
   ]),
+  gi("milk", 1077, [
+    densityWater,
+    uvp(0.5, "Quart", 3, "dollars", "general"),
+    uvp(1, "Cup", 236.588, "ml", "TEST, should be part of unit/lib.rs"),
+  ]),
+];
+
+const oil = [
   gi("olive oil", 4053, [densityOil, uvp(2, "liter", 23, "dollars", "costco")]),
   i("olive oil", "850687100339", "CA olive range", [
     uvp(15, "dollars", 500, "ml", "whole foods"),
@@ -205,15 +137,9 @@ const products: ProductConfigItem[] = [
     densityOil,
     uvp(2, "liter", 23, "dollars", "costco"),
   ]),
-  gi("water", 14411, [
-    densityWater,
-    uvp(11968, "cups", 11.4, "dollars", "sf puc"),
-  ]),
-  gi("milk", 1077, [
-    densityWater,
-    uvp(0.5, "Quart", 3, "dollars", "general"),
-    uvp(1, "Cup", 236.588, "ml", "TEST, should be part of unit/lib.rs"),
-  ]),
+];
+
+const spices = [
   i("kosher salt", "013600020019", "Diamond Crystal", [
     uvp(3, "lb", 8, "dollars", "whole foods"),
   ]),
@@ -230,15 +156,40 @@ const products: ProductConfigItem[] = [
     ]),
     ndb_number: 18369, //redundant
   },
-  gi("cilantro", 11165, [
-    uvp(1, "bunch", 2, "dollars", "whole foods"),
-    uvp(1, "bunch", 100, "sprig", "general"),
-  ]),
-  gi("salsa", 6164, [uvp(2, "cups", 6, "dollars", "whole foods")]),
+  gi("ginger", 11216, [uvp(1, "lb", 4, "dollars", "safeway")]),
+  gi("ground ginger", 2021, [spiceJarPrice]),
+  gi("ground cinnamon", 2010, [spiceJarPrice]),
+  gi("nutmeg", 2025, [spiceJarPrice]),
   gi("black pepper", 2030, [
     uvp(2, "oz", 8, "dollars", "whole foods"),
     uvp(1, "tsp", 1, "tsp, ground", "tmp"),
   ]),
+];
+const produce = [
+  gi("cilantro", 11165, [
+    uvp(1, "bunch", 2, "dollars", "whole foods"),
+    uvp(1, "bunch", 100, "sprig", "general"),
+  ]),
+];
+const baking = [
+  gi("molasses", 19304, [spiceJarPrice]),
+  gi("vanilla extract", 2050, [spiceJarPrice]),
+];
+const products: ProductConfigItem[] = [
+  ...sugars,
+  ...flours,
+  ...dairy,
+  ...oil,
+  gi("water", 14411, [
+    densityWater,
+    uvp(11968, "cups", 11.4, "dollars", "sf puc"),
+  ]),
+  ...spices,
+  ...produce,
+  ...baking,
+
+  gi("salsa", 6164, [uvp(2, "cups", 6, "dollars", "whole foods")]),
+
   {
     name: "M18 Hackzall",
     upc: "045242502776",
@@ -246,12 +197,6 @@ const products: ProductConfigItem[] = [
     model: "2719-20",
     unit_mappings: [uvp(1, "each", 169, "dollars", "home depot")],
   },
-  gi("ginger", 11216, [uvp(1, "lb", 4, "dollars", "safeway")]),
-  gi("ground ginger", 2021, [spiceJarPrice]),
-  gi("ground cinnamon", 2010, [spiceJarPrice]),
-  gi("nutmeg", 2025, [spiceJarPrice]),
-  gi("molasses", 19304, [spiceJarPrice]),
-  gi("vanilla extract", 2050, [spiceJarPrice]),
 ];
 
 export const config: DataConfig = {
