@@ -49,7 +49,7 @@ export function buildPaginatedResponse<T>(
   return {
     meta: {
       pageIndex: pagination.pageIndex,
-      pageSize: data.length, //todo: is this wrong (if len is shorter than req)
+      pageSize: pagination.pageSize,
       totalCount: count,
     },
     items: data,

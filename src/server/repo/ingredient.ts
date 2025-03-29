@@ -205,7 +205,7 @@ const buildIngredientWhere = (
         ],
       },
       {
-        // ingredients only, not recipes? todo: check this
+        // Filter for standalone ingredients only, not recipe ingredients
         recipeId: { equals: null },
       },
     ],
