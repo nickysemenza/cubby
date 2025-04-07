@@ -17,16 +17,22 @@ export const WasmContextProvider: React.FC<{
   children?: React.ReactNode;
 }> = ({ children }) => {
   const [state, setState] = useState<wasm>();
-  // const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     const fetchWasm = async () => {
+      if (state !== undefined || loading) {
+        console.log("wasm-load: skipping");
+        return;
+      }
+      setLoading(true);
       console.time("wasm-load");
       const wasm = await import("recipebridge/pkg/recipebridge");
       setState(wasm);
       console.timeEnd("wasm-load");
+      setLoading(false);
     };
     void fetchWasm();
-  }, []);
+  }, [loading, state]);
 
   return (
     state && (

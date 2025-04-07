@@ -76,24 +76,36 @@ const sumPrice = (
   const missing = [];
   const nutrients: nutrientInfoWIP[] = [];
   for (const ingredient of ingredients) {
+    const ingName = ingredient.ingredient?.name;
     try {
       const { price, gram, nutrient } = getPrice(w, ingredient, ingMap);
 
-      if (price) prices.push(price);
-      if (gram) grams.push(gram);
-      if (nutrient) nutrients.push(nutrient);
+      if (price) {
+        prices.push(price);
+      } else {
+        missing.push(`price-${ingName}`);
+      }
+      if (gram) {
+        grams.push(gram);
+      } else {
+        missing.push(`gram-${ingName}`);
+      }
+      if (nutrient) {
+        nutrients.push(nutrient);
+      } else {
+        missing.push(`nutrient-${ingName}`);
+      }
+      continue;
     } catch (e) {
-      console.log(`Error in getPrice for ${ingredient.ingredient?.name}`, e);
+      console.log(`Error in getPrice for ${ingName}`, e);
+      missing.push(ingName);
     }
-    missing.push(ingredient.ingredient?.name);
   }
   return {
     price: prices.reduce((acc, curr) => acc + (curr.value || 0), 0),
     protein: nutrients.reduce((acc, curr) => acc + curr.protein, 0),
-    grams: grams.map((g) => g.value),
-    prices: prices.map((g) => g.value),
+    weight: grams.reduce((acc, curr) => acc + curr.value, 0),
     missing,
-    nutrients,
   };
   // return prices;
 };
@@ -102,17 +114,15 @@ export const RecipeIngredientList: React.FC<{
   ingMap: Record<string, IngredientOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
   const { w } = useWasm();
-  const data = ingredients;
-  // problematic:
-  // const data = useMemo(() => {
-  //   console.log("memo");
-  //   return w
-  //     ? ingredients.map((i) => ({
-  //         ...i,
-  //         priceInfo: getPrice(w, i, ingMap || {}),
-  //       }))
-  //     : [];
-  // }, [ingredients, ingMap, w]);
+  const data = useMemo(() => {
+    //   console.log("memo");
+    return w
+      ? ingredients.map((i) => ({
+          ...i,
+          priceInfo: ingMap && getPrice(w, i, ingMap),
+        }))
+      : [];
+  }, [ingredients, ingMap, w]);
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("amounts", {
@@ -120,9 +130,28 @@ export const RecipeIngredientList: React.FC<{
         return <JsonRenderer input={info.getValue()} />;
       },
     }),
-    columnHelper.accessor("ingredient", {
-      cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
+    columnHelper.display({
+      id: "dollars",
+      header: "dollars",
+      cell: (props) => {
+        const measure = props.row.original.priceInfo?.price;
+        return w && measure && w.format_measure(measure);
+      },
+    }),
+    columnHelper.display({
+      id: "grams",
+      header: "grams",
+      cell: (props) => {
+        const measure = props.row.original.priceInfo?.gram;
+        return w && measure && w.format_measure(measure);
+      },
+    }),
+    columnHelper.display({
+      id: "nutnrient",
+      header: "nutnrient",
+      cell: (props) => {
+        const measure = props.row.original.priceInfo?.nutrient;
+        return <JsonRenderer input={measure} />;
       },
     }),
     // columnHelper.accessor("priceInfo", {
@@ -130,6 +159,11 @@ export const RecipeIngredientList: React.FC<{
     //     return <JsonRenderer input={info.getValue()} />;
     //   },
     // }),
+    columnHelper.accessor("ingredient", {
+      cell: (info) => {
+        return <JsonRenderer input={info.getValue()} />;
+      },
+    }),
     columnHelper.accessor(
       (ingredient) => ingredient.ingredient?.name || "Unknown",
       {
@@ -140,7 +174,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "actions",
       cell: (props) => {
-        if (ingMap === undefined) {
+        if (ingMap === undefined || w === undefined) {
           return "loading";
         }
         const id = props.row.original.ingredient?.id;
@@ -152,7 +186,7 @@ export const RecipeIngredientList: React.FC<{
           <div>
             {/* {firstAmount &&
               w.convert_to_target_via_mappings(mappings, firstAmount, "money")} */}
-            {w && buildunitMappingsGraph(w, mappings)}
+            {buildunitMappingsGraph(w, mappings)}
           </div>
         );
       },
