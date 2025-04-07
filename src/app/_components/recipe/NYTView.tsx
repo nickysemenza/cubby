@@ -2,12 +2,11 @@
 
 import { type RecipeOut } from "~/schemas/recipe";
 import { getGlobalInstructionNumber, getIngredientName } from "./utils";
-import { useContext } from "react";
-import { WasmContext } from "~/wasmContext";
+import { useWasm } from "~/wasmContext";
 export const NYTView: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
   return (
     <div className="container mx-auto">
       <div className="flex flex-col pt-2 md:flex-row">
@@ -20,10 +19,11 @@ export const NYTView: React.FC<{
             section.ingredients.map((i) => (
               <div key={i.id} className="flex flex-row justify-center py-1">
                 <div className="flex w-1/2 justify-end pr-1 font-light text-gray-600">
-                  {i.amounts
-                    .filter((a) => a.unit !== "$" && a.unit !== "kcal")
-                    .map((a) => w.format_amount(a))
-                    .join(" / ")}
+                  {w &&
+                    i.amounts
+                      .filter((a) => a.unit !== "$" && a.unit !== "kcal")
+                      .map((a) => w.format_amount(a))
+                      .join(" / ")}
                 </div>
                 <div className="w-1/2">{getIngredientName(i)}</div>
               </div>

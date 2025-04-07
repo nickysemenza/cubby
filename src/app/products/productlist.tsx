@@ -13,14 +13,14 @@ import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
-import React, { useContext, useState } from "react";
+import React, { useState } from "react";
 import {
   buildSortParams,
   defaultPagination,
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
-import { WasmContext } from "~/wasmContext";
+import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
 import JsonRenderer from "../_components/json";
 import { UnitMapping } from "~/schemas/unitmapping";
@@ -42,7 +42,7 @@ export function ProductList() {
       | string
       | undefined,
   });
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
 
   const data = productsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
@@ -105,12 +105,14 @@ export function ProductList() {
           info.row.original,
         );
         return (
-          <>
-            {buildunitMappingsGraph(w, mappings)}
-            <div className="w-60">
-              <UnitMappingsTable mappings={mappings} w={w} />
-            </div>
-          </>
+          w && (
+            <>
+              {buildunitMappingsGraph(w, mappings)}
+              <div className="w-60">
+                <UnitMappingsTable mappings={mappings} w={w} />
+              </div>
+            </>
+          )
         );
       },
     }),

@@ -13,7 +13,7 @@ import { type Flatten } from "~/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
-import { useContext, useState } from "react";
+import { useState } from "react";
 import {
   buildSortParams,
   defaultPagination,
@@ -24,9 +24,9 @@ import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
 import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
-import { WasmContext } from "~/wasmContext";
 import { unitMappignsFromProduct } from "~/schemas/combo";
 import { UnitMappingsTable } from "../_components/unitmappingstable";
+import { useWasm } from "~/wasmContext";
 
 dayjs.extend(relativeTime);
 
@@ -44,7 +44,7 @@ export function IngredientList() {
   });
   const data = ingredientsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
   const columns = [
     buildSelectColumn<Flatten<typeof data>>(),
     columnHelper.accessor("name", {
@@ -128,10 +128,12 @@ export function IngredientList() {
           unitMappignsFromProduct(product),
         );
         return (
-          <div>
-            <UnitMappingsTable mappings={mappings} w={w} />
-            {buildunitMappingsGraph(w, mappings)}
-          </div>
+          w && (
+            <div>
+              <UnitMappingsTable mappings={mappings} w={w} />
+              {buildunitMappingsGraph(w, mappings)}
+            </div>
+          )
         );
       },
     }),

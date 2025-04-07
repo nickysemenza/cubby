@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useContext } from "react";
+import React, { useState, useMemo } from "react";
 import { type WIngredient } from "recipebridge/pkg";
 import { api } from "~/trpc/react";
 import { getIngredientUnit } from "./utils";
@@ -12,14 +12,14 @@ import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
-import { WasmContext } from "~/wasmContext";
+import { useWasm } from "~/wasmContext";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
     .map((line) => line.trim())
     .filter((l) => l.length > 0);
 const NewRecipe: React.FC = () => {
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
   const [url, setURL] = useState<string>(
     "https://cooking.nytimes.com/recipes/1022674-chewy-gingerbread-cookies",
   );
@@ -35,7 +35,7 @@ const NewRecipe: React.FC = () => {
   );
 
   const ingredientsParsed = useMemo(
-    () => ingredientLines.map((line) => w.parse_ingredient(line)),
+    () => (w ? ingredientLines.map((line) => w.parse_ingredient(line)) : []),
     [ingredientLines, w],
   );
 
@@ -111,13 +111,14 @@ const NewRecipe: React.FC = () => {
           <ol className="list-decimal pl-5 leading-relaxed">
             {instructionLines.map((line, x) => (
               <li key={x + "2"}>
-                {formatRichText(
-                  w,
-                  w.parse_rich_text(
-                    line,
-                    ingredientsParsed.map((l) => l.name),
-                  ),
-                )}
+                {w &&
+                  formatRichText(
+                    w,
+                    w.parse_rich_text(
+                      line,
+                      ingredientsParsed.map((l) => l.name),
+                    ),
+                  )}
               </li>
             ))}
           </ol>
@@ -142,15 +143,15 @@ const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
 
 const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   const amounts = amount.amounts;
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
   return (
     <div className="inline">
       <div className="inline">
         {amounts.map((a, x) => (
           <div key={getIngredientUnit(a)} className="inline">
             <div className="inline text-blue-600">
-              {w.format_measure_value(a)}
-            </div>{" "}
+              {w && w.format_measure_value(a)}
+            </div>
             <div className="inline text-green-800">{getIngredientUnit(a)}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}
           </div>

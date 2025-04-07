@@ -1,8 +1,7 @@
 "use client";
 
-import { useContext } from "react";
 import { FoodSummary } from "~/schemas/usda";
-import { WasmContext } from "~/wasmContext";
+import { useWasm } from "~/wasmContext";
 import JsonRenderer from "../json";
 import { UnitMappingsTable } from "../unitmappingstable";
 import { NutritionInfoTable } from "./nutrition";
@@ -22,7 +21,7 @@ export const USDADebug: React.FC<{ id: number; food: FoodSummary }> = ({
     fdc_id,
     ...rest
   } = food;
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
   const mappings = unitMappingsFromFood(food);
   return (
     <div>
@@ -36,11 +35,13 @@ export const USDADebug: React.FC<{ id: number; food: FoodSummary }> = ({
           <h3>nutrition per 100g</h3>
           <NutritionInfoTable n={nutritionInfo} />
         </div>
-        <div className="w-1/2">
-          <UnitMappingsTable mappings={mappings} w={w} />
-          {buildunitMappingsGraph(w, mappings)}
-          <JsonRenderer input={{ brandedFoodInfo, rest, foodInfo }} />
-        </div>
+        {w && (
+          <div className="w-1/2">
+            <UnitMappingsTable mappings={mappings} w={w} />
+            {buildunitMappingsGraph(w, mappings)}
+            <JsonRenderer input={{ brandedFoodInfo, rest, foodInfo }} />
+          </div>
+        )}
       </div>
     </div>
   );

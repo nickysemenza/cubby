@@ -17,8 +17,8 @@ import {
   test123,
   unitMappignsFromProduct,
 } from "~/schemas/combo";
-import { useContext, useMemo } from "react";
-import { wasm, WasmContext } from "~/wasmContext";
+import { useMemo } from "react";
+import { useWasm, wasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../UnitMappingGraph";
 import { WMeasure } from "recipebridge/pkg/recipebridge";
 
@@ -101,8 +101,18 @@ export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
-  const w = useContext(WasmContext);
+  const { w } = useWasm();
   const data = ingredients;
+  // problematic:
+  // const data = useMemo(() => {
+  //   console.log("memo");
+  //   return w
+  //     ? ingredients.map((i) => ({
+  //         ...i,
+  //         priceInfo: getPrice(w, i, ingMap || {}),
+  //       }))
+  //     : [];
+  // }, [ingredients, ingMap, w]);
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("amounts", {
@@ -115,6 +125,11 @@ export const RecipeIngredientList: React.FC<{
         return <JsonRenderer input={info.getValue()} />;
       },
     }),
+    // columnHelper.accessor("priceInfo", {
+    //   cell: (info) => {
+    //     return <JsonRenderer input={info.getValue()} />;
+    //   },
+    // }),
     columnHelper.accessor(
       (ingredient) => ingredient.ingredient?.name || "Unknown",
       {
@@ -137,7 +152,7 @@ export const RecipeIngredientList: React.FC<{
           <div>
             {/* {firstAmount &&
               w.convert_to_target_via_mappings(mappings, firstAmount, "money")} */}
-            {buildunitMappingsGraph(w, mappings)}
+            {w && buildunitMappingsGraph(w, mappings)}
           </div>
         );
       },
@@ -166,7 +181,9 @@ export const RecipeIngredientList: React.FC<{
     },
   });
 
-  const totalPrice = ingMap && sumPrice(w, ingredients, ingMap);
+  const totalPrice = useMemo(() => {
+    return w && ingMap && sumPrice(w, ingredients, ingMap);
+  }, [ingMap, ingredients, w]);
   return (
     <div>
       <JsonRenderer input={totalPrice} />

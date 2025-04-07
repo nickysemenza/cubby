@@ -1,15 +1,23 @@
 "use client";
 
-import { createContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 export type wasm = typeof import("../recipebridge/pkg");
 
-export const WasmContext = createContext<wasm>({} as wasm);
+export type wasmState = {
+  w: wasm | undefined;
+  loading: boolean;
+};
+export const WasmContext = createContext<wasmState>({
+  w: undefined,
+  loading: false,
+});
 
 export const WasmContextProvider: React.FC<{
   children?: React.ReactNode;
 }> = ({ children }) => {
   const [state, setState] = useState<wasm>();
+  // const [loading, setLoading] = useState(true);
   useEffect(() => {
     const fetchWasm = async () => {
       console.time("wasm-load");
@@ -22,7 +30,13 @@ export const WasmContextProvider: React.FC<{
 
   return (
     state && (
-      <WasmContext.Provider value={state}>{children}</WasmContext.Provider>
+      <WasmContext.Provider value={{ w: state, loading: true }}>
+        {children}
+      </WasmContext.Provider>
     )
   );
+};
+
+export const useWasm = () => {
+  return useContext(WasmContext);
 };
