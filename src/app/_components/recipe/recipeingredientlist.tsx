@@ -17,56 +17,79 @@ import {
   test123,
   unitMappignsFromProduct,
 } from "~/schemas/combo";
-import { useContext } from "react";
+import { useContext, useMemo } from "react";
 import { wasm, WasmContext } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../UnitMappingGraph";
+import { WMeasure } from "recipebridge/pkg/recipebridge";
 
+type nutrientInfoWIP = {
+  protein: number;
+};
 dayjs.extend(relativeTime);
+
+// getPrice extracts the price, grams, and nutrients from the ingredient
+const getPrice = (
+  w: wasm,
+  ingredient: SectionIngredientOut,
+  ingMap: Record<string, IngredientOut>,
+) => {
+  let price: WMeasure | undefined;
+  let gram: WMeasure | undefined;
+  let nutrient: nutrientInfoWIP | undefined;
+
+  //??
+  // return { price, gram, nutrient };
+
+  const id = ingredient.ingredient?.id;
+  const entry = id ? ingMap[id] : undefined;
+  const product = entry?.product;
+  const mappings = product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
+  const nutrientA = product
+    ?.flatMap((p) => test123(p))
+    .filter((x) => x !== undefined);
+  const firstAmount = ingredient.amounts[0];
+  if (firstAmount) {
+    price = w.convert_to_dollars_via_mappings(mappings, "money", firstAmount);
+
+    const gramsValue = w.convert_to_dollars_via_mappings(
+      mappings,
+      "weight",
+      firstAmount,
+    );
+    gram = gramsValue;
+    const firstNutrietn = nutrientA?.pop();
+    if (firstNutrietn) {
+      const protein = firstNutrietn.protein || 0;
+      const proteinVal = (gramsValue.value / 100) * protein;
+      nutrient = { protein: proteinVal };
+    }
+  }
+  return { price, gram, nutrient };
+};
 const sumPrice = (
   w: wasm,
   ingredients: SectionIngredientOut[],
   ingMap: Record<string, IngredientOut>,
 ) => {
-  const prices = [];
-  const grams = [];
+  const prices: WMeasure[] = [];
+  const grams: WMeasure[] = [];
   const missing = [];
-  const nutrients = [];
+  const nutrients: nutrientInfoWIP[] = [];
   for (const ingredient of ingredients) {
     try {
-      const id = ingredient.ingredient?.id;
-      const entry = id ? ingMap[id] : undefined;
-      const product = entry?.product;
-      const mappings =
-        product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
-      const nutrientA = product
-        ?.flatMap((p) => test123(p))
-        .filter((x) => x !== undefined);
-      const firstAmount = ingredient.amounts[0];
-      if (firstAmount) {
-        prices.push(
-          w.convert_to_dollars_via_mappings(mappings, "money", firstAmount),
-        );
-        const gramsValue = w.convert_to_dollars_via_mappings(
-          mappings,
-          "weight",
-          firstAmount,
-        );
-        grams.push(gramsValue);
-        const firstNutrietn = nutrientA?.pop();
-        if (firstNutrietn) {
-          const protein = firstNutrietn.protein || 0;
-          const proteinVal = (gramsValue.value / 100) * protein;
-          nutrients.push(proteinVal); // Add proteinVal to nutrients
-        }
-        continue;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (e) {}
+      const { price, gram, nutrient } = getPrice(w, ingredient, ingMap);
+
+      if (price) prices.push(price);
+      if (gram) grams.push(gram);
+      if (nutrient) nutrients.push(nutrient);
+    } catch (e) {
+      console.log(`Error in getPrice for ${ingredient.ingredient?.name}`, e);
+    }
     missing.push(ingredient.ingredient?.name);
   }
   return {
     price: prices.reduce((acc, curr) => acc + (curr.value || 0), 0),
-    protein: nutrients.reduce((acc, curr) => acc + curr, 0),
+    protein: nutrients.reduce((acc, curr) => acc + curr.protein, 0),
     grams: grams.map((g) => g.value),
     prices: prices.map((g) => g.value),
     missing,
