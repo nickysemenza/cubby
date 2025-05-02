@@ -3,7 +3,7 @@ import { unitMappingBase } from "~/schemas/unitmapping";
 import { locationBase } from "~/schemas/location";
 import { ndb, upc } from "./util";
 
-export const productConfig = z.object({
+const eproductConfig = z.object({
   name: z.string(),
   upc: upc.optional(),
   ndb_number: ndb.optional(),
@@ -12,9 +12,13 @@ export const productConfig = z.object({
 
   ingredient: z.boolean().optional(),
   unit_mappings: z.array(unitMappingBase).optional(),
-
+  // price_per is shorthand for unit_mappings
   price_per: z.number().optional(),
 });
+export const productConfig = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("product"), data: eproductConfig }),
+  z.object({ kind: z.literal("reference"), name: z.string() }),
+]);
 
 const locationWithProductHint = locationBase.extend({
   products: z.lazy(() => productConfig.array().optional()),

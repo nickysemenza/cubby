@@ -50,7 +50,7 @@ export default async function Page({ params }: PageParams) {
 
       <h1>{location.name}</h1>
 
-      {location.children.map((child) => (
+      {location.children?.map((child) => (
         <div key={child.id}>
           <PillLink
             text={child.name}

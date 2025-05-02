@@ -1,4 +1,4 @@
-import { type Prisma, type PrismaClient } from "@prisma/client";
+import { Product, type Prisma, type PrismaClient } from "@prisma/client";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
 import { type z } from "zod";
@@ -17,19 +17,49 @@ export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
   now: Date,
   product: ProductConfigItem,
-) => {
-  const { name, manufacturer, upc, model, ndb_number } = product;
-  let ingredient = undefined;
-  if (product.ingredient) {
+): Promise<Product> => {
+  if (product.kind === "reference") {
+    const p = await db.product.findMany({
+      where: {
+        name: {
+          equals: product.name,
+          mode: "insensitive",
+        },
+      },
+    });
+
+    switch (p.length) {
+      case 0:
+        throw new Error(`Product ${product.name} not found`);
+      case 1:
+        return p[0];
+      default:
+        throw new Error(
+          `findOrCreateProduct: Product ${product.name} is ambiguous`,
+        );
+    }
+  }
+  const {
+    name,
+    manufacturer,
+    upc,
+    model,
+    ndb_number,
+    ingredient,
+    price_per,
+    unit_mappings,
+  } = product.data;
+  let ingredeintRef = undefined;
+  if (ingredient) {
     //  only link item if its an ingredient
 
-    ingredient = await findOrCreateIngredient(db, product.name);
+    ingredeintRef = await findOrCreateIngredient(db, name);
   }
   const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
-    product.price_per !== undefined
+    price_per !== undefined
       ? {
           a: { value: 1, unit: "each" },
-          b: { value: product.price_per, unit: "dollar" },
+          b: { value: price_per, unit: "dollar" },
           source: "config",
         }
       : undefined;
@@ -40,7 +70,9 @@ export const findOrCreateProduct = async (
     ndb_number,
     model,
     updatedAt: now,
-    Ingredient: ingredient ? { connect: { id: ingredient.id } } : undefined,
+    Ingredient: ingredeintRef
+      ? { connect: { id: ingredeintRef.id } }
+      : undefined,
   };
   const productRow = await db.product.upsert({
     where: {
@@ -62,7 +94,7 @@ export const findOrCreateProduct = async (
     where: { productId: productRow.id },
   });
   const mappings = [
-    ...(product.unit_mappings ?? []),
+    ...(unit_mappings ?? []),
     ...(pricePerMapping ? [pricePerMapping] : []),
   ];
 

@@ -3,7 +3,7 @@ import {
   ProductConfigItem,
   DataConfig,
 } from "~/schemas/config";
-import { uvp, lc, lp, p, gp, i, gi } from "./data-helpers";
+import { uvp, lc, lp, p, gp, i, gi, pr } from "./data-helpers";
 
 const densityOil = uvp(1, "ml", 0.9, "g", "unk");
 const densityWater = uvp(1, "ml", 1, "g", "unk");
@@ -61,6 +61,10 @@ const garage: InfLocationConfig = lc("garage", "room", [
 const locations: InfLocationConfig[] = [
   garage,
   lc("kitchen", "room", [
+    lc("kitchen", "room", [
+      lp("fridge", "cabinet", [pr("cilantro"), pr("white sugar")]),
+    ]),
+
     lc("pantry", "cabinet", [
       lp("spice drawer", "drawer", []),
       lp("coffee drawer", "drawer", []),
@@ -189,14 +193,7 @@ const products: ProductConfigItem[] = [
   ...baking,
 
   gi("salsa", 6164, [uvp(2, "cups", 6, "dollars", "whole foods")]),
-
-  {
-    name: "M18 Hackzall",
-    upc: "045242502776",
-    manufacturer: "Milwaukee",
-    model: "2719-20",
-    unit_mappings: [uvp(1, "each", 169, "dollars", "home depot")],
-  },
+  p("M18 Hackzall", "045242502776", "Milwaukee", "2719-20", 169),
 ];
 
 export const config: DataConfig = {

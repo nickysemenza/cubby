@@ -22,8 +22,11 @@ export const uvp = (
 });
 // generic product
 export const gp = (name: string): ProductConfigItem => ({
-  name,
-  manufacturer: "generic",
+  kind: "product",
+  data: {
+    name,
+    manufacturer: "generic",
+  },
 });
 // product (non-ingredient)
 export const p = (
@@ -33,11 +36,14 @@ export const p = (
   model: string,
   price_per: number,
 ): ProductConfigItem => ({
-  name,
-  manufacturer,
-  upc,
-  model,
-  price_per,
+  kind: "product",
+  data: {
+    name,
+    manufacturer,
+    upc,
+    model,
+    price_per,
+  },
 });
 // product (ingredient)
 export const i = (
@@ -46,23 +52,35 @@ export const i = (
   manufacturer: string,
   unit_mappings: UnitMapping[],
 ): ProductConfigItem => ({
-  name,
-  ingredient: true,
-  manufacturer,
-  upc,
-  unit_mappings,
+  kind: "product",
+  data: {
+    name,
+    ingredient: true,
+    manufacturer,
+    upc,
+    unit_mappings,
+  },
 });
+
+export const pr = (name: string): ProductConfigItem => ({
+  kind: "reference",
+  name,
+});
+
 // product (generic ingredient
 export const gi = (
   name: string,
   ndb_number: number | undefined,
   unit_mappings: UnitMapping[],
 ): ProductConfigItem => ({
-  name,
-  ingredient: true,
-  manufacturer: "generic",
-  unit_mappings,
-  ndb_number,
+  kind: "product",
+  data: {
+    name,
+    ingredient: true,
+    manufacturer: "generic",
+    unit_mappings,
+    ndb_number,
+  },
 });
 // location
 export const lp = (

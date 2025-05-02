@@ -78,15 +78,6 @@ const renderForeignObjectNode = ({
             <div className="">{nodeDatum.type}</div>
           </>
         )}
-        {/* {nodeDatum.children && (
-          <button
-            style={{ width: "100%" }}
-            onClick={toggleNode}
-            className="border-2 border-purple-200"
-          >
-            {nodeDatum.__rd3t.collapsed ? "Expand" : "Collapse"}
-          </button>
-        )} */}
       </div>
     </foreignObject>
   </g>
