@@ -6,7 +6,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { type Flatten } from "~/util";
+import { Result, withFailure, withSuccess, type Flatten } from "~/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
@@ -21,10 +21,9 @@ import { useMemo } from "react";
 import { useWasm, wasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../UnitMappingGraph";
 import { WMeasure } from "recipebridge/pkg/recipebridge";
+import { NutrientsPer100 } from "~/schemas/usda";
+import { renderValueOrError } from "~/result";
 
-type nutrientInfoWIP = {
-  protein: number;
-};
 dayjs.extend(relativeTime);
 
 // getPrice extracts the price, grams, and nutrients from the ingredient
@@ -33,12 +32,9 @@ const getPrice = (
   ingredient: SectionIngredientOut,
   ingMap: Record<string, IngredientOut>,
 ) => {
-  let price: WMeasure | undefined;
-  let gram: WMeasure | undefined;
-  let nutrient: nutrientInfoWIP | undefined;
-
-  //??
-  // return { price, gram, nutrient };
+  let price: Result<WMeasure>;
+  let gram: Result<WMeasure>;
+  let nutrient: Result<NutrientsPer100>;
 
   const id = ingredient.ingredient?.id;
   const entry = id ? ingMap[id] : undefined;
@@ -49,21 +45,39 @@ const getPrice = (
     .filter((x) => x !== undefined);
   const firstAmount = ingredient.amounts[0];
   if (firstAmount) {
-    price = w.convert_to_dollars_via_mappings(mappings, "money", firstAmount);
-
-    const gramsValue = w.convert_to_dollars_via_mappings(
-      mappings,
-      "weight",
-      firstAmount,
-    );
-    gram = gramsValue;
-    const firstNutrietn = nutrientA?.pop();
-    if (firstNutrietn) {
-      const protein = firstNutrietn.protein || 0;
-      const proteinVal = (gramsValue.value / 100) * protein;
-      nutrient = { protein: proteinVal };
+    try {
+      price = withSuccess(
+        w.convert_to_dollars_via_mappings(mappings, "money", firstAmount),
+      );
+    } catch (e) {
+      price = withFailure("convert to money: " + e);
     }
+    try {
+      const gramsValue = w.convert_to_dollars_via_mappings(
+        mappings,
+        "weight",
+        firstAmount,
+      );
+      gram = withSuccess(gramsValue);
+      const firstNutrietn = nutrientA?.pop();
+      if (firstNutrietn) {
+        nutrient = withSuccess({
+          protein: (gramsValue.value / 100) * (firstNutrietn.protein || 0),
+          kcal: (gramsValue.value / 100) * (firstNutrietn.kcal || 0),
+        });
+      } else {
+        nutrient = withFailure(`product(s) have no nutrients`);
+      }
+    } catch (e) {
+      gram = withFailure("convert to weight: " + e);
+      nutrient = withFailure("convert to weight: " + e);
+    }
+  } else {
+    price = withFailure(`ingredient ${ingredient.id} has no amounts`);
+    gram = withFailure(`ingredient ${ingredient.id} has no amounts`);
+    nutrient = withFailure(`ingredient ${ingredient.id} has no amounts`);
   }
+
   return { price, gram, nutrient };
 };
 const sumPrice = (
@@ -74,24 +88,24 @@ const sumPrice = (
   const prices: WMeasure[] = [];
   const grams: WMeasure[] = [];
   const missing = [];
-  const nutrients: nutrientInfoWIP[] = [];
+  const nutrients: NutrientsPer100[] = [];
   for (const ingredient of ingredients) {
     const ingName = ingredient.ingredient?.name;
     try {
       const { price, gram, nutrient } = getPrice(w, ingredient, ingMap);
 
-      if (price) {
-        prices.push(price);
+      if (price.success) {
+        prices.push(price.value);
       } else {
         missing.push(`price-${ingName}`);
       }
-      if (gram) {
-        grams.push(gram);
+      if (gram.success) {
+        grams.push(gram.value);
       } else {
         missing.push(`gram-${ingName}`);
       }
-      if (nutrient) {
-        nutrients.push(nutrient);
+      if (nutrient.success) {
+        nutrients.push(nutrient.value);
       } else {
         missing.push(`nutrient-${ingName}`);
       }
@@ -104,6 +118,7 @@ const sumPrice = (
   return {
     price: prices.reduce((acc, curr) => acc + (curr.value || 0), 0),
     protein: nutrients.reduce((acc, curr) => acc + curr.protein, 0),
+    kcal: nutrients.reduce((acc, curr) => acc + curr.kcal, 0),
     weight: grams.reduce((acc, curr) => acc + curr.value, 0),
     missing,
   };
@@ -115,7 +130,6 @@ export const RecipeIngredientList: React.FC<{
 }> = ({ ingredients, ingMap }) => {
   const { w } = useWasm();
   const data = useMemo(() => {
-    //   console.log("memo");
     return w
       ? ingredients.map((i) => ({
           ...i,
@@ -125,6 +139,13 @@ export const RecipeIngredientList: React.FC<{
   }, [ingredients, ingMap, w]);
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
+    columnHelper.accessor(
+      (ingredient) => ingredient.ingredient?.name || "Unknown",
+      {
+        id: "ing name",
+        cell: (info) => info.getValue(),
+      },
+    ),
     columnHelper.accessor("amounts", {
       cell: (info) => {
         return <JsonRenderer input={info.getValue()} />;
@@ -135,7 +156,11 @@ export const RecipeIngredientList: React.FC<{
       header: "dollars",
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
-        return w && measure && w.format_measure(measure);
+        return (
+          w &&
+          measure &&
+          renderValueOrError(measure, (m) => w.format_measure(m))
+        );
       },
     }),
     columnHelper.display({
@@ -143,15 +168,22 @@ export const RecipeIngredientList: React.FC<{
       header: "grams",
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
-        return w && measure && w.format_measure(measure);
+        return (
+          w &&
+          measure &&
+          renderValueOrError(measure, (m) => w.format_measure(m))
+        );
       },
     }),
     columnHelper.display({
-      id: "nutnrient",
-      header: "nutnrient",
+      id: "nutrient",
+      header: "nutrient",
       cell: (props) => {
         const measure = props.row.original.priceInfo?.nutrient;
-        return <JsonRenderer input={measure} />;
+        return (
+          measure &&
+          renderValueOrError(measure, (m) => <JsonRenderer input={m} />)
+        );
       },
     }),
     // columnHelper.accessor("priceInfo", {
@@ -164,13 +196,7 @@ export const RecipeIngredientList: React.FC<{
         return <JsonRenderer input={info.getValue()} />;
       },
     }),
-    columnHelper.accessor(
-      (ingredient) => ingredient.ingredient?.name || "Unknown",
-      {
-        id: "ing name",
-        cell: (info) => info.getValue(),
-      },
-    ),
+
     columnHelper.display({
       id: "actions",
       cell: (props) => {
@@ -181,14 +207,7 @@ export const RecipeIngredientList: React.FC<{
         const entry = id ? ingMap[id] : undefined;
         const mappings =
           entry?.product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
-        // const firstAmount = props.row.original.amounts[0];
-        return (
-          <div>
-            {/* {firstAmount &&
-              w.convert_to_target_via_mappings(mappings, firstAmount, "money")} */}
-            {buildunitMappingsGraph(w, mappings)}
-          </div>
-        );
+        return <div>{buildunitMappingsGraph(w, mappings)}</div>;
       },
     }),
 

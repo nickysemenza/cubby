@@ -59,7 +59,8 @@ const foodInfo = z
   .describe("usda food table");
 
 const nutrientsPer100 = z.object({
-  protein: z.number().optional(),
+  protein: z.number(),
+  kcal: z.number(),
 });
 export type NutrientsPer100 = z.infer<typeof nutrientsPer100>;
 const BrandedFoodServingInfo = z.object({

@@ -64,28 +64,29 @@ const getNutrientSummary = async (
       nutrient: true,
     },
   });
-  let protein = undefined;
 
-  const nutrientSummary: NutrientSummary[] = [];
-  nutrients.forEach((n) => {
-    const nutrient: NutrientSummary = {
-      amount: n.amount.toNumber(),
-      name: n.nutrient.name,
-      unit: nutrient_unit_name.parse(n.nutrient.unit_name),
-    };
-    if (nutrient.amount === 0) {
-      return;
-    }
+  const nutrientSummary: NutrientSummary[] = nutrients
+    .map((n) => {
+      const nutrient: NutrientSummary = {
+        amount: n.amount.toNumber(),
+        name: n.nutrient.name,
+        unit: nutrient_unit_name.parse(n.nutrient.unit_name),
+      };
+      return nutrient;
+    })
+    .filter((n) => n.amount !== 0);
 
-    if (nutrient.name === "Protein" && nutrient.unit === "G") {
-      protein = nutrient.amount;
-    }
-    nutrientSummary.push(nutrient);
-  });
   return {
     nutrientSummary,
     nutrientsPer100: {
-      protein,
+      protein:
+        nutrientSummary.find(
+          (nutrient) => nutrient.name === "Protein" && nutrient.unit === "G",
+        )?.amount || 0,
+      kcal:
+        nutrientSummary.find(
+          (nutrient) => nutrient.name === "Energy" && nutrient.unit === "KCAL",
+        )?.amount || 0,
     },
   };
 };

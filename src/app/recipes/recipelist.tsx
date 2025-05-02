@@ -38,7 +38,14 @@ export function RecipeList() {
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     columnHelper.accessor("name", {
-      cell: (info) => info.getValue(),
+      cell: (info) => (
+        <Link
+          className="text-blue-600 hover:underline dark:text-blue-500"
+          href={`recipes/${info.row.original.id}`}
+        >
+          {info.getValue()}
+        </Link>
+      ),
     }),
 
     columnHelper.accessor("createdAt", {

@@ -45,6 +45,7 @@ extern "C" {
 
 #[wasm_bindgen]
 pub fn format_measure_value(input: &WMeasure) -> f64 {
+    setup();
     let measure: Measure = serde_wasm_bindgen::from_value(input.into()).unwrap();
     // truncate2_decimals
     f64::trunc(measure.values().0 * 1000.0) / 1000.0
@@ -52,6 +53,7 @@ pub fn format_measure_value(input: &WMeasure) -> f64 {
 
 #[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> WIngredient {
+    setup();
     let i = dbg!(ingredient::from_str(input));
     let js_value = serde_wasm_bindgen::to_value(&i).unwrap();
     js_value.into()
@@ -84,9 +86,11 @@ pub fn format_measure(amount: &WMeasure) -> String {
     }
 }
 fn raw_amount_to_measure(a: RawAmount) -> Measure {
+    setup();
     Measure::from_parts(a.unit.as_str(), a.value, a.upper_value)
 }
 fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappings {
+    setup();
     let mut mapping_pairs: UnitMappings = Vec::new();
     for m in mappings {
         mapping_pairs.push((raw_amount_to_measure(m.a), raw_amount_to_measure(m.b)));
@@ -94,6 +98,7 @@ fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappings {
     mapping_pairs
 }
 pub fn mappings_from_w(mappings: Vec<WUnitMapping>) -> UnitMappings {
+    setup();
     let parsed_mappings: Result<Vec<UnitMapping>, String> = mappings
         .iter()
         .map(|m| {
@@ -122,7 +127,7 @@ pub fn test_convert_to_target(mappings: Vec<WUnitMapping>, mk: String) -> String
     match converted_measure {
         Some(m) => format!("{}={}", target_measure, m),
         None => format!(
-            "failed to convert {} to {} target measure",
+            "test_convert_to_target: failed to convert {} to {} target measure",
             target_measure, mk
         ),
     }
@@ -148,7 +153,7 @@ pub fn convert_to_dollars_via_mappings(
             Ok(js_value.into())
         }
         None => Err(format!(
-            "failed to convert {} to money target measure",
+            "convert_to_dollars_via_mappings: failed to convert {} to money target measure",
             target_measure
         )),
     }
@@ -173,7 +178,7 @@ pub fn convert_to_target_via_mappings(
     match converted_measure {
         Some(m) => format!("{}={}", target_measure, m),
         None => format!(
-            "failed to convert {} to {} target measure",
+            "convert_to_target_via_mappings: failed to convert {} to {} target measure",
             target_measure, dest_measure_kind
         ),
     }
