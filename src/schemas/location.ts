@@ -32,12 +32,12 @@ export const locationOut = z
 export type LocationOut = z.infer<typeof locationOut>;
 
 export type InfLocation = LocationOut & {
-  children: InfLocation[];
+  children?: InfLocation[];
   parent?: InfLocation;
 };
 
 export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
-  children: z.lazy(() => infLocation.array()),
+  children: z.lazy(() => infLocation.array()).optional(),
   parent: z.lazy(() => infLocation.optional()),
 });
 

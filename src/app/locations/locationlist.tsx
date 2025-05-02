@@ -8,7 +8,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { type Flatten } from "~/util";
+import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -20,7 +20,7 @@ import {
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
-import JsonRenderer from "../_components/json";
+import JsonRenderer from "../_components/json-renderer";
 
 dayjs.extend(relativeTime);
 

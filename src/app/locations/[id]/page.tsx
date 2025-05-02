@@ -1,5 +1,5 @@
 import { PillLink } from "~/app/_components/EntityPill";
-import JsonRenderer from "~/app/_components/json";
+import JsonRenderer from "~/app/_components/json-renderer";
 import {
   Breadcrumb,
   BreadcrumbItem,

@@ -1,5 +1,5 @@
 import { type CompactRecipe, type ParsedCompactRecipe } from "./codec";
-import { getIngredientUnit } from "~/app/_components/recipe/utils";
+import { getIngredientUnit } from "~/app/_components/recipe/recipeutils";
 
 export const parseCompactRecipe = async (
   raw: CompactRecipe,

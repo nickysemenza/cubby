@@ -1,5 +1,5 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
-import { dedupe } from "~/util";
+import { dedupe } from "~/misc/util";
 import { dbRecipeToAPIShallow } from "./recipe";
 import {
   buildTakeSkip,

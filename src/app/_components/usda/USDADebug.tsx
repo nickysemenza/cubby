@@ -2,12 +2,12 @@
 
 import { FoodSummary } from "~/schemas/usda";
 import { useWasm } from "~/wasmContext";
-import JsonRenderer from "../json";
-import { UnitMappingsTable } from "../unitmappingstable";
+import JsonRenderer from "../json-renderer";
+import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/combo";
 import { Pill } from "../EntityPill";
-import { buildunitMappingsGraph } from "../UnitMappingGraph";
+import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 
 export const USDADebug: React.FC<{ id: number; food: FoodSummary }> = ({
   food,

@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { parseCompactRecipe } from "./parser";
 import { format_amount, parse_ingredient } from "recipebridge/pkg";
-import { getIngredientUnit } from "~/app/_components/recipe/utils";
+import { getIngredientUnit } from "~/app/_components/recipe/recipeutils";
 
 test("parsing works", async () => {
   const out = await parseCompactRecipe({

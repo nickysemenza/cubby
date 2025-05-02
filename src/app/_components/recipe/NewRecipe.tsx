@@ -3,11 +3,11 @@
 import React, { useState, useMemo } from "react";
 import { type WIngredient } from "recipebridge/pkg";
 import { api } from "~/trpc/react";
-import { getIngredientUnit } from "./utils";
+import { getIngredientUnit } from "./recipeutils";
 import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
 import { formatRichText } from "./richtext";
-import useDebounce from "../useDebounce";
+import useDebounce from "../../../misc/useDebounce";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
 import { Input } from "~/components/ui/input";

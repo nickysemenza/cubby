@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { getIngredientUnit } from "~/app/_components/recipe/utils";
+import { getIngredientUnit } from "~/app/_components/recipe/recipeutils";
 import { UnitMapping } from "~/schemas/unitmapping";
 import {
   FoodInfo,

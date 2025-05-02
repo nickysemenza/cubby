@@ -12,7 +12,7 @@ const foreignObjectProps: React.SVGProps<SVGForeignObjectElement> = {
   x: 20,
 };
 const rootName = "_root";
-export default function LocationTree() {
+export default function LocationTreeGraph() {
   const locations = api.location.makeTree.useQuery();
   const data = locations.data;
   const { translate, containerRef } = useCenteredTree();

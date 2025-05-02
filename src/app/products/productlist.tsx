@@ -8,7 +8,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { type Flatten } from "~/util";
+import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -21,12 +21,12 @@ import {
 } from "../_components/data-table/tableUtils";
 import { PillLink } from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
-import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
-import JsonRenderer from "../_components/json";
+import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
+import JsonRenderer from "../_components/json-renderer";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappignsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
-import { UnitMappingsTable } from "../_components/unitmappingstable";
+import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 
 dayjs.extend(relativeTime);
 

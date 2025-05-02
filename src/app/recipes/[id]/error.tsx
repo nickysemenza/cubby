@@ -1,7 +1,7 @@
 "use client"; // Error boundaries must be Client Components
 
 import { useEffect } from "react";
-import JsonRenderer from "~/app/_components/json";
+import JsonRenderer from "~/app/_components/json-renderer";
 
 export default function Error({
   error,

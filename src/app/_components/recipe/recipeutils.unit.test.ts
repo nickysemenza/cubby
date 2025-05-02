@@ -4,7 +4,7 @@ import {
   getGlobalInstructionNumber,
   getIngredientName,
   getIngredientUnit,
-} from "./utils";
+} from "./recipeutils";
 
 test("recipe utils", () => {
   const recipe: RecipeOut = {

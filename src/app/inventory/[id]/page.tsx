@@ -1,4 +1,4 @@
-import JsonRenderer from "~/app/_components/json";
+import JsonRenderer from "~/app/_components/json-renderer";
 import { api } from "~/trpc/server";
 
 type DetailParams = { id: string };

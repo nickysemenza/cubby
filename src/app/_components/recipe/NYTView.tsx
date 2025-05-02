@@ -1,7 +1,7 @@
 "use client";
 
 import { type RecipeOut } from "~/schemas/recipe";
-import { getGlobalInstructionNumber, getIngredientName } from "./utils";
+import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
 import { useWasm } from "~/wasmContext";
 export const NYTView: React.FC<{
   recipe: RecipeOut;

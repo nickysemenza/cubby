@@ -6,11 +6,11 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Result, withFailure, withSuccess, type Flatten } from "~/util";
+import { Result, withFailure, withSuccess, type Flatten } from "~/misc/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
-import JsonRenderer from "../json";
+import JsonRenderer from "../json-renderer";
 import RTable from "../data-table/Table";
 import {
   IngredientOut,
@@ -19,10 +19,10 @@ import {
 } from "~/schemas/combo";
 import { useMemo } from "react";
 import { useWasm, wasm } from "~/wasmContext";
-import { buildunitMappingsGraph } from "../UnitMappingGraph";
+import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { WMeasure } from "recipebridge/pkg/recipebridge";
 import { NutrientsPer100 } from "~/schemas/usda";
-import { renderValueOrError } from "~/result";
+import { renderValueOrError } from "~/misc/result";
 
 dayjs.extend(relativeTime);
 

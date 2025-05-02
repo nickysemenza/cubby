@@ -9,7 +9,7 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { type Flatten } from "~/util";
+import { type Flatten } from "~/misc/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
@@ -23,9 +23,9 @@ import { PillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
-import { buildunitMappingsGraph } from "../_components/UnitMappingGraph";
+import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { unitMappignsFromProduct } from "~/schemas/combo";
-import { UnitMappingsTable } from "../_components/unitmappingstable";
+import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
 
 dayjs.extend(relativeTime);

@@ -182,9 +182,10 @@ const buildLocationWithChildren = (
     name: x.name,
     id: x.id,
     type: locationType.parse(x.type),
-    //@ts-expect-error WIP
-    children: (x.children || []).map(buildLocationWithChildren),
-    //@ts-expect-error WIP
+    children:
+      x.children && x.children.length > 0
+        ? x.children.map(buildLocationWithChildren)
+        : undefined,
     parent: x.parent ? buildLocationWithChildren(x.parent) : undefined,
     ...extractDbTimestampsFromDBRec(x),
   };
