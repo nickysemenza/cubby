@@ -6,80 +6,62 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Result, withFailure, withSuccess, type Flatten } from "~/misc/util";
+import { Result, withFailure, type Flatten } from "~/misc/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import JsonRenderer from "../json-renderer";
 import RTable from "../data-table/Table";
-import {
-  IngredientOut,
-  test123,
-  unitMappignsFromProduct,
-} from "~/schemas/combo";
+import { IngredientOut, unitMappignsFromProduct } from "~/schemas/combo";
 import { useMemo } from "react";
 import { useWasm, wasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { WMeasure } from "recipebridge/pkg/recipebridge";
 import { NutrientsPer100 } from "~/schemas/usda";
 import { renderValueOrError } from "~/misc/result";
+import {
+  convertAmountToPrice,
+  getGramAndNutrient,
+} from "~/app/_components/units/univ-conversion";
 
 dayjs.extend(relativeTime);
 
-// getPrice extracts the price, grams, and nutrients from the ingredient
 const getPrice = (
   w: wasm,
   ingredient: SectionIngredientOut,
   ingMap: Record<string, IngredientOut>,
-) => {
-  let price: Result<WMeasure>;
-  let gram: Result<WMeasure>;
-  let nutrient: Result<NutrientsPer100>;
-
+): {
+  price: Result<WMeasure>;
+  gram: Result<WMeasure>;
+  nutrient: Result<NutrientsPer100>;
+} => {
   const id = ingredient.ingredient?.id;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
   const mappings = product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
-  const nutrientA = product
-    ?.flatMap((p) => test123(p))
-    .filter((x) => x !== undefined);
   const firstAmount = ingredient.amounts[0];
-  if (firstAmount) {
-    try {
-      price = withSuccess(
-        w.convert_to_measure_via_mappings(mappings, "money", firstAmount),
-      );
-    } catch (e) {
-      price = withFailure("convert to money: " + e);
-    }
-    try {
-      const gramsValue = w.convert_to_measure_via_mappings(
-        mappings,
-        "weight",
-        firstAmount,
-      );
-      gram = withSuccess(gramsValue);
-      const firstNutrietn = nutrientA?.pop();
-      if (firstNutrietn) {
-        nutrient = withSuccess({
-          protein: (gramsValue.value / 100) * (firstNutrietn.protein || 0),
-          kcal: (gramsValue.value / 100) * (firstNutrietn.kcal || 0),
-        });
-      } else {
-        nutrient = withFailure(`product(s) have no nutrients`);
-      }
-    } catch (e) {
-      gram = withFailure("convert to weight: " + e);
-      nutrient = withFailure("convert to weight: " + e);
-    }
-  } else {
-    price = withFailure(`ingredient ${ingredient.id} has no amounts`);
-    gram = withFailure(`ingredient ${ingredient.id} has no amounts`);
-    nutrient = withFailure(`ingredient ${ingredient.id} has no amounts`);
+  // todo: should additional amounts be added to the mappings?
+
+  if (!firstAmount) {
+    const error = `ingredient ${ingredient.id} has no amounts`;
+    return {
+      price: withFailure(error),
+      gram: withFailure(error),
+      nutrient: withFailure(error),
+    };
   }
+
+  const price = convertAmountToPrice(w, firstAmount, mappings);
+  const { gram, nutrient } = getGramAndNutrient(
+    w,
+    firstAmount,
+    mappings,
+    product,
+  );
 
   return { price, gram, nutrient };
 };
+
 const sumPrice = (
   w: wasm,
   ingredients: SectionIngredientOut[],

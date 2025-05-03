@@ -79,6 +79,7 @@ const locations: InfLocationConfig[] = [
 const sugars = [
   i("White sugar", "015800030621", "C&H", [
     uvp(4, "lb", 5, "dollars", "whole foods"),
+    uvp(4, "lb", 1, "each", "general"),
   ]),
   gi("powdered sugar", 19336, [uvp(2, "lb", 5, "dollars", "whole foods")]),
 ];

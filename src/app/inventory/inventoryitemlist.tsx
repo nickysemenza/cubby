@@ -21,6 +21,11 @@ import {
 } from "../_components/data-table/tableUtils";
 import JsonRenderer from "../_components/json-renderer";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
+import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
+import { useWasm } from "~/wasmContext";
+import { convertAmountToPrice } from "../_components/units/univ-conversion";
+import { renderValueOrError } from "~/misc/result";
+import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 
 dayjs.extend(relativeTime);
 
@@ -33,7 +38,7 @@ export function InventoryItemList() {
     sort: buildSortParams(sorting, initialSort),
     pagination,
   });
-
+  const { w } = useWasm();
   const data = inventoryitemsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
@@ -41,10 +46,11 @@ export function InventoryItemList() {
       enableSorting: false,
       cell: (info) => {
         const product = info.getValue();
-        const { upc, ndb_number } = product;
+        const { upc, ndb_number, unitMappings } = product;
         return (
           <>
             <JsonRenderer input={{ upc, ndb_number }} />
+            <div>{w && buildunitMappingsGraph(w, unitMappings)}</div>
             <ProductPillLink product={product} />
           </>
         );
@@ -63,7 +69,22 @@ export function InventoryItemList() {
     }),
     columnHelper.accessor("amount", {
       cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
+        const amounts = info.getValue();
+        if (amounts.unit === "each") {
+          // todo
+          amounts.unit = "Whole";
+        }
+        const mappings = info.row.original.product.unitMappings;
+        if (w === undefined || mappings === undefined) {
+          return "loading";
+        }
+        const price = convertAmountToPrice(w, amounts, mappings);
+        return (
+          <div className="flex flex-col">
+            <div>{renderValueOrError(price, (p) => w.format_measure(p))}</div>
+            <div>{w.format_amount(amounts)}</div>
+          </div>
+        );
       },
     }),
 

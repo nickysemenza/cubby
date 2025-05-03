@@ -135,9 +135,9 @@ fn setup() {
 }
 
 #[wasm_bindgen]
-pub fn convert_to_measure_via_mappings(
+pub fn conv_measure_to_kind(
     mappings: Vec<WUnitMapping>,
-    input_measure_kind: String,
+    input_target_measure_kind: String,
     input_measure_w: WMeasure,
 ) -> Result<WMeasure, String> {
     setup();
@@ -147,8 +147,8 @@ pub fn convert_to_measure_via_mappings(
     let measure: Result<Measure, _> = serde_wasm_bindgen::from_value(input_measure_w.into());
     let input_measure = measure.map_err(|e| format!("failed to parse input amount: {e}"))?;
 
-    let target_measure_kind = MeasureKind::from_str(&input_measure_kind)
-        .map_err(|_| format!("invalid measure kind: {}", input_measure_kind))?;
+    let target_measure_kind = MeasureKind::from_str(&input_target_measure_kind)
+        .map_err(|_| format!("invalid measure kind: {}", input_target_measure_kind))?;
     let converted_measure =
         input_measure.convert_measure_via_mappings(target_measure_kind.clone(), mapping_pairs);
     match converted_measure {
@@ -157,7 +157,7 @@ pub fn convert_to_measure_via_mappings(
             Ok(js_value.into())
         }
         None => Err(format!(
-            "convert_to_measure_via_mappings: failed to convert '{}' to target measure '{}'",
+            "conv_measure_to_kind: failed to convert '{}' to target measure '{}'",
             input_measure, target_measure_kind,
         )),
     }

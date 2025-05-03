@@ -11,13 +11,21 @@ import {
   inventoryentryList,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { TRPCError } from "@trpc/server";
 
 const getByID = publicProcedure
   .input(IDInput)
   .output(inventoryWithLocationAndProductOut)
-  .query(
-    async ({ ctx, input }) => await getInventoryEntryByID(ctx.db, input.id),
-  );
+  .query(async ({ ctx, input }) => {
+    const res = await getInventoryEntryByID(ctx.db, input.id);
+    if (res === null) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Inventory entry not found",
+      });
+    }
+    return res;
+  });
 
 const list = publicProcedure
   .input(

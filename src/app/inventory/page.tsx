@@ -1,6 +1,7 @@
 import { HydrateClient } from "~/trpc/server";
 import { InventoryItemList } from "./inventoryitemlist";
 import { type Metadata } from "next";
+import { WasmContextProvider } from "~/wasmContext";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,9 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <HydrateClient>
-      <div>
+      <WasmContextProvider>
         <InventoryItemList />
-      </div>
+      </WasmContextProvider>
     </HydrateClient>
   );
 }

@@ -9,13 +9,21 @@ import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 
 const inventoryentryInclude = {
-  Product: true,
+  Product: {
+    include: {
+      unitMappings: true,
+    },
+  },
   location: true,
 };
 
 type InventoryEntryDeepDB = Prisma.InventoryEntryGetPayload<{
   include: {
-    Product: true;
+    Product: {
+      include: {
+        unitMappings: true;
+      };
+    };
     location: true;
   };
 }>;
@@ -32,18 +40,22 @@ const dbInventoryEntryoToAPI: (
       ...restOfLocation,
       type: locationType.parse(type),
     },
-    product: Product,
+    product: {
+      ...Product,
+      unitMappings: Product.unitMappings,
+    },
   };
 };
 
 export const getInventoryEntryByID = async (db: PrismaClient, id: string) => {
-  const res = await db.inventoryEntry.findFirstOrThrow({
+  const res = await db.inventoryEntry.findFirst({
     where: {
       id,
     },
     include: inventoryentryInclude,
   });
-  return dbInventoryEntryoToAPI(res);
+
+  return res ? dbInventoryEntryoToAPI(res) : null;
 };
 
 export const inventoryentryList = async (

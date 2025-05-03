@@ -8,6 +8,11 @@ export const buildunitMappingsGraph = (
   w: wasm,
   unitMapping: WUnitMapping[],
 ) => {
+  if (unitMapping.length === 0) {
+    return (
+      <div className="border-red border-2 text-red-400">No unit mappings</div>
+    );
+  }
   try {
     const graph = w
       .graph_unit_mappings(unitMapping)
