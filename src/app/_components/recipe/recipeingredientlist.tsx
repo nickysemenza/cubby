@@ -47,13 +47,13 @@ const getPrice = (
   if (firstAmount) {
     try {
       price = withSuccess(
-        w.convert_to_dollars_via_mappings(mappings, "money", firstAmount),
+        w.convert_to_measure_via_mappings(mappings, "money", firstAmount),
       );
     } catch (e) {
       price = withFailure("convert to money: " + e);
     }
     try {
-      const gramsValue = w.convert_to_dollars_via_mappings(
+      const gramsValue = w.convert_to_measure_via_mappings(
         mappings,
         "weight",
         firstAmount,
