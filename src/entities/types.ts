@@ -1,1 +1,1 @@
-export type Entity = "ingredient" | "product" | "recipe" | "location";
+export type Entity = "ingredient" | "product" | "recipe" | "location" | "inventory-item";

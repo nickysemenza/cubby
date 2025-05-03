@@ -25,7 +25,7 @@ import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { useWasm } from "~/wasmContext";
 import { convertAmountToPrice } from "../_components/units/univ-conversion";
 import { renderValueOrError } from "~/misc/result";
-import { UnitMappingsTable } from "../_components/units/unitmappingstable";
+import { formatAmount } from "../_components/inventory/format-amount";
 
 dayjs.extend(relativeTime);
 
@@ -69,22 +69,7 @@ export function InventoryItemList() {
     }),
     columnHelper.accessor("amount", {
       cell: (info) => {
-        const amounts = info.getValue();
-        if (amounts.unit === "each") {
-          // todo
-          amounts.unit = "Whole";
-        }
-        const mappings = info.row.original.product.unitMappings;
-        if (w === undefined || mappings === undefined) {
-          return "loading";
-        }
-        const price = convertAmountToPrice(w, amounts, mappings);
-        return (
-          <div className="flex flex-col">
-            <div>{renderValueOrError(price, (p) => w.format_measure(p))}</div>
-            <div>{w.format_amount(amounts)}</div>
-          </div>
-        );
+        return w && formatAmount(w, info.getValue(), info.row.original.product.unitMappings);
       },
     }),
 
