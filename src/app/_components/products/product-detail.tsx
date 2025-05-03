@@ -6,6 +6,7 @@ import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { type ProductWithMappingsAndFoodOut } from "~/schemas/combo";
 import { NutritionInfoTable } from "../usda/nutrition";
+import { NoneState } from "../NoneState";
 
 interface ProductDetailProps {
     product: ProductWithMappingsAndFoodOut;
@@ -23,21 +24,18 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
                     <div>
                         <span className="font-medium">Manufacturer:</span> {product.manufacturer}
                     </div>
-                    {product.model && (
-                        <div>
-                            <span className="font-medium">Model:</span> {product.model}
-                        </div>
-                    )}
-                    {product.upc && (
-                        <div>
-                            <span className="font-medium">UPC:</span> {product.upc}
-                        </div>
-                    )}
-                    {product.ndb_number && (
-                        <div>
-                            <span className="font-medium">NDB Number:</span> {product.ndb_number}
-                        </div>
-                    )}
+                    <div>
+                        <span className="font-medium">Model:</span>{" "}
+                        {product.model ? product.model : <NoneState />}
+                    </div>
+                    <div>
+                        <span className="font-medium">UPC:</span>{" "}
+                        {product.upc ? product.upc : <NoneState />}
+                    </div>
+                    <div>
+                        <span className="font-medium">NDB Number:</span>{" "}
+                        {product.ndb_number ? product.ndb_number : <NoneState />}
+                    </div>
                 </div>
             ),
         },
@@ -45,12 +43,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             title: "Unit Mappings",
             content: (
                 <div className="space-y-2">
-                    {product.unitMappings.map((mapping) => (
-                        <div key={mapping.id}>
-                            <span className="font-medium">{mapping.a.unit}:</span> {mapping.a.value} ={" "}
-                            <span className="font-medium">{mapping.b.unit}:</span> {mapping.b.value}
-                        </div>
-                    ))}
+                    {product.unitMappings.length > 0 ? (
+                        product.unitMappings.map((mapping) => (
+                            <div key={mapping.id}>
+                                <span className="font-medium">{mapping.a.unit}:</span> {mapping.a.value} ={" "}
+                                <span className="font-medium">{mapping.b.unit}:</span> {mapping.b.value}
+                            </div>
+                        ))
+                    ) : (
+                        <NoneState />
+                    )}
                 </div>
             ),
         },

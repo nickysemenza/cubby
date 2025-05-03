@@ -54,7 +54,7 @@ export function ProductList() {
           <div className="flex flex-col">
             <Link
               className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-              href={`products/${info.getValue()}`}
+              href={`products/${info.row.original.id}`}
             >
               {info.getValue()}
             </Link>
