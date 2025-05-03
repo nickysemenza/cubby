@@ -236,3 +236,5 @@ export const ingredientList = async (
   );
   return { data: ingredients, count: totalCount };
 };
+
+// export const ingredientsMissingProducts = async (db: PrismaClient) => {};

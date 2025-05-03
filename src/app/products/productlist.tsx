@@ -19,7 +19,7 @@ import {
   defaultPagination,
   defaultSortState,
 } from "../_components/data-table/tableUtils";
-import { PillLink } from "../_components/EntityPill";
+import { IngredientPillLink } from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import JsonRenderer from "../_components/json-renderer";
@@ -59,11 +59,7 @@ export function ProductList() {
               {info.getValue()}
             </Link>
             {ingredient && (
-              <PillLink
-                text={ingredient.name}
-                label="ingredient"
-                href={`ingredients/${ingredient.id}`}
-              />
+              <IngredientPillLink name={ingredient.name} id={ingredient.id} />
             )}
           </div>
         );

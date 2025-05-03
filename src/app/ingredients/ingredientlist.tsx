@@ -19,7 +19,7 @@ import {
   defaultPagination,
   defaultSortState,
 } from "../_components/data-table/tableUtils";
-import { PillLink } from "../_components/EntityPill";
+import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
@@ -90,11 +90,7 @@ export function IngredientList() {
               )
               .map((recipe) => (
                 <li key={recipe.id}>
-                  <PillLink
-                    text={recipe.name}
-                    label="recipe"
-                    href={`recipes/${recipe.id}`}
-                  />
+                  <RecipePillLink recipe={recipe} />
                 </li>
               ))}
           </ul>
@@ -108,11 +104,7 @@ export function IngredientList() {
           <ul className="">
             {info.getValue().map((product) => (
               <li key={product.id}>
-                <PillLink
-                  text={`${product.name} (${product.manufacturer})`}
-                  label="product"
-                  href={`products/${product.id}`}
-                />
+                <ProductPillLink product={product} />
               </li>
             ))}
           </ul>

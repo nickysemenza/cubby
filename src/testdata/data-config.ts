@@ -173,6 +173,7 @@ const produce = [
   gi("cilantro", 11165, [
     uvp(1, "bunch", 2, "dollars", "whole foods"),
     uvp(1, "bunch", 100, "sprig", "general"),
+    uvp(1, "bunch", 1, "each", "general"),
   ]),
 ];
 const baking = [

@@ -6,7 +6,7 @@ import JsonRenderer from "../json-renderer";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/combo";
-import { Pill } from "../EntityPill";
+import { EntityPill } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 
 export const USDADebug: React.FC<{ id: number; food: FoodSummary }> = ({
@@ -27,7 +27,7 @@ export const USDADebug: React.FC<{ id: number; food: FoodSummary }> = ({
     <div>
       <h2>
         {food.foodInfo.description}
-        <Pill text={food.foodInfo.data_type} />
+        <EntityPill text={food.foodInfo.data_type} />
       </h2>
       {fdc_id}
       <div className="flex">

@@ -20,6 +20,7 @@ import {
   defaultSortState,
 } from "../_components/data-table/tableUtils";
 import JsonRenderer from "../_components/json-renderer";
+import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 
 dayjs.extend(relativeTime);
 
@@ -39,13 +40,25 @@ export function InventoryItemList() {
     columnHelper.accessor("product", {
       enableSorting: false,
       cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
+        const product = info.getValue();
+        const { upc, ndb_number } = product;
+        return (
+          <>
+            <JsonRenderer input={{ upc, ndb_number }} />
+            <ProductPillLink product={product} />
+          </>
+        );
       },
     }),
     columnHelper.accessor("location", {
       enableSorting: false,
       cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
+        const item = info.getValue();
+        return (
+          <>
+            <LocationPillLink location={item} />
+          </>
+        );
       },
     }),
     columnHelper.accessor("amount", {

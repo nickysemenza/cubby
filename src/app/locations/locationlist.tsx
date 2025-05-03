@@ -19,7 +19,7 @@ import {
   defaultPagination,
   defaultSortState,
 } from "../_components/data-table/tableUtils";
-import { PillLink } from "../_components/EntityPill";
+import { LocationPillLink } from "../_components/EntityPill";
 import JsonRenderer from "../_components/json-renderer";
 
 dayjs.extend(relativeTime);
@@ -49,11 +49,7 @@ export function LocationList() {
         <div>
           {info.getValue().map((child) => (
             <div key={child.id}>
-              <PillLink
-                text={child.name}
-                label="location"
-                href={`locations/${child.id}`}
-              />
+              <LocationPillLink location={child} />
             </div>
           ))}
         </div>
@@ -63,17 +59,7 @@ export function LocationList() {
       enableSorting: false,
       cell: (info) => {
         const item = info.getValue();
-        return (
-          <div>
-            {item && (
-              <PillLink
-                text={item.name}
-                label="location"
-                href={`locations/${item.id}`}
-              />
-            )}
-          </div>
-        );
+        return <div>{item && <LocationPillLink location={item} />}</div>;
       },
     }),
     columnHelper.accessor("type", {

@@ -1,4 +1,4 @@
-import { PillLink } from "~/app/_components/EntityPill";
+import { LocationPillLink } from "~/app/_components/EntityPill";
 import JsonRenderer from "~/app/_components/json-renderer";
 import {
   Breadcrumb,
@@ -52,11 +52,7 @@ export default async function Page({ params }: PageParams) {
 
       {location.children?.map((child) => (
         <div key={child.id}>
-          <PillLink
-            text={child.name}
-            label="location"
-            href={`locations/${child.id}`}
-          />
+          <LocationPillLink location={child} />
         </div>
       ))}
       <JsonRenderer input={location} />
