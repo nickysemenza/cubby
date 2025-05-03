@@ -14,16 +14,18 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { type ReactNode } from "react";
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
+  additionalFilters?: ReactNode;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
-  const { table } = props;
+  const { table, additionalFilters } = props;
   return (
     <div className="space-y-4">
-      <DataTableToolbar table={table} />
+      <DataTableToolbar table={table} additionalFilters={additionalFilters} />
       <Table aria-label="Tasks">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (

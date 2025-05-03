@@ -37,6 +37,7 @@ const list = publicProcedure
     z
       .object({
         nameFilter: z.string().optional(),
+        missingProductsOnly: z.boolean().optional().default(false),
       })
       .merge(sortPaginationCombo),
   )
@@ -47,6 +48,7 @@ const list = publicProcedure
       input.nameFilter,
       input.sort,
       input.pagination,
+      input.missingProductsOnly,
     );
 
     return buildPaginatedResponse(input.pagination, data, count);

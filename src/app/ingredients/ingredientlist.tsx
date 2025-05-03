@@ -27,6 +27,7 @@ import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { unitMappignsFromProduct } from "~/schemas/combo";
 import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
+import { Checkbox } from "~/components/ui/checkbox";
 
 dayjs.extend(relativeTime);
 
@@ -35,18 +36,23 @@ export function IngredientList() {
   const [sorting, setSorting] = useState(defaultSortState(initialSort));
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState(defaultPagination);
+  const [globalFilter, setGlobalFilter] = useState({
+    missingProductsOnly: false,
+  });
   const [ingredientsResp] = api.ingredient.list.useSuspenseQuery({
     sort: buildSortParams(sorting, initialSort),
     pagination,
     nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
       | string
       | undefined,
+    missingProductsOnly: globalFilter.missingProductsOnly,
   });
   const data = ingredientsResp.items;
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  type IngredientData = Flatten<typeof data>;
+  const columnHelper = createColumnHelper<IngredientData>();
   const { w } = useWasm();
   const columns = [
-    buildSelectColumn<Flatten<typeof data>>(),
+    buildSelectColumn<IngredientData>(),
     columnHelper.accessor("name", {
       enableSorting: true,
       cell: (info) => info.getValue(),
@@ -60,7 +66,6 @@ export function IngredientList() {
         </ul>
       ),
     }),
-
     columnHelper.accessor("createdAt", {
       cell: (info) => dayjs(info.getValue()).fromNow(),
     }),
@@ -147,13 +152,34 @@ export function IngredientList() {
       sorting,
       columnFilters,
       pagination,
+      globalFilter,
     },
+    onGlobalFilterChange: setGlobalFilter,
   });
 
   return (
     <div>
       <IngredientMerger table={table} />
-      <RTable table={table} />
+      <RTable
+        table={table}
+        additionalFilters={
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="missingProductsOnly"
+              checked={table.getState().globalFilter.missingProductsOnly}
+              onCheckedChange={(checked) =>
+                table.setGlobalFilter({ missingProductsOnly: checked })
+              }
+            />
+            <label
+              htmlFor="missingProductsOnly"
+              className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              Missing Products Only
+            </label>
+          </div>
+        }
+      />
     </div>
   );
 }

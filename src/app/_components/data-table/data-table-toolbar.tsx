@@ -5,15 +5,19 @@ import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { DataTableViewOptions } from "./data-table-view-options";
+import { type ReactNode } from "react";
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
+  additionalFilters?: ReactNode;
 }
 
 export function DataTableToolbar<TData>({
   table,
+  additionalFilters,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered = table.getState().columnFilters.length > 0;
+  const isFiltered =
+    table.getState().columnFilters.length > 0 || table.getState().globalFilter;
 
   return (
     <div className="flex items-center justify-between">
@@ -32,10 +36,15 @@ export function DataTableToolbar<TData>({
           />
         )}
 
+        {additionalFilters}
+
         {isFiltered && (
           <Button
             variant="ghost"
-            onClick={() => table.resetColumnFilters()}
+            onClick={() => {
+              table.resetColumnFilters();
+              table.setGlobalFilter({});
+            }}
             className="h-8 px-2 lg:px-3"
           >
             Reset
