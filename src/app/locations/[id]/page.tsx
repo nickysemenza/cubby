@@ -1,17 +1,11 @@
-import { LocationPillLink } from "~/app/_components/EntityPill";
-import JsonRenderer from "~/app/_components/json-renderer";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb";
-import { collectInfiniteParents } from "~/schemas/location";
 import { api } from "~/trpc/server";
+import { LocationDetail } from "~/app/_components/locations/location-detail";
+import { WasmContextProvider } from "~/wasmContext";
+import { type LocationOutWithParentChildren } from "~/schemas/location";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
+
 export async function generateMetadata({ params }: PageParams) {
   const id = (await params).id;
   const location = await api.location.getByID({ id });
@@ -19,43 +13,13 @@ export async function generateMetadata({ params }: PageParams) {
     title: `Location | ${location.name}`,
   };
 }
+
 export default async function Page({ params }: PageParams) {
   const id = (await params).id;
-  const location = await api.location.getByID({ id });
-
-  const parentHierarchy = collectInfiniteParents(location);
-
-  const breadCrumbItems = parentHierarchy
-    .map((parentLocation) => (
-      <>
-        <BreadcrumbSeparator />
-        <BreadcrumbItem key={parentLocation.id}>
-          <BreadcrumbLink href={`/locations/${parentLocation.id}`}>
-            {parentLocation.name}
-          </BreadcrumbLink>
-        </BreadcrumbItem>
-      </>
-    ))
-    .reverse();
+  const location = await api.location.getByID({ id }) as LocationOutWithParentChildren;
   return (
-    <div>
-      <Breadcrumb>
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink href="/">Home</BreadcrumbLink>
-          </BreadcrumbItem>
-          {breadCrumbItems}
-        </BreadcrumbList>
-      </Breadcrumb>
-
-      <h1>{location.name}</h1>
-
-      {location.children?.map((child) => (
-        <div key={child.id}>
-          <LocationPillLink location={child} />
-        </div>
-      ))}
-      <JsonRenderer input={location} />
-    </div>
+    <WasmContextProvider>
+      <LocationDetail location={location} />
+    </WasmContextProvider>
   );
 }

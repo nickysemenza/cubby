@@ -175,19 +175,21 @@ type LocationWithParentChild = Prisma.LocationGetPayload<{
     parent: true;
   };
 }>;
-const buildLocationWithChildren = (x: LocationWithParentChild): InfLocation => {
+const buildLocationWithChildren = (x: LocationWithParentChild, excludeId?: string): InfLocation => {
   return {
     name: x.name,
     id: x.id,
     type: locationType.parse(x.type),
     children:
       x.children && x.children.length > 0
-        ? x.children.map((child) =>
-            buildLocationWithChildren(child as LocationWithParentChild),
-          )
+        ? x.children
+            .filter((child) => child.id !== excludeId)
+            .map((child) =>
+              buildLocationWithChildren(child as LocationWithParentChild, excludeId),
+            )
         : undefined,
     parent: x.parent
-      ? buildLocationWithChildren(x.parent as LocationWithParentChild)
+      ? buildLocationWithChildren(x.parent as LocationWithParentChild, excludeId)
       : undefined,
     ...extractDbTimestampsFromDBRec(x),
   };
@@ -266,5 +268,5 @@ export const getLocationById = async (db: PrismaClient, id: string) => {
     },
   });
 
-  return buildLocationWithChildren(res);
+  return buildLocationWithChildren(res, id);
 };
