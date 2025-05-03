@@ -79,3 +79,29 @@ export const inventoryentryList = async (
   const inventoryentrys = res.map(dbInventoryEntryoToAPI);
   return { data: inventoryentrys, count: totalCount };
 };
+
+export interface UpdateInventoryEntryData {
+  amount?: z.infer<typeof import("~/codec/codec").amount>;
+  productId?: string;
+  locationId?: string;
+}
+
+export const updateInventoryEntry = async (
+  db: PrismaClient,
+  id: string,
+  data: UpdateInventoryEntryData
+) => {
+  const updated = await db.inventoryEntry.update({
+    where: {
+      id,
+    },
+    data: {
+      ...(data.amount ? { amount: data.amount } : {}),
+      ...(data.productId ? { productId: data.productId } : {}),
+      ...(data.locationId ? { locationId: data.locationId } : {}),
+    },
+    include: inventoryentryInclude,
+  });
+
+  return dbInventoryEntryoToAPI(updated);
+};

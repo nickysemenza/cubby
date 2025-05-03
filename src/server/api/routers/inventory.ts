@@ -9,9 +9,12 @@ import {
 import {
   getInventoryEntryByID,
   inventoryentryList,
+  updateInventoryEntry,
+  type UpdateInventoryEntryData
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
+import { amount } from "~/codec/codec";
 
 const getByID = publicProcedure
   .input(IDInput)
@@ -45,7 +48,37 @@ const list = publicProcedure
     return buildPaginatedResponse(input.pagination, data, count);
   });
 
+const update = publicProcedure
+  .input(
+    z.object({
+      id: z.string().uuid(),
+      data: z.object({
+        amount: amount.optional(),
+        productId: z.string().uuid().optional(),
+        locationId: z.string().uuid().optional(),
+      })
+    })
+  )
+  .output(inventoryWithLocationAndProductOut)
+  .mutation(async ({ ctx, input }) => {
+    try {
+      const result = await updateInventoryEntry(
+        ctx.db,
+        input.id,
+        input.data as UpdateInventoryEntryData
+      );
+      return result;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to update inventory entry",
+        cause: error,
+      });
+    }
+  });
+
 export const inventoryentryRouter = createTRPCRouter({
   getByID,
   list,
+  update,
 });
