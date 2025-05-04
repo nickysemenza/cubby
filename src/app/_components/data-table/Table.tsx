@@ -16,13 +16,22 @@ import { Button } from "~/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { type ReactNode } from "react";
 
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+export interface FilterableColumn {
+  id: string;
+  placeholder: string;
+  filterType?: "text" | "select";
+  options?: FilterOption[];
+}
+
 interface TTableProps<TItem> {
   table: ITable<TItem>;
   additionalFilters?: ReactNode;
-  filterableColumns: {
-    id: string;
-    placeholder: string;
-  }[];
+  filterableColumns: FilterableColumn[];
   isLoading?: boolean;
 }
 

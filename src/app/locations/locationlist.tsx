@@ -3,23 +3,27 @@
 import { api } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
-import RTable from "../_components/data-table/Table";
+import RTable, { FilterableColumn } from "../_components/data-table/Table";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import { createCreatedAtColumn, createIdColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCreatedAtColumn,
+  createIdColumn,
+} from "../_components/data-table/columnHelpers";
 import { LocationPillLink } from "../_components/EntityPill";
 import JsonRenderer from "../_components/json-renderer";
+import { LocationType, locationType } from "~/schemas/location";
 
 export function LocationList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
-  
+
   // Query data with params from table state
   const { data: itemsResp, isLoading } = api.location.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
-    itemTypeFilter: tableState.getColumnFilter("type"),
+    itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
   });
 
   // Set up columns using helpers
@@ -61,7 +65,7 @@ export function LocationList() {
       },
     }),
   ];
-  
+
   // Configure the table
   const table = useTableConfig({
     data,
@@ -70,7 +74,9 @@ export function LocationList() {
     totalCount: itemsResp?.meta?.totalCount || 0,
   });
 
-  const filterableColumns = [
+  // Get the location types from zod schema
+
+  const filterableColumns: FilterableColumn[] = [
     {
       id: "name",
       placeholder: "Filter by location name...",
@@ -78,12 +84,21 @@ export function LocationList() {
     {
       id: "type",
       placeholder: "Filter by type...",
+      filterType: "select",
+      options: Object.values(locationType.enum).map((type) => ({
+        value: type,
+        label: type,
+      })),
     },
   ];
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} isLoading={isLoading} />
+      <RTable
+        table={table}
+        filterableColumns={filterableColumns}
+        isLoading={isLoading}
+      />
     </div>
   );
 }
