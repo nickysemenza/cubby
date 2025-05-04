@@ -11,11 +11,11 @@ const loadConfig = publicProcedure
 
 export const insertDataConfig = async (db: PrismaClient, input: DataConfig) => {
   return await db.$transaction(async (tx) => {
-    await loadLocations(tx, input.locations);
     await loadProducts(tx, input.products);
     for (const [name, aliases] of Object.entries(input.aliases ?? {})) {
       await findOrCreateIngredient(tx, name, aliases);
     }
+    await loadLocations(tx, input.locations);
   });
 };
 export const systemRouter = createTRPCRouter({
