@@ -13,13 +13,7 @@ import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Amount } from "~/codec/codec";
 import { api } from "~/trpc/react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { clientSideFilter, Combobox, NullableComboboxItem } from "../combobox";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -38,12 +32,19 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     inventoryitem.amount.value.toString(),
   );
   const [amountUnit, setAmountUnit] = useState(inventoryitem.amount.unit);
-  const [selectedLocationId, setSelectedLocationId] = useState(
-    inventoryitem.location.id,
-  );
-  const [selectedProductId, setSelectedProductId] = useState(
-    inventoryitem.product.id,
-  );
+  const currentLocationSelection = {
+    id: inventoryitem.location.id,
+    name: inventoryitem.location.name,
+  };
+  const [selectedLocation, setSelectedLocation] =
+    useState<NullableComboboxItem>(currentLocationSelection);
+
+  const currentProductSelection = {
+    id: inventoryitem.product.id,
+    name: inventoryitem.product.name,
+  };
+  const [selectedProductId, setSelectedProductId] =
+    useState<NullableComboboxItem>(currentProductSelection);
   const [errorMessage, setErrorMessage] = useState("");
 
   // Fetch locations and products for dropdowns
@@ -51,11 +52,18 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
+  const findLocations = async (searchQuery: string) =>
+    // todo: server side search here
+    clientSideFilter(locations.items, searchQuery);
 
   const [products] = api.product.list.useSuspenseQuery({
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
+
+  const findProducts = async (searchQuery: string) =>
+    // todo: server side search here
+    clientSideFilter(products.items, searchQuery);
 
   const updateMutation = api.inventoryItem.update.useMutation({
     onSuccess: () => {
@@ -90,14 +98,14 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   };
 
   const handleSaveLocation = () => {
-    if (!selectedLocationId) {
+    if (!selectedLocation) {
       setErrorMessage("Please select a location");
       return;
     }
 
     updateMutation.mutate({
       id: inventoryitem.id,
-      data: { locationId: selectedLocationId },
+      data: { locationId: selectedLocation.id },
     });
   };
 
@@ -109,7 +117,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
 
     updateMutation.mutate({
       id: inventoryitem.id,
-      data: { productId: selectedProductId },
+      data: { productId: selectedProductId.id },
     });
   };
 
@@ -189,21 +197,12 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         <div className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium">Location</label>
-            <Select
-              value={selectedLocationId}
-              onValueChange={setSelectedLocationId}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a location" />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.items.map((location) => (
-                  <SelectItem key={location.id} value={location.id}>
-                    {location.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              label="location"
+              findItems={findLocations}
+              value={selectedLocation}
+              setValue={setSelectedLocation}
+            />
           </div>
           {errorMessage && isEditingLocation && (
             <div className="text-sm text-red-500">{errorMessage}</div>
@@ -219,7 +218,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
               variant="outline"
               onClick={() => {
                 setIsEditingLocation(false);
-                setSelectedLocationId(inventoryitem.location.id);
+                setSelectedLocation(currentLocationSelection);
                 setErrorMessage("");
               }}
               disabled={updateMutation.isPending}
@@ -247,22 +246,12 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         <div className="space-y-4">
           <div>
             <label className="mb-2 block text-sm font-medium">Product</label>
-            <Select
+            <Combobox
+              label="product"
+              findItems={findProducts}
               value={selectedProductId}
-              onValueChange={setSelectedProductId}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a product" />
-              </SelectTrigger>
-              <SelectContent>
-                {products.items.map((product) => (
-                  <SelectItem key={product.id} value={product.id}>
-                    {product.name}{" "}
-                    {product.manufacturer ? `(${product.manufacturer})` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              setValue={setSelectedProductId}
+            />
           </div>
           {errorMessage && isEditingProduct && (
             <div className="text-sm text-red-500">{errorMessage}</div>
@@ -278,7 +267,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
               variant="outline"
               onClick={() => {
                 setIsEditingProduct(false);
-                setSelectedProductId(inventoryitem.product.id);
+                setSelectedProductId(currentProductSelection);
                 setErrorMessage("");
               }}
               disabled={updateMutation.isPending}
