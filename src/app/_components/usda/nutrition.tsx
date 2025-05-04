@@ -1,3 +1,4 @@
+import { ScrollArea } from "~/components/ui/scroll-area";
 import {
   Table,
   TableCell,
@@ -19,32 +20,34 @@ export const NutritionInfoTable: React.FC<{
   const items = limit ? nutrientSummary.slice(0, limit) : nutrientSummary;
   const remaining = nutrientSummary.length - items.length;
   return (
-    <Table className="text-xs">
-      <TableHeader>
-        <TableRow>
-          <TableHead>Nutrient</TableHead>
-          <TableHead>Amount</TableHead>
-          <TableHead>Unit</TableHead>
-        </TableRow>
-      </TableHeader>
-      <tbody>
-        {items.map((nutrient) => (
-          <TableRow key={`${nutrient.name}-${nutrient.unit}`}>
-            <TableCell>{nutrient.name}</TableCell>
-            <TableCell className="text-right">{nutrient.amount}</TableCell>
-            <TableCell>{nutrient.unit}</TableCell>
-          </TableRow>
-        ))}
-      </tbody>
-      {remaining > 0 && (
-        <TableFooter>
+    <ScrollArea className="h-[200px] w-[250px] rounded-md border">
+      <Table className="text-xs">
+        <TableHeader>
           <TableRow>
-            <TableCell colSpan={3} className="text-right">
-              {remaining} more nutrients
-            </TableCell>
+            <TableHead>Nutrient</TableHead>
+            <TableHead>Amount</TableHead>
+            <TableHead>Unit</TableHead>
           </TableRow>
-        </TableFooter>
-      )}
-    </Table>
+        </TableHeader>
+        <tbody>
+          {items.map((nutrient) => (
+            <TableRow key={`${nutrient.name}-${nutrient.unit}`}>
+              <TableCell>{nutrient.name}</TableCell>
+              <TableCell className="text-right">{nutrient.amount}</TableCell>
+              <TableCell>{nutrient.unit}</TableCell>
+            </TableRow>
+          ))}
+        </tbody>
+        {remaining > 0 && (
+          <TableFooter>
+            <TableRow>
+              <TableCell colSpan={3} className="text-right">
+                {remaining} more nutrients
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        )}
+      </Table>
+    </ScrollArea>
   );
 };

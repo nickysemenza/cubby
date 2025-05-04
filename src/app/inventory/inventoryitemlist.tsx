@@ -23,9 +23,7 @@ import JsonRenderer from "../_components/json-renderer";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { useWasm } from "~/wasmContext";
-import { convertAmountToPrice } from "../_components/units/univ-conversion";
-import { renderValueOrError } from "~/misc/result";
-import { formatAmount } from "../_components/inventory/format-amount";
+import { showAmountAndPrice } from "../_components/inventory/format-amount";
 
 dayjs.extend(relativeTime);
 
@@ -69,7 +67,14 @@ export function InventoryItemList() {
     }),
     columnHelper.accessor("amount", {
       cell: (info) => {
-        return w && formatAmount(w, info.getValue(), info.row.original.product.unitMappings);
+        return (
+          w &&
+          showAmountAndPrice(
+            w,
+            info.getValue(),
+            info.row.original.product.unitMappings,
+          )
+        );
       },
     }),
 

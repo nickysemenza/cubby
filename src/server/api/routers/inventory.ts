@@ -10,7 +10,7 @@ import {
   getInventoryEntryByID,
   inventoryentryList,
   updateInventoryEntry,
-  type UpdateInventoryEntryData
+  type UpdateInventoryEntryData,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
@@ -56,8 +56,8 @@ const update = publicProcedure
         amount: amount.optional(),
         productId: z.string().uuid().optional(),
         locationId: z.string().uuid().optional(),
-      })
-    })
+      }),
+    }),
   )
   .output(inventoryWithLocationAndProductOut)
   .mutation(async ({ ctx, input }) => {
@@ -65,7 +65,7 @@ const update = publicProcedure
       const result = await updateInventoryEntry(
         ctx.db,
         input.id,
-        input.data as UpdateInventoryEntryData
+        input.data as UpdateInventoryEntryData,
       );
       return result;
     } catch (error) {

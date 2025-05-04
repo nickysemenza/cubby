@@ -5,7 +5,7 @@ import { useWasm } from "~/wasmContext";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { z } from "zod";
 import { type FC, useState } from "react";
-import { formatAmount } from "./format-amount";
+import { showAmountAndPrice } from "./format-amount";
 import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
@@ -178,7 +178,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     return (
       <div className="space-y-4">
         <div className="text-lg">
-          {formatAmount(
+          {showAmountAndPrice(
             w,
             inventoryitem.amount,
             inventoryitem.product.unitMappings,

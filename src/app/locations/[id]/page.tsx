@@ -16,7 +16,9 @@ export async function generateMetadata({ params }: PageParams) {
 
 export default async function Page({ params }: PageParams) {
   const id = (await params).id;
-  const location = await api.location.getByID({ id }) as LocationOutWithParentChildren;
+  const location = (await api.location.getByID({
+    id,
+  })) as LocationOutWithParentChildren;
   return (
     <WasmContextProvider>
       <LocationDetail location={location} />

@@ -19,14 +19,18 @@ import {
   defaultPagination,
   defaultSortState,
 } from "../_components/data-table/tableUtils";
-import { IngredientPillLink } from "../_components/EntityPill";
+import {
+  IngredientPillLink,
+  LocationPillLink,
+} from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
-import JsonRenderer from "../_components/json-renderer";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappignsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingsTable } from "../_components/units/unitmappingstable";
+import { tryFormatMeasure } from "../_components/inventory/format-amount";
+import { NoneState } from "../_components/NoneState";
 
 dayjs.extend(relativeTime);
 
@@ -71,21 +75,23 @@ export function ProductList() {
     columnHelper.accessor("upc", {
       cell: (info) => {
         const upc = info.getValue();
-        return upc && <code>{upc}</code>;
+        return upc ? <code>{upc}</code> : <NoneState />;
       },
     }),
     columnHelper.accessor("ndb_number", {
       header: "NDB",
-      cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
+      cell: (info) =>
+        info.getValue() ? <code>{info.getValue()}</code> : <NoneState />,
     }),
     columnHelper.accessor("model", {
-      cell: (info) => info.getValue() && <code>{info.getValue()}</code>,
+      cell: (info) =>
+        info.getValue() ? <code>{info.getValue()}</code> : <NoneState />,
     }),
     columnHelper.accessor("food", {
       id: "food info",
       cell: (info) => {
         const food = info.getValue();
-        if (!food) return "❌";
+        if (!food) return <NoneState />;
         const { nutritionInfo } = food;
         return (
           <div className="w-64">
@@ -102,12 +108,12 @@ export function ProductList() {
         );
         return (
           w && (
-            <>
-              {buildunitMappingsGraph(w, mappings)}
+            <div className="flex flex-row gap-2">
+              <div>{buildunitMappingsGraph(w, mappings)}</div>
               <div className="w-60">
                 <UnitMappingsTable mappings={mappings} w={w} />
               </div>
-            </>
+            </div>
           )
         );
       },
@@ -115,9 +121,13 @@ export function ProductList() {
 
     columnHelper.accessor("inventoryEntry", {
       enableSorting: false,
-      cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
-      },
+      cell: (info) =>
+        info.getValue().map((e) => (
+          <div key={e.id}>
+            {w && tryFormatMeasure(w, e.amount)}
+            <LocationPillLink location={e.location} />
+          </div>
+        )),
     }),
 
     columnHelper.accessor("createdAt", {

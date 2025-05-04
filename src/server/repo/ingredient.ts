@@ -224,12 +224,14 @@ export const ingredientList = async (
     name: sort.orderBy === "name" ? sort.direction : undefined,
     aliases: sort.orderBy === "aliases" ? sort.direction : undefined,
   };
-  
-  let where: Prisma.IngredientWhereInput = name ? buildIngredientWhere(false, name) : { 
-    // Should only include standalone ingredients (not recipe ingredients)
-    recipeId: { equals: null },
-  };
-  
+
+  let where: Prisma.IngredientWhereInput = name
+    ? buildIngredientWhere(false, name)
+    : {
+        // Should only include standalone ingredients (not recipe ingredients)
+        recipeId: { equals: null },
+      };
+
   // Add missing products filter if requested
   if (missingProductsOnly) {
     where = {
@@ -239,7 +241,7 @@ export const ingredientList = async (
       },
     };
   }
-  
+
   const res = await db.ingredient.findMany({
     orderBy,
     where,
@@ -252,4 +254,3 @@ export const ingredientList = async (
   );
   return { data: ingredients, count: totalCount };
 };
-

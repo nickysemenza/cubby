@@ -175,7 +175,10 @@ type LocationWithParentChild = Prisma.LocationGetPayload<{
     parent: true;
   };
 }>;
-const buildLocationWithChildren = (x: LocationWithParentChild, excludeId?: string): InfLocation => {
+const buildLocationWithChildren = (
+  x: LocationWithParentChild,
+  excludeId?: string,
+): InfLocation => {
   return {
     name: x.name,
     id: x.id,
@@ -185,11 +188,17 @@ const buildLocationWithChildren = (x: LocationWithParentChild, excludeId?: strin
         ? x.children
             .filter((child) => child.id !== excludeId)
             .map((child) =>
-              buildLocationWithChildren(child as LocationWithParentChild, excludeId),
+              buildLocationWithChildren(
+                child as LocationWithParentChild,
+                excludeId,
+              ),
             )
         : undefined,
     parent: x.parent
-      ? buildLocationWithChildren(x.parent as LocationWithParentChild, excludeId)
+      ? buildLocationWithChildren(
+          x.parent as LocationWithParentChild,
+          excludeId,
+        )
       : undefined,
     ...extractDbTimestampsFromDBRec(x),
   };

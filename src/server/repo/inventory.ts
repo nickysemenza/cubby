@@ -89,7 +89,7 @@ export interface UpdateInventoryEntryData {
 export const updateInventoryEntry = async (
   db: PrismaClient,
   id: string,
-  data: UpdateInventoryEntryData
+  data: UpdateInventoryEntryData,
 ) => {
   const updated = await db.inventoryEntry.update({
     where: {

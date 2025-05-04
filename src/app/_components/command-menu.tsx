@@ -50,7 +50,6 @@ export function GlobalCommandMenu() {
               >
                 {entity.icon}
                 <span>{entity.pluralLabel}</span>
-                {/* <CommandShortcut>⇧{entity.shortcut}</CommandShortcut> */}
               </CommandItem>
             ))}
           </CommandGroup>

@@ -1,5 +1,6 @@
 import { type RichItem } from "recipebridge/pkg/recipebridge";
 import { wasm } from "~/wasmContext";
+import { tryFormatMeasure } from "../inventory/format-amount";
 
 export const formatRichText = (w: wasm, text: RichItem[]) => {
   return text.map((t, x) => {
@@ -28,7 +29,7 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
             className="decoration-grey m-0 inline text-green-800 underline decoration-solid"
             key={x}
           >
-            {w.format_measure(val)}
+            {tryFormatMeasure(w, val)}
           </div>
         );
     }
