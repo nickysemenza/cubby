@@ -17,14 +17,14 @@ export function RecipeList() {
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const [recipesResp] = api.recipe.list.useSuspenseQuery({
+  const { data: recipesResp, isLoading } = api.recipe.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
   });
 
   // Set up columns using helpers
-  const data = recipesResp.items;
+  const data = recipesResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     createNameColumn(columnHelper, "recipes"),
@@ -41,7 +41,7 @@ export function RecipeList() {
     data,
     columns,
     tableState,
-    totalCount: recipesResp.meta.totalCount
+    totalCount: recipesResp?.meta?.totalCount || 0
   });
 
   const filterableColumns = [
@@ -54,6 +54,7 @@ export function RecipeList() {
       <RTable 
         table={table} 
         filterableColumns={filterableColumns}
+        isLoading={isLoading}
       />
     </div>
   );

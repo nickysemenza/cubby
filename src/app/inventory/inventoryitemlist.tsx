@@ -21,7 +21,7 @@ export function InventoryItemList() {
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const [inventoryitemsResp] = api.inventoryItem.list.useSuspenseQuery({
+  const { data: inventoryitemsResp, isLoading } = api.inventoryItem.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     productNameFilter: tableState.getColumnFilter("product"),
@@ -29,7 +29,7 @@ export function InventoryItemList() {
   });
 
   const { w } = useWasm();
-  const data = inventoryitemsResp.items;
+  const data = inventoryitemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
   // Set up columns using helpers where possible
@@ -80,7 +80,7 @@ export function InventoryItemList() {
     data,
     columns,
     tableState,
-    totalCount: inventoryitemsResp.meta.totalCount,
+    totalCount: inventoryitemsResp?.meta?.totalCount || 0,
   });
 
   const filterableColumns = [
@@ -96,7 +96,7 @@ export function InventoryItemList() {
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} />
+      <RTable table={table} filterableColumns={filterableColumns} isLoading={isLoading} />
     </div>
   );
 }

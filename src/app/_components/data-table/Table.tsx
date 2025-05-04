@@ -23,15 +23,21 @@ interface TTableProps<TItem> {
     id: string;
     placeholder: string;
   }[];
+  isLoading?: boolean;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
-  const { table, additionalFilters, filterableColumns } = props;
-  
+  const {
+    table,
+    additionalFilters,
+    filterableColumns,
+    isLoading = false,
+  } = props;
+
   return (
     <div className="space-y-4">
-      <DataTableToolbar 
-        table={table} 
+      <DataTableToolbar
+        table={table}
         additionalFilters={additionalFilters}
         filterableColumns={filterableColumns}
       />
@@ -85,7 +91,19 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows?.length ? (
+          {isLoading ? (
+            <TableRow>
+              <TableCell
+                colSpan={table.getAllColumns().length}
+                className="h-24 text-center"
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
+                  <span>Loading...</span>
+                </div>
+              </TableCell>
+            </TableRow>
+          ) : table.getRowModel().rows?.length ? (
             table.getRowModel().rows.map((row) => (
               <TableRow
                 key={row.id}
@@ -101,7 +119,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           ) : (
             <TableRow>
               <TableCell
-                colSpan={table.getAllColumns.length}
+                colSpan={table.getAllColumns().length}
                 className="h-24 text-center"
               >
                 No results.

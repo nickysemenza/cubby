@@ -27,14 +27,14 @@ export function IngredientList() {
   });
   
   // Query data with params from table state
-  const [ingredientsResp] = api.ingredient.list.useSuspenseQuery({
+  const { data: ingredientsResp, isLoading } = api.ingredient.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
     missingProductsOnly: globalFilter.missingProductsOnly,
   });
   
-  const data = ingredientsResp.items;
+  const data = ingredientsResp?.items || [];
   type IngredientData = Flatten<typeof data>;
   const columnHelper = createColumnHelper<IngredientData>();
   const { w } = useWasm();
@@ -116,7 +116,7 @@ export function IngredientList() {
     data,
     columns,
     tableState,
-    totalCount: ingredientsResp.meta.totalCount,
+    totalCount: ingredientsResp?.meta?.totalCount || 0,
     globalFilter,
     onGlobalFilterChange: setGlobalFilter,
   });
@@ -134,6 +134,7 @@ export function IngredientList() {
       <RTable
         table={table}
         filterableColumns={filterableColumns}
+        isLoading={isLoading}
         additionalFilters={
           <div className="flex items-center space-x-2">
             <Checkbox

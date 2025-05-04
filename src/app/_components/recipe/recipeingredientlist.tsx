@@ -303,7 +303,11 @@ export const RecipeIngredientList: React.FC<{
   return (
     <div>
       {totalPrice && formatTotalPrice(totalPrice)}
-      <RTable table={table} filterableColumns={[]} />
+      <RTable 
+        table={table} 
+        filterableColumns={[]} 
+        isLoading={!w || data.length === 0} 
+      />
     </div>
   );
 };

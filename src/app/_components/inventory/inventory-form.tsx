@@ -94,24 +94,28 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
   });
 
   // Fetch locations and products for dropdowns
-  const [locations] = api.location.list.useSuspenseQuery({
+  const { data: locationsResp } = api.location.list.useQuery({
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
+  
+  const locations = locationsResp?.items || [];
 
   const findLocations = async (searchQuery: string) =>
     clientSideFilter(
-      locations.items.map(buildLocationComboboxItem),
+      locations.map(buildLocationComboboxItem),
       searchQuery,
     );
 
-  const [products] = api.product.list.useSuspenseQuery({
+  const { data: productsResp } = api.product.list.useQuery({
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
+  
+  const products = productsResp?.items || [];
 
   const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
-    clientSideFilter(products.items.map(buildProductComboboxItem), searchQuery);
+    clientSideFilter(products.map(buildProductComboboxItem), searchQuery);
 
   const handleSubmit = (values: InventoryFormValues) => {
     // Convert the form values to an Amount object

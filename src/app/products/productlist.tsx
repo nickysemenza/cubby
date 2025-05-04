@@ -24,7 +24,7 @@ export function ProductList() {
   const tableState = useTableState({ initialSort: "createdAt" });
   
   // Query data with params from table state
-  const [productsResp] = api.product.list.useSuspenseQuery({
+  const { data: productsResp, isLoading } = api.product.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
@@ -33,7 +33,7 @@ export function ProductList() {
   });
   
   const { w } = useWasm();
-  const data = productsResp.items;
+  const data = productsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   
   // Set up columns using helpers where possible
@@ -123,7 +123,7 @@ export function ProductList() {
     data,
     columns,
     tableState,
-    totalCount: productsResp.meta.totalCount,
+    totalCount: productsResp?.meta?.totalCount || 0,
   });
 
   const filterableColumns = [
@@ -143,7 +143,7 @@ export function ProductList() {
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} />
+      <RTable table={table} filterableColumns={filterableColumns} isLoading={isLoading} />
     </div>
   );
 }

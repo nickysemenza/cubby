@@ -15,7 +15,7 @@ export function LocationList() {
   const tableState = useTableState({ initialSort: "createdAt" });
   
   // Query data with params from table state
-  const [itemsResp] = api.location.list.useSuspenseQuery({
+  const { data: itemsResp, isLoading } = api.location.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
@@ -23,7 +23,7 @@ export function LocationList() {
   });
 
   // Set up columns using helpers
-  const data = itemsResp.items;
+  const data = itemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     // Custom name column
@@ -67,7 +67,7 @@ export function LocationList() {
     data,
     columns,
     tableState,
-    totalCount: itemsResp.meta.totalCount,
+    totalCount: itemsResp?.meta?.totalCount || 0,
   });
 
   const filterableColumns = [
@@ -83,7 +83,7 @@ export function LocationList() {
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} />
+      <RTable table={table} filterableColumns={filterableColumns} isLoading={isLoading} />
     </div>
   );
 }

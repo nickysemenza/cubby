@@ -19,7 +19,7 @@ export function USDAFoodList() {
   const tableState = useTableState({ initialSort: "fdc_id" });
 
   // Query data with params from table state
-  const [foodsResp] = api.usda.list.useSuspenseQuery({
+  const { data: foodsResp, isLoading } = api.usda.list.useQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("foodinfo-description"),
@@ -27,7 +27,7 @@ export function USDAFoodList() {
   });
 
   const { w } = useWasm();
-  const data = foodsResp.items;
+  const data = foodsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
   // Set up columns
@@ -110,7 +110,7 @@ export function USDAFoodList() {
     data,
     columns,
     tableState,
-    totalCount: foodsResp.meta.totalCount,
+    totalCount: foodsResp?.meta.totalCount || 0,
   });
 
   const filterableColumns = [
@@ -120,7 +120,11 @@ export function USDAFoodList() {
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} />
+      <RTable
+        table={table}
+        filterableColumns={filterableColumns}
+        isLoading={isLoading}
+      />
     </div>
   );
 }
