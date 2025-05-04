@@ -43,12 +43,35 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 const t = initTRPC.context<typeof createTRPCContext>().create({
   transformer: superjson,
   errorFormatter({ shape, error }) {
+    // If the error was caused by a Zod validation, add the full error details
+    if (error.cause instanceof ZodError) {
+      const zodError = error.cause;
+      
+      // Log the detailed error for server-side debugging
+      console.error("[TRPC ZodError]", {
+        path: shape.data?.path,
+        fullError: zodError.format(),
+        issues: zodError.issues,
+      });
+      
+      return {
+        ...shape,
+        message: `${shape.message}: ${zodError.issues.map(issue => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ')}`,
+        data: {
+          ...shape.data,
+          zodError: zodError.flatten(),
+          zodIssues: zodError.issues,
+        },
+      };
+    }
+    
     return {
       ...shape,
       data: {
         ...shape.data,
-        zodError:
-          error.cause instanceof ZodError ? error.cause.flatten() : null,
+        zodError: null,
       },
     };
   },
