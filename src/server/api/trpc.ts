@@ -46,19 +46,19 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
     // If the error was caused by a Zod validation, add the full error details
     if (error.cause instanceof ZodError) {
       const zodError = error.cause;
-      
+
       // Log the detailed error for server-side debugging
       console.error("[TRPC ZodError]", {
         path: shape.data?.path,
         fullError: zodError.format(),
         issues: zodError.issues,
       });
-      
+
       return {
         ...shape,
-        message: `${shape.message}: ${zodError.issues.map(issue => 
-          `${issue.path.join('.')}: ${issue.message}`
-        ).join(', ')}`,
+        message: `${shape.message}: ${zodError.issues
+          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+          .join(", ")}`,
         data: {
           ...shape.data,
           zodError: zodError.flatten(),
@@ -66,7 +66,7 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
         },
       };
     }
-    
+
     return {
       ...shape,
       data: {

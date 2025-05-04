@@ -31,23 +31,32 @@ export interface TableStateReturn {
   getSortParams: () => SortParams;
 }
 
-export function useTableState(options: TableStateOptions = {}): TableStateReturn {
+export function useTableState(
+  options: TableStateOptions = {},
+): TableStateReturn {
   const {
     initialSort = "createdAt",
     initialFilter = [],
     initialPagination = defaultPagination,
   } = options;
 
-  const [sorting, setSorting] = useState<SortingState>(defaultSortState(initialSort));
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(initialFilter);
-  const [pagination, setPagination] = useState<PaginationState>(initialPagination);
+  const [sorting, setSorting] = useState<SortingState>(
+    defaultSortState(initialSort),
+  );
+  const [columnFilters, setColumnFilters] =
+    useState<ColumnFiltersState>(initialFilter);
+  const [pagination, setPagination] =
+    useState<PaginationState>(initialPagination);
 
   const getNameFilter = () => {
-    return columnFilters.find((filter) => filter.id === "name")?.value as string | undefined;
+    return columnFilters.find((filter) => filter.id === "name")?.value as
+      | string
+      | undefined;
   };
 
   const getDescriptionFilter = () => {
-    return columnFilters.find((filter) => filter.id === "foodInfo.description")?.value as string | undefined;
+    return columnFilters.find((filter) => filter.id === "foodInfo_description")
+      ?.value as string | undefined;
   };
 
   const getSortParams = () => {

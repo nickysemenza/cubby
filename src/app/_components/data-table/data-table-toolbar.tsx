@@ -39,12 +39,18 @@ export function DataTableToolbar<TData>({
         {table
           .getAllColumns()
           .map((c) => c.id)
-          .includes("foodInfo.description") && (
+          .includes("foodInfo_description") && (
           <Input
             placeholder="Filter by description..."
-            value={(table.getColumn("foodInfo.description")?.getFilterValue() as string) ?? ""}
+            value={
+              (table
+                .getColumn("foodInfo_description")
+                ?.getFilterValue() as string) ?? ""
+            }
             onChange={(event) =>
-              table.getColumn("foodInfo.description")?.setFilterValue(event.target.value)
+              table
+                .getColumn("foodInfo_description")
+                ?.setFilterValue(event.target.value)
             }
             className="h-8 w-[150px] lg:w-[250px]"
           />
