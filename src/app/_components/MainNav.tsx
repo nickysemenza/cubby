@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
 type NavItem = {
@@ -15,11 +16,11 @@ const NavItems: NavItem[] = [
     label: "Home",
     isActive: (pathname) => pathname === "/",
   },
-  ...["recipes", "ingredients", "locations", "products", "inventory"].map(
+  ...entities.map(
     (item): NavItem => ({
-      href: `/${item}`,
-      label: item,
-      isActive: (pathname) => pathname.startsWith(`/${item}`),
+      href: `/${item.basePath}`,
+      label: item.pluralLabel,
+      isActive: (pathname) => pathname.startsWith(`/${item.basePath}`),
     }),
   ),
   { href: "/api/panel", label: "API Panel", isActive: () => false },

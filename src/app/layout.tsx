@@ -8,6 +8,7 @@ import { ToastContainer } from "react-toastify";
 import { MainNav } from "./_components/MainNav";
 import Link from "next/link";
 import { PackageOpen } from "lucide-react";
+import { GlobalCommandMenu } from "./_components/command-menu";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -37,6 +38,7 @@ export default function RootLayout({
             </div>
           </div>
         </div>
+        <GlobalCommandMenu />
         <ToastContainer />
         <TRPCReactProvider>{children}</TRPCReactProvider>
       </body>
