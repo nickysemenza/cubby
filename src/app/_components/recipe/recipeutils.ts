@@ -14,8 +14,18 @@ export const getGlobalInstructionNumber = (
   instructionIndex +
   1;
 
-export const getIngredientName = (ingredient: SectionIngredient) => {
-  return ingredient.ingredient?.name ?? ingredient.recipe?.name ?? "unknown";
+export const getIngredientName = (ingredient: SectionIngredient): string => {
+  // With discriminated union, exhaustively check all possible types
+  switch (ingredient.type) {
+    case "ingredient":
+      return ingredient.ingredient.name;
+    case "recipe":
+      return ingredient.recipe.name;
+  }
+  // TypeScript exhaustiveness check - this will catch if we add a new type
+  // to the discriminated union but forget to handle it here
+  const _exhaustiveCheck: never = ingredient;
+  return _exhaustiveCheck; // This line is unreachable but pleases TypeScript
 };
 
 export const getIngredientUnit = (amount: WMeasure): string => {

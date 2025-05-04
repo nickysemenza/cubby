@@ -50,12 +50,26 @@ const secitonIngredienttoAPI: (
     include: { ingredient: { include: { Recipe: true } } };
   }>,
 ) => SectionIngredient = (sectionIngredient) => {
-  return {
-    ...sectionIngredient,
-    recipe: null,
-    ingredient: sectionIngredient.ingredient ?? null,
-    amounts: sectionIngredient.amounts,
-  };
+  // Check if this ingredient refers to a recipe
+  if (sectionIngredient.ingredient?.Recipe) {
+    // This is a recipe reference
+    return {
+      ...sectionIngredient,
+      type: "recipe",
+      recipe: dbRecipeToAPIShallow(sectionIngredient.ingredient.Recipe),
+      ingredient: null,
+      amounts: sectionIngredient.amounts,
+    };
+  } else {
+    // This is a regular ingredient
+    return {
+      ...sectionIngredient,
+      type: "ingredient",
+      recipe: null,
+      ingredient: sectionIngredient.ingredient ?? null,
+      amounts: sectionIngredient.amounts,
+    };
+  }
 };
 export const dbRecipeToAPIShallow: (
   recipe: Prisma.RecipeGetPayload<object>,

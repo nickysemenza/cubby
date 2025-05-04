@@ -10,7 +10,6 @@ import { Result, withFailure, type Flatten } from "~/misc/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
-import JsonRenderer from "../json-renderer";
 import RTable from "../data-table/Table";
 import { IngredientOut, unitMappignsFromProduct } from "~/schemas/combo";
 import { useMemo } from "react";
@@ -24,8 +23,9 @@ import {
   getGramAndNutrient,
 } from "~/app/_components/units/univ-conversion";
 import { tryFormatMeasure } from "../inventory/format-amount";
-import { IngredientPillLink } from "../EntityPill";
+import { IngredientPillLink, RecipePillLink } from "../EntityPill";
 import { SummaryCard, type SummaryItem } from "../SummaryCard";
+import { getIngredientName } from "./recipeutils";
 
 dayjs.extend(relativeTime);
 
@@ -38,7 +38,9 @@ const getPrice = (
   gram: Result<WMeasure>;
   nutrient: Result<NutrientsPer100>;
 } => {
-  const id = ingredient.ingredient?.id;
+  // Handle based on ingredient type (discriminated union)
+  const id =
+    ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
   const mappings = product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
@@ -75,7 +77,7 @@ const sumPrice = (
   const missing = [];
   const nutrients: NutrientsPer100[] = [];
   for (const ingredient of ingredients) {
-    const ingName = ingredient.ingredient?.name;
+    const ingName = getIngredientName(ingredient);
     try {
       const { price, gram, nutrient } = getPrice(w, ingredient, ingMap);
 
@@ -143,14 +145,11 @@ export const RecipeIngredientList: React.FC<{
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
   const columns = [
-    columnHelper.accessor(
-      (ingredient) => ingredient.ingredient?.name || "Unknown",
-      {
-        id: "ing name",
-        header: "Ingredient",
-        cell: (info) => info.getValue(),
-      },
-    ),
+    columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
+      id: "ing name",
+      header: "Ingredient",
+      cell: (info) => info.getValue(),
+    }),
     columnHelper.accessor("amounts", {
       header: "Amounts",
       cell: (info) => {
@@ -204,17 +203,24 @@ export const RecipeIngredientList: React.FC<{
         );
       },
     }),
-    columnHelper.accessor("ingredient", {
+    columnHelper.display({
+      id: "ingredientDetails",
       header: "Ingredient Details",
-      cell: (info) => {
-        const ingredient = info.getValue();
-        if (!ingredient) return null;
+      cell: (props) => {
+        const row = props.row.original;
 
-        return ingredient.id ? (
-          <IngredientPillLink name={ingredient.name} id={ingredient.id} />
-        ) : (
-          <JsonRenderer input={ingredient} />
-        );
+        if (row.type === "ingredient") {
+          return (
+            <IngredientPillLink
+              name={row.ingredient.name}
+              id={row.ingredient.id}
+            />
+          );
+        } else if (row.type === "recipe") {
+          return <RecipePillLink recipe={row.recipe} />;
+        }
+
+        return null;
       },
     }),
     columnHelper.display({
@@ -224,7 +230,14 @@ export const RecipeIngredientList: React.FC<{
         if (ingMap === undefined || w === undefined) {
           return "loading";
         }
-        const id = props.row.original.ingredient?.id;
+
+        const row = props.row.original;
+        let id = undefined;
+
+        if (row.type === "ingredient") {
+          id = row.ingredient.id;
+        }
+
         const entry = id ? ingMap[id] : undefined;
         const mappings =
           entry?.product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
@@ -287,14 +300,7 @@ export const RecipeIngredientList: React.FC<{
       },
     ];
 
-    return (
-      <SummaryCard
-        title="Recipe Summary"
-        items={summaryItems}
-        warningMessage="Missing data for"
-        warningCount={totals.missing.length}
-      />
-    );
+    return <SummaryCard title="Recipe Summary" items={summaryItems} />;
   };
 
   return (

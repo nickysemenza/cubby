@@ -40,8 +40,11 @@ const RecipeDetail: React.FC<{
     };
 
     async function fetchMyAPI() {
+      // Only get IDs from SectionIngredients that are actually ingredients (not recipes)
       const ingMap = await getBulkIngredients(
-        ingredients.map((i) => i.ingredient?.id || ""),
+        ingredients
+          .filter(i => i.type === "ingredient")
+          .map(i => i.ingredient.id)
       );
       dataSet(ingMap);
     }

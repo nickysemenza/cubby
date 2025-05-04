@@ -19,14 +19,25 @@ export const recipeTopLevel = z
       .nullable(),
   })
   .merge(dbTimestampsOut);
-const sectionIngredientOut = z
-  .object({
-    id: z.string().uuid(),
-    recipe: recipeTopLevel.nullable(),
-    ingredient: ingredientOut.nullable(),
-    amounts: z.array(amount),
-  })
-  .merge(dbTimestampsOut);
+// Create a base schema with common fields
+const sectionIngredientBase = z.object({
+  id: z.string().uuid(),
+  amounts: z.array(amount),
+}).merge(dbTimestampsOut);
+
+// Create a discriminated union to ensure either recipe or ingredient is set
+const sectionIngredientOut = z.discriminatedUnion("type", [
+  sectionIngredientBase.extend({
+    type: z.literal("ingredient"),
+    recipe: z.null(),
+    ingredient: ingredientOut,
+  }),
+  sectionIngredientBase.extend({
+    type: z.literal("recipe"),
+    recipe: recipeTopLevel,
+    ingredient: z.null(),
+  }),
+]);
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 const recipeSectionOut = z
   .object({
