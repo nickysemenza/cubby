@@ -1,11 +1,7 @@
 import { WMeasure } from "recipebridge/pkg/recipebridge";
-import { z } from "zod";
 import { Amount } from "~/codec/codec";
 import { Result, withFailure, withSuccess } from "~/misc/util";
-import {
-  ingredientWithRecipesAndProductOut,
-  ProductWithMappingsAndFoodOut,
-} from "~/schemas/combo";
+import { ProductWithMappingsAndFoodOut } from "~/schemas/combo";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { NutrientsPer100 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
@@ -28,9 +24,7 @@ export const getGramAndNutrient = (
   w: wasm,
   firstAmount: Amount,
   mappings: UnitMapping[],
-  product:
-    | z.infer<typeof ingredientWithRecipesAndProductOut>["product"]
-    | undefined,
+  product: ProductWithMappingsAndFoodOut[] | undefined,
 ): { gram: Result<WMeasure>; nutrient: Result<NutrientsPer100> } => {
   try {
     const gramsValue = w.conv_measure_to_kind(mappings, "weight", firstAmount);
