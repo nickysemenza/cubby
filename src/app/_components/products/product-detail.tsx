@@ -49,7 +49,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   if (isEditing) {
     return (
       <div className="container mx-auto py-10">
-        <h1 className="text-2xl font-bold mb-6">Edit Product</h1>
+        <h1 className="mb-6 text-2xl font-bold">Edit Product</h1>
         <ProductForm
           mode="edit"
           entity={product}
@@ -80,11 +80,19 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           </div>
           <div>
             <span className="font-medium">UPC:</span>{" "}
-            {product.upc ? product.upc : <NoneState />}
+            {product.upc ? (
+              <Link href={`/usda/upc/${product.upc}`} className="text-blue-600 hover:underline">
+                {product.upc}
+              </Link>
+            ) : <NoneState />}
           </div>
           <div>
             <span className="font-medium">NDB Number:</span>{" "}
-            {product.ndb_number ? product.ndb_number : <NoneState />}
+            {product.ndb_number ? (
+              <Link href={`/usda/ndb/${product.ndb_number}`} className="text-blue-600 hover:underline">
+                {product.ndb_number}
+              </Link>
+            ) : <NoneState />}
           </div>
           <div className="mt-4">
             <Button onClick={() => setIsEditing(true)}>Edit</Button>
@@ -127,5 +135,5 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     });
   }
 
-  return <DetailPage sections={sections} title="product" />;
+  return <DetailPage sections={sections} entity="product" />;
 };

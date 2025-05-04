@@ -10,10 +10,7 @@ import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { Button } from "~/components/ui/button";
-import { 
-  InventoryForm, 
-  type UpdateInventoryData 
-} from "./inventory-form";
+import { InventoryForm, type UpdateInventoryData } from "./inventory-form";
 import { api } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -98,5 +95,5 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     },
   ];
 
-  return <DetailPage sections={sections} title="inventory-item" />;
+  return <DetailPage sections={sections} entity="inventory-item" />;
 };

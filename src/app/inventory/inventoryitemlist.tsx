@@ -4,7 +4,6 @@ import { api } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
-import JsonRenderer from "../_components/json-renderer";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { useWasm } from "~/wasmContext";
@@ -15,18 +14,20 @@ import {
   createCreatedAtColumn,
   createIdColumn,
 } from "../_components/data-table/columnHelpers";
+import Link from "next/link";
 
 export function InventoryItemList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: inventoryitemsResp, isLoading } = api.inventoryItem.list.useQuery({
-    sort: tableState.getSortParams(),
-    pagination: tableState.pagination,
-    productNameFilter: tableState.getColumnFilter("product"),
-    locationNameFilter: tableState.getColumnFilter("location"),
-  });
+  const { data: inventoryitemsResp, isLoading } =
+    api.inventoryItem.list.useQuery({
+      sort: tableState.getSortParams(),
+      pagination: tableState.pagination,
+      productNameFilter: tableState.getColumnFilter("product"),
+      locationNameFilter: tableState.getColumnFilter("location"),
+    });
 
   const { w } = useWasm();
   const data = inventoryitemsResp?.items || [];
@@ -41,7 +42,30 @@ export function InventoryItemList() {
         const { upc, ndb_number, unitMappings } = product;
         return (
           <>
-            <JsonRenderer input={{ upc, ndb_number }} />
+            <div className="mb-2 space-y-1">
+              {upc && (
+                <div className="text-xs">
+                  UPC:{" "}
+                  <Link
+                    href={`/usda/upc/${upc}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {upc}
+                  </Link>
+                </div>
+              )}
+              {ndb_number && (
+                <div className="text-xs">
+                  NDB:{" "}
+                  <Link
+                    href={`/usda/ndb/${ndb_number}`}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {ndb_number}
+                  </Link>
+                </div>
+              )}
+            </div>
             <div>{w && buildunitMappingsGraph(w, unitMappings)}</div>
             <ProductPillLink product={product} />
           </>
@@ -96,7 +120,11 @@ export function InventoryItemList() {
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} isLoading={isLoading} />
+      <RTable
+        table={table}
+        filterableColumns={filterableColumns}
+        isLoading={isLoading}
+      />
     </div>
   );
 }

@@ -62,13 +62,24 @@ export function ProductList() {
     columnHelper.accessor("upc", {
       cell: (info) => {
         const upc = info.getValue();
-        return upc ? <code>{upc}</code> : <NoneState />;
+        return upc ? (
+          <Link href={`/usda/upc/${upc}`} className="font-mono text-blue-600 hover:underline">
+            {upc}
+          </Link>
+        ) : <NoneState />;
       },
     }),
     columnHelper.accessor("ndb_number", {
       header: "NDB",
       cell: (info) =>
-        info.getValue() ? <code>{info.getValue()}</code> : <NoneState />,
+        info.getValue() ? (
+          <Link 
+            href={`/usda/ndb/${info.getValue()}`} 
+            className="font-mono text-blue-600 hover:underline"
+          >
+            {info.getValue()}
+          </Link>
+        ) : <NoneState />,
     }),
     columnHelper.accessor("model", {
       cell: (info) =>

@@ -69,7 +69,12 @@ export function USDAFoodList() {
             )}
             {brandedFood.gtin_upc && (
               <div className="font-mono text-xs">
-                UPC: {brandedFood.gtin_upc}
+                UPC: <Link 
+                  href={`/usda/upc/${brandedFood.gtin_upc}`}
+                  className="text-blue-600 hover:underline"
+                >
+                  {brandedFood.gtin_upc}
+                </Link>
               </div>
             )}
           </div>

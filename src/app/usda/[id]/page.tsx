@@ -1,4 +1,4 @@
-import { USDADebug } from "~/app/_components/usda/USDADebug";
+import { USDAFoodDetail } from "~/app/_components/usda/USDAFoodDetail";
 import { api } from "~/trpc/server";
 import { WasmContextProvider } from "~/wasmContext";
 
@@ -17,7 +17,7 @@ export default async function Page({ params }: PageParams) {
 
   return (
     <WasmContextProvider>
-      <USDADebug id={id} food={food} />
+      <USDAFoodDetail id={id} food={food} />
     </WasmContextProvider>
   );
 }

@@ -11,13 +11,13 @@ export interface DetailSection {
 
 interface DetailPageProps {
   sections: DetailSection[];
-  title: Entity;
+  entity: Entity;
 }
 
-export const DetailPage: FC<DetailPageProps> = ({ sections, title }) => {
+export const DetailPage: FC<DetailPageProps> = ({ sections, entity }) => {
   return (
     <div className="space-y-6 p-6">
-      <h1 className="text-2xl font-bold capitalize">{title} Details</h1>
+      <h1 className="text-2xl font-bold capitalize">{entity} Details</h1>
       <div className="container mx-auto p-4">
         <div className="grid gap-6 md:grid-cols-2">
           {sections.map((section, index) => (
