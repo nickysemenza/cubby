@@ -16,8 +16,8 @@ const NavItems: NavItem[] = [
     label: "Home",
     isActive: (pathname) => pathname === "/",
   },
-  ...Object.entries(entities).map(
-    ([name, item]): NavItem => ({
+  ...Object.values(entities).map(
+    (item): NavItem => ({
       href: `/${item.basePath}`,
       label: item.pluralLabel,
       isActive: (pathname) => pathname.startsWith(`/${item.basePath}`),

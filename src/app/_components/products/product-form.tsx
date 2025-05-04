@@ -15,8 +15,9 @@ import {
   NullableNumberField,
   getSubmitButtonText,
   buildUpdateObject,
-  SideBySideFields
+  SideBySideFields,
 } from "../form-utils";
+import { DevTool } from "@hookform/devtools";
 
 // Form schema for product form
 const formSchema = z
@@ -122,6 +123,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
+      <DevTool control={form.control} />
       <RequiredTextField
         form={form}
         name="name"

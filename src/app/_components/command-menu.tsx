@@ -43,7 +43,7 @@ export function GlobalCommandMenu() {
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup heading="Entities">
-            {Object.entries(entities).map(([name, entity]) => (
+            {Object.values(entities).map((entity) => (
               <CommandItem
                 key={entity.basePath}
                 onSelect={() => goToPage(`/${entity.basePath}`)}

@@ -9,6 +9,7 @@ import { MainNav } from "./_components/MainNav";
 import Link from "next/link";
 import { PackageOpen } from "lucide-react";
 import { GlobalCommandMenu } from "./_components/command-menu";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -38,9 +39,14 @@ export default function RootLayout({
             </div>
           </div>
         </div>
+
         <GlobalCommandMenu />
         <ToastContainer />
-        <TRPCReactProvider>{children}</TRPCReactProvider>
+        <TRPCReactProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+
+          {children}
+        </TRPCReactProvider>
       </body>
     </html>
   );
