@@ -323,7 +323,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
           <JsonRenderer input={inventoryitem} />
         </div>
       ),
-      isWide: true,
     },
   ];
 
