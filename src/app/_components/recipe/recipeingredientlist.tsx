@@ -253,9 +253,6 @@ export const RecipeIngredientList: React.FC<{
     enableFilters: false,
     getCoreRowModel: getCoreRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    // manualSorting: true,
-    // manualFiltering: true,
-    // manualPagination: true,
     rowCount: ingredients.length,
     state: {
       pagination: {

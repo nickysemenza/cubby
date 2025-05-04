@@ -1,24 +1,9 @@
 "use client";
 
 import { api } from "~/trpc/react";
-import {
-  type ColumnFiltersState,
-  createColumnHelper,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import Link from "next/link";
 import { useState } from "react";
-import {
-  buildSortParams,
-  defaultPagination,
-  defaultSortState,
-} from "../_components/data-table/tableUtils";
 import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
@@ -28,29 +13,33 @@ import { unitMappignsFromProduct } from "~/schemas/combo";
 import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
 import { Checkbox } from "~/components/ui/checkbox";
-
-dayjs.extend(relativeTime);
+import { useTableState } from "../_components/data-table/useTableState";
+import { useTableConfig } from "../_components/data-table/useTableConfig";
+import { createCreatedAtColumn, createIdColumn } from "../_components/data-table/columnHelpers";
 
 export function IngredientList() {
-  const initialSort = "createdAt";
-  const [sorting, setSorting] = useState(defaultSortState(initialSort));
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [pagination, setPagination] = useState(defaultPagination);
+  // Set up table state
+  const tableState = useTableState({ initialSort: "createdAt" });
+  
+  // Set up global filter for missing products
   const [globalFilter, setGlobalFilter] = useState({
     missingProductsOnly: false,
   });
+  
+  // Query data with params from table state
   const [ingredientsResp] = api.ingredient.list.useSuspenseQuery({
-    sort: buildSortParams(sorting, initialSort),
-    pagination,
-    nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
-      | string
-      | undefined,
+    sort: tableState.getSortParams(),
+    pagination: tableState.pagination,
+    nameFilter: tableState.getNameFilter(),
     missingProductsOnly: globalFilter.missingProductsOnly,
   });
+  
   const data = ingredientsResp.items;
   type IngredientData = Flatten<typeof data>;
   const columnHelper = createColumnHelper<IngredientData>();
   const { w } = useWasm();
+  
+  // Set up columns using helpers where possible
   const columns = [
     buildSelectColumn<IngredientData>(),
     columnHelper.accessor("name", {
@@ -66,22 +55,8 @@ export function IngredientList() {
         </ul>
       ),
     }),
-    columnHelper.accessor("createdAt", {
-      cell: (info) => dayjs(info.getValue()).fromNow(),
-    }),
-    columnHelper.accessor("id", {
-      enableSorting: false,
-      cell: (info) => (
-        <div>
-          <Link
-            className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`ingredients/${info.getValue()}`}
-          >
-            {info.getValue()}
-          </Link>
-        </div>
-      ),
-    }),
+    createCreatedAtColumn(columnHelper),
+    createIdColumn(columnHelper, "ingredients"),
     columnHelper.accessor("appearsInRecipes", {
       enableSorting: false,
       cell: (info) => (
@@ -135,25 +110,14 @@ export function IngredientList() {
       },
     }),
   ];
-  const table = useReactTable({
-    data: data,
+  
+  // Configure the table with global filter
+  const table = useTableConfig({
+    data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    getSortedRowModel: getSortedRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    manualSorting: true,
-    manualFiltering: true,
-    manualPagination: true,
-    rowCount: ingredientsResp.meta.totalCount,
-    state: {
-      sorting,
-      columnFilters,
-      pagination,
-      globalFilter,
-    },
+    tableState,
+    totalCount: ingredientsResp.meta.totalCount,
+    globalFilter,
     onGlobalFilterChange: setGlobalFilter,
   });
 

@@ -1,45 +1,31 @@
 "use client";
 
 import { api } from "~/trpc/react";
-import {
-  type ColumnFiltersState,
-  createColumnHelper,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
-import Link from "next/link";
-import { useState } from "react";
-import {
-  buildSortParams,
-  defaultPagination,
-  defaultSortState,
-} from "../_components/data-table/tableUtils";
+import { useTableState } from "../_components/data-table/useTableState";
+import { useTableConfig } from "../_components/data-table/useTableConfig";
+import { createCreatedAtColumn, createIdColumn } from "../_components/data-table/columnHelpers";
 import { LocationPillLink } from "../_components/EntityPill";
 import JsonRenderer from "../_components/json-renderer";
 
-dayjs.extend(relativeTime);
-
 export function LocationList() {
-  const initialSort = "createdAt";
-  const [sorting, setSorting] = useState(defaultSortState(initialSort));
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [pagination, setPagination] = useState(defaultPagination);
+  // Set up table state
+  const tableState = useTableState({ initialSort: "createdAt" });
+  
+  // Query data with params from table state
   const [itemsResp] = api.location.list.useSuspenseQuery({
-    sort: buildSortParams(sorting, initialSort),
-    pagination,
-    nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
-      | string
-      | undefined,
+    sort: tableState.getSortParams(),
+    pagination: tableState.pagination,
+    nameFilter: tableState.getNameFilter(),
   });
 
+  // Set up columns using helpers
   const data = itemsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
+    // Custom name column
     columnHelper.accessor("name", {
       cell: (info) => info.getValue(),
     }),
@@ -65,23 +51,8 @@ export function LocationList() {
     columnHelper.accessor("type", {
       cell: (info) => info.getValue(),
     }),
-
-    columnHelper.accessor("createdAt", {
-      cell: (info) => dayjs(info.getValue()).fromNow(),
-    }),
-    columnHelper.accessor("id", {
-      enableSorting: false,
-      cell: (info) => (
-        <div>
-          <Link
-            className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-            href={`locations/${info.getValue()}`}
-          >
-            {info.getValue()}
-          </Link>
-        </div>
-      ),
-    }),
+    createCreatedAtColumn(columnHelper),
+    createIdColumn(columnHelper, "locations"),
     columnHelper.accessor("inventoryEntries", {
       enableSorting: false,
       cell: (info) => {
@@ -89,23 +60,13 @@ export function LocationList() {
       },
     }),
   ];
-  const table = useReactTable({
-    data: data,
+  
+  // Configure the table
+  const table = useTableConfig({
+    data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    manualSorting: true,
-    manualFiltering: true,
-    manualPagination: true,
-    rowCount: itemsResp.meta.totalCount,
-    state: {
-      sorting,
-      columnFilters,
-      pagination,
-    },
+    tableState,
+    totalCount: itemsResp.meta.totalCount,
   });
 
   return (

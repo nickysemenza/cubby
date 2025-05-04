@@ -1,28 +1,12 @@
 "use client";
 
 import { api } from "~/trpc/react";
-import {
-  type ColumnFiltersState,
-  createColumnHelper,
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
 import Link from "next/link";
-import React, { useState } from "react";
-import {
-  buildSortParams,
-  defaultPagination,
-  defaultSortState,
-} from "../_components/data-table/tableUtils";
-import {
-  IngredientPillLink,
-  LocationPillLink,
-} from "../_components/EntityPill";
+import React from "react";
+import { IngredientPillLink, LocationPillLink } from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { UnitMapping } from "~/schemas/unitmapping";
@@ -31,25 +15,26 @@ import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { NoneState } from "../_components/NoneState";
-
-dayjs.extend(relativeTime);
+import { useTableState } from "../_components/data-table/useTableState";
+import { useTableConfig } from "../_components/data-table/useTableConfig";
+import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 
 export function ProductList() {
-  const initialSort = "createdAt";
-  const [sorting, setSorting] = useState(defaultSortState(initialSort));
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [pagination, setPagination] = useState(defaultPagination);
+  // Set up table state
+  const tableState = useTableState({ initialSort: "createdAt" });
+  
+  // Query data with params from table state
   const [productsResp] = api.product.list.useSuspenseQuery({
-    sort: buildSortParams(sorting, initialSort),
-    pagination,
-    nameFilter: columnFilters.find((filter) => filter.id === "name")?.value as
-      | string
-      | undefined,
+    sort: tableState.getSortParams(),
+    pagination: tableState.pagination,
+    nameFilter: tableState.getNameFilter(),
   });
+  
   const { w } = useWasm();
-
   const data = productsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  
+  // Set up columns using helpers where possible
   const columns = [
     columnHelper.accessor("name", {
       cell: (info) => {
@@ -118,7 +103,6 @@ export function ProductList() {
         );
       },
     }),
-
     columnHelper.accessor("inventoryEntry", {
       enableSorting: false,
       cell: (info) =>
@@ -129,28 +113,15 @@ export function ProductList() {
           </div>
         )),
     }),
-
-    columnHelper.accessor("createdAt", {
-      cell: (info) => dayjs(info.getValue()).fromNow(),
-    }),
+    createCreatedAtColumn(columnHelper),
   ];
-  const table = useReactTable({
-    data: data,
+  
+  // Configure the table
+  const table = useTableConfig({
+    data,
     columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    manualSorting: true,
-    manualFiltering: true,
-    manualPagination: true,
-    rowCount: productsResp.meta.totalCount,
-    state: {
-      sorting,
-      columnFilters,
-      pagination,
-    },
+    tableState,
+    totalCount: productsResp.meta.totalCount,
   });
 
   return (
