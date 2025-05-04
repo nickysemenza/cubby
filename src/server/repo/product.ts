@@ -11,7 +11,7 @@ import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
 import { findFood } from "./usda";
-import { FoodLookupParam } from "~/schemas/usda";
+import { foodLookupParam, FoodLookupParam } from "~/schemas/usda";
 import { type productBase, type ProductTopLevelOut } from "~/schemas/product";
 import { formatSearchTerm } from "./util";
 
@@ -148,6 +148,7 @@ type ProductDeepDB = Prisma.ProductGetPayload<{
   };
 }>;
 
+// Convert product to food lookup parameter
 export const foodLookupParamFromProduct = (product: {
   upc: string | null;
   ndb_number: number | null;
@@ -161,19 +162,44 @@ export const foodLookupParamFromProduct = (product: {
   return null;
 };
 
+// Find products by UPC or NDB number - used to find linked products for food items
+export const findProductsByFoodIdentifier = async (
+  db: PrismaClient,
+  rawLookup?: FoodLookupParam,
+) => {
+  if (!rawLookup) {
+    return [];
+  }
+  // validate that lookup zod schema is good
+
+  const lookup = foodLookupParam.parse(rawLookup);
+
+  // Create where clause based on lookup type
+  const where: Prisma.ProductWhereInput =
+    lookup.kind === "upc"
+      ? { upc: lookup.gtin_upc }
+      : { ndb_number: lookup.ndb_number };
+
+  // Find all matching products
+  const res = await db.product.findMany({
+    where,
+  });
+  return res;
+};
+
 const dbProductoToAPI: (
   db: PrismaClient,
   product: ProductDeepDB,
 ) => Promise<
   z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>
 > = async (db, product) => {
-  const { Ingredient, unitMappings, InventoryEntry, ...restOfIngredient } =
+  const { Ingredient, unitMappings, InventoryEntry, ...restOfProduct } =
     product;
 
   const lookupParam = foodLookupParamFromProduct(product);
   const food = lookupParam ? await findFood(db, lookupParam) : null;
   return {
-    ...restOfIngredient,
+    ...restOfProduct,
     ingredient: Ingredient,
     unitMappings,
     food,

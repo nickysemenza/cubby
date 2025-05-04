@@ -1,54 +1,48 @@
 import { Entity } from "./types";
 
 type EntityDefinition = {
-  name: Entity;
   label: string;
   basePath: string;
   pluralLabel: string;
   shortcut?: string;
   icon: string;
 };
-export const entities: EntityDefinition[] = [
-  {
-    name: "ingredient",
+
+export const entities: Record<Entity, EntityDefinition> = {
+  ingredient: {
     label: "Ingredient",
     pluralLabel: "Ingredients",
     basePath: "ingredients",
     icon: "🍽️",
   },
-  {
-    name: "product",
+  product: {
     label: "Product",
     pluralLabel: "Products",
     basePath: "products",
     icon: "🛒",
   },
-  {
-    name: "recipe",
+  recipe: {
     label: "Recipe",
     pluralLabel: "Recipes",
     basePath: "recipes",
     icon: "📖",
   },
-  {
-    name: "location",
+  location: {
     label: "Location",
     pluralLabel: "Locations",
     basePath: "locations",
     icon: "📍",
   },
-  {
-    name: "inventory-item",
+  "inventory-item": {
     label: "Inventory Item",
     pluralLabel: "Inventory",
     basePath: "inventory",
     icon: "📦",
   },
-  {
-    name: "usda-food",
+  "usda-food": {
     label: "USDA Food",
     pluralLabel: "USDA Foods",
     basePath: "usda",
     icon: "🍲",
   },
-];
+};

@@ -12,6 +12,7 @@ import {
   BrandedFoodInfo,
   FoodPortion,
   FoodLookupParam,
+  LegacyFoodInfo,
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
 import { type Span, trace } from "@opentelemetry/api";
@@ -21,6 +22,7 @@ import {
   buildTakeSkip,
 } from "~/schemas/util";
 import { formatSearchTerm } from "./util";
+import { findProductsByFoodIdentifier } from "./product";
 
 const getFoodByID = async (
   db: PrismaClient,
@@ -35,6 +37,21 @@ const getFoodByID = async (
     data_type: foodInfo.data_type,
     description: foodInfo.description,
   };
+};
+const getLegacyFoodByID = async (
+  db: PrismaClient,
+  fdc_id: number,
+): Promise<LegacyFoodInfo | null> => {
+  const foodInfo = await db.usda_sr_legacy_food.findFirst({
+    where: {
+      fdc_id: fdc_id,
+    },
+  });
+  return foodInfo
+    ? {
+        ndb_number: foodInfo.NDB_number,
+      }
+    : null;
 };
 
 const getFoodPortion = async (
@@ -209,7 +226,6 @@ export const getLegacyFoodIDByNDBNumber = async (
   db: PrismaClient,
   ndb_number: number,
 ) => {
-  console.log("getLegacyFoodIDByNDBNumber", ndb_number);
   const food = await db.usda_sr_legacy_food.findUnique({
     where: {
       NDB_number: ndb_number,
@@ -236,21 +252,40 @@ export const findFood = async (
       return getFoodSummaryByID(db, fdc_id);
     });
 };
+
 export const getFoodSummaryByID = async (
   db: PrismaClient,
   fdc_id: number,
 ): Promise<FoodSummary | null> => {
   const portionInfoRaw = await getFoodPortion(db, fdc_id);
   const w = await import("recipebridge/pkg");
+
+  // Get branded food info first as we need it for linked products
+  const brandedFoodInfo = await getBrandedFoodByID(db, fdc_id);
+  const legacyFoodInfo = await getLegacyFoodByID(db, fdc_id);
+  const upc = brandedFoodInfo?.gtin_upc;
+  // const ndb_number = brandedFoodInfo?.ndb_number;
+  // Get linked products
+  const linkedProducts = await findProductsByFoodIdentifier(
+    db,
+    upc !== undefined
+      ? { kind: "upc", gtin_upc: upc }
+      : legacyFoodInfo !== null
+        ? { kind: "ndb", ndb_number: legacyFoodInfo.ndb_number }
+        : undefined,
+  );
+
   return {
     fdc_id,
-    brandedFoodInfo: await getBrandedFoodByID(db, fdc_id),
+    brandedFoodInfo,
     foodInfo: await getFoodByID(db, fdc_id),
+    legacyFoodInfo,
     nutritionInfo: await getNutrientSummary(db, fdc_id),
     portionInfo: {
       raw: portionInfoRaw,
       parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
     },
+    linkedProducts,
   };
 };
 
@@ -290,22 +325,26 @@ export const listFoods = async (
   // Create simplified food summaries with basic info
   const foodSummaries: FoodSummary[] = await Promise.all(
     foods.map(async (food) => {
-      const nutritionInfo = await getNutrientSummary(db, food.fdc_id);
       const portionInfoRaw = await getFoodPortion(db, food.fdc_id);
       const w = await import("recipebridge/pkg");
 
+      // Get branded food info for linked products lookup
+      const brandedFoodInfo = await getBrandedFoodByID(db, food.fdc_id);
+
       return {
         fdc_id: food.fdc_id,
-        brandedFoodInfo: await getBrandedFoodByID(db, food.fdc_id),
+        brandedFoodInfo,
         foodInfo: {
           data_type: food.data_type,
           description: food.description,
         },
-        nutritionInfo,
+        nutritionInfo: await getNutrientSummary(db, food.fdc_id),
         portionInfo: {
           raw: portionInfoRaw,
           parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
         },
+        linkedProducts: [], // todo?
+        legacyFoodInfo: null, // todo?
       };
     }),
   );

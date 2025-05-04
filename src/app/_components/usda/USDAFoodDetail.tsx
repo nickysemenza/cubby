@@ -5,25 +5,37 @@ import { useWasm } from "~/wasmContext";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/combo";
-import { EntityPill } from "../EntityPill";
+import { ProductPillLink } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
+import Link from "next/link";
 
 export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
   food,
 }) => {
-  const { brandedFoodInfo, foodInfo, nutritionInfo, portionInfo, fdc_id } =
-    food;
+  const {
+    brandedFoodInfo,
+    foodInfo,
+    nutritionInfo,
+    portionInfo,
+    fdc_id,
+    linkedProducts,
+    legacyFoodInfo,
+  } = food;
+
+  // Debug linked products issue
+  console.log("Food object:", food);
+  console.log("Linked products:", linkedProducts);
   const { w } = useWasm();
   const mappings = unitMappingsFromFood(food);
 
   const foodInfoSection = (
     <div>
-      <h2 className="mb-3">
-        {foodInfo.description}
-        <EntityPill text={foodInfo.data_type} />
-      </h2>
       <div className="mb-2">FDC ID: {fdc_id}</div>
+      <div>type: {foodInfo.data_type}</div>
+
+      {legacyFoodInfo && <div>NDB: {legacyFoodInfo.ndb_number}</div>}
+
       {brandedFoodInfo && (
         <div className="space-y-2">
           {brandedFoodInfo.brand_name && (
@@ -129,13 +141,59 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
     <div>Loading unit mappings...</div>
   );
 
+  // Section for displaying linked products
+  const linkedProductsSection = (
+    <div>
+      <h3 className="mb-3">Associated Products</h3>
+      {!linkedProducts || linkedProducts.length === 0 ? (
+        <div className="text-gray-500 italic">No associated products found</div>
+      ) : (
+        <div className="space-y-4">
+          {linkedProducts.map((product) => (
+            <div
+              key={product.id}
+              className="rounded-md border border-gray-200 p-3"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <ProductPillLink product={product} />
+                  <div className="mt-1 text-sm text-gray-600">
+                    {product.manufacturer}
+                  </div>
+                </div>
+                <Link
+                  href={`/products/${product.id}`}
+                  className="rounded-md bg-blue-100 px-3 py-1 text-sm text-blue-800 transition-colors hover:bg-blue-200"
+                >
+                  View
+                </Link>
+              </div>
+              <div className="mt-2 space-y-1 text-xs text-gray-500">
+                {product.model && <div>Model: {product.model}</div>}
+                {product.upc && <div>UPC: {product.upc}</div>}
+                {product.ndb_number && <div>NDB: {product.ndb_number}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   const sections: DetailSection[] = [
     { title: "Food Information", content: foodInfoSection },
+    { title: "Associated Products", content: linkedProductsSection },
     { title: "Nutrition Information", content: nutritionSection },
     { title: "Serving Information", content: servingInfoSection },
     { title: "Branded Food Ingredients", content: ingredientsSection },
     { title: "Unit Conversions", content: unitMappingsSection },
   ];
 
-  return <DetailPage sections={sections} entity="usda-food" />;
+  return (
+    <DetailPage
+      sections={sections}
+      entity="usda-food"
+      name={foodInfo.description}
+    />
+  );
 };

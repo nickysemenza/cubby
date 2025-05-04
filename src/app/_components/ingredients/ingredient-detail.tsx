@@ -89,5 +89,11 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     });
   }
 
-  return <DetailPage sections={sections} entity="ingredient" />;
+  return (
+    <DetailPage
+      sections={sections}
+      entity="ingredient"
+      name={ingredient.name}
+    />
+  );
 };

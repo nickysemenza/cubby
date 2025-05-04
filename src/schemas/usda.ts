@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ndb, upc } from "./util";
 import { unitMappingBase } from "./unitmapping";
+import { productTopLevelOut } from "./product";
 
 // select distinct unit_name from nutrient;
 export const nutrient_unit_name = z.enum([
@@ -92,15 +93,21 @@ const foodPortion = z.object({
   gram_weight: z.number(),
 });
 
+const legacyFoodInfo = z.object({
+  ndb_number: ndb,
+});
+export type LegacyFoodInfo = z.infer<typeof legacyFoodInfo>;
 export const foodSummary = z.object({
   fdc_id: z.number(),
   brandedFoodInfo: brandedFoodInfo.nullable(),
-  foodInfo: foodInfo,
+  foodInfo,
+  legacyFoodInfo: legacyFoodInfo.nullable(),
   nutritionInfo,
   portionInfo: z.object({
     raw: z.array(foodPortion),
     parsed: z.array(unitMappingBase),
   }),
+  linkedProducts: z.array(productTopLevelOut).optional(),
 });
 export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;

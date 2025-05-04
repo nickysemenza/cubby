@@ -16,6 +16,7 @@ import { ProductForm, type UpdateProductData } from "./product-form";
 import { Button } from "~/components/ui/button";
 import { api } from "~/trpc/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface ProductDetailProps {
   product: ProductWithMappingsAndFoodOut;
@@ -81,18 +82,28 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           <div>
             <span className="font-medium">UPC:</span>{" "}
             {product.upc ? (
-              <Link href={`/usda/upc/${product.upc}`} className="text-blue-600 hover:underline">
+              <Link
+                href={`/usda/upc/${product.upc}`}
+                className="text-blue-600 hover:underline"
+              >
                 {product.upc}
               </Link>
-            ) : <NoneState />}
+            ) : (
+              <NoneState />
+            )}
           </div>
           <div>
             <span className="font-medium">NDB Number:</span>{" "}
             {product.ndb_number ? (
-              <Link href={`/usda/ndb/${product.ndb_number}`} className="text-blue-600 hover:underline">
+              <Link
+                href={`/usda/ndb/${product.ndb_number}`}
+                className="text-blue-600 hover:underline"
+              >
                 {product.ndb_number}
               </Link>
-            ) : <NoneState />}
+            ) : (
+              <NoneState />
+            )}
           </div>
           <div className="mt-4">
             <Button onClick={() => setIsEditing(true)}>Edit</Button>
@@ -135,5 +146,5 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     });
   }
 
-  return <DetailPage sections={sections} entity="product" />;
+  return <DetailPage sections={sections} entity="product" name={product.name} />;
 };
