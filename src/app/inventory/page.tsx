@@ -1,9 +1,8 @@
 import { HydrateClient } from "~/trpc/server";
 import { InventoryItemList } from "./inventoryitemlist";
 import { type Metadata } from "next";
-import { WasmContextProvider } from "~/wasmContext";
-
-export const dynamic = "force-dynamic";
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Inventory Items",
@@ -11,10 +10,16 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <HydrateClient>
-      <WasmContextProvider>
+    <div className="container mx-auto p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Inventory Items</h1>
+        <Link href="/inventory/new">
+          <Button>Create New</Button>
+        </Link>
+      </div>
+      <HydrateClient>
         <InventoryItemList />
-      </WasmContextProvider>
-    </HydrateClient>
+      </HydrateClient>
+    </div>
   );
 }

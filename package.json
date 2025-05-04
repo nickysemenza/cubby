@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@devoxa/integresql-client": "^2.1.1",
+    "@hookform/resolvers": "^5.0.1",
     "@opentelemetry/api-logs": "^0.200.0",
     "@opentelemetry/instrumentation": "^0.200.0",
     "@opentelemetry/resources": "^1.28.0",
@@ -40,10 +41,11 @@
     "@radix-ui/react-checkbox": "^1.1.4",
     "@radix-ui/react-dialog": "^1.1.11",
     "@radix-ui/react-dropdown-menu": "^2.1.6",
+    "@radix-ui/react-label": "^2.1.4",
     "@radix-ui/react-popover": "^1.1.11",
     "@radix-ui/react-scroll-area": "^1.2.6",
     "@radix-ui/react-select": "^2.1.6",
-    "@radix-ui/react-slot": "^1.1.2",
+    "@radix-ui/react-slot": "^1.2.0",
     "@t3-oss/env-nextjs": "^0.13.0",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-table": "^8.20.5",
@@ -67,7 +69,7 @@
     "react-arborist": "^3.4.1",
     "react-d3-tree": "^3.6.5",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.53.2",
+    "react-hook-form": "^7.56.2",
     "react-toastify": "^11.0.2",
     "server-only": "^0.0.1",
     "superjson": "^2.2.1",
@@ -76,7 +78,7 @@
     "trpc-ui": "^1.0.4",
     "vite-plugin-wasm": "^3.3.0",
     "yaml": "^2.7.0",
-    "zod": "^3.23.8",
+    "zod": "^3.24.3",
     "zod-to-json-schema": "^3.24.1"
   },
   "devDependencies": {

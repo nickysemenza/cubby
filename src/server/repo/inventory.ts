@@ -105,3 +105,25 @@ export const updateInventoryEntry = async (
 
   return dbInventoryEntryoToAPI(updated);
 };
+
+export interface CreateInventoryEntryData {
+  amount: z.infer<typeof import("~/codec/codec").amount>;
+  productId: string;
+  locationId: string;
+}
+
+export const createInventoryEntry = async (
+  db: PrismaClient,
+  data: CreateInventoryEntryData,
+) => {
+  const created = await db.inventoryEntry.create({
+    data: {
+      productId: data.productId,
+      locationId: data.locationId,
+      amount: data.amount,
+    },
+    include: inventoryentryInclude,
+  });
+
+  return dbInventoryEntryoToAPI(created);
+};

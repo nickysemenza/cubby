@@ -11,6 +11,7 @@ import {
   inventoryentryList,
   updateInventoryEntry,
   type UpdateInventoryEntryData,
+  createInventoryEntry,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
@@ -77,8 +78,31 @@ const update = publicProcedure
     }
   });
 
+const create = publicProcedure
+  .input(
+    z.object({
+      productId: z.string().uuid(),
+      locationId: z.string().uuid(),
+      amount: amount,
+    }),
+  )
+  .output(inventoryWithLocationAndProductOut)
+  .mutation(async ({ ctx, input }) => {
+    try {
+      const result = await createInventoryEntry(ctx.db, input);
+      return result;
+    } catch (error) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Failed to create inventory entry",
+        cause: error,
+      });
+    }
+  });
+
 export const inventoryentryRouter = createTRPCRouter({
   getByID,
   list,
   update,
+  create,
 });

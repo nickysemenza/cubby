@@ -2,3 +2,4 @@ ignore:
   - "*.config.*"
   - "scripts"
   - "tooling"
+  - "src/components/ui" #shadcn/ui

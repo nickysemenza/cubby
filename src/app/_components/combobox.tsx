@@ -18,12 +18,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
+import { z } from "zod";
 
-export type ComboboxItem = {
-  name: string;
-  id: string;
-};
-export type NullableComboboxItem = ComboboxItem | null;
+export const ComboboxItem = z.object({
+  name: z.string(),
+  id: z.string(),
+});
+export const NullableComboboxItem = ComboboxItem.nullable();
+
+export type ComboboxItem = z.infer<typeof ComboboxItem>;
+export type NullableComboboxItem = z.infer<typeof NullableComboboxItem>;
 export const clientSideFilter = (items: ComboboxItem[], query: string) => {
   const normalizedQuery = query.toLowerCase().trim();
   if (normalizedQuery === "") {
@@ -48,7 +52,6 @@ export const Combobox: React.FC<{
   React.useEffect(() => {
     async function handleValueChange() {
       const result = await findItems(commandInput);
-      console.log({ result });
       setResults(result);
     }
     handleValueChange();

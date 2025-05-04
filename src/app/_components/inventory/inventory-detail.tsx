@@ -19,8 +19,10 @@ import {
   ComboboxItem,
   NullableComboboxItem,
 } from "../combobox";
-import { ProductTopLevelOut } from "~/schemas/product";
-import { LocationOut } from "~/schemas/location";
+import {
+  buildProductComboboxItem,
+  buildLocationComboboxItem,
+} from "../combobox/utils";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -40,24 +42,13 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   );
   const [amountUnit, setAmountUnit] = useState(inventoryitem.amount.unit);
 
-  const buildproductComboboxItem = (
-    product: ProductTopLevelOut,
-  ): ComboboxItem => ({
-    id: product.id,
-    name: `${product.name} (${product.manufacturer})`,
-  });
-  const buildlocationComboboxItem = (location: LocationOut): ComboboxItem => ({
-    id: location.id,
-    name: `${location.name} (${location.type})`,
-  });
-
-  const currentLocationSelection = buildlocationComboboxItem(
+  const currentLocationSelection = buildLocationComboboxItem(
     inventoryitem.location,
   );
   const [selectedLocation, setSelectedLocation] =
     useState<NullableComboboxItem>(currentLocationSelection);
 
-  const currentProductSelection = buildproductComboboxItem(
+  const currentProductSelection = buildProductComboboxItem(
     inventoryitem.product,
   );
   const [selectedProductId, setSelectedProductId] =
@@ -72,7 +63,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   const findLocations = async (searchQuery: string) =>
     // todo: server side search here
     clientSideFilter(
-      locations.items.map(buildlocationComboboxItem),
+      locations.items.map(buildLocationComboboxItem),
       searchQuery,
     );
 
@@ -83,7 +74,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
 
   const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
     // todo: server side search here
-    clientSideFilter(products.items.map(buildproductComboboxItem), searchQuery);
+    clientSideFilter(products.items.map(buildProductComboboxItem), searchQuery);
 
   const updateMutation = api.inventoryItem.update.useMutation({
     onSuccess: () => {
