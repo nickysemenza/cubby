@@ -10,9 +10,10 @@ import {
   createCreatedAtColumn,
   createIdColumn,
 } from "../_components/data-table/columnHelpers";
-import { LocationPillLink } from "../_components/EntityPill";
-import JsonRenderer from "../_components/json-renderer";
+import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
+import { tryFormatMeasure } from "../_components/inventory/format-amount";
+import { useWasm } from "~/wasmContext";
 
 export function LocationList() {
   // Set up table state
@@ -25,6 +26,7 @@ export function LocationList() {
     nameFilter: tableState.getColumnFilter("name"),
     itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
   });
+  const { w } = useWasm();
 
   // Set up columns using helpers
   const data = itemsResp?.items || [];
@@ -60,9 +62,13 @@ export function LocationList() {
     createIdColumn(columnHelper, "locations"),
     columnHelper.accessor("inventoryEntries", {
       enableSorting: false,
-      cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
-      },
+      cell: (info) =>
+        info.getValue().map((e) => (
+          <div key={e.id}>
+            {w && tryFormatMeasure(w, e.amount)}
+            <ProductPillLink product={e.product} />
+          </div>
+        )),
     }),
   ];
 

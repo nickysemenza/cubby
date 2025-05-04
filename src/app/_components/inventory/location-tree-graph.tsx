@@ -28,6 +28,7 @@ export default function LocationTreeGraph() {
           data={{ children: data, name: rootName }}
           orientation="vertical"
           translate={translate}
+          zoom={0.5}
           renderCustomNodeElement={(rd3tProps) =>
             renderForeignObjectNode({
               ...rd3tProps,
@@ -46,7 +47,7 @@ const useCenteredTree = () => {
     (containerElem: HTMLElement) => {
       if (containerElem !== null) {
         const { width, height } = containerElem.getBoundingClientRect();
-        setTranslate({ x: width / 2, y: height / 2 });
+        setTranslate({ x: width / 2, y: height / 4 });
       }
     },
     [],
