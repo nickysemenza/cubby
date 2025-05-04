@@ -1,0 +1,116 @@
+"use client";
+
+import { api } from "~/trpc/react";
+import { createColumnHelper } from "@tanstack/react-table";
+import { type Flatten } from "~/misc/util";
+import RTable from "../_components/data-table/Table";
+import Link from "next/link";
+import React from "react";
+import { NoneState } from "../_components/NoneState";
+import { useTableState } from "../_components/data-table/useTableState";
+import { useTableConfig } from "../_components/data-table/useTableConfig";
+import { NutritionInfoTable } from "../_components/usda/nutrition";
+import { useWasm } from "~/wasmContext";
+import { UnitMappingsTable } from "../_components/units/unitmappingstable";
+import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
+
+export function USDAFoodList() {
+  // Set up table state
+  const tableState = useTableState({ initialSort: "fdc_id" });
+  
+  // Query data with params from table state
+  const [foodsResp] = api.usda.list.useSuspenseQuery({
+    sort: tableState.getSortParams(),
+    pagination: tableState.pagination,
+    nameFilter: tableState.getDescriptionFilter(),
+  });
+  
+  const { w } = useWasm();
+  const data = foodsResp.items;
+  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  
+  // Set up columns
+  const columns = [
+    columnHelper.accessor("fdc_id", {
+      header: "FDC ID",
+      cell: (info) => (
+        <Link
+          className="font-medium text-blue-600 hover:underline dark:text-blue-500"
+          href={`usda/${info.getValue()}`}
+        >
+          {info.getValue()}
+        </Link>
+      ),
+    }),
+    columnHelper.accessor("foodInfo.description", {
+      header: "Description",
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("foodInfo.data_type", {
+      header: "Type",
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("brandedFoodInfo", {
+      header: "Brand Info",
+      cell: (info) => {
+        const brandedFood = info.getValue();
+        if (!brandedFood) return <NoneState />;
+        
+        return (
+          <div className="flex flex-col">
+            <div>{brandedFood.brand_owner || <NoneState />}</div>
+            {brandedFood.branded_food_category && (
+              <div className="text-xs text-gray-500">
+                {brandedFood.branded_food_category}
+              </div>
+            )}
+            {brandedFood.gtin_upc && (
+              <div className="text-xs font-mono">UPC: {brandedFood.gtin_upc}</div>
+            )}
+          </div>
+        );
+      },
+    }),
+    columnHelper.accessor("nutritionInfo", {
+      header: "Nutrition",
+      cell: (info) => {
+        const nutritionInfo = info.getValue();
+        return (
+          <div className="w-64">
+            <NutritionInfoTable n={nutritionInfo} limit={5} />
+          </div>
+        );
+      },
+    }),
+    columnHelper.accessor("portionInfo", {
+      header: "Portions",
+      cell: (info) => {
+        const portionInfo = info.getValue();
+        if (!w || portionInfo.raw.length === 0) return <NoneState />;
+        
+        return (
+          <div className="flex flex-row gap-2">
+            <div>{buildunitMappingsGraph(w, portionInfo.parsed)}</div>
+            <div className="w-60">
+              <UnitMappingsTable mappings={portionInfo.parsed} w={w} />
+            </div>
+          </div>
+        );
+      },
+    }),
+  ];
+  
+  // Configure the table
+  const table = useTableConfig({
+    data,
+    columns,
+    tableState,
+    totalCount: foodsResp.meta.totalCount,
+  });
+
+  return (
+    <div>
+      <RTable table={table} />
+    </div>
+  );
+}

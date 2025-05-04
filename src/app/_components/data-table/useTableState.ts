@@ -27,6 +27,7 @@ export interface TableStateReturn {
   pagination: PaginationState;
   setPagination: (value: PaginationState) => void;
   getNameFilter: () => string | undefined;
+  getDescriptionFilter: () => string | undefined;
   getSortParams: () => SortParams;
 }
 
@@ -45,6 +46,10 @@ export function useTableState(options: TableStateOptions = {}): TableStateReturn
     return columnFilters.find((filter) => filter.id === "name")?.value as string | undefined;
   };
 
+  const getDescriptionFilter = () => {
+    return columnFilters.find((filter) => filter.id === "foodInfo.description")?.value as string | undefined;
+  };
+
   const getSortParams = () => {
     return buildSortParams(sorting, initialSort);
   };
@@ -57,6 +62,7 @@ export function useTableState(options: TableStateOptions = {}): TableStateReturn
     pagination,
     setPagination,
     getNameFilter,
+    getDescriptionFilter,
     getSortParams,
   };
 }

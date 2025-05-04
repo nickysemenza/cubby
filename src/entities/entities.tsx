@@ -44,4 +44,11 @@ export const entities: EntityDefinition[] = [
     basePath: "inventory",
     icon: "📦",
   },
+  {
+    name: "usda-food",
+    label: "USDA Food",
+    pluralLabel: "USDA Foods",
+    basePath: "usda",
+    icon: "🍲",
+  },
 ];

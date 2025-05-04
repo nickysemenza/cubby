@@ -15,6 +15,7 @@ import {
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
 import { type Span, trace } from "@opentelemetry/api";
+import { type SortParams, type PaginationParams, buildTakeSkip } from "~/schemas/util";
 
 const getFoodByID = async (
   db: PrismaClient,
@@ -246,4 +247,54 @@ export const getFoodSummaryByID = async (
       parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
     },
   };
+};
+
+export const listFoods = async (
+  db: PrismaClient,
+  nameFilter: string | undefined,
+  sort: SortParams,
+  pagination: PaginationParams,
+) => {
+  const orderBy: Prisma.usda_foodOrderByWithAggregationInput = {
+    description: sort.orderBy === "description" ? sort.direction : undefined,
+    data_type: sort.orderBy === "data_type" ? sort.direction : undefined,
+    fdc_id: sort.orderBy === "fdc_id" ? sort.direction : undefined,
+  };
+  
+  const where: Prisma.usda_foodWhereInput = {
+    description: nameFilter ? { search: nameFilter } : undefined,
+  };
+  
+  const foods = await db.usda_food.findMany({
+    orderBy,
+    where,
+    ...buildTakeSkip(pagination),
+  });
+  
+  const totalCount = await db.usda_food.count({ where });
+  
+  // Create simplified food summaries with basic info
+  const foodSummaries: FoodSummary[] = await Promise.all(
+    foods.map(async (food) => {
+      const nutritionInfo = await getNutrientSummary(db, food.fdc_id);
+      const portionInfoRaw = await getFoodPortion(db, food.fdc_id);
+      const w = await import("recipebridge/pkg");
+      
+      return {
+        fdc_id: food.fdc_id,
+        brandedFoodInfo: await getBrandedFoodByID(db, food.fdc_id),
+        foodInfo: {
+          data_type: food.data_type,
+          description: food.description,
+        },
+        nutritionInfo,
+        portionInfo: {
+          raw: portionInfoRaw,
+          parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
+        },
+      };
+    })
+  );
+  
+  return { data: foodSummaries, count: totalCount };
 };

@@ -3,4 +3,5 @@ export type Entity =
   | "product"
   | "recipe"
   | "location"
-  | "inventory-item";
+  | "inventory-item"
+  | "usda-food";

@@ -36,6 +36,20 @@ export function DataTableToolbar<TData>({
           />
         )}
 
+        {table
+          .getAllColumns()
+          .map((c) => c.id)
+          .includes("foodInfo.description") && (
+          <Input
+            placeholder="Filter by description..."
+            value={(table.getColumn("foodInfo.description")?.getFilterValue() as string) ?? ""}
+            onChange={(event) =>
+              table.getColumn("foodInfo.description")?.setFilterValue(event.target.value)
+            }
+            className="h-8 w-[150px] lg:w-[250px]"
+          />
+        )}
+
         {additionalFilters}
 
         {isFiltered && (
