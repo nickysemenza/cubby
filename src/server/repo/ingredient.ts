@@ -9,6 +9,7 @@ import {
 import { type IngredientOut } from "~/schemas/combo";
 import { findFood } from "./usda";
 import { foodLookupParamFromProduct } from "./product";
+import { formatSearchTerm } from "./util";
 
 export const mergeIngredients = async (
   db: PrismaClient,
@@ -195,7 +196,7 @@ const buildIngredientWhere = (
           {
             name: exact
               ? { in: list, mode: "insensitive" }
-              : { search: name, mode: "insensitive" },
+              : formatSearchTerm(name),
           },
           {
             aliases: {

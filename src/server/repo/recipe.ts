@@ -13,6 +13,7 @@ import {
   type PaginationParams,
   buildTakeSkip,
 } from "~/schemas/util";
+import { formatSearchTerm } from "./util";
 
 export const getRecipeByID = async (
   id: string,
@@ -122,7 +123,7 @@ export const recipeList = async (
     name: sort.orderBy === "name" ? sort.direction : undefined,
   };
   const where: Prisma.RecipeWhereInput = {
-    name: name != "" ? { search: name } : undefined,
+    name: formatSearchTerm(name),
   };
   const res = await db.recipe.findMany({
     orderBy,

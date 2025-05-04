@@ -13,6 +13,7 @@ import {
 } from "~/schemas/util";
 import { type InfLocationConfig } from "../../schemas/config";
 import { findOrCreateProduct } from "./product";
+import { formatSearchTerm } from "./util";
 
 const upsertChild = async (
   db: Prisma.TransactionClient,
@@ -248,7 +249,7 @@ export const locationList = async (
     type: sort.orderBy === "type" ? sort.direction : undefined,
   };
   const where: Prisma.LocationWhereInput = {
-    name: name != "" ? { search: name, mode: "insensitive" } : undefined,
+    name: formatSearchTerm(name),
     type: itemType,
   };
   const res = await db.location.findMany({

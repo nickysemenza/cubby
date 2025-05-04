@@ -13,6 +13,7 @@ import { locationType } from "~/schemas/location";
 import { findFood } from "./usda";
 import { FoodLookupParam } from "~/schemas/usda";
 import { type productBase, type ProductTopLevelOut } from "~/schemas/product";
+import { formatSearchTerm } from "./util";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
@@ -212,15 +213,9 @@ export const productList = async (
     upc: sort.orderBy === "upc" ? sort.direction : undefined,
   };
   const where: Prisma.ProductWhereInput = {
-    name: name && name !== "" ? { search: name } : undefined,
-    manufacturer: manufacturer && manufacturer !== "" ? { 
-      contains: manufacturer,
-      mode: 'insensitive' 
-    } : undefined,
-    upc: upc && upc !== "" ? { 
-      contains: upc,
-      mode: 'insensitive' 
-    } : undefined,
+    name: formatSearchTerm(name),
+    manufacturer: formatSearchTerm(manufacturer),
+    upc: formatSearchTerm(upc),
   };
   const res = await db.product.findMany({
     orderBy,
@@ -249,7 +244,7 @@ export const createProduct = async (
       ndb_number: data.ndb_number,
     },
   });
-  
+
   return product;
 };
 
@@ -263,6 +258,6 @@ export const updateProduct = async (
     where: { id },
     data,
   });
-  
+
   return product;
 };

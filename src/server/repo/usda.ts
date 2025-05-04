@@ -15,7 +15,12 @@ import {
 } from "~/schemas/usda";
 import { wasm } from "~/wasmContext";
 import { type Span, trace } from "@opentelemetry/api";
-import { type SortParams, type PaginationParams, buildTakeSkip } from "~/schemas/util";
+import {
+  type SortParams,
+  type PaginationParams,
+  buildTakeSkip,
+} from "~/schemas/util";
+import { formatSearchTerm } from "./util";
 
 const getFoodByID = async (
   db: PrismaClient,
@@ -261,32 +266,34 @@ export const listFoods = async (
     data_type: sort.orderBy === "data_type" ? sort.direction : undefined,
     fdc_id: sort.orderBy === "fdc_id" ? sort.direction : undefined,
   };
-  
+
   const where: Prisma.usda_foodWhereInput = {
-    // For description, use full-text search (if supported by the database)
-    description: nameFilter ? { search: nameFilter } : undefined,
+    // For description, use full-text search with properly formatted query
+    description: nameFilter ? formatSearchTerm(nameFilter) : undefined,
     // For data_type, use standard string contains (case insensitive)
-    data_type: dataTypeFilter ? { 
-      contains: dataTypeFilter,
-      mode: 'insensitive'
-    } : undefined,
+    data_type: dataTypeFilter
+      ? {
+          contains: dataTypeFilter,
+          mode: "insensitive",
+        }
+      : undefined,
   };
-  
+
   const foods = await db.usda_food.findMany({
     orderBy,
     where,
     ...buildTakeSkip(pagination),
   });
-  
+
   const totalCount = await db.usda_food.count({ where });
-  
+
   // Create simplified food summaries with basic info
   const foodSummaries: FoodSummary[] = await Promise.all(
     foods.map(async (food) => {
       const nutritionInfo = await getNutrientSummary(db, food.fdc_id);
       const portionInfoRaw = await getFoodPortion(db, food.fdc_id);
       const w = await import("recipebridge/pkg");
-      
+
       return {
         fdc_id: food.fdc_id,
         brandedFoodInfo: await getBrandedFoodByID(db, food.fdc_id),
@@ -300,8 +307,8 @@ export const listFoods = async (
           parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
         },
       };
-    })
+    }),
   );
-  
+
   return { data: foodSummaries, count: totalCount };
 };
