@@ -21,6 +21,7 @@ test("recipe utils", () => {
         ingredients: [
           {
             id: "",
+            type: "ingredient",
             createdAt: new Date(),
             updatedAt: new Date(),
             recipe: null,
@@ -34,6 +35,7 @@ test("recipe utils", () => {
           },
           {
             id: "",
+            type: "recipe",
             createdAt: new Date(),
             updatedAt: new Date(),
             ingredient: null,

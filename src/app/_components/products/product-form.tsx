@@ -1,21 +1,21 @@
 "use client";
 
 import { type FC } from "react";
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui/button";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
 import { productBase, type ProductTopLevelOut } from "~/schemas/product";
 import { upc, ndb } from "~/schemas/util";
+import {
+  type CreateModeProps,
+  type EditModeProps,
+  FormWrapper,
+  RequiredTextField,
+  NullableTextField,
+  NullableNumberField,
+  getSubmitButtonText,
+  buildUpdateObject,
+} from "../form-utils";
 
 // Form schema for product form
 const formSchema = z
@@ -43,27 +43,15 @@ export type UpdateProductData = {
   data: Partial<CreateProductData>;
 };
 
-// Base props shared by both modes
-interface BaseProductFormProps {
-  isPending: boolean;
-  error?: string;
-  onCancel?: () => void;
-}
-
 // Props for create mode
-interface CreateProductFormProps extends BaseProductFormProps {
-  mode: "create";
-  onCreate: (data: CreateProductData) => void;
-  onEdit?: never;
+interface CreateProductFormProps extends CreateModeProps<CreateProductData> {
   product?: never;
 }
 
 // Props for edit mode
-interface EditProductFormProps extends BaseProductFormProps {
-  mode: "edit";
-  onEdit: (data: UpdateProductData) => void;
-  onCreate?: never;
-  product: ProductTopLevelOut;
+interface EditProductFormProps
+  extends EditModeProps<UpdateProductData, ProductTopLevelOut> {
+  entity: ProductTopLevelOut;
 }
 
 // Combined props type using discriminated union
@@ -72,22 +60,18 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
 
+  // Get the product entity in edit mode
+  const product = mode === "edit" ? props.entity : undefined;
+
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: props.mode === "edit" && props.product ? props.product.name : "",
-      manufacturer:
-        props.mode === "edit" && props.product
-          ? props.product.manufacturer
-          : "",
-      model:
-        props.mode === "edit" && props.product ? props.product.model : null,
-      upc: props.mode === "edit" && props.product ? props.product.upc : null,
-      ndb_number:
-        props.mode === "edit" && props.product
-          ? props.product.ndb_number
-          : null,
+      name: product ? product.name : "",
+      manufacturer: product ? product.manufacturer : "",
+      model: product ? product.model : null,
+      upc: product ? product.upc : null,
+      ndb_number: product ? product.ndb_number : null,
     },
   });
 
@@ -102,30 +86,15 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         ndb_number: values.ndb_number,
       };
       props.onCreate(createData);
-    } else if (mode === "edit") {
-      const product = props.product;
+    } else if (mode === "edit" && product) {
       // In edit mode, determine which fields have changed
-      const updates: Partial<CreateProductData> = {};
-
-      if (values.name !== product.name) {
-        updates.name = values.name;
-      }
-
-      if (values.manufacturer !== product.manufacturer) {
-        updates.manufacturer = values.manufacturer;
-      }
-
-      if (values.model !== product.model) {
-        updates.model = values.model;
-      }
-
-      if (values.upc !== product.upc) {
-        updates.upc = values.upc;
-      }
-
-      if (values.ndb_number !== product.ndb_number) {
-        updates.ndb_number = values.ndb_number;
-      }
+      const updates = buildUpdateObject(product, values, [
+        "name",
+        "manufacturer",
+        "model",
+        "upc",
+        "ndb_number",
+      ]);
 
       // Only update if there are changes
       if (Object.keys(updates).length > 0) {
@@ -141,131 +110,57 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     }
   };
 
-  const buttonText =
-    mode === "create"
-      ? isPending
-        ? "Creating..."
-        : "Create"
-      : isPending
-        ? "Saving..."
-        : "Save";
+  const buttonText = getSubmitButtonText(mode, isPending);
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter product name" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <FormWrapper
+      form={form}
+      onSubmit={handleSubmit}
+      error={error}
+      isPending={isPending}
+      onCancel={onCancel}
+      submitButtonText={buttonText}
+    >
+      <RequiredTextField
+        form={form}
+        name="name"
+        label="Name"
+        placeholder="Enter product name"
+      />
 
-        <FormField
-          control={form.control}
-          name="manufacturer"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Manufacturer</FormLabel>
-              <FormControl>
-                <Input placeholder="Enter manufacturer" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <RequiredTextField
+        form={form}
+        name="manufacturer"
+        label="Manufacturer"
+        placeholder="Enter manufacturer"
+      />
 
-        <FormField
-          control={form.control}
-          name="model"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Model (Optional)</FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Enter model"
-                  {...field}
-                  value={field.value || ""}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    field.onChange(value === "" ? null : value);
-                  }}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <NullableTextField
+        form={form}
+        name="model"
+        label="Model (Optional)"
+        placeholder="Enter model"
+      />
 
-        <div className="flex space-x-4">
-          <FormField
-            control={form.control}
+      <div className="flex space-x-4">
+        <div className="flex-1">
+          <NullableTextField
+            form={form}
             name="upc"
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel>UPC (Optional)</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="12-digit UPC code"
-                    {...field}
-                    value={field.value || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      field.onChange(value === "" ? null : value);
-                    }}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="UPC (Optional)"
+            placeholder="12-digit UPC code"
           />
+        </div>
 
-          <FormField
-            control={form.control}
+        <div className="flex-1">
+          <NullableNumberField
+            form={form}
             name="ndb_number"
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel>NDB Number (Optional)</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="NDB number (1000-99999)"
-                    {...field}
-                    value={field.value !== null ? field.value.toString() : ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      const numberValue = value ? parseInt(value, 10) : null;
-                      field.onChange(numberValue);
-                    }}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="NDB Number (Optional)"
+            placeholder="NDB number (1000-99999)"
           />
         </div>
-
-        {error && <div className="text-sm text-red-500">{error}</div>}
-
-        <div className="flex space-x-2">
-          <Button type="submit" disabled={isPending}>
-            {buttonText}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </Form>
+      </div>
+    </FormWrapper>
   );
 };

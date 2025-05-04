@@ -53,7 +53,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       return (
         <InventoryForm
           mode="edit"
-          inventoryItem={inventoryitem}
+          entity={inventoryitem}
           onEdit={handleEdit}
           onCancel={() => setIsEditing(false)}
           isPending={updateMutation.isPending}

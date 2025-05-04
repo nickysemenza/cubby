@@ -52,7 +52,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         <h1 className="text-2xl font-bold mb-6">Edit Product</h1>
         <ProductForm
           mode="edit"
-          product={product}
+          entity={product}
           onEdit={handleEdit}
           isPending={updateProduct.isPending}
           error={error}

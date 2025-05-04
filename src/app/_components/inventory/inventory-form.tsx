@@ -2,15 +2,9 @@
 
 import { useWasm } from "~/wasmContext";
 import { type FC } from "react";
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui/button";
 import { Amount } from "~/codec/codec";
 import { api } from "~/trpc/react";
-import {
-  clientSideFilter,
-  Combobox,
-  ComboboxItem,
-} from "~/app/_components/combobox";
+import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -18,19 +12,20 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   inventoryCreatePayloadData,
   inventoryUpdatePayloadData,
 } from "~/schemas/inventory";
+import {
+  type CreateModeProps,
+  type EditModeProps,
+  FormWrapper,
+  ComboboxField,
+  NumericField,
+  RequiredTextField,
+  getSubmitButtonText,
+} from "../form-utils";
 
 // Form schema for inventory form
 const formSchema = z.object({
@@ -55,27 +50,19 @@ export type UpdateInventoryData = {
   data: z.infer<typeof inventoryUpdatePayloadData>;
 };
 
-// Base props shared by both modes
-interface BaseInventoryFormProps {
-  isPending: boolean;
-  error?: string;
-  onCancel?: () => void;
-}
-
 // Props for create mode
-interface CreateInventoryFormProps extends BaseInventoryFormProps {
-  mode: "create";
-  onCreate: (data: CreateInventoryData) => void;
-  onEdit?: never;
+interface CreateInventoryFormProps
+  extends CreateModeProps<CreateInventoryData> {
   inventoryItem?: never;
 }
 
 // Props for edit mode
-interface EditInventoryFormProps extends BaseInventoryFormProps {
-  mode: "edit";
-  onEdit: (data: UpdateInventoryData) => void;
-  onCreate?: never;
-  inventoryItem: z.infer<typeof inventoryWithLocationAndProductOut>;
+interface EditInventoryFormProps
+  extends EditModeProps<
+    UpdateInventoryData,
+    z.infer<typeof inventoryWithLocationAndProductOut>
+  > {
+  entity: z.infer<typeof inventoryWithLocationAndProductOut>;
 }
 
 // Combined props type using discriminated union
@@ -85,22 +72,21 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
   const { w } = useWasm();
   const { mode, isPending, error, onCancel } = props;
 
+  // Get the inventory item in edit mode
+  const inventoryItem = mode === "edit" ? props.entity : undefined;
+
   // Initialize form with default values or existing inventory item data
   const form = useForm<InventoryFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      product: props.mode === "edit" && props.inventoryItem
-        ? buildProductComboboxItem(props.inventoryItem.product)
+      product: inventoryItem
+        ? buildProductComboboxItem(inventoryItem.product)
         : undefined,
-      location: props.mode === "edit" && props.inventoryItem
-        ? buildLocationComboboxItem(props.inventoryItem.location)
+      location: inventoryItem
+        ? buildLocationComboboxItem(inventoryItem.location)
         : undefined,
-      amountValue: props.mode === "edit" && props.inventoryItem 
-        ? props.inventoryItem.amount.value.toString() 
-        : "",
-      amountUnit: props.mode === "edit" && props.inventoryItem 
-        ? props.inventoryItem.amount.unit 
-        : "",
+      amountValue: inventoryItem ? inventoryItem.amount.value.toString() : "",
+      amountUnit: inventoryItem ? inventoryItem.amount.unit : "",
     },
   });
 
@@ -138,8 +124,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         amount,
       };
       props.onCreate(createData);
-    } else if (mode === "edit") {
-      const inventoryItem = props.inventoryItem;
+    } else if (mode === "edit" && inventoryItem) {
       // In edit mode, determine which fields have changed
       const updates: z.infer<typeof inventoryUpdatePayloadData> = {};
 
@@ -179,107 +164,50 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     return <div>Loading...</div>;
   }
 
-  const buttonText =
-    mode === "create"
-      ? isPending
-        ? "Creating..."
-        : "Create"
-      : isPending
-        ? "Saving..."
-        : "Save";
+  const buttonText = getSubmitButtonText(mode, isPending);
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <FormField
-          control={form.control}
-          name="product"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Product</FormLabel>
-              <FormControl>
-                <Combobox
-                  label="product"
-                  findItems={findProducts}
-                  value={field.value}
-                  setValue={field.onChange}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+    <FormWrapper
+      form={form}
+      onSubmit={handleSubmit}
+      error={error}
+      isPending={isPending}
+      onCancel={onCancel}
+      submitButtonText={buttonText}
+    >
+      <ComboboxField
+        form={form}
+        name="product"
+        label="Product"
+        findItems={findProducts}
+      />
 
-        <FormField
-          control={form.control}
-          name="location"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Location</FormLabel>
-              <FormControl>
-                <Combobox
-                  label="location"
-                  findItems={findLocations}
-                  value={field.value}
-                  setValue={field.onChange}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+      <ComboboxField
+        form={form}
+        name="location"
+        label="Location"
+        findItems={findLocations}
+      />
 
-        <div className="flex space-x-4">
-          <FormField
-            control={form.control}
+      <div className="flex space-x-4">
+        <div className="flex-1">
+          <NumericField
+            form={form}
             name="amountValue"
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel>Amount Value</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="Enter amount"
-                    {...field}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Amount Value"
+            placeholder="Enter amount"
           />
+        </div>
 
-          <FormField
-            control={form.control}
+        <div className="flex-1">
+          <RequiredTextField
+            form={form}
             name="amountUnit"
-            render={({ field }) => (
-              <FormItem className="flex-1">
-                <FormLabel>Amount Unit</FormLabel>
-                <FormControl>
-                  <Input type="text" placeholder="Enter unit" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
+            label="Amount Unit"
+            placeholder="Enter unit"
           />
         </div>
-
-        {error && <div className="text-sm text-red-500">{error}</div>}
-
-        <div className="flex space-x-2">
-          <Button type="submit" disabled={isPending}>
-            {buttonText}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onCancel}
-            disabled={isPending}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </Form>
+      </div>
+    </FormWrapper>
   );
 };
