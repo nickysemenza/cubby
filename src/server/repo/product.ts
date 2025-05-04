@@ -199,6 +199,8 @@ export const getProductByID = async (db: PrismaClient, id: string) => {
 export const productList = async (
   db: PrismaClient,
   name: string | undefined,
+  manufacturer: string | undefined,
+  upc: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
@@ -210,7 +212,15 @@ export const productList = async (
     upc: sort.orderBy === "upc" ? sort.direction : undefined,
   };
   const where: Prisma.ProductWhereInput = {
-    name: name != "" ? { search: name } : undefined,
+    name: name && name !== "" ? { search: name } : undefined,
+    manufacturer: manufacturer && manufacturer !== "" ? { 
+      contains: manufacturer,
+      mode: 'insensitive' 
+    } : undefined,
+    upc: upc && upc !== "" ? { 
+      contains: upc,
+      mode: 'insensitive' 
+    } : undefined,
   };
   const res = await db.product.findMany({
     orderBy,

@@ -28,6 +28,8 @@ export function ProductList() {
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
+    manufacturerFilter: tableState.getColumnFilter("manufacturer"),
+    upcFilter: tableState.getColumnFilter("upc"),
   });
   
   const { w } = useWasm();

@@ -19,6 +19,7 @@ export function LocationList() {
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
     nameFilter: tableState.getColumnFilter("name"),
+    itemTypeFilter: tableState.getColumnFilter("type"),
   });
 
   // Set up columns using helpers

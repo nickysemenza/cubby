@@ -1,6 +1,6 @@
 "use client";
 
-import { type Table } from "@tanstack/react-table";
+import { RowData, type Table } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -18,7 +18,7 @@ interface DataTableToolbarProps<TData> {
 }
 
 // Separate component for each filter input to properly use hooks
-const FilterInput = <TData extends object>({
+const FilterInput = <TData extends RowData>({
   column,
   table,
   value,
@@ -73,15 +73,19 @@ export function DataTableToolbar<TData>({
     table.getState().columnFilters.length > 0 || table.getState().globalFilter;
 
   // Create an array of available columns outside the JSX
-  const availableColumns = filterableColumns?.filter(column => 
-    table.getAllColumns().map(c => c.id).includes(column.id)
-  ) || [];
+  const availableColumns =
+    filterableColumns?.filter((column) =>
+      table
+        .getAllColumns()
+        .map((c) => c.id)
+        .includes(column.id),
+    ) || [];
 
   return (
     <div className="flex items-center justify-between">
       <div className="flex flex-1 items-center space-x-2">
         {availableColumns.map((column) => (
-          <FilterInput
+          <FilterInput<TData>
             key={column.id}
             column={column}
             table={table}
