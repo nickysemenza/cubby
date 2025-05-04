@@ -10,11 +10,16 @@ import { type ReactNode } from "react";
 interface DataTableToolbarProps<TData> {
   table: Table<TData>;
   additionalFilters?: ReactNode;
+  filterableColumns: {
+    id: string;
+    placeholder: string;
+  }[];
 }
 
 export function DataTableToolbar<TData>({
   table,
   additionalFilters,
+  filterableColumns,
 }: DataTableToolbarProps<TData>) {
   const isFiltered =
     table.getState().columnFilters.length > 0 || table.getState().globalFilter;
@@ -22,39 +27,27 @@ export function DataTableToolbar<TData>({
   return (
     <div className="flex items-center justify-between">
       <div className="flex flex-1 items-center space-x-2">
-        {table
-          .getAllColumns()
-          .map((c) => c.id)
-          .includes("name") && (
-          <Input
-            placeholder="Filter by name..."
-            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-            onChange={(event) =>
-              table.getColumn("name")?.setFilterValue(event.target.value)
-            }
-            className="h-8 w-[150px] lg:w-[250px]"
-          />
-        )}
+        {filterableColumns?.map((column) => {
+          // Check if this column exists in the table
+          const isColumnAvailable = table
+            .getAllColumns()
+            .map((c) => c.id)
+            .includes(column.id);
 
-        {table
-          .getAllColumns()
-          .map((c) => c.id)
-          .includes("foodInfo_description") && (
-          <Input
-            placeholder="Filter by description..."
-            value={
-              (table
-                .getColumn("foodInfo_description")
-                ?.getFilterValue() as string) ?? ""
-            }
-            onChange={(event) =>
-              table
-                .getColumn("foodInfo_description")
-                ?.setFilterValue(event.target.value)
-            }
-            className="h-8 w-[150px] lg:w-[250px]"
-          />
-        )}
+          if (!isColumnAvailable) return null;
+
+          return (
+            <Input
+              key={column.id}
+              placeholder={column.placeholder}
+              value={(table.getColumn(column.id)?.getFilterValue() as string) ?? ""}
+              onChange={(event) =>
+                table.getColumn(column.id)?.setFilterValue(event.target.value)
+              }
+              className="h-8 w-[150px] lg:w-[250px]"
+            />
+          );
+        })}
 
         {additionalFilters}
 

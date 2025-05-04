@@ -18,7 +18,7 @@ export function LocationList() {
   const [itemsResp] = api.location.list.useSuspenseQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
-    nameFilter: tableState.getNameFilter(),
+    nameFilter: tableState.getColumnFilter("name"),
   });
 
   // Set up columns using helpers
@@ -69,9 +69,20 @@ export function LocationList() {
     totalCount: itemsResp.meta.totalCount,
   });
 
+  const filterableColumns = [
+    {
+      id: "name",
+      placeholder: "Filter by location name...",
+    },
+    {
+      id: "type",
+      placeholder: "Filter by type...",
+    },
+  ];
+
   return (
     <div>
-      <RTable table={table} />
+      <RTable table={table} filterableColumns={filterableColumns} />
     </div>
   );
 }

@@ -252,6 +252,7 @@ export const getFoodSummaryByID = async (
 export const listFoods = async (
   db: PrismaClient,
   nameFilter: string | undefined,
+  dataTypeFilter: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
@@ -262,7 +263,13 @@ export const listFoods = async (
   };
   
   const where: Prisma.usda_foodWhereInput = {
+    // For description, use full-text search (if supported by the database)
     description: nameFilter ? { search: nameFilter } : undefined,
+    // For data_type, use standard string contains (case insensitive)
+    data_type: dataTypeFilter ? { 
+      contains: dataTypeFilter,
+      mode: 'insensitive'
+    } : undefined,
   };
   
   const foods = await db.usda_food.findMany({

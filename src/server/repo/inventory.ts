@@ -62,13 +62,38 @@ export const inventoryentryList = async (
   db: PrismaClient,
   sort: SortParams,
   pagination: PaginationParams,
+  productNameFilter?: string,
+  locationNameFilter?: string,
 ) => {
   const orderBy: Prisma.InventoryEntryOrderByWithAggregationInput = {
     createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
     amount: sort.orderBy === "amount" ? sort.direction : undefined,
   };
 
-  const where = undefined; // no filter support yet
+  // Build where clause based on filters
+  const where: Prisma.InventoryEntryWhereInput = {
+    ...(productNameFilter
+      ? {
+          Product: {
+            name: {
+              contains: productNameFilter,
+              mode: 'insensitive',
+            },
+          },
+        }
+      : {}),
+    ...(locationNameFilter
+      ? {
+          location: {
+            name: {
+              contains: locationNameFilter,
+              mode: 'insensitive',
+            },
+          },
+        }
+      : {}),
+  };
+
   const res = await db.inventoryEntry.findMany({
     orderBy,
     where,

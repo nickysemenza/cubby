@@ -20,7 +20,7 @@ export function RecipeList() {
   const [recipesResp] = api.recipe.list.useSuspenseQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
-    nameFilter: tableState.getNameFilter(),
+    nameFilter: tableState.getColumnFilter("name"),
   });
 
   // Set up columns using helpers
@@ -41,12 +41,20 @@ export function RecipeList() {
     data,
     columns,
     tableState,
-    totalCount: recipesResp.meta.totalCount,
+    totalCount: recipesResp.meta.totalCount
   });
+
+  const filterableColumns = [
+    { id: "name", placeholder: "Filter by recipe name..." },
+    { id: "meta", placeholder: "Filter by source..." }
+  ];
 
   return (
     <div>
-      <RTable table={table} />
+      <RTable 
+        table={table} 
+        filterableColumns={filterableColumns}
+      />
     </div>
   );
 }

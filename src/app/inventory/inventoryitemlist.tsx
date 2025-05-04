@@ -11,22 +11,27 @@ import { useWasm } from "~/wasmContext";
 import { showAmountAndPrice } from "../_components/inventory/format-amount";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import { createCreatedAtColumn, createIdColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCreatedAtColumn,
+  createIdColumn,
+} from "../_components/data-table/columnHelpers";
 
 export function InventoryItemList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
-  
+
   // Query data with params from table state
   const [inventoryitemsResp] = api.inventoryItem.list.useSuspenseQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
+    productNameFilter: tableState.getColumnFilter("product"),
+    locationNameFilter: tableState.getColumnFilter("location"),
   });
-  
+
   const { w } = useWasm();
   const data = inventoryitemsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
-  
+
   // Set up columns using helpers where possible
   const columns = [
     columnHelper.accessor("product", {
@@ -69,7 +74,7 @@ export function InventoryItemList() {
     createCreatedAtColumn(columnHelper),
     createIdColumn(columnHelper, "inventory"),
   ];
-  
+
   // Configure the table
   const table = useTableConfig({
     data,
@@ -78,9 +83,20 @@ export function InventoryItemList() {
     totalCount: inventoryitemsResp.meta.totalCount,
   });
 
+  const filterableColumns = [
+    {
+      id: "product",
+      placeholder: "Filter by product...",
+    },
+    {
+      id: "location",
+      placeholder: "Filter by location...",
+    },
+  ];
+
   return (
     <div>
-      <RTable table={table} />
+      <RTable table={table} filterableColumns={filterableColumns} />
     </div>
   );
 }

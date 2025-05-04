@@ -38,7 +38,8 @@ const list = publicProcedure
   .input(
     z
       .object({
-        // no filters yet
+        productNameFilter: z.string().optional(),
+        locationNameFilter: z.string().optional(),
       })
       .merge(sortPaginationCombo),
   )
@@ -48,6 +49,8 @@ const list = publicProcedure
       ctx.db,
       input.sort,
       input.pagination,
+      input.productNameFilter,
+      input.locationNameFilter
     );
     return buildPaginatedResponse(input.pagination, data, count);
   });

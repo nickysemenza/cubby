@@ -26,13 +26,15 @@ const list = publicProcedure
   .input(
     z.object({
       nameFilter: z.string().optional(),
+      dataTypeFilter: z.string().optional(),
     }).merge(sortPaginationCombo)
   )
   .output(createPaginatedResponseSchema(foodSummary))
   .query(async ({ ctx, input }) => {
     const { data, count } = await listFoods(
       ctx.db,
-      input.nameFilter, // We still use nameFilter parameter but it will contain description filter values
+      input.nameFilter, // Filter for description values
+      input.dataTypeFilter, // New filter for data_type values
       input.sort,
       input.pagination
     );

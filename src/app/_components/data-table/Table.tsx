@@ -19,13 +19,22 @@ import { type ReactNode } from "react";
 interface TTableProps<TItem> {
   table: ITable<TItem>;
   additionalFilters?: ReactNode;
+  filterableColumns: {
+    id: string;
+    placeholder: string;
+  }[];
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
-  const { table, additionalFilters } = props;
+  const { table, additionalFilters, filterableColumns } = props;
+  
   return (
     <div className="space-y-4">
-      <DataTableToolbar table={table} additionalFilters={additionalFilters} />
+      <DataTableToolbar 
+        table={table} 
+        additionalFilters={additionalFilters}
+        filterableColumns={filterableColumns}
+      />
       <Table aria-label="Tasks">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (

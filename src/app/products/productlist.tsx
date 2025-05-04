@@ -27,7 +27,7 @@ export function ProductList() {
   const [productsResp] = api.product.list.useSuspenseQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
-    nameFilter: tableState.getNameFilter(),
+    nameFilter: tableState.getColumnFilter("name"),
   });
   
   const { w } = useWasm();
@@ -124,9 +124,24 @@ export function ProductList() {
     totalCount: productsResp.meta.totalCount,
   });
 
+  const filterableColumns = [
+    {
+      id: "name",
+      placeholder: "Filter by name...",
+    },
+    {
+      id: "manufacturer",
+      placeholder: "Filter by manufacturer...",
+    },
+    {
+      id: "upc",
+      placeholder: "Filter by UPC...",
+    },
+  ];
+
   return (
     <div>
-      <RTable table={table} />
+      <RTable table={table} filterableColumns={filterableColumns} />
     </div>
   );
 }

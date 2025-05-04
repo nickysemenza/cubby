@@ -17,18 +17,19 @@ import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 export function USDAFoodList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "fdc_id" });
-  
+
   // Query data with params from table state
   const [foodsResp] = api.usda.list.useSuspenseQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
-    nameFilter: tableState.getDescriptionFilter(),
+    nameFilter: tableState.getColumnFilter("foodinfo-description"),
+    dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type"),
   });
-  
+
   const { w } = useWasm();
   const data = foodsResp.items;
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
-  
+
   // Set up columns
   const columns = [
     columnHelper.accessor("fdc_id", {
@@ -43,10 +44,12 @@ export function USDAFoodList() {
       ),
     }),
     columnHelper.accessor("foodInfo.description", {
+      id: "foodinfo-description",
       header: "Description",
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("foodInfo.data_type", {
+      id: "foodInfo-data_type",
       header: "Type",
       cell: (info) => info.getValue(),
     }),
@@ -55,7 +58,7 @@ export function USDAFoodList() {
       cell: (info) => {
         const brandedFood = info.getValue();
         if (!brandedFood) return <NoneState />;
-        
+
         return (
           <div className="flex flex-col">
             <div>{brandedFood.brand_owner || <NoneState />}</div>
@@ -65,7 +68,9 @@ export function USDAFoodList() {
               </div>
             )}
             {brandedFood.gtin_upc && (
-              <div className="text-xs font-mono">UPC: {brandedFood.gtin_upc}</div>
+              <div className="font-mono text-xs">
+                UPC: {brandedFood.gtin_upc}
+              </div>
             )}
           </div>
         );
@@ -87,7 +92,7 @@ export function USDAFoodList() {
       cell: (info) => {
         const portionInfo = info.getValue();
         if (!w || portionInfo.raw.length === 0) return <NoneState />;
-        
+
         return (
           <div className="flex flex-row gap-2">
             <div>{buildunitMappingsGraph(w, portionInfo.parsed)}</div>
@@ -99,7 +104,7 @@ export function USDAFoodList() {
       },
     }),
   ];
-  
+
   // Configure the table
   const table = useTableConfig({
     data,
@@ -108,9 +113,14 @@ export function USDAFoodList() {
     totalCount: foodsResp.meta.totalCount,
   });
 
+  const filterableColumns = [
+    { id: "foodinfo-description", placeholder: "Filter by description..." },
+    { id: "foodInfo-data_type", placeholder: "Filter by type..." },
+  ];
+
   return (
     <div>
-      <RTable table={table} />
+      <RTable table={table} filterableColumns={filterableColumns} />
     </div>
   );
 }

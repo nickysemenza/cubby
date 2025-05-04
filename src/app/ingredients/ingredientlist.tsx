@@ -30,7 +30,7 @@ export function IngredientList() {
   const [ingredientsResp] = api.ingredient.list.useSuspenseQuery({
     sort: tableState.getSortParams(),
     pagination: tableState.pagination,
-    nameFilter: tableState.getNameFilter(),
+    nameFilter: tableState.getColumnFilter("name"),
     missingProductsOnly: globalFilter.missingProductsOnly,
   });
   
@@ -121,11 +121,19 @@ export function IngredientList() {
     onGlobalFilterChange: setGlobalFilter,
   });
 
+  const filterableColumns = [
+    {
+      id: "name",
+      placeholder: "Filter by ingredient name...",
+    },
+  ];
+
   return (
     <div>
       <IngredientMerger table={table} />
       <RTable
         table={table}
+        filterableColumns={filterableColumns}
         additionalFilters={
           <div className="flex items-center space-x-2">
             <Checkbox
