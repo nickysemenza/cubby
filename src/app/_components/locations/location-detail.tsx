@@ -58,7 +58,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           <JsonRenderer input={location} />
         </div>
       ),
-      isWide: true,
     },
   ];
 

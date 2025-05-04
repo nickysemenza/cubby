@@ -15,3 +15,4 @@ export const productTopLevelOut = z
   })
   .merge(productBase)
   .merge(dbTimestampsOut);
+export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;

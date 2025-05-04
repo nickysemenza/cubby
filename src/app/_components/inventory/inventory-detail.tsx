@@ -13,7 +13,14 @@ import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Amount } from "~/codec/codec";
 import { api } from "~/trpc/react";
-import { clientSideFilter, Combobox, NullableComboboxItem } from "../combobox";
+import {
+  clientSideFilter,
+  Combobox,
+  ComboboxItem,
+  NullableComboboxItem,
+} from "../combobox";
+import { ProductTopLevelOut } from "~/schemas/product";
+import { LocationOut } from "~/schemas/location";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -32,17 +39,27 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     inventoryitem.amount.value.toString(),
   );
   const [amountUnit, setAmountUnit] = useState(inventoryitem.amount.unit);
-  const currentLocationSelection = {
-    id: inventoryitem.location.id,
-    name: inventoryitem.location.name,
-  };
+
+  const buildproductComboboxItem = (
+    product: ProductTopLevelOut,
+  ): ComboboxItem => ({
+    id: product.id,
+    name: `${product.name} (${product.manufacturer})`,
+  });
+  const buildlocationComboboxItem = (location: LocationOut): ComboboxItem => ({
+    id: location.id,
+    name: `${location.name} (${location.type})`,
+  });
+
+  const currentLocationSelection = buildlocationComboboxItem(
+    inventoryitem.location,
+  );
   const [selectedLocation, setSelectedLocation] =
     useState<NullableComboboxItem>(currentLocationSelection);
 
-  const currentProductSelection = {
-    id: inventoryitem.product.id,
-    name: inventoryitem.product.name,
-  };
+  const currentProductSelection = buildproductComboboxItem(
+    inventoryitem.product,
+  );
   const [selectedProductId, setSelectedProductId] =
     useState<NullableComboboxItem>(currentProductSelection);
   const [errorMessage, setErrorMessage] = useState("");
@@ -54,16 +71,19 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   });
   const findLocations = async (searchQuery: string) =>
     // todo: server side search here
-    clientSideFilter(locations.items, searchQuery);
+    clientSideFilter(
+      locations.items.map(buildlocationComboboxItem),
+      searchQuery,
+    );
 
   const [products] = api.product.list.useSuspenseQuery({
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
 
-  const findProducts = async (searchQuery: string) =>
+  const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
     // todo: server side search here
-    clientSideFilter(products.items, searchQuery);
+    clientSideFilter(products.items.map(buildproductComboboxItem), searchQuery);
 
   const updateMutation = api.inventoryItem.update.useMutation({
     onSuccess: () => {
