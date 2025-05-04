@@ -15,7 +15,10 @@ import {
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
-import { amount } from "~/codec/codec";
+import {
+  inventoryCreatePayloadData,
+  inventoryUpdatePayloadData,
+} from "~/schemas/inventory";
 
 const getByID = publicProcedure
   .input(IDInput)
@@ -53,11 +56,7 @@ const update = publicProcedure
   .input(
     z.object({
       id: z.string().uuid(),
-      data: z.object({
-        amount: amount.optional(),
-        productId: z.string().uuid().optional(),
-        locationId: z.string().uuid().optional(),
-      }),
+      data: inventoryUpdatePayloadData,
     }),
   )
   .output(inventoryWithLocationAndProductOut)
@@ -79,13 +78,7 @@ const update = publicProcedure
   });
 
 const create = publicProcedure
-  .input(
-    z.object({
-      productId: z.string().uuid(),
-      locationId: z.string().uuid(),
-      amount: amount,
-    }),
-  )
+  .input(inventoryCreatePayloadData)
   .output(inventoryWithLocationAndProductOut)
   .mutation(async ({ ctx, input }) => {
     try {
