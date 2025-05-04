@@ -23,6 +23,9 @@ import {
   convertAmountToPrice,
   getGramAndNutrient,
 } from "~/app/_components/units/univ-conversion";
+import { tryFormatMeasure } from "../inventory/format-amount";
+import { IngredientPillLink } from "../EntityPill";
+import { SummaryCard, type SummaryItem } from "../SummaryCard";
 
 dayjs.extend(relativeTime);
 
@@ -106,6 +109,23 @@ const sumPrice = (
   };
   // return prices;
 };
+
+// Format nutrients in a user-friendly way
+const formatNutrients = (nutrients: NutrientsPer100) => {
+  return (
+    <div className="space-y-1 text-sm">
+      <div>
+        <span className="font-medium">Calories:</span>{" "}
+        {nutrients.kcal.toFixed(1)} kcal
+      </div>
+      <div>
+        <span className="font-medium">Protein:</span>{" "}
+        {nutrients.protein.toFixed(1)}g
+      </div>
+    </div>
+  );
+};
+
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientOut> | undefined;
@@ -119,68 +139,87 @@ export const RecipeIngredientList: React.FC<{
         }))
       : [];
   }, [ingredients, ingMap, w]);
+
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
+
   const columns = [
     columnHelper.accessor(
       (ingredient) => ingredient.ingredient?.name || "Unknown",
       {
         id: "ing name",
+        header: "Ingredient",
         cell: (info) => info.getValue(),
       },
     ),
     columnHelper.accessor("amounts", {
+      header: "Amounts",
       cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
+        if (!w) return "Loading...";
+        const amounts = info.getValue();
+
+        // Format each amount using tryFormatMeasure
+        return (
+          <div className="space-y-1">
+            {amounts.map((amount, index) => (
+              <div key={index}>{tryFormatMeasure(w, amount)}</div>
+            ))}
+          </div>
+        );
       },
     }),
     columnHelper.display({
       id: "dollars",
-      header: "dollars",
+      header: "Cost",
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
         return (
           w &&
           measure &&
-          renderValueOrError(measure, (m) => w.format_measure(m))
+          renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
         );
       },
     }),
     columnHelper.display({
       id: "grams",
-      header: "grams",
+      header: "Weight",
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
         return (
           w &&
           measure &&
-          renderValueOrError(measure, (m) => w.format_measure(m))
+          renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
         );
       },
     }),
     columnHelper.display({
       id: "nutrient",
-      header: "nutrient",
+      header: "Nutrition",
       cell: (props) => {
-        const measure = props.row.original.priceInfo?.nutrient;
+        const nutrientResult = props.row.original.priceInfo?.nutrient;
         return (
-          measure &&
-          renderValueOrError(measure, (m) => <JsonRenderer input={m} />)
+          nutrientResult &&
+          renderValueOrError(nutrientResult, (nutrients) =>
+            formatNutrients(nutrients),
+          )
         );
       },
     }),
-    // columnHelper.accessor("priceInfo", {
-    //   cell: (info) => {
-    //     return <JsonRenderer input={info.getValue()} />;
-    //   },
-    // }),
     columnHelper.accessor("ingredient", {
+      header: "Ingredient Details",
       cell: (info) => {
-        return <JsonRenderer input={info.getValue()} />;
+        const ingredient = info.getValue();
+        if (!ingredient) return null;
+
+        return ingredient.id ? (
+          <IngredientPillLink name={ingredient.name} id={ingredient.id} />
+        ) : (
+          <JsonRenderer input={ingredient} />
+        );
       },
     }),
-
     columnHelper.display({
-      id: "actions",
+      id: "mappings",
+      header: "Unit Mappings",
       cell: (props) => {
         if (ingMap === undefined || w === undefined) {
           return "loading";
@@ -192,11 +231,8 @@ export const RecipeIngredientList: React.FC<{
         return <div>{buildunitMappingsGraph(w, mappings)}</div>;
       },
     }),
-
-    columnHelper.accessor("createdAt", {
-      cell: (info) => dayjs(info.getValue()).fromNow(),
-    }),
   ];
+
   const table = useReactTable({
     data: data,
     columns,
@@ -219,9 +255,51 @@ export const RecipeIngredientList: React.FC<{
   const totalPrice = useMemo(() => {
     return w && ingMap && sumPrice(w, ingredients, ingMap);
   }, [ingMap, ingredients, w]);
+
+  // Format the total price information
+  const formatTotalPrice = (totals: ReturnType<typeof sumPrice>) => {
+    if (!w) return null;
+
+    const summaryItems: SummaryItem[] = [
+      {
+        label: "Total Cost",
+        value: totals.price,
+        formatter: (value) => `$${Number(value).toFixed(2)}`,
+      },
+      {
+        label: "Total Weight",
+        value: totals.weight,
+        formatter: (value) => `${Number(value).toFixed(0)}g`,
+      },
+      {
+        label: "Total Calories",
+        value: totals.kcal,
+        formatter: (value) => `${Number(value).toFixed(0)} kcal`,
+      },
+      {
+        label: "Total Protein",
+        value: totals.protein,
+        formatter: (value) => `${Number(value).toFixed(0)}g`,
+      },
+      {
+        label: "Missing Data",
+        value: totals.missing.join(", "),
+      },
+    ];
+
+    return (
+      <SummaryCard
+        title="Recipe Summary"
+        items={summaryItems}
+        warningMessage="Missing data for"
+        warningCount={totals.missing.length}
+      />
+    );
+  };
+
   return (
     <div>
-      <JsonRenderer input={totalPrice} />
+      {totalPrice && formatTotalPrice(totalPrice)}
       <RTable table={table} />
     </div>
   );
