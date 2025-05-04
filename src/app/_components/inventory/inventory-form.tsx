@@ -2,7 +2,6 @@
 
 import { useWasm } from "~/wasmContext";
 import { type FC } from "react";
-import { Amount } from "~/codec/codec";
 import { api } from "~/trpc/react";
 import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
 import {
@@ -25,6 +24,10 @@ import {
   NumericField,
   RequiredTextField,
   getSubmitButtonText,
+  SideBySideFields,
+  detectComboboxIdChange,
+  hasAmountChanged,
+  createAmountObject,
 } from "../form-utils";
 
 // Form schema for inventory form
@@ -111,10 +114,11 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     clientSideFilter(products.items.map(buildProductComboboxItem), searchQuery);
 
   const handleSubmit = (values: InventoryFormValues) => {
-    const amount: Amount = {
-      value: parseFloat(values.amountValue),
+    // Convert the form values to an Amount object
+    const amount = createAmountObject({
+      value: values.amountValue,
       unit: values.amountUnit,
-    };
+    });
 
     if (mode === "create") {
       // For creation, pass all fields
@@ -128,22 +132,33 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       // In edit mode, determine which fields have changed
       const updates: z.infer<typeof inventoryUpdatePayloadData> = {};
 
-      // Check if amount has changed
+      // Check if amount has changed using shared utility
       if (
-        amount.value !== inventoryItem.amount.value ||
-        amount.unit !== inventoryItem.amount.unit
+        hasAmountChanged(
+          inventoryItem.amount,
+          values.amountValue,
+          values.amountUnit,
+        )
       ) {
         updates.amount = amount;
       }
 
-      // Check if product has changed
-      if (values.product?.id !== inventoryItem.product.id) {
-        updates.productId = values.product!.id;
+      // Check if product has changed using shared utility
+      const productIdChange = detectComboboxIdChange(
+        inventoryItem.product.id,
+        values.product,
+      );
+      if (productIdChange) {
+        updates.productId = productIdChange;
       }
 
-      // Check if location has changed
-      if (values.location?.id !== inventoryItem.location.id) {
-        updates.locationId = values.location!.id;
+      // Check if location has changed using shared utility
+      const locationIdChange = detectComboboxIdChange(
+        inventoryItem.location.id,
+        values.location,
+      );
+      if (locationIdChange) {
+        updates.locationId = locationIdChange;
       }
 
       // Only update if there are changes
@@ -189,25 +204,21 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         findItems={findLocations}
       />
 
-      <div className="flex space-x-4">
-        <div className="flex-1">
-          <NumericField
-            form={form}
-            name="amountValue"
-            label="Amount Value"
-            placeholder="Enter amount"
-          />
-        </div>
+      <SideBySideFields>
+        <NumericField
+          form={form}
+          name="amountValue"
+          label="Amount Value"
+          placeholder="Enter amount"
+        />
 
-        <div className="flex-1">
-          <RequiredTextField
-            form={form}
-            name="amountUnit"
-            label="Amount Unit"
-            placeholder="Enter unit"
-          />
-        </div>
-      </div>
+        <RequiredTextField
+          form={form}
+          name="amountUnit"
+          label="Amount Unit"
+          placeholder="Enter unit"
+        />
+      </SideBySideFields>
     </FormWrapper>
   );
 };

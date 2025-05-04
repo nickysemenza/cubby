@@ -305,3 +305,74 @@ export function buildUpdateObject<
 
   return updates;
 }
+
+// Helper function to detect changes in a nested field
+export function hasNestedFieldChanged<T, F>(
+  entity: T,
+  entityPath: (e: T) => unknown,
+  formValue: F,
+): boolean {
+  const entityValue = entityPath(entity);
+  return JSON.stringify(entityValue) !== JSON.stringify(formValue);
+}
+
+// Helper to extract ID from a ComboboxItem if different from entity
+export function detectComboboxIdChange(
+  entityId: string,
+  comboboxItem: ComboboxItem | null | undefined,
+): string | undefined {
+  if (comboboxItem && comboboxItem.id !== entityId) {
+    return comboboxItem.id;
+  }
+  return undefined;
+}
+
+// Helper to build a common form layout with two fields side by side
+export function SideBySideFields({
+  children,
+}: {
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <div className="flex space-x-4">
+      <div className="flex-1">
+        {Array.isArray(children) ? children[0] : children}
+      </div>
+      <div className="flex-1">
+        {Array.isArray(children) && children.length > 1 ? children[1] : null}
+      </div>
+    </div>
+  );
+}
+
+// Helper to create an Amount object from form values
+export interface AmountValues {
+  value: string | number;
+  unit: string;
+}
+
+export function createAmountObject(values: AmountValues) {
+  return {
+    value:
+      typeof values.value === "string"
+        ? parseFloat(values.value)
+        : values.value,
+    unit: values.unit,
+  };
+}
+
+// Detect changes in an amount value
+export function hasAmountChanged(
+  entityAmount: { value: number; unit: string },
+  formAmountValue: string | number,
+  formAmountUnit: string,
+): boolean {
+  const numericValue =
+    typeof formAmountValue === "string"
+      ? parseFloat(formAmountValue)
+      : formAmountValue;
+
+  return (
+    numericValue !== entityAmount.value || formAmountUnit !== entityAmount.unit
+  );
+}

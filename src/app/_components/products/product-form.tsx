@@ -15,6 +15,7 @@ import {
   NullableNumberField,
   getSubmitButtonText,
   buildUpdateObject,
+  SideBySideFields
 } from "../form-utils";
 
 // Form schema for product form
@@ -142,25 +143,21 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         placeholder="Enter model"
       />
 
-      <div className="flex space-x-4">
-        <div className="flex-1">
-          <NullableTextField
-            form={form}
-            name="upc"
-            label="UPC (Optional)"
-            placeholder="12-digit UPC code"
-          />
-        </div>
+      <SideBySideFields>
+        <NullableTextField
+          form={form}
+          name="upc"
+          label="UPC (Optional)"
+          placeholder="12-digit UPC code"
+        />
 
-        <div className="flex-1">
-          <NullableNumberField
-            form={form}
-            name="ndb_number"
-            label="NDB Number (Optional)"
-            placeholder="NDB number (1000-99999)"
-          />
-        </div>
-      </div>
+        <NullableNumberField
+          form={form}
+          name="ndb_number"
+          label="NDB Number (Optional)"
+          placeholder="NDB number (1000-99999)"
+        />
+      </SideBySideFields>
     </FormWrapper>
   );
 };
