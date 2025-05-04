@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC } from "react";
+import { type FC, useState } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
@@ -12,6 +12,10 @@ import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
+import { ProductForm, type UpdateProductData } from "./product-form";
+import { Button } from "~/components/ui/button";
+import { api } from "~/trpc/react";
+import { useRouter } from "next/navigation";
 
 interface ProductDetailProps {
   product: ProductWithMappingsAndFoodOut;
@@ -19,6 +23,45 @@ interface ProductDetailProps {
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const { w } = useWasm();
+  const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const updateProduct = api.product.update.useMutation({
+    onSuccess: () => {
+      setIsEditing(false);
+      router.refresh();
+    },
+    onError: (error) => {
+      setError(error.message);
+    },
+  });
+
+  const handleEdit = (data: UpdateProductData) => {
+    updateProduct.mutate(data);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setError(undefined);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="container mx-auto py-10">
+        <h1 className="text-2xl font-bold mb-6">Edit Product</h1>
+        <ProductForm
+          mode="edit"
+          product={product}
+          onEdit={handleEdit}
+          isPending={updateProduct.isPending}
+          error={error}
+          onCancel={handleCancel}
+        />
+      </div>
+    );
+  }
+
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
@@ -42,6 +85,9 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           <div>
             <span className="font-medium">NDB Number:</span>{" "}
             {product.ndb_number ? product.ndb_number : <NoneState />}
+          </div>
+          <div className="mt-4">
+            <Button onClick={() => setIsEditing(true)}>Edit</Button>
           </div>
         </div>
       ),

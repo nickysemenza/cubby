@@ -6,7 +6,8 @@ import {
   sortPaginationCombo,
   buildPaginatedResponse,
 } from "~/schemas/util";
-import { getProductByID, productList } from "~/server/repo/product";
+import { createProduct, getProductByID, productList, updateProduct } from "~/server/repo/product";
+import { productBase, productTopLevelOut } from "~/schemas/product";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 
 const getByID = publicProcedure
@@ -37,7 +38,28 @@ const list = publicProcedure
     return buildPaginatedResponse(input.pagination, data, count);
   });
 
+const create = publicProcedure
+  .input(productBase)
+  .output(productTopLevelOut)
+  .mutation(async ({ ctx, input }) => {
+    return await createProduct(ctx.db, input);
+  });
+
+const update = publicProcedure
+  .input(
+    z.object({
+      id: z.string().uuid(),
+      data: productBase.partial(),
+    })
+  )
+  .output(productTopLevelOut)
+  .mutation(async ({ ctx, input }) => {
+    return await updateProduct(ctx.db, input.id, input.data);
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   list,
+  create,
+  update,
 });

@@ -12,6 +12,7 @@ import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
 import { findFood } from "./usda";
 import { FoodLookupParam } from "~/schemas/usda";
+import { type productBase, type ProductTopLevelOut } from "~/schemas/product";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
@@ -222,4 +223,36 @@ export const productList = async (
     res.map(async (product) => await dbProductoToAPI(db, product)),
   );
   return { data: products, count: totalCount };
+};
+
+// Create a new product
+export const createProduct = async (
+  db: PrismaClient,
+  data: z.infer<typeof productBase>,
+): Promise<ProductTopLevelOut> => {
+  const product = await db.product.create({
+    data: {
+      name: data.name,
+      manufacturer: data.manufacturer,
+      model: data.model,
+      upc: data.upc,
+      ndb_number: data.ndb_number,
+    },
+  });
+  
+  return product;
+};
+
+// Update an existing product
+export const updateProduct = async (
+  db: PrismaClient,
+  id: string,
+  data: Partial<z.infer<typeof productBase>>,
+): Promise<ProductTopLevelOut> => {
+  const product = await db.product.update({
+    where: { id },
+    data,
+  });
+  
+  return product;
 };
