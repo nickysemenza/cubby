@@ -28,9 +28,9 @@ export const showAmountAndPrice = (
   );
 };
 
-export const tryFormatMeasure = (w: wasm, amount: WMeasure) => {
+export const tryFormatMeasure = (w: wasm, measure: WMeasure) => {
   try {
-    return w.format_measure(amount);
+    return w.format_measure(measure);
   } catch (error) {
     return (
       <div className="text-red-400">{"Error formatting measure :" + error}</div>

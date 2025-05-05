@@ -5,7 +5,7 @@ import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import {
   unitMappignsFromProduct,
-  type ProductWithMappingsAndFoodOut,
+  productWithIngredientAndInventoryAndMappingsOut,
 } from "~/schemas/combo";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
@@ -16,11 +16,18 @@ import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { z } from "zod";
+import {
+  IngredientPillLink,
+  LocationPillLink,
+  FoodPillLink,
+} from "../EntityPill";
 
 import { useMutation } from "@tanstack/react-query";
+import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 
 interface ProductDetailProps {
-  product: ProductWithMappingsAndFoodOut;
+  product: z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>;
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
@@ -66,7 +73,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       </div>
     );
   }
-
+  const mappings = unitMappignsFromProduct(product);
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
@@ -109,6 +116,40 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
               <NoneState />
             )}
           </div>
+          <div className="mt-4 space-y-2">
+            {product.ingredient && (
+              <div>
+                <span className="font-medium">Ingredient:</span>{" "}
+                <IngredientPillLink
+                  name={product.ingredient.name}
+                  id={product.ingredient.id}
+                />
+              </div>
+            )}
+            {product.food && (
+              <div>
+                <span className="font-medium">USDA Food:</span>{" "}
+                <FoodPillLink food={product.food} />
+              </div>
+            )}
+            {product.inventoryEntry && product.inventoryEntry.length > 0 && (
+              <div>
+                <span className="font-medium">Inventory Locations:</span>{" "}
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {product.inventoryEntry.map((entry) => (
+                    <LocationPillLink
+                      key={entry.id}
+                      location={{
+                        id: entry.location.id,
+                        name: entry.location.name,
+                        type: entry.location.type,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           <div className="mt-4">
             <Button onClick={() => setIsEditing(true)}>Edit</Button>
           </div>
@@ -117,14 +158,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     },
     {
       title: "Unit Mappings",
-      content: (
+      content: w && (
         <div className="space-y-2">
-          {w && (
-            <UnitMappingsTable
-              mappings={unitMappignsFromProduct(product)}
-              w={w}
-            />
-          )}
+          <div>{buildunitMappingsGraph(w, mappings)}</div>
+          <UnitMappingsTable mappings={mappings} w={w} />
         </div>
       ),
     },

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type React from "react";
+import { entities } from "~/entities/entities";
 import { type Entity } from "~/entities/types";
 
 interface PillProps {
@@ -8,17 +9,18 @@ interface PillProps {
   label?: string;
 }
 
-export const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
+const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
   return (
-    <span className="text-primary-foreground hover:bg-primary/90 inline-flex items-center truncate rounded-full bg-blue-500 px-2 py-1 text-sm font-medium transition-colors">
+    <span className="inline-flex items-center truncate rounded-full bg-green-100 px-2 py-0.5 text-sm font-medium text-green-900 transition-colors hover:bg-green-600">
       <span className="truncate">{text}</span>
       {entity && (
-        <span className="text-primary ml-2 rounded-full bg-blue-200 px-1 py-0.5 text-xs font-semibold">
-          {entity}
+        <span className="text-primary py-0.3 ml-1 rounded-full bg-blue-200 px-1 text-xs font-semibold">
+          {entities[entity].label}
+          {entities[entity].icon}
         </span>
       )}
       {label && (
-        <span className="text-primary ml-2 rounded-full bg-purple-300 px-1 py-0.5 text-xs font-semibold">
+        <span className="text-primary py-0.3 ml-1 rounded-full bg-purple-300 px-1 text-xs font-semibold">
           {label}
         </span>
       )}
@@ -57,6 +59,15 @@ export const ProductPillLink: React.FC<{
     text={name}
     label={manufacturer}
     entity={"product"}
+  />
+);
+export const FoodPillLink: React.FC<{
+  food: { foodInfo: { description: string }; fdc_id: number };
+}> = ({ food }) => (
+  <PillLink
+    href={`/usda/fdc/${food.fdc_id}`}
+    text={food.foodInfo.description}
+    entity={"usda-food"}
   />
 );
 
