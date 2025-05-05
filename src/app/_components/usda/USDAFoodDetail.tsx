@@ -8,7 +8,6 @@ import { unitMappingsFromFood } from "~/schemas/combo";
 import { ProductPillLink } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
-import Link from "next/link";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 
 export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
