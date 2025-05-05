@@ -12,12 +12,14 @@ import {
   updateInventoryEntry,
   type UpdateInventoryEntryData,
   createInventoryEntry,
+  bulkProcessInventoryEntries,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
 import {
   inventoryCreatePayloadData,
   inventoryUpdatePayloadData,
+  inventoryBulkOperationPayload,
 } from "~/schemas/inventory";
 
 const getByID = publicProcedure
@@ -40,6 +42,7 @@ const list = publicProcedure
       .object({
         productNameFilter: z.string().optional(),
         locationNameFilter: z.string().optional(),
+        locationIdFilter: z.string().optional(),
       })
       .merge(sortPaginationCombo),
   )
@@ -50,7 +53,8 @@ const list = publicProcedure
       input.sort,
       input.pagination,
       input.productNameFilter,
-      input.locationNameFilter
+      input.locationNameFilter,
+      input.locationIdFilter,
     );
     return buildPaginatedResponse(input.pagination, data, count);
   });
@@ -96,9 +100,29 @@ const create = publicProcedure
     }
   });
 
+// Bulk process inventory entries (creates and updates in one call)
+const bulkProcess = publicProcedure
+  .input(inventoryBulkOperationPayload)
+  .output(z.array(inventoryWithLocationAndProductOut))
+  .mutation(async ({ ctx, input }) => {
+    console.log({ input });
+    const result = await bulkProcessInventoryEntries(
+      ctx.db,
+      input.locationId,
+      input.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        locationId: item.locationId ?? input.locationId,
+        amount: item.amount,
+      })),
+    );
+    return result;
+  });
+
 export const inventoryentryRouter = createTRPCRouter({
   getByID,
   list,
   update,
   create,
+  bulkProcess,
 });

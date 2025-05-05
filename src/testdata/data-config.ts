@@ -40,8 +40,8 @@ const garage: InfLocationConfig = lc("garage", "room", [
     lp("oscillating and grinder", "half-crate", [
       p("Ryobi Angle Grinder", "033287188048", "Ryobi", "PBLAG01B", 129),
       p("Ryobi Oscillating Tool", "033287190706", "Ryobi", "PBLMT50B", 129),
-      gp("angle grinder discs"),
-      gp("oscillating toolblades"),
+      gp("angle grinder discs", 4),
+      gp("oscillating toolblades", 8),
     ]),
 
     lp("bin B", "crate", []),

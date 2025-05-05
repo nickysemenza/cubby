@@ -7,18 +7,17 @@ import { DetailPage } from "../data-table/detail-page";
 import { type LocationOutWithParentChildren } from "~/schemas/location";
 import { NoneState } from "../NoneState";
 import { LocationPillLink } from "../EntityPill";
-import { useWasm } from "~/wasmContext";
 import { Button } from "~/components/ui/button";
 import { LocationForm, type UpdateLocationData } from "./location-form";
 import { api } from "~/trpc/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 interface LocationDetailProps {
   location: LocationOutWithParentChildren;
 }
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
-  const { w } = useWasm();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -73,8 +72,11 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               <NoneState />
             )}
           </div>
-          <div className="mt-4">
+          <div className="mt-4 space-x-2">
             <Button onClick={() => setIsEditing(true)}>Edit</Button>
+            <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
+              <Button variant="outline">Bulk Edit Inventory</Button>
+            </Link>
           </div>
         </div>
       ),

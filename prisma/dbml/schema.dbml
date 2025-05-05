@@ -107,6 +107,7 @@ Table Location {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
+  lastBulkInventory DateTime
   parent Location
   parentId String
   children Location [not null]

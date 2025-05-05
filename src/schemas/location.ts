@@ -25,6 +25,7 @@ export type LocationBase = z.infer<typeof locationBase>;
 export const locationOut = z
   .object({
     id: z.string().uuid(),
+    lastBulkInventory: z.date().nullable(),
   })
   .merge(locationBase)
   .merge(dbTimestampsOut);

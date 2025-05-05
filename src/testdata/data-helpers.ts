@@ -21,11 +21,12 @@ export const uvp = (
   source: source,
 });
 // generic product
-export const gp = (name: string): ProductConfigItem => ({
+export const gp = (name: string, price_per: number): ProductConfigItem => ({
   kind: "product",
   data: {
     name,
     manufacturer: "generic",
+    price_per,
   },
 });
 // product (non-ingredient)

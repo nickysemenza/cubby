@@ -13,6 +13,7 @@ import {
 import { UseFormReturn, FieldValues, Path, PathValue } from "react-hook-form";
 import { Input } from "~/components/ui/input";
 import { Combobox, ComboboxItem } from "./combobox";
+import { DevTool } from "@hookform/devtools";
 
 // Base props shared by all forms
 export interface BaseFormProps {
@@ -71,6 +72,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
 }) {
   return (
     <Form {...form}>
+      <DevTool control={form.control} />
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {children}
 

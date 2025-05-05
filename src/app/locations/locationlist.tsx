@@ -59,6 +59,13 @@ export function LocationList() {
       cell: (info) => info.getValue(),
     }),
     createCreatedAtColumn(columnHelper),
+    columnHelper.accessor("lastBulkInventory", {
+      header: "Last Bulk Inventory",
+      cell: (info) => {
+        const date = info.getValue();
+        return date ? new Date(date).toLocaleString() : "Never";
+      },
+    }),
     createIdColumn(columnHelper, "locations"),
     columnHelper.accessor("inventoryEntries", {
       enableSorting: false,

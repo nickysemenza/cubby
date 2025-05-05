@@ -8,6 +8,7 @@ import {
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 import { getSortDirection } from "./util";
+import { InventoryBulkOperationItem } from "~/schemas/inventory";
 
 const inventoryentryInclude = {
   Product: {
@@ -65,6 +66,7 @@ export const inventoryentryList = async (
   pagination: PaginationParams,
   productNameFilter?: string,
   locationNameFilter?: string,
+  locationIdFilter?: string,
 ) => {
   const orderBy: Prisma.InventoryEntryOrderByWithAggregationInput = {
     createdAt: getSortDirection(sort, "createdAt"),
@@ -90,6 +92,13 @@ export const inventoryentryList = async (
               contains: locationNameFilter,
               mode: "insensitive",
             },
+          },
+        }
+      : {}),
+    ...(locationIdFilter
+      ? {
+          location: {
+            id: locationIdFilter,
           },
         }
       : {}),
@@ -152,4 +161,90 @@ export const createInventoryEntry = async (
   });
 
   return dbInventoryEntryoToAPI(created);
+};
+
+export const bulkProcessInventoryEntries = async (
+  db: PrismaClient,
+  locationId: string,
+  items: InventoryBulkOperationItem[],
+) => {
+  // Use a transaction to ensure all operations are processed atomically
+  const processedItems = await db.$transaction(async (tx) => {
+    const results = [];
+
+    // First, get all existing inventory entries for this location
+    const existingItems = await tx.inventoryEntry.findMany({
+      where: {
+        locationId: locationId,
+      },
+      include: inventoryentryInclude,
+    });
+
+    // Get IDs of items in the submitted array
+    const submittedIds = items.filter((item) => item.id).map((item) => item.id);
+
+    // Find items to delete (existing items not in the submitted array)
+    const itemsToDelete = existingItems.filter(
+      (item) => !submittedIds.includes(item.id),
+    );
+
+    // Delete items that are not in the submitted array
+    for (const item of itemsToDelete) {
+      await tx.inventoryEntry.delete({
+        where: { id: item.id },
+      });
+    }
+
+    // Process submitted items - create new or update existing
+    for (const item of items) {
+      if (!item.id) {
+        // Create new inventory entry - productId and amount are required
+        if (!item.productId || !item.amount) {
+          throw new Error("productId and amount are required for new items");
+        }
+        const created = await tx.inventoryEntry.create({
+          data: {
+            productId: item.productId,
+            locationId: locationId,
+            amount: item.amount,
+          },
+          include: inventoryentryInclude,
+        });
+        results.push(created);
+      } else {
+        // Update existing inventory entry
+        const updateData: Prisma.InventoryEntryUpdateInput = {};
+        if (item.amount) updateData.amount = item.amount;
+        if (item.productId)
+          updateData.Product = { connect: { id: item.productId } };
+
+        // Only process if there are actual updates
+        if (Object.keys(updateData).length > 0) {
+          const updated = await tx.inventoryEntry.update({
+            where: { id: item.id },
+            data: updateData,
+            include: inventoryentryInclude,
+          });
+          results.push(updated);
+        } else {
+          // If no updates, just fetch the current item
+          const current = await tx.inventoryEntry.findUnique({
+            where: { id: item.id },
+            include: inventoryentryInclude,
+          });
+          if (current) results.push(current);
+        }
+      }
+    }
+
+    // Update the location's lastBulkInventory timestamp
+    await tx.location.update({
+      where: { id: locationId },
+      data: { lastBulkInventory: new Date() },
+    });
+
+    return results;
+  });
+
+  return processedItems.map(dbInventoryEntryoToAPI);
 };

@@ -36,7 +36,6 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
-import { DevTool } from "@hookform/devtools";
 
 // Form schema for location form
 const formSchema = z.object({
@@ -167,7 +166,6 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <DevTool control={form.control} />
       <SideBySideFields>
         <RequiredTextField
           form={form}

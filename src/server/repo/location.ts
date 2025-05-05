@@ -22,7 +22,7 @@ export const createLocation = async (
     name: string;
     type: string;
     parentId: string | null;
-  }
+  },
 ) => {
   const location = await db.location.create({
     data: {
@@ -53,7 +53,7 @@ export const updateLocation = async (
     name?: string;
     type?: string;
     parentId?: string | null;
-  }
+  },
 ) => {
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {
@@ -73,10 +73,12 @@ export const updateLocation = async (
       if (currentParent.id === id) {
         throw new Error("Circular parent-child relationship detected");
       }
-      currentParent = await db.location.findUnique({
-        where: { id: currentParent.id },
-        include: { parent: true },
-      }).then(loc => loc?.parent || null);
+      currentParent = await db.location
+        .findUnique({
+          where: { id: currentParent.id },
+          include: { parent: true },
+        })
+        .then((loc) => loc?.parent || null);
     }
   }
 
@@ -85,11 +87,12 @@ export const updateLocation = async (
     data: {
       name: data.name,
       type: data.type,
-      parent: data.parentId !== undefined
-        ? data.parentId
-          ? { connect: { id: data.parentId } }
-          : { disconnect: true }
-        : undefined,
+      parent:
+        data.parentId !== undefined
+          ? data.parentId
+            ? { connect: { id: data.parentId } }
+            : { disconnect: true }
+          : undefined,
     },
     include: {
       parent: true,
@@ -221,6 +224,7 @@ const dbLocationToAPI: (
 ) => LocationOut = (location) => {
   return {
     id: location.id,
+    lastBulkInventory: location.lastBulkInventory,
     name: location.name,
     type: locationType.parse(location.type),
     ...extractDbTimestampsFromDBRec(location),
@@ -258,6 +262,7 @@ const buildLocationWithChildren = (
   return {
     name: x.name,
     id: x.id,
+    lastBulkInventory: x.lastBulkInventory,
     type: locationType.parse(x.type),
     children:
       x.children && x.children.length > 0
@@ -322,6 +327,7 @@ export const locationList = async (
     createdAt: getSortDirection(sort, "createdAt"),
     name: getSortDirection(sort, "name"),
     type: getSortDirection(sort, "type"),
+    lastBulkInventory: getSortDirection(sort, "lastBulkInventory"),
   };
   const where: Prisma.LocationWhereInput = {
     name: formatSearchTerm(name),

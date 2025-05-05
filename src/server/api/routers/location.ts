@@ -6,7 +6,7 @@ import {
   sortPaginationCombo,
   buildPaginatedResponse,
 } from "~/schemas/util";
-import { infLocation, locationType, locationBase } from "~/schemas/location";
+import { infLocation, locationType } from "~/schemas/location";
 import {
   buildLocationTree,
   buildLocationTypeCount,
