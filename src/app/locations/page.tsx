@@ -4,9 +4,11 @@ import { type Metadata } from "next";
 import LocationTreeGraph from "../_components/inventory/location-tree-graph";
 import LocationTreeView from "../_components/inventory/location-tree-view";
 import { WasmContextProvider } from "~/wasmContext";
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Recipes",
+  title: "Locations",
 };
 
 export default function Page() {
@@ -14,6 +16,12 @@ export default function Page() {
     <HydrateClient>
       <div>
         <WasmContextProvider>
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold">Locations</h1>
+            <Link href="/locations/new">
+              <Button>New Location</Button>
+            </Link>
+          </div>
           <div className="flex flex-row">
             <LocationTreeView />
             <LocationTreeGraph />

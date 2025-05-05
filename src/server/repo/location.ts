@@ -15,6 +15,91 @@ import { type InfLocationConfig } from "../../schemas/config";
 import { findOrCreateProduct } from "./product";
 import { formatSearchTerm, getSortDirection } from "./util";
 
+// Create a new location
+export const createLocation = async (
+  db: PrismaClient,
+  data: {
+    name: string;
+    type: string;
+    parentId: string | null;
+  }
+) => {
+  const location = await db.location.create({
+    data: {
+      name: data.name,
+      type: data.type,
+      parent: data.parentId
+        ? {
+            connect: {
+              id: data.parentId,
+            },
+          }
+        : undefined,
+    },
+    include: {
+      parent: true,
+      children: true,
+    },
+  });
+
+  return buildLocationWithChildren(location);
+};
+
+// Update an existing location
+export const updateLocation = async (
+  db: PrismaClient,
+  id: string,
+  data: {
+    name?: string;
+    type?: string;
+    parentId?: string | null;
+  }
+) => {
+  // Make sure we're not setting a location as its own parent
+  if (data.parentId === id) {
+    throw new Error("A location cannot be its own parent");
+  }
+
+  // Check if the new parent would create a circular reference
+  if (data.parentId) {
+    const potentialParent = await db.location.findUnique({
+      where: { id: data.parentId },
+      include: { parent: true },
+    });
+
+    // Walk up the parent chain to check for circular references
+    let currentParent = potentialParent?.parent;
+    while (currentParent) {
+      if (currentParent.id === id) {
+        throw new Error("Circular parent-child relationship detected");
+      }
+      currentParent = await db.location.findUnique({
+        where: { id: currentParent.id },
+        include: { parent: true },
+      }).then(loc => loc?.parent || null);
+    }
+  }
+
+  const location = await db.location.update({
+    where: { id },
+    data: {
+      name: data.name,
+      type: data.type,
+      parent: data.parentId !== undefined
+        ? data.parentId
+          ? { connect: { id: data.parentId } }
+          : { disconnect: true }
+        : undefined,
+    },
+    include: {
+      parent: true,
+      children: true,
+    },
+  });
+
+  return buildLocationWithChildren(location);
+};
+
 const upsertChild = async (
   db: Prisma.TransactionClient,
   now: Date,

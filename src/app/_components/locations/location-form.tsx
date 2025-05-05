@@ -1,0 +1,217 @@
+"use client";
+
+import { type FC } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { api } from "~/trpc/react";
+import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/utils";
+import {
+  locationBase,
+  locationType,
+  type LocationOut,
+} from "~/schemas/location";
+import {
+  type CreateModeProps,
+  type EditModeProps,
+  FormWrapper,
+  RequiredTextField,
+  getSubmitButtonText,
+  ComboboxField,
+  detectComboboxIdChange,
+  SideBySideFields,
+} from "../form-utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "~/components/ui/form";
+import { DevTool } from "@hookform/devtools";
+
+// Form schema for location form
+const formSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  type: locationType,
+  parent: ComboboxItem.nullable(),
+});
+
+export type LocationFormValues = z.infer<typeof formSchema>;
+
+// Use the backend type for creation data
+export type CreateLocationData = z.infer<typeof locationBase> & {
+  parentId: string | null;
+};
+
+// Define the props passed by parent for update operation
+export type UpdateLocationData = {
+  id: string;
+  data: Partial<CreateLocationData>;
+};
+
+// Props for create mode
+interface CreateLocationFormProps extends CreateModeProps<CreateLocationData> {
+  location?: never;
+}
+
+// Props for edit mode
+interface EditLocationFormProps
+  extends EditModeProps<UpdateLocationData, LocationOut> {
+  entity: LocationOut & { parent?: LocationOut | null };
+}
+
+// Combined props type using discriminated union
+type LocationFormProps = CreateLocationFormProps | EditLocationFormProps;
+
+export const LocationForm: FC<LocationFormProps> = (props) => {
+  const { mode, isPending, error, onCancel } = props;
+
+  // Get the location entity in edit mode
+  const location = mode === "edit" ? props.entity : undefined;
+
+  // Initialize form with default values or existing location data
+  const form = useForm<LocationFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: location ? location.name : "",
+      type: location ? location.type : "room",
+      parent:
+        location && location.parent
+          ? buildLocationComboboxItem(location.parent)
+          : null,
+    },
+  });
+
+  // Fetch locations for parent dropdown
+  const { data: locationsResp } = api.location.list.useQuery({
+    pagination: { pageIndex: 0, pageSize: 100 },
+    sort: { orderBy: "name", direction: "asc" },
+  });
+
+  const locations = locationsResp?.items || [];
+
+  // Filter out the current location (can't be its own parent)
+  const availableParents = locations.filter(
+    (loc) => mode !== "edit" || loc.id !== location?.id,
+  );
+
+  const findLocations = async (searchQuery: string) =>
+    clientSideFilter(
+      availableParents.map(buildLocationComboboxItem),
+      searchQuery,
+    );
+
+  const handleSubmit = (values: LocationFormValues) => {
+    if (mode === "create") {
+      // For creation, pass all fields
+      const createData: CreateLocationData = {
+        name: values.name,
+        type: values.type,
+        parentId: values.parent ? values.parent.id : null,
+      };
+      props.onCreate(createData);
+    } else if (mode === "edit" && location) {
+      // Build update object
+      const updates: Partial<CreateLocationData> = {};
+
+      // Check if name has changed
+      if (values.name !== location.name) {
+        updates.name = values.name;
+      }
+
+      // Check if type has changed
+      if (values.type !== location.type) {
+        updates.type = values.type;
+      }
+
+      // Check if parent has changed
+      const parentIdChange = detectComboboxIdChange(
+        location.parent?.id,
+        values.parent,
+      );
+      if (parentIdChange !== undefined) {
+        updates.parentId = parentIdChange;
+      }
+
+      // Only update if there are changes
+      if (Object.keys(updates).length > 0) {
+        const updateData: UpdateLocationData = {
+          id: location.id,
+          data: updates,
+        };
+        props.onEdit(updateData);
+      } else if (onCancel) {
+        // If no changes, just run the cancel function
+        onCancel();
+      }
+    }
+  };
+
+  const buttonText = getSubmitButtonText(mode, isPending);
+
+  return (
+    <FormWrapper
+      form={form}
+      onSubmit={handleSubmit}
+      error={error}
+      isPending={isPending}
+      onCancel={onCancel}
+      submitButtonText={buttonText}
+    >
+      <DevTool control={form.control} />
+      <SideBySideFields>
+        <RequiredTextField
+          form={form}
+          name="name"
+          label="Name"
+          placeholder="Enter location name"
+        />
+
+        <FormField
+          control={form.control}
+          name="type"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Type</FormLabel>
+              <Select
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+                value={field.value}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a location type" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {Object.values(locationType.enum).map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </SideBySideFields>
+
+      <ComboboxField
+        form={form}
+        name="parent"
+        label="Parent Location (Optional)"
+        findItems={findLocations}
+      />
+    </FormWrapper>
+  );
+};

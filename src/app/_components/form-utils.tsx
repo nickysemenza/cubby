@@ -318,7 +318,7 @@ export function hasNestedFieldChanged<T, F>(
 
 // Helper to extract ID from a ComboboxItem if different from entity
 export function detectComboboxIdChange(
-  entityId: string,
+  entityId: string | undefined,
   comboboxItem: ComboboxItem | null | undefined,
 ): string | undefined {
   if (comboboxItem && comboboxItem.id !== entityId) {
