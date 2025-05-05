@@ -13,7 +13,7 @@ import {
 } from "~/schemas/util";
 import { type InfLocationConfig } from "../../schemas/config";
 import { findOrCreateProduct } from "./product";
-import { formatSearchTerm } from "./util";
+import { formatSearchTerm, getSortDirection } from "./util";
 
 const upsertChild = async (
   db: Prisma.TransactionClient,
@@ -142,34 +142,24 @@ const dbLocationToAPI: (
   };
 };
 
-function recursiveLocationChildren(level: number): Prisma.LocationFindManyArgs {
+function recursiveLocationInclude(
+  level: number,
+  includeType: "children" | "parent",
+): Prisma.LocationFindManyArgs {
   if (level === 0) {
     return {
       include: {
-        children: true,
+        [includeType]: true,
       },
     };
   }
   return {
     include: {
-      children: recursiveLocationChildren(level - 1),
+      [includeType]: recursiveLocationInclude(level - 1, includeType),
     },
   };
 }
-function recursiveLocationParent(level: number): Prisma.LocationFindManyArgs {
-  if (level === 0) {
-    return {
-      include: {
-        parent: true,
-      },
-    };
-  }
-  return {
-    include: {
-      parent: recursiveLocationParent(level - 1),
-    },
-  };
-}
+
 type LocationWithParentChild = Prisma.LocationGetPayload<{
   include: {
     children: true;
@@ -222,7 +212,7 @@ export const buildLocationTypeCount = async (db: PrismaClient) => {
 export const buildLocationTree = async (db: PrismaClient) => {
   const res = await db.location.findMany({
     include: {
-      children: recursiveLocationChildren(10),
+      children: recursiveLocationInclude(10, "children"),
       parent: true,
     },
     where: {
@@ -244,9 +234,9 @@ export const locationList = async (
   pagination: PaginationParams,
 ) => {
   const orderBy: Prisma.LocationOrderByWithAggregationInput = {
-    createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
-    name: sort.orderBy === "name" ? sort.direction : undefined,
-    type: sort.orderBy === "type" ? sort.direction : undefined,
+    createdAt: getSortDirection(sort, "createdAt"),
+    name: getSortDirection(sort, "name"),
+    type: getSortDirection(sort, "type"),
   };
   const where: Prisma.LocationWhereInput = {
     name: formatSearchTerm(name),
@@ -273,7 +263,7 @@ export const getLocationById = async (db: PrismaClient, id: string) => {
       id,
     },
     include: {
-      parent: recursiveLocationParent(10),
+      parent: recursiveLocationInclude(10, "parent"),
       children: true,
     },
   });

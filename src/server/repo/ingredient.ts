@@ -9,7 +9,7 @@ import {
 import { type IngredientOut } from "~/schemas/combo";
 import { findFood } from "./usda";
 import { foodLookupParamFromProduct } from "./product";
-import { formatSearchTerm } from "./util";
+import { formatSearchTerm, getSortDirection } from "./util";
 
 export const mergeIngredients = async (
   db: PrismaClient,
@@ -221,9 +221,9 @@ export const ingredientList = async (
   missingProductsOnly: boolean = false,
 ) => {
   const orderBy: Prisma.IngredientOrderByWithAggregationInput = {
-    createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
-    name: sort.orderBy === "name" ? sort.direction : undefined,
-    aliases: sort.orderBy === "aliases" ? sort.direction : undefined,
+    createdAt: getSortDirection(sort, "createdAt"),
+    name: getSortDirection(sort, "name"),
+    aliases: getSortDirection(sort, "aliases"),
   };
 
   let where: Prisma.IngredientWhereInput = name

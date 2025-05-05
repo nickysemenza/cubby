@@ -14,6 +14,7 @@ import { findFood } from "./usda";
 import { foodLookupParam, FoodLookupParam } from "~/schemas/usda";
 import { type productBase, type ProductTopLevelOut } from "~/schemas/product";
 import { formatSearchTerm } from "./util";
+import { getSortDirection } from "./util";
 
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
@@ -232,11 +233,11 @@ export const productList = async (
   pagination: PaginationParams,
 ) => {
   const orderBy: Prisma.ProductOrderByWithAggregationInput = {
-    createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
-    name: sort.orderBy === "name" ? sort.direction : undefined,
-    manufacturer: sort.orderBy === "manufacturer" ? sort.direction : undefined,
-    model: sort.orderBy === "model" ? sort.direction : undefined,
-    upc: sort.orderBy === "upc" ? sort.direction : undefined,
+    createdAt: getSortDirection(sort, "createdAt"),
+    name: getSortDirection(sort, "name"),
+    manufacturer: getSortDirection(sort, "manufacturer"),
+    model: getSortDirection(sort, "model"),
+    upc: getSortDirection(sort, "upc"),
   };
   const where: Prisma.ProductWhereInput = {
     name: formatSearchTerm(name),

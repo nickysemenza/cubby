@@ -142,6 +142,8 @@ model InventoryEntry {
     /// where is the product
     location   Location @relation("LocationToProduct", fields: [locationId], references: [id])
     locationId String   @db.Uuid
+
+    @@unique([productId, locationId])
 }
 
 model Location {

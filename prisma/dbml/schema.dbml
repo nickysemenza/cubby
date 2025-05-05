@@ -94,6 +94,10 @@ Table InventoryEntry {
   location Location [not null, note: 'where is the product']
   locationId String [not null]
 
+  indexes {
+    (productId, locationId) [unique]
+  }
+
   Note: 'holds a mapping between an product and a location'
 }
 

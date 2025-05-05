@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { type SortParams } from "~/schemas/util";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (
@@ -12,3 +13,7 @@ export const formatSearchTerm = (
   // however, this seems slower than just using contains
   // return { search: term.trim().split(/\s+/).join(" & ") };
 };
+
+// Helper function to get sort direction for a field
+export const getSortDirection = (sort: SortParams, field: string) =>
+  sort.orderBy === field ? sort.direction : undefined;

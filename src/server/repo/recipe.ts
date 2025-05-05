@@ -13,7 +13,7 @@ import {
   type PaginationParams,
   buildTakeSkip,
 } from "~/schemas/util";
-import { formatSearchTerm } from "./util";
+import { formatSearchTerm, getSortDirection } from "./util";
 
 export const getRecipeByID = async (
   id: string,
@@ -119,8 +119,8 @@ export const recipeList = async (
   pagination: PaginationParams,
 ) => {
   const orderBy: Prisma.RecipeOrderByWithAggregationInput = {
-    createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
-    name: sort.orderBy === "name" ? sort.direction : undefined,
+    createdAt: getSortDirection(sort, "createdAt"),
+    name: getSortDirection(sort, "name"),
   };
   const where: Prisma.RecipeWhereInput = {
     name: formatSearchTerm(name),

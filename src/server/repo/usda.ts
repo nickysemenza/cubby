@@ -21,7 +21,7 @@ import {
   type PaginationParams,
   buildTakeSkip,
 } from "~/schemas/util";
-import { formatSearchTerm } from "./util";
+import { formatSearchTerm, getSortDirection } from "./util";
 import { findProductsByFoodIdentifier } from "./product";
 
 const getFoodByID = async (
@@ -297,9 +297,9 @@ export const listFoods = async (
   pagination: PaginationParams,
 ) => {
   const orderBy: Prisma.usda_foodOrderByWithAggregationInput = {
-    description: sort.orderBy === "description" ? sort.direction : undefined,
-    data_type: sort.orderBy === "data_type" ? sort.direction : undefined,
-    fdc_id: sort.orderBy === "fdc_id" ? sort.direction : undefined,
+    description: getSortDirection(sort, "description"),
+    data_type: getSortDirection(sort, "data_type"),
+    fdc_id: getSortDirection(sort, "fdc_id"),
   };
 
   const where: Prisma.usda_foodWhereInput = {

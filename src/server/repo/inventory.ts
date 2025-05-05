@@ -7,6 +7,7 @@ import {
 } from "~/schemas/util";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
+import { getSortDirection } from "./util";
 
 const inventoryentryInclude = {
   Product: {
@@ -66,8 +67,8 @@ export const inventoryentryList = async (
   locationNameFilter?: string,
 ) => {
   const orderBy: Prisma.InventoryEntryOrderByWithAggregationInput = {
-    createdAt: sort.orderBy === "createdAt" ? sort.direction : undefined,
-    amount: sort.orderBy === "amount" ? sort.direction : undefined,
+    createdAt: getSortDirection(sort, "createdAt"),
+    amount: getSortDirection(sort, "amount"),
   };
 
   // Build where clause based on filters
@@ -77,7 +78,7 @@ export const inventoryentryList = async (
           Product: {
             name: {
               contains: productNameFilter,
-              mode: 'insensitive',
+              mode: "insensitive",
             },
           },
         }
@@ -87,7 +88,7 @@ export const inventoryentryList = async (
           location: {
             name: {
               contains: locationNameFilter,
-              mode: 'insensitive',
+              mode: "insensitive",
             },
           },
         }
