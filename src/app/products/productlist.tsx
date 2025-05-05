@@ -6,7 +6,10 @@ import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
 import Link from "next/link";
 import React from "react";
-import { IngredientPillLink, LocationPillLink } from "../_components/EntityPill";
+import {
+  IngredientPillLink,
+  LocationPillLink,
+} from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { UnitMapping } from "~/schemas/unitmapping";
@@ -22,7 +25,7 @@ import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 export function ProductList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
-  
+
   // Query data with params from table state
   const { data: productsResp, isLoading } = api.product.list.useQuery({
     sort: tableState.getSortParams(),
@@ -31,11 +34,11 @@ export function ProductList() {
     manufacturerFilter: tableState.getColumnFilter("manufacturer"),
     upcFilter: tableState.getColumnFilter("upc"),
   });
-  
+
   const { w } = useWasm();
   const data = productsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
-  
+
   // Set up columns using helpers where possible
   const columns = [
     columnHelper.accessor("name", {
@@ -63,23 +66,30 @@ export function ProductList() {
       cell: (info) => {
         const upc = info.getValue();
         return upc ? (
-          <Link href={`/usda/upc/${upc}`} className="font-mono text-blue-600 hover:underline">
+          <Link
+            href={`/usda/upc/${upc}`}
+            className="font-mono text-blue-600 hover:underline"
+          >
             {upc}
           </Link>
-        ) : <NoneState />;
+        ) : (
+          <NoneState />
+        );
       },
     }),
     columnHelper.accessor("ndb_number", {
       header: "NDB",
       cell: (info) =>
         info.getValue() ? (
-          <Link 
-            href={`/usda/ndb/${info.getValue()}`} 
+          <Link
+            href={`/usda/ndb/${info.getValue()}`}
             className="font-mono text-blue-600 hover:underline"
           >
             {info.getValue()}
           </Link>
-        ) : <NoneState />,
+        ) : (
+          <NoneState />
+        ),
     }),
     columnHelper.accessor("model", {
       cell: (info) =>
@@ -128,7 +138,7 @@ export function ProductList() {
     }),
     createCreatedAtColumn(columnHelper),
   ];
-  
+
   // Configure the table
   const table = useTableConfig({
     data,
@@ -154,7 +164,11 @@ export function ProductList() {
 
   return (
     <div>
-      <RTable table={table} filterableColumns={filterableColumns} isLoading={isLoading} />
+      <RTable
+        table={table}
+        filterableColumns={filterableColumns}
+        isLoading={isLoading}
+      />
     </div>
   );
 }

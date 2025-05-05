@@ -15,17 +15,20 @@ import { useWasm } from "~/wasmContext";
 import { Checkbox } from "~/components/ui/checkbox";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import { createCreatedAtColumn, createIdColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCreatedAtColumn,
+  createIdColumn,
+} from "../_components/data-table/columnHelpers";
 
 export function IngredientList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
-  
+
   // Set up global filter for missing products
   const [globalFilter, setGlobalFilter] = useState({
     missingProductsOnly: false,
   });
-  
+
   // Query data with params from table state
   const { data: ingredientsResp, isLoading } = api.ingredient.list.useQuery({
     sort: tableState.getSortParams(),
@@ -33,12 +36,12 @@ export function IngredientList() {
     nameFilter: tableState.getColumnFilter("name"),
     missingProductsOnly: globalFilter.missingProductsOnly,
   });
-  
+
   const data = ingredientsResp?.items || [];
   type IngredientData = Flatten<typeof data>;
   const columnHelper = createColumnHelper<IngredientData>();
   const { w } = useWasm();
-  
+
   // Set up columns using helpers where possible
   const columns = [
     buildSelectColumn<IngredientData>(),
@@ -110,7 +113,7 @@ export function IngredientList() {
       },
     }),
   ];
-  
+
   // Configure the table with global filter
   const table = useTableConfig({
     data,

@@ -4,12 +4,12 @@ import { RowData, type Table } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "~/components/ui/select";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { type ReactNode, useState, useEffect } from "react";
@@ -89,7 +89,7 @@ const SelectFilterInput = <TData extends RowData>({
         <SelectValue placeholder={column.placeholder} />
       </SelectTrigger>
       <SelectContent>
-        {column.options?.map(option => (
+        {column.options?.map((option) => (
           <SelectItem key={option.value} value={option.value}>
             {option.label}
           </SelectItem>

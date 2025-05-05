@@ -2,7 +2,10 @@
 
 import { useWasm } from "~/wasmContext";
 import { type FC, useState } from "react";
-import { InventoryForm, type CreateInventoryData } from "~/app/_components/inventory/inventory-form";
+import {
+  InventoryForm,
+  type CreateInventoryData,
+} from "~/app/_components/inventory/inventory-form";
 import { api } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 
@@ -32,8 +35,8 @@ const CreateInventoryItem: FC = () => {
   return (
     <div className="container mx-auto p-4">
       <h1 className="mb-6 text-2xl font-bold">Create New Inventory Item</h1>
-      <InventoryForm 
-        mode="create" 
+      <InventoryForm
+        mode="create"
         onCreate={handleCreate}
         isPending={createMutation.isPending}
         error={error}

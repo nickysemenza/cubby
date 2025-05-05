@@ -20,10 +20,12 @@ export const recipeTopLevel = z
   })
   .merge(dbTimestampsOut);
 // Create a base schema with common fields
-const sectionIngredientBase = z.object({
-  id: z.string().uuid(),
-  amounts: z.array(amount),
-}).merge(dbTimestampsOut);
+const sectionIngredientBase = z
+  .object({
+    id: z.string().uuid(),
+    amounts: z.array(amount),
+  })
+  .merge(dbTimestampsOut);
 
 // Create a discriminated union to ensure either recipe or ingredient is set
 const sectionIngredientOut = z.discriminatedUnion("type", [

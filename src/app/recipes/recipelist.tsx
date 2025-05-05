@@ -41,18 +41,18 @@ export function RecipeList() {
     data,
     columns,
     tableState,
-    totalCount: recipesResp?.meta?.totalCount || 0
+    totalCount: recipesResp?.meta?.totalCount || 0,
   });
 
   const filterableColumns = [
     { id: "name", placeholder: "Filter by recipe name..." },
-    { id: "meta", placeholder: "Filter by source..." }
+    { id: "meta", placeholder: "Filter by source..." },
   ];
 
   return (
     <div>
-      <RTable 
-        table={table} 
+      <RTable
+        table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
       />

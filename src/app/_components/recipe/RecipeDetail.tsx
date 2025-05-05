@@ -43,8 +43,8 @@ const RecipeDetail: React.FC<{
       // Only get IDs from SectionIngredients that are actually ingredients (not recipes)
       const ingMap = await getBulkIngredients(
         ingredients
-          .filter(i => i.type === "ingredient")
-          .map(i => i.ingredient.id)
+          .filter((i) => i.type === "ingredient")
+          .map((i) => i.ingredient.id),
       );
       dataSet(ingMap);
     }

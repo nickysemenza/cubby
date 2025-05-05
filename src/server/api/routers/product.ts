@@ -6,7 +6,12 @@ import {
   sortPaginationCombo,
   buildPaginatedResponse,
 } from "~/schemas/util";
-import { createProduct, getProductByID, productList, updateProduct } from "~/server/repo/product";
+import {
+  createProduct,
+  getProductByID,
+  productList,
+  updateProduct,
+} from "~/server/repo/product";
 import { productBase, productTopLevelOut } from "~/schemas/product";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 
@@ -54,7 +59,7 @@ const update = publicProcedure
     z.object({
       id: z.string().uuid(),
       data: productBase.partial(),
-    })
+    }),
   )
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {

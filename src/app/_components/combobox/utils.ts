@@ -14,4 +14,4 @@ export const buildLocationComboboxItem = (
 ): ComboboxItem => ({
   id: location.id,
   name: `${location.name} (${location.type})`,
-}); 
+});

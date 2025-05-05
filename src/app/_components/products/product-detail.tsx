@@ -146,5 +146,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     });
   }
 
-  return <DetailPage sections={sections} entity="product" name={product.name} />;
+  return (
+    <DetailPage sections={sections} entity="product" name={product.name} />
+  );
 };

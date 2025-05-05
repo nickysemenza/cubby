@@ -60,7 +60,9 @@ export function createNameColumn<T extends BaseRow>(
 /**
  * Creates a relative timestamp column
  */
-export function createCreatedAtColumn<T extends BaseRow>(columnHelper: ColumnHelper<T>) {
+export function createCreatedAtColumn<T extends BaseRow>(
+  columnHelper: ColumnHelper<T>,
+) {
   return columnHelper.accessor((row) => row.createdAt, {
     id: "createdAt",
     cell: (info) => {

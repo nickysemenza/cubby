@@ -1,5 +1,11 @@
 import { WasmContextProvider } from "~/wasmContext";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "~/components/ui/card";
 import BulkInventoryForm from "./bulk-inventory-form";
 
 export const metadata = {

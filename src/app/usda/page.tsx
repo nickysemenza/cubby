@@ -12,7 +12,7 @@ export default function Page() {
   return (
     <HydrateClient>
       <div className="container mx-auto py-10">
-        <div className="flex justify-between items-center mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">USDA Foods</h1>
         </div>
         <WasmContextProvider>

@@ -95,5 +95,11 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     },
   ];
 
-  return <DetailPage sections={sections} entity="inventory-item" name={inventoryitem.product.name} />;
+  return (
+    <DetailPage
+      sections={sections}
+      entity="inventory-item"
+      name={inventoryitem.product.name}
+    />
+  );
 };
