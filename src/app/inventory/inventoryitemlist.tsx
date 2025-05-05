@@ -1,6 +1,5 @@
 "use client";
-
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
@@ -16,18 +15,22 @@ import {
 } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
 
+import { useQuery } from "@tanstack/react-query";
+
 export function InventoryItemList() {
+  const api = useTRPC();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: inventoryitemsResp, isLoading } =
-    api.inventoryItem.list.useQuery({
+  const { data: inventoryitemsResp, isLoading } = useQuery(
+    api.inventoryItem.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
       productNameFilter: tableState.getColumnFilter("product"),
       locationNameFilter: tableState.getColumnFilter("location"),
-    });
+    }),
+  );
 
   const { w } = useWasm();
   const data = inventoryitemsResp?.items || [];

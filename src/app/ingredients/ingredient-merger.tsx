@@ -1,16 +1,19 @@
 import { type Table } from "@tanstack/react-table";
 
 import { Button } from "~/components/ui/button";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { toast } from "react-toastify";
 import { IngredientPillLink } from "../_components/EntityPill";
 import { type IngredientOut } from "~/schemas/combo";
+
+import { useMutation } from "@tanstack/react-query";
 
 interface IngredientMergerProps {
   table: Table<IngredientOut>;
 }
 export function IngredientMerger({ table }: IngredientMergerProps) {
-  const merge = api.ingredient.merge.useMutation();
+  const api = useTRPC();
+  const merge = useMutation(api.ingredient.merge.mutationOptions());
   const selected = table.getFilteredSelectedRowModel().rows.map((x) => {
     const { id, name } = x.original;
     return { id, name };

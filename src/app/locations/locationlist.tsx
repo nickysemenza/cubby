@@ -1,6 +1,5 @@
 "use client";
-
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable, { FilterableColumn } from "../_components/data-table/Table";
@@ -15,17 +14,22 @@ import { LocationType, locationType } from "~/schemas/location";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { useWasm } from "~/wasmContext";
 
+import { useQuery } from "@tanstack/react-query";
+
 export function LocationList() {
+  const api = useTRPC();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: itemsResp, isLoading } = api.location.list.useQuery({
-    sort: tableState.getSortParams(),
-    pagination: tableState.pagination,
-    nameFilter: tableState.getColumnFilter("name"),
-    itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
-  });
+  const { data: itemsResp, isLoading } = useQuery(
+    api.location.list.queryOptions({
+      sort: tableState.getSortParams(),
+      pagination: tableState.pagination,
+      nameFilter: tableState.getColumnFilter("name"),
+      itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
+    }),
+  );
   const { w } = useWasm();
 
   // Set up columns using helpers

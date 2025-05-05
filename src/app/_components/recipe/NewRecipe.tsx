@@ -1,8 +1,7 @@
 "use client";
-
 import React, { useState, useMemo } from "react";
 import { type WIngredient } from "recipebridge/pkg";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { getIngredientUnit } from "./recipeutils";
 import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
@@ -13,12 +12,15 @@ import { toast } from "react-toastify";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { useWasm } from "~/wasmContext";
+import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
     .map((line) => line.trim())
     .filter((l) => l.length > 0);
 const NewRecipe: React.FC = () => {
+  const api = useTRPC();
   const { w } = useWasm();
   const [url, setURL] = useState<string>(
     "https://cooking.nytimes.com/recipes/1022674-chewy-gingerbread-cookies",
@@ -43,7 +45,7 @@ const NewRecipe: React.FC = () => {
     () => cleanupLinesToArray(instructionsText),
     [instructionsText],
   );
-  const scrape = api.recipe.scrape.useMutation();
+  const scrape = useMutation(api.recipe.scrape.mutationOptions());
   const onScrape = async () => {
     const res = await scrape.mutateAsync(url);
     if (res?.sections[0]) {
@@ -52,7 +54,7 @@ const NewRecipe: React.FC = () => {
       setInstructions(res.sections[0].instructions.join("\n"));
     }
   };
-  const insert = api.recipe.insertCompact.useMutation();
+  const insert = useMutation(api.recipe.insertCompact.mutationOptions());
   const onCreate = async () => {
     const compact: CompactRecipe = {
       name,
@@ -130,9 +132,12 @@ const NewRecipe: React.FC = () => {
   );
 };
 const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
-  const itemsResp = api.ingredient.getByName.useQuery({
-    nameFilter: name,
-  });
+  const api = useTRPC();
+  const itemsResp = useQuery(
+    api.ingredient.getByName.queryOptions({
+      nameFilter: name,
+    }),
+  );
   const resultName = itemsResp.data?.name;
   return (
     <div className={resultName ? "inline underline" : "inline"}>

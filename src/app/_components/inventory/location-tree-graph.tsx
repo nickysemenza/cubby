@@ -1,9 +1,10 @@
 "use client";
-
 import Link from "next/link";
 import { type Ref, useCallback, useState } from "react";
 import Tree, { type CustomNodeElementProps, type Point } from "react-d3-tree";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
+
+import { useQuery } from "@tanstack/react-query";
 
 const nodeSize = { x: 100, y: 200 };
 const foreignObjectProps: React.SVGProps<SVGForeignObjectElement> = {
@@ -13,7 +14,8 @@ const foreignObjectProps: React.SVGProps<SVGForeignObjectElement> = {
 };
 const rootName = "_root";
 export default function LocationTreeGraph() {
-  const locations = api.location.makeTree.useQuery();
+  const api = useTRPC();
+  const locations = useQuery(api.location.makeTree.queryOptions());
   const data = locations.data;
   const { translate, containerRef } = useCenteredTree();
 

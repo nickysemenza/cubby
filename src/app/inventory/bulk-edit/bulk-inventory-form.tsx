@@ -1,10 +1,9 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { ComboboxItem, clientSideFilter } from "~/app/_components/combobox";
 import {
   buildProductComboboxItem,
@@ -29,6 +28,9 @@ import { toast } from "react-toastify";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
+
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
@@ -50,6 +52,7 @@ const formSchema = z.object({
 type BulkInventoryFormValues = z.infer<typeof formSchema>;
 
 export default function BulkInventoryForm() {
+  const api = useTRPC();
   const { w } = useWasm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,10 +78,12 @@ export default function BulkInventoryForm() {
   const selectedLocation = form.watch("location");
 
   // Fetch locations for the location selector
-  const { data: locationsResp } = api.location.list.useQuery({
-    pagination: { pageIndex: 0, pageSize: 100 },
-    sort: { orderBy: "name", direction: "asc" },
-  });
+  const { data: locationsResp } = useQuery(
+    api.location.list.queryOptions({
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: { orderBy: "name", direction: "asc" },
+    }),
+  );
 
   const locations = locationsResp?.items || [];
 
@@ -103,16 +108,18 @@ export default function BulkInventoryForm() {
   }, [searchParams, locations, form]);
 
   // Fetch products for the product dropdown
-  const { data: productsResp } = api.product.list.useQuery({
-    pagination: { pageIndex: 0, pageSize: 100 },
-    sort: { orderBy: "name", direction: "asc" },
-  });
+  const { data: productsResp } = useQuery(
+    api.product.list.queryOptions({
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: { orderBy: "name", direction: "asc" },
+    }),
+  );
 
   const products = productsResp?.items || [];
 
   // Fetch existing inventory items when location is selected
-  const { data: inventoryItemsData, refetch: refetchInventoryItems } =
-    api.inventoryItem.list.useQuery(
+  const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
+    api.inventoryItem.list.queryOptions(
       {
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
@@ -121,7 +128,8 @@ export default function BulkInventoryForm() {
       {
         enabled: !!selectedLocation,
       },
-    );
+    ),
+  );
 
   // Load existing inventory items when location changes
   useEffect(() => {
@@ -162,11 +170,13 @@ export default function BulkInventoryForm() {
   };
 
   // Bulk process mutation
-  const bulkProcessMutation = api.inventoryItem.bulkProcess.useMutation({
-    onSuccess: () => {
-      refetchInventoryItems();
-    },
-  });
+  const bulkProcessMutation = useMutation(
+    api.inventoryItem.bulkProcess.mutationOptions({
+      onSuccess: () => {
+        refetchInventoryItems();
+      },
+    }),
+  );
 
   // Submit handler
   const onSubmit = async (values: BulkInventoryFormValues) => {

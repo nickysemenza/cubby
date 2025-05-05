@@ -1,10 +1,13 @@
 "use client";
 import { NodeRendererProps, Tree } from "react-arborist";
 import { InfLocation } from "~/schemas/location";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
+
+import { useQuery } from "@tanstack/react-query";
 
 const LocationTreeView = () => {
-  const locations = api.location.makeTree.useQuery();
+  const api = useTRPC();
+  const locations = useQuery(api.location.makeTree.queryOptions());
   const data = locations.data;
 
   return (

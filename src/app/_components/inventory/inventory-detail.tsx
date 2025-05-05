@@ -1,5 +1,4 @@
 "use client";
-
 import JsonRenderer from "~/app/_components/json-renderer";
 import { useWasm } from "~/wasmContext";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
@@ -11,7 +10,9 @@ import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { Button } from "~/components/ui/button";
 import { InventoryForm, type UpdateInventoryData } from "./inventory-form";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
+
+import { useMutation } from "@tanstack/react-query";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -22,20 +23,23 @@ interface InventoryDetailProps {
 export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
+  const api = useTRPC();
   const { w } = useWasm();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
-  const updateMutation = api.inventoryItem.update.useMutation({
-    onSuccess: () => {
-      setIsEditing(false);
-      // Refresh the page to get updated data
-      window.location.reload();
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  const updateMutation = useMutation(
+    api.inventoryItem.update.mutationOptions({
+      onSuccess: () => {
+        setIsEditing(false);
+        // Refresh the page to get updated data
+        window.location.reload();
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
 
   const handleEdit = (data: UpdateInventoryData) => {
     updateMutation.mutate(data);

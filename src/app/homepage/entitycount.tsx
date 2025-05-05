@@ -1,13 +1,15 @@
 "use client";
+import { useTRPC } from "~/trpc/react";
 
-import { api } from "~/trpc/react";
+import { useQuery } from "@tanstack/react-query";
 
 export default function EntityCount() {
-  const location = api.location.list.useQuery({});
-  const product = api.product.list.useQuery({});
-  const ingredient = api.ingredient.list.useQuery({});
-  const recipe = api.recipe.list.useQuery({});
-  const inventoryItem = api.inventoryItem.list.useQuery({});
+  const api = useTRPC();
+  const location = useQuery(api.location.list.queryOptions({}));
+  const product = useQuery(api.product.list.queryOptions({}));
+  const ingredient = useQuery(api.ingredient.list.queryOptions({}));
+  const recipe = useQuery(api.recipe.list.queryOptions({}));
+  const inventoryItem = useQuery(api.inventoryItem.list.queryOptions({}));
   return (
     <ul>
       <li>location count: {location.data?.meta.totalCount}</li>

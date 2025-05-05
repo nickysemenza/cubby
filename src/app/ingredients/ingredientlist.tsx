@@ -1,6 +1,5 @@
 "use client";
-
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import { useState } from "react";
@@ -20,7 +19,10 @@ import {
   createIdColumn,
 } from "../_components/data-table/columnHelpers";
 
+import { useQuery } from "@tanstack/react-query";
+
 export function IngredientList() {
+  const api = useTRPC();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
@@ -30,12 +32,14 @@ export function IngredientList() {
   });
 
   // Query data with params from table state
-  const { data: ingredientsResp, isLoading } = api.ingredient.list.useQuery({
-    sort: tableState.getSortParams(),
-    pagination: tableState.pagination,
-    nameFilter: tableState.getColumnFilter("name"),
-    missingProductsOnly: globalFilter.missingProductsOnly,
-  });
+  const { data: ingredientsResp, isLoading } = useQuery(
+    api.ingredient.list.queryOptions({
+      sort: tableState.getSortParams(),
+      pagination: tableState.pagination,
+      nameFilter: tableState.getColumnFilter("name"),
+      missingProductsOnly: globalFilter.missingProductsOnly,
+    }),
+  );
 
   const data = ingredientsResp?.items || [];
   type IngredientData = Flatten<typeof data>;

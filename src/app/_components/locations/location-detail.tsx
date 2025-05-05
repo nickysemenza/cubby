@@ -1,5 +1,4 @@
 "use client";
-
 import { type FC, useState } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
@@ -9,28 +8,33 @@ import { NoneState } from "../NoneState";
 import { LocationPillLink } from "../EntityPill";
 import { Button } from "~/components/ui/button";
 import { LocationForm, type UpdateLocationData } from "./location-form";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+import { useMutation } from "@tanstack/react-query";
 
 interface LocationDetailProps {
   location: LocationOutWithParentChildren;
 }
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
+  const api = useTRPC();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
-  const updateLocation = api.location.update.useMutation({
-    onSuccess: () => {
-      setIsEditing(false);
-      router.refresh();
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  const updateLocation = useMutation(
+    api.location.update.mutationOptions({
+      onSuccess: () => {
+        setIsEditing(false);
+        router.refresh();
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
 
   const handleEdit = (data: UpdateLocationData) => {
     updateLocation.mutate(data);

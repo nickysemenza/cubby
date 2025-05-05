@@ -1,23 +1,27 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LocationForm, type CreateLocationData } from "./location-form";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
+import { useMutation } from "@tanstack/react-query";
+
 export function NewLocation() {
+  const api = useTRPC();
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
 
-  const createLocation = api.location.create.useMutation({
-    onSuccess: (location) => {
-      router.push(`/locations/${location.id}`);
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  const createLocation = useMutation(
+    api.location.create.mutationOptions({
+      onSuccess: (location) => {
+        router.push(`/locations/${location.id}`);
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
 
   const handleCreate = (data: CreateLocationData) => {
     createLocation.mutate(data);

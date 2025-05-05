@@ -1,5 +1,4 @@
 "use client";
-
 import { type FC, useState } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
@@ -14,29 +13,34 @@ import { UnitMappingsTable } from "../units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
 import { ProductForm, type UpdateProductData } from "./product-form";
 import { Button } from "~/components/ui/button";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+import { useMutation } from "@tanstack/react-query";
 
 interface ProductDetailProps {
   product: ProductWithMappingsAndFoodOut;
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
+  const api = useTRPC();
   const { w } = useWasm();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
-  const updateProduct = api.product.update.useMutation({
-    onSuccess: () => {
-      setIsEditing(false);
-      router.refresh();
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  const updateProduct = useMutation(
+    api.product.update.mutationOptions({
+      onSuccess: () => {
+        setIsEditing(false);
+        router.refresh();
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
 
   const handleEdit = (data: UpdateProductData) => {
     updateProduct.mutate(data);

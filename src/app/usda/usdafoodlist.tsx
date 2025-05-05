@@ -1,6 +1,5 @@
 "use client";
-
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
@@ -14,17 +13,22 @@ import { useWasm } from "~/wasmContext";
 import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 
+import { useQuery } from "@tanstack/react-query";
+
 export function USDAFoodList() {
+  const api = useTRPC();
   // Set up table state
   const tableState = useTableState({ initialSort: "fdc_id" });
 
   // Query data with params from table state
-  const { data: foodsResp, isLoading } = api.usda.list.useQuery({
-    sort: tableState.getSortParams(),
-    pagination: tableState.pagination,
-    nameFilter: tableState.getColumnFilter("foodinfo-description"),
-    dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type"),
-  });
+  const { data: foodsResp, isLoading } = useQuery(
+    api.usda.list.queryOptions({
+      sort: tableState.getSortParams(),
+      pagination: tableState.pagination,
+      nameFilter: tableState.getColumnFilter("foodinfo-description"),
+      dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type"),
+    }),
+  );
 
   const { w } = useWasm();
   const data = foodsResp?.items || [];

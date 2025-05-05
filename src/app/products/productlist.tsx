@@ -1,6 +1,5 @@
 "use client";
-
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
@@ -22,18 +21,23 @@ import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 
+import { useQuery } from "@tanstack/react-query";
+
 export function ProductList() {
+  const api = useTRPC();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: productsResp, isLoading } = api.product.list.useQuery({
-    sort: tableState.getSortParams(),
-    pagination: tableState.pagination,
-    nameFilter: tableState.getColumnFilter("name"),
-    manufacturerFilter: tableState.getColumnFilter("manufacturer"),
-    upcFilter: tableState.getColumnFilter("upc"),
-  });
+  const { data: productsResp, isLoading } = useQuery(
+    api.product.list.queryOptions({
+      sort: tableState.getSortParams(),
+      pagination: tableState.pagination,
+      nameFilter: tableState.getColumnFilter("name"),
+      manufacturerFilter: tableState.getColumnFilter("manufacturer"),
+      upcFilter: tableState.getColumnFilter("upc"),
+    }),
+  );
 
   const { w } = useWasm();
   const data = productsResp?.items || [];

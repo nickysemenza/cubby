@@ -1,28 +1,32 @@
 "use client";
-
 import { useWasm } from "~/wasmContext";
 import { type FC, useState } from "react";
 import {
   InventoryForm,
   type CreateInventoryData,
 } from "~/app/_components/inventory/inventory-form";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 
+import { useMutation } from "@tanstack/react-query";
+
 const CreateInventoryItem: FC = () => {
+  const api = useTRPC();
   const { w } = useWasm();
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
 
-  const createMutation = api.inventoryItem.create.useMutation({
-    onSuccess: (data) => {
-      // Redirect to the new inventory item's detail page
-      router.push(`/inventory/${data.id}`);
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  const createMutation = useMutation(
+    api.inventoryItem.create.mutationOptions({
+      onSuccess: (data) => {
+        // Redirect to the new inventory item's detail page
+        router.push(`/inventory/${data.id}`);
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
 
   const handleCreate = (data: CreateInventoryData) => {
     createMutation.mutate(data);

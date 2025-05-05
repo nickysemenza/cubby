@@ -1,10 +1,9 @@
 "use client";
-
 import { type FC } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/utils";
 import {
@@ -36,6 +35,8 @@ import {
   FormLabel,
   FormMessage,
 } from "~/components/ui/form";
+
+import { useQuery } from "@tanstack/react-query";
 
 // Form schema for location form
 const formSchema = z.object({
@@ -72,6 +73,7 @@ interface EditLocationFormProps
 type LocationFormProps = CreateLocationFormProps | EditLocationFormProps;
 
 export const LocationForm: FC<LocationFormProps> = (props) => {
+  const api = useTRPC();
   const { mode, isPending, error, onCancel } = props;
 
   // Get the location entity in edit mode
@@ -91,10 +93,12 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
   });
 
   // Fetch locations for parent dropdown
-  const { data: locationsResp } = api.location.list.useQuery({
-    pagination: { pageIndex: 0, pageSize: 100 },
-    sort: { orderBy: "name", direction: "asc" },
-  });
+  const { data: locationsResp } = useQuery(
+    api.location.list.queryOptions({
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: { orderBy: "name", direction: "asc" },
+    }),
+  );
 
   const findLocations = async (searchQuery: string) =>
     clientSideFilter(

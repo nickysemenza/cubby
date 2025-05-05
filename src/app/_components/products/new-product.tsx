@@ -1,23 +1,27 @@
 "use client";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProductForm, type CreateProductData } from "./product-form";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
+import { useMutation } from "@tanstack/react-query";
+
 export function NewProduct() {
+  const api = useTRPC();
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
 
-  const createProduct = api.product.create.useMutation({
-    onSuccess: (product) => {
-      router.push(`/products/${product.id}`);
-    },
-    onError: (error) => {
-      setError(error.message);
-    },
-  });
+  const createProduct = useMutation(
+    api.product.create.mutationOptions({
+      onSuccess: (product) => {
+        router.push(`/products/${product.id}`);
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
 
   const handleCreate = (data: CreateProductData) => {
     createProduct.mutate(data);

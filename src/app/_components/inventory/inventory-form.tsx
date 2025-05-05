@@ -1,8 +1,7 @@
 "use client";
-
 import { useWasm } from "~/wasmContext";
 import { type FC } from "react";
-import { api } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
 import {
   buildProductComboboxItem,
@@ -29,6 +28,8 @@ import {
   hasAmountChanged,
   createAmountObject,
 } from "../form-utils";
+
+import { useQuery } from "@tanstack/react-query";
 
 // Form schema for inventory form
 const formSchema = z.object({
@@ -72,6 +73,7 @@ interface EditInventoryFormProps
 type InventoryFormProps = CreateInventoryFormProps | EditInventoryFormProps;
 
 export const InventoryForm: FC<InventoryFormProps> = (props) => {
+  const api = useTRPC();
   const { w } = useWasm();
   const { mode, isPending, error, onCancel } = props;
 
@@ -94,10 +96,12 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
   });
 
   // Fetch locations and products for dropdowns
-  const { data: locationsResp } = api.location.list.useQuery({
-    pagination: { pageIndex: 0, pageSize: 100 },
-    sort: { orderBy: "name", direction: "asc" },
-  });
+  const { data: locationsResp } = useQuery(
+    api.location.list.queryOptions({
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: { orderBy: "name", direction: "asc" },
+    }),
+  );
 
   const findLocations = async (searchQuery: string) =>
     clientSideFilter(
@@ -105,10 +109,12 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       searchQuery,
     );
 
-  const { data: productsResp } = api.product.list.useQuery({
-    pagination: { pageIndex: 0, pageSize: 100 },
-    sort: { orderBy: "name", direction: "asc" },
-  });
+  const { data: productsResp } = useQuery(
+    api.product.list.queryOptions({
+      pagination: { pageIndex: 0, pageSize: 100 },
+      sort: { orderBy: "name", direction: "asc" },
+    }),
+  );
 
   const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
     clientSideFilter(
