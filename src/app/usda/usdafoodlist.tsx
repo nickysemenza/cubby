@@ -25,8 +25,10 @@ export function USDAFoodList() {
     api.usda.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
-      nameFilter: tableState.getColumnFilter("foodinfo-description"),
-      dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type"),
+      filters: {
+        nameFilter: tableState.getColumnFilter("foodinfo-description"),
+        dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type"),
+      },
     }),
   );
 

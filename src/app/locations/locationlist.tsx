@@ -26,8 +26,10 @@ export function LocationList() {
     api.location.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
-      nameFilter: tableState.getColumnFilter("name"),
-      itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
+      filters: {
+        nameFilter: tableState.getColumnFilter("name"),
+        itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
+      },
     }),
   );
   const { w } = useWasm();

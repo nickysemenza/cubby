@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -82,10 +82,11 @@ export default function BulkInventoryForm() {
     api.location.list.queryOptions({
       pagination: { pageIndex: 0, pageSize: 100 },
       sort: { orderBy: "name", direction: "asc" },
+      filters: {},
     }),
   );
 
-  const locations = locationsResp?.items || [];
+  const locations = useMemo(() => locationsResp?.items || [], [locationsResp]);
 
   // Update URL when location changes
   useEffect(() => {
@@ -112,6 +113,7 @@ export default function BulkInventoryForm() {
     api.product.list.queryOptions({
       pagination: { pageIndex: 0, pageSize: 100 },
       sort: { orderBy: "name", direction: "asc" },
+      filters: {},
     }),
   );
 
@@ -123,7 +125,7 @@ export default function BulkInventoryForm() {
       {
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
-        locationIdFilter: selectedLocation?.id,
+        filters: { locationIdFilter: selectedLocation?.id },
       },
       {
         enabled: !!selectedLocation,

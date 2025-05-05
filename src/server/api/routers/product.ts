@@ -24,9 +24,11 @@ const list = publicProcedure
   .input(
     z
       .object({
-        nameFilter: z.string().optional(),
-        manufacturerFilter: z.string().optional(),
-        upcFilter: z.string().optional(),
+        filters: z.object({
+          nameFilter: z.string().optional(),
+          manufacturerFilter: z.string().optional(),
+          upcFilter: z.string().optional(),
+        }),
       })
       .merge(sortPaginationCombo),
   )
@@ -38,9 +40,9 @@ const list = publicProcedure
   .query(async ({ ctx, input }) => {
     const { data, count } = await productList(
       ctx.db,
-      input.nameFilter,
-      input.manufacturerFilter,
-      input.upcFilter,
+      input.filters.nameFilter,
+      input.filters.manufacturerFilter,
+      input.filters.upcFilter,
       input.sort,
       input.pagination,
     );

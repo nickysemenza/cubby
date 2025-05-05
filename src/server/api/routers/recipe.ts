@@ -21,7 +21,9 @@ const list = publicProcedure
   .input(
     z
       .object({
-        nameFilter: z.string().optional(),
+        filters: z.object({
+          nameFilter: z.string().optional(),
+        }),
       })
       .merge(sortPaginationCombo),
   )
@@ -29,7 +31,7 @@ const list = publicProcedure
   .query(async ({ ctx, input }) => {
     const { data, count } = await recipeList(
       ctx.db,
-      input.nameFilter,
+      input.filters.nameFilter,
       input.sort,
       input.pagination,
     );

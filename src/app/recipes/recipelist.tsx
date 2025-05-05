@@ -23,7 +23,9 @@ export function RecipeList() {
     api.recipe.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
-      nameFilter: tableState.getColumnFilter("name"),
+      filters: {
+        nameFilter: tableState.getColumnFilter("name"),
+      },
     }),
   );
 

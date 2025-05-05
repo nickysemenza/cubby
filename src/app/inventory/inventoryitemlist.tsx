@@ -27,8 +27,10 @@ export function InventoryItemList() {
     api.inventoryItem.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
-      productNameFilter: tableState.getColumnFilter("product"),
-      locationNameFilter: tableState.getColumnFilter("location"),
+      filters: {
+        productNameFilter: tableState.getColumnFilter("product"),
+        locationNameFilter: tableState.getColumnFilter("location"),
+      },
     }),
   );
 

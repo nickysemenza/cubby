@@ -21,8 +21,10 @@ const list = publicProcedure
   .input(
     z
       .object({
-        nameFilter: z.string().optional(),
-        itemTypeFilter: locationType.optional(),
+        filters: z.object({
+          nameFilter: z.string().optional(),
+          itemTypeFilter: locationType.optional(),
+        }),
       })
       .merge(sortPaginationCombo),
   )
@@ -32,8 +34,8 @@ const list = publicProcedure
   .query(async ({ ctx, input }) => {
     const { data, count } = await locationList(
       ctx.db,
-      input.nameFilter,
-      input.itemTypeFilter,
+      input.filters.nameFilter,
+      input.filters.itemTypeFilter,
       input.sort,
       input.pagination,
     );

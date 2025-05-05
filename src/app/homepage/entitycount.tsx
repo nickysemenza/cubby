@@ -2,14 +2,21 @@
 import { useTRPC } from "~/trpc/react";
 
 import { useQuery } from "@tanstack/react-query";
+import { SortParams } from "~/schemas/util";
 
 export default function EntityCount() {
   const api = useTRPC();
-  const location = useQuery(api.location.list.queryOptions({}));
-  const product = useQuery(api.product.list.queryOptions({}));
-  const ingredient = useQuery(api.ingredient.list.queryOptions({}));
-  const recipe = useQuery(api.recipe.list.queryOptions({}));
-  const inventoryItem = useQuery(api.inventoryItem.list.queryOptions({}));
+  const sort: SortParams = { orderBy: "name", direction: "asc" };
+  const opts = {
+    filters: {},
+    sort,
+    pagination: { pageIndex: 0, pageSize: 100 },
+  };
+  const location = useQuery(api.location.list.queryOptions(opts));
+  const product = useQuery(api.product.list.queryOptions(opts));
+  const ingredient = useQuery(api.ingredient.list.queryOptions(opts));
+  const recipe = useQuery(api.recipe.list.queryOptions(opts));
+  const inventoryItem = useQuery(api.inventoryItem.list.queryOptions(opts));
   return (
     <ul>
       <li>location count: {location.data?.meta.totalCount}</li>

@@ -100,6 +100,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     api.location.list.queryOptions({
       pagination: { pageIndex: 0, pageSize: 100 },
       sort: { orderBy: "name", direction: "asc" },
+      filters: {},
     }),
   );
 
@@ -113,6 +114,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     api.product.list.queryOptions({
       pagination: { pageIndex: 0, pageSize: 100 },
       sort: { orderBy: "name", direction: "asc" },
+      filters: {},
     }),
   );
 

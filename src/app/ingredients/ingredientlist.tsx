@@ -36,8 +36,10 @@ export function IngredientList() {
     api.ingredient.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
-      nameFilter: tableState.getColumnFilter("name"),
-      missingProductsOnly: globalFilter.missingProductsOnly,
+      filters: {
+        nameFilter: tableState.getColumnFilter("name"),
+        missingProductsOnly: globalFilter.missingProductsOnly,
+      },
     }),
   );
 

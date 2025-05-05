@@ -36,8 +36,10 @@ const list = publicProcedure
   .input(
     z
       .object({
-        nameFilter: z.string().optional(),
-        missingProductsOnly: z.boolean().optional().default(false),
+        filters: z.object({
+          nameFilter: z.string().optional(),
+          missingProductsOnly: z.boolean().optional().default(false),
+        }),
       })
       .merge(sortPaginationCombo),
   )
@@ -45,10 +47,10 @@ const list = publicProcedure
   .query(async ({ ctx, input }) => {
     const { data, count } = await ingredientList(
       ctx.db,
-      input.nameFilter,
+      input.filters.nameFilter,
       input.sort,
       input.pagination,
-      input.missingProductsOnly,
+      input.filters.missingProductsOnly,
     );
 
     return buildPaginatedResponse(input.pagination, data, count);

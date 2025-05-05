@@ -33,9 +33,11 @@ export function ProductList() {
     api.product.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
-      nameFilter: tableState.getColumnFilter("name"),
-      manufacturerFilter: tableState.getColumnFilter("manufacturer"),
-      upcFilter: tableState.getColumnFilter("upc"),
+      filters: {
+        nameFilter: tableState.getColumnFilter("name"),
+        manufacturerFilter: tableState.getColumnFilter("manufacturer"),
+        upcFilter: tableState.getColumnFilter("upc"),
+      },
     }),
   );
 

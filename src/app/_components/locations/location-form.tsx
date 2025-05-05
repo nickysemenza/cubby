@@ -97,6 +97,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
     api.location.list.queryOptions({
       pagination: { pageIndex: 0, pageSize: 100 },
       sort: { orderBy: "name", direction: "asc" },
+      filters: {},
     }),
   );
 

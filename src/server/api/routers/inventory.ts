@@ -40,9 +40,11 @@ const list = publicProcedure
   .input(
     z
       .object({
-        productNameFilter: z.string().optional(),
-        locationNameFilter: z.string().optional(),
-        locationIdFilter: z.string().optional(),
+        filters: z.object({
+          productNameFilter: z.string().optional(),
+          locationNameFilter: z.string().optional(),
+          locationIdFilter: z.string().optional(),
+        }),
       })
       .merge(sortPaginationCombo),
   )
@@ -52,9 +54,9 @@ const list = publicProcedure
       ctx.db,
       input.sort,
       input.pagination,
-      input.productNameFilter,
-      input.locationNameFilter,
-      input.locationIdFilter,
+      input.filters.productNameFilter,
+      input.filters.locationNameFilter,
+      input.filters.locationIdFilter,
     );
     return buildPaginatedResponse(input.pagination, data, count);
   });
