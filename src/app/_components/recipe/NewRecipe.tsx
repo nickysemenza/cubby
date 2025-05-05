@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { type WIngredient } from "recipebridge/pkg";
 import { useTRPC } from "~/trpc/react";
 import { getIngredientUnit } from "./recipeutils";
@@ -14,21 +14,52 @@ import { Textarea } from "~/components/ui/textarea";
 import { useWasm } from "~/wasmContext";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "~/components/ui/form";
+import { FormWrapper } from "../form-utils";
+
 const cleanupLinesToArray = (lines: string) =>
   lines
     .split("\n")
     .map((line) => line.trim())
     .filter((l) => l.length > 0);
+
+// Form schema for recipe
+const formSchema = z.object({
+  url: z.string().url("Please enter a valid URL"),
+  name: z.string().min(1, "Name is required"),
+  ingredientsText: z.string().min(1, "Ingredients are required"),
+  instructionsText: z.string().min(1, "Instructions are required"),
+});
+
+type RecipeFormValues = z.infer<typeof formSchema>;
+
 const NewRecipe: React.FC = () => {
   const api = useTRPC();
   const { w } = useWasm();
-  const [url, setURL] = useState<string>(
-    "https://cooking.nytimes.com/recipes/1022674-chewy-gingerbread-cookies",
-  );
-  const [name, setName] = useState<string>("");
-  const [ingredientsText, setIngredients] = useState<string>("");
-  const [instructionsText, setInstructions] = useState<string>("");
   const router = useRouter();
+
+  // Initialize form
+  const form = useForm<RecipeFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      url: "https://cooking.nytimes.com/recipes/1022674-chewy-gingerbread-cookies",
+      name: "",
+      ingredientsText: "",
+      instructionsText: "",
+    },
+  });
+
+  const { watch } = form;
+  const ingredientsText = watch("ingredientsText");
+  const instructionsText = watch("instructionsText");
 
   const debouncedText = useDebounce(ingredientsText, 300);
   const ingredientLines = useMemo(
@@ -45,51 +76,94 @@ const NewRecipe: React.FC = () => {
     () => cleanupLinesToArray(instructionsText),
     [instructionsText],
   );
+
   const scrape = useMutation(api.recipe.scrape.mutationOptions());
   const onScrape = async () => {
+    const url = form.getValues("url");
     const res = await scrape.mutateAsync(url);
     if (res?.sections[0]) {
-      setName(res.name);
-      setIngredients(res.sections[0].ingredients.join("\n"));
-      setInstructions(res.sections[0].instructions.join("\n"));
+      form.setValue("name", res.name);
+      form.setValue("ingredientsText", res.sections[0].ingredients.join("\n"));
+      form.setValue(
+        "instructionsText",
+        res.sections[0].instructions.join("\n"),
+      );
     }
   };
+
   const insert = useMutation(api.recipe.insertCompact.mutationOptions());
-  const onCreate = async () => {
+  const onSubmit = async (values: RecipeFormValues) => {
     const compact: CompactRecipe = {
-      name,
-      meta: { url },
+      name: values.name,
+      meta: { url: values.url },
       sections: [
         {
-          ingredients: ingredientLines,
-          instructions: instructionLines,
+          ingredients: cleanupLinesToArray(values.ingredientsText),
+          instructions: cleanupLinesToArray(values.instructionsText),
         },
       ],
     };
     const res = await insert.mutateAsync(compact);
-    toast(`Recipe ${name} created`, { type: "success" });
+    toast(`Recipe ${values.name} created`, { type: "success" });
     router.push(`/recipes/${res.id}`);
   };
 
   return (
-    <div className="container mx-auto">
+    <FormWrapper
+      form={form}
+      onSubmit={onSubmit}
+      isPending={scrape.isPending || insert.isPending}
+      submitButtonText="Create Recipe"
+    >
       <div className="my-4">
-        <Input
-          type="url"
-          value={url}
-          onChange={(e) => setURL(e.target.value)}
+        <FormField
+          control={form.control}
+          name="url"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Input type="url" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
-        <Button onClick={() => onScrape()}>Scrape</Button>
+        <Button type="button" onClick={() => onScrape()}>
+          Scrape
+        </Button>
       </div>
-      <Input value={name} onChange={(e) => setName(e.target.value)} />
+
+      <FormField
+        control={form.control}
+        name="name"
+        render={({ field }) => (
+          <FormItem>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Textarea
-          value={ingredientsText}
-          onChange={(e) => setIngredients(e.target.value)}
-          rows={10}
-          cols={50}
-          placeholder="Enter your recipe here..."
-          className="border border-gray-300"
+        <FormField
+          control={form.control}
+          name="ingredientsText"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  rows={10}
+                  cols={50}
+                  placeholder="Enter your recipe here..."
+                  className="border border-gray-300"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
         <div>
           {ingredientsParsed.map((l, x) => (
@@ -99,15 +173,27 @@ const NewRecipe: React.FC = () => {
           ))}
         </div>
       </div>
+
       <hr className="my-4" />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Textarea
-          value={instructionsText}
-          onChange={(e) => setInstructions(e.target.value)}
-          rows={10}
-          cols={50}
-          placeholder="Enter your instructions here..."
-          className="border border-gray-300 leading-relaxed"
+        <FormField
+          control={form.control}
+          name="instructionsText"
+          render={({ field }) => (
+            <FormItem>
+              <FormControl>
+                <Textarea
+                  {...field}
+                  rows={10}
+                  cols={50}
+                  placeholder="Enter your instructions here..."
+                  className="border border-gray-300 leading-relaxed"
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
         />
         <div>
           <ol className="list-decimal pl-5 leading-relaxed">
@@ -126,11 +212,10 @@ const NewRecipe: React.FC = () => {
           </ol>
         </div>
       </div>
-      {/* <JsonRenderer input={{ lines, linesParsed }} /> */}
-      <Button onClick={() => onCreate()}>Create</Button>
-    </div>
+    </FormWrapper>
   );
 };
+
 const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
   const api = useTRPC();
   const itemsResp = useQuery(

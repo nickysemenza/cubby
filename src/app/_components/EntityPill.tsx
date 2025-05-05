@@ -69,7 +69,7 @@ export const FoodPillLink: React.FC<{
   food: { foodInfo: { description: string }; fdc_id: number };
 }> = ({ food }) => (
   <PillLink
-    href={`/usda/fdc/${food.fdc_id}`}
+    href={`/usda/${food.fdc_id}`}
     text={food.foodInfo.description}
     entity={"usda-food"}
   />
