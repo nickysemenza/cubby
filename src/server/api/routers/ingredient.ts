@@ -11,8 +11,12 @@ import {
   mergeIngredients,
   ingredientList,
   getIngredientByName,
+  createIngredient,
+  updateIngredient,
 } from "~/server/repo/ingredient";
 import { ingredientWithRecipesAndProductOut } from "~/schemas/combo";
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ingredientBase, ingredientOut } from "~/schemas/ingredient";
 
 const merge = publicProcedure
   .input(
@@ -67,9 +71,30 @@ const getByName = publicProcedure
       await getIngredientByName(ctx.db, input.nameFilter),
   );
 
+const create = publicProcedure
+  .input(ingredientBase)
+  .output(ingredientWithRecipesAndProductOut)
+  .mutation(async ({ ctx, input }) => {
+    return await createIngredient(ctx.db, input);
+  });
+
+const update = publicProcedure
+  .input(
+    z.object({
+      id: z.string().uuid(),
+      data: ingredientBase.partial(),
+    }),
+  )
+  .output(ingredientWithRecipesAndProductOut)
+  .mutation(async ({ ctx, input }) => {
+    return await updateIngredient(ctx.db, input.id, input.data);
+  });
+
 export const ingredientRouter = createTRPCRouter({
   getByName,
   getByID,
   list,
   merge,
+  create,
+  update,
 });

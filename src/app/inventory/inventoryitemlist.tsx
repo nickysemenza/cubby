@@ -14,7 +14,6 @@ import {
   createIdColumn,
 } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
-import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -101,23 +100,7 @@ export function InventoryItemList() {
         );
       },
     }),
-    columnHelper.accessor("inventoryEntries", {
-      enableSorting: false,
-      cell: (info) => (
-        <div className="space-y-1">
-          {info.getValue().map((e) => (
-            <div key={e.id}>
-              {w && showAmountAndPrice(w, e.amount, e.product.unitMappings)}
-            </div>
-          ))}
-          <EntityPillLinkList
-            items={info.getValue().map((e) => e.product)}
-            Pill={ProductPillLink}
-            pillPropName="product"
-          />
-        </div>
-      ),
-    }),
+
     createCreatedAtColumn(columnHelper),
     createIdColumn(columnHelper, "inventory"),
   ];

@@ -10,6 +10,8 @@ import { type IngredientOut } from "~/schemas/combo";
 import { findFood } from "./usda";
 import { foodLookupParamFromProduct } from "./product";
 import { formatSearchTerm, getSortDirection } from "./util";
+import { type z } from "zod";
+import { ingredientBase } from "~/schemas/ingredient";
 
 export const mergeIngredients = async (
   db: PrismaClient,
@@ -136,6 +138,35 @@ export const getIngredientByName = async (db: PrismaClient, name: string) => {
     include: ingredientInclude,
   });
   return res ? await dbIngredientToAPI(db, res) : null;
+};
+
+export const createIngredient = async (
+  db: PrismaClient,
+  data: z.infer<typeof ingredientBase>,
+): Promise<IngredientOut> => {
+  const ingredient = await db.ingredient.create({
+    data: {
+      name: data.name,
+      aliases: data.aliases || [],
+    },
+    include: ingredientInclude,
+  });
+
+  return await dbIngredientToAPI(db, ingredient);
+};
+
+export const updateIngredient = async (
+  db: PrismaClient,
+  id: string,
+  data: Partial<z.infer<typeof ingredientBase>>,
+): Promise<IngredientOut> => {
+  const ingredient = await db.ingredient.update({
+    where: { id },
+    data: data,
+    include: ingredientInclude,
+  });
+
+  return await dbIngredientToAPI(db, ingredient);
 };
 
 export const findOrCreateIngredient = async (

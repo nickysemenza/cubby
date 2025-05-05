@@ -2,7 +2,7 @@ import { z } from "zod";
 import { inventoryEntryOut } from "./inventory";
 import { locationOut } from "./location";
 import { productTopLevelOut } from "./product";
-import { ingredientBase } from "./ingredient";
+import { ingredientOut } from "./ingredient";
 import { UnitMapping, unitMappingOut } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
 import { FoodSummary, foodSummary } from "./usda";
@@ -33,7 +33,7 @@ export const inventoryWithLocationAndProductOut = inventoryEntryOut.merge(
 export const productWithIngredientAndInventoryAndMappingsOut =
   productTopLevelOut.merge(
     z.object({
-      ingredient: ingredientBase.nullable(),
+      ingredient: ingredientOut.nullable(),
       unitMappings: z.array(unitMappingOut),
       inventoryEntry: z.array(inventoryWithLocationOut),
       food: foodSummary.nullable(),
@@ -54,7 +54,7 @@ export const ingredientWithRecipesAndProductOut = z
     appearsInRecipes: z.array(recipeTopLevel),
     product: z.array(productWithMappingsAndFoodOut),
   })
-  .merge(ingredientBase);
+  .merge(ingredientOut);
 
 export const locationOutWithParentChildrenAndInventoryOut = z
   .object({

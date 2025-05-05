@@ -13,7 +13,7 @@ export const recipeTopLevel = baseEntitySchema.extend({
 });
 
 // Create a base schema with common fields
-const sectionIngredientBase = z
+const sectioningredientOut = z
   .object({
     id: z.string().uuid(),
     amounts: z.array(amount),
@@ -22,12 +22,12 @@ const sectionIngredientBase = z
 
 // Create a discriminated union to ensure either recipe or ingredient is set
 const sectionIngredientOut = z.discriminatedUnion("type", [
-  sectionIngredientBase.extend({
+  sectioningredientOut.extend({
     type: z.literal("ingredient"),
     recipe: z.null(),
     ingredient: ingredientOut,
   }),
-  sectionIngredientBase.extend({
+  sectioningredientOut.extend({
     type: z.literal("recipe"),
     recipe: recipeTopLevel,
     ingredient: z.null(),

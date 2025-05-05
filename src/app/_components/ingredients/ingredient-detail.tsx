@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC } from "react";
+import { type FC, useState } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
@@ -9,16 +9,65 @@ import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
 import { EntityPillLinkList } from "../EntityPillLinkList";
+import { Button } from "~/components/ui/button";
+import { IngredientForm, type UpdateIngredientData } from "./ingredient-form";
+import { useTRPC } from "~/trpc/react";
+import { useMutation } from "@tanstack/react-query";
+import { Card, CardContent } from "~/components/ui/card";
 
 interface IngredientDetailProps {
   ingredient: IngredientOut;
 }
 
-export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
+export const IngredientDetail: FC<IngredientDetailProps> = ({
+  ingredient: initialIngredient,
+}) => {
+  const api = useTRPC();
+  const [ingredient, setIngredient] =
+    useState<IngredientOut>(initialIngredient);
+  const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  const updateIngredient = useMutation(
+    api.ingredient.update.mutationOptions({
+      onSuccess: (updatedIngredient) => {
+        setIngredient(updatedIngredient);
+        setIsEditing(false);
+      },
+      onError: (error) => {
+        setError(error.message);
+      },
+    }),
+  );
+
+  const handleEdit = (data: UpdateIngredientData) => {
+    updateIngredient.mutate(data);
+  };
+
+  const handleCancel = () => {
+    setIsEditing(false);
+    setError(undefined);
+  };
+
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
-      content: (
+      content: isEditing ? (
+        <div className="container mx-auto py-10">
+          <Card>
+            <CardContent className="pt-6">
+              <IngredientForm
+                mode="edit"
+                entity={ingredient}
+                isPending={updateIngredient.isPending}
+                error={error}
+                onEdit={handleEdit}
+                onCancel={handleCancel}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
         <div className="space-y-2">
           <div>
             <span className="font-medium">Name:</span> {ingredient.name}
@@ -30,6 +79,15 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             ) : (
               <NoneState />
             )}
+          </div>
+          <div className="pt-2">
+            <Button
+              onClick={() => setIsEditing(true)}
+              variant="outline"
+              size="sm"
+            >
+              Edit Ingredient
+            </Button>
           </div>
         </div>
       ),
