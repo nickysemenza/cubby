@@ -1,13 +1,12 @@
 import { z } from "zod";
-import { amount } from "~/codec/codec";
 import { dbTimestampsOut } from "./util";
+import { amount } from "~/codec/codec";
 
 export const unitMappingBase = z.object({
   a: amount.describe("first of pair"),
   b: amount.describe("second of pair"),
   source: z.string().nullable(),
 });
-export type UnitMapping = z.infer<typeof unitMappingBase>;
 
 export const unitMappingOut = z
   .object({
@@ -16,4 +15,5 @@ export const unitMappingOut = z
   .merge(unitMappingBase)
   .merge(dbTimestampsOut);
 
+export type UnitMapping = z.infer<typeof unitMappingBase>;
 export type UnitMappingOut = z.infer<typeof unitMappingOut>;

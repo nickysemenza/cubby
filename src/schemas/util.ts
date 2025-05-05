@@ -73,3 +73,11 @@ export const IDInput = z
     id: z.string().uuid().describe("UUID"),
   })
   .describe("input for retrieving by ID");
+
+// Base entity schema with common fields
+export const baseEntitySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+  })
+  .merge(dbTimestampsOut);

@@ -1,24 +1,17 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./util";
+import { baseEntitySchema, dbTimestampsOut } from "./util";
 import { amount } from "~/codec/codec";
 
-const ingredientOut = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string(),
-  })
-  .merge(dbTimestampsOut);
-export const recipeTopLevel = z
-  .object({
-    id: z.string().uuid(),
-    name: z.string(),
-    meta: z
-      .object({
-        url: z.string().nullable(),
-      })
-      .nullable(),
-  })
-  .merge(dbTimestampsOut);
+const ingredientOut = baseEntitySchema;
+
+export const recipeTopLevel = baseEntitySchema.extend({
+  meta: z
+    .object({
+      url: z.string().nullable(),
+    })
+    .nullable(),
+});
+
 // Create a base schema with common fields
 const sectionIngredientBase = z
   .object({
@@ -40,7 +33,9 @@ const sectionIngredientOut = z.discriminatedUnion("type", [
     ingredient: z.null(),
   }),
 ]);
+
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
+
 const recipeSectionOut = z
   .object({
     id: z.string().uuid(),
@@ -49,7 +44,9 @@ const recipeSectionOut = z
     instructions: z.array(z.object({ instruction: z.string() })),
   })
   .merge(dbTimestampsOut);
+
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
+
 export const recipeOut = z
   .object({
     sections: z.array(recipeSectionOut),

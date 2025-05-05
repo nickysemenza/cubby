@@ -5,6 +5,7 @@ import { dbTimestampsOut } from "./util";
 export const inventoryEntryOut = z
   .object({
     id: z.string().uuid(),
+    // inventory entries do not have a name, just ID
     amount: amount,
   })
   .merge(dbTimestampsOut);
