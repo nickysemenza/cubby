@@ -28,6 +28,7 @@ describe("getGramAndNutrient", () => {
         id: "123",
         name: "Test Product",
         food: {
+          legacyFoodInfo: null,
           nutritionInfo: {
             nutrientsPer100: {
               protein: 10,
@@ -100,8 +101,7 @@ describe("getGramAndNutrient", () => {
         source: "test",
       },
     ];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const product: any[] = [
+    const product: ProductWithMappingsAndFoodOut[] = [
       {
         id: "123",
         name: "Test Product",
@@ -109,6 +109,10 @@ describe("getGramAndNutrient", () => {
         unitMappings: [],
         createdAt: new Date(),
         updatedAt: new Date(),
+        upc: null,
+        ndb_number: null,
+        manufacturer: "",
+        model: null,
       },
     ];
 

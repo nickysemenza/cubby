@@ -63,7 +63,6 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
       pageIndex: z.number(),
       pageSize: z.number(),
       totalCount: z.number(),
-      // totalPages: z.number(),
     }),
     items: z.array(entrySchema),
   });
