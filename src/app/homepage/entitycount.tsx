@@ -17,6 +17,7 @@ export default function EntityCount() {
   const ingredient = useQuery(api.ingredient.list.queryOptions(opts));
   const recipe = useQuery(api.recipe.list.queryOptions(opts));
   const inventoryItem = useQuery(api.inventoryItem.list.queryOptions(opts));
+  const usda = useQuery(api.usda.list.queryOptions(opts));
   return (
     <ul>
       <li>location count: {location.data?.meta.totalCount}</li>
@@ -24,6 +25,7 @@ export default function EntityCount() {
       <li>item count: {ingredient.data?.meta.totalCount}</li>
       <li>recipe count: {recipe.data?.meta.totalCount}</li>
       <li>inventory count: {inventoryItem.data?.meta.totalCount}</li>
+      <li>usda food: {usda.data?.meta.totalCount}</li>
     </ul>
   );
 }

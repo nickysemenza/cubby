@@ -11,9 +11,11 @@ const LocationTreeView = () => {
   const data = locations.data;
 
   return (
-    <Tree initialData={data} disableDrag>
-      {Node}
-    </Tree>
+    data && (
+      <Tree initialData={data} disableDrag>
+        {Node}
+      </Tree>
+    )
   );
 };
 
