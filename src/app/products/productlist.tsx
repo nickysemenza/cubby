@@ -20,6 +20,7 @@ import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
+import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -134,13 +135,18 @@ export function ProductList() {
     }),
     columnHelper.accessor("inventoryEntry", {
       enableSorting: false,
-      cell: (info) =>
-        info.getValue().map((e) => (
-          <div key={e.id}>
-            {w && tryFormatMeasure(w, e.amount)}
-            <LocationPillLink location={e.location} />
-          </div>
-        )),
+      cell: (info) => (
+        <div className="space-y-1">
+          {info.getValue().map((e) => (
+            <div key={e.id}>{w && tryFormatMeasure(w, e.amount)}</div>
+          ))}
+          <EntityPillLinkList
+            items={info.getValue().map((e) => e.location)}
+            Pill={LocationPillLink}
+            pillPropName="location"
+          />
+        </div>
+      ),
     }),
     createCreatedAtColumn(columnHelper),
   ];

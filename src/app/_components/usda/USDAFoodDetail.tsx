@@ -9,6 +9,7 @@ import { ProductPillLink } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
 import Link from "next/link";
+import { EntityPillLinkList } from "../EntityPillLinkList";
 
 export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
   food,
@@ -149,32 +150,11 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
         <div className="text-gray-500 italic">No associated products found</div>
       ) : (
         <div className="space-y-4">
-          {linkedProducts.map((product) => (
-            <div
-              key={product.id}
-              className="rounded-md border border-gray-200 p-3"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <ProductPillLink product={product} />
-                  <div className="mt-1 text-sm text-gray-600">
-                    {product.manufacturer}
-                  </div>
-                </div>
-                <Link
-                  href={`/products/${product.id}`}
-                  className="rounded-md bg-blue-100 px-3 py-1 text-sm text-blue-800 transition-colors hover:bg-blue-200"
-                >
-                  View
-                </Link>
-              </div>
-              <div className="mt-2 space-y-1 text-xs text-gray-500">
-                {product.model && <div>Model: {product.model}</div>}
-                {product.upc && <div>UPC: {product.upc}</div>}
-                {product.ndb_number && <div>NDB: {product.ndb_number}</div>}
-              </div>
-            </div>
-          ))}
+          <EntityPillLinkList
+            items={linkedProducts}
+            Pill={ProductPillLink}
+            pillPropName="product"
+          />
         </div>
       )}
     </div>

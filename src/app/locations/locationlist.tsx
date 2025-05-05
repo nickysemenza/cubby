@@ -13,6 +13,7 @@ import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { useWasm } from "~/wasmContext";
+import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -45,13 +46,11 @@ export function LocationList() {
     columnHelper.accessor("children", {
       enableSorting: false,
       cell: (info) => (
-        <div>
-          {info.getValue().map((child) => (
-            <div key={child.id}>
-              <LocationPillLink location={child} />
-            </div>
-          ))}
-        </div>
+        <EntityPillLinkList
+          items={info.getValue()}
+          Pill={LocationPillLink}
+          pillPropName="location"
+        />
       ),
     }),
     columnHelper.accessor("parent", {
@@ -75,13 +74,18 @@ export function LocationList() {
     createIdColumn(columnHelper, "locations"),
     columnHelper.accessor("inventoryEntries", {
       enableSorting: false,
-      cell: (info) =>
-        info.getValue().map((e) => (
-          <div key={e.id}>
-            {w && tryFormatMeasure(w, e.amount)}
-            <ProductPillLink product={e.product} />
-          </div>
-        )),
+      cell: (info) => (
+        <div className="space-y-1">
+          {info.getValue().map((e) => (
+            <div key={e.id}>{w && tryFormatMeasure(w, e.amount)}</div>
+          ))}
+          <EntityPillLinkList
+            items={info.getValue().map((e) => e.product)}
+            Pill={ProductPillLink}
+            pillPropName="product"
+          />
+        </div>
+      ),
     }),
   ];
 

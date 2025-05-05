@@ -14,6 +14,7 @@ import {
   createIdColumn,
 } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
+import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -40,13 +41,26 @@ export function InventoryItemList() {
 
   // Set up columns using helpers where possible
   const columns = [
+    columnHelper.accessor("amount", {
+      cell: (info) => {
+        return (
+          w &&
+          showAmountAndPrice(
+            w,
+            info.getValue(),
+            info.row.original.product.unitMappings,
+          )
+        );
+      },
+    }),
     columnHelper.accessor("product", {
       enableSorting: false,
       cell: (info) => {
         const product = info.getValue();
         const { upc, ndb_number, unitMappings } = product;
         return (
-          <>
+          <div className="space-y-1">
+            <ProductPillLink product={product} />
             <div className="mb-2 space-y-1">
               {upc && (
                 <div className="text-xs">
@@ -72,8 +86,7 @@ export function InventoryItemList() {
               )}
             </div>
             <div>{w && buildunitMappingsGraph(w, unitMappings)}</div>
-            <ProductPillLink product={product} />
-          </>
+          </div>
         );
       },
     }),
@@ -88,17 +101,22 @@ export function InventoryItemList() {
         );
       },
     }),
-    columnHelper.accessor("amount", {
-      cell: (info) => {
-        return (
-          w &&
-          showAmountAndPrice(
-            w,
-            info.getValue(),
-            info.row.original.product.unitMappings,
-          )
-        );
-      },
+    columnHelper.accessor("inventoryEntries", {
+      enableSorting: false,
+      cell: (info) => (
+        <div className="space-y-1">
+          {info.getValue().map((e) => (
+            <div key={e.id}>
+              {w && showAmountAndPrice(w, e.amount, e.product.unitMappings)}
+            </div>
+          ))}
+          <EntityPillLinkList
+            items={info.getValue().map((e) => e.product)}
+            Pill={ProductPillLink}
+            pillPropName="product"
+          />
+        </div>
+      ),
     }),
     createCreatedAtColumn(columnHelper),
     createIdColumn(columnHelper, "inventory"),

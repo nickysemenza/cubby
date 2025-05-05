@@ -22,6 +22,7 @@ import {
   LocationPillLink,
   FoodPillLink,
 } from "../EntityPill";
+import { EntityPillLinkList } from "../EntityPillLinkList";
 
 import { useMutation } from "@tanstack/react-query";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
@@ -136,16 +137,15 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
               <div>
                 <span className="font-medium">Inventory Locations:</span>{" "}
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {product.inventoryEntry.map((entry) => (
-                    <LocationPillLink
-                      key={entry.id}
-                      location={{
-                        id: entry.location.id,
-                        name: entry.location.name,
-                        type: entry.location.type,
-                      }}
-                    />
-                  ))}
+                  <EntityPillLinkList
+                    items={product.inventoryEntry.map((entry) => ({
+                      id: entry.location.id,
+                      name: entry.location.name,
+                      type: entry.location.type,
+                    }))}
+                    Pill={LocationPillLink}
+                    pillPropName="location"
+                  />
                 </div>
               </div>
             )}

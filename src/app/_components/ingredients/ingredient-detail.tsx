@@ -8,6 +8,7 @@ import { type IngredientOut } from "~/schemas/combo";
 import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
+import { EntityPillLinkList } from "../EntityPillLinkList";
 
 interface IngredientDetailProps {
   ingredient: IngredientOut;
@@ -36,33 +37,21 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Related Products",
       content: (
-        <div className="space-y-2">
-          {ingredient.product.length > 0 ? (
-            ingredient.product.map((product) => (
-              <div key={product.id}>
-                <ProductPillLink product={product} />
-              </div>
-            ))
-          ) : (
-            <NoneState />
-          )}
-        </div>
+        <EntityPillLinkList
+          items={ingredient.product}
+          Pill={ProductPillLink}
+          pillPropName="product"
+        />
       ),
     },
     {
       title: "Appears In Recipes",
       content: (
-        <div className="space-y-2">
-          {ingredient.appearsInRecipes.length > 0 ? (
-            ingredient.appearsInRecipes.map((recipe) => (
-              <div key={recipe.id}>
-                <RecipePillLink recipe={recipe} />
-              </div>
-            ))
-          ) : (
-            <NoneState />
-          )}
-        </div>
+        <EntityPillLinkList
+          items={ingredient.appearsInRecipes}
+          Pill={RecipePillLink}
+          pillPropName="recipe"
+        />
       ),
     },
     {

@@ -20,6 +20,7 @@ import {
 } from "../_components/data-table/columnHelpers";
 
 import { useQuery } from "@tanstack/react-query";
+import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 export function IngredientList() {
   const api = useTRPC();
@@ -69,35 +70,26 @@ export function IngredientList() {
     columnHelper.accessor("appearsInRecipes", {
       enableSorting: false,
       cell: (info) => (
-        <div>
-          <ul className="">
-            {info
-              .getValue()
-              .filter(
-                (obj1, i, arr) =>
-                  arr.findIndex((obj2) => obj2.id === obj1.id) === i,
-              )
-              .map((recipe) => (
-                <li key={recipe.id}>
-                  <RecipePillLink recipe={recipe} />
-                </li>
-              ))}
-          </ul>
-        </div>
+        <EntityPillLinkList
+          items={info
+            .getValue()
+            .filter(
+              (obj1, i, arr) =>
+                arr.findIndex((obj2) => obj2.id === obj1.id) === i,
+            )}
+          Pill={RecipePillLink}
+          pillPropName="recipe"
+        />
       ),
     }),
     columnHelper.accessor("product", {
       enableSorting: false,
       cell: (info) => (
-        <div>
-          <ul className="">
-            {info.getValue().map((product) => (
-              <li key={product.id}>
-                <ProductPillLink product={product} />
-              </li>
-            ))}
-          </ul>
-        </div>
+        <EntityPillLinkList
+          items={info.getValue()}
+          Pill={ProductPillLink}
+          pillPropName="product"
+        />
       ),
     }),
     columnHelper.accessor("product", {

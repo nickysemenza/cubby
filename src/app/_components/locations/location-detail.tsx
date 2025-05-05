@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { EntityPillLinkList } from "../EntityPillLinkList";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -96,34 +97,21 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     {
       title: "Child Locations",
       content: (
-        <div className="space-y-2">
-          {location.children && location.children.length > 0 ? (
-            location.children.map((child) => (
-              <div key={child.id}>
-                <LocationPillLink location={child} />
-              </div>
-            ))
-          ) : (
-            <NoneState />
-          )}
-        </div>
+        <EntityPillLinkList
+          items={location.children}
+          Pill={LocationPillLink}
+          pillPropName="location"
+        />
       ),
     },
     {
       title: "Inventory Items",
       content: (
-        <div className="space-y-2">
-          {inventoryItemsData?.items && inventoryItemsData.items.length > 0 ? (
-            inventoryItemsData.items.map((entry) => (
-              <div key={entry.id}>
-                <InventoryEntryPillLink entry={entry} />
-                {entry.id}
-              </div>
-            ))
-          ) : (
-            <NoneState />
-          )}
-        </div>
+        <EntityPillLinkList
+          items={inventoryItemsData?.items}
+          Pill={InventoryEntryPillLink}
+          pillPropName="entry"
+        />
       ),
     },
     {
