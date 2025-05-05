@@ -19,7 +19,10 @@ describe("system test", () => {
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller({ headers: new Headers(), db: prisma });
-    const list = await caller.ingredient.list({ pagination: { pageSize: 12 } });
+    const list = await caller.ingredient.list({
+      pagination: { pageSize: 12 },
+      filters: {},
+    });
     expect(list.items.length).toEqual(12);
     const eggs = await caller.ingredient.getByName({
       nameFilter: "large eggs",

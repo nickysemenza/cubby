@@ -19,7 +19,7 @@ describe("recipe router", () => {
 
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller({ headers: new Headers(), db: prisma });
-    const recipeList = await caller.list({});
+    const recipeList = await caller.list({ filters: {} });
     expect(recipeList.items.length).toEqual(exampleRecipesCompact.length);
   });
 });

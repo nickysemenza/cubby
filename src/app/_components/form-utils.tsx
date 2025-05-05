@@ -320,13 +320,22 @@ export function hasNestedFieldChanged<T, F>(
 
 // Helper to extract ID from a ComboboxItem if different from entity
 export function detectComboboxIdChange(
-  entityId: string | undefined,
+  entityId: string | undefined | null,
   comboboxItem: ComboboxItem | null | undefined,
-): string | undefined {
-  if (comboboxItem && comboboxItem.id !== entityId) {
-    return comboboxItem.id;
+): string | null | undefined {
+  if (entityId === null && !comboboxItem) {
+    return undefined; // No change if both are null/empty
   }
-  return undefined;
+  if (entityId === null && comboboxItem) {
+    return comboboxItem.id; // Set new ID if entity was null
+  }
+  if (entityId !== null && !comboboxItem) {
+    return null; // Set to null if removing association
+  }
+  if (comboboxItem && comboboxItem.id !== entityId) {
+    return comboboxItem.id; // Change ID if different
+  }
+  return undefined; // No change
 }
 
 // Helper to build a common form layout with two fields side by side

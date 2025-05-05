@@ -59,26 +59,23 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     setError(undefined);
   };
 
-  if (isEditing) {
-    return (
-      <div className="container mx-auto py-10">
-        <h1 className="mb-6 text-2xl font-bold">Edit Product</h1>
-        <ProductForm
-          mode="edit"
-          entity={product}
-          onEdit={handleEdit}
-          isPending={updateProduct.isPending}
-          error={error}
-          onCancel={handleCancel}
-        />
-      </div>
-    );
-  }
   const mappings = unitMappignsFromProduct(product);
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
-      content: (
+      content: isEditing ? (
+        <div className="container mx-auto py-10">
+          <h1 className="mb-6 text-2xl font-bold">Edit Product</h1>
+          <ProductForm
+            mode="edit"
+            entity={product}
+            onEdit={handleEdit}
+            isPending={updateProduct.isPending}
+            error={error}
+            onCancel={handleCancel}
+          />
+        </div>
+      ) : (
         <div className="space-y-2">
           <div>
             <span className="font-medium">Name:</span> {product.name}

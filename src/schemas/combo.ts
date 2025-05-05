@@ -75,7 +75,7 @@ export const unitMappignsFromProduct = (
   return [...product.unitMappings, ...foodMappings];
 };
 
-export const unitMappingsFromFood = (food: FoodSummary) => {
+export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] => {
   const serving = food.brandedFoodInfo?.serving_as_amount;
   return [...food.portionInfo.parsed, ...(serving ? [serving] : [])];
 };

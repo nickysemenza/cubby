@@ -12,7 +12,10 @@ import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
 import { findFood } from "./usda";
 import { foodLookupParam, FoodLookupParam } from "~/schemas/usda";
-import { type productBase, type ProductTopLevelOut } from "~/schemas/product";
+import {
+  type ProductTopLevelOut,
+  type ProductInputPayload,
+} from "~/schemas/product";
 import { formatSearchTerm } from "./util";
 import { getSortDirection } from "./util";
 
@@ -260,15 +263,14 @@ export const productList = async (
 // Create a new product
 export const createProduct = async (
   db: PrismaClient,
-  data: z.infer<typeof productBase>,
+  data: ProductInputPayload,
 ): Promise<ProductTopLevelOut> => {
+  const { ingredientId, ...productData } = data;
+
   const product = await db.product.create({
     data: {
-      name: data.name,
-      manufacturer: data.manufacturer,
-      model: data.model,
-      upc: data.upc,
-      ndb_number: data.ndb_number,
+      ...productData,
+      Ingredient: ingredientId ? { connect: { id: ingredientId } } : undefined,
     },
   });
 
@@ -279,11 +281,29 @@ export const createProduct = async (
 export const updateProduct = async (
   db: PrismaClient,
   id: string,
-  data: Partial<z.infer<typeof productBase>>,
+  data: Partial<ProductInputPayload>,
 ): Promise<ProductTopLevelOut> => {
+  const { ingredientId, ...productData } = data;
+
+  // Create the update data with relation handling
+  const updateData: Prisma.ProductUpdateInput = {
+    ...productData,
+  };
+
+  // Handle ingredient relationship
+  if (ingredientId !== undefined) {
+    if (ingredientId === null) {
+      // Disconnect the ingredient if set to null
+      updateData.Ingredient = { disconnect: true };
+    } else {
+      // Connect to the ingredient if ID is provided
+      updateData.Ingredient = { connect: { id: ingredientId } };
+    }
+  }
+
   const product = await db.product.update({
     where: { id },
-    data,
+    data: updateData,
   });
 
   return product;

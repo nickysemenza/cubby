@@ -1,11 +1,16 @@
 "use client";
 
-import { type FC } from "react";
+import { type FC, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useTRPC } from "~/trpc/react";
 import { z } from "zod";
-import { productBase, type ProductTopLevelOut } from "~/schemas/product";
+import {
+  type ProductInputPayload,
+  type ProductTopLevelOut,
+} from "~/schemas/product";
 import { upc, ndb } from "~/schemas/util";
+import { ComboboxItem, NullableComboboxItem } from "../combobox";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -16,7 +21,10 @@ import {
   getSubmitButtonText,
   buildUpdateObject,
   SideBySideFields,
+  ComboboxField,
+  detectComboboxIdChange,
 } from "../form-utils";
+import { useQuery } from "@tanstack/react-query";
 
 // Form schema for product form
 const formSchema = z
@@ -26,6 +34,7 @@ const formSchema = z
     model: z.string().nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
+    ingredient: NullableComboboxItem, // Ingredient association
   })
   .transform((data) => ({
     ...data,
@@ -36,12 +45,12 @@ const formSchema = z
 export type ProductFormValues = z.infer<typeof formSchema>;
 
 // Use the backend type for creation data
-export type CreateProductData = z.infer<typeof productBase>;
+export type CreateProductData = ProductInputPayload;
 
 // Define the props passed by parent for update operation
 export type UpdateProductData = {
   id: string;
-  data: Partial<CreateProductData>;
+  data: Partial<ProductInputPayload>;
 };
 
 // Props for create mode
@@ -49,10 +58,18 @@ interface CreateProductFormProps extends CreateModeProps<CreateProductData> {
   product?: never;
 }
 
+// Define a custom type for product with ingredient
+interface ProductWithIngredient extends ProductTopLevelOut {
+  ingredient?: {
+    id: string;
+    name: string;
+  } | null;
+}
+
 // Props for edit mode
 interface EditProductFormProps
-  extends EditModeProps<UpdateProductData, ProductTopLevelOut> {
-  entity: ProductTopLevelOut;
+  extends EditModeProps<UpdateProductData, ProductWithIngredient> {
+  entity: ProductWithIngredient;
 }
 
 // Combined props type using discriminated union
@@ -60,6 +77,36 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
+  const api = useTRPC();
+
+  // Function to search for ingredients
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const { data: ingredientsResponse } = useQuery(
+    api.ingredient.list.queryOptions({
+      filters: {
+        nameFilter: searchQuery,
+      },
+      pagination: {
+        pageIndex: 0,
+        pageSize: 10,
+      },
+    }),
+  );
+
+  const findIngredients = async (query: string): Promise<ComboboxItem[]> => {
+    if (!query || query.trim() === "") {
+      return [];
+    }
+
+    setSearchQuery(query);
+    return (
+      ingredientsResponse?.items.map((item: { id: string; name: string }) => ({
+        id: item.id,
+        name: item.name,
+      })) ?? []
+    );
+  };
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
@@ -73,6 +120,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       model: product ? product.model : null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
+      ingredient: product?.ingredient,
     },
   });
 
@@ -85,17 +133,28 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         model: values.model,
         upc: values.upc,
         ndb_number: values.ndb_number,
+        ingredientId: values.ingredient?.id || null,
       };
       props.onCreate(createData);
     } else if (mode === "edit" && product) {
       // In edit mode, determine which fields have changed
-      const updates = buildUpdateObject(product, values, [
-        "name",
-        "manufacturer",
-        "model",
-        "upc",
-        "ndb_number",
-      ]);
+      const updates: Partial<CreateProductData> = buildUpdateObject(
+        {
+          ...product,
+        },
+        values,
+        ["name", "manufacturer", "model", "upc", "ndb_number"],
+      );
+
+      // Check for ingredient changes
+      const ingredientId = detectComboboxIdChange(
+        product.ingredient ? product.ingredient.id : null,
+        values.ingredient,
+      );
+
+      if (ingredientId !== undefined) {
+        updates.ingredientId = ingredientId;
+      }
 
       // Only update if there are changes
       if (Object.keys(updates).length > 0) {
@@ -158,6 +217,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           placeholder="NDB number (1000-99999)"
         />
       </SideBySideFields>
+
+      <ComboboxField
+        form={form}
+        name="ingredient"
+        label="Ingredient"
+        findItems={findIngredients}
+      />
     </FormWrapper>
   );
 };

@@ -12,7 +12,7 @@ import {
   productList,
   updateProduct,
 } from "~/server/repo/product";
-import { productBase, productTopLevelOut } from "~/schemas/product";
+import { productInputPayload, productTopLevelOut } from "~/schemas/product";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 
 const getByID = publicProcedure
@@ -50,7 +50,7 @@ const list = publicProcedure
   });
 
 const create = publicProcedure
-  .input(productBase)
+  .input(productInputPayload)
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
     return await createProduct(ctx.db, input);
@@ -60,7 +60,7 @@ const update = publicProcedure
   .input(
     z.object({
       id: z.string().uuid(),
-      data: productBase.partial(),
+      data: productInputPayload.partial(),
     }),
   )
   .output(productTopLevelOut)
