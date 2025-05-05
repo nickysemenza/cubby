@@ -3,19 +3,19 @@ import { type FC, useState } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
-import { type LocationOutWithParentChildren } from "~/schemas/location";
+import { InfLocation } from "~/schemas/location";
 import { NoneState } from "../NoneState";
-import { LocationPillLink } from "../EntityPill";
+import { InventoryEntryPillLink, LocationPillLink } from "../EntityPill";
 import { Button } from "~/components/ui/button";
 import { LocationForm, type UpdateLocationData } from "./location-form";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 interface LocationDetailProps {
-  location: LocationOutWithParentChildren;
+  location: InfLocation;
 }
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
@@ -44,6 +44,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     setIsEditing(false);
     setError(undefined);
   };
+
+  const { data: inventoryItemsData } = useQuery(
+    api.inventoryItem.list.queryOptions({
+      sort: { orderBy: "createdAt", direction: "desc" },
+      pagination: { pageIndex: 0, pageSize: 100 },
+      filters: { locationIdFilter: location.id },
+    }),
+  );
 
   const sections: DetailSection[] = [
     {
@@ -93,6 +101,23 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
             location.children.map((child) => (
               <div key={child.id}>
                 <LocationPillLink location={child} />
+              </div>
+            ))
+          ) : (
+            <NoneState />
+          )}
+        </div>
+      ),
+    },
+    {
+      title: "Inventory Items",
+      content: (
+        <div className="space-y-2">
+          {inventoryItemsData?.items && inventoryItemsData.items.length > 0 ? (
+            inventoryItemsData.items.map((entry) => (
+              <div key={entry.id}>
+                <InventoryEntryPillLink entry={entry} />
+                {entry.id}
               </div>
             ))
           ) : (

@@ -41,10 +41,14 @@ export const LocationPillLink: React.FC<{
     label={type}
   />
 );
-export const InventoryEntryPIllLink: React.FC<{
-  inventoryEntry: { name: string; id: string };
-}> = ({ inventoryEntry: { name, id } }) => (
-  <PillLink href={`/inventory/${id}`} text={name} entity={"inventory-item"} />
+export const InventoryEntryPillLink: React.FC<{
+  entry: { product: { name: string }; id: string };
+}> = ({ entry }) => (
+  <PillLink
+    href={`/inventory/${entry.id}`}
+    text={entry.product.name}
+    entity={"inventory-item"}
+  />
 );
 export const RecipePillLink: React.FC<{
   recipe: { name: string; id: string };
