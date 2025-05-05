@@ -98,12 +98,10 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
-  
-  const locations = locationsResp?.items || [];
 
   const findLocations = async (searchQuery: string) =>
     clientSideFilter(
-      locations.map(buildLocationComboboxItem),
+      locationsResp?.items.map(buildLocationComboboxItem),
       searchQuery,
     );
 
@@ -111,11 +109,12 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     pagination: { pageIndex: 0, pageSize: 100 },
     sort: { orderBy: "name", direction: "asc" },
   });
-  
-  const products = productsResp?.items || [];
 
   const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
-    clientSideFilter(products.map(buildProductComboboxItem), searchQuery);
+    clientSideFilter(
+      productsResp?.items.map(buildProductComboboxItem),
+      searchQuery,
+    );
 
   const handleSubmit = (values: InventoryFormValues) => {
     // Convert the form values to an Amount object

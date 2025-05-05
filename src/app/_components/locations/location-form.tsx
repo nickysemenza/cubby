@@ -96,16 +96,12 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
     sort: { orderBy: "name", direction: "asc" },
   });
 
-  const locations = locationsResp?.items || [];
-
-  // Filter out the current location (can't be its own parent)
-  const availableParents = locations.filter(
-    (loc) => mode !== "edit" || loc.id !== location?.id,
-  );
-
   const findLocations = async (searchQuery: string) =>
     clientSideFilter(
-      availableParents.map(buildLocationComboboxItem),
+      locationsResp?.items
+        // Filter out the current location (can't be its own parent)
+        .filter((loc) => mode !== "edit" || loc.id !== location?.id)
+        ?.map(buildLocationComboboxItem),
       searchQuery,
     );
 

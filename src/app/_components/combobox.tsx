@@ -28,7 +28,13 @@ export const NullableComboboxItem = ComboboxItem.nullable();
 
 export type ComboboxItem = z.infer<typeof ComboboxItem>;
 export type NullableComboboxItem = z.infer<typeof NullableComboboxItem>;
-export const clientSideFilter = (items: ComboboxItem[], query: string) => {
+export const clientSideFilter = (
+  items: ComboboxItem[] | undefined,
+  query: string,
+) => {
+  if (!items) {
+    return [];
+  }
   const normalizedQuery = query.toLowerCase().trim();
   if (normalizedQuery === "") {
     return items;
