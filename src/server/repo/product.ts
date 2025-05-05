@@ -265,16 +265,34 @@ export const createProduct = async (
   db: PrismaClient,
   data: ProductInputPayload,
 ): Promise<ProductTopLevelOut> => {
-  const { ingredientId, ...productData } = data;
+  const { ingredientId, unitMappings, ...productData } = data;
 
-  const product = await db.product.create({
-    data: {
-      ...productData,
-      Ingredient: ingredientId ? { connect: { id: ingredientId } } : undefined,
-    },
+  // Use a transaction to ensure atomicity
+  return await db.$transaction(async (tx) => {
+    // Create the product first
+    const product = await tx.product.create({
+      data: {
+        ...productData,
+        Ingredient: ingredientId
+          ? { connect: { id: ingredientId } }
+          : undefined,
+      },
+    });
+
+    // If there are unit mappings, create them
+    if (unitMappings) {
+      await tx.productUnitMappings.createMany({
+        data: unitMappings.map((mapping) => ({
+          productId: product.id,
+          a: mapping.a,
+          b: mapping.b,
+          source: mapping.source,
+        })),
+      });
+    }
+
+    return product;
   });
-
-  return product;
 };
 
 // Update an existing product
@@ -283,28 +301,87 @@ export const updateProduct = async (
   id: string,
   data: Partial<ProductInputPayload>,
 ): Promise<ProductTopLevelOut> => {
-  const { ingredientId, ...productData } = data;
+  const { ingredientId, unitMappings, ...productData } = data;
 
-  // Create the update data with relation handling
-  const updateData: Prisma.ProductUpdateInput = {
-    ...productData,
-  };
+  // Use a transaction to ensure atomicity
+  return await db.$transaction(async (tx) => {
+    // Create the update data with relation handling
+    const updateData: Prisma.ProductUpdateInput = {
+      ...productData,
+    };
 
-  // Handle ingredient relationship
-  if (ingredientId !== undefined) {
-    if (ingredientId === null) {
-      // Disconnect the ingredient if set to null
-      updateData.Ingredient = { disconnect: true };
-    } else {
-      // Connect to the ingredient if ID is provided
-      updateData.Ingredient = { connect: { id: ingredientId } };
+    // Handle ingredient relationship
+    if (ingredientId !== undefined) {
+      if (ingredientId === null) {
+        // Disconnect the ingredient if set to null
+        updateData.Ingredient = { disconnect: true };
+      } else {
+        // Connect to the ingredient if ID is provided
+        updateData.Ingredient = { connect: { id: ingredientId } };
+      }
     }
-  }
 
-  const product = await db.product.update({
-    where: { id },
-    data: updateData,
+    // Update the product
+    const product = await tx.product.update({
+      where: { id },
+      data: updateData,
+    });
+
+    const productId = id;
+    // If unitMappings is provided, handle the updates efficiently
+    if (unitMappings !== undefined) {
+      // Get existing mappings
+      const existingMappings = await tx.productUnitMappings.findMany({
+        where: { productId },
+      });
+
+      // Find mappings to delete (exist in DB but not in new data)
+      const toDelete = existingMappings.filter(
+        (m) => !unitMappings.some((um) => um.id === m.id),
+      );
+
+      // Find mappings to create (exist in new data but not in DB)
+      const toCreate = unitMappings.filter((m) => m.id === undefined);
+
+      // Find mappings to update (exist in both)
+      const toUpdate = unitMappings.filter(
+        (m): m is typeof m & { id: string } => m.id !== undefined,
+      );
+
+      // Delete removed mappings
+      if (toDelete.length > 0) {
+        await tx.productUnitMappings.deleteMany({
+          where: {
+            id: { in: toDelete.map((m) => m.id) },
+          },
+        });
+      }
+
+      // Create new mappings
+      if (toCreate.length > 0) {
+        await tx.productUnitMappings.createMany({
+          data: toCreate.map((mapping) => ({
+            productId,
+            a: mapping.a,
+            b: mapping.b,
+            source: mapping.source,
+          })),
+        });
+      }
+
+      // Update existing mappings
+      for (const mapping of toUpdate) {
+        await tx.productUnitMappings.update({
+          where: { id: mapping.id },
+          data: {
+            a: mapping.a,
+            b: mapping.b,
+            source: mapping.source,
+          },
+        });
+      }
+    }
+
+    return product;
   });
-
-  return product;
 };

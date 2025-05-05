@@ -8,6 +8,10 @@ export const unitMappingBase = z.object({
   source: z.string().nullable(),
 });
 
+export const unitMappingInput = unitMappingBase.extend({
+  id: z.string().uuid().optional(),
+});
+
 export const unitMappingOut = z
   .object({
     id: z.string().uuid(),
@@ -16,4 +20,5 @@ export const unitMappingOut = z
   .merge(dbTimestampsOut);
 
 export type UnitMapping = z.infer<typeof unitMappingBase>;
+export type UnitMappingInput = z.infer<typeof unitMappingInput>;
 export type UnitMappingOut = z.infer<typeof unitMappingOut>;

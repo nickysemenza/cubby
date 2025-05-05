@@ -1,7 +1,7 @@
 "use client";
 
 import { type FC, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTRPC } from "~/trpc/react";
 import { z } from "zod";
@@ -25,6 +25,9 @@ import {
   detectComboboxIdChange,
 } from "../form-utils";
 import { useQuery } from "@tanstack/react-query";
+import { Button } from "~/components/ui/button";
+import { Plus, X } from "lucide-react";
+import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 
 // Form schema for product form
 const formSchema = z
@@ -35,6 +38,7 @@ const formSchema = z
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
     ingredient: NullableComboboxItem, // Ingredient association
+    unitMappings: z.array(unitMappingInput),
   })
   .transform((data) => ({
     ...data,
@@ -45,12 +49,14 @@ const formSchema = z
 export type ProductFormValues = z.infer<typeof formSchema>;
 
 // Use the backend type for creation data
-export type CreateProductData = ProductInputPayload;
+export type CreateProductData = ProductInputPayload & {
+  unitMappings: UnitMappingInput[];
+};
 
 // Define the props passed by parent for update operation
 export type UpdateProductData = {
   id: string;
-  data: Partial<ProductInputPayload>;
+  data: Partial<CreateProductData>;
 };
 
 // Props for create mode
@@ -58,12 +64,13 @@ interface CreateProductFormProps extends CreateModeProps<CreateProductData> {
   product?: never;
 }
 
-// Define a custom type for product with ingredient
+// Define a custom type for product with ingredient and unit mappings
 interface ProductWithIngredient extends ProductTopLevelOut {
   ingredient?: {
     id: string;
     name: string;
   } | null;
+  unitMappings: UnitMappingInput[];
 }
 
 // Props for edit mode
@@ -121,7 +128,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
       ingredient: product?.ingredient,
+      unitMappings: product?.unitMappings ?? [],
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "unitMappings",
   });
 
   const handleSubmit = (values: ProductFormValues) => {
@@ -134,6 +147,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         upc: values.upc,
         ndb_number: values.ndb_number,
         ingredientId: values.ingredient?.id || null,
+        unitMappings: values.unitMappings,
       };
       props.onCreate(createData);
     } else if (mode === "edit" && product) {
@@ -154,6 +168,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
       if (ingredientId !== undefined) {
         updates.ingredientId = ingredientId;
+      }
+
+      // Check for unit mapping changes
+      if (
+        JSON.stringify(product.unitMappings) !==
+        JSON.stringify(values.unitMappings)
+      ) {
+        updates.unitMappings = values.unitMappings;
       }
 
       // Only update if there are changes
@@ -224,6 +246,88 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         label="Ingredient"
         findItems={findIngredients}
       />
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-medium">Unit Mappings</h3>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              append({
+                a: { value: 1, unit: "" },
+                b: { value: 1, unit: "" },
+                source: null,
+              })
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Mapping
+          </Button>
+        </div>
+
+        {fields.map((field, index) => (
+          <div key={field.id} className="space-y-4 rounded-lg border p-4">
+            <div className="flex justify-between">
+              <h4 className="font-medium">Mapping {index + 1}</h4>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => remove(index)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <h5 className="text-sm font-medium">From</h5>
+                <SideBySideFields>
+                  <NullableNumberField
+                    form={form}
+                    name={`unitMappings.${index}.a.value`}
+                    label="Value"
+                    placeholder="Enter value"
+                  />
+                  <RequiredTextField
+                    form={form}
+                    name={`unitMappings.${index}.a.unit`}
+                    label="Unit"
+                    placeholder="Enter unit"
+                  />
+                </SideBySideFields>
+              </div>
+
+              <div className="space-y-2">
+                <h5 className="text-sm font-medium">To</h5>
+                <SideBySideFields>
+                  <NullableNumberField
+                    form={form}
+                    name={`unitMappings.${index}.b.value`}
+                    label="Value"
+                    placeholder="Enter value"
+                  />
+                  <RequiredTextField
+                    form={form}
+                    name={`unitMappings.${index}.b.unit`}
+                    label="Unit"
+                    placeholder="Enter unit"
+                  />
+                </SideBySideFields>
+              </div>
+            </div>
+
+            <NullableTextField
+              form={form}
+              name={`unitMappings.${index}.source`}
+              label="Source (Optional)"
+              placeholder="Enter source"
+            />
+          </div>
+        ))}
+      </div>
     </FormWrapper>
   );
 };
