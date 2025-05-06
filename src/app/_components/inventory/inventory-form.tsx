@@ -1,8 +1,7 @@
 "use client";
 import { useWasm } from "~/wasmContext";
 import { type FC } from "react";
-import { useTRPC } from "~/trpc/react";
-import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
+import { ComboboxItem } from "~/app/_components/combobox";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -29,7 +28,10 @@ import {
   createAmountObject,
 } from "../form-utils";
 
-import { useQuery } from "@tanstack/react-query";
+import {
+  WithLocationSearch,
+  WithProductSearch,
+} from "../combobox/with-search-hook";
 
 // Form schema for inventory form
 const formSchema = z.object({
@@ -73,7 +75,6 @@ interface EditInventoryFormProps
 type InventoryFormProps = CreateInventoryFormProps | EditInventoryFormProps;
 
 export const InventoryForm: FC<InventoryFormProps> = (props) => {
-  const api = useTRPC();
   const { w } = useWasm();
   const { mode, isPending, error, onCancel } = props;
 
@@ -94,35 +95,6 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       amountUnit: inventoryItem ? inventoryItem.amount.unit : "",
     },
   });
-
-  // Fetch locations and products for dropdowns
-  const { data: locationsResp } = useQuery(
-    api.location.list.queryOptions({
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: { orderBy: "name", direction: "asc" },
-      filters: {},
-    }),
-  );
-
-  const findLocations = async (searchQuery: string) =>
-    clientSideFilter(
-      locationsResp?.items.map(buildLocationComboboxItem),
-      searchQuery,
-    );
-
-  const { data: productsResp } = useQuery(
-    api.product.list.queryOptions({
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: { orderBy: "name", direction: "asc" },
-      filters: {},
-    }),
-  );
-
-  const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
-    clientSideFilter(
-      productsResp?.items.map(buildProductComboboxItem),
-      searchQuery,
-    );
 
   const handleSubmit = (values: InventoryFormValues) => {
     // Convert the form values to an Amount object
@@ -201,19 +173,27 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <ComboboxField
-        form={form}
-        name="product"
-        label="Product"
-        findItems={findProducts}
-      />
+      <WithProductSearch>
+        {({ findItems }) => (
+          <ComboboxField
+            form={form}
+            name="product"
+            label="Product"
+            findItems={findItems}
+          />
+        )}
+      </WithProductSearch>
 
-      <ComboboxField
-        form={form}
-        name="location"
-        label="Location"
-        findItems={findLocations}
-      />
+      <WithLocationSearch>
+        {({ findItems }) => (
+          <ComboboxField
+            form={form}
+            name="location"
+            label="Location"
+            findItems={findItems}
+          />
+        )}
+      </WithLocationSearch>
 
       <SideBySideFields>
         <NumericField

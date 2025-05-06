@@ -4,7 +4,7 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
-import { ComboboxItem, clientSideFilter } from "~/app/_components/combobox";
+import { ComboboxItem } from "~/app/_components/combobox";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -30,7 +30,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
-
+import {
+  WithLocationSearch,
+  WithProductSearch,
+} from "~/app/_components/combobox/with-search-hook";
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
@@ -108,17 +111,6 @@ export default function BulkInventoryForm() {
     }
   }, [searchParams, locations, form]);
 
-  // Fetch products for the product dropdown
-  const { data: productsResp } = useQuery(
-    api.product.list.queryOptions({
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: { orderBy: "name", direction: "asc" },
-      filters: {},
-    }),
-  );
-
-  const products = productsResp?.items || [];
-
   // Fetch existing inventory items when location is selected
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
     api.inventoryItem.list.queryOptions(
@@ -154,13 +146,6 @@ export default function BulkInventoryForm() {
       form.setValue("items", []);
     }
   }, [selectedLocation, inventoryItemsData, form]);
-
-  // Lookup functions for comboboxes
-  const findLocations = async (searchQuery: string) =>
-    clientSideFilter(locations.map(buildLocationComboboxItem), searchQuery);
-
-  const findProducts = async (searchQuery: string): Promise<ComboboxItem[]> =>
-    clientSideFilter(products.map(buildProductComboboxItem), searchQuery);
 
   // Add a new empty inventory item
   const addInventoryItem = () => {
@@ -248,12 +233,16 @@ export default function BulkInventoryForm() {
               <FormItem>
                 <FormLabel>Location</FormLabel>
                 <FormControl>
-                  <Combobox
-                    label="location"
-                    findItems={findLocations}
-                    value={field.value}
-                    setValue={field.onChange}
-                  />
+                  <WithLocationSearch>
+                    {({ findItems }) => (
+                      <Combobox
+                        label="location"
+                        findItems={findItems}
+                        value={field.value}
+                        setValue={field.onChange}
+                      />
+                    )}
+                  </WithLocationSearch>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -286,12 +275,16 @@ export default function BulkInventoryForm() {
                         name={`items.${index}.product`}
                         render={({ field }) => (
                           <FormItem>
-                            <Combobox
-                              label="product"
-                              findItems={findProducts}
-                              value={field.value}
-                              setValue={field.onChange}
-                            />
+                            <WithProductSearch>
+                              {({ findItems }) => (
+                                <Combobox
+                                  label="product"
+                                  findItems={findItems}
+                                  value={field.value}
+                                  setValue={field.onChange}
+                                />
+                              )}
+                            </WithProductSearch>
                             <FormMessage />
                           </FormItem>
                         )}

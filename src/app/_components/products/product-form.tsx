@@ -1,16 +1,15 @@
 "use client";
 
-import { type FC, useState } from "react";
+import { type FC } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTRPC } from "~/trpc/react";
 import { z } from "zod";
 import {
   type ProductInputPayload,
   type ProductTopLevelOut,
 } from "~/schemas/product";
 import { upc, ndb } from "~/schemas/util";
-import { ComboboxItem, NullableComboboxItem } from "../combobox";
+import { NullableComboboxItem } from "../combobox";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -24,10 +23,10 @@ import {
   ComboboxField,
   detectComboboxIdChange,
 } from "../form-utils";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
+import { WithIngredientSearch } from "../combobox/with-search-hook";
 
 // Form schema for product form
 const formSchema = z
@@ -84,36 +83,6 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
-  const api = useTRPC();
-
-  // Function to search for ingredients
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const { data: ingredientsResponse } = useQuery(
-    api.ingredient.list.queryOptions({
-      filters: {
-        nameFilter: searchQuery,
-      },
-      pagination: {
-        pageIndex: 0,
-        pageSize: 10,
-      },
-    }),
-  );
-
-  const findIngredients = async (query: string): Promise<ComboboxItem[]> => {
-    if (!query || query.trim() === "") {
-      return [];
-    }
-
-    setSearchQuery(query);
-    return (
-      ingredientsResponse?.items.map((item: { id: string; name: string }) => ({
-        id: item.id,
-        name: item.name,
-      })) ?? []
-    );
-  };
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
@@ -239,13 +208,16 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           placeholder="NDB number (1000-99999)"
         />
       </SideBySideFields>
-
-      <ComboboxField
-        form={form}
-        name="ingredient"
-        label="Ingredient"
-        findItems={findIngredients}
-      />
+      <WithIngredientSearch>
+        {({ findItems }) => (
+          <ComboboxField
+            form={form}
+            name="ingredient"
+            label="Ingredient"
+            findItems={findItems}
+          />
+        )}
+      </WithIngredientSearch>
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">

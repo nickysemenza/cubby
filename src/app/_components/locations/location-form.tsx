@@ -3,8 +3,7 @@ import { type FC } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTRPC } from "~/trpc/react";
-import { clientSideFilter, ComboboxItem } from "~/app/_components/combobox";
+import { ComboboxItem } from "~/app/_components/combobox";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/utils";
 import {
   locationBase,
@@ -36,7 +35,7 @@ import {
   FormMessage,
 } from "~/components/ui/form";
 
-import { useQuery } from "@tanstack/react-query";
+import { WithLocationSearch } from "../combobox/with-search-hook";
 
 // Form schema for location form
 const formSchema = z.object({
@@ -73,7 +72,6 @@ interface EditLocationFormProps
 type LocationFormProps = CreateLocationFormProps | EditLocationFormProps;
 
 export const LocationForm: FC<LocationFormProps> = (props) => {
-  const api = useTRPC();
   const { mode, isPending, error, onCancel } = props;
 
   // Get the location entity in edit mode
@@ -91,24 +89,6 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           : null,
     },
   });
-
-  // Fetch locations for parent dropdown
-  const { data: locationsResp } = useQuery(
-    api.location.list.queryOptions({
-      pagination: { pageIndex: 0, pageSize: 100 },
-      sort: { orderBy: "name", direction: "asc" },
-      filters: {},
-    }),
-  );
-
-  const findLocations = async (searchQuery: string) =>
-    clientSideFilter(
-      locationsResp?.items
-        // Filter out the current location (can't be its own parent)
-        .filter((loc) => mode !== "edit" || loc.id !== location?.id)
-        ?.map(buildLocationComboboxItem),
-      searchQuery,
-    );
 
   const handleSubmit = (values: LocationFormValues) => {
     if (mode === "create") {
@@ -205,12 +185,16 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
         />
       </SideBySideFields>
 
-      <ComboboxField
-        form={form}
-        name="parent"
-        label="Parent Location (Optional)"
-        findItems={findLocations}
-      />
+      <WithLocationSearch>
+        {({ findItems }) => (
+          <ComboboxField
+            form={form}
+            name="parent"
+            label="Parent Location (Optional)"
+            findItems={findItems}
+          />
+        )}
+      </WithLocationSearch>
     </FormWrapper>
   );
 };

@@ -28,23 +28,7 @@ export const NullableComboboxItem = ComboboxItem.nullable();
 
 export type ComboboxItem = z.infer<typeof ComboboxItem>;
 export type NullableComboboxItem = z.infer<typeof NullableComboboxItem>;
-export const clientSideFilter = (
-  items: ComboboxItem[] | undefined,
-  query: string,
-) => {
-  if (!items) {
-    return [];
-  }
-  const normalizedQuery = query.toLowerCase().trim();
-  if (normalizedQuery === "") {
-    return items;
-  }
-  return normalizedQuery === ""
-    ? items
-    : items.filter((item) => {
-        return item.name.toLowerCase().includes(normalizedQuery);
-      });
-};
+
 export const Combobox: React.FC<{
   label: string;
   findItems: (searchQuery: string) => Promise<ComboboxItem[]>;
