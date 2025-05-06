@@ -10,11 +10,17 @@ import {
 } from "~/schemas/util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
-import { recipeOut } from "~/schemas/recipe";
+import { 
+  recipeOut, 
+  recipeCreateInput, 
+  recipeUpdateInput 
+} from "~/schemas/recipe";
 import {
+  createRecipe,
   getRecipeByID,
   insertCompactRecipe,
   recipeList,
+  updateRecipe,
 } from "~/server/repo/recipe";
 
 const list = publicProcedure
@@ -60,10 +66,26 @@ const insertCompact = publicProcedure
   .input(compactRecipeSchema)
   .output(z.object({ id: z.string().uuid() }))
   .mutation(async ({ ctx, input }) => await insertCompactRecipe(input, ctx.db));
+const create = publicProcedure
+  .input(recipeCreateInput)
+  .output(z.object({ id: z.string().uuid() }))
+  .mutation(async ({ ctx, input }) => {
+    return await createRecipe(input, ctx.db);
+  });
+
+const update = publicProcedure
+  .input(recipeUpdateInput)
+  .output(z.object({ id: z.string().uuid() }))
+  .mutation(async ({ ctx, input }) => {
+    return await updateRecipe(input.id, input.data, ctx.db);
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   scrape,
   seed,
   get,
   list,
+  create,
+  update,
 });

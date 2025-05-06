@@ -1,0 +1,350 @@
+"use client";
+
+import { type FC } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Button } from "~/components/ui/button";
+import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  FormWrapper,
+  RequiredTextField,
+  NullableTextField,
+  getSubmitButtonText,
+  buildUpdateObject,
+} from "../../form-utils";
+import { IngredientFieldArray } from "./ingredient-field-array";
+import { InstructionFieldArray } from "./instruction-field-array";
+import {
+  type RecipeFormProps,
+  type RecipeFormValues,
+  formSchema,
+} from "./types";
+import {
+  type RecipeCreateInput,
+  type RecipeUpdateInput,
+} from "~/schemas/recipe";
+
+export const RecipeForm: FC<RecipeFormProps> = (props) => {
+  const { mode, isPending, error, onCancel } = props;
+
+  // Get the recipe entity in edit mode
+  const recipe = mode === "edit" ? props.entity : undefined;
+  const initialName = mode === "create" ? props.initialName : undefined;
+
+  // Initialize form with default values or existing recipe data
+  const form = useForm<RecipeFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: recipe ? recipe.name : (initialName ?? ""),
+      meta: recipe ? recipe.meta : null,
+      sections: recipe
+        ? recipe.sections.map((section) => ({
+            id: section.id,
+            name: section.name,
+            ingredients: section.ingredients
+              .filter((ing) => ing.type === "ingredient")
+              .map((ing) => ({
+                id: ing.id,
+                type: "ingredient" as const,
+                ingredient: ing.ingredient
+                  ? {
+                      id: ing.ingredient.id,
+                      name: ing.ingredient.name,
+                    }
+                  : null,
+                amounts: ing.amounts,
+              })),
+            instructions: section.instructions,
+          }))
+        : [
+            {
+              name: null,
+              ingredients: [],
+              instructions: [],
+            },
+          ],
+    },
+  });
+
+  // Set up field arrays for sections
+  const {
+    fields: sectionFields,
+    append: appendSection,
+    remove: removeSection,
+    move: moveSection,
+  } = useFieldArray({
+    control: form.control,
+    name: "sections",
+  });
+
+  const handleSubmit = (values: RecipeFormValues) => {
+    if (mode === "create") {
+      // For creation, transform the form values to the API format
+      const createData: RecipeCreateInput = {
+        name: values.name,
+        meta: values.meta,
+        sections: values.sections.map((section) => ({
+          name: section.name,
+          ingredients: section.ingredients
+            .filter((ing) => ing.ingredient !== null)
+            .map((ing) => ({
+              ingredientId: ing.ingredient!.id,
+              amounts: ing.amounts,
+            })),
+          instructions: section.instructions,
+        })),
+      };
+      props.onCreate(createData);
+    } else if (mode === "edit" && recipe) {
+      // In edit mode, determine which fields have changed
+      const basicUpdates = buildUpdateObject(recipe, values, ["name", "meta"]);
+
+      // Handle section updates - this is more complex since we need to track IDs
+      const sectionUpdates = values.sections.map((section, idx) => {
+        const originalSection = recipe.sections[idx];
+
+        // For a new section or completely changed section
+        if (!originalSection || !section.id) {
+          return {
+            name: section.name,
+            ingredients: section.ingredients
+              .filter((ing) => ing.ingredient !== null)
+              .map((ing) => ({
+                ingredientId: ing.ingredient!.id,
+                amounts: ing.amounts,
+              })),
+            instructions: section.instructions,
+          };
+        }
+
+        // For existing section, include ID and track changes
+        const sectionUpdate: {
+          id: string;
+          name?: string | null;
+          ingredients?: Array<{
+            id?: string;
+            ingredientId: string;
+            amounts: Array<{ value: number; unit: string }>;
+          }>;
+          instructions?: Array<{
+            id?: string;
+            instruction: string;
+          }>;
+        } = {
+          id: section.id,
+        };
+
+        // Check for name changes
+        if (originalSection.name !== section.name) {
+          sectionUpdate.name = section.name;
+        }
+
+        // Check for ingredient changes
+        const ingredientsChanged =
+          JSON.stringify(
+            originalSection.ingredients.map((ing) => ({
+              id: ing.id,
+              ingredientId:
+                ing.type === "ingredient" ? ing.ingredient?.id : null,
+              amounts: ing.amounts,
+            })),
+          ) !==
+          JSON.stringify(
+            section.ingredients.map((ing) => ({
+              id: ing.id,
+              ingredientId: ing.ingredient?.id,
+              amounts: ing.amounts,
+            })),
+          );
+
+        if (ingredientsChanged) {
+          sectionUpdate.ingredients = section.ingredients
+            .filter((ing) => ing.ingredient !== null)
+            .map((ing) => {
+              const output: {
+                id?: string;
+                ingredientId: string;
+                amounts: Array<{ value: number; unit: string }>;
+              } = {
+                ingredientId: ing.ingredient!.id,
+                amounts: ing.amounts,
+              };
+
+              // Include ID if it exists (for updates)
+              if (ing.id) {
+                output.id = ing.id;
+              }
+
+              return output;
+            });
+        }
+
+        // Check for instruction changes
+        const instructionsChanged =
+          JSON.stringify(originalSection.instructions) !==
+          JSON.stringify(section.instructions);
+
+        if (instructionsChanged) {
+          sectionUpdate.instructions = section.instructions.map((inst) => {
+            const output: {
+              id?: string;
+              instruction: string;
+            } = {
+              instruction: inst.instruction,
+            };
+
+            // Include ID if it exists (for updates)
+            if (inst.id) {
+              output.id = inst.id;
+            }
+
+            return output;
+          });
+        }
+
+        return sectionUpdate;
+      });
+
+      // Only update if there are changes
+      if (
+        Object.keys(basicUpdates).length > 0 ||
+        sectionUpdates.some((s) => Object.keys(s).length > 1)
+      ) {
+        const updateData: RecipeUpdateInput = {
+          id: recipe.id,
+          data: {
+            ...basicUpdates,
+            sections: sectionUpdates,
+          },
+        };
+        props.onEdit(updateData);
+      } else if (onCancel) {
+        // If no changes, just run the cancel function
+        onCancel();
+      }
+    }
+  };
+
+  const buttonText = getSubmitButtonText(mode, isPending);
+
+  return (
+    <FormWrapper
+      form={form}
+      onSubmit={handleSubmit}
+      error={error}
+      isPending={isPending}
+      onCancel={onCancel}
+      submitButtonText={buttonText}
+    >
+      <RequiredTextField
+        form={form}
+        name="name"
+        label="Recipe Name"
+        placeholder="Enter recipe name"
+      />
+
+      <NullableTextField
+        form={form}
+        name="meta.url"
+        label="URL (Optional)"
+        placeholder="Enter recipe URL"
+      />
+
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-medium">Recipe Sections</h3>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              appendSection({
+                name: null,
+                ingredients: [],
+                instructions: [],
+              })
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Section
+          </Button>
+        </div>
+
+        {sectionFields.map((sectionField, sectionIndex) => (
+          <div
+            key={sectionField.id}
+            className="space-y-4 rounded-lg border border-gray-200 p-4"
+          >
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium">
+                Section {sectionIndex + 1}
+                {sectionField.name ? `: ${sectionField.name}` : ""}
+              </h4>
+              <div className="flex space-x-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    moveSection(sectionIndex, Math.max(0, sectionIndex - 1))
+                  }
+                  disabled={sectionIndex === 0}
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    moveSection(
+                      sectionIndex,
+                      Math.min(sectionFields.length - 1, sectionIndex + 1),
+                    )
+                  }
+                  disabled={sectionIndex === sectionFields.length - 1}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => removeSection(sectionIndex)}
+                  disabled={sectionFields.length === 1}
+                >
+                  <Trash className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <NullableTextField
+              form={form}
+              name={`sections.${sectionIndex}.name`}
+              label="Section Name (Optional)"
+              placeholder="E.g., 'Main Course', 'Sauce', etc."
+            />
+
+            {/* Ingredients and Instructions side by side */}
+            <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
+              {/* Ingredients */}
+              <div className="md:w-1/2">
+                <h5 className="mb-4 text-sm font-medium">Ingredients</h5>
+                <IngredientFieldArray form={form} sectionIndex={sectionIndex} />
+              </div>
+
+              {/* Instructions */}
+              <div className="md:w-1/2">
+                <h5 className="mb-4 text-sm font-medium">Instructions</h5>
+                <InstructionFieldArray
+                  form={form}
+                  sectionIndex={sectionIndex}
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </FormWrapper>
+  );
+};

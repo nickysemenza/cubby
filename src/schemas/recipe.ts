@@ -54,3 +54,36 @@ export const recipeOut = z
   .merge(recipeTopLevel);
 
 export type RecipeOut = z.infer<typeof recipeOut>;
+
+// Schema for recipe mutations
+export const recipeIngredientInput = z.object({
+  ingredientId: z.string().uuid(),
+  amounts: z.array(amount),
+  id: z.string().uuid().optional(),
+});
+
+export const recipeInstructionInput = z.object({
+  instruction: z.string(),
+  id: z.string().uuid().optional(),
+});
+
+export const recipeSectionInput = z.object({
+  name: z.string().nullable().optional(),
+  ingredients: z.array(recipeIngredientInput).optional(),
+  instructions: z.array(recipeInstructionInput).optional(),
+  id: z.string().uuid().optional(),
+});
+
+export const recipeCreateInput = z.object({
+  name: z.string(),
+  meta: recipeTopLevel.shape.meta,
+  sections: z.array(recipeSectionInput),
+});
+
+export const recipeUpdateInput = z.object({
+  id: z.string().uuid(),
+  data: recipeCreateInput.partial(),
+});
+
+export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;
+export type RecipeUpdateInput = z.infer<typeof recipeUpdateInput>;
