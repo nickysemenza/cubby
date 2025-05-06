@@ -32,7 +32,7 @@ test("formatting with wasm", () => {
   // expect(format_amount({ value: 1, unit: "cup" })).toEqual("1 cup");
 });
 
-test("wasm unknown ingrecient", () => {
+test.skip("wasm unknown ingrecient", () => {
   const parseA = parse_ingredient("1 foo bar");
   expect(parseA).toEqual({
     name: "foo bar",

@@ -193,6 +193,8 @@ describe("convertAmountToPrice", () => {
 
     // Assert
     expect(result.success).toBe(false);
-    expect(result.error).toContain("Error");
+    expect(result.error).toContain(
+      "conv_measure_to_kind: failed to convert '1 invalidunit' to target measure 'Money'",
+    );
   });
 });
