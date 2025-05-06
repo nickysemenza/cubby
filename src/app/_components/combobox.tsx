@@ -19,6 +19,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { z } from "zod";
+import useDebounce from "~/misc/useDebounce";
 
 export const ComboboxItem = z.object({
   name: z.string(),
@@ -39,13 +40,15 @@ export const Combobox: React.FC<{
 
   const [commandInput, setCommandInput] = React.useState<string>("");
   const [results, setResults] = React.useState<ComboboxItem[]>([]);
+  const debouncedInput = useDebounce(commandInput, 300);
+
   React.useEffect(() => {
     async function handleValueChange() {
-      const result = await findItems(commandInput);
+      const result = await findItems(debouncedInput);
       setResults(result);
     }
     handleValueChange();
-  }, [commandInput, findItems]);
+  }, [debouncedInput, findItems]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
