@@ -11,8 +11,11 @@ export default function Page() {
   return (
     <HydrateClient>
       <div>
-        <Link href="/recipes/new" className="text-blue-600 hover:underline">
-          New
+        <Link
+          href="/recipes/new-compact"
+          className="text-blue-600 hover:underline"
+        >
+          New Compact
         </Link>
         <RecipeList />
       </div>

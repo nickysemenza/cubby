@@ -41,7 +41,7 @@ const formSchema = z.object({
 
 type RecipeFormValues = z.infer<typeof formSchema>;
 
-const NewRecipe: React.FC = () => {
+const NewCompactRecipe: React.FC = () => {
   const api = useTRPC();
   const { w } = useWasm();
   const router = useRouter();
@@ -260,4 +260,4 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   );
 };
 
-export default NewRecipe;
+export default NewCompactRecipe;

@@ -1,5 +1,5 @@
 import { type Metadata } from "next";
-import NewRecipe from "~/app/_components/recipe/NewRecipe";
+import NewCompactRecipe from "~/app/_components/recipe/NewCompactRecipe";
 import { WasmContextProvider } from "~/wasmContext";
 
 export const metadata: Metadata = {
@@ -10,7 +10,7 @@ export default function Page() {
   return (
     <div>
       <WasmContextProvider>
-        <NewRecipe />
+        <NewCompactRecipe />
       </WasmContextProvider>
     </div>
   );
