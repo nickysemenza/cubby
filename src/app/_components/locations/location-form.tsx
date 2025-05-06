@@ -3,7 +3,7 @@ import { type FC } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ComboboxItem } from "~/app/_components/combobox";
+import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/utils";
 import {
   locationBase,
@@ -60,6 +60,7 @@ export type UpdateLocationData = {
 // Props for create mode
 interface CreateLocationFormProps extends CreateModeProps<CreateLocationData> {
   location?: never;
+  initialName?: string;
 }
 
 // Props for edit mode
@@ -68,7 +69,6 @@ interface EditLocationFormProps
   entity: LocationOut & { parent?: LocationOut | null };
 }
 
-// Combined props type using discriminated union
 type LocationFormProps = CreateLocationFormProps | EditLocationFormProps;
 
 export const LocationForm: FC<LocationFormProps> = (props) => {
@@ -76,12 +76,13 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
 
   // Get the location entity in edit mode
   const location = mode === "edit" ? props.entity : undefined;
+  const initialName = mode === "create" ? props.initialName : undefined;
 
   // Initialize form with default values or existing location data
   const form = useForm<LocationFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: location ? location.name : "",
+      name: location ? location.name : (initialName ?? ""),
       type: location ? location.type : "room",
       parent:
         location && location.parent
@@ -193,6 +194,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
             label="Parent Location (Optional)"
             findItems={findItems}
             onCreateNew={onCreateNew}
+            insideDialog={mode === "create"}
           />
         )}
       </WithLocationSearch>

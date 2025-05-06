@@ -1,6 +1,6 @@
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { type LocationOut } from "~/schemas/location";
-import { type ComboboxItem } from "~/app/_components/combobox";
+import { type ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
 export const buildProductComboboxItem = (

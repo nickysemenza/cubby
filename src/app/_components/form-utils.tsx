@@ -12,8 +12,9 @@ import {
 } from "~/components/ui/form";
 import { UseFormReturn, FieldValues, Path, PathValue } from "react-hook-form";
 import { Input } from "~/components/ui/input";
-import { Combobox, ComboboxItem } from "./combobox";
+import { ComboboxItem } from "./combobox/combobox-types";
 import { DevTool } from "@hookform/devtools";
+import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 
 // Base props shared by all forms
 export interface BaseFormProps {
@@ -73,7 +74,15 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   return (
     <Form {...form}>
       <DevTool control={form.control} />
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form
+        onSubmit={(e) => {
+          // https://github.com/orgs/react-hook-form/discussions/7038#discussioncomment-11376398
+          e.stopPropagation();
+          e.preventDefault();
+          form.handleSubmit(onSubmit)(e);
+        }}
+        className="space-y-6"
+      >
         {children}
 
         {error && <div className="text-sm text-red-500">{error}</div>}
@@ -225,6 +234,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   label: string;
   findItems: (query: string) => Promise<ComboboxItem[]>;
   onCreateNew?: (name: string) => Promise<ComboboxItem>;
+  insideDialog?: boolean;
 }) {
   return (
     <FormField
@@ -234,7 +244,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Combobox
+            <DialogCompatibleCombobox
               label={label.toLowerCase()}
               findItems={findItems}
               value={field.value as ComboboxItem | null}

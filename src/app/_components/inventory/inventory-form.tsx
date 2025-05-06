@@ -1,7 +1,7 @@
 "use client";
 import { useWasm } from "~/wasmContext";
 import { type FC } from "react";
-import { ComboboxItem } from "~/app/_components/combobox";
+import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,

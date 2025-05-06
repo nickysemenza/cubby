@@ -9,7 +9,7 @@ import {
   type ProductTopLevelOut,
 } from "~/schemas/product";
 import { upc, ndb } from "~/schemas/util";
-import { NullableComboboxItem } from "../combobox";
+import { ComboboxItem } from "../combobox/combobox-types";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -36,7 +36,7 @@ const formSchema = z
     model: z.string().nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
-    ingredient: NullableComboboxItem, // Ingredient association
+    ingredient: ComboboxItem.nullable(), // Ingredient association
     unitMappings: z.array(unitMappingInput),
   })
   .transform((data) => ({
@@ -61,6 +61,7 @@ export type UpdateProductData = {
 // Props for create mode
 interface CreateProductFormProps extends CreateModeProps<CreateProductData> {
   product?: never;
+  initialName?: string;
 }
 
 // Define a custom type for product with ingredient and unit mappings
@@ -86,17 +87,18 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
+  const initialName = mode === "create" ? props.initialName : undefined;
 
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: product ? product.name : "",
+      name: product ? product.name : (initialName ?? ""),
       manufacturer: product ? product.manufacturer : "",
       model: product ? product.model : null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
-      ingredient: product?.ingredient,
+      ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
     },
   });
@@ -216,6 +218,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
             label="Ingredient"
             findItems={findItems}
             onCreateNew={onCreateNew}
+            insideDialog={mode === "create"}
           />
         )}
       </WithIngredientSearch>

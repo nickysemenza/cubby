@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { type ComboboxItem } from "../combobox";
+import { type ComboboxItem } from "./combobox-types";
 import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -9,10 +9,19 @@ import {
   buildProductComboboxItem,
 } from "./utils";
 import { toast } from "sonner";
-import { type LocationOut } from "~/schemas/location";
+import { type LocationOut, type LocationType } from "~/schemas/location";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { IngredientForm } from "~/app/_components/ingredients/ingredient-form";
+import { LocationForm } from "~/app/_components/locations/location-form";
+import { ProductForm } from "~/app/_components/products/product-form";
 
 interface WithEntitySearchProps {
   children: (props: {
@@ -24,9 +33,158 @@ const pagination = {
   pageIndex: 0,
   pageSize: 20,
 };
+
+function CreateIngredientDialog({
+  isOpen,
+  onOpenChange,
+  onCancel,
+  onCreate,
+  isPending,
+  error,
+  initialName,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCancel: () => void;
+  onCreate: (data: { name: string; aliases: string[] }) => void;
+  isPending: boolean;
+  error?: string;
+  initialName?: string;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking on Popover contents
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-radix-popper-content-wrapper]")) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Create New Ingredient</DialogTitle>
+        </DialogHeader>
+        <IngredientForm
+          mode="create"
+          isPending={isPending}
+          error={error}
+          onCancel={onCancel}
+          onCreate={onCreate}
+          initialName={initialName}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CreateLocationDialog({
+  isOpen,
+  onOpenChange,
+  onCancel,
+  onCreate,
+  isPending,
+  error,
+  initialName,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCancel: () => void;
+  onCreate: (data: {
+    name: string;
+    type: LocationType;
+    parentId: string | null;
+  }) => void;
+  isPending: boolean;
+  error?: string;
+  initialName?: string;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking on Popover contents
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-radix-popper-content-wrapper]")) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Create New Location</DialogTitle>
+        </DialogHeader>
+        <LocationForm
+          mode="create"
+          isPending={isPending}
+          error={error}
+          onCancel={onCancel}
+          onCreate={onCreate}
+          initialName={initialName}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateProductDialog({
+  isOpen,
+  onOpenChange,
+  onCancel,
+  onCreate,
+  isPending,
+  error,
+  initialName,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCancel: () => void;
+  onCreate: (data: {
+    name: string;
+    manufacturer: string;
+    model: string | null;
+    upc: string | null;
+    ndb_number: number | null;
+    ingredientId: string | null;
+  }) => void;
+  isPending: boolean;
+  error?: string;
+  initialName?: string;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking on Popover contents
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-radix-popper-content-wrapper]")) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>Create New Product</DialogTitle>
+        </DialogHeader>
+        <ProductForm
+          mode="create"
+          isPending={isPending}
+          error={error}
+          onCancel={onCancel}
+          onCreate={onCreate}
+          initialName={initialName}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function WithIngredientSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [pendingName, setPendingName] = useState("");
+  const [pendingResolve, setPendingResolve] = useState<
+    ((item: ComboboxItem) => void) | null
+  >(null);
   const queryClient = useQueryClient();
   const { data } = useQuery(
     api.ingredient.list.queryOptions({
@@ -49,6 +207,11 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
         queryClient.invalidateQueries({
           queryKey: ["ingredient", "list"],
         });
+        setIsDialogOpen(false);
+        if (pendingResolve) {
+          pendingResolve(buildIngredientComboboxItem(newIngredient));
+          setPendingResolve(null);
+        }
       },
       onError: (error) => {
         toast.error(`Failed to create ingredient: ${error.message}`);
@@ -57,20 +220,42 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
   );
 
   const onCreateNew = async (name: string) => {
-    // todo: instead of default values or null, this should pop up a modal form
-    const newIngredient = await createMutation.mutateAsync({
-      name,
-      aliases: [],
+    setPendingName(name);
+    setIsDialogOpen(true);
+    return new Promise<ComboboxItem>((resolve) => {
+      setPendingResolve(() => resolve);
     });
-    return buildIngredientComboboxItem(newIngredient);
   };
 
-  return <>{children({ findItems, onCreateNew })}</>;
+  return (
+    <>
+      <CreateIngredientDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={() => {
+          setIsDialogOpen(false);
+          setPendingResolve(null);
+        }}
+        onCreate={(data) => {
+          createMutation.mutate(data);
+        }}
+        isPending={createMutation.isPending}
+        error={createMutation.error?.message}
+        initialName={pendingName}
+      />
+      {children({ findItems, onCreateNew })}
+    </>
+  );
 }
 
 export function WithLocationSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [pendingName, setPendingName] = useState("");
+  const [pendingResolve, setPendingResolve] = useState<
+    ((item: ComboboxItem) => void) | null
+  >(null);
   const queryClient = useQueryClient();
   const { data } = useQuery(
     api.location.list.queryOptions({
@@ -88,6 +273,11 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
         queryClient.invalidateQueries({
           queryKey: ["location", "list"],
         });
+        setIsDialogOpen(false);
+        if (pendingResolve) {
+          pendingResolve(buildLocationComboboxItem(newLocation));
+          setPendingResolve(null);
+        }
       },
       onError: (error) => {
         toast.error(`Failed to create location: ${error.message}`);
@@ -101,20 +291,42 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
   };
 
   const onCreateNew = async (name: string) => {
-    // todo: instead of default values or null, this should pop up a modal form
-    const newLocation = await createMutation.mutateAsync({
-      name,
-      type: "shelf", // Default type, could be improved with a type selector
-      parentId: null,
+    setPendingName(name);
+    setIsDialogOpen(true);
+    return new Promise<ComboboxItem>((resolve) => {
+      setPendingResolve(() => resolve);
     });
-    return buildLocationComboboxItem(newLocation);
   };
 
-  return <>{children({ findItems, onCreateNew })}</>;
+  return (
+    <>
+      <CreateLocationDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={() => {
+          setIsDialogOpen(false);
+          setPendingResolve(null);
+        }}
+        onCreate={(data) => {
+          createMutation.mutate(data);
+        }}
+        isPending={createMutation.isPending}
+        error={createMutation.error?.message}
+        initialName={pendingName}
+      />
+      {children({ findItems, onCreateNew })}
+    </>
+  );
 }
+
 export function WithProductSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
   const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [pendingName, setPendingName] = useState("");
+  const [pendingResolve, setPendingResolve] = useState<
+    ((item: ComboboxItem) => void) | null
+  >(null);
   const queryClient = useQueryClient();
   const { data } = useQuery(
     api.product.list.queryOptions({
@@ -132,6 +344,11 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
         queryClient.invalidateQueries({
           queryKey: ["product", "list"],
         });
+        setIsDialogOpen(false);
+        if (pendingResolve) {
+          pendingResolve(buildProductComboboxItem(newProduct));
+          setPendingResolve(null);
+        }
       },
       onError: (error) => {
         toast.error(`Failed to create product: ${error.message}`);
@@ -145,17 +362,30 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
   };
 
   const onCreateNew = async (name: string) => {
-    // todo: instead of default values or null, this should pop up a modal form
-    const newProduct = await createMutation.mutateAsync({
-      name,
-      manufacturer: "generic", // Default manufacturer
-      model: null,
-      upc: null,
-      ndb_number: null,
-      ingredientId: null,
+    setPendingName(name);
+    setIsDialogOpen(true);
+    return new Promise<ComboboxItem>((resolve) => {
+      setPendingResolve(() => resolve);
     });
-    return buildProductComboboxItem(newProduct);
   };
 
-  return <>{children({ findItems, onCreateNew })}</>;
+  return (
+    <>
+      <CreateProductDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={() => {
+          setIsDialogOpen(false);
+          setPendingResolve(null);
+        }}
+        onCreate={(data) => {
+          createMutation.mutate(data);
+        }}
+        isPending={createMutation.isPending}
+        error={createMutation.error?.message}
+        initialName={pendingName}
+      />
+      {children({ findItems, onCreateNew })}
+    </>
+  );
 }

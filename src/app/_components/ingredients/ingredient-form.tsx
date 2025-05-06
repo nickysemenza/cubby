@@ -39,11 +39,15 @@ export type UpdateIngredientData = {
 interface CreateIngredientFormProps
   extends CreateModeProps<CreateIngredientData> {
   ingredient?: never;
+  initialName?: string;
 }
 
 // Props for edit mode
 interface EditIngredientFormProps
-  extends EditModeProps<UpdateIngredientData, IngredientWithRecipesAndProductOut> {
+  extends EditModeProps<
+    UpdateIngredientData,
+    IngredientWithRecipesAndProductOut
+  > {
   entity: IngredientWithRecipesAndProductOut;
 }
 
@@ -53,12 +57,13 @@ type IngredientFormProps = CreateIngredientFormProps | EditIngredientFormProps;
 export const IngredientForm: FC<IngredientFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
   const ingredient = mode === "edit" ? props.entity : undefined;
+  const initialName = mode === "create" ? props.initialName : undefined;
 
   // Initialize form
   const form = useForm<IngredientFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: ingredient ? ingredient.name : "",
+      name: ingredient ? ingredient.name : (initialName ?? ""),
       aliases: ingredient ? ingredient.aliases : [],
     },
   });

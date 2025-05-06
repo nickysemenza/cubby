@@ -4,22 +4,14 @@ import { useForm, useFieldArray, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
-import { ComboboxItem } from "~/app/_components/combobox";
+import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
 } from "~/app/_components/combobox/utils";
 import { Button } from "~/components/ui/button";
-import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from "~/components/ui/form";
+import { Form, FormItem, FormMessage } from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
-import { Combobox } from "~/app/_components/combobox";
 import { DevTool } from "@hookform/devtools";
 import { X, Plus } from "lucide-react";
 import { useWasm } from "~/wasmContext";
@@ -34,6 +26,8 @@ import {
   WithLocationSearch,
   WithProductSearch,
 } from "~/app/_components/combobox/with-search-hook";
+import { ComboboxField } from "~/app/_components/form-utils";
+
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
@@ -226,29 +220,17 @@ export default function BulkInventoryForm() {
       <DevTool control={form.control} />
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <div className="mb-6 max-w-md">
-          <FormField
-            control={form.control}
-            name="location"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Location</FormLabel>
-                <FormControl>
-                  <WithLocationSearch>
-                    {({ findItems, onCreateNew }) => (
-                      <Combobox
-                        label="location"
-                        findItems={findItems}
-                        value={field.value}
-                        setValue={field.onChange}
-                        onCreateNew={onCreateNew}
-                      />
-                    )}
-                  </WithLocationSearch>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <WithLocationSearch>
+            {({ findItems, onCreateNew }) => (
+              <ComboboxField
+                form={form}
+                name="location"
+                label="Location"
+                findItems={findItems}
+                onCreateNew={onCreateNew}
+              />
             )}
-          />
+          </WithLocationSearch>
         </div>
 
         {selectedLocation && (
@@ -271,26 +253,17 @@ export default function BulkInventoryForm() {
                     className="flex items-center gap-2 rounded border p-1"
                   >
                     <div className="flex-1">
-                      <Controller
-                        control={form.control}
-                        name={`items.${index}.product`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <WithProductSearch>
-                              {({ findItems, onCreateNew }) => (
-                                <Combobox
-                                  label="product"
-                                  findItems={findItems}
-                                  value={field.value}
-                                  setValue={field.onChange}
-                                  onCreateNew={onCreateNew}
-                                />
-                              )}
-                            </WithProductSearch>
-                            <FormMessage />
-                          </FormItem>
+                      <WithProductSearch>
+                        {({ findItems, onCreateNew }) => (
+                          <ComboboxField
+                            form={form}
+                            name={`items.${index}.product`}
+                            label="Product"
+                            findItems={findItems}
+                            onCreateNew={onCreateNew}
+                          />
                         )}
-                      />
+                      </WithProductSearch>
                     </div>
 
                     <div className="w-24">
