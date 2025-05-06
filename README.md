@@ -1,29 +1,28 @@
-# Create T3 App
+# Recipehub
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+Recipehub is both a recipe database and a home inventory database tied together.
+Main technologies: Next.js, React w/ TailwindCSS, tRPC w/ React Query, and Prisma (PostgresSQL)
 
-## What's next? How do I make an app with this?
+# Entities
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+**Recipes** have multiple sections, each of which has **Ingredients** and an amount. Ingredients can also be other recipes.
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+**Products** have multiple unit mappings (each of which contain 2 amounts). Products can also point to an ingredient
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+**USDA Food** database is loaded, loosely linked to products based on the products NDB number or UPC code
 
-## Learn More
+Products can be inventoried - an **Inventory Entry** specified the amount of a given **Product** at a given **Location**.
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+# File layout
+- `src/components/ui` contains components from [shadcn/ui](https://ui.shadcn.com/)
+- `/src/schemas` - Zod schema definitions
+- `/src/server/api` - tRPC API routes and handlers
+- `/src/server/repo` - Database repository layer
+- `/recipebridge` contains a Web Assembly shim for calling out to Rust code in [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+# Testing Strategy
+- Unit tests use Vitest and have `.unit.test.ts` suffix
+- Integration tests use Vitest with `.integration.test.ts` suffix
+- E2E tests use Playwright in `/tests/e2e`
 
-## How do I deploy this?
-
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
