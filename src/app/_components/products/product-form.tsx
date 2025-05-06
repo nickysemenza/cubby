@@ -209,12 +209,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         />
       </SideBySideFields>
       <WithIngredientSearch>
-        {({ findItems }) => (
+        {({ findItems, onCreateNew }) => (
           <ComboboxField
             form={form}
             name="ingredient"
             label="Ingredient"
             findItems={findItems}
+            onCreateNew={onCreateNew}
           />
         )}
       </WithIngredientSearch>

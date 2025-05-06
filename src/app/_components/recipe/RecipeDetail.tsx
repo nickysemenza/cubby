@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { SectionIngredientOut, type RecipeOut } from "~/schemas/recipe";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { buildCLient } from "~/trpc/react";
-import { IngredientOut } from "~/schemas/combo";
+import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
@@ -18,22 +18,22 @@ const RecipeDetail: React.FC<{
       ),
     [recipe.sections],
   );
-  const [data, dataSet] = useState<Record<string, IngredientOut> | undefined>(
+  const [data, dataSet] = useState<Record<string, IngredientWithRecipesAndProductOut> | undefined>(
     undefined,
   );
 
   useEffect(() => {
     const getBulkIngredients = async (ids: string[]) => {
-      const ingredientsArray: IngredientOut[] = await Promise.all(
+      const ingredientsArray: IngredientWithRecipesAndProductOut[] = await Promise.all(
         ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
       );
-      const ingredientMap: Record<string, IngredientOut> =
+      const ingredientMap: Record<string, IngredientWithRecipesAndProductOut> =
         ingredientsArray.reduce(
           (acc, ingredient) => {
             acc[ingredient.id] = ingredient;
             return acc;
           },
-          {} as Record<string, IngredientOut>,
+          {} as Record<string, IngredientWithRecipesAndProductOut>,
         );
       console.log({ somePosts: ingredientMap });
       return ingredientMap;

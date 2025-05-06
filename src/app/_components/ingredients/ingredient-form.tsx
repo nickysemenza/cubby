@@ -4,7 +4,7 @@ import { type FC } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { type IngredientOut } from "~/schemas/combo";
+import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { ingredientBase } from "~/schemas/ingredient";
 import {
   type CreateModeProps,
@@ -43,8 +43,8 @@ interface CreateIngredientFormProps
 
 // Props for edit mode
 interface EditIngredientFormProps
-  extends EditModeProps<UpdateIngredientData, IngredientOut> {
-  entity: IngredientOut;
+  extends EditModeProps<UpdateIngredientData, IngredientWithRecipesAndProductOut> {
+  entity: IngredientWithRecipesAndProductOut;
 }
 
 // Combined props type

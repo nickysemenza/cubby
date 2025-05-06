@@ -4,12 +4,12 @@ import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { toast } from "react-toastify";
 import { IngredientPillLink } from "../_components/EntityPill";
-import { type IngredientOut } from "~/schemas/combo";
+import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
 import { useMutation } from "@tanstack/react-query";
 
 interface IngredientMergerProps {
-  table: Table<IngredientOut>;
+  table: Table<IngredientWithRecipesAndProductOut>;
 }
 export function IngredientMerger({ table }: IngredientMergerProps) {
   const api = useTRPC();

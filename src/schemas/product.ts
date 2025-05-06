@@ -7,7 +7,7 @@ export const productBase = z.object({
   name: z.string(),
   upc: upc.nullable(),
   ndb_number: ndb.nullable(),
-  manufacturer: z.string(),
+  manufacturer: z.string().describe("Manufacturer or 'generic'"),
   model: z.string().nullable(),
 });
 

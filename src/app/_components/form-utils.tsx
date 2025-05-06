@@ -218,11 +218,13 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   name,
   label,
   findItems,
+  onCreateNew,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
   findItems: (query: string) => Promise<ComboboxItem[]>;
+  onCreateNew?: (name: string) => Promise<ComboboxItem>;
 }) {
   return (
     <FormField
@@ -241,6 +243,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
                   value as PathValue<TFieldValues, Path<TFieldValues>>,
                 )
               }
+              onCreateNew={onCreateNew}
             />
           </FormControl>
           <FormMessage />

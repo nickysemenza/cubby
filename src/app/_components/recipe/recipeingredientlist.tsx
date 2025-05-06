@@ -11,7 +11,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
-import { IngredientOut, unitMappignsFromProduct } from "~/schemas/combo";
+import { IngredientWithRecipesAndProductOut, unitMappignsFromProduct } from "~/schemas/combo";
 import { useMemo } from "react";
 import { useWasm, wasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
@@ -32,7 +32,7 @@ dayjs.extend(relativeTime);
 const getPrice = (
   w: wasm,
   ingredient: SectionIngredientOut,
-  ingMap: Record<string, IngredientOut>,
+  ingMap: Record<string, IngredientWithRecipesAndProductOut>,
 ): {
   price: Result<WMeasure>;
   gram: Result<WMeasure>;
@@ -70,7 +70,7 @@ const getPrice = (
 const sumPrice = (
   w: wasm,
   ingredients: SectionIngredientOut[],
-  ingMap: Record<string, IngredientOut>,
+  ingMap: Record<string, IngredientWithRecipesAndProductOut>,
 ) => {
   const prices: WMeasure[] = [];
   const grams: WMeasure[] = [];
@@ -130,7 +130,7 @@ const formatNutrients = (nutrients: NutrientsPer100) => {
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
-  ingMap: Record<string, IngredientOut> | undefined;
+  ingMap: Record<string, IngredientWithRecipesAndProductOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
   const { w } = useWasm();
   const data = useMemo(() => {

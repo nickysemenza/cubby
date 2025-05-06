@@ -1,6 +1,7 @@
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { type LocationOut } from "~/schemas/location";
 import { type ComboboxItem } from "~/app/_components/combobox";
+import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
 export const buildProductComboboxItem = (
   product: ProductTopLevelOut,
@@ -14,4 +15,11 @@ export const buildLocationComboboxItem = (
 ): ComboboxItem => ({
   id: location.id,
   name: `${location.name} (${location.type})`,
+});
+
+export const buildIngredientComboboxItem = (
+  location: IngredientWithRecipesAndProductOut,
+): ComboboxItem => ({
+  id: location.id,
+  name: `${location.name}`,
 });

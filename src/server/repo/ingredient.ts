@@ -6,7 +6,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "~/schemas/util";
-import { type IngredientOut } from "~/schemas/combo";
+import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { findFood } from "./usda";
 import { foodLookupParamFromProduct } from "./product";
 import { formatSearchTerm, getSortDirection } from "./util";
@@ -100,7 +100,7 @@ const ingredientInclude = {
 const dbIngredientToAPI: (
   db: PrismaClient,
   ingredient: IngredientDeepDB,
-) => Promise<IngredientOut> = async (db, ingredient) => {
+) => Promise<IngredientWithRecipesAndProductOut> = async (db, ingredient) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
     ingredient;
 
@@ -143,7 +143,7 @@ export const getIngredientByName = async (db: PrismaClient, name: string) => {
 export const createIngredient = async (
   db: PrismaClient,
   data: z.infer<typeof ingredientBase>,
-): Promise<IngredientOut> => {
+): Promise<IngredientWithRecipesAndProductOut> => {
   const ingredient = await db.ingredient.create({
     data: {
       name: data.name,
@@ -159,7 +159,7 @@ export const updateIngredient = async (
   db: PrismaClient,
   id: string,
   data: Partial<z.infer<typeof ingredientBase>>,
-): Promise<IngredientOut> => {
+): Promise<IngredientWithRecipesAndProductOut> => {
   const ingredient = await db.ingredient.update({
     where: { id },
     data: data,

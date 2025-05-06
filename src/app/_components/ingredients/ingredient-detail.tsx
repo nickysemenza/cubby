@@ -4,7 +4,7 @@ import { type FC, useState } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
-import { type IngredientOut } from "~/schemas/combo";
+import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
@@ -16,7 +16,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
 
 interface IngredientDetailProps {
-  ingredient: IngredientOut;
+  ingredient: IngredientWithRecipesAndProductOut;
 }
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({
@@ -24,7 +24,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
 }) => {
   const api = useTRPC();
   const [ingredient, setIngredient] =
-    useState<IngredientOut>(initialIngredient);
+    useState<IngredientWithRecipesAndProductOut>(initialIngredient);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 

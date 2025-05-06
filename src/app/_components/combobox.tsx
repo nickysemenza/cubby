@@ -35,7 +35,8 @@ export const Combobox: React.FC<{
   findItems: (searchQuery: string) => Promise<ComboboxItem[]>;
   value: NullableComboboxItem;
   setValue: (item: NullableComboboxItem) => void;
-}> = ({ label, findItems, value, setValue }) => {
+  onCreateNew?: (name: string) => Promise<ComboboxItem>;
+}> = ({ label, findItems, value, setValue, onCreateNew }) => {
   const [open, setOpen] = React.useState(false);
 
   const [commandInput, setCommandInput] = React.useState<string>("");
@@ -71,7 +72,23 @@ export const Combobox: React.FC<{
             onValueChange={setCommandInput}
           />
           <CommandList>
-            <CommandEmpty>No {label} found.</CommandEmpty>
+            <CommandEmpty>
+              No {label} found.
+              {onCreateNew && commandInput.trim() !== "" && (
+                <Button
+                  variant="outline"
+                  className="mt-2 w-full"
+                  onClick={async () => {
+                    const newItem = await onCreateNew(commandInput);
+                    setValue(newItem);
+                    setOpen(false);
+                    setCommandInput("");
+                  }}
+                >
+                  Create new {label}: {commandInput}
+                </Button>
+              )}
+            </CommandEmpty>
             <CommandGroup>
               {results.map((result: ComboboxItem) => (
                 <CommandItem

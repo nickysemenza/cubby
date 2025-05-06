@@ -234,12 +234,13 @@ export default function BulkInventoryForm() {
                 <FormLabel>Location</FormLabel>
                 <FormControl>
                   <WithLocationSearch>
-                    {({ findItems }) => (
+                    {({ findItems, onCreateNew }) => (
                       <Combobox
                         label="location"
                         findItems={findItems}
                         value={field.value}
                         setValue={field.onChange}
+                        onCreateNew={onCreateNew}
                       />
                     )}
                   </WithLocationSearch>
@@ -276,12 +277,13 @@ export default function BulkInventoryForm() {
                         render={({ field }) => (
                           <FormItem>
                             <WithProductSearch>
-                              {({ findItems }) => (
+                              {({ findItems, onCreateNew }) => (
                                 <Combobox
                                   label="product"
                                   findItems={findItems}
                                   value={field.value}
                                   setValue={field.onChange}
+                                  onCreateNew={onCreateNew}
                                 />
                               )}
                             </WithProductSearch>
