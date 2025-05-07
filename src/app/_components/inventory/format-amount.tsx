@@ -22,7 +22,7 @@ export const showAmountAndPrice = (
   const price = convertAmountToPrice(w, amount, mappings);
   return (
     <div className="flex flex-col">
-      <div>{renderValueOrError(price, (p) => w.format_measure(p))}</div>
+      <div>{renderValueOrError(price, (p) => w.format_amount(p))}</div>
       <div>{tryFormatMeasure(w, amount)}</div>
     </div>
   );
@@ -30,7 +30,7 @@ export const showAmountAndPrice = (
 
 export const tryFormatMeasure = (w: wasm, measure: WMeasure) => {
   try {
-    return w.format_measure(measure);
+    return w.format_amount(measure);
   } catch (error) {
     return (
       <div className="text-red-400">{"Error formatting measure :" + error}</div>

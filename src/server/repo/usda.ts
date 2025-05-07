@@ -1,5 +1,4 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { getIngredientUnit } from "~/app/_components/recipe/recipeutils";
 import { UnitMapping } from "~/schemas/unitmapping";
 import {
   FoodInfo,
@@ -165,7 +164,7 @@ const getAmountFromBrandedFoodServingSize = (
     },
     b: {
       value: b.value,
-      unit: getIngredientUnit(b),
+      unit: b.unit,
     },
     source: `USDA FDC ${fdc_id}`,
   };

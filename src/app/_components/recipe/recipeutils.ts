@@ -1,4 +1,3 @@
-import { type WMeasure } from "recipebridge/pkg";
 import { type RecipeOut, type SectionIngredient } from "~/schemas/recipe";
 
 // returns the 1-indexed count of the instruction, across all sections.
@@ -26,12 +25,4 @@ export const getIngredientName = (ingredient: SectionIngredient): string => {
   // to the discriminated union but forget to handle it here
   const _exhaustiveCheck: never = ingredient;
   return _exhaustiveCheck; // This line is unreachable but pleases TypeScript
-};
-
-export const getIngredientUnit = (amount: WMeasure): string => {
-  // if typeof is OtherUnit
-  if (typeof amount.unit === "object" && "Other" in amount.unit) {
-    return amount.unit.Other;
-  }
-  return amount.unit;
 };

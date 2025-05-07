@@ -18,14 +18,18 @@ const FLOAT_PRECISION: f64 = 1000.0;
 /// A pair of measures that can be used for unit conversion
 type UnitMappingPairs = Vec<(Measure, Measure)>;
 
-/// Represents a raw amount with a unit and value
+/// RawMeasure is a measure with the unit as a string
 #[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct RawAmount {
     unit: String,
     value: f64,
     upper_value: Option<f64>,
 }
-
+impl RawAmount {
+    pub fn to_measure(&self) -> Measure {
+        Measure::from_parts(self.unit.as_str(), self.value, self.upper_value)
+    }
+}
 /// Represents a mapping between two raw amounts
 #[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct UnitMapping {
@@ -40,8 +44,6 @@ extern "C" {
     pub type WIngredient;
     #[wasm_bindgen(typescript_type = "WMeasure")]
     pub type WMeasure;
-    #[wasm_bindgen(typescript_type = "WRawAmount")]
-    pub type WRawAmount;
     #[wasm_bindgen(typescript_type = "WUnitMapping")]
     pub type WUnitMapping;
     #[wasm_bindgen(typescript_type = "WCompactRecipe")]
@@ -61,16 +63,11 @@ fn setup() {
     let _ = wasm_tracing::try_set_as_global_default();
 }
 
-/// Converts a RawAmount to a Measure
-fn raw_amount_to_measure(a: RawAmount) -> Measure {
-    Measure::from_parts(a.unit.as_str(), a.value, a.upper_value)
-}
-
 /// Converts a vector of UnitMapping to UnitMappingPairs
 fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappingPairs {
     mappings
         .into_iter()
-        .map(|m| (raw_amount_to_measure(m.a), raw_amount_to_measure(m.b)))
+        .map(|m| (m.a.to_measure(), m.b.to_measure()))
         .collect()
 }
 
@@ -93,9 +90,9 @@ fn mappings_from_w(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, Stri
 #[wasm_bindgen]
 pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
     setup();
-    let measure: Measure = serde_wasm_bindgen::from_value(input.into())
+    let measure: RawAmount = serde_wasm_bindgen::from_value(input.into())
         .map_err(|e| format!("Failed to parse measure: {}", e))?;
-    Ok(f64::trunc(measure.values().0 * FLOAT_PRECISION) / FLOAT_PRECISION)
+    Ok(f64::trunc(measure.to_measure().values().0 * FLOAT_PRECISION) / FLOAT_PRECISION)
 }
 
 /// Parses an ingredient string into a WIngredient
@@ -110,20 +107,11 @@ pub fn parse_ingredient(input: &str) -> Result<WIngredient, String> {
 
 /// Formats a raw amount into a string representation
 #[wasm_bindgen]
-pub fn format_amount(amount: &WRawAmount) -> Result<String, String> {
+pub fn format_amount(amount: &WMeasure) -> Result<String, String> {
     setup();
     serde_wasm_bindgen::from_value(amount.into())
-        .map(|a: RawAmount| format!("{}", raw_amount_to_measure(a)))
+        .map(|a: RawAmount| format!("{}", a.to_measure()))
         .map_err(|e| format!("Failed to format amount: {}", e))
-}
-
-/// Formats a measure into a string representation
-#[wasm_bindgen]
-pub fn format_measure(amount: &WMeasure) -> Result<String, String> {
-    setup();
-    serde_wasm_bindgen::from_value(amount.into())
-        .map(|a: Measure| format!("{}", a))
-        .map_err(|e| format!("Failed to format measure: {}", e))
 }
 
 /// Creates a graph representation of unit mappings
@@ -142,17 +130,18 @@ pub fn conv_measure_to_kind(
 ) -> Result<WMeasure, String> {
     setup();
     let mapping_pairs = mappings_from_w(mappings)?;
-    let input_measure: Measure = serde_wasm_bindgen::from_value(input_measure_w.into())
+    let input_measure: RawAmount = serde_wasm_bindgen::from_value(input_measure_w.into())
         .map_err(|e| format!("Failed to parse input amount: {}", e))?;
     let target_measure_kind = MeasureKind::from_str(&input_target_measure_kind)
         .map_err(|_| format!("Invalid measure kind: {}", input_target_measure_kind))?;
 
+    let input_measure = input_measure.to_measure();
     input_measure
         .convert_measure_via_mappings(target_measure_kind.clone(), mapping_pairs)
         .map(|m| serde_wasm_bindgen::to_value(&m).unwrap().into())
         .ok_or_else(|| {
             format!(
-                "Failed to convert '{}' to target measure '{}'",
+                "conv_measure_to_kind: failed to convert '{}' to target measure '{}'",
                 input_measure, target_measure_kind
             )
         })
@@ -193,23 +182,15 @@ interface WIngredient {
     name: string;
 }
 
-type OtherUnitEnum = {"Other": string};
-
 interface WMeasure {
-    unit: string | OtherUnitEnum;
+    unit: string;
     value: number;
     upper_value?: number;
 }
 
 interface WUnitMapping {
-    a: WRawAmount;
-    b: WRawAmount;
-}
-
-interface WRawAmount {
-    unit: string;
-    value: number;
-    upper_value?: number;
+    a: WMeasure;
+    b: WMeasure;
 }
 
 interface WCompactRecipe {

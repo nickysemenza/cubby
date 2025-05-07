@@ -2,7 +2,6 @@
 import React, { useMemo } from "react";
 import { type WIngredient } from "recipebridge/pkg";
 import { useTRPC } from "~/trpc/react";
-import { getIngredientUnit } from "./recipeutils";
 import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
 import { formatRichText } from "./richtext";
@@ -238,11 +237,11 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
     <div className="inline">
       <div className="inline">
         {amounts.map((a, x) => (
-          <div key={getIngredientUnit(a)} className="inline">
+          <div key={x} className="inline">
             <div className="inline text-blue-600">
               {w && w.format_measure_value(a)}
             </div>
-            <div className="inline text-green-800">{getIngredientUnit(a)}</div>
+            <div className="inline text-green-800">{a.unit}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}
           </div>
         ))}

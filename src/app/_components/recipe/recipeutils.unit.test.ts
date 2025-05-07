@@ -1,10 +1,6 @@
 import { expect, test } from "vitest";
 import { type SectionIngredient, type RecipeOut } from "~/schemas/recipe";
-import {
-  getGlobalInstructionNumber,
-  getIngredientName,
-  getIngredientUnit,
-} from "./recipeutils";
+import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
 
 test("recipe utils", () => {
   const recipe: RecipeOut = {
@@ -71,10 +67,4 @@ test("recipe utils", () => {
   expect(si).toBeDefined();
   if (!si) return;
   expect(getIngredientName(si)).toEqual("flour-r");
-});
-test("ingredient unit ", () => {
-  expect(getIngredientUnit({ value: 1, unit: "Cup" })).toEqual("Cup");
-  expect(getIngredientUnit({ value: 1, unit: { Other: "something" } })).toEqual(
-    "something",
-  );
 });

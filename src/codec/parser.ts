@@ -1,5 +1,4 @@
 import { type CompactRecipe, type ParsedCompactRecipe } from "./codec";
-import { getIngredientUnit } from "~/app/_components/recipe/recipeutils";
 
 export const parseCompactRecipe = async (
   raw: CompactRecipe,
@@ -15,10 +14,7 @@ export const parseCompactRecipe = async (
             const parsed = parse_ingredient(ingredient);
             return {
               name: parsed.name,
-              amounts: parsed.amounts.map((amount) => ({
-                value: amount.value,
-                unit: getIngredientUnit(amount),
-              })),
+              amounts: parsed.amounts,
             };
           }),
         ),
