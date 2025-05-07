@@ -2,7 +2,7 @@ import { type FC } from "react";
 import { useFieldArray, UseFormReturn } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
-import { RequiredTextField } from "../../form-utils";
+import { RequiredTextareaField } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
 
 interface InstructionFieldArrayProps {
@@ -42,7 +42,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           {fields.map((field, instructionIndex) => (
             <div key={field.id} className="flex items-start space-x-2">
               <div className="flex-grow">
-                <RequiredTextField
+                <RequiredTextareaField
                   form={form}
                   name={`sections.${sectionIndex}.instructions.${instructionIndex}.instruction`}
                   label={`Step ${instructionIndex + 1}`}

@@ -7,8 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
 import {
   FormWrapper,
-  RequiredTextField,
-  NullableTextField,
+  UnifiedTextField,
   getSubmitButtonText,
   buildUpdateObject,
 } from "../../form-utils";
@@ -236,18 +235,20 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <RequiredTextField
+      <UnifiedTextField
         form={form}
         name="name"
-        label="Recipe Name"
+        label="Name"
         placeholder="Enter recipe name"
+        nullable={false}
       />
 
-      <NullableTextField
+      <UnifiedTextField
         form={form}
         name="meta.url"
         label="URL (Optional)"
         placeholder="Enter recipe URL"
+        nullable={true}
       />
 
       <div className="space-y-6">
@@ -318,7 +319,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               </div>
             </div>
 
-            <NullableTextField
+            <UnifiedTextField
               form={form}
               name={`sections.${sectionIndex}.name`}
               label="Section Name (Optional)"

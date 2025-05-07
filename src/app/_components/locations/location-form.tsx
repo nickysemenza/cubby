@@ -14,7 +14,7 @@ import {
   type CreateModeProps,
   type EditModeProps,
   FormWrapper,
-  RequiredTextField,
+  UnifiedTextField,
   getSubmitButtonText,
   ComboboxField,
   detectComboboxIdChange,
@@ -149,11 +149,12 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       submitButtonText={buttonText}
     >
       <SideBySideFields>
-        <RequiredTextField
+        <UnifiedTextField
           form={form}
           name="name"
           label="Name"
           placeholder="Enter location name"
+          nullable={false}
         />
 
         <FormField

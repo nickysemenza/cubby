@@ -5,7 +5,7 @@ import { Plus, Trash } from "lucide-react";
 import {
   SideBySideFields,
   NullableNumericField,
-  RequiredTextField,
+  UnifiedTextField,
   createAmountObject,
 } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
@@ -49,11 +49,12 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
               label="Value"
               placeholder="Enter amount"
             />
-            <RequiredTextField
+            <UnifiedTextField
               form={form}
               name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.unit`}
               label="Unit"
               placeholder="Enter unit"
+              nullable={false}
             />
           </SideBySideFields>
 

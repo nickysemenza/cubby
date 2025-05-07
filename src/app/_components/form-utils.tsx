@@ -15,6 +15,7 @@ import { Input } from "~/components/ui/input";
 import { ComboboxItem } from "./combobox/combobox-types";
 import { DevTool } from "@hookform/devtools";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
+import { Textarea } from "~/components/ui/textarea";
 
 // Base props shared by all forms
 export interface BaseFormProps {
@@ -105,8 +106,8 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   );
 }
 
-// Helper for handling nullable text fields
-export function NullableTextField<
+// Helper for handling required textarea fields
+export function RequiredTextareaField<
   TFieldValues extends FieldValues = FieldValues,
 >({
   form,
@@ -127,46 +128,7 @@ export function NullableTextField<
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input
-              placeholder={placeholder}
-              {...field}
-              value={(field.value as string | null) || ""}
-              onChange={(e) => {
-                const value = e.target.value;
-                field.onChange(value === "" ? null : value);
-              }}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
-
-// Helper for handling required text fields
-export function RequiredTextField<
-  TFieldValues extends FieldValues = FieldValues,
->({
-  form,
-  name,
-  label,
-  placeholder,
-}: {
-  form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
-  label: string;
-  placeholder: string;
-}) {
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input placeholder={placeholder} {...field} />
+            <Textarea placeholder={placeholder} {...field} />
           </FormControl>
           <FormMessage />
         </FormItem>
@@ -339,16 +301,13 @@ export function SideBySideFields({
 
 // Helper to create an Amount object from form values
 export interface AmountValues {
-  value: string | number;
+  value: number;
   unit: string;
 }
 
 export function createAmountObject(values: AmountValues) {
   return {
-    value:
-      typeof values.value === "string"
-        ? parseFloat(values.value)
-        : values.value,
+    value: values.value,
     unit: values.unit,
   };
 }
@@ -356,15 +315,56 @@ export function createAmountObject(values: AmountValues) {
 // Detect changes in an amount value
 export function hasAmountChanged(
   entityAmount: { value: number; unit: string },
-  formAmountValue: string | number,
+  formAmountValue: number,
   formAmountUnit: string,
 ): boolean {
-  const numericValue =
-    typeof formAmountValue === "string"
-      ? parseFloat(formAmountValue)
-      : formAmountValue;
-
   return (
-    numericValue !== entityAmount.value || formAmountUnit !== entityAmount.unit
+    formAmountValue !== entityAmount.value ||
+    formAmountUnit !== entityAmount.unit
+  );
+}
+
+// Unified text field component that combines nullable and required functionality
+export function UnifiedTextField<
+  TFieldValues extends FieldValues = FieldValues,
+>({
+  form,
+  name,
+  label,
+  placeholder,
+  nullable = false,
+}: {
+  form: UseFormReturn<TFieldValues>;
+  name: Path<TFieldValues>;
+  label: string;
+  placeholder: string;
+  nullable?: boolean;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              placeholder={placeholder}
+              {...field}
+              value={
+                nullable ? (field.value as string | null) || "" : field.value
+              }
+              onChange={(e) => {
+                const value = e.target.value;
+                field.onChange(
+                  nullable ? (value === "" ? null : value) : value,
+                );
+              }}
+            />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
   );
 }

@@ -10,7 +10,7 @@ import {
   type CreateModeProps,
   type EditModeProps,
   FormWrapper,
-  RequiredTextField,
+  UnifiedTextField,
   getSubmitButtonText,
   buildUpdateObject,
 } from "../form-utils";
@@ -141,11 +141,12 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <RequiredTextField
+      <UnifiedTextField
         form={form}
         name="name"
         label="Name"
         placeholder="Enter ingredient name"
+        nullable={false}
       />
 
       <div className="space-y-4">

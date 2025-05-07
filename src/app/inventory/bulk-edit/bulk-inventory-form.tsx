@@ -33,7 +33,7 @@ const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
     message: "Please select a product",
   }),
-  amountValue: z.string().min(1, "Please enter a value"),
+  amountValue: z.number().min(1, "Please enter a value"),
   amountUnit: z.string().min(1, "Please enter a unit"),
   id: z.string().optional(), // For existing items
 });
@@ -128,7 +128,7 @@ export default function BulkInventoryForm() {
       // Convert existing inventory items to form field values
       const existingItems = inventoryItemsData.items.map((item) => ({
         product: buildProductComboboxItem(item.product),
-        amountValue: item.amount.value.toString(),
+        amountValue: item.amount.value,
         amountUnit: item.amount.unit,
         id: item.id,
       }));
@@ -145,7 +145,7 @@ export default function BulkInventoryForm() {
   const addInventoryItem = () => {
     append({
       product: null as unknown as ComboboxItem,
-      amountValue: "",
+      amountValue: 1,
       amountUnit: "",
     });
   };

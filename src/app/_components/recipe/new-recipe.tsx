@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useState } from "react";
-import { RecipeForm, type CreateRecipeData } from "./recipe-form";
+import { RecipeForm } from "./recipe-form";
 import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
+import { CreateRecipeData } from "./recipe-form/types";
 
 export default function NewRecipeForm() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function NewRecipeForm() {
         setError(error.message);
         toast.error("Failed to create recipe");
       },
-    })
+    }),
   );
 
   const handleCreate = (data: CreateRecipeData) => {

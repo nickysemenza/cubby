@@ -14,8 +14,7 @@ import {
   type CreateModeProps,
   type EditModeProps,
   FormWrapper,
-  RequiredTextField,
-  NullableTextField,
+  UnifiedTextField,
   getSubmitButtonText,
   buildUpdateObject,
   SideBySideFields,
@@ -174,33 +173,37 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <RequiredTextField
+      <UnifiedTextField
         form={form}
         name="name"
         label="Name"
         placeholder="Enter product name"
+        nullable={false}
       />
 
-      <RequiredTextField
+      <UnifiedTextField
         form={form}
         name="manufacturer"
         label="Manufacturer"
         placeholder="Enter manufacturer"
+        nullable={false}
       />
 
-      <NullableTextField
+      <UnifiedTextField
         form={form}
         name="model"
         label="Model (Optional)"
         placeholder="Enter model"
+        nullable={true}
       />
 
       <SideBySideFields>
-        <NullableTextField
+        <UnifiedTextField
           form={form}
           name="upc"
           label="UPC (Optional)"
           placeholder="12-digit UPC code"
+          nullable={true}
         />
 
         <NullableNumericField
@@ -268,11 +271,12 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                     label="Value"
                     placeholder="Enter value"
                   />
-                  <RequiredTextField
+                  <UnifiedTextField
                     form={form}
                     name={`unitMappings.${index}.a.unit`}
                     label="Unit"
                     placeholder="Enter unit"
+                    nullable={false}
                   />
                 </SideBySideFields>
               </div>
@@ -286,21 +290,23 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                     label="Value"
                     placeholder="Enter value"
                   />
-                  <RequiredTextField
+                  <UnifiedTextField
                     form={form}
                     name={`unitMappings.${index}.b.unit`}
                     label="Unit"
                     placeholder="Enter unit"
+                    nullable={false}
                   />
                 </SideBySideFields>
               </div>
             </div>
 
-            <NullableTextField
+            <UnifiedTextField
               form={form}
               name={`unitMappings.${index}.source`}
               label="Source (Optional)"
               placeholder="Enter source"
+              nullable={true}
             />
           </div>
         ))}

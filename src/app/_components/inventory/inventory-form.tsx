@@ -19,13 +19,13 @@ import {
   type EditModeProps,
   FormWrapper,
   ComboboxField,
-  RequiredTextField,
   getSubmitButtonText,
   SideBySideFields,
   detectComboboxIdChange,
   hasAmountChanged,
   createAmountObject,
   NullableNumericField,
+  UnifiedTextField,
 } from "../form-utils";
 
 import {
@@ -41,7 +41,7 @@ const formSchema = z.object({
   location: ComboboxItem.refine((item) => item !== null, {
     message: "Please select a location",
   }),
-  amountValue: z.string().min(1, "Please enter a value"),
+  amountValue: z.number().min(1, "Please enter a value"),
   amountUnit: z.string().min(1, "Please enter a unit"),
 });
 
@@ -91,7 +91,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       location: inventoryItem
         ? buildLocationComboboxItem(inventoryItem.location)
         : undefined,
-      amountValue: inventoryItem ? inventoryItem.amount.value.toString() : "",
+      amountValue: inventoryItem ? inventoryItem.amount.value : undefined,
       amountUnit: inventoryItem ? inventoryItem.amount.unit : "",
     },
   });
@@ -205,11 +205,12 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
           placeholder="Enter amount"
         />
 
-        <RequiredTextField
+        <UnifiedTextField
           form={form}
           name="amountUnit"
           label="Amount Unit"
           placeholder="Enter unit"
+          nullable={false}
         />
       </SideBySideFields>
     </FormWrapper>

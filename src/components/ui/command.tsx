@@ -57,17 +57,6 @@ function CommandInput({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Input>) {
-  // Handle keydown events to prevent them from being captured by parent dialog
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Stop propagation for key events to prevent dialogs from capturing them
-    e.stopPropagation();
-    
-    // Call original onKeyDown handler if provided
-    if (props.onKeyDown) {
-      props.onKeyDown(e);
-    }
-  };
-
   return (
     <div
       data-slot="command-input-wrapper"
@@ -80,8 +69,6 @@ function CommandInput({
           "placeholder:text-muted-foreground flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-hidden disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
-        // Override keydown to prevent dialog from capturing events
-        onKeyDown={handleKeyDown}
         {...props}
       />
     </div>
