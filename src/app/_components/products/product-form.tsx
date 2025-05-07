@@ -16,12 +16,12 @@ import {
   FormWrapper,
   RequiredTextField,
   NullableTextField,
-  NullableNumberField,
   getSubmitButtonText,
   buildUpdateObject,
   SideBySideFields,
   ComboboxField,
   detectComboboxIdChange,
+  NullableNumericField,
 } from "../form-utils";
 import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
@@ -203,8 +203,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           placeholder="12-digit UPC code"
         />
 
-        <NullableNumberField
+        <NullableNumericField
           form={form}
+          step="1"
           name="ndb_number"
           label="NDB Number (Optional)"
           placeholder="NDB number (1000-99999)"
@@ -261,7 +262,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               <div className="space-y-2">
                 <h5 className="text-sm font-medium">From</h5>
                 <SideBySideFields>
-                  <NullableNumberField
+                  <NullableNumericField
                     form={form}
                     name={`unitMappings.${index}.a.value`}
                     label="Value"
@@ -279,7 +280,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               <div className="space-y-2">
                 <h5 className="text-sm font-medium">To</h5>
                 <SideBySideFields>
-                  <NullableNumberField
+                  <NullableNumericField
                     form={form}
                     name={`unitMappings.${index}.b.value`}
                     label="Value"

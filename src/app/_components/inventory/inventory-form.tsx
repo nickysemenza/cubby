@@ -19,13 +19,13 @@ import {
   type EditModeProps,
   FormWrapper,
   ComboboxField,
-  NumericField,
   RequiredTextField,
   getSubmitButtonText,
   SideBySideFields,
   detectComboboxIdChange,
   hasAmountChanged,
   createAmountObject,
+  NullableNumericField,
 } from "../form-utils";
 
 import {
@@ -198,7 +198,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       </WithLocationSearch>
 
       <SideBySideFields>
-        <NumericField
+        <NullableNumericField
           form={form}
           name="amountValue"
           label="Amount Value"

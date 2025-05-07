@@ -175,19 +175,21 @@ export function RequiredTextField<
   );
 }
 
-// Helper for handling nullable number fields
-export function NullableNumberField<
+// Helper for handling nullable numeric fields with number input type
+export function NullableNumericField<
   TFieldValues extends FieldValues = FieldValues,
 >({
   form,
   name,
   label,
   placeholder,
+  step = "0.01",
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
   placeholder: string;
+  step?: string;
 }) {
   return (
     <FormField
@@ -198,6 +200,8 @@ export function NullableNumberField<
           <FormLabel>{label}</FormLabel>
           <FormControl>
             <Input
+              type="number"
+              step={step}
               placeholder={placeholder}
               {...field}
               value={
@@ -207,7 +211,7 @@ export function NullableNumberField<
               }
               onChange={(e) => {
                 const value = e.target.value;
-                const numberValue = value ? parseInt(value, 10) : null;
+                const numberValue = value ? parseFloat(value) : null;
                 field.onChange(
                   numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
                 );
@@ -254,42 +258,6 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
                 )
               }
               onCreateNew={onCreateNew}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
-
-// Helper for handling numeric inputs (for amounts, etc.)
-export function NumericField<TFieldValues extends FieldValues = FieldValues>({
-  form,
-  name,
-  label,
-  placeholder,
-  step = "0.01",
-}: {
-  form: UseFormReturn<TFieldValues>;
-  name: Path<TFieldValues>;
-  label: string;
-  placeholder: string;
-  step?: string;
-}) {
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              type="number"
-              step={step}
-              placeholder={placeholder}
-              {...field}
             />
           </FormControl>
           <FormMessage />

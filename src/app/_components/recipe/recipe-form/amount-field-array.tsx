@@ -4,10 +4,9 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash } from "lucide-react";
 import {
   SideBySideFields,
-  NumericField,
+  NullableNumericField,
   RequiredTextField,
   createAmountObject,
-  NullableNumberField,
 } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
 
@@ -44,7 +43,7 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
       {fields.map((field, amountIndex) => (
         <div key={field.id} className="flex items-center space-x-2">
           <SideBySideFields>
-            <NullableNumberField
+            <NullableNumericField
               form={form}
               name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.value`}
               label="Value"
