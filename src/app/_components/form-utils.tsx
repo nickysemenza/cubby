@@ -16,6 +16,13 @@ import { ComboboxItem } from "./combobox/combobox-types";
 import { DevTool } from "@hookform/devtools";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import { Textarea } from "~/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 
 // Base props shared by all forms
 export interface BaseFormProps {
@@ -379,6 +386,54 @@ export function UnifiedTextField<
           </FormItem>
         );
       }}
+    />
+  );
+}
+
+// Helper for handling select fields
+export function SelectField<TFieldValues extends FieldValues = FieldValues>({
+  form,
+  name,
+  label,
+  options,
+  placeholder,
+}: {
+  form: UseFormReturn<TFieldValues>;
+  name: Path<TFieldValues>;
+  label: string;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Select
+              onValueChange={field.onChange}
+              value={field.value}
+              defaultValue={field.value}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={placeholder || `Select ${label.toLowerCase()}`}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
     />
   );
 }

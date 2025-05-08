@@ -19,21 +19,8 @@ import {
   ComboboxField,
   detectComboboxIdChange,
   SideBySideFields,
+  SelectField,
 } from "../form-utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
 
 import { WithLocationSearch } from "../combobox/with-search-hook";
 
@@ -157,33 +144,15 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           nullable={false}
         />
 
-        <FormField
-          control={form.control}
+        <SelectField
+          form={form}
           name="type"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Type</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-                value={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a location type" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {Object.values(locationType.enum).map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Type"
+          options={Object.values(locationType.enum).map((type) => ({
+            value: type,
+            label: type,
+          }))}
+          placeholder="Select a location type"
         />
       </SideBySideFields>
 

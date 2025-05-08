@@ -17,12 +17,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "~/components/ui/form";
-import { FormWrapper } from "../form-utils";
+  FormWrapper,
+  RequiredTextareaField,
+  UnifiedTextField,
+} from "../form-utils";
 
 const cleanupLinesToArray = (lines: string) =>
   lines
@@ -115,54 +113,30 @@ const NewCompactRecipe: React.FC = () => {
       submitButtonText="Create Recipe"
     >
       <div className="my-4">
-        <FormField
-          control={form.control}
+        <UnifiedTextField
+          form={form}
           name="url"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Input type="url" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Recipe URL"
+          placeholder="Enter recipe URL"
         />
         <Button type="button" onClick={() => onScrape()}>
           Scrape
         </Button>
       </div>
 
-      <FormField
-        control={form.control}
+      <UnifiedTextField
+        form={form}
         name="name"
-        render={({ field }) => (
-          <FormItem>
-            <FormControl>
-              <Input {...field} />
-            </FormControl>
-            <FormMessage />
-          </FormItem>
-        )}
+        label="Name"
+        placeholder="Enter recipe name"
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <FormField
-          control={form.control}
+        <RequiredTextareaField
+          form={form}
           name="ingredientsText"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  rows={10}
-                  cols={50}
-                  placeholder="Enter your recipe here..."
-                  className="border border-gray-300"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Ingredients"
+          placeholder="Enter your recipe here..."
         />
         <div>
           {ingredientsParsed.map((l, x) => (
@@ -176,23 +150,11 @@ const NewCompactRecipe: React.FC = () => {
       <hr className="my-4" />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <FormField
-          control={form.control}
+        <RequiredTextareaField
+          form={form}
           name="instructionsText"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  rows={10}
-                  cols={50}
-                  placeholder="Enter your instructions here..."
-                  className="border border-gray-300 leading-relaxed"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
+          label="Instructions"
+          placeholder="Enter your instructions here..."
         />
         <div>
           <ol className="list-decimal pl-5 leading-relaxed">

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
@@ -10,9 +10,6 @@ import {
   buildLocationComboboxItem,
 } from "~/app/_components/combobox/utils";
 import { Button } from "~/components/ui/button";
-import { Form, FormItem, FormMessage } from "~/components/ui/form";
-import { Input } from "~/components/ui/input";
-import { DevTool } from "@hookform/devtools";
 import { X, Plus } from "lucide-react";
 import { useWasm } from "~/wasmContext";
 import { createAmountObject } from "~/app/_components/form-utils";
@@ -30,6 +27,7 @@ import { ComboboxField } from "~/app/_components/form-utils";
 import { UnifiedTextField } from "~/app/_components/form-utils";
 import { ValidInvalidIcon } from "~/app/_components/icons/valid-invalid";
 import { NullableNumericField } from "~/app/_components/form-utils";
+import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
 
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
@@ -219,117 +217,103 @@ export default function BulkInventoryForm() {
   }
 
   return (
-    <Form {...form}>
-      <DevTool control={form.control} />
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="mb-6 max-w-md">
-          <WithLocationSearch>
-            {({ findItems, onCreateNew }) => (
-              <ComboboxField
-                form={form}
-                name="location"
-                label="Location"
-                findItems={findItems}
-                onCreateNew={onCreateNew}
-              />
-            )}
-          </WithLocationSearch>
-        </div>
+    <FormWrapper
+      form={form}
+      onSubmit={onSubmit}
+      error={error ?? undefined}
+      isPending={isSubmitting}
+      submitButtonText={getSubmitButtonText("edit", isSubmitting)}
+    >
+      <div className="mb-6 max-w-md">
+        <WithLocationSearch>
+          {({ findItems, onCreateNew }) => (
+            <ComboboxField
+              form={form}
+              name="location"
+              label="Location"
+              findItems={findItems}
+              onCreateNew={onCreateNew}
+            />
+          )}
+        </WithLocationSearch>
+      </div>
 
-        {selectedLocation && (
-          <>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-medium">
-                Inventory for {selectedLocation.name}
-              </h3>
-              <Button type="button" onClick={addInventoryItem} size="sm">
-                <Plus className="mr-1 h-4 w-4" />
-                Add Item
-              </Button>
-            </div>
+      {selectedLocation && (
+        <>
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-medium">
+              Inventory for {selectedLocation.name}
+            </h3>
+            <Button type="button" onClick={addInventoryItem} size="sm">
+              <Plus className="mr-1 h-4 w-4" />
+              Add Item
+            </Button>
+          </div>
 
-            <div className="space-y-2">
-              {fields.length > 0 ? (
-                fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="flex items-center gap-2 rounded border p-1"
-                  >
-                    <div className="flex-1">
-                      <WithProductSearch>
-                        {({ findItems, onCreateNew }) => (
-                          <ComboboxField
-                            form={form}
-                            name={`items.${index}.product`}
-                            label="Product"
-                            findItems={findItems}
-                            onCreateNew={onCreateNew}
-                          />
-                        )}
-                      </WithProductSearch>
-                    </div>
-
-                    <div className="w-24">
-                      <NullableNumericField
-                        form={form}
-                        name={`items.${index}.amountValue`}
-                        label="Value"
-                        placeholder="Value"
-                      />
-                    </div>
-
-                    <div className="w-24">
-                      <UnifiedTextField
-                        form={form}
-                        name={`items.${index}.amountUnit`}
-                        label="Unit"
-                        placeholder="Unit"
-                        getIcon={(x) =>
-                          w &&
-                          x && (
-                            <ValidInvalidIcon
-                              isValid={w.is_valid_unit(x, [])}
-                            />
-                          )
-                        }
-                      />
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => remove(index)}
-                      className="flex-shrink-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+          <div className="space-y-2">
+            {fields.length > 0 ? (
+              fields.map((field, index) => (
+                <div
+                  key={field.id}
+                  className="flex items-center gap-2 rounded border p-1"
+                >
+                  <div className="flex-1">
+                    <WithProductSearch>
+                      {({ findItems, onCreateNew }) => (
+                        <ComboboxField
+                          form={form}
+                          name={`items.${index}.product`}
+                          label="Product"
+                          findItems={findItems}
+                          onCreateNew={onCreateNew}
+                        />
+                      )}
+                    </WithProductSearch>
                   </div>
-                ))
-              ) : (
-                <div className="py-4 text-center text-gray-500">
-                  No inventory items yet.
+
+                  <div className="w-24">
+                    <NullableNumericField
+                      form={form}
+                      name={`items.${index}.amountValue`}
+                      label="Value"
+                      placeholder="Value"
+                    />
+                  </div>
+
+                  <div className="w-24">
+                    <UnifiedTextField
+                      form={form}
+                      name={`items.${index}.amountUnit`}
+                      label="Unit"
+                      placeholder="Unit"
+                      getIcon={(x) =>
+                        w &&
+                        x && (
+                          <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
+                        )
+                      }
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => remove(index)}
+                    className="flex-shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {error && <div className="mt-4 text-red-500">{error}</div>}
-
-        <div className="flex justify-end">
-          <Button
-            type="submit"
-            disabled={
-              isSubmitting ||
-              !selectedLocation ||
-              (!form.formState.isDirty && fields.length === 0)
-            }
-          >
-            {isSubmitting ? "Saving..." : "Save All Changes"}
-          </Button>
-        </div>
-      </form>
-    </Form>
+              ))
+            ) : (
+              <div className="py-4 text-center text-gray-500">
+                No inventory items yet.
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </FormWrapper>
   );
 }
