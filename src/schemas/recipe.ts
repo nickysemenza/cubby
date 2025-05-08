@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { baseEntitySchema, dbTimestampsOut } from "./util";
+import { baseEntitySchema, dbTimestampsOut, id } from "./util";
 import { amount } from "~/codec/codec";
 
 const ingredientOut = baseEntitySchema;
@@ -57,21 +57,21 @@ export type RecipeOut = z.infer<typeof recipeOut>;
 
 // Schema for recipe mutations
 export const recipeIngredientInput = z.object({
-  ingredientId: z.string().uuid(),
+  ingredientId: id,
   amounts: z.array(amount),
-  id: z.string().uuid().optional(),
+  id: id.optional(),
 });
 
 export const recipeInstructionInput = z.object({
   instruction: z.string(),
-  id: z.string().uuid().optional(),
+  id: id.optional(),
 });
 
 export const recipeSectionInput = z.object({
   name: z.string().nullable().optional(),
   ingredients: z.array(recipeIngredientInput).optional(),
   instructions: z.array(recipeInstructionInput).optional(),
-  id: z.string().uuid().optional(),
+  id: id.optional(),
 });
 
 export const recipeCreateInput = z.object({
@@ -81,7 +81,7 @@ export const recipeCreateInput = z.object({
 });
 
 export const recipeUpdateInput = z.object({
-  id: z.string().uuid(),
+  id: id,
   data: recipeCreateInput.partial(),
 });
 

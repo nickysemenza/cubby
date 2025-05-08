@@ -8,8 +8,6 @@ import { formatRichText } from "./richtext";
 import useDebounce from "../../../misc/useDebounce";
 import { useRouter } from "next/navigation";
 import { toast } from "react-toastify";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
 import { useWasm } from "~/wasmContext";
 import { useMutation } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";

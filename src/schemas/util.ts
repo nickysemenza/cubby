@@ -68,16 +68,18 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
   });
 }
 
+export const id = z.string().uuid().describe("entity identifier");
+
 export const IDInput = z
   .object({
-    id: z.string().uuid().describe("UUID"),
+    id: id,
   })
   .describe("input for retrieving by ID");
 
 // Base entity schema with common fields
 export const baseEntitySchema = z
   .object({
-    id: z.string().uuid(),
+    id: id,
     name: z.string(),
   })
   .merge(dbTimestampsOut);

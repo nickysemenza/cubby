@@ -19,9 +19,13 @@ import {
   formSchema,
 } from "./types";
 import {
+  recipeIngredientInput,
+  recipeInstructionInput,
+  recipeSectionInput,
   type RecipeCreateInput,
   type RecipeUpdateInput,
 } from "~/schemas/recipe";
+import { z } from "zod";
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
@@ -117,19 +121,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         }
 
         // For existing section, include ID and track changes
-        const sectionUpdate: {
-          id: string;
-          name?: string | null;
-          ingredients?: Array<{
-            id?: string;
-            ingredientId: string;
-            amounts: Array<{ value: number; unit: string }>;
-          }>;
-          instructions?: Array<{
-            id?: string;
-            instruction: string;
-          }>;
-        } = {
+        const sectionUpdate: z.infer<typeof recipeSectionInput> = {
           id: section.id,
         };
 
@@ -160,11 +152,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           sectionUpdate.ingredients = section.ingredients
             .filter((ing) => ing.ingredient !== null)
             .map((ing) => {
-              const output: {
-                id?: string;
-                ingredientId: string;
-                amounts: Array<{ value: number; unit: string }>;
-              } = {
+              const output: z.infer<typeof recipeIngredientInput> = {
                 ingredientId: ing.ingredient!.id,
                 amounts: ing.amounts,
               };
@@ -185,10 +173,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
         if (instructionsChanged) {
           sectionUpdate.instructions = section.instructions.map((inst) => {
-            const output: {
-              id?: string;
-              instruction: string;
-            } = {
+            const output: z.infer<typeof recipeInstructionInput> = {
               instruction: inst.instruction,
             };
 

@@ -306,31 +306,6 @@ export function SideBySideFields({
   );
 }
 
-// Helper to create an Amount object from form values
-export interface AmountValues {
-  value: number;
-  unit: string;
-}
-
-export function createAmountObject(values: AmountValues) {
-  return {
-    value: values.value,
-    unit: values.unit,
-  };
-}
-
-// Detect changes in an amount value
-export function hasAmountChanged(
-  entityAmount: { value: number; unit: string },
-  formAmountValue: number,
-  formAmountUnit: string,
-): boolean {
-  return (
-    formAmountValue !== entityAmount.value ||
-    formAmountUnit !== entityAmount.unit
-  );
-}
-
 // Unified text field component that combines nullable and required functionality
 export function UnifiedTextField<
   TFieldValues extends FieldValues = FieldValues,

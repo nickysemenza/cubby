@@ -22,8 +22,6 @@ import {
   getSubmitButtonText,
   SideBySideFields,
   detectComboboxIdChange,
-  hasAmountChanged,
-  createAmountObject,
   NullableNumericField,
   UnifiedTextField,
 } from "../form-utils";
@@ -32,6 +30,7 @@ import {
   WithLocationSearch,
   WithProductSearch,
 } from "../combobox/with-search-hook";
+import { amount } from "~/codec/codec";
 
 // Form schema for inventory form
 const formSchema = z.object({
@@ -41,8 +40,7 @@ const formSchema = z.object({
   location: ComboboxItem.refine((item) => item !== null, {
     message: "Please select a location",
   }),
-  amountValue: z.number().min(1, "Please enter a value"),
-  amountUnit: z.string().min(1, "Please enter a unit"),
+  amount: amount,
 });
 
 export type InventoryFormValues = z.infer<typeof formSchema>;
@@ -91,20 +89,13 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       location: inventoryItem
         ? buildLocationComboboxItem(inventoryItem.location)
         : undefined,
-      amountValue: inventoryItem ? inventoryItem.amount.value : undefined,
-      amountUnit: inventoryItem ? inventoryItem.amount.unit : "",
+      amount: inventoryItem ? inventoryItem.amount : { value: 1, unit: "" },
     },
   });
 
   const handleSubmit = (values: InventoryFormValues) => {
-    // Convert the form values to an Amount object
-    const amount = createAmountObject({
-      value: values.amountValue,
-      unit: values.amountUnit,
-    });
-
+    const amount = values.amount;
     if (mode === "create") {
-      // For creation, pass all fields
       const createData: CreateInventoryData = {
         productId: values.product!.id,
         locationId: values.location!.id,
@@ -112,21 +103,13 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       };
       props.onCreate(createData);
     } else if (mode === "edit" && inventoryItem) {
-      // In edit mode, determine which fields have changed
       const updates: z.infer<typeof inventoryUpdatePayloadData> = {};
-
-      // Check if amount has changed using shared utility
       if (
-        hasAmountChanged(
-          inventoryItem.amount,
-          values.amountValue,
-          values.amountUnit,
-        )
+        values.amount.value !== inventoryItem.amount.value ||
+        values.amount.unit !== inventoryItem.amount.unit
       ) {
         updates.amount = amount;
       }
-
-      // Check if product has changed using shared utility
       const productIdChange = detectComboboxIdChange(
         inventoryItem.product.id,
         values.product,
@@ -134,8 +117,6 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       if (productIdChange) {
         updates.productId = productIdChange;
       }
-
-      // Check if location has changed using shared utility
       const locationIdChange = detectComboboxIdChange(
         inventoryItem.location.id,
         values.location,
@@ -143,8 +124,6 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       if (locationIdChange) {
         updates.locationId = locationIdChange;
       }
-
-      // Only update if there are changes
       if (Object.keys(updates).length > 0) {
         const updateData: UpdateInventoryData = {
           id: inventoryItem.id,
@@ -152,7 +131,6 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         };
         props.onEdit(updateData);
       } else if (onCancel) {
-        // If no changes, just run the cancel function
         onCancel();
       }
     }
@@ -200,14 +178,13 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       <SideBySideFields>
         <NullableNumericField
           form={form}
-          name="amountValue"
+          name="amount.value"
           label="Amount Value"
           placeholder="Enter amount"
         />
-
         <UnifiedTextField
           form={form}
-          name="amountUnit"
+          name="amount.unit"
           label="Amount Unit"
           placeholder="Enter unit"
           nullable={false}

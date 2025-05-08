@@ -1,58 +1,39 @@
 import { type db } from "../db";
 import { type ParsedCompactRecipe } from "~/codec/codec";
-import { RecipeSource } from "@prisma/client";
 import { findOrCreateIngredient } from "./ingredient";
+import { RecipeCreateInput } from "~/schemas/recipe";
+import { createRecipe } from "./recipe";
 
 export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
   prismaClient: typeof db,
 ) => {
-  return await prismaClient.$transaction(async (tx) => {
-    const newRecipe = await tx.recipe.upsert({
-      where: { name: recipe.name },
-      update: {},
-      create: {
-        name: recipe.name,
-        SourceData: recipe.meta?.url ?? null,
-        SourceType: recipe.meta?.url ? RecipeSource.Website : null,
-      },
-      include: { sections: { include: { ingredients: true } } },
-    });
-    // delete all existing sections and sectioningredients (in reverse order)
-    await tx.recipeSectionIngredient.deleteMany({
-      where: {
-        recipeSectionId: {
-          in: newRecipe.sections.map((section) => section.id),
-        },
-      },
-    });
-    await tx.recipeSection.deleteMany({
-      where: { recipeId: newRecipe.id },
-    });
-    for (const section of recipe.sections) {
-      const newSection = await tx.recipeSection.create({
-        data: {
-          recipeId: newRecipe.id,
-          name: null,
-          instructions: section.instructions.map((text) => {
-            return { text };
+  const i: RecipeCreateInput = {
+    name: recipe.name,
+    meta: {
+      url: recipe.meta?.url ?? null,
+    },
+    sections: await Promise.all(
+      recipe.sections.map(async (section) => ({
+        instructions: section.instructions.map((instruction) => ({
+          instruction,
+        })),
+        ingredients: await Promise.all(
+          section.ingredients.map(async (ingredient) => {
+            const newIngredient = await findOrCreateIngredient(
+              prismaClient,
+              ingredient.name,
+            );
+            return {
+              ingredientId: newIngredient.id,
+              amounts: ingredient.amounts,
+            };
           }),
-        },
-      });
+        ),
+      })),
+    ),
+  };
 
-      for (const ingredient of section.ingredients) {
-        const newIngredient = await findOrCreateIngredient(tx, ingredient.name);
-
-        const amounts: PrismaJson.Amount[] = ingredient.amounts;
-        await tx.recipeSectionIngredient.create({
-          data: {
-            recipeSectionId: newSection.id,
-            ingredientId: newIngredient.id,
-            amounts,
-          },
-        });
-      }
-    }
-    return { id: newRecipe.id };
-  });
+  const newRecipe = await createRecipe(i, prismaClient);
+  return { id: newRecipe.id };
 };

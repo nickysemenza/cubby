@@ -14,7 +14,7 @@ export const compactRecipeSchema = z.object({
 export type CompactRecipe = z.infer<typeof compactRecipeSchema>;
 export const amount = z.object({
   value: z.number(),
-  unit: z.string(),
+  unit: z.string().min(1),
 });
 export type Amount = z.infer<typeof amount>;
 export const parsedIngredient = z.object({

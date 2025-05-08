@@ -162,10 +162,7 @@ const getAmountFromBrandedFoodServingSize = (
       value: serving_size.toNumber(),
       unit: normalize_branded_food_serving_size_unit(servingSizeUnit),
     },
-    b: {
-      value: b.value,
-      unit: b.unit,
-    },
+    b,
     source: `USDA FDC ${fdc_id}`,
   };
   console.log({ inferredMapping });

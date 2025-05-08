@@ -12,7 +12,6 @@ import {
 import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { useWasm } from "~/wasmContext";
-import { createAmountObject } from "~/app/_components/form-utils";
 import { toast } from "react-toastify";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -28,14 +27,13 @@ import { UnifiedTextField } from "~/app/_components/form-utils";
 import { ValidInvalidIcon } from "~/app/_components/icons/valid-invalid";
 import { NullableNumericField } from "~/app/_components/form-utils";
 import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
-
+import { amount } from "~/codec/codec";
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
     message: "Please select a product",
   }),
-  amountValue: z.number().min(1, "Please enter a value"),
-  amountUnit: z.string().min(1, "Please enter a unit"),
+  amount: amount,
   id: z.string().optional(), // For existing items
 });
 
@@ -123,21 +121,15 @@ export default function BulkInventoryForm() {
   // Load existing inventory items when location changes
   useEffect(() => {
     if (selectedLocation && inventoryItemsData?.items) {
-      // Clear current items first
       form.setValue("items", []);
-
-      // Convert existing inventory items to form field values
-      const existingItems = inventoryItemsData.items.map((item) => ({
-        product: buildProductComboboxItem(item.product),
-        amountValue: item.amount.value,
-        amountUnit: item.amount.unit,
-        id: item.id,
-      }));
-
-      // Replace the items with existing ones
+      const existingItems: z.infer<typeof inventoryItemSchema>[] =
+        inventoryItemsData.items.map((item) => ({
+          product: buildProductComboboxItem(item.product),
+          amount: item.amount,
+          id: item.id,
+        }));
       form.setValue("items", existingItems);
     } else {
-      // Clear items if no location selected
       form.setValue("items", []);
     }
   }, [selectedLocation, inventoryItemsData, form]);
@@ -146,8 +138,7 @@ export default function BulkInventoryForm() {
   const addInventoryItem = () => {
     append({
       product: null as unknown as ComboboxItem,
-      amountValue: 1,
-      amountUnit: "",
+      amount: { value: 1, unit: "" },
     });
   };
 
@@ -166,44 +157,28 @@ export default function BulkInventoryForm() {
       setError("Please select a location");
       return;
     }
-
     setIsSubmitting(true);
     setError(null);
-
     try {
-      // Filter out any incomplete items
       const validItems = values.items.filter(
-        (item) => item.product && item.amountValue && item.amountUnit,
+        (item) => item.product && item.amount.value && item.amount.unit,
       );
-
-      // Transform items for the API
       const processItems: InventoryBulkOperationItem[] = validItems.map(
         (item) => {
-          const amount = createAmountObject({
-            value: item.amountValue,
-            unit: item.amountUnit,
-          });
-
           const res: InventoryBulkOperationItem = {
             locationId: values.location.id,
-            // Include id only for existing items
             ...(item.id && { id: item.id }),
             productId: item.product.id,
-            amount,
+            amount: item.amount,
           };
           return res;
         },
       );
-
-      // Submit all items in a single bulk operation
       await bulkProcessMutation.mutateAsync({
         locationId: values.location.id,
         items: processItems,
       });
-
-      // Show success message
       toast(`Successfully updated inventory for ${values.location.name}`);
-
       setIsSubmitting(false);
     } catch (err) {
       console.error("Error submitting inventory items:", err);
@@ -274,7 +249,7 @@ export default function BulkInventoryForm() {
                   <div className="w-24">
                     <NullableNumericField
                       form={form}
-                      name={`items.${index}.amountValue`}
+                      name={`items.${index}.amount.value`}
                       label="Value"
                       placeholder="Value"
                     />
@@ -283,7 +258,7 @@ export default function BulkInventoryForm() {
                   <div className="w-24">
                     <UnifiedTextField
                       form={form}
-                      name={`items.${index}.amountUnit`}
+                      name={`items.${index}.amount.unit`}
                       label="Unit"
                       placeholder="Unit"
                       getIcon={(x) =>

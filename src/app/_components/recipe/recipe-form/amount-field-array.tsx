@@ -6,7 +6,6 @@ import {
   SideBySideFields,
   NullableNumericField,
   UnifiedTextField,
-  createAmountObject,
 } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
 import { useWasm } from "~/wasmContext";
@@ -69,7 +68,7 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append(createAmountObject({ value: 1, unit: "" }))}
+          onClick={() => append({ value: 1, unit: "" })}
         >
           <Plus className="mr-2 h-4 w-4" />
           Add Amount
