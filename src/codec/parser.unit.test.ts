@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { parseCompactRecipe } from "./parser";
 import { format_amount, parse_ingredient } from "recipebridge/pkg";
+import { is_valid_unit } from "recipebridge/pkg/recipebridge";
 
 test("parsing works", async () => {
   const out = await parseCompactRecipe({
@@ -46,4 +47,14 @@ test("wasm unknown ingrecient", () => {
     amounts: [{ value: 1, unit: "clove" }],
   });
   expect(parseB.amounts[0]!.unit).toEqual("clove");
+});
+
+test("wasm is_valid_unit", () => {
+  expect(is_valid_unit("gram", [])).toEqual(true);
+  expect(is_valid_unit("gra", [])).toEqual(false);
+  expect(is_valid_unit("", [])).toEqual(false);
+  expect(is_valid_unit("Cup", [])).toEqual(true);
+  expect(is_valid_unit("cup", [])).toEqual(true);
+  expect(is_valid_unit("foo", ["foo"])).toEqual(true);
+  expect(is_valid_unit("foo", ["bar"])).toEqual(false);
 });

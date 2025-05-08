@@ -224,7 +224,6 @@ dependencies = [
  "nom-language",
  "petgraph",
  "serde",
- "serde_json",
  "tracing",
 ]
 

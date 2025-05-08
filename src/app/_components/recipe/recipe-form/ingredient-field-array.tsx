@@ -3,7 +3,7 @@ import { useFieldArray, UseFormReturn } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
 import { WithIngredientSearch } from "../../combobox/with-search-hook";
-import { ComboboxField, SideBySideFields } from "../../form-utils";
+import { ComboboxField } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
 import { AmountFieldArray } from "./amount-field-array";
 
@@ -30,7 +30,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           size="sm"
           onClick={() =>
             append({
-              type: "ingredient" as const,
+              type: "ingredient",
               ingredient: null,
               amounts: [{ value: 1, unit: "" }],
             })
@@ -93,27 +93,29 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                 </div>
               </div>
 
-              <WithIngredientSearch>
-                {({ findItems, onCreateNew }) => (
-                  <ComboboxField
-                    form={form}
-                    name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`}
-                    label="Ingredient"
-                    findItems={findItems}
-                    onCreateNew={onCreateNew}
-                  />
-                )}
-              </WithIngredientSearch>
+              <div className="flex flex-row space-y-2">
+                <div className="w-1/2 pr-2">
+                  <WithIngredientSearch>
+                    {({ findItems, onCreateNew }) => (
+                      <ComboboxField
+                        form={form}
+                        name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`}
+                        label="Ingredient"
+                        findItems={findItems}
+                        onCreateNew={onCreateNew}
+                      />
+                    )}
+                  </WithIngredientSearch>
+                </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Amounts</label>
-                <SideBySideFields>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Amounts</label>
                   <AmountFieldArray
                     form={form}
                     sectionIndex={sectionIndex}
                     ingredientIndex={ingredientIndex}
                   />
-                </SideBySideFields>
+                </div>
               </div>
             </div>
           ))}

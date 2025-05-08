@@ -26,6 +26,8 @@ import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
+import ValidInvalidIcon from "../icons/valid-invalid";
+import { useWasm } from "~/wasmContext";
 
 // Form schema for product form
 const formSchema = z
@@ -84,6 +86,7 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
 
+  const { w } = useWasm();
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
@@ -277,6 +280,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                     label="Unit"
                     placeholder="Enter unit"
                     nullable={false}
+                    getIcon={(x) =>
+                      w &&
+                      x && <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
+                    }
                   />
                 </SideBySideFields>
               </div>
@@ -296,6 +303,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                     label="Unit"
                     placeholder="Enter unit"
                     nullable={false}
+                    getIcon={(x) =>
+                      w &&
+                      x && <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
+                    }
                   />
                 </SideBySideFields>
               </div>

@@ -1,9 +1,9 @@
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 use ingredient::{
     self,
     rich_text::RichParser,
-    unit::{make_graph, print_graph, Measure, MeasureKind},
+    unit::{is_valid, make_graph, print_graph, Measure, MeasureKind},
     IngredientParser,
 };
 use serde::{Deserialize, Serialize};
@@ -171,6 +171,12 @@ pub fn parse_rich_text(r: String, ingredient_names: Vec<String>) -> Result<RichI
     rtp.parse(r.as_str())
         .map(|r| serde_wasm_bindgen::to_value(&r).unwrap().into())
         .map_err(|e| JsValue::from_str(&e))
+}
+
+#[wasm_bindgen]
+pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
+    setup();
+    is_valid(HashSet::from_iter(extra_units), unit)
 }
 
 // TypeScript type definitions

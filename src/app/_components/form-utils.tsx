@@ -333,38 +333,52 @@ export function UnifiedTextField<
   label,
   placeholder,
   nullable = false,
+  getIcon,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
   placeholder: string;
   nullable?: boolean;
+  getIcon?: (value: string | null) => ReactNode;
 }) {
   return (
     <FormField
       control={form.control}
       name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input
-              placeholder={placeholder}
-              {...field}
-              value={
-                nullable ? (field.value as string | null) || "" : field.value
-              }
-              onChange={(e) => {
-                const value = e.target.value;
-                field.onChange(
-                  nullable ? (value === "" ? null : value) : value,
-                );
-              }}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
+      render={({ field }) => {
+        const value = nullable
+          ? (field.value as string | null) || ""
+          : field.value;
+        const icon = getIcon
+          ? getIcon(nullable ? (field.value as string | null) : field.value)
+          : null;
+        return (
+          <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+              <div className="relative">
+                <Input
+                  placeholder={placeholder}
+                  {...field}
+                  value={value}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    field.onChange(nullable ? (v === "" ? null : v) : v);
+                  }}
+                  className={icon ? "pr-10" : undefined}
+                />
+                {icon && (
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                    {icon}
+                  </span>
+                )}
+              </div>
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 }

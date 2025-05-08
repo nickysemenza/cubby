@@ -27,6 +27,9 @@ import {
   WithProductSearch,
 } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
+import { UnifiedTextField } from "~/app/_components/form-utils";
+import { ValidInvalidIcon } from "~/app/_components/icons/valid-invalid";
+import { NullableNumericField } from "~/app/_components/form-utils";
 
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
@@ -267,33 +270,28 @@ export default function BulkInventoryForm() {
                     </div>
 
                     <div className="w-24">
-                      <Controller
-                        control={form.control}
+                      <NullableNumericField
+                        form={form}
                         name={`items.${index}.amountValue`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              placeholder="Value"
-                              {...field}
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        label="Value"
+                        placeholder="Value"
                       />
                     </div>
 
                     <div className="w-24">
-                      <Controller
-                        control={form.control}
+                      <UnifiedTextField
+                        form={form}
                         name={`items.${index}.amountUnit`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <Input placeholder="Unit" {...field} />
-                            <FormMessage />
-                          </FormItem>
-                        )}
+                        label="Unit"
+                        placeholder="Unit"
+                        getIcon={(x) =>
+                          w &&
+                          x && (
+                            <ValidInvalidIcon
+                              isValid={w.is_valid_unit(x, [])}
+                            />
+                          )
+                        }
                       />
                     </div>
 

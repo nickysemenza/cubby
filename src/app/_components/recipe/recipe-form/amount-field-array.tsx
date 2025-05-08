@@ -9,6 +9,8 @@ import {
   createAmountObject,
 } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
+import { useWasm } from "~/wasmContext";
+import ValidInvalidIcon from "../../icons/valid-invalid";
 
 interface AmountFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
@@ -25,21 +27,10 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
     control: form.control,
     name: `sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts`,
   });
+  const { w } = useWasm();
 
   return (
     <div className="space-y-2">
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => append(createAmountObject({ value: 1, unit: "" }))}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Amount
-        </Button>
-      </div>
-
       {fields.map((field, amountIndex) => (
         <div key={field.id} className="flex items-center space-x-2">
           <SideBySideFields>
@@ -55,6 +46,9 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
               label="Unit"
               placeholder="Enter unit"
               nullable={false}
+              getIcon={(x) =>
+                w && x && <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
+              }
             />
           </SideBySideFields>
 
@@ -70,6 +64,17 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
           </Button>
         </div>
       ))}
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => append(createAmountObject({ value: 1, unit: "" }))}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Amount
+        </Button>
+      </div>
     </div>
   );
 };

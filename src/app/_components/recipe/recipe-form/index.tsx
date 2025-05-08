@@ -324,6 +324,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               name={`sections.${sectionIndex}.name`}
               label="Section Name (Optional)"
               placeholder="E.g., 'Main Course', 'Sauce', etc."
+              nullable={true}
             />
 
             {/* Ingredients and Instructions side by side */}

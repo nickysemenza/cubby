@@ -7,7 +7,7 @@ const ingredientOut = baseEntitySchema;
 export const recipeTopLevel = baseEntitySchema.extend({
   meta: z
     .object({
-      url: z.string().nullable(),
+      url: z.string().url().nullable(),
     })
     .nullable(),
 });
