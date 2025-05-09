@@ -17,6 +17,17 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
+// Mock Clerk components
+vi.mock("@clerk/nextjs", () => {
+  return {
+    ClerkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    SignInButton: () => <div>Sign In</div>,
+    SignedIn: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    SignedOut: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    UserButton: () => <div>User</div>,
+  };
+});
+
 describe("App Router: Works with Client Components", () => {
   vi.mock("geist/font/sans", () => {
     return {

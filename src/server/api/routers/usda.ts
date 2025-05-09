@@ -1,4 +1,4 @@
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { foodLookupParam, foodSummary } from "~/schemas/usda";
 import { z } from "zod";
 import { findFood, getFoodSummaryByID, listFoods } from "~/server/repo/usda";
@@ -22,7 +22,7 @@ const getByID = publicProcedure
   .output(foodSummary.nullable())
   .query(async ({ ctx, input }) => await getFoodSummaryByID(ctx.db, input.id));
 
-const list = publicProcedure
+const list = protectedProcedure
   .input(
     z
       .object({

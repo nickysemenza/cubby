@@ -6,13 +6,14 @@
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
  */
-import { initTRPC } from "@trpc/server";
+import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
 
 import { db } from "~/server/db";
 import { flatten } from "flat";
 import { type Span, trace } from "@opentelemetry/api";
+import { auth } from "@clerk/nextjs/server";
 
 /**
  * 1. CONTEXT
@@ -29,6 +30,7 @@ import { type Span, trace } from "@opentelemetry/api";
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   return {
     db,
+    auth: opts.headers.has("skip-auth") ? undefined : await auth(),
     ...opts,
   };
 };
@@ -130,12 +132,27 @@ const tracingMiddleWare = t.middleware(async (opts) => {
       if (true && typeof input === "object") {
         span.setAttributes(flatten({ input }));
       }
+      span.setAttribute("userId", opts.ctx.auth?.userId ?? "guest");
       span.setAttributes({ path: opts.path });
       const result = await opts.next();
       span.setAttributes({ ok: result.ok });
       return result;
     },
   );
+});
+
+// Check if the user is signed in
+// Otherwise, throw an UNAUTHORIZED code
+// cf https://clerk.com/docs/references/nextjs/trpc#create-a-protected-procedure
+const isAuthed = t.middleware(({ next, ctx }) => {
+  if (!ctx.auth?.userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      auth: ctx.auth,
+    },
+  });
 });
 
 /**
@@ -148,3 +165,5 @@ const tracingMiddleWare = t.middleware(async (opts) => {
 export const publicProcedure = t.procedure
   .use(timingMiddleware)
   .use(tracingMiddleWare);
+
+export const protectedProcedure = publicProcedure.use(isAuthed);

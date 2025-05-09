@@ -29,6 +29,7 @@
     "knip": "knip"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.19.1",
     "@devoxa/integresql-client": "^2.1.1",
     "@hookform/resolvers": "^5.0.1",
     "@opentelemetry/api-logs": "^0.200.0",

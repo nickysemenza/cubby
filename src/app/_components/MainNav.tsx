@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
+import { SignedIn } from "@clerk/nextjs";
 
 type NavItem = {
   href: string;
@@ -23,6 +24,11 @@ const NavItems: NavItem[] = [
       isActive: (pathname) => pathname.startsWith(`/${item.basePath}`),
     }),
   ),
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    isActive: (pathname) => pathname === "/dashboard"
+  },
   { href: "/api/panel", label: "API Panel", isActive: () => false },
 ];
 
@@ -39,11 +45,29 @@ export function MainNav({
     >
       {NavItems.map((item) => {
         const active = item.isActive(pathName);
+
+        // Only show Dashboard link if it's not the Dashboard link or user is signed in
+        if (item.href === "/dashboard") {
+          return (
+            <SignedIn key={item.href}>
+              <Link
+                href={item.href}
+                className={cn(
+                  "hover:text-primary text-sm font-medium transition-colors",
+                  !active && "text-muted-foreground",
+                )}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            </SignedIn>
+          );
+        }
+
         return (
           <Link
             href={item.href}
             key={item.href}
-            // className={`${active ? "bg-blue-700" : undefined} block rounded-sm px-3 py-2 text-gray-900 hover:bg-gray-100 md:p-0 md:hover:bg-transparent md:hover:text-blue-700 dark:border-gray-700 dark:text-white dark:hover:bg-gray-700 dark:hover:text-white md:dark:hover:bg-transparent md:dark:hover:text-blue-500`}
             className={cn(
               "hover:text-primary text-sm font-medium transition-colors",
               !active && "text-muted-foreground",

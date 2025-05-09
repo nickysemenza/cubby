@@ -18,7 +18,11 @@ describe("system test", () => {
     await insertDataConfig(prisma, config);
 
     const createCaller = createCallerFactory(appRouter);
-    const caller = createCaller({ headers: new Headers(), db: prisma });
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
     const list = await caller.ingredient.list({
       pagination: { pageSize: 12 },
       filters: {},
