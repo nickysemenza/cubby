@@ -130,7 +130,9 @@ export const recipeList = async (
   const where: Prisma.RecipeWhereInput = {
     name: formatSearchTerm(name),
   };
-  const res = await db.recipe.findMany({
+
+  // Define query parameters once to avoid duplication
+  const findManyParams = {
     orderBy,
     where,
     ...buildTakeSkip(pagination),
@@ -143,9 +145,15 @@ export const recipeList = async (
         },
       },
     },
-  });
-  const totalCount = await db.recipe.count({ where });
-  const items = res.map(dbRecipeToAPI);
+  };
+
+  // Execute both queries in a single transaction for better performance
+  const [results, totalCount] = await db.$transaction([
+    db.recipe.findMany(findManyParams),
+    db.recipe.count({ where }),
+  ]);
+
+  const items = results.map(dbRecipeToAPI);
   return { data: items, count: totalCount };
 };
 

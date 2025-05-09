@@ -23,7 +23,7 @@ Table RecipeSection {
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
   ingredients RecipeSectionIngredient [not null]
-  instructions Json[] [not null, note: '[Instruction]  ']
+  instructions Json[] [not null, note: '[Instruction]']
 }
 
 Table RecipeSectionIngredient {

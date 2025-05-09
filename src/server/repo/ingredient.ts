@@ -274,15 +274,24 @@ export const ingredientList = async (
     };
   }
 
-  const res = await db.ingredient.findMany({
+  // Define query parameters once to avoid duplication
+  const findManyParams = {
     orderBy,
     where,
     ...buildTakeSkip(pagination),
     include: ingredientInclude,
-  });
-  const totalCount = await db.ingredient.count({ where });
+  };
+
+  // Execute both queries in a single transaction for better performance
+  const [results, totalCount] = await db.$transaction([
+    db.ingredient.findMany(findManyParams),
+    db.ingredient.count({ where }),
+  ]);
+
+  // Process results after receiving both queries
   const ingredients = await Promise.all(
-    res.map((ingredient) => dbIngredientToAPI(db, ingredient)),
+    results.map((ingredient) => dbIngredientToAPI(db, ingredient)),
   );
+
   return { data: ingredients, count: totalCount };
 };

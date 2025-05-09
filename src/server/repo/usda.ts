@@ -310,13 +310,18 @@ export const listFoods = async (
       : undefined,
   };
 
-  const foods = await db.usda_food.findMany({
+  // Define query parameters once to avoid duplication
+  const findManyParams = {
     orderBy,
     where,
     ...buildTakeSkip(pagination),
-  });
+  };
 
-  const totalCount = await db.usda_food.count({ where });
+  // Execute both queries in a single transaction for better performance
+  const [foods, totalCount] = await db.$transaction([
+    db.usda_food.findMany(findManyParams),
+    db.usda_food.count({ where }),
+  ]);
 
   // Create simplified food summaries with basic info
   const foodSummaries: FoodSummary[] = await Promise.all(

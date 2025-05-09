@@ -247,15 +247,23 @@ export const productList = async (
     manufacturer: formatSearchTerm(manufacturer),
     upc: formatSearchTerm(upc),
   };
-  const res = await db.product.findMany({
+
+  // Define query parameters once to avoid duplication
+  const findManyParams = {
     orderBy,
     where,
     ...buildTakeSkip(pagination),
     include: productInclude,
-  });
-  const totalCount = await db.product.count({ where });
+  };
+
+  // Execute both queries in a single transaction for better performance
+  const [results, totalCount] = await db.$transaction([
+    db.product.findMany(findManyParams),
+    db.product.count({ where }),
+  ]);
+
   const products = await Promise.all(
-    res.map(async (product) => await dbProductoToAPI(db, product)),
+    results.map(async (product) => await dbProductoToAPI(db, product)),
   );
   return { data: products, count: totalCount };
 };

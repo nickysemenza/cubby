@@ -104,14 +104,21 @@ export const inventoryentryList = async (
       : {}),
   };
 
-  const res = await db.inventoryEntry.findMany({
+  // Define query parameters once to avoid duplication
+  const findManyParams = {
     orderBy,
     where,
     ...buildTakeSkip(pagination),
     include: inventoryentryInclude,
-  });
-  const totalCount = await db.inventoryEntry.count({ where });
-  const inventoryentrys = res.map(dbInventoryEntryoToAPI);
+  };
+
+  // Execute both queries in a single transaction for better performance
+  const [results, totalCount] = await db.$transaction([
+    db.inventoryEntry.findMany(findManyParams),
+    db.inventoryEntry.count({ where }),
+  ]);
+
+  const inventoryentrys = results.map(dbInventoryEntryoToAPI);
   return { data: inventoryentrys, count: totalCount };
 };
 

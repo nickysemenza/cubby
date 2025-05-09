@@ -333,7 +333,9 @@ export const locationList = async (
     name: formatSearchTerm(name),
     type: itemType,
   };
-  const res = await db.location.findMany({
+
+  // Define query parameters once to avoid duplication
+  const findManyParams = {
     orderBy,
     where,
     ...buildTakeSkip(pagination),
@@ -342,9 +344,15 @@ export const locationList = async (
       children: true,
       InventoryEntries: { include: { Product: true } },
     },
-  });
-  const totalCount = await db.location.count({ where });
-  const items = res.map(dbLocationToAPIWithChildren);
+  };
+
+  // Execute both queries in a single transaction for better performance
+  const [results, totalCount] = await db.$transaction([
+    db.location.findMany(findManyParams),
+    db.location.count({ where }),
+  ]);
+
+  const items = results.map(dbLocationToAPIWithChildren);
   return { data: items, count: totalCount };
 };
 

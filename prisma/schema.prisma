@@ -35,6 +35,9 @@ model Recipe {
     pointerIngredient Ingredient? // what ingredients are actually this recipe
     SourceType        RecipeSource?
     SourceData        String?
+
+    @@index([createdAt])
+    @@index([SourceType])
 }
 
 model RecipeSection {
@@ -46,8 +49,11 @@ model RecipeSection {
     updatedAt    DateTime                  @default(now()) @updatedAt
     deletedAt    DateTime?
     ingredients  RecipeSectionIngredient[]
-    /// [Instruction]  
+    /// [Instruction]
     instructions Json[]
+
+    @@index([recipeId])
+    @@index([createdAt])
 }
 
 model RecipeSectionIngredient {
@@ -64,6 +70,9 @@ model RecipeSectionIngredient {
     createdAt DateTime  @default(now())
     updatedAt DateTime  @default(now()) @updatedAt
     deletedAt DateTime?
+
+    @@index([recipeSectionId])
+    @@index([ingredientId])
 }
 
 model Ingredient {
@@ -83,6 +92,9 @@ model Ingredient {
 
     // what product(s) point to this ingredient
     Product Product[]
+
+    @@index([recipeId])
+    @@index([createdAt])
 }
 
 model Product {
@@ -109,6 +121,9 @@ model Product {
     InventoryEntry InventoryEntry[]
 
     @@unique([name, manufacturer])
+    @@index([ingredientId])
+    @@index([createdAt])
+    @@index([name])
 }
 
 model ProductUnitMappings {
@@ -147,6 +162,9 @@ model InventoryEntry {
     locationId String   @db.Uuid
 
     @@unique([productId, locationId])
+    @@index([productId])
+    @@index([locationId])
+    @@index([createdAt])
 }
 
 model Location {
@@ -167,6 +185,9 @@ model Location {
 
     @@index([name])
     @@index([type])
+    @@index([parentId])
+    @@index([createdAt])
+    @@index([lastBulkInventory])
 }
 
 enum RecipeSource {
