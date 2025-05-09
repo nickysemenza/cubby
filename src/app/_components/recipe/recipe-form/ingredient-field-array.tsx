@@ -7,6 +7,7 @@ import { ComboboxField } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
 import { AmountFieldArray } from "./amount-field-array";
 import { FieldArrayItemControls } from "./field-array-item-controls";
+import { IngredientPillLink } from "../../EntityPill";
 
 interface IngredientFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
@@ -44,13 +45,30 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                 <div className="w-1/2 pr-2">
                   <WithIngredientSearch>
                     {({ findItems, onCreateNew }) => (
-                      <ComboboxField
-                        form={form}
-                        name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`}
-                        label="Ingredient"
-                        findItems={findItems}
-                        onCreateNew={onCreateNew}
-                      />
+                      <>
+                        <ComboboxField
+                          form={form}
+                          name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`}
+                          label="Ingredient"
+                          findItems={findItems}
+                          onCreateNew={onCreateNew}
+                        />
+                        {form.watch(
+                          `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`,
+                        ) && (
+                          <div className="mt-1">
+                            <IngredientPillLink
+                              id={form.watch(
+                                `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.id`,
+                              )}
+                              name={form.watch(
+                                `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.name`,
+                              )}
+                              openInNewTab={true}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </WithIngredientSearch>
                 </div>
@@ -76,7 +94,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
         </div>
       )}
 
-      <div className="flex justify-end mt-2">
+      <div className="mt-2 flex justify-end">
         <Button
           type="button"
           variant="outline"

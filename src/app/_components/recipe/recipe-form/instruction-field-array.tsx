@@ -50,7 +50,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
         </div>
       )}
 
-      <div className="flex justify-end mt-2">
+      <div className="mt-2 flex justify-end">
         <Button
           type="button"
           variant="outline"

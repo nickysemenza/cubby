@@ -319,7 +319,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           </div>
         ))}
 
-        <div className="flex justify-center mt-3">
+        <div className="mt-3 flex justify-center">
           <Button
             type="button"
             variant="outline"
