@@ -7,7 +7,7 @@ import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
-  createIdColumn,
+  createNameColumn,
 } from "../_components/data-table/columnHelpers";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
@@ -17,6 +17,7 @@ import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
+import { NoneState } from "../_components/NoneState";
 
 export function LocationList() {
   const api = useTRPC();
@@ -40,10 +41,8 @@ export function LocationList() {
   const data = itemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
-    // Custom name column
-    columnHelper.accessor("name", {
-      cell: (info) => info.getValue(),
-    }),
+    // Name column with link to detail page
+    createNameColumn(columnHelper, "locations"),
     columnHelper.accessor("children", {
       enableSorting: false,
       cell: (info) => (
@@ -72,21 +71,26 @@ export function LocationList() {
         return date ? <HoverableTimestamp timestamp={date} /> : "Never";
       },
     }),
-    createIdColumn(columnHelper, "locations"),
     columnHelper.accessor("inventoryEntries", {
       enableSorting: false,
-      cell: (info) => (
-        <div className="space-y-1">
-          {info.getValue().map((e) => (
-            <div key={e.id}>{w && tryFormatMeasure(w, e.amount)}</div>
-          ))}
-          <EntityPillLinkList
-            items={info.getValue().map((e) => e.product)}
-            Pill={ProductPillLink}
-            pillPropName="product"
-          />
-        </div>
-      ),
+      cell: (info) => {
+        const entries = info.getValue();
+        if (!entries || entries.length === 0) {
+          return <NoneState />;
+        }
+        return (
+          <div className="space-y-2">
+            {entries.map((entry) => (
+              <div key={entry.id} className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">
+                  {w && tryFormatMeasure(w, entry.amount)}
+                </span>
+                <ProductPillLink product={entry.product} />
+              </div>
+            ))}
+          </div>
+        );
+      },
     }),
   ];
 

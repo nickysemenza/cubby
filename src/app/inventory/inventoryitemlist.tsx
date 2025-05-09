@@ -9,10 +9,7 @@ import { useWasm } from "~/wasmContext";
 import { showAmountAndPrice } from "../_components/inventory/format-amount";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import {
-  createCreatedAtColumn,
-  createIdColumn,
-} from "../_components/data-table/columnHelpers";
+import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
@@ -43,12 +40,18 @@ export function InventoryItemList() {
     columnHelper.accessor("amount", {
       cell: (info) => {
         return (
-          w &&
-          showAmountAndPrice(
-            w,
-            info.getValue(),
-            info.row.original.product.unitMappings,
-          )
+          <Link
+            className="block max-w-64"
+            href={`/inventory/${info.row.original.id}`}
+          >
+            view:{" "}
+            {w &&
+              showAmountAndPrice(
+                w,
+                info.getValue(),
+                info.row.original.product.unitMappings,
+              )}
+          </Link>
         );
       },
     }),
@@ -102,7 +105,6 @@ export function InventoryItemList() {
     }),
 
     createCreatedAtColumn(columnHelper),
-    createIdColumn(columnHelper, "inventory"),
   ];
 
   // Configure the table

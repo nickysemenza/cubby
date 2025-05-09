@@ -8,7 +8,6 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createNameColumn,
   createCreatedAtColumn,
-  createIdColumn,
 } from "../_components/data-table/columnHelpers";
 
 import { useQuery } from "@tanstack/react-query";
@@ -39,7 +38,6 @@ export function RecipeList() {
       enableSorting: false,
       cell: (info) => info.getValue()?.url,
     }),
-    createIdColumn(columnHelper, "recipes"),
   ];
 
   // Configure the table

@@ -15,10 +15,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import {
-  createCreatedAtColumn,
-  createIdColumn,
-} from "../_components/data-table/columnHelpers";
+import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
@@ -56,7 +53,14 @@ export function IngredientList() {
     buildSelectColumn<IngredientData>(),
     columnHelper.accessor("name", {
       enableSorting: true,
-      cell: (info) => info.getValue(),
+      cell: (info) => (
+        <Link
+          className="font-medium text-blue-600 hover:underline dark:text-blue-500"
+          href={`/ingredients/${info.row.original.id}`}
+        >
+          {String(info.getValue())}
+        </Link>
+      ),
     }),
     columnHelper.accessor("aliases", {
       cell: (info) => (
@@ -68,7 +72,6 @@ export function IngredientList() {
       ),
     }),
     createCreatedAtColumn(columnHelper),
-    createIdColumn(columnHelper, "ingredients"),
     columnHelper.accessor("appearsInRecipes", {
       enableSorting: false,
       cell: (info) => (

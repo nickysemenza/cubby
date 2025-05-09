@@ -13,29 +13,6 @@ interface BaseRow {
 }
 
 /**
- * Creates a linked ID column with consistent styling
- */
-export function createIdColumn<T extends BaseRow>(
-  columnHelper: ColumnHelper<T>,
-  pathPrefix: string,
-) {
-  return columnHelper.accessor((row) => row.id, {
-    id: "id",
-    enableSorting: false,
-    cell: (info) => (
-      <div>
-        <Link
-          className="group-selected:bg-slate-700 group-selected:border-slate-800 rounded-sm border border-slate-200 bg-slate-100 px-1 font-mono font-medium text-blue-600 hover:underline dark:text-blue-500"
-          href={`${pathPrefix}/${info.getValue()}`}
-        >
-          {String(info.getValue())}
-        </Link>
-      </div>
-    ),
-  });
-}
-
-/**
  * Creates a standard name column that links to the detail page
  */
 export function createNameColumn<T extends BaseRow>(
@@ -46,7 +23,7 @@ export function createNameColumn<T extends BaseRow>(
     id: "name",
     cell: (info) => (
       <Link
-        className="text-blue-600 hover:underline dark:text-blue-500"
+        className="font-medium text-blue-600 hover:underline dark:text-blue-500"
         href={`${pathPrefix}/${info.row.original.id}`}
       >
         {String(info.getValue())}
