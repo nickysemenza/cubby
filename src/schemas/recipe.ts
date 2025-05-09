@@ -68,9 +68,9 @@ export const recipeInstructionInput = z.object({
 });
 
 export const recipeSectionInput = z.object({
-  name: z.string().nullable().optional(),
-  ingredients: z.array(recipeIngredientInput).optional(),
-  instructions: z.array(recipeInstructionInput).optional(),
+  name: z.string().min(2).nullable().optional(),
+  ingredients: z.array(recipeIngredientInput).min(1).optional(),
+  instructions: z.array(recipeInstructionInput).min(1).optional(),
   id: id.optional(),
 });
 
