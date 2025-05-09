@@ -59,19 +59,21 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
           >
             <Trash className="h-4 w-4" />
           </Button>
+          {amountIndex === fields.length - 1 ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => append({ value: 1, unit: "" })}
+              className="mt-5"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          ) : (
+            <div className="mt-5 w-9 flex-shrink-0" />
+          )}
         </div>
       ))}
-      <div className="flex justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => append({ value: 1, unit: "" })}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Amount
-        </Button>
-      </div>
     </div>
   );
 };

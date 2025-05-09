@@ -95,7 +95,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
 
         {error && <div className="text-sm text-red-500">{error}</div>}
 
-        <div className="flex space-x-2">
+        <div className="flex justify-end space-x-2">
           <Button type="submit" disabled={isPending}>
             {submitButtonText}
           </Button>

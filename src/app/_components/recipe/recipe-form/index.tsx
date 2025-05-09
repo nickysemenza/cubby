@@ -10,6 +10,7 @@ import {
   UnifiedTextField,
   getSubmitButtonText,
   buildUpdateObject,
+  SideBySideFields,
 } from "../../form-utils";
 import { IngredientFieldArray } from "./ingredient-field-array";
 import { InstructionFieldArray } from "./instruction-field-array";
@@ -220,40 +221,27 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="Enter recipe name"
-        nullable={false}
-      />
+      <SideBySideFields>
+        <UnifiedTextField
+          form={form}
+          name="name"
+          label="Name"
+          placeholder="Enter recipe name"
+          nullable={false}
+        />
 
-      <UnifiedTextField
-        form={form}
-        name="meta.url"
-        label="URL (Optional)"
-        placeholder="Enter recipe URL"
-        nullable={true}
-      />
+        <UnifiedTextField
+          form={form}
+          name="meta.url"
+          label="URL (Optional)"
+          placeholder="Enter recipe URL"
+          nullable={true}
+        />
+      </SideBySideFields>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium">Recipe Sections</h3>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              appendSection({
-                name: null,
-                ingredients: [],
-                instructions: [],
-              })
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Section
-          </Button>
         </div>
 
         {sectionFields.map((sectionField, sectionIndex) => (
@@ -304,14 +292,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               </div>
             </div>
 
-            <UnifiedTextField
-              form={form}
-              name={`sections.${sectionIndex}.name`}
-              label="Section Name (Optional)"
-              placeholder="E.g., 'Main Course', 'Sauce', etc."
-              nullable={true}
-            />
-
             {/* Ingredients and Instructions side by side */}
             <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:space-x-3">
               {/* Ingredients */}
@@ -322,6 +302,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
               {/* Instructions */}
               <div className="md:w-1/2">
+                <UnifiedTextField
+                  form={form}
+                  name={`sections.${sectionIndex}.name`}
+                  label="Section Name (Optional)"
+                  placeholder="E.g., 'Main Course', 'Sauce', etc."
+                  nullable={true}
+                />
                 <h5 className="mb-2 text-sm font-medium">Instructions</h5>
                 <InstructionFieldArray
                   form={form}
@@ -331,6 +318,24 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </div>
           </div>
         ))}
+
+        <div className="flex justify-center mt-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              appendSection({
+                name: null,
+                ingredients: [],
+                instructions: [],
+              })
+            }
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Section
+          </Button>
+        </div>
       </div>
     </FormWrapper>
   );
