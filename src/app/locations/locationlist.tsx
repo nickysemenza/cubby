@@ -16,6 +16,7 @@ import { useWasm } from "~/wasmContext";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
+import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 
 export function LocationList() {
   const api = useTRPC();
@@ -68,7 +69,7 @@ export function LocationList() {
       header: "Last Bulk Inventory",
       cell: (info) => {
         const date = info.getValue();
-        return date ? new Date(date).toLocaleString() : "Never";
+        return date ? <HoverableTimestamp timestamp={date} /> : "Never";
       },
     }),
     createIdColumn(columnHelper, "locations"),

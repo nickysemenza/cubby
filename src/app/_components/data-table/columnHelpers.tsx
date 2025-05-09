@@ -1,12 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
 import { type ColumnHelper } from "@tanstack/react-table";
+import { HoverableTimestamp } from "../HoverableTimestamp";
 
 // Initialize dayjs relative time plugin
-dayjs.extend(relativeTime);
 
 interface BaseRow {
   id: string | number;
@@ -67,7 +65,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
     id: "createdAt",
     cell: (info) => {
       const value = info.getValue();
-      return value ? dayjs(value).fromNow() : "";
+      return value ? <HoverableTimestamp timestamp={value} /> : "";
     },
   });
 }

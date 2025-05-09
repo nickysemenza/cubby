@@ -7,8 +7,6 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import {
@@ -28,8 +26,6 @@ import { tryFormatMeasure } from "../inventory/format-amount";
 import { IngredientPillLink, RecipePillLink } from "../EntityPill";
 import { SummaryCard, type SummaryItem } from "../SummaryCard";
 import { getIngredientName } from "./recipeutils";
-
-dayjs.extend(relativeTime);
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
