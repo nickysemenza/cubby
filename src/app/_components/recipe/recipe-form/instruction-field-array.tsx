@@ -20,7 +20,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
   });
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-2">
       <div className="flex justify-end">
         <Button
           type="button"
@@ -38,18 +38,19 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
           No instructions added yet
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-2">
           {fields.map((field, instructionIndex) => (
-            <div key={field.id} className="flex items-start space-x-2">
+            <div key={field.id} className="flex items-start space-x-1">
               <div className="flex-grow">
                 <RequiredTextareaField
                   form={form}
                   name={`sections.${sectionIndex}.instructions.${instructionIndex}.instruction`}
                   label={`Step ${instructionIndex + 1}`}
                   placeholder="Enter instruction step"
+                  rows={2}
                 />
               </div>
-              <div className="mt-8 flex flex-col space-y-1">
+              <div className="mt-7 flex flex-col space-y-1">
                 <Button
                   type="button"
                   variant="ghost"

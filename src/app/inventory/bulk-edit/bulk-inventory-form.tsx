@@ -24,10 +24,10 @@ import {
 } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
 import { UnifiedTextField } from "~/app/_components/form-utils";
-import { ValidInvalidIcon } from "~/app/_components/icons/valid-invalid";
 import { NullableNumericField } from "~/app/_components/form-utils";
 import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
 import { amount } from "~/codec/codec";
+import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
@@ -262,10 +262,7 @@ export default function BulkInventoryForm() {
                       label="Unit"
                       placeholder="Unit"
                       getIcon={(x) =>
-                        w &&
-                        x && (
-                          <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
-                        )
+                        w && x && getHoverableMeasureUnitIcon(w, x)
                       }
                     />
                   </div>

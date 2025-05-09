@@ -6,6 +6,13 @@ import { UnitMapping } from "~/schemas/unitmapping";
 import { wasm } from "~/wasmContext";
 import { convertAmountToPrice } from "../units/univ-conversion";
 import { WMeasure } from "recipebridge/pkg/recipebridge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import ValidInvalidIcon from "../icons/valid-invalid";
 
 export const showAmountAndPrice = (
   w: wasm,
@@ -37,3 +44,16 @@ export const tryFormatMeasure = (w: wasm, measure: WMeasure) => {
     );
   }
 };
+
+export const getHoverableMeasureUnitIcon = (w: wasm, x: string) => (
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger>
+        <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>{w.measure_kind({ unit: x, value: 1 })}</p>
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+);

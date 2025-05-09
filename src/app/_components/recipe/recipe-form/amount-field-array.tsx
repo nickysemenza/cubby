@@ -9,7 +9,7 @@ import {
 } from "../../form-utils";
 import { type RecipeFormValues } from "./types";
 import { useWasm } from "~/wasmContext";
-import ValidInvalidIcon from "../../icons/valid-invalid";
+import { getHoverableMeasureUnitIcon } from "../../inventory/format-amount";
 
 interface AmountFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
@@ -29,9 +29,9 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
   const { w } = useWasm();
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {fields.map((field, amountIndex) => (
-        <div key={field.id} className="flex items-center space-x-2">
+        <div key={field.id} className="flex items-center space-x-1">
           <SideBySideFields>
             <NullableNumericField
               form={form}
@@ -45,9 +45,7 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
               label="Unit"
               placeholder="Enter unit"
               nullable={false}
-              getIcon={(x) =>
-                w && x && <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
-              }
+              getIcon={(x) => w && x && getHoverableMeasureUnitIcon(w, x)}
             />
           </SideBySideFields>
 
@@ -57,7 +55,7 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
             size="icon"
             onClick={() => remove(amountIndex)}
             disabled={fields.length <= 1}
-            className="mt-6"
+            className="mt-5"
           >
             <Trash className="h-4 w-4" />
           </Button>

@@ -89,7 +89,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           e.preventDefault();
           form.handleSubmit(onSubmit)(e);
         }}
-        className="space-y-6"
+        className="space-y-4"
       >
         {children}
 
@@ -121,21 +121,28 @@ export function RequiredTextareaField<
   name,
   label,
   placeholder,
+  rows = 3,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
   placeholder: string;
+  rows?: number;
 }) {
   return (
     <FormField
       control={form.control}
       name={name}
       render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
+        <FormItem className="space-y-1">
+          <FormLabel className="text-sm">{label}</FormLabel>
           <FormControl>
-            <Textarea placeholder={placeholder} {...field} />
+            <Textarea
+              placeholder={placeholder}
+              {...field}
+              className="min-h-0 px-2 py-1"
+              rows={rows}
+            />
           </FormControl>
           <FormMessage />
         </FormItem>
@@ -152,7 +159,7 @@ export function NullableNumericField<
   name,
   label,
   placeholder,
-  step = "0.01",
+  step = "1",
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -351,7 +358,7 @@ export function UnifiedTextField<
                   className={icon ? "pr-10" : undefined}
                 />
                 {icon && (
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                  <span className="absolute inset-y-0 right-3 flex items-center">
                     {icon}
                   </span>
                 )}

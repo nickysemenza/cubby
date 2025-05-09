@@ -22,7 +22,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
   });
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-2">
       <div className="flex justify-end">
         <Button
           type="button"
@@ -46,11 +46,11 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           No ingredients added yet
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-2">
           {fields.map((field, ingredientIndex) => (
             <div
               key={field.id}
-              className="space-y-3 rounded border border-gray-100 p-3"
+              className="border-opacity-50 space-y-2 rounded border border-gray-100 px-2 py-2"
             >
               <div className="flex items-center justify-between">
                 <h6 className="text-sm font-medium">
@@ -93,7 +93,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-row space-y-2">
+              <div className="flex flex-row">
                 <div className="w-1/2 pr-2">
                   <WithIngredientSearch>
                     {({ findItems, onCreateNew }) => (

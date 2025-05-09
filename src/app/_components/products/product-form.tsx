@@ -26,8 +26,8 @@ import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
-import ValidInvalidIcon from "../icons/valid-invalid";
 import { useWasm } from "~/wasmContext";
+import { getHoverableMeasureUnitIcon } from "../inventory/format-amount";
 
 // Form schema for product form
 const formSchema = z
@@ -280,10 +280,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                     label="Unit"
                     placeholder="Enter unit"
                     nullable={false}
-                    getIcon={(x) =>
-                      w &&
-                      x && <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
-                    }
+                    getIcon={(x) => w && x && getHoverableMeasureUnitIcon(w, x)}
                   />
                 </SideBySideFields>
               </div>
@@ -303,10 +300,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                     label="Unit"
                     placeholder="Enter unit"
                     nullable={false}
-                    getIcon={(x) =>
-                      w &&
-                      x && <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
-                    }
+                    getIcon={(x) => w && x && getHoverableMeasureUnitIcon(w, x)}
                   />
                 </SideBySideFields>
               </div>

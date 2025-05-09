@@ -236,7 +236,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         nullable={true}
       />
 
-      <div className="space-y-6">
+      <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium">Recipe Sections</h3>
           <Button
@@ -259,7 +259,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         {sectionFields.map((sectionField, sectionIndex) => (
           <div
             key={sectionField.id}
-            className="space-y-4 rounded-lg border border-gray-200 p-4"
+            className="space-y-3 rounded border border-gray-100 p-3"
           >
             <div className="flex items-center justify-between">
               <h4 className="font-medium">
@@ -313,16 +313,16 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             />
 
             {/* Ingredients and Instructions side by side */}
-            <div className="flex flex-col space-y-4 md:flex-row md:space-y-0 md:space-x-4">
+            <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:space-x-3">
               {/* Ingredients */}
               <div className="md:w-1/2">
-                <h5 className="mb-4 text-sm font-medium">Ingredients</h5>
+                <h5 className="mb-2 text-sm font-medium">Ingredients</h5>
                 <IngredientFieldArray form={form} sectionIndex={sectionIndex} />
               </div>
 
               {/* Instructions */}
               <div className="md:w-1/2">
-                <h5 className="mb-4 text-sm font-medium">Instructions</h5>
+                <h5 className="mb-2 text-sm font-medium">Instructions</h5>
                 <InstructionFieldArray
                   form={form}
                   sectionIndex={sectionIndex}
