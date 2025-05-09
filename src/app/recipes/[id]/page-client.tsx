@@ -16,23 +16,23 @@ interface RecipePageClientProps {
 export default function RecipePageClient({ recipe }: RecipePageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isEditing = searchParams.get('edit') === 'true';
+  const isEditing = searchParams.get("edit") === "true";
 
   const startEditing = () => {
     const params = new URLSearchParams(searchParams);
-    params.set('edit', 'true');
+    params.set("edit", "true");
     router.push(`?${params.toString()}`);
   };
 
   const stopEditing = () => {
     const params = new URLSearchParams(searchParams);
-    params.delete('edit');
+    params.delete("edit");
     router.push(`?${params.toString()}`);
   };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">{recipe.name}</h1>
         {!isEditing ? (
           <Button onClick={startEditing} variant="outline" size="sm">

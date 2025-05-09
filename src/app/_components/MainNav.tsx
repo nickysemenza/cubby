@@ -27,7 +27,7 @@ const NavItems: NavItem[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
-    isActive: (pathname) => pathname === "/dashboard"
+    isActive: (pathname) => pathname === "/dashboard",
   },
   { href: "/api/panel", label: "API Panel", isActive: () => false },
 ];

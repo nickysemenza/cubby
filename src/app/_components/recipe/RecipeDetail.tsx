@@ -18,15 +18,16 @@ const RecipeDetail: React.FC<{
       ),
     [recipe.sections],
   );
-  const [data, dataSet] = useState<Record<string, IngredientWithRecipesAndProductOut> | undefined>(
-    undefined,
-  );
+  const [data, dataSet] = useState<
+    Record<string, IngredientWithRecipesAndProductOut> | undefined
+  >(undefined);
 
   useEffect(() => {
     const getBulkIngredients = async (ids: string[]) => {
-      const ingredientsArray: IngredientWithRecipesAndProductOut[] = await Promise.all(
-        ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
-      );
+      const ingredientsArray: IngredientWithRecipesAndProductOut[] =
+        await Promise.all(
+          ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
+        );
       const ingredientMap: Record<string, IngredientWithRecipesAndProductOut> =
         ingredientsArray.reduce(
           (acc, ingredient) => {

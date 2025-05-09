@@ -10,10 +10,10 @@ import {
 } from "~/schemas/util";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
-import { 
-  recipeOut, 
-  recipeCreateInput, 
-  recipeUpdateInput 
+import {
+  recipeOut,
+  recipeCreateInput,
+  recipeUpdateInput,
 } from "~/schemas/recipe";
 import {
   createRecipe,

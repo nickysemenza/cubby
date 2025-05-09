@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageParams) {
 export default async function Page({ params }: PageParams) {
   const id = (await params).id;
   const recipe = await api.recipe.get({ id });
-  
+
   return (
     <div className="container py-6">
       <WasmContextProvider>

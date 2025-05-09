@@ -52,7 +52,7 @@ function PopoverContent({
             onInteractOutside(e);
             return;
           }
-          
+
           // Prevent closing when interacting with dialog
           const target = e.target as HTMLElement;
           if (target.closest('[data-slot="dialog-content"]')) {

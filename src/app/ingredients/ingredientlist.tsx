@@ -133,7 +133,7 @@ export function IngredientList() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <IngredientMerger table={table} />
         <Button asChild variant="default">
           <Link href="/ingredients/new">Create New Ingredient</Link>

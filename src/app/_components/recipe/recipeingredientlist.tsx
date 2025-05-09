@@ -11,7 +11,10 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
-import { IngredientWithRecipesAndProductOut, unitMappignsFromProduct } from "~/schemas/combo";
+import {
+  IngredientWithRecipesAndProductOut,
+  unitMappignsFromProduct,
+} from "~/schemas/combo";
 import { useMemo } from "react";
 import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
@@ -19,7 +22,7 @@ import { renderValueOrError } from "~/misc/result";
 import {
   renderNutrients,
   calculateTotals,
-  createIngredientData
+  createIngredientData,
 } from "~/app/_components/units/univ-conversion";
 import { tryFormatMeasure } from "../inventory/format-amount";
 import { IngredientPillLink, RecipePillLink } from "../EntityPill";
@@ -34,9 +37,7 @@ export const RecipeIngredientList: React.FC<{
 }> = ({ ingredients, ingMap }) => {
   const { w } = useWasm();
   const data = useMemo(() => {
-    return w && ingMap 
-      ? createIngredientData(w, ingredients, ingMap)
-      : [];
+    return w && ingMap ? createIngredientData(w, ingredients, ingMap) : [];
   }, [ingredients, ingMap, w]);
 
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
@@ -95,7 +96,7 @@ export const RecipeIngredientList: React.FC<{
         return (
           nutrientResult &&
           renderValueOrError(nutrientResult, (nutrients) =>
-            renderNutrients(nutrients)
+            renderNutrients(nutrients),
           )
         );
       },
@@ -160,7 +161,9 @@ export const RecipeIngredientList: React.FC<{
   });
 
   const totalPrice = useMemo(() => {
-    return w && ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName);
+    return (
+      w && ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName)
+    );
   }, [ingMap, ingredients, w]);
 
   // Format the total price information
