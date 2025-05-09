@@ -23,11 +23,9 @@ import {
   WithProductSearch,
 } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
-import { UnifiedTextField } from "~/app/_components/form-utils";
-import { NullableNumericField } from "~/app/_components/form-utils";
 import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
 import { amount } from "~/codec/codec";
-import { getHoverableMeasureUnitIcon } from "~/app/_components/inventory/format-amount";
+import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
@@ -246,24 +244,11 @@ export default function BulkInventoryForm() {
                     </WithProductSearch>
                   </div>
 
-                  <div className="w-24">
-                    <NullableNumericField
+                  <div className="w-64">
+                    <AmountFieldGroup
                       form={form}
-                      name={`items.${index}.amount.value`}
-                      label="Value"
-                      placeholder="Value"
-                    />
-                  </div>
-
-                  <div className="w-24">
-                    <UnifiedTextField
-                      form={form}
-                      name={`items.${index}.amount.unit`}
-                      label="Unit"
-                      placeholder="Unit"
-                      getIcon={(x) =>
-                        w && x && getHoverableMeasureUnitIcon(w, x)
-                      }
+                      valuePath={`items.${index}.amount.value`}
+                      unitPath={`items.${index}.amount.unit`}
                     />
                   </div>
 

@@ -21,12 +21,8 @@ import {
 import { Button } from "~/components/ui/button";
 import { Scale } from "lucide-react";
 import { Result } from "~/misc/util";
-import {
-  FormWrapper,
-  NullableNumericField,
-  UnifiedTextField,
-  SideBySideFields,
-} from "~/app/_components/form-utils";
+import { FormWrapper } from "~/app/_components/form-utils";
+import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 
 const formSchema = z.object({
   amount: amount,
@@ -136,22 +132,12 @@ export function ConversionDialog({ mappings, w }: ConversionDialogProps) {
             submitButtonText="Apply"
             onCancel={() => setOpen(false)}
           >
-            <SideBySideFields>
-              <NullableNumericField
-                form={form}
-                name="amount.value"
-                label="Value"
-                placeholder="Enter a value"
-                step="0.01"
-              />
-
-              <UnifiedTextField
-                form={form}
-                name="amount.unit"
-                label="Unit"
-                placeholder="Enter a unit"
-              />
-            </SideBySideFields>
+            <AmountFieldGroup
+              form={form}
+              valuePath="amount.value"
+              unitPath="amount.unit"
+              step="0.01"
+            />
           </FormWrapper>
 
           {Object.keys(conversions).length > 0 && (

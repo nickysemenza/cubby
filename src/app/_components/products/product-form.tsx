@@ -22,12 +22,11 @@ import {
   detectComboboxIdChange,
   NullableNumericField,
 } from "../form-utils";
+import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
-import { useWasm } from "~/wasmContext";
-import { getHoverableMeasureUnitIcon } from "../inventory/format-amount";
 
 // Form schema for product form
 const formSchema = z
@@ -86,7 +85,6 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
 
-  const { w } = useWasm();
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
@@ -267,42 +265,20 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <h5 className="text-sm font-medium">From</h5>
-                <SideBySideFields>
-                  <NullableNumericField
-                    form={form}
-                    name={`unitMappings.${index}.a.value`}
-                    label="Value"
-                    placeholder="Enter value"
-                  />
-                  <UnifiedTextField
-                    form={form}
-                    name={`unitMappings.${index}.a.unit`}
-                    label="Unit"
-                    placeholder="Enter unit"
-                    nullable={false}
-                    getIcon={(x) => w && x && getHoverableMeasureUnitIcon(w, x)}
-                  />
-                </SideBySideFields>
+                <AmountFieldGroup
+                  form={form}
+                  valuePath={`unitMappings.${index}.a.value`}
+                  unitPath={`unitMappings.${index}.a.unit`}
+                />
               </div>
 
               <div className="space-y-2">
                 <h5 className="text-sm font-medium">To</h5>
-                <SideBySideFields>
-                  <NullableNumericField
-                    form={form}
-                    name={`unitMappings.${index}.b.value`}
-                    label="Value"
-                    placeholder="Enter value"
-                  />
-                  <UnifiedTextField
-                    form={form}
-                    name={`unitMappings.${index}.b.unit`}
-                    label="Unit"
-                    placeholder="Enter unit"
-                    nullable={false}
-                    getIcon={(x) => w && x && getHoverableMeasureUnitIcon(w, x)}
-                  />
-                </SideBySideFields>
+                <AmountFieldGroup
+                  form={form}
+                  valuePath={`unitMappings.${index}.b.value`}
+                  unitPath={`unitMappings.${index}.b.unit`}
+                />
               </div>
             </div>
 

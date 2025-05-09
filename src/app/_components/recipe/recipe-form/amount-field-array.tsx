@@ -2,14 +2,8 @@ import { type FC } from "react";
 import { useFieldArray, UseFormReturn } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash } from "lucide-react";
-import {
-  SideBySideFields,
-  NullableNumericField,
-  UnifiedTextField,
-} from "../../form-utils";
 import { type RecipeFormValues } from "./types";
-import { useWasm } from "~/wasmContext";
-import { getHoverableMeasureUnitIcon } from "../../inventory/format-amount";
+import { AmountFieldGroup } from "../../inventory/amount-field-group";
 
 interface AmountFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
@@ -26,28 +20,16 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
     control: form.control,
     name: `sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts`,
   });
-  const { w } = useWasm();
 
   return (
     <div className="space-y-1">
       {fields.map((field, amountIndex) => (
         <div key={field.id} className="flex items-center space-x-1">
-          <SideBySideFields>
-            <NullableNumericField
-              form={form}
-              name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.value`}
-              label="Value"
-              placeholder="Enter amount"
-            />
-            <UnifiedTextField
-              form={form}
-              name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.unit`}
-              label="Unit"
-              placeholder="Enter unit"
-              nullable={false}
-              getIcon={(x) => w && x && getHoverableMeasureUnitIcon(w, x)}
-            />
-          </SideBySideFields>
+          <AmountFieldGroup
+            form={form}
+            valuePath={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.value`}
+            unitPath={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.unit`}
+          />
 
           <Button
             type="button"

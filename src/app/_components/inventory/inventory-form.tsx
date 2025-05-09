@@ -20,11 +20,9 @@ import {
   FormWrapper,
   ComboboxField,
   getSubmitButtonText,
-  SideBySideFields,
   detectComboboxIdChange,
-  NullableNumericField,
-  UnifiedTextField,
 } from "../form-utils";
+import { AmountFieldGroup } from "./amount-field-group";
 
 import {
   WithLocationSearch,
@@ -175,21 +173,11 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         )}
       </WithLocationSearch>
 
-      <SideBySideFields>
-        <NullableNumericField
-          form={form}
-          name="amount.value"
-          label="Amount Value"
-          placeholder="Enter amount"
-        />
-        <UnifiedTextField
-          form={form}
-          name="amount.unit"
-          label="Amount Unit"
-          placeholder="Enter unit"
-          nullable={false}
-        />
-      </SideBySideFields>
+      <AmountFieldGroup
+        form={form}
+        valuePath="amount.value"
+        unitPath="amount.unit"
+      />
     </FormWrapper>
   );
 };
