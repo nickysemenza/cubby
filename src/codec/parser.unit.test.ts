@@ -1,7 +1,11 @@
 import { expect, test } from "vitest";
 import { parseCompactRecipe } from "./parser";
-import { format_amount, parse_ingredient } from "recipebridge/pkg";
-import { is_valid_unit } from "recipebridge/pkg/recipebridge";
+import {
+  format_amount,
+  measure_kind,
+  parse_ingredient,
+  is_valid_unit,
+} from "recipebridge/pkg/recipebridge";
 
 test("parsing works", async () => {
   const out = await parseCompactRecipe({
@@ -47,6 +51,18 @@ test("wasm unknown ingrecient", () => {
     amounts: [{ value: 1, unit: "clove" }],
   });
   expect(parseB.amounts[0]!.unit).toEqual("clove");
+});
+
+test("wasm measure_kind", () => {
+  expect(measure_kind({ value: 1, unit: "Cup" })).toEqual("volume");
+  expect(measure_kind({ value: 1, unit: "gram" })).toEqual("weight");
+  expect(measure_kind({ value: 1, unit: "dollar" })).toEqual("money");
+  expect(measure_kind({ value: 1, unit: "kcal" })).toEqual("calories");
+  expect(measure_kind({ value: 1, unit: "second" })).toEqual("time");
+  // expect(measure_kind({ value: 1, unit: "farenheit" })).toEqual("temperature");
+  expect(measure_kind({ value: 1, unit: "inch" })).toEqual("length");
+  expect(measure_kind({ value: 1, unit: "foo" })).toEqual("other");
+  expect(measure_kind({ value: 1, unit: "Whole" })).toEqual("other");
 });
 
 test("wasm is_valid_unit", () => {

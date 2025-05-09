@@ -50,6 +50,8 @@ extern "C" {
     pub type WCompactRecipe;
     #[wasm_bindgen(typescript_type = "RichItem[]")]
     pub type RichItems;
+    #[wasm_bindgen(typescript_type = "MeasureKind")]
+    pub type WMeasureKind;
 }
 
 // Global allocator setup
@@ -85,13 +87,18 @@ fn mappings_from_w(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, Stri
     Ok(mappings_to_pairs(parsed_mappings?))
 }
 
+fn parse_w_measure(input: &WMeasure) -> Result<RawAmount, String> {
+    setup();
+    serde_wasm_bindgen::from_value(input.into())
+        .map_err(|e| format!("Failed to parse measure: {}", e))
+}
+
 // Public API functions
 /// Formats a measure value with specified precision
 #[wasm_bindgen]
 pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
     setup();
-    let measure: RawAmount = serde_wasm_bindgen::from_value(input.into())
-        .map_err(|e| format!("Failed to parse measure: {}", e))?;
+    let measure = parse_w_measure(input)?;
     Ok(f64::trunc(measure.to_measure().values().0 * FLOAT_PRECISION) / FLOAT_PRECISION)
 }
 
@@ -109,9 +116,8 @@ pub fn parse_ingredient(input: &str) -> Result<WIngredient, String> {
 #[wasm_bindgen]
 pub fn format_amount(amount: &WMeasure) -> Result<String, String> {
     setup();
-    serde_wasm_bindgen::from_value(amount.into())
-        .map(|a: RawAmount| format!("{}", a.to_measure()))
-        .map_err(|e| format!("Failed to format amount: {}", e))
+    let measure = parse_w_measure(amount)?;
+    Ok(format!("{}", measure.to_measure()))
 }
 
 /// Creates a graph representation of unit mappings
@@ -125,15 +131,17 @@ pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String
 #[wasm_bindgen]
 pub fn conv_measure_to_kind(
     mappings: Vec<WUnitMapping>,
-    input_target_measure_kind: String,
+    input_target_measure_kind: WMeasureKind,
     input_measure_w: WMeasure,
 ) -> Result<WMeasure, String> {
     setup();
     let mapping_pairs = mappings_from_w(mappings)?;
-    let input_measure: RawAmount = serde_wasm_bindgen::from_value(input_measure_w.into())
-        .map_err(|e| format!("Failed to parse input amount: {}", e))?;
-    let target_measure_kind = MeasureKind::from_str(&input_target_measure_kind)
-        .map_err(|_| format!("Invalid measure kind: {}", input_target_measure_kind))?;
+    let input_measure = parse_w_measure(&input_measure_w)?;
+
+    let measure_kind = serde_wasm_bindgen::from_value::<String>(input_target_measure_kind.into())
+        .map_err(|e| format!("Failed to parse measure kind: {}", e))?;
+    let target_measure_kind = MeasureKind::from_str(&measure_kind)
+        .map_err(|_| format!("Invalid measure kind: {}", measure_kind))?;
 
     let input_measure = input_measure.to_measure();
     input_measure
@@ -173,10 +181,21 @@ pub fn parse_rich_text(r: String, ingredient_names: Vec<String>) -> Result<RichI
         .map_err(|e| JsValue::from_str(&e))
 }
 
+/// Returns true if a unit is valid (including passed in extra units)
 #[wasm_bindgen]
 pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
     setup();
     is_valid(HashSet::from_iter(extra_units), unit)
+}
+/// Returns the kind of a amount's unit
+#[wasm_bindgen]
+pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
+    setup();
+    parse_w_measure(amount)?
+        .to_measure()
+        .kind()
+        .map(|k| serde_wasm_bindgen::to_value(k.to_str()).unwrap().into())
+        .map_err(|_| "Failed to determine measure kind".to_string())
 }
 
 // TypeScript type definitions
@@ -206,6 +225,8 @@ interface WCompactRecipe {
     url?: string;
     image?: string;
 }
+
+type MeasureKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other";
 
 type RichItem =
     | { kind: "Text"; value: string }

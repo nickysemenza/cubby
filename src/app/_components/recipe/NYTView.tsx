@@ -21,7 +21,10 @@ export const NYTView: React.FC<{
                 <div className="flex w-1/2 justify-end pr-1 font-light text-gray-600">
                   {w &&
                     i.amounts
-                      .filter((a) => a.unit !== "$" && a.unit !== "kcal")
+                      .filter(
+                        (a) =>
+                          !["money", "calories"].includes(w.measure_kind(a)),
+                      )
                       .map((a) => w.format_amount(a))
                       .join(" / ")}
                 </div>
