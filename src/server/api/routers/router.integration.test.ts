@@ -18,7 +18,11 @@ describe("recipe router", () => {
     await seedRealRecipes(prisma);
 
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({ headers: new Headers(), db: prisma });
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
     const recipeList = await caller.list({ filters: {} });
     expect(recipeList.items.length).toEqual(exampleRecipesCompact.length);
   });

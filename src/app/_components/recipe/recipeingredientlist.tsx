@@ -6,21 +6,20 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { Result, withFailure, type Flatten } from "~/misc/util";
+import { type Flatten } from "~/misc/util";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import { IngredientWithRecipesAndProductOut, unitMappignsFromProduct } from "~/schemas/combo";
 import { useMemo } from "react";
-import { useWasm, wasm } from "~/wasmContext";
+import { useWasm } from "~/wasmContext";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
-import { WMeasure } from "recipebridge/pkg/recipebridge";
-import { NutrientsPer100 } from "~/schemas/usda";
 import { renderValueOrError } from "~/misc/result";
 import {
-  convertAmountToPrice,
-  getGramAndNutrient,
+  renderNutrients,
+  calculateTotals,
+  createIngredientData
 } from "~/app/_components/units/univ-conversion";
 import { tryFormatMeasure } from "../inventory/format-amount";
 import { IngredientPillLink, RecipePillLink } from "../EntityPill";
@@ -29,116 +28,14 @@ import { getIngredientName } from "./recipeutils";
 
 dayjs.extend(relativeTime);
 
-const getPrice = (
-  w: wasm,
-  ingredient: SectionIngredientOut,
-  ingMap: Record<string, IngredientWithRecipesAndProductOut>,
-): {
-  price: Result<WMeasure>;
-  gram: Result<WMeasure>;
-  nutrient: Result<NutrientsPer100>;
-} => {
-  // Handle based on ingredient type (discriminated union)
-  const id =
-    ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
-  const entry = id ? ingMap[id] : undefined;
-  const product = entry?.product;
-  const mappings = product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
-  const firstAmount = ingredient.amounts[0];
-  // todo: should additional amounts be added to the mappings?
-
-  if (!firstAmount) {
-    const error = `ingredient ${ingredient.id} has no amounts`;
-    return {
-      price: withFailure(error),
-      gram: withFailure(error),
-      nutrient: withFailure(error),
-    };
-  }
-
-  const price = convertAmountToPrice(w, firstAmount, mappings);
-  const { gram, nutrient } = getGramAndNutrient(
-    w,
-    firstAmount,
-    mappings,
-    product,
-  );
-
-  return { price, gram, nutrient };
-};
-
-const sumPrice = (
-  w: wasm,
-  ingredients: SectionIngredientOut[],
-  ingMap: Record<string, IngredientWithRecipesAndProductOut>,
-) => {
-  const prices: WMeasure[] = [];
-  const grams: WMeasure[] = [];
-  const missing = [];
-  const nutrients: NutrientsPer100[] = [];
-  for (const ingredient of ingredients) {
-    const ingName = getIngredientName(ingredient);
-    try {
-      const { price, gram, nutrient } = getPrice(w, ingredient, ingMap);
-
-      if (price.success) {
-        prices.push(price.value);
-      } else {
-        missing.push(`price-${ingName}`);
-      }
-      if (gram.success) {
-        grams.push(gram.value);
-      } else {
-        missing.push(`gram-${ingName}`);
-      }
-      if (nutrient.success) {
-        nutrients.push(nutrient.value);
-      } else {
-        missing.push(`nutrient-${ingName}`);
-      }
-      continue;
-    } catch (e) {
-      console.log(`Error in getPrice for ${ingName}`, e);
-      missing.push(ingName);
-    }
-  }
-  return {
-    price: prices.reduce((acc, curr) => acc + (curr.value || 0), 0),
-    protein: nutrients.reduce((acc, curr) => acc + curr.protein, 0),
-    kcal: nutrients.reduce((acc, curr) => acc + curr.kcal, 0),
-    weight: grams.reduce((acc, curr) => acc + curr.value, 0),
-    missing,
-  };
-  // return prices;
-};
-
-// Format nutrients in a user-friendly way
-const formatNutrients = (nutrients: NutrientsPer100) => {
-  return (
-    <div className="space-y-1 text-sm">
-      <div>
-        <span className="font-medium">Calories:</span>{" "}
-        {nutrients.kcal.toFixed(1)} kcal
-      </div>
-      <div>
-        <span className="font-medium">Protein:</span>{" "}
-        {nutrients.protein.toFixed(1)}g
-      </div>
-    </div>
-  );
-};
-
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientWithRecipesAndProductOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
   const { w } = useWasm();
   const data = useMemo(() => {
-    return w
-      ? ingredients.map((i) => ({
-          ...i,
-          priceInfo: ingMap && getPrice(w, i, ingMap),
-        }))
+    return w && ingMap 
+      ? createIngredientData(w, ingredients, ingMap)
       : [];
   }, [ingredients, ingMap, w]);
 
@@ -198,7 +95,7 @@ export const RecipeIngredientList: React.FC<{
         return (
           nutrientResult &&
           renderValueOrError(nutrientResult, (nutrients) =>
-            formatNutrients(nutrients),
+            renderNutrients(nutrients)
           )
         );
       },
@@ -263,11 +160,11 @@ export const RecipeIngredientList: React.FC<{
   });
 
   const totalPrice = useMemo(() => {
-    return w && ingMap && sumPrice(w, ingredients, ingMap);
+    return w && ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName);
   }, [ingMap, ingredients, w]);
 
   // Format the total price information
-  const formatTotalPrice = (totals: ReturnType<typeof sumPrice>) => {
+  const formatTotalPrice = (totals: ReturnType<typeof calculateTotals>) => {
     if (!w) return null;
 
     const summaryItems: SummaryItem[] = [

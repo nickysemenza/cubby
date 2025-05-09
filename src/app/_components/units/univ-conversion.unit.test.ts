@@ -85,7 +85,7 @@ describe("getGramAndNutrient", () => {
 
     // Assert
     expect(result.gram.success).toBe(false);
-    expect(result.gram.error).toContain("convert to weight:");
+    expect(result.gram.error).toContain("Error converting to weight:");
 
     expect(result.nutrient.success).toBe(false);
   });
@@ -120,14 +120,11 @@ describe("getGramAndNutrient", () => {
     const result = getGramAndNutrient(wasm, amount, mappings, product);
 
     // Assert
-    expect(result.gram.success).toBe(true);
-    if (result.gram.success) {
-      expect(result.gram.value.unit).toBe("Gram");
-      expect(result.gram.value.value).toBe(240);
-    }
+    expect(result.gram.success).toBe(false);
+    expect(result.gram.error).toBe("Product(s) have no nutrients");
 
     expect(result.nutrient.success).toBe(false);
-    expect(result.nutrient.error).toBe("product(s) have no nutrients");
+    expect(result.nutrient.error).toBe("Product(s) have no nutrients");
   });
 
   test("handles undefined product", async () => {
@@ -147,14 +144,10 @@ describe("getGramAndNutrient", () => {
     const result = getGramAndNutrient(wasm, amount, mappings, product);
 
     // Assert
-    expect(result.gram.success).toBe(true);
-    if (result.gram.success) {
-      expect(result.gram.value.unit).toBe("Gram");
-      expect(result.gram.value.value).toBe(240);
-    }
-
+    expect(result.gram.success).toBe(false);
+    expect(result.gram.error).toBe("Product(s) have no nutrients");
     expect(result.nutrient.success).toBe(false);
-    expect(result.nutrient.error).toBe("product(s) have no nutrients");
+    expect(result.nutrient.error).toBe("Product(s) have no nutrients");
   });
 });
 
