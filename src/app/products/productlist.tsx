@@ -10,11 +10,10 @@ import {
   LocationPillLink,
 } from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
-import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappignsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
-import { UnitMappingsTable } from "../_components/units/unitmappingstable";
+import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
@@ -123,11 +122,8 @@ export function ProductList() {
         );
         return (
           w && (
-            <div className="flex flex-row gap-2">
-              <div>{buildunitMappingsGraph(w, mappings)}</div>
-              <div className="w-60">
-                <UnitMappingsTable mappings={mappings} w={w} />
-              </div>
+            <div className="w-full">
+              <UnitMappingDisplay mappings={mappings} w={w} title="" />
             </div>
           )
         );

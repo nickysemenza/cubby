@@ -10,8 +10,7 @@ import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { useWasm } from "~/wasmContext";
-import { UnitMappingsTable } from "../_components/units/unitmappingstable";
-import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
+import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -106,11 +105,8 @@ export function USDAFoodList() {
         if (!w || portionInfo.raw.length === 0) return <NoneState />;
 
         return (
-          <div className="flex flex-row gap-2">
-            <div>{buildunitMappingsGraph(w, portionInfo.parsed)}</div>
-            <div className="w-60">
-              <UnitMappingsTable mappings={portionInfo.parsed} w={w} />
-            </div>
+          <div className="w-full">
+            <UnitMappingDisplay mappings={portionInfo.parsed} w={w} title="" />
           </div>
         );
       },

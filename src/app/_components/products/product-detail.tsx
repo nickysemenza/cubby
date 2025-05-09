@@ -9,12 +9,12 @@ import {
 } from "~/schemas/combo";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
-import { UnitMappingsTable } from "../units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
 import { ProductForm, type UpdateProductData } from "./product-form";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
+import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import Link from "next/link";
 import { z } from "zod";
 import {
@@ -25,7 +25,6 @@ import {
 import { EntityPillLinkList } from "../EntityPillLinkList";
 
 import { useMutation } from "@tanstack/react-query";
-import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 
 interface ProductDetailProps {
   product: z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>;
@@ -155,12 +154,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     },
     {
       title: "Unit Mappings",
-      content: w && (
-        <div className="space-y-2">
-          <div>{buildunitMappingsGraph(w, mappings)}</div>
-          <UnitMappingsTable mappings={mappings} w={w} />
-        </div>
-      ),
+      content: w && <UnitMappingDisplay mappings={mappings} w={w} title="" />,
     },
     {
       title: "Raw Details",

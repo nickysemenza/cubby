@@ -7,10 +7,9 @@ import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
-import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
 import { unitMappignsFromProduct } from "~/schemas/combo";
-import { UnitMappingsTable } from "../_components/units/unitmappingstable";
 import { useWasm } from "~/wasmContext";
+import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { useTableState } from "../_components/data-table/useTableState";
@@ -105,14 +104,7 @@ export function IngredientList() {
         const mappings = product.flatMap((product) =>
           unitMappignsFromProduct(product),
         );
-        return (
-          w && (
-            <div>
-              <UnitMappingsTable mappings={mappings} w={w} />
-              {buildunitMappingsGraph(w, mappings)}
-            </div>
-          )
-        );
+        return w && <UnitMappingDisplay mappings={mappings} w={w} title="" />;
       },
     }),
   ];

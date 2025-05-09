@@ -2,13 +2,12 @@
 
 import { FoodSummary } from "~/schemas/usda";
 import { useWasm } from "~/wasmContext";
-import { UnitMappingsTable } from "../units/unitmappingstable";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/combo";
 import { ProductPillLink } from "../EntityPill";
-import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
+import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 
 export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
   food,
@@ -132,11 +131,7 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
   );
 
   const unitMappingsSection = w ? (
-    <div>
-      <h3 className="mb-3">Unit Conversions</h3>
-      <UnitMappingsTable mappings={mappings} w={w} />
-      {buildunitMappingsGraph(w, mappings)}
-    </div>
+    <UnitMappingDisplay mappings={mappings} w={w} />
   ) : (
     <div>Loading unit mappings...</div>
   );
