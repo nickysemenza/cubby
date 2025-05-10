@@ -12,6 +12,7 @@ import { z } from "zod";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   inventoryCreatePayloadData,
+  type InventoryUpdateInput,
   inventoryUpdatePayloadData,
 } from "~/schemas/inventory";
 import {
@@ -43,25 +44,16 @@ const formSchema = z.object({
 
 export type InventoryFormValues = z.infer<typeof formSchema>;
 
-// Define the props passed by parent for create operation
-export type CreateInventoryData = z.infer<typeof inventoryCreatePayloadData>;
-
-// Use the existing zod schema type for update
-export type UpdateInventoryData = {
-  id: string;
-  data: z.infer<typeof inventoryUpdatePayloadData>;
-};
-
 // Props for create mode
 interface CreateInventoryFormProps
-  extends CreateModeProps<CreateInventoryData> {
+  extends CreateModeProps<z.infer<typeof inventoryCreatePayloadData>> {
   inventoryItem?: never;
 }
 
 // Props for edit mode
 interface EditInventoryFormProps
   extends EditModeProps<
-    UpdateInventoryData,
+    InventoryUpdateInput,
     z.infer<typeof inventoryWithLocationAndProductOut>
   > {
   entity: z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -94,7 +86,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
   const handleSubmit = (values: InventoryFormValues) => {
     const amount = values.amount;
     if (mode === "create") {
-      const createData: CreateInventoryData = {
+      const createData: z.infer<typeof inventoryCreatePayloadData> = {
         productId: values.product!.id,
         locationId: values.location!.id,
         amount,
@@ -123,7 +115,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         updates.locationId = locationIdChange;
       }
       if (Object.keys(updates).length > 0) {
-        const updateData: UpdateInventoryData = {
+        const updateData: InventoryUpdateInput = {
           id: inventoryItem.id,
           data: updates,
         };

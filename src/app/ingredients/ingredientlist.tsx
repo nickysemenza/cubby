@@ -14,7 +14,10 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCreatedAtColumn,
+  createImageColumn,
+} from "../_components/data-table/columnHelpers";
 import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
@@ -50,6 +53,7 @@ export function IngredientList() {
   // Set up columns using helpers where possible
   const columns = [
     buildSelectColumn<IngredientData>(),
+    createImageColumn(columnHelper),
     columnHelper.accessor("name", {
       enableSorting: true,
       cell: (info) => (

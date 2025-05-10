@@ -7,10 +7,12 @@ import { InfLocation } from "~/schemas/location";
 import { NoneState } from "../NoneState";
 import { InventoryEntryPillLink, LocationPillLink } from "../EntityPill";
 import { Button } from "~/components/ui/button";
-import { LocationForm, type UpdateLocationData } from "./location-form";
+import { LocationForm } from "./location-form";
+import { type LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import EntityImageList from "../EntityImageList";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -37,7 +39,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     }),
   );
 
-  const handleEdit = (data: UpdateLocationData) => {
+  const handleEdit = (data: LocationUpdateInput) => {
     updateLocation.mutate(data);
   };
 
@@ -53,6 +55,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       filters: { locationIdFilter: location.id },
     }),
   );
+
+  // Get location images from the location object
+  const locationImages = location.images || [];
 
   const sections: DetailSection[] = [
     {
@@ -93,6 +98,10 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           </div>
         </div>
       ),
+    },
+    {
+      title: "Images",
+      content: <EntityImageList images={locationImages} />,
     },
     {
       title: "Child Locations",

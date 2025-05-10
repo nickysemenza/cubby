@@ -9,7 +9,8 @@ import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { Button } from "~/components/ui/button";
-import { InventoryForm, type UpdateInventoryData } from "./inventory-form";
+import { InventoryForm } from "./inventory-form";
+import { type InventoryUpdateInput } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
 import { useMutation } from "@tanstack/react-query";
@@ -41,7 +42,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     }),
   );
 
-  const handleEdit = (data: UpdateInventoryData) => {
+  const handleEdit = (data: InventoryUpdateInput) => {
     updateMutation.mutate(data);
   };
 

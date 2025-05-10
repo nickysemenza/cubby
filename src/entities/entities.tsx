@@ -45,4 +45,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "usda",
     icon: "🍲",
   },
+  image: {
+    label: "Image",
+    pluralLabel: "Images",
+    basePath: "images",
+    icon: "🖼️",
+  },
 };

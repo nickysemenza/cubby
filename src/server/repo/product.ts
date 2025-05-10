@@ -141,14 +141,40 @@ export const loadProducts = async (
 const productInclude = {
   Ingredient: true,
   unitMappings: true,
-  InventoryEntry: { include: { location: true } },
+  InventoryEntry: {
+    include: {
+      location: {
+        include: {
+          images: {
+            include: {
+              image: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  images: { include: { image: true } },
 };
 
 type ProductDeepDB = Prisma.ProductGetPayload<{
   include: {
     Ingredient: true;
     unitMappings: true;
-    InventoryEntry: { include: { location: true } };
+    InventoryEntry: {
+      include: {
+        location: {
+          include: {
+            images: {
+              include: {
+                image: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    images: { include: { image: true } };
   };
 }>;
 
@@ -191,29 +217,47 @@ export const findProductsByFoodIdentifier = async (
   return res;
 };
 
-const dbProductoToAPI: (
+const dbProductToAPI: (
   db: PrismaClient,
   product: ProductDeepDB,
 ) => Promise<
   z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>
 > = async (db, product) => {
-  const { Ingredient, unitMappings, InventoryEntry, ...restOfProduct } =
+  const { Ingredient, unitMappings, InventoryEntry, images, ...restOfProduct } =
     product;
 
   const lookupParam = foodLookupParamFromProduct(product);
   const food = lookupParam ? await findFood(db, lookupParam) : null;
+
+  // Extract images from the join table records
+  const productImages = images.map((pi) => pi.image);
+
   return {
     ...restOfProduct,
     ingredient: Ingredient,
     unitMappings,
     food,
-    inventoryEntry: InventoryEntry.map((entry) => ({
-      ...entry,
-      location: {
-        ...entry.location,
-        type: locationType.parse(entry.location.type),
-      },
-    })),
+    images: productImages,
+    inventoryEntry: InventoryEntry.map((entry) => {
+      const {
+        type,
+        images: locationImages,
+        ...restOfLocation
+      } = entry.location;
+      // Extract images from the join table
+      const extractedLocationImages = locationImages
+        ? locationImages.map((li) => li.image)
+        : [];
+
+      return {
+        ...entry,
+        location: {
+          ...restOfLocation,
+          type: locationType.parse(type),
+          images: extractedLocationImages,
+        },
+      };
+    }),
   };
 };
 
@@ -224,7 +268,7 @@ export const getProductByID = async (db: PrismaClient, id: string) => {
     },
     include: productInclude,
   });
-  return dbProductoToAPI(db, res);
+  return dbProductToAPI(db, res);
 };
 
 export const productList = async (
@@ -263,7 +307,7 @@ export const productList = async (
   ]);
 
   const products = await Promise.all(
-    results.map(async (product) => await dbProductoToAPI(db, product)),
+    results.map(async (product) => await dbProductToAPI(db, product)),
   );
   return { data: products, count: totalCount };
 };
@@ -273,7 +317,7 @@ export const createProduct = async (
   db: PrismaClient,
   data: ProductInputPayload,
 ): Promise<ProductTopLevelOut> => {
-  const { ingredientId, unitMappings, ...productData } = data;
+  const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
   // Use a transaction to ensure atomicity
   return await db.$transaction(async (tx) => {
@@ -299,6 +343,28 @@ export const createProduct = async (
       });
     }
 
+    // Associate images if provided
+    if (pendingImageIds && pendingImageIds.length > 0) {
+      // Create ProductImage records for each image
+      await Promise.all(
+        pendingImageIds.map(async (imageId) => {
+          // Create association
+          await tx.productImage.create({
+            data: {
+              productId: product.id,
+              imageId,
+            },
+          });
+
+          // Update image status to UPLOADED
+          await tx.image.update({
+            where: { id: imageId },
+            data: { status: "UPLOADED" },
+          });
+        }),
+      );
+    }
+
     return product;
   });
 };
@@ -309,7 +375,13 @@ export const updateProduct = async (
   id: string,
   data: Partial<ProductInputPayload>,
 ): Promise<ProductTopLevelOut> => {
-  const { ingredientId, unitMappings, ...productData } = data;
+  const {
+    ingredientId,
+    unitMappings,
+    pendingImageIds,
+    removeImageIds,
+    ...productData
+  } = data;
 
   // Use a transaction to ensure atomicity
   return await db.$transaction(async (tx) => {
@@ -388,6 +460,39 @@ export const updateProduct = async (
           },
         });
       }
+    }
+
+    // Add new images if provided
+    if (pendingImageIds && pendingImageIds.length > 0) {
+      await Promise.all(
+        pendingImageIds.map(async (imageId) => {
+          // Create association
+          await tx.productImage.create({
+            data: {
+              productId: product.id,
+              imageId,
+            },
+          });
+
+          // Update image status to UPLOADED
+          await tx.image.update({
+            where: { id: imageId },
+            data: { status: "UPLOADED" },
+          });
+        }),
+      );
+    }
+
+    // Remove images if requested
+    if (removeImageIds && removeImageIds.length > 0) {
+      await tx.productImage.deleteMany({
+        where: {
+          productId: product.id,
+          imageId: {
+            in: removeImageIds,
+          },
+        },
+      });
     }
 
     return product;

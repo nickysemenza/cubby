@@ -1,3 +1,4 @@
+import { assertNever } from "~/lib/assert";
 import { type RecipeOut, type SectionIngredient } from "~/schemas/recipe";
 
 // returns the 1-indexed count of the instruction, across all sections.
@@ -14,15 +15,13 @@ export const getGlobalInstructionNumber = (
   1;
 
 export const getIngredientName = (ingredient: SectionIngredient): string => {
-  // With discriminated union, exhaustively check all possible types
-  switch (ingredient.type) {
+  const { type } = ingredient;
+  switch (type) {
     case "ingredient":
       return ingredient.ingredient.name;
     case "recipe":
       return ingredient.recipe.name;
+    default:
+      return assertNever(type);
   }
-  // TypeScript exhaustiveness check - this will catch if we add a new type
-  // to the discriminated union but forget to handle it here
-  const _exhaustiveCheck: never = ingredient;
-  return _exhaustiveCheck; // This line is unreachable but pleases TypeScript
 };

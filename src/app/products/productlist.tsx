@@ -18,7 +18,10 @@ import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCreatedAtColumn,
+  createImageColumn,
+} from "../_components/data-table/columnHelpers";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";
@@ -47,6 +50,7 @@ export function ProductList() {
 
   // Set up columns using helpers where possible
   const columns = [
+    createImageColumn(columnHelper),
     columnHelper.accessor("name", {
       cell: (info) => {
         const ingredient = info.row.original.ingredient;

@@ -11,6 +11,7 @@ import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
+import Image from "next/image";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -37,6 +38,41 @@ export function InventoryItemList() {
 
   // Set up columns using helpers where possible
   const columns = [
+    // Create a custom image column that uses product images
+    columnHelper.accessor("product", {
+      id: "product_image",
+      header: "Image",
+      enableSorting: false,
+      cell: (info) => {
+        const product = info.getValue();
+        if (!product.images || product.images.length === 0) {
+          return (
+            <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-gray-100">
+              <span className="text-xs text-gray-500">No image</span>
+            </div>
+          );
+        }
+
+        // Use the first image
+        const image = product.images[0];
+        return (
+          <div className="relative h-12 w-12 overflow-hidden rounded-md border">
+            <Image
+              src={image.url}
+              alt={image.filename || "Product image"}
+              fill
+              sizes="48px"
+              className="object-cover"
+            />
+            {product.images.length > 1 && (
+              <div className="absolute right-0 bottom-0 flex h-5 w-5 items-center justify-center rounded-tl-md bg-black/70 text-xs text-white">
+                +{product.images.length - 1}
+              </div>
+            )}
+          </div>
+        );
+      },
+    }),
     columnHelper.accessor("amount", {
       cell: (info) => {
         return (

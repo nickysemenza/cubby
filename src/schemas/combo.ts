@@ -6,6 +6,7 @@ import { ingredientOut } from "./ingredient";
 import { UnitMapping, unitMappingOut } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
 import { FoodSummary, foodSummary } from "./usda";
+import { imageOut } from "./image";
 
 export const inventoryWithProductOut = inventoryEntryOut.merge(
   z.object({
@@ -63,6 +64,7 @@ export const locationOutWithParentChildrenAndInventoryOut = z
     children: z.array(locationOut),
     parent: locationOut.nullable(),
     inventoryEntries: z.array(inventoryWithProductOut),
+    images: z.array(imageOut).optional(),
   })
   .merge(locationOut);
 

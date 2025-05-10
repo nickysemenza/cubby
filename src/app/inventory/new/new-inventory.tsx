@@ -1,10 +1,9 @@
 "use client";
 import { useWasm } from "~/wasmContext";
 import { type FC, useState } from "react";
-import {
-  InventoryForm,
-  type CreateInventoryData,
-} from "~/app/_components/inventory/inventory-form";
+import { InventoryForm } from "~/app/_components/inventory/inventory-form";
+import { z } from "zod";
+import { inventoryCreatePayloadData } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 
@@ -28,7 +27,7 @@ const CreateInventoryItem: FC = () => {
     }),
   );
 
-  const handleCreate = (data: CreateInventoryData) => {
+  const handleCreate = (data: z.infer<typeof inventoryCreatePayloadData>) => {
     createMutation.mutate(data);
   };
 

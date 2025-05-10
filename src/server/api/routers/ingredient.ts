@@ -15,8 +15,8 @@ import {
   updateIngredient,
 } from "~/server/repo/ingredient";
 import { ingredientWithRecipesAndProductOut } from "~/schemas/combo";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ingredientBase, ingredientOut } from "~/schemas/ingredient";
+
+import { ingredientBase, ingredientUpdateInput } from "~/schemas/ingredient";
 
 const merge = publicProcedure
   .input(
@@ -79,12 +79,7 @@ const create = publicProcedure
   });
 
 const update = publicProcedure
-  .input(
-    z.object({
-      id: z.string().uuid(),
-      data: ingredientBase.partial(),
-    }),
-  )
+  .input(ingredientUpdateInput)
   .output(ingredientWithRecipesAndProductOut)
   .mutation(async ({ ctx, input }) => {
     return await updateIngredient(ctx.db, input.id, input.data);

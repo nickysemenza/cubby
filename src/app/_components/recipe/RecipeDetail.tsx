@@ -5,6 +5,7 @@ import { SectionIngredientOut, type RecipeOut } from "~/schemas/recipe";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { buildCLient } from "~/trpc/react";
 import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import EntityImageList from "../EntityImageList";
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
@@ -21,6 +22,9 @@ const RecipeDetail: React.FC<{
   const [data, dataSet] = useState<
     Record<string, IngredientWithRecipesAndProductOut> | undefined
   >(undefined);
+
+  // Get recipe images from the recipe object
+  const recipeImages = recipe.images || [];
 
   useEffect(() => {
     const getBulkIngredients = async (ids: string[]) => {
@@ -56,14 +60,13 @@ const RecipeDetail: React.FC<{
   return (
     <div>
       <h1>Recipe Detail</h1>
-      {/* <JsonEditor data={recipe} /> */}
+
+      {/* Recipe Images Section */}
+      <div className="mb-6">
+        <EntityImageList images={recipeImages} title="Recipe Images" />
+      </div>
+
       <RecipeIngredientList ingredients={ingredients} ingMap={data} />
-      {/* {ingredients.map((ingredient, index) => (
-        <div key={index}>
-          <h3>{ingredient.ingredient?.name}</h3>
-          <JsonEditor data={ingredient} />
-        </div>
-      ))} */}
     </div>
   );
 };

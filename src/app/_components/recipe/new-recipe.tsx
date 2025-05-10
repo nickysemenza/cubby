@@ -6,7 +6,7 @@ import { useState } from "react";
 import { RecipeForm } from "./recipe-form";
 import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
-import { CreateRecipeData } from "./recipe-form/types";
+import { type RecipeCreateInput } from "~/schemas/recipe";
 
 export default function NewRecipeForm() {
   const router = useRouter();
@@ -27,7 +27,7 @@ export default function NewRecipeForm() {
     }),
   );
 
-  const handleCreate = (data: CreateRecipeData) => {
+  const handleCreate = (data: RecipeCreateInput) => {
     createMutation.mutate(data);
   };
 

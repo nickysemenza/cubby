@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LocationForm, type CreateLocationData } from "./location-form";
+import { LocationForm } from "./location-form";
+import { type LocationCreateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
@@ -23,8 +24,8 @@ export function NewLocation() {
     }),
   );
 
-  const handleCreate = (data: CreateLocationData) => {
-    createLocation.mutate(data);
+  const handleCreate = async (data: LocationCreateInput) => {
+    return await createLocation.mutateAsync(data);
   };
 
   const handleCancel = () => {

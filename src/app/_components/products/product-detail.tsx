@@ -10,7 +10,8 @@ import {
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
 import { useWasm } from "~/wasmContext";
-import { ProductForm, type UpdateProductData } from "./product-form";
+import { ProductForm } from "./product-form";
+import { type ProductInputPayload } from "~/schemas/product";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
@@ -23,6 +24,7 @@ import {
   FoodPillLink,
 } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
+import EntityImageList from "../EntityImageList";
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -49,7 +51,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     }),
   );
 
-  const handleEdit = (data: UpdateProductData) => {
+  const handleEdit = (data: {
+    id: string;
+    data: Partial<ProductInputPayload>;
+  }) => {
     updateProduct.mutate(data);
   };
 
@@ -57,6 +62,9 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     setIsEditing(false);
     setError(undefined);
   };
+
+  // Get product images from the product object
+  const productImages = product.images || [];
 
   const mappings = unitMappignsFromProduct(product);
   const sections: DetailSection[] = [
@@ -153,6 +161,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ),
     },
     {
+      title: "Images",
+      content: <EntityImageList images={productImages} />,
+    },
+    {
       title: "Unit Mappings",
       content: w && <UnitMappingDisplay mappings={mappings} w={w} title="" />,
     },
@@ -168,7 +180,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   // Add nutrition section if available
   if (product.food?.nutritionInfo) {
-    sections.splice(1, 0, {
+    sections.splice(2, 0, {
       title: "Nutrition Information",
       content: (
         <div className="bg-muted rounded-md p-4">

@@ -6,7 +6,12 @@ import {
   sortPaginationCombo,
   buildPaginatedResponse,
 } from "~/schemas/util";
-import { infLocation, locationType } from "~/schemas/location";
+import {
+  infLocation,
+  locationType,
+  locationCreateInput,
+  locationUpdateInput,
+} from "~/schemas/location";
 import {
   buildLocationTree,
   buildLocationTypeCount,
@@ -59,34 +64,17 @@ const makeTree = publicProcedure
   .output(z.array(infLocation))
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
-// Create location schemas
-const locationCreatePayloadData = z.object({
-  name: z.string().min(1),
-  type: locationType,
-  parentId: z.string().uuid().nullable(),
-});
-
 // Create location endpoint
 const create = publicProcedure
-  .input(locationCreatePayloadData)
+  .input(locationCreateInput)
   .output(infLocation)
   .mutation(async ({ ctx, input }) => {
     return await createLocation(ctx.db, input);
   });
 
-// Update location schema
-const locationUpdatePayloadData = z.object({
-  id: z.string().uuid(),
-  data: z.object({
-    name: z.string().min(1).optional(),
-    type: locationType.optional(),
-    parentId: z.string().uuid().nullable().optional(),
-  }),
-});
-
 // Update location endpoint
 const update = publicProcedure
-  .input(locationUpdatePayloadData)
+  .input(locationUpdateInput)
   .output(infLocation)
   .mutation(async ({ ctx, input }) => {
     return await updateLocation(ctx.db, input.id, input.data);

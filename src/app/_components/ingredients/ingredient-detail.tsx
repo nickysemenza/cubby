@@ -10,7 +10,8 @@ import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { Button } from "~/components/ui/button";
-import { IngredientForm, type UpdateIngredientData } from "./ingredient-form";
+import { IngredientForm } from "./ingredient-form";
+import { type IngredientUpdateInput } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
@@ -40,7 +41,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
     }),
   );
 
-  const handleEdit = (data: UpdateIngredientData) => {
+  const handleEdit = (data: IngredientUpdateInput) => {
     updateIngredient.mutate(data);
   };
 

@@ -6,8 +6,7 @@ import { useState } from "react";
 import { RecipeForm } from "./recipe-form";
 import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
-import { RecipeOut } from "~/schemas/recipe";
-import { UpdateRecipeData } from "./recipe-form/types";
+import { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
 
 interface EditRecipeFormProps {
   recipe: RecipeOut;
@@ -37,7 +36,7 @@ export default function EditRecipeForm({
     }),
   );
 
-  const handleUpdate = (data: UpdateRecipeData) => {
+  const handleUpdate = (data: RecipeUpdateInput) => {
     updateMutation.mutate(data);
   };
 

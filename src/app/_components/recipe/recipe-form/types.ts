@@ -2,6 +2,8 @@ import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
 import { amount } from "~/codec/codec";
 import { recipeTopLevel } from "~/schemas/recipe";
+import { type PendingImage } from "../../PendingImageUpload";
+import { type ImageOut } from "~/schemas/image";
 
 // Form schema for recipe form
 export const formSchema = z.object({
@@ -37,7 +39,7 @@ export interface CreateRecipeFormProps {
   isPending: boolean;
   error?: string;
   onCancel?: () => void;
-  onCreate: (data: CreateRecipeData) => void;
+  onCreate: (data: RecipeCreateInput) => void;
   initialName?: string;
 }
 
@@ -47,8 +49,10 @@ export interface EditRecipeFormProps {
   isPending: boolean;
   error?: string;
   onCancel?: () => void;
-  onEdit: (data: UpdateRecipeData) => void;
-  entity: RecipeOut;
+  onEdit: (data: RecipeUpdateInput) => void;
+  entity: RecipeOut & {
+    images?: PendingImage[] | ImageOut[];
+  };
 }
 
 // Combined props type using discriminated union
@@ -60,6 +64,3 @@ import {
   RecipeUpdateInput,
   RecipeOut,
 } from "~/schemas/recipe";
-
-export type CreateRecipeData = RecipeCreateInput;
-export type UpdateRecipeData = RecipeUpdateInput;

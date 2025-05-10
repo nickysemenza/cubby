@@ -14,9 +14,22 @@ const inventoryentryInclude = {
   Product: {
     include: {
       unitMappings: true,
+      images: {
+        include: {
+          image: true,
+        },
+      },
     },
   },
-  location: true,
+  location: {
+    include: {
+      images: {
+        include: {
+          image: true,
+        },
+      },
+    },
+  },
 };
 
 type InventoryEntryDeepDB = Prisma.InventoryEntryGetPayload<{
@@ -24,27 +37,51 @@ type InventoryEntryDeepDB = Prisma.InventoryEntryGetPayload<{
     Product: {
       include: {
         unitMappings: true;
+        images: {
+          include: {
+            image: true;
+          };
+        };
       };
     };
-    location: true;
+    location: {
+      include: {
+        images: {
+          include: {
+            image: true;
+          };
+        };
+      };
+    };
   };
 }>;
 
-const dbInventoryEntryoToAPI: (
+const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
-  const { Product, location, ...restOfIngredient } = inventoryentry;
+  const { Product, location, ...restOfInventoryEntry } = inventoryentry;
 
-  const { type, ...restOfLocation } = location;
+  const { type, images: locationImages, ...restOfLocation } = location;
+
+  // Extract images from join tables
+  const productImages = Product.images
+    ? Product.images.map((pi) => pi.image)
+    : [];
+  const extractedLocationImages = locationImages
+    ? locationImages.map((li) => li.image)
+    : [];
+
   return {
-    ...restOfIngredient,
+    ...restOfInventoryEntry,
     location: {
       ...restOfLocation,
       type: locationType.parse(type),
+      images: extractedLocationImages,
     },
     product: {
       ...Product,
       unitMappings: Product.unitMappings,
+      images: productImages,
     },
   };
 };
@@ -57,7 +94,7 @@ export const getInventoryEntryByID = async (db: PrismaClient, id: string) => {
     include: inventoryentryInclude,
   });
 
-  return res ? dbInventoryEntryoToAPI(res) : null;
+  return res ? dbInventoryEntryToAPI(res) : null;
 };
 
 export const inventoryentryList = async (
@@ -118,7 +155,7 @@ export const inventoryentryList = async (
     db.inventoryEntry.count({ where }),
   ]);
 
-  const inventoryentrys = results.map(dbInventoryEntryoToAPI);
+  const inventoryentrys = results.map(dbInventoryEntryToAPI);
   return { data: inventoryentrys, count: totalCount };
 };
 
@@ -145,7 +182,7 @@ export const updateInventoryEntry = async (
     include: inventoryentryInclude,
   });
 
-  return dbInventoryEntryoToAPI(updated);
+  return dbInventoryEntryToAPI(updated);
 };
 
 export interface CreateInventoryEntryData {
@@ -167,7 +204,7 @@ export const createInventoryEntry = async (
     include: inventoryentryInclude,
   });
 
-  return dbInventoryEntryoToAPI(created);
+  return dbInventoryEntryToAPI(created);
 };
 
 export const bulkProcessInventoryEntries = async (
@@ -253,5 +290,5 @@ export const bulkProcessInventoryEntries = async (
     return results;
   });
 
-  return processedItems.map(dbInventoryEntryoToAPI);
+  return processedItems.map(dbInventoryEntryToAPI);
 };

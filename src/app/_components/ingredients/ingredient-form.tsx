@@ -5,7 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import { ingredientBase } from "~/schemas/ingredient";
+import {
+  ingredientBase,
+  type IngredientUpdateInput,
+} from "~/schemas/ingredient";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -26,18 +29,9 @@ const formSchema = z.object({
 
 export type IngredientFormValues = z.infer<typeof formSchema>;
 
-// Create data type
-export type CreateIngredientData = z.infer<typeof ingredientBase>;
-
-// Update data type
-export type UpdateIngredientData = {
-  id: string;
-  data: Partial<CreateIngredientData>;
-};
-
 // Props for create mode
 interface CreateIngredientFormProps
-  extends CreateModeProps<CreateIngredientData> {
+  extends CreateModeProps<z.infer<typeof ingredientBase>> {
   ingredient?: never;
   initialName?: string;
 }
@@ -45,7 +39,7 @@ interface CreateIngredientFormProps
 // Props for edit mode
 interface EditIngredientFormProps
   extends EditModeProps<
-    UpdateIngredientData,
+    IngredientUpdateInput,
     IngredientWithRecipesAndProductOut
   > {
   entity: IngredientWithRecipesAndProductOut;
@@ -99,7 +93,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
     if (mode === "create") {
       // For creation, pass all fields
       // Get current date for timestamps (will be replaced by server)
-      const createData: CreateIngredientData = {
+      const createData: z.infer<typeof ingredientBase> = {
         name: values.name,
         aliases: filteredAliases,
       };
@@ -118,7 +112,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
 
       // Only update if there are changes
       if (Object.keys(updates).length > 0) {
-        const updateData: UpdateIngredientData = {
+        const updateData: IngredientUpdateInput = {
           id: ingredient.id,
           data: updates,
         };

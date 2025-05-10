@@ -10,7 +10,6 @@ import {
   getInventoryEntryByID,
   inventoryentryList,
   updateInventoryEntry,
-  type UpdateInventoryEntryData,
   createInventoryEntry,
   bulkProcessInventoryEntries,
 } from "~/server/repo/inventory";
@@ -18,8 +17,8 @@ import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
 import {
   inventoryCreatePayloadData,
-  inventoryUpdatePayloadData,
   inventoryBulkOperationPayload,
+  inventoryUpdateInput,
 } from "~/schemas/inventory";
 
 const getByID = publicProcedure
@@ -62,20 +61,11 @@ const list = publicProcedure
   });
 
 const update = publicProcedure
-  .input(
-    z.object({
-      id: z.string().uuid(),
-      data: inventoryUpdatePayloadData,
-    }),
-  )
+  .input(inventoryUpdateInput)
   .output(inventoryWithLocationAndProductOut)
   .mutation(async ({ ctx, input }) => {
     try {
-      const result = await updateInventoryEntry(
-        ctx.db,
-        input.id,
-        input.data as UpdateInventoryEntryData,
-      );
+      const result = await updateInventoryEntry(ctx.db, input.id, input.data);
       return result;
     } catch (error) {
       throw new TRPCError({

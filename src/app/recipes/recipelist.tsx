@@ -8,6 +8,7 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createNameColumn,
   createCreatedAtColumn,
+  createImageColumn,
 } from "../_components/data-table/columnHelpers";
 
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,7 @@ export function RecipeList() {
   const data = recipesResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
+    createImageColumn(columnHelper),
     createNameColumn(columnHelper, "recipes"),
     createCreatedAtColumn(columnHelper),
     columnHelper.accessor("meta", {

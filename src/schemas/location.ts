@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "./util";
 import { type locationOutWithParentChildrenAndInventoryOut } from "./combo";
+import { createInputImages, imageOut, updateInputImages } from "./image";
 
 export const locationType = z
   //todo: remove this in the future to make it more flexible?
@@ -26,6 +27,7 @@ export const locationOut = z
   .object({
     id: z.string().uuid(),
     lastBulkInventory: z.date().nullable(),
+    images: z.array(imageOut),
   })
   .merge(locationBase)
   .merge(dbTimestampsOut);
@@ -45,6 +47,22 @@ export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
 export type LocationOutWithParentChildren = z.infer<
   typeof locationOutWithParentChildrenAndInventoryOut
 >;
+
+// Input schema for creating locations
+export const locationCreateInput = locationBase
+  .extend({
+    parentId: z.string().uuid().nullable(),
+  })
+  .merge(createInputImages);
+
+// Input schema for updating locations
+export const locationUpdateInput = z.object({
+  id: z.string().uuid(),
+  data: locationCreateInput.partial().merge(updateInputImages),
+});
+
+export type LocationCreateInput = z.infer<typeof locationCreateInput>;
+export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 
 export const collectInfiniteParents = (location: InfLocation) => {
   const parentHierarchy = [];

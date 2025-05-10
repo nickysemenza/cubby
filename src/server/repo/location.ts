@@ -4,6 +4,8 @@ import {
   type LocationOut,
   type InfLocation,
   locationType,
+  LocationCreateInput,
+  LocationUpdateInput,
 } from "~/schemas/location";
 import {
   type SortParams,
@@ -18,42 +20,57 @@ import { formatSearchTerm, getSortDirection } from "./util";
 // Create a new location
 export const createLocation = async (
   db: PrismaClient,
-  data: {
-    name: string;
-    type: string;
-    parentId: string | null;
-  },
+  data: LocationCreateInput,
 ) => {
-  const location = await db.location.create({
-    data: {
-      name: data.name,
-      type: data.type,
-      parent: data.parentId
-        ? {
-            connect: {
-              id: data.parentId,
-            },
-          }
-        : undefined,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+  return await db.$transaction(async (tx) => {
+    // Create the location
+    const location = await tx.location.create({
+      data: {
+        name: data.name,
+        type: data.type,
+        parent: data.parentId
+          ? {
+              connect: {
+                id: data.parentId,
+              },
+            }
+          : undefined,
+      },
+      include: {
+        parent: true,
+        children: true,
+      },
+    });
 
-  return buildLocationWithChildren(location);
+    // Associate images if provided
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      // Create LocationImage records for each image
+      await Promise.all(
+        data.pendingImageIds.map(async (imageId) => {
+          await tx.locationImage.create({
+            data: {
+              locationId: location.id,
+              imageId,
+            },
+          });
+
+          // Update image status to UPLOADED
+          await tx.image.update({
+            where: { id: imageId },
+            data: { status: "UPLOADED" },
+          });
+        }),
+      );
+    }
+    return getLocationById(tx, location.id);
+  });
 };
 
 // Update an existing location
 export const updateLocation = async (
   db: PrismaClient,
   id: string,
-  data: {
-    name?: string;
-    type?: string;
-    parentId?: string | null;
-  },
+  data: LocationUpdateInput["data"],
 ) => {
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {
@@ -82,25 +99,60 @@ export const updateLocation = async (
     }
   }
 
-  const location = await db.location.update({
-    where: { id },
-    data: {
-      name: data.name,
-      type: data.type,
-      parent:
-        data.parentId !== undefined
-          ? data.parentId
-            ? { connect: { id: data.parentId } }
-            : { disconnect: true }
-          : undefined,
-    },
-    include: {
-      parent: true,
-      children: true,
-    },
-  });
+  return await db.$transaction(async (tx) => {
+    // Update the location
+    const location = await tx.location.update({
+      where: { id },
+      data: {
+        name: data.name,
+        type: data.type,
+        parent:
+          data.parentId !== undefined
+            ? data.parentId
+              ? { connect: { id: data.parentId } }
+              : { disconnect: true }
+            : undefined,
+      },
+      include: {
+        parent: true,
+        children: true,
+      },
+    });
 
-  return buildLocationWithChildren(location);
+    // Add new images
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      await Promise.all(
+        data.pendingImageIds.map(async (imageId) => {
+          await tx.locationImage.create({
+            data: {
+              locationId: location.id,
+              imageId,
+            },
+          });
+
+          // Update image status to UPLOADED
+          await tx.image.update({
+            where: { id: imageId },
+            data: { status: "UPLOADED" },
+          });
+        }),
+      );
+    }
+
+    // Remove existing images
+    if (data.removeImageIds && data.removeImageIds.length > 0) {
+      await tx.locationImage.deleteMany({
+        where: {
+          locationId: location.id,
+          imageId: {
+            in: data.removeImageIds,
+          },
+        },
+      });
+    }
+
+    return getLocationById(tx, location.id);
+  });
 };
 
 const upsertChild = async (
@@ -197,17 +249,24 @@ type LocationDeepDB = Prisma.LocationGetPayload<{
     parent: true;
     children: true;
     InventoryEntries: { include: { Product: true } };
+    images: { include: { image: true } };
   };
 }>;
 
 const dbLocationToAPIWithChildren: (
   location: LocationDeepDB,
 ) => LocationOutWithParentChildren = (location) => {
-  const { parent, children, InventoryEntries, ...restOfLocation } = location;
+  const { parent, children, InventoryEntries, images, ...restOfLocation } =
+    location;
+
+  // Extract images from the join table records if they exist
+  const locationImages = images ? images.map((li) => li.image) : [];
 
   return {
+    ...dbLocationToAPI(restOfLocation),
     parent: parent ? dbLocationToAPI(parent) : null,
     children: children.map(dbLocationToAPI),
+    images: locationImages,
     inventoryEntries: InventoryEntries.map((x) => {
       const { Product, ...rest } = x;
       return {
@@ -215,7 +274,6 @@ const dbLocationToAPIWithChildren: (
         product: Product,
       };
     }),
-    ...dbLocationToAPI(restOfLocation),
   };
 };
 
@@ -227,6 +285,7 @@ const dbLocationToAPI: (
     lastBulkInventory: location.lastBulkInventory,
     name: location.name,
     type: locationType.parse(location.type),
+    images: [], //todo: fix
     ...extractDbTimestampsFromDBRec(location),
   };
 };
@@ -239,12 +298,22 @@ function recursiveLocationInclude(
     return {
       include: {
         [includeType]: true,
+        images: {
+          include: {
+            image: true,
+          },
+        },
       },
     };
   }
   return {
     include: {
       [includeType]: recursiveLocationInclude(level - 1, includeType),
+      images: {
+        include: {
+          image: true,
+        },
+      },
     },
   };
 }
@@ -253,17 +322,22 @@ type LocationWithParentChild = Prisma.LocationGetPayload<{
   include: {
     children: true;
     parent: true;
+    images: { include: { image: true } };
   };
 }>;
 const buildLocationWithChildren = (
   x: LocationWithParentChild,
   excludeId?: string,
 ): InfLocation => {
+  // Extract images if they exist
+  const locationImages = x.images ? x.images.map((li) => li.image) : [];
+
   return {
     name: x.name,
     id: x.id,
     lastBulkInventory: x.lastBulkInventory,
     type: locationType.parse(x.type),
+    images: locationImages,
     children:
       x.children && x.children.length > 0
         ? x.children
@@ -304,6 +378,11 @@ export const buildLocationTree = async (db: PrismaClient) => {
     include: {
       children: recursiveLocationInclude(10, "children"),
       parent: true,
+      images: {
+        include: {
+          image: true,
+        },
+      },
     },
     where: {
       parentId: null,
@@ -343,6 +422,11 @@ export const locationList = async (
       parent: true,
       children: true,
       InventoryEntries: { include: { Product: true } },
+      images: {
+        include: {
+          image: true,
+        },
+      },
     },
   };
 
@@ -356,7 +440,10 @@ export const locationList = async (
   return { data: items, count: totalCount };
 };
 
-export const getLocationById = async (db: PrismaClient, id: string) => {
+export const getLocationById = async (
+  db: PrismaClient | Prisma.TransactionClient,
+  id: string,
+) => {
   const res = await db.location.findFirstOrThrow({
     where: {
       id,
@@ -364,6 +451,12 @@ export const getLocationById = async (db: PrismaClient, id: string) => {
     include: {
       parent: recursiveLocationInclude(10, "parent"),
       children: true,
+      images: {
+        include: {
+          image: true,
+        },
+      },
+      InventoryEntries: { include: { Product: true } },
     },
   });
 

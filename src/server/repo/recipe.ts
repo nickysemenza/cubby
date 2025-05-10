@@ -31,6 +31,11 @@ export const getRecipeByID = async (
           },
         },
       },
+      images: {
+        include: {
+          image: true,
+        },
+      },
     },
   });
   return res === null ? null : dbRecipeToAPI(res);
@@ -45,10 +50,15 @@ type RecipeDeepDB = Prisma.RecipeGetPayload<{
         };
       };
     };
+    images: {
+      include: {
+        image: true;
+      };
+    };
   };
 }>;
 
-const secitonIngredienttoAPI: (
+const sectionIngredientToAPI: (
   sectionIngredient: Prisma.RecipeSectionIngredientGetPayload<{
     include: { ingredient: { include: { Recipe: true } } };
   }>,
@@ -86,18 +96,22 @@ export const dbRecipeToAPIShallow: (
   };
 };
 const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
-  const { sections, SourceData, SourceType, ...restOfRecipe } = recipe;
+  const { sections, SourceData, SourceType, images, ...restOfRecipe } = recipe;
+
+  // Extract images from the join table records
+  const recipeImages = images.map((ri) => ri.image);
 
   return {
     ...restOfRecipe,
     meta: {
       url: SourceType === RecipeSource.Website ? SourceData : null,
     },
+    images: recipeImages,
     sections: sections.map((section) => {
       const { ingredients, instructions, ...restOfSection } = section;
       return {
         ...restOfSection,
-        ingredients: ingredients.map(secitonIngredienttoAPI),
+        ingredients: ingredients.map(sectionIngredientToAPI),
         // Map JSON instructions array to the expected format
         instructions: Array.isArray(instructions)
           ? instructions.map((instruction: { text: string }) => {
@@ -144,6 +158,11 @@ export const recipeList = async (
           },
         },
       },
+      images: {
+        include: {
+          image: true,
+        },
+      },
     },
   };
 
@@ -165,6 +184,7 @@ export const createRecipe = async (
     ? RecipeSource.Website
     : RecipeSource.Other;
   const sourceData = recipe.meta?.url || null;
+  const { pendingImageIds } = recipe;
 
   // Create the recipe in a transaction
   return await db.$transaction(async (tx) => {
@@ -190,6 +210,28 @@ export const createRecipe = async (
         },
       },
     });
+
+    // Associate images if provided
+    if (pendingImageIds && pendingImageIds.length > 0) {
+      // Create RecipeImage records for each image
+      await Promise.all(
+        pendingImageIds.map(async (imageId) => {
+          // Create association
+          await tx.recipeImage.create({
+            data: {
+              recipeId: createdRecipe.id,
+              imageId,
+            },
+          });
+
+          // Update image status to UPLOADED
+          await tx.image.update({
+            where: { id: imageId },
+            data: { status: "UPLOADED" },
+          });
+        }),
+      );
+    }
 
     return { id: createdRecipe.id };
   });
@@ -238,6 +280,39 @@ export const updateRecipe = async (
                 SourceData: sourceData,
               }
             : {}),
+        },
+      });
+    }
+
+    // Add new images if provided
+    if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
+      await Promise.all(
+        updates.pendingImageIds.map(async (imageId) => {
+          // Create association
+          await tx.recipeImage.create({
+            data: {
+              recipeId: id,
+              imageId,
+            },
+          });
+
+          // Update image status to UPLOADED
+          await tx.image.update({
+            where: { id: imageId },
+            data: { status: "UPLOADED" },
+          });
+        }),
+      );
+    }
+
+    // Remove images if requested
+    if (updates.removeImageIds && updates.removeImageIds.length > 0) {
+      await tx.recipeImage.deleteMany({
+        where: {
+          recipeId: id,
+          imageId: {
+            in: updates.removeImageIds,
+          },
         },
       });
     }

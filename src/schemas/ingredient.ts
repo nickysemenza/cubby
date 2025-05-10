@@ -11,3 +11,11 @@ export const ingredientOut = z
   })
   .merge(ingredientBase)
   .merge(dbTimestampsOut);
+
+// Input schema for updating ingredients
+export const ingredientUpdateInput = z.object({
+  id: z.string().uuid(),
+  data: ingredientBase.partial(),
+});
+
+export type IngredientUpdateInput = z.infer<typeof ingredientUpdateInput>;

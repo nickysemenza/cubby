@@ -1,0 +1,216 @@
+"use client";
+
+import { useParams } from "next/navigation";
+import { useTRPC } from "~/trpc/react";
+import Image from "next/image";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  ProductPillLink,
+  LocationPillLink,
+  RecipePillLink,
+} from "~/app/_components/EntityPill";
+import { Badge } from "~/components/ui/badge";
+import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
+import { useQuery } from "@tanstack/react-query";
+
+export default function ImageDetailPage() {
+  const params = useParams();
+  const id = params.id as string;
+  const api = useTRPC();
+
+  // Get image details from the API using the new getImageById endpoint
+  const {
+    data: imageDetails,
+    isLoading,
+    error,
+  } = useQuery(api.image.getImageById.queryOptions({ id }));
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
+          <span>Loading image details...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !imageDetails) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold">Image Not Found</h2>
+          <p className="mt-2 text-gray-500">
+            The image you are looking for does not exist.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Render status badge with appropriate color
+  const getStatusBadge = (status: string) => {
+    let variant: "default" | "outline" = "outline";
+    let className = "";
+
+    switch (status) {
+      case "UPLOADED":
+        variant = "default";
+        className = "bg-green-500 hover:bg-green-600";
+        break;
+      case "PENDING":
+        className = "border-yellow-600 text-yellow-700";
+        break;
+      case "FAILED":
+        className = "border-red-600 text-red-700";
+        break;
+    }
+
+    return (
+      <Badge variant={variant} className={className}>
+        {status}
+      </Badge>
+    );
+  };
+
+  // Format bytes to human-readable format
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (bytes === 0) return "0 Bytes";
+
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ["Bytes", "KB", "MB", "GB"];
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  };
+
+  // Render entity link if associated with an entity
+  const renderEntityLink = () => {
+    if (
+      !imageDetails.entityType ||
+      !imageDetails.entityId ||
+      !imageDetails.entityName
+    ) {
+      return (
+        <span className="text-gray-500 italic">
+          Not associated with any entity
+        </span>
+      );
+    }
+
+    switch (imageDetails.entityType) {
+      case "PRODUCT":
+        return (
+          <ProductPillLink
+            product={{
+              id: imageDetails.entityId,
+              name: imageDetails.entityName,
+              manufacturer: "", // We don't have this info here
+            }}
+          />
+        );
+      case "LOCATION":
+        return (
+          <LocationPillLink
+            location={{
+              id: imageDetails.entityId,
+              name: imageDetails.entityName,
+              type: "", // We don't have this info here
+            }}
+          />
+        );
+      case "RECIPE":
+        return (
+          <RecipePillLink
+            recipe={{
+              id: imageDetails.entityId,
+              name: imageDetails.entityName,
+            }}
+          />
+        );
+      default:
+        return <span>Unknown entity type</span>;
+    }
+  };
+
+  return (
+    <div className="space-y-6 p-4 md:p-8">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold tracking-tight">Image Details</h1>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Preview</CardTitle>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-md border">
+              <Image
+                src={imageDetails.url}
+                alt={imageDetails.filename}
+                fill
+                className="object-contain"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Image Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Filename</h3>
+              <p className="mt-1">{imageDetails.filename}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">
+                Content Type
+              </h3>
+              <p className="mt-1">{imageDetails.contentType}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Size</h3>
+              <p className="mt-1">{formatBytes(imageDetails.size)}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Status</h3>
+              <div className="mt-1">{getStatusBadge(imageDetails.status)}</div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">
+                Associated Entity
+              </h3>
+              <div className="mt-1">{renderEntityLink()}</div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Created</h3>
+              <p className="mt-1">
+                <HoverableTimestamp timestamp={imageDetails.createdAt} />
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">
+                Last Updated
+              </h3>
+              <p className="mt-1">
+                <HoverableTimestamp timestamp={imageDetails.updatedAt} />
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

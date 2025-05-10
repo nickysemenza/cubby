@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { baseEntitySchema, dbTimestampsOut, id } from "./util";
 import { amount } from "~/codec/codec";
+import { createInputImages, imageOut, updateInputImages } from "./image";
 
 const ingredientOut = baseEntitySchema;
 
@@ -50,6 +51,7 @@ export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export const recipeOut = z
   .object({
     sections: z.array(recipeSectionOut),
+    images: z.array(imageOut).optional(),
   })
   .merge(recipeTopLevel);
 
@@ -74,15 +76,17 @@ export const recipeSectionInput = z.object({
   id: id.optional(),
 });
 
-export const recipeCreateInput = z.object({
-  name: z.string(),
-  meta: recipeTopLevel.shape.meta,
-  sections: z.array(recipeSectionInput),
-});
+export const recipeCreateInput = z
+  .object({
+    name: z.string(),
+    meta: recipeTopLevel.shape.meta,
+    sections: z.array(recipeSectionInput),
+  })
+  .merge(createInputImages);
 
 export const recipeUpdateInput = z.object({
   id: id,
-  data: recipeCreateInput.partial(),
+  data: recipeCreateInput.partial().merge(updateInputImages),
 });
 
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;

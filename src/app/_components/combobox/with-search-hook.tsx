@@ -7,6 +7,7 @@ import {
   buildIngredientComboboxItem,
   buildLocationComboboxItem,
   buildProductComboboxItem,
+  buildRecipeComboboxItem,
 } from "./utils";
 import { toast } from "sonner";
 import { type LocationOut, type LocationType } from "~/schemas/location";
@@ -94,7 +95,8 @@ export function CreateLocationDialog({
     name: string;
     type: LocationType;
     parentId: string | null;
-  }) => void;
+    pendingImageIds?: string[];
+  }) => Promise<LocationOut>;
   isPending: boolean;
   error?: string;
   initialName?: string;
@@ -307,8 +309,8 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
           setIsDialogOpen(false);
           setPendingResolve(null);
         }}
-        onCreate={(data) => {
-          createMutation.mutate(data);
+        onCreate={async (data) => {
+          return await createMutation.mutateAsync(data);
         }}
         isPending={createMutation.isPending}
         error={createMutation.error?.message}
@@ -388,4 +390,25 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
       {children({ findItems, onCreateNew })}
     </>
   );
+}
+
+export function WithRecipeSearch({ children }: WithEntitySearchProps) {
+  const api = useTRPC();
+  const [searchQuery, setSearchQuery] = useState("");
+  const { data } = useQuery(
+    api.recipe.list.queryOptions({
+      filters: {
+        nameFilter: searchQuery,
+      },
+      pagination,
+    }),
+  );
+
+  const findItems = async (query: string): Promise<ComboboxItem[]> => {
+    setSearchQuery(query);
+    return data?.items.map(buildRecipeComboboxItem) ?? [];
+  };
+
+  // For recipes, we don't provide the ability to create from this interface
+  return <>{children({ findItems })}</>;
 }

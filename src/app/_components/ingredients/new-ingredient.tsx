@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { IngredientForm, type CreateIngredientData } from "./ingredient-form";
+import { IngredientForm } from "./ingredient-form";
+import { z } from "zod";
+import { ingredientBase } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
@@ -23,7 +25,7 @@ export function NewIngredient() {
     }),
   );
 
-  const handleCreate = (data: CreateIngredientData) => {
+  const handleCreate = (data: z.infer<typeof ingredientBase>) => {
     createIngredient.mutate(data);
   };
 

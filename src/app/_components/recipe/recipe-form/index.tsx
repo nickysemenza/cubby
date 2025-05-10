@@ -2,6 +2,7 @@
 
 import { type FC } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
+import { useImageState } from "../../hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
@@ -26,10 +27,17 @@ import {
   type RecipeCreateInput,
   type RecipeUpdateInput,
 } from "~/schemas/recipe";
+import { PendingImageUpload } from "../../PendingImageUpload";
 import { z } from "zod";
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
+  const {
+    handlePendingImagesChange,
+    handleRemovedImagesChange,
+    getImageData,
+    hasImageChanges,
+  } = useImageState();
 
   // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;
@@ -97,7 +105,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             })),
           instructions: section.instructions,
         })),
+        ...getImageData(true), // Apply pending images for creation
       };
+
       props.onCreate(createData);
     } else if (mode === "edit" && recipe) {
       // In edit mode, determine which fields have changed
@@ -190,18 +200,23 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         return sectionUpdate;
       });
 
-      // Only update if there are changes
-      if (
+      // Check if we have any changes
+      const imageChanges = hasImageChanges();
+      const hasFieldChanges =
         Object.keys(basicUpdates).length > 0 ||
-        sectionUpdates.some((s) => Object.keys(s).length > 1)
-      ) {
+        sectionUpdates.some((s) => Object.keys(s).length > 1);
+
+      // Only update if there are changes
+      if (hasFieldChanges || imageChanges) {
         const updateData: RecipeUpdateInput = {
           id: recipe.id,
           data: {
             ...basicUpdates,
             sections: sectionUpdates,
+            ...getImageData(), // Apply image updates
           },
         };
+
         props.onEdit(updateData);
       } else if (onCancel) {
         // If no changes, just run the cancel function
@@ -238,6 +253,15 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           nullable={true}
         />
       </SideBySideFields>
+
+      {/* Show image upload in both create and edit modes */}
+      <PendingImageUpload
+        entityType="RECIPE"
+        onImagesChange={handlePendingImagesChange}
+        existingImages={mode === "edit" && recipe?.images ? recipe.images : []}
+        onExistingImagesRemove={handleRemovedImagesChange}
+        className="mt-4"
+      />
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">

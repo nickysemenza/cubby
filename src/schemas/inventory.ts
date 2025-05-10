@@ -16,6 +16,14 @@ export const inventoryUpdatePayloadData = z.object({
   locationId: z.string().uuid().optional(),
 });
 
+// Input schema for updating inventory entries
+export const inventoryUpdateInput = z.object({
+  id: z.string().uuid(),
+  data: inventoryUpdatePayloadData,
+});
+
+export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
+
 export const inventoryCreatePayloadData = z.object({
   productId: z.string().uuid(),
   locationId: z.string().uuid(),

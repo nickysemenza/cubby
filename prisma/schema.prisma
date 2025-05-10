@@ -36,6 +36,9 @@ model Recipe {
     SourceType        RecipeSource?
     SourceData        String?
 
+    // recipe images
+    images           RecipeImage[]
+
     @@index([createdAt])
     @@index([SourceType])
 }
@@ -120,6 +123,9 @@ model Product {
     // products are inventoried
     InventoryEntry InventoryEntry[]
 
+    // product images
+    images     ProductImage[]
+
     @@unique([name, manufacturer])
     @@index([ingredientId])
     @@index([createdAt])
@@ -180,6 +186,9 @@ model Location {
     children         Location[]       @relation("LocationToLocation")
     /// products that are in this location
     InventoryEntries InventoryEntry[] @relation("LocationToProduct")
+
+    // location images
+    images           LocationImage[]
 
     type String
 
@@ -293,4 +302,77 @@ model usda_food_portion {
 model usda_sr_legacy_food {
     fdc_id     Int @id
     NDB_number Int @unique
+}
+
+// Image upload models
+model Image {
+    id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    url         String
+    key         String         @unique
+    filename    String
+    size        Int
+    contentType String
+    status      ImageStatus    @default(PENDING)
+    createdAt   DateTime       @default(now())
+    updatedAt   DateTime       @default(now()) @updatedAt
+    deletedAt   DateTime?
+
+    // Relations
+    productImages ProductImage[]
+    locationImages LocationImage[]
+    recipeImages  RecipeImage[]
+
+    @@index([createdAt])
+    @@index([status])
+}
+
+model ProductImage {
+    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    product   Product   @relation(fields: [productId], references: [id])
+    productId String    @db.Uuid
+    image     Image     @relation(fields: [imageId], references: [id])
+    imageId   String    @db.Uuid
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @default(now()) @updatedAt
+    deletedAt DateTime?
+
+    @@unique([productId, imageId])
+    @@index([productId])
+    @@index([imageId])
+}
+
+model LocationImage {
+    id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    location   Location  @relation(fields: [locationId], references: [id])
+    locationId String    @db.Uuid
+    image      Image     @relation(fields: [imageId], references: [id])
+    imageId    String    @db.Uuid
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @default(now()) @updatedAt
+    deletedAt  DateTime?
+
+    @@unique([locationId, imageId])
+    @@index([locationId])
+    @@index([imageId])
+}
+
+model RecipeImage {
+    id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+    recipe    Recipe    @relation(fields: [recipeId], references: [id])
+    recipeId  String    @db.Uuid
+    image     Image     @relation(fields: [imageId], references: [id])
+    imageId   String    @db.Uuid
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @default(now()) @updatedAt
+    deletedAt DateTime?
+
+    @@unique([recipeId, imageId])
+    @@index([recipeId])
+    @@index([imageId])
+}
+
+enum ImageStatus {
+    PENDING
+    UPLOADED
+    FAILED
 }

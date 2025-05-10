@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ProductForm, type CreateProductData } from "./product-form";
+import { ProductForm } from "./product-form";
+import { type ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
@@ -23,7 +24,7 @@ export function NewProduct() {
     }),
   );
 
-  const handleCreate = (data: CreateProductData) => {
+  const handleCreate = (data: ProductInputPayload) => {
     createProduct.mutate(data);
   };
 

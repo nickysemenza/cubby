@@ -2,6 +2,7 @@
 
 import { type FC } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
+import { useImageState } from "../hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
@@ -27,6 +28,8 @@ import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
+import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
+import { type ImageOut } from "~/schemas/image";
 
 // Form schema for product form
 const formSchema = z
@@ -47,35 +50,31 @@ const formSchema = z
 
 export type ProductFormValues = z.infer<typeof formSchema>;
 
-// Use the backend type for creation data
-export type CreateProductData = ProductInputPayload & {
-  unitMappings: UnitMappingInput[];
-};
-
-// Define the props passed by parent for update operation
-export type UpdateProductData = {
-  id: string;
-  data: Partial<CreateProductData>;
-};
-
 // Props for create mode
-interface CreateProductFormProps extends CreateModeProps<CreateProductData> {
+interface CreateProductFormProps extends CreateModeProps<ProductInputPayload> {
   product?: never;
   initialName?: string;
 }
 
 // Define a custom type for product with ingredient and unit mappings
-interface ProductWithIngredient extends ProductTopLevelOut {
+interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
   ingredient?: {
     id: string;
     name: string;
   } | null;
   unitMappings: UnitMappingInput[];
+  images?: PendingImage[] | ImageOut[];
 }
 
 // Props for edit mode
 interface EditProductFormProps
-  extends EditModeProps<UpdateProductData, ProductWithIngredient> {
+  extends EditModeProps<
+    {
+      id: string;
+      data: Partial<ProductInputPayload>;
+    },
+    ProductWithIngredient
+  > {
   entity: ProductWithIngredient;
 }
 
@@ -84,6 +83,12 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
+  const {
+    handlePendingImagesChange,
+    handleRemovedImagesChange,
+    getImageData,
+    hasImageChanges,
+  } = useImageState();
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
@@ -111,7 +116,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const handleSubmit = (values: ProductFormValues) => {
     if (mode === "create") {
       // For creation, pass all fields
-      const createData: CreateProductData = {
+      const createData: ProductInputPayload = {
         name: values.name,
         manufacturer: values.manufacturer,
         model: values.model,
@@ -119,11 +124,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         ndb_number: values.ndb_number,
         ingredientId: values.ingredient?.id || null,
         unitMappings: values.unitMappings,
+        ...getImageData(true), // Apply pending images for creation
       };
+
       props.onCreate(createData);
     } else if (mode === "edit" && product) {
       // In edit mode, determine which fields have changed
-      const updates: Partial<CreateProductData> = buildUpdateObject(
+      const updates: Partial<ProductInputPayload> = buildUpdateObject(
         {
           ...product,
         },
@@ -149,12 +156,20 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         updates.unitMappings = values.unitMappings;
       }
 
+      // Check if we have any changes (field changes or image changes)
+      const imageChanges = hasImageChanges();
+      const hasFieldChanges = Object.keys(updates).length > 0;
+
       // Only update if there are changes
-      if (Object.keys(updates).length > 0) {
-        const updateData: UpdateProductData = {
+      if (hasFieldChanges || imageChanges) {
+        const updateData = {
           id: product.id,
-          data: updates,
+          data: {
+            ...updates,
+            ...getImageData(), // Apply image updates
+          },
         };
+
         props.onEdit(updateData);
       } else if (onCancel) {
         // If no changes, just run the cancel function
@@ -227,6 +242,17 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           />
         )}
       </WithIngredientSearch>
+
+      {/* Show image upload in both create and edit modes */}
+      <PendingImageUpload
+        entityType="PRODUCT"
+        onImagesChange={handlePendingImagesChange}
+        existingImages={
+          mode === "edit" && product?.images ? product.images : []
+        }
+        onExistingImagesRemove={handleRemovedImagesChange}
+        className="mt-4"
+      />
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">

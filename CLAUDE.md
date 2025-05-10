@@ -1,0 +1,5 @@
+- read the readme.md to understand project structure
+- after touching files, format them with prettier
+- ensure the typechecker and linter  is happy with all changes (npm run check)
+- whenever possible, types should be derived from common zod schemas
+- since many of the forms / routers / repos / etc are the same between entities (recipes, locations, products, etc), try to use common helper functions as much as possible

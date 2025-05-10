@@ -8,6 +8,7 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
   createNameColumn,
+  createImageColumn,
 } from "../_components/data-table/columnHelpers";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
@@ -41,6 +42,8 @@ export function LocationList() {
   const data = itemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
+    // Image column
+    createImageColumn(columnHelper),
     // Name column with link to detail page
     createNameColumn(columnHelper, "locations"),
     columnHelper.accessor("children", {
