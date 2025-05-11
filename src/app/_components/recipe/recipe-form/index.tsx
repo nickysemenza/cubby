@@ -2,7 +2,7 @@
 
 import { type FC } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
-import { useImageState } from "../../hooks/useImageState";
+import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "~/components/ui/button";
 import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";

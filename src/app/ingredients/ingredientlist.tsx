@@ -8,7 +8,6 @@ import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
 import { unitMappingsFromProduct } from "~/schemas/combo";
-import { useWasm } from "~/wasmContext";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
@@ -48,8 +47,6 @@ export function IngredientList() {
   const data = ingredientsResp?.items || [];
   type IngredientData = Flatten<typeof data>;
   const columnHelper = createColumnHelper<IngredientData>();
-  const w = useWasm();
-
   // Set up columns using helpers where possible
   const columns = [
     buildSelectColumn<IngredientData>(),
@@ -108,7 +105,7 @@ export function IngredientList() {
         const mappings = product.flatMap((product) =>
           unitMappingsFromProduct(product),
         );
-        return <UnitMappingDisplay mappings={mappings} w={w} title="" />;
+        return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),
   ];

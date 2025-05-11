@@ -1,7 +1,6 @@
 "use client";
 
 import { FoodSummary } from "~/schemas/usda";
-import { useWasm } from "~/wasmContext";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/combo";
 import { ProductPillLink } from "../EntityPill";
@@ -25,7 +24,6 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
   // Debug linked products issue
   console.log("Food object:", food);
   console.log("Linked products:", linkedProducts);
-  const w = useWasm();
   const mappings = unitMappingsFromFood(food);
 
   const foodInfoSection = (
@@ -130,7 +128,7 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
     </div>
   );
 
-  const unitMappingsSection = <UnitMappingDisplay mappings={mappings} w={w} />;
+  const unitMappingsSection = <UnitMappingDisplay mappings={mappings} />;
 
   // Section for displaying linked products
   const linkedProductsSection = (

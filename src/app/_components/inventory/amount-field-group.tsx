@@ -7,7 +7,7 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "../form-utils";
-import { useWasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 import { getHoverableMeasureUnitIcon } from "./format-amount";
 
 interface AmountFieldGroupProps<

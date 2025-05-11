@@ -9,7 +9,7 @@ import { MainNav } from "./_components/MainNav";
 import { GlobalCommandMenu } from "./_components/command-menu";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "~/components/ui/sonner";
-import { WasmContextProvider } from "~/wasmContext";
+import { WasmContextProvider } from "~/hooks/useWasm";
 
 export const metadata: Metadata = {
   title: "RecipeHub",

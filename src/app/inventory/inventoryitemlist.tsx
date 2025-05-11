@@ -4,8 +4,8 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/util";
 import RTable from "../_components/data-table/Table";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
-import { buildunitMappingsGraph } from "../_components/units/UnitMappingGraph";
-import { useWasm } from "~/wasmContext";
+import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
+import { useWasm } from "~/hooks/useWasm";
 import { showAmountAndPrice } from "../_components/inventory/format-amount";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
@@ -122,7 +122,7 @@ export function InventoryItemList() {
                 </div>
               )}
             </div>
-            <div>{buildunitMappingsGraph(w, unitMappings)}</div>
+            <UnitMappingGraph unitMapping={unitMappings} />
           </div>
         );
       },

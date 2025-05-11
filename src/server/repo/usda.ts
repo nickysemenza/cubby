@@ -13,7 +13,7 @@ import {
   FoodLookupParam,
   LegacyFoodInfo,
 } from "~/schemas/usda";
-import { wasm } from "~/wasmContext";
+import { wasm } from "~/hooks/useWasm";
 import { type Span, trace } from "@opentelemetry/api";
 import {
   type SortParams,

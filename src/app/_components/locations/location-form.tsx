@@ -1,7 +1,7 @@
 "use client";
 import { type FC } from "react";
 import { useForm } from "react-hook-form";
-import { useImageState } from "../hooks/useImageState";
+import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";

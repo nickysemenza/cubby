@@ -8,7 +8,7 @@ import { z } from "zod";
 import { MeasureKind, WMeasure } from "recipebridge/pkg/recipebridge";
 import { amount, Amount } from "~/codec/codec";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { wasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 import { safeConvertAmount } from "~/app/_components/units/univ-conversion";
 import {
   Dialog,
@@ -32,7 +32,6 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface ConversionDialogProps {
   mappings: UnitMapping[];
-  w: wasm;
 }
 
 const measureKinds: MeasureKind[] = [
@@ -46,7 +45,8 @@ const measureKinds: MeasureKind[] = [
   "other",
 ];
 
-export function ConversionDialog({ mappings, w }: ConversionDialogProps) {
+export function ConversionDialog({ mappings }: ConversionDialogProps) {
+  const w = useWasm();
   const [open, setOpen] = useState(false);
   const [conversions, setConversions] = useState<
     Record<MeasureKind, Result<WMeasure>>
@@ -94,7 +94,7 @@ export function ConversionDialog({ mappings, w }: ConversionDialogProps) {
     });
 
     return () => subscription.unsubscribe();
-  }, [form, w, mappings, performConversions]);
+  }, [form, performConversions]);
 
   // Trigger initial conversion when dialog opens
   React.useEffect(() => {

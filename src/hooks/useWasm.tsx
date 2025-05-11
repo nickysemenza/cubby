@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type wasm = typeof import("../recipebridge/pkg");
+export type wasm = typeof import("../../recipebridge/pkg/recipebridge");
 
 type wasmState = {
   wasm: wasm | undefined;

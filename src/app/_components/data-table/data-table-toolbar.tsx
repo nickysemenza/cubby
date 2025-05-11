@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/select";
 import { DataTableViewOptions } from "./data-table-view-options";
 import { type ReactNode, useState, useEffect } from "react";
-import useDebounce from "~/misc/useDebounce";
+import useDebounce from "~/hooks/useDebounce";
 
 interface FilterOption {
   value: string;

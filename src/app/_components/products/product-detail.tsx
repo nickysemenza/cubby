@@ -9,7 +9,6 @@ import {
 } from "~/schemas/combo";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
-import { useWasm } from "~/wasmContext";
 import { ProductForm } from "./product-form";
 import { type ProductInputPayload } from "~/schemas/product";
 import { Button } from "~/components/ui/button";
@@ -34,7 +33,6 @@ interface ProductDetailProps {
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
-  const w = useWasm();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -166,7 +164,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     },
     {
       title: "Unit Mappings",
-      content: <UnitMappingDisplay mappings={mappings} w={w} title="" />,
+      content: <UnitMappingDisplay mappings={mappings} title="" />,
     },
     {
       title: "Raw Details",

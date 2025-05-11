@@ -8,7 +8,7 @@ import {
 } from "~/schemas/combo";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { NutrientsPer100 } from "~/schemas/usda";
-import { wasm } from "~/wasmContext";
+import { wasm } from "~/hooks/useWasm";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import React from "react";
 

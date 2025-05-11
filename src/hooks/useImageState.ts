@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type PendingImage } from "../PendingImageUpload";
+import { PendingImage } from "~/app/_components/PendingImageUpload";
 import { type UpdateInputImages } from "~/schemas/image";
 
 /**

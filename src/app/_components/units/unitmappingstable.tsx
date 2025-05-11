@@ -8,13 +8,14 @@ import {
 } from "~/components/ui/table";
 import { UnitMapping } from "~/schemas/unitmapping";
 
-import { wasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 import { NoneState } from "../NoneState";
 
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
-  w: wasm;
-}> = ({ mappings, w }) => {
+}> = ({ mappings }) => {
+  const w = useWasm();
+
   return (
     <Table className="table-auto text-xs">
       <TableHeader>

@@ -1,12 +1,12 @@
 "use client";
 import JsonRenderer from "~/app/_components/json-renderer";
-import { useWasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { z } from "zod";
 import { type FC, useState } from "react";
 import { showAmountAndPrice } from "./format-amount";
 import { LocationPillLink, ProductPillLink } from "../EntityPill";
-import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
+import { UnitMappingGraph } from "../units/UnitMappingGraph";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { Button } from "~/components/ui/button";
 import { InventoryForm } from "./inventory-form";
@@ -74,7 +74,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         <LocationPillLink location={inventoryitem.location} />
         <ProductPillLink product={inventoryitem.product} />
         <div className="bg-muted rounded-md p-4">
-          {buildunitMappingsGraph(w, inventoryitem.product.unitMappings)}
+          <UnitMappingGraph unitMapping={inventoryitem.product.unitMappings} />
         </div>
         <Button variant="outline" onClick={() => setIsEditing(true)}>
           Edit Inventory Item

@@ -13,7 +13,7 @@ import {
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
-import { useWasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 import { useQuery } from "@tanstack/react-query";

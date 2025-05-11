@@ -14,8 +14,8 @@ import {
   unitMappingsFromProduct,
 } from "~/schemas/combo";
 import { useMemo } from "react";
-import { useWasm } from "~/wasmContext";
-import { buildunitMappingsGraph } from "../units/UnitMappingGraph";
+import { useWasm } from "~/hooks/useWasm";
+import { UnitMappingGraph } from "../units/UnitMappingGraph";
 import { renderValueOrError } from "~/misc/result";
 import {
   renderNutrients,
@@ -130,7 +130,7 @@ export const RecipeIngredientList: React.FC<{
         const entry = id ? ingMap[id] : undefined;
         const mappings =
           entry?.product?.flatMap((p) => unitMappingsFromProduct(p)) || [];
-        return <div>{buildunitMappingsGraph(w, mappings)}</div>;
+        return <UnitMappingGraph unitMapping={mappings} />;
       },
     }),
   ];

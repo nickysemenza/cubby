@@ -9,7 +9,6 @@ import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
-import { useWasm } from "~/wasmContext";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 
 import { useQuery } from "@tanstack/react-query";
@@ -31,7 +30,6 @@ export function USDAFoodList() {
     }),
   );
 
-  const w = useWasm();
   const data = foodsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
@@ -106,7 +104,7 @@ export function USDAFoodList() {
 
         return (
           <div className="w-full">
-            <UnitMappingDisplay mappings={portionInfo.parsed} w={w} title="" />
+            <UnitMappingDisplay mappings={portionInfo.parsed} title="" />
           </div>
         );
       },

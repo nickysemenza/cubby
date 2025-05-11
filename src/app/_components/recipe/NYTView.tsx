@@ -2,7 +2,7 @@
 
 import { type RecipeOut } from "~/schemas/recipe";
 import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
-import { useWasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 export const NYTView: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {

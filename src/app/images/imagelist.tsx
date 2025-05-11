@@ -14,7 +14,7 @@ import { Input } from "~/components/ui/input";
 import RTable from "~/app/_components/data-table/Table";
 import { NoneState } from "~/app/_components/NoneState";
 import { Badge } from "~/components/ui/badge";
-import useDebounce from "~/misc/useDebounce";
+import useDebounce from "~/hooks/useDebounce";
 import { useQuery } from "@tanstack/react-query";
 import { useTableState } from "~/app/_components/data-table/useTableState";
 import { useTableConfig } from "~/app/_components/data-table/useTableConfig";

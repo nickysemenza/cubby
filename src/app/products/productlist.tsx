@@ -9,7 +9,7 @@ import {
   IngredientPillLink,
   LocationPillLink,
 } from "../_components/EntityPill";
-import { useWasm } from "~/wasmContext";
+import { useWasm } from "~/hooks/useWasm";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappingsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
@@ -126,7 +126,7 @@ export function ProductList() {
         );
         return (
           <div className="w-full">
-            <UnitMappingDisplay mappings={mappings} w={w} title="" />
+            <UnitMappingDisplay mappings={mappings} title="" />
           </div>
         );
       },

@@ -5,7 +5,7 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { type ComboboxItem } from "./combobox-types";
-import useDebounce from "~/misc/useDebounce";
+import useDebounce from "~/hooks/useDebounce";
 
 /**
  * DialogCompatibleCombobox
