@@ -11,7 +11,7 @@ import {
 } from "../_components/EntityPill";
 import { useWasm } from "~/wasmContext";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { unitMappignsFromProduct } from "~/schemas/combo";
+import { unitMappingsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
@@ -121,7 +121,7 @@ export function ProductList() {
     columnHelper.accessor("unitMappings", {
       enableSorting: false,
       cell: (info) => {
-        const mappings: UnitMapping[] = unitMappignsFromProduct(
+        const mappings: UnitMapping[] = unitMappingsFromProduct(
           info.row.original,
         );
         return (

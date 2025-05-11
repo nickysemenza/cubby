@@ -218,7 +218,8 @@ const getBrandedFoodIDByUPC = async (db: PrismaClient, gtin_upc: string) => {
 
   return brandedFood?.fdc_id;
 };
-export const getLegacyFoodIDByNDBNumber = async (
+// Internal helper function for getting legacy food IDs
+const getLegacyFoodIDByNDBNumber = async (
   db: PrismaClient,
   ndb_number: number,
 ) => {

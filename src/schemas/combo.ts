@@ -71,7 +71,7 @@ export const locationOutWithParentChildrenAndInventoryOut = z
 export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut
 >;
-export const unitMappignsFromProduct = (
+export const unitMappingsFromProduct = (
   product: ProductWithMappingsAndFoodOut,
 ): UnitMapping[] => {
   const { food } = product;

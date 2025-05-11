@@ -4,7 +4,7 @@ import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import {
-  unitMappignsFromProduct,
+  unitMappingsFromProduct,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "~/schemas/combo";
 import { NutritionInfoTable } from "../usda/nutrition";
@@ -66,7 +66,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   // Get product images from the product object
   const productImages = product.images || [];
 
-  const mappings = unitMappignsFromProduct(product);
+  const mappings = unitMappingsFromProduct(product);
   const sections: DetailSection[] = [
     {
       title: "Basic Information",

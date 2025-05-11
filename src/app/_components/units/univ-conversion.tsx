@@ -4,7 +4,7 @@ import { Result, withFailure, withSuccess } from "~/misc/util";
 import {
   ProductWithMappingsAndFoodOut,
   IngredientWithRecipesAndProductOut,
-  unitMappignsFromProduct,
+  unitMappingsFromProduct,
 } from "~/schemas/combo";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { NutrientsPer100 } from "~/schemas/usda";
@@ -200,7 +200,7 @@ export const getIngredientMeasures = (
     ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
-  const mappings = product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
+  const mappings = product?.flatMap((p) => unitMappingsFromProduct(p)) || [];
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {

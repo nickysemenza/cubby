@@ -7,7 +7,7 @@ import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
-import { unitMappignsFromProduct } from "~/schemas/combo";
+import { unitMappingsFromProduct } from "~/schemas/combo";
 import { useWasm } from "~/wasmContext";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -106,7 +106,7 @@ export function IngredientList() {
       cell: (info) => {
         const product = info.getValue();
         const mappings = product.flatMap((product) =>
-          unitMappignsFromProduct(product),
+          unitMappingsFromProduct(product),
         );
         return w && <UnitMappingDisplay mappings={mappings} w={w} title="" />;
       },

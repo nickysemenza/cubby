@@ -192,7 +192,7 @@ export const foodLookupParamFromProduct = (product: {
   return null;
 };
 
-// Find products by UPC or NDB number - used to find linked products for food items
+// Function to find products by UPC or NDB number - used for food items in usda.ts
 export const findProductsByFoodIdentifier = async (
   db: PrismaClient,
   rawLookup?: FoodLookupParam,

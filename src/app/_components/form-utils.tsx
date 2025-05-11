@@ -265,16 +265,6 @@ export function buildUpdateObject<
   return updates;
 }
 
-// Helper function to detect changes in a nested field
-export function hasNestedFieldChanged<T, F>(
-  entity: T,
-  entityPath: (e: T) => unknown,
-  formValue: F,
-): boolean {
-  const entityValue = entityPath(entity);
-  return JSON.stringify(entityValue) !== JSON.stringify(formValue);
-}
-
 // Helper to extract ID from a ComboboxItem if different from entity
 export function detectComboboxIdChange(
   entityId: string | undefined | null,

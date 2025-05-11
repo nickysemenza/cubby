@@ -11,7 +11,7 @@ import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import {
   IngredientWithRecipesAndProductOut,
-  unitMappignsFromProduct,
+  unitMappingsFromProduct,
 } from "~/schemas/combo";
 import { useMemo } from "react";
 import { useWasm } from "~/wasmContext";
@@ -134,7 +134,7 @@ export const RecipeIngredientList: React.FC<{
 
         const entry = id ? ingMap[id] : undefined;
         const mappings =
-          entry?.product?.flatMap((p) => unitMappignsFromProduct(p)) || [];
+          entry?.product?.flatMap((p) => unitMappingsFromProduct(p)) || [];
         return <div>{buildunitMappingsGraph(w, mappings)}</div>;
       },
     }),

@@ -290,6 +290,7 @@ const dbLocationToAPI: (
   };
 };
 
+// Internal utility function for recursive location inclusion
 function recursiveLocationInclude(
   level: number,
   includeType: "children" | "parent",
