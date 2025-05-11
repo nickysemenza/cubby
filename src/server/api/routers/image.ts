@@ -1,9 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  publicProcedure,
-} from "~/server/api/trpc";
+import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import {
   initiateUploadWithoutEntitySchema,
   initiateUploadWithoutEntityResponseSchema,
@@ -50,7 +46,7 @@ export const imageRouter = createTRPCRouter({
   /**
    * Initiate an image upload
    */
-  uploadImage: protectedProcedure
+  uploadImage: publicProcedure
     .input(initiateUploadWithoutEntitySchema)
     .output(initiateUploadWithoutEntityResponseSchema)
     .mutation(async ({ ctx, input }) => {
@@ -78,7 +74,7 @@ export const imageRouter = createTRPCRouter({
   /**
    * Get an image by ID with entity association information
    */
-  getImageById: protectedProcedure
+  getImageById: publicProcedure
     .input(getImageByIdSchema)
     .output(imageWithEntitySchema)
     .query(async ({ ctx, input }) => {
