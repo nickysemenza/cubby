@@ -36,7 +36,7 @@ export const WasmContextProvider: React.FC<{
 
   return (
     state && (
-      <WasmContext.Provider value={{ w: state, loading: true }}>
+      <WasmContext.Provider value={{ w: state, loading: false }}>
         {children}
       </WasmContext.Provider>
     )

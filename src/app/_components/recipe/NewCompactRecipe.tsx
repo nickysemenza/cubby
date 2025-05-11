@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { type WIngredient } from "recipebridge/pkg";
 import { useTRPC } from "~/trpc/react";
 import { type CompactRecipe } from "~/codec/codec";
@@ -20,7 +20,6 @@ import {
   UnifiedTextField,
 } from "../form-utils";
 import { CreateIngredientDialog } from "../combobox/with-search-hook";
-import { useState } from "react";
 
 const cleanupLinesToArray = (lines: string) =>
   lines
@@ -58,43 +57,64 @@ const NewCompactRecipe: React.FC = () => {
   const ingredientsText = watch("ingredientsText");
   const instructionsText = watch("instructionsText");
 
-  const debouncedText = useDebounce(ingredientsText, 300);
+  // Debounce both text inputs to reduce parsing frequency
+  const debouncedIngredientsText = useDebounce(ingredientsText, 200);
+  const debouncedInstructionsText = useDebounce(instructionsText, 200);
+
+  // Parse ingredient lines only when debounced text changes
   const ingredientLines = useMemo(
-    () => cleanupLinesToArray(debouncedText),
-    [debouncedText],
+    () => cleanupLinesToArray(debouncedIngredientsText),
+    [debouncedIngredientsText],
   );
 
+  // Parse ingredients only when lines change
   const ingredientsParsed = useMemo(
     () => (w ? ingredientLines.map((line) => w.parse_ingredient(line)) : []),
     [ingredientLines, w],
   );
 
+  // Extract names only when parsed ingredients change
   const ingredientNames = useMemo(
     () => ingredientsParsed.map((ingredient) => ingredient.name),
     [ingredientsParsed],
   );
 
+  // Parse instruction lines only when debounced text changes
   const instructionLines = useMemo(
-    () => cleanupLinesToArray(instructionsText),
-    [instructionsText],
+    () => cleanupLinesToArray(debouncedInstructionsText),
+    [debouncedInstructionsText],
   );
 
   // Check if any ingredients are missing from the database
+  // Only run queries after debounce has settled to reduce database load
+  const debouncedIngredientNames = useDebounce(ingredientNames, 500);
+  const uniqueIngredientNames = Array.from(new Set(debouncedIngredientNames));
+
   const ingredientQueries = useQueries({
-    queries: ingredientNames.map((name) => ({
+    queries: uniqueIngredientNames.map((name) => ({
       ...api.ingredient.getByName.queryOptions({
         nameFilter: name,
       }),
-      staleTime: 10000,
+      staleTime: 30000, // Increase staleTime to reduce refetching
+      enabled: name.length > 0, // Only run query if name is not empty
     })),
   });
 
   const missingIngredients = useMemo(() => {
+    // Create a map of ingredient names to their existence status
+    const existenceMap = new Map();
+    uniqueIngredientNames.forEach((name, index) => {
+      if (name && !ingredientQueries[index].isLoading) {
+        existenceMap.set(name, !!ingredientQueries[index].data);
+      }
+    });
+
+    // Filter ingredient names based on this map
     return ingredientNames.filter(
-      (name, index) =>
-        !ingredientQueries[index].isLoading && !ingredientQueries[index].data,
+      (name) =>
+        name.length > 0 && existenceMap.has(name) && !existenceMap.get(name),
     );
-  }, [ingredientNames, ingredientQueries]);
+  }, [ingredientNames, uniqueIngredientNames, ingredientQueries]);
 
   const scrape = useMutation(api.recipe.scrape.mutationOptions());
   const onScrape = async () => {
@@ -188,18 +208,10 @@ const NewCompactRecipe: React.FC = () => {
         />
         <div>
           <ol className="list-decimal pl-5 leading-relaxed">
-            {instructionLines.map((line, x) => (
-              <li key={x + "2"}>
-                {w &&
-                  formatRichText(
-                    w,
-                    w.parse_rich_text(
-                      line,
-                      ingredientsParsed.map((l) => l.name),
-                    ),
-                  )}
-              </li>
-            ))}
+            <RichTextInstructions
+              instructionLines={instructionLines}
+              ingredientNames={ingredientNames}
+            />
           </ol>
         </div>
       </div>
@@ -207,20 +219,59 @@ const NewCompactRecipe: React.FC = () => {
   );
 };
 
-const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
+// Component to memoize rich text parsing for instructions
+const RichTextInstructions = React.memo(function RichTextInstructions({
+  instructionLines,
+  ingredientNames,
+}: {
+  instructionLines: string[];
+  ingredientNames: string[];
+}) {
+  const { w } = useWasm();
+
+  // Memoize the rich text parsing results to prevent recalculation on each render
+  const parsedInstructions = useMemo(() => {
+    if (!w) return [];
+
+    // Parse all instructions at once
+    return instructionLines.map((line) =>
+      formatRichText(w, w.parse_rich_text(line, ingredientNames)),
+    );
+  }, [w, instructionLines, ingredientNames]);
+
+  return (
+    <>
+      {parsedInstructions.map((content, idx) => (
+        <li key={idx + "2"}>{content}</li>
+      ))}
+    </>
+  );
+});
+
+const IngredientByName = React.memo(function IngredientByName({
+  name,
+}: {
+  name: string;
+}) {
   const api = useTRPC();
-  const itemsResp = useQuery(
-    api.ingredient.getByName.queryOptions({
+
+  // Don't query for empty names
+  const itemsResp = useQuery({
+    ...api.ingredient.getByName.queryOptions({
       nameFilter: name,
     }),
-  );
+    staleTime: 30000, // Increase staleTime to reduce refetching
+    enabled: name.length > 0, // Only run query if name is not empty
+  });
+
   const resultName = itemsResp.data?.name;
+
   return (
     <div className={resultName ? "inline underline" : "inline"}>
       {resultName ?? name}
     </div>
   );
-};
+});
 
 const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
   missingIngredients,
@@ -305,13 +356,20 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
 const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   const amounts = amount.amounts;
   const { w } = useWasm();
+
+  // Memoize formatted measure values
+  const formattedAmounts = useMemo(() => {
+    if (!w) return amounts.map(() => null);
+    return amounts.map((a) => w.format_measure_value(a));
+  }, [w, amounts]);
+
   return (
     <div className="inline">
       <div className="inline">
         {amounts.map((a, x) => (
           <div key={x} className="inline">
-            <div className="inline text-blue-600">
-              {w && w.format_measure_value(a)}
+            <div className="inline pr-1 text-blue-600">
+              {formattedAmounts[x]}
             </div>
             <div className="inline text-green-800">{a.unit}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}
