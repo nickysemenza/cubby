@@ -35,7 +35,7 @@ const pagination = {
   pageSize: 20,
 };
 
-function CreateIngredientDialog({
+export function CreateIngredientDialog({
   isOpen,
   onOpenChange,
   onCancel,

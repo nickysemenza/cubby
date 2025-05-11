@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Button } from "~/components/ui/button";
+import { Button, ButtonVariants } from "~/components/ui/button";
 import {
   Form,
   FormControl,
@@ -69,6 +69,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   isPending,
   onCancel,
   submitButtonText,
+  submitButtonVariant = "default",
   children,
 }: {
   form: UseFormReturn<TFieldValues>;
@@ -77,6 +78,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   isPending: boolean;
   onCancel?: () => void;
   submitButtonText: string;
+  submitButtonVariant?: ButtonVariants["variant"];
   children: ReactNode;
 }) {
   return (
@@ -96,7 +98,11 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
         {error && <div className="text-sm text-red-500">{error}</div>}
 
         <div className="flex justify-end space-x-2">
-          <Button type="submit" disabled={isPending}>
+          <Button
+            type="submit"
+            disabled={isPending}
+            variant={submitButtonVariant}
+          >
             {submitButtonText}
           </Button>
           <Button

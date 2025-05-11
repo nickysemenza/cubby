@@ -7,10 +7,10 @@ import { Button } from "~/components/ui/button";
 import { formatRichText } from "./richtext";
 import useDebounce from "../../../misc/useDebounce";
 import { useRouter } from "next/navigation";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { useWasm } from "~/wasmContext";
 import { useMutation } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -19,6 +19,8 @@ import {
   RequiredTextareaField,
   UnifiedTextField,
 } from "../form-utils";
+import { CreateIngredientDialog } from "../combobox/with-search-hook";
+import { useState } from "react";
 
 const cleanupLinesToArray = (lines: string) =>
   lines
@@ -67,10 +69,32 @@ const NewCompactRecipe: React.FC = () => {
     [ingredientLines, w],
   );
 
+  const ingredientNames = useMemo(
+    () => ingredientsParsed.map((ingredient) => ingredient.name),
+    [ingredientsParsed],
+  );
+
   const instructionLines = useMemo(
     () => cleanupLinesToArray(instructionsText),
     [instructionsText],
   );
+
+  // Check if any ingredients are missing from the database
+  const ingredientQueries = useQueries({
+    queries: ingredientNames.map((name) => ({
+      ...api.ingredient.getByName.queryOptions({
+        nameFilter: name,
+      }),
+      staleTime: 10000,
+    })),
+  });
+
+  const missingIngredients = useMemo(() => {
+    return ingredientNames.filter(
+      (name, index) =>
+        !ingredientQueries[index].isLoading && !ingredientQueries[index].data,
+    );
+  }, [ingredientNames, ingredientQueries]);
 
   const scrape = useMutation(api.recipe.scrape.mutationOptions());
   const onScrape = async () => {
@@ -99,7 +123,7 @@ const NewCompactRecipe: React.FC = () => {
       ],
     };
     const res = await insert.mutateAsync(compact);
-    toast(`Recipe ${values.name} created`, { type: "success" });
+    toast.success(`Recipe ${values.name} created`);
     router.push(`/recipes/${res.id}`);
   };
 
@@ -109,6 +133,9 @@ const NewCompactRecipe: React.FC = () => {
       onSubmit={onSubmit}
       isPending={scrape.isPending || insert.isPending}
       submitButtonText="Create Recipe"
+      submitButtonVariant={
+        missingIngredients.length > 0 ? "destructive" : "default"
+      }
     >
       <div className="my-4">
         <UnifiedTextField
@@ -130,12 +157,17 @@ const NewCompactRecipe: React.FC = () => {
       />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <RequiredTextareaField
-          form={form}
-          name="ingredientsText"
-          label="Ingredients"
-          placeholder="Enter your recipe here..."
-        />
+        <div>
+          <RequiredTextareaField
+            form={form}
+            name="ingredientsText"
+            label="Ingredients"
+            placeholder="Enter your recipe here..."
+          />
+          {missingIngredients.length > 0 && (
+            <MissingIngredientsList missingIngredients={missingIngredients} />
+          )}
+        </div>
         <div>
           {ingredientsParsed.map((l, x) => (
             <div key={`${l.name}${x}`}>
@@ -187,6 +219,86 @@ const IngredientByName: React.FC<{ name: string }> = ({ name }) => {
     <div className={resultName ? "inline underline" : "inline"}>
       {resultName ?? name}
     </div>
+  );
+};
+
+const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
+  missingIngredients,
+}) => {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  // State for the ingredient creation dialog
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedIngredient, setSelectedIngredient] = useState("");
+
+  // Mutation for creating ingredients
+  const createIngredient = useMutation(
+    api.ingredient.create.mutationOptions({
+      onSuccess: () => {
+        // Invalidate ingredient queries to refetch and update the missing ingredients list
+        // This will refetch all ingredient.getByName queries which will update our missing ingredients list
+        queryClient.invalidateQueries({
+          queryKey: ["ingredient", "getByName"],
+        });
+        toast.success("Ingredient created successfully!");
+        setIsDialogOpen(false);
+      },
+    }),
+  );
+
+  const handleOpenDialog = (name: string) => {
+    setSelectedIngredient(name);
+    setIsDialogOpen(true);
+  };
+
+  if (missingIngredients.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      <CreateIngredientDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={() => setIsDialogOpen(false)}
+        onCreate={(data) => {
+          createIngredient.mutate(data);
+        }}
+        isPending={createIngredient.isPending}
+        error={createIngredient.error?.message}
+        initialName={selectedIngredient}
+      />
+
+      <div className="mt-4 rounded border border-orange-200 bg-orange-50 p-3">
+        <h3 className="mb-2 font-medium text-orange-800">
+          Missing Ingredients
+        </h3>
+        <div className="mb-2 text-sm text-orange-700">
+          These ingredients don&apos;t exist in your database yet:
+        </div>
+        <ul className="space-y-1">
+          {missingIngredients.map((name, index) => (
+            <li
+              key={`missing-${index}`}
+              className="flex items-center justify-between"
+            >
+              <span>{name}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="py-1 text-xs"
+                onClick={() => handleOpenDialog(name)}
+                disabled={createIngredient.isPending}
+              >
+                Create
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
   );
 };
 
