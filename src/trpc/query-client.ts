@@ -4,6 +4,8 @@ import {
 } from "@tanstack/react-query";
 import SuperJSON from "superjson";
 
+// https://trpc.io/docs/client/tanstack-react-query/server-components#3-create-a-query-client-factory
+
 export const createQueryClient = () =>
   new QueryClient({
     defaultOptions: {

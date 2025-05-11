@@ -3,14 +3,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SectionIngredientOut, type RecipeOut } from "~/schemas/recipe";
 import { RecipeIngredientList } from "./recipeingredientlist";
-import { buildCLient } from "~/trpc/react";
 import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import EntityImageList from "../EntityImageList";
+import { useTRPCClient } from "~/trpc/react";
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {
-  const [trpcClient] = useState(() => buildCLient());
+  const trpcClient = useTRPCClient();
 
   const ingredients: SectionIngredientOut[] = useMemo(
     () =>

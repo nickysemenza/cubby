@@ -1,6 +1,6 @@
 import "server-only";
 
-// todo: move this file to https://trpc.io/docs/client/tanstack-react-query/setup
+// todo: move this file to https://trpc.io/docs/client/tanstack-react-query/server-components#5-create-a-trpc-caller-for-server-components
 import { createHydrationHelpers } from "@trpc/react-query/rsc";
 import { headers } from "next/headers";
 import { cache } from "react";
