@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
-import { PackageOpen } from "lucide-react";
+import { Menu, PackageOpen, X } from "lucide-react";
+import { useState } from "react";
 
 type NavItem = {
   href: string;
@@ -39,16 +40,23 @@ export function MainNav({
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
   const pathName = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
-    <div className="flex w-full items-center">
-      <Link href="/" className="mr-6 flex items-center space-x-3">
+    <div className="flex w-full items-center justify-between">
+      <Link href="/" className="flex items-center space-x-3">
         <PackageOpen />
         <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
           recipehub
         </span>
       </Link>
+
+      {/* Desktop Navigation */}
       <nav
-        className={cn("flex items-center space-x-4 lg:space-x-6", className)}
+        className={cn(
+          "hidden items-center space-x-4 md:flex lg:space-x-6",
+          className,
+        )}
         {...props}
       >
         {NavItems.map((item) => {
@@ -87,14 +95,71 @@ export function MainNav({
           );
         })}
       </nav>
-      <div className="ml-auto flex items-center space-x-4">
+
+      <div className="flex items-center space-x-4">
         <SignedOut>
           <SignInButton />
         </SignedOut>
         <SignedIn>
           <UserButton />
         </SignedIn>
+
+        {/* Mobile menu button */}
+        <button
+          className="p-2 md:hidden"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
+
+      {/* Mobile Navigation */}
+      {mobileMenuOpen && (
+        <div className="bg-background fixed inset-0 top-16 z-50 md:hidden">
+          <nav className="flex flex-col space-y-4 p-4">
+            {NavItems.map((item) => {
+              const active = item.isActive(pathName);
+
+              // Only show Dashboard link if it's not the Dashboard link or user is signed in
+              if (item.href === "/dashboard") {
+                return (
+                  <SignedIn key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "hover:text-primary p-2 text-base font-medium transition-colors",
+                        !active && "text-muted-foreground",
+                        active && "bg-muted rounded",
+                      )}
+                      aria-current={active ? "page" : undefined}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  </SignedIn>
+                );
+              }
+
+              return (
+                <Link
+                  href={item.href}
+                  key={item.href}
+                  className={cn(
+                    "hover:text-primary p-2 text-base font-medium transition-colors",
+                    !active && "text-muted-foreground",
+                    active && "bg-muted rounded",
+                  )}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </div>
   );
 }

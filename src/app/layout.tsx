@@ -26,7 +26,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className={`${GeistSans.variable}`}>
         <body>
-          <div className="hidden flex-col md:flex">
+          <div className="flex flex-col">
             <div className="border-b">
               <div className="flex h-16 items-center px-4">
                 <MainNav className="mx-0" />
