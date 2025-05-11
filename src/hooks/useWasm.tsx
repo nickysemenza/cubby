@@ -26,7 +26,7 @@ export const WasmContextProvider: React.FC<{
       }
       setLoading(true);
       console.time("wasm-load");
-      const wasm = await import("recipebridge/pkg/recipebridge");
+      const wasm = await import("../../recipebridge/pkg/recipebridge");
       setState(wasm);
       console.timeEnd("wasm-load");
       setLoading(false);
