@@ -25,7 +25,9 @@ export const upsertRecipeFromCompact = async (
               ingredient.name,
             );
             return {
+              type: "ingredient" as const,
               ingredientId: newIngredient.id,
+              recipeId: null,
               amounts: ingredient.amounts,
             };
           }),

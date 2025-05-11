@@ -1,6 +1,6 @@
 import { type Prisma, type PrismaClient, RecipeSource } from "@prisma/client";
 import { type z } from "zod";
-import { type CompactRecipe } from "~/codec/codec";
+import { type CompactRecipe, amount } from "~/codec/codec";
 import { parseCompactRecipe } from "~/codec/parser";
 import {
   type RecipeOut,
@@ -8,6 +8,7 @@ import {
   type SectionIngredient,
   type RecipeCreateInput,
   type RecipeUpdateInput,
+  recipeIngredientInput,
 } from "~/schemas/recipe";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import {
@@ -188,6 +189,21 @@ export const createRecipe = async (
 
   // Create the recipe in a transaction
   return await db.$transaction(async (tx) => {
+    // Process all ingredients first
+    const processedSections = await Promise.all(
+      recipe.sections.map(async (section) => {
+        const processedIngredients = section.ingredients
+          ? await processIngredients(tx, section.ingredients)
+          : [];
+
+        return {
+          name: section.name,
+          processedIngredients,
+          instructions: section.instructions,
+        };
+      }),
+    );
+
     // Create the main recipe
     const createdRecipe = await tx.recipe.create({
       data: {
@@ -195,13 +211,10 @@ export const createRecipe = async (
         SourceType: sourceType,
         SourceData: sourceData,
         sections: {
-          create: recipe.sections.map((section) => ({
+          create: processedSections.map((section) => ({
             name: section.name,
             ingredients: {
-              create: section.ingredients?.map((ingredient) => ({
-                amounts: ingredient.amounts,
-                ingredientId: ingredient.ingredientId,
-              })),
+              create: section.processedIngredients,
             },
             instructions: section.instructions?.map((instruction) => ({
               text: instruction.instruction,
@@ -235,6 +248,69 @@ export const createRecipe = async (
 
     return { id: createdRecipe.id };
   });
+};
+
+// Helper function to process ingredients
+const processIngredient = async (
+  tx: Prisma.TransactionClient,
+  ingredient: z.infer<typeof recipeIngredientInput>,
+): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }> => {
+  // For ingredient types, just use the ingredient ID directly
+  if (ingredient.type === "ingredient") {
+    return {
+      ingredientId: ingredient.ingredientId,
+      amounts: ingredient.amounts,
+    };
+  }
+
+  // For recipe types, find or create an ingredient that points to the recipe
+  // Find any existing ingredient that already points to this recipe
+  const recipeIngredient = await tx.ingredient.findFirst({
+    where: { recipeId: ingredient.recipeId },
+  });
+
+  // If found, use the existing ingredient
+  if (recipeIngredient) {
+    return {
+      ingredientId: recipeIngredient.id,
+      amounts: ingredient.amounts,
+    };
+  }
+
+  // Otherwise, create a new ingredient that points to the recipe
+  // First get the recipe name
+  const recipe = await tx.recipe.findUnique({
+    where: { id: ingredient.recipeId },
+    select: { name: true },
+  });
+
+  if (!recipe) {
+    throw new Error(`Recipe with ID ${ingredient.recipeId} not found`);
+  }
+
+  // Create a new ingredient that points to this recipe
+  const newIngredient = await tx.ingredient.create({
+    data: {
+      name: `Recipe: ${recipe.name}`,
+      aliases: [],
+      recipeId: ingredient.recipeId,
+    },
+  });
+
+  return {
+    ingredientId: newIngredient.id,
+    amounts: ingredient.amounts,
+  };
+};
+
+// Helper function to process multiple ingredients
+const processIngredients = async (
+  tx: Prisma.TransactionClient,
+  ingredients: z.infer<typeof recipeIngredientInput>[],
+): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
+  return await Promise.all(
+    ingredients.map((ing) => processIngredient(tx, ing)),
+  );
 };
 
 export const updateRecipe = async (
@@ -328,10 +404,10 @@ export const updateRecipe = async (
               name: sectionUpdate.name || null,
               ingredients: sectionUpdate.ingredients
                 ? {
-                    create: sectionUpdate.ingredients.map((ing) => ({
-                      ingredientId: ing.ingredientId,
-                      amounts: ing.amounts,
-                    })),
+                    create: await processIngredients(
+                      tx,
+                      sectionUpdate.ingredients,
+                    ),
                   }
                 : undefined,
               instructions: sectionUpdate.instructions
@@ -369,21 +445,29 @@ export const updateRecipe = async (
             // Process each ingredient in the update
             for (const ingredientUpdate of sectionUpdate.ingredients) {
               if (!ingredientUpdate.id) {
-                // Create new ingredient
+                // Process the ingredient and create it
+                const processedIngredient = await processIngredient(
+                  tx,
+                  ingredientUpdate,
+                );
                 await tx.recipeSectionIngredient.create({
                   data: {
                     recipeSectionId: sectionUpdate.id,
-                    ingredientId: ingredientUpdate.ingredientId,
-                    amounts: ingredientUpdate.amounts,
+                    ingredientId: processedIngredient.ingredientId,
+                    amounts: processedIngredient.amounts,
                   },
                 });
               } else {
-                // Update existing ingredient
+                // Process the ingredient and update it
+                const processedIngredient = await processIngredient(
+                  tx,
+                  ingredientUpdate,
+                );
                 await tx.recipeSectionIngredient.update({
                   where: { id: ingredientUpdate.id },
                   data: {
-                    ingredientId: ingredientUpdate.ingredientId,
-                    amounts: ingredientUpdate.amounts,
+                    ingredientId: processedIngredient.ingredientId,
+                    amounts: processedIngredient.amounts,
                   },
                 });
               }

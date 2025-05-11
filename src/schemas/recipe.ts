@@ -57,12 +57,26 @@ export const recipeOut = z
 
 export type RecipeOut = z.infer<typeof recipeOut>;
 
+export type sectionIngredientType = "ingredient" | "recipe";
+
 // Schema for recipe mutations
-export const recipeIngredientInput = z.object({
-  ingredientId: id,
-  amounts: z.array(amount),
-  id: id.optional(),
-});
+export const recipeIngredientInput = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("ingredient"),
+    ingredientId: id,
+    recipeId: z.null(),
+    amounts: z.array(amount),
+    id: id.optional(),
+  }),
+  z.object({
+    type: z.literal("recipe"),
+    recipeId: id,
+    ingredientId: z.null(),
+    amounts: z.array(amount),
+    id: id.optional(),
+  }),
+]);
+export type RecipeIngredientInput = z.infer<typeof recipeIngredientInput>;
 
 export const recipeInstructionInput = z.object({
   instruction: z.string(),

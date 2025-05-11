@@ -5,6 +5,23 @@ import { recipeTopLevel } from "~/schemas/recipe";
 import { type PendingImage } from "../../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 
+const ingItem = z.discriminatedUnion("type", [
+  z.object({
+    id: z.string().uuid().optional(),
+    type: z.literal("ingredient"),
+    ingredient: ComboboxItem,
+    recipe: z.null(),
+    amounts: z.array(amount),
+  }),
+  z.object({
+    id: z.string().uuid().optional(),
+    type: z.literal("recipe"),
+    ingredient: z.null(),
+    recipe: ComboboxItem,
+    amounts: z.array(amount),
+  }),
+]);
+export type IngItem = z.infer<typeof ingItem>;
 // Form schema for recipe form
 export const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -13,14 +30,7 @@ export const formSchema = z.object({
     z.object({
       id: z.string().uuid().optional(),
       name: z.string().nullable(),
-      ingredients: z.array(
-        z.object({
-          id: z.string().uuid().optional(),
-          type: z.literal("ingredient"),
-          ingredient: ComboboxItem.nullable(),
-          amounts: z.array(amount),
-        }),
-      ),
+      ingredients: z.array(ingItem),
       instructions: z.array(
         z.object({
           id: z.string().uuid().optional(),

@@ -16,12 +16,13 @@ import {
 import { IngredientFieldArray } from "./ingredient-field-array";
 import { InstructionFieldArray } from "./instruction-field-array";
 import {
+  IngItem,
   type RecipeFormProps,
   type RecipeFormValues,
   formSchema,
 } from "./types";
 import {
-  recipeIngredientInput,
+  RecipeIngredientInput,
   recipeInstructionInput,
   recipeSectionInput,
   type RecipeCreateInput,
@@ -29,6 +30,30 @@ import {
 } from "~/schemas/recipe";
 import { PendingImageUpload } from "../../PendingImageUpload";
 import { z } from "zod";
+
+// Helper function to map any ingredient type to the correct API format
+const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
+  if (ing.type === "ingredient" && ing.ingredient) {
+    return {
+      type: "ingredient",
+      ingredientId: ing.ingredient.id,
+      recipeId: null,
+      amounts: ing.amounts,
+      id: ing.id,
+    };
+  } else if (ing.type === "recipe" && ing.recipe) {
+    return {
+      type: "recipe",
+      recipeId: ing.recipe.id,
+      ingredientId: null,
+      amounts: ing.amounts,
+      id: ing.id,
+    };
+  }
+  throw new Error(
+    `Invalid ingredient type or missing data: ${JSON.stringify(ing)}`,
+  );
+};
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
@@ -53,19 +78,31 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         ? recipe.sections.map((section) => ({
             id: section.id,
             name: section.name,
-            ingredients: section.ingredients
-              .filter((ing) => ing.type === "ingredient")
-              .map((ing) => ({
-                id: ing.id,
-                type: "ingredient" as const,
-                ingredient: ing.ingredient
-                  ? {
-                      id: ing.ingredient.id,
-                      name: ing.ingredient.name,
-                    }
-                  : null,
-                amounts: ing.amounts,
-              })),
+            ingredients: section.ingredients.map((ing) => {
+              if (ing.type === "ingredient") {
+                return {
+                  id: ing.id,
+                  type: "ingredient" as const,
+                  ingredient: {
+                    id: ing.ingredient.id,
+                    name: ing.ingredient.name,
+                  },
+                  recipe: null,
+                  amounts: ing.amounts,
+                };
+              } else {
+                return {
+                  id: ing.id,
+                  type: "recipe" as const,
+                  ingredient: null,
+                  recipe: {
+                    id: ing.recipe.id,
+                    name: ing.recipe.name,
+                  },
+                  amounts: ing.amounts,
+                };
+              }
+            }),
             instructions: section.instructions,
           }))
         : [
@@ -97,12 +134,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         meta: values.meta,
         sections: values.sections.map((section) => ({
           name: section.name,
-          ingredients: section.ingredients
-            .filter((ing) => ing.ingredient !== null)
-            .map((ing) => ({
-              ingredientId: ing.ingredient!.id,
-              amounts: ing.amounts,
-            })),
+          ingredients: section.ingredients.map(mapIngredientToApiFormat),
           instructions: section.instructions,
         })),
         ...getImageData(true), // Apply pending images for creation
@@ -121,12 +153,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         if (!originalSection || !section.id) {
           return {
             name: section.name,
-            ingredients: section.ingredients
-              .filter((ing) => ing.ingredient !== null)
-              .map((ing) => ({
-                ingredientId: ing.ingredient!.id,
-                amounts: ing.amounts,
-              })),
+            ingredients: section.ingredients.map(mapIngredientToApiFormat),
             instructions: section.instructions,
           };
         }
@@ -146,35 +173,34 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           JSON.stringify(
             originalSection.ingredients.map((ing) => ({
               id: ing.id,
+              type: ing.type,
               ingredientId:
-                ing.type === "ingredient" ? ing.ingredient?.id : null,
+                ing.type === "ingredient" && ing.ingredient
+                  ? ing.ingredient.id
+                  : null,
+              recipeId:
+                ing.type === "recipe" && ing.recipe ? ing.recipe.id : null,
               amounts: ing.amounts,
             })),
           ) !==
           JSON.stringify(
             section.ingredients.map((ing) => ({
               id: ing.id,
-              ingredientId: ing.ingredient?.id,
+              type: ing.type,
+              ingredientId:
+                ing.type === "ingredient" && ing.ingredient
+                  ? ing.ingredient.id
+                  : null,
+              recipeId:
+                ing.type === "recipe" && ing.recipe ? ing.recipe.id : null,
               amounts: ing.amounts,
             })),
           );
 
         if (ingredientsChanged) {
-          sectionUpdate.ingredients = section.ingredients
-            .filter((ing) => ing.ingredient !== null)
-            .map((ing) => {
-              const output: z.infer<typeof recipeIngredientInput> = {
-                ingredientId: ing.ingredient!.id,
-                amounts: ing.amounts,
-              };
-
-              // Include ID if it exists (for updates)
-              if (ing.id) {
-                output.id = ing.id;
-              }
-
-              return output;
-            });
+          sectionUpdate.ingredients = section.ingredients.map(
+            mapIngredientToApiFormat,
+          );
         }
 
         // Check for instruction changes
@@ -216,9 +242,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             ...getImageData(), // Apply image updates
           },
         };
-
+        console.log("found updates", updateData);
         props.onEdit(updateData);
       } else if (onCancel) {
+        console.log("No changes detected");
         // If no changes, just run the cancel function
         onCancel();
       }
