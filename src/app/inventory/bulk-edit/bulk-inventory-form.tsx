@@ -12,7 +12,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { useWasm } from "~/wasmContext";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -176,7 +176,9 @@ export default function BulkInventoryForm() {
         locationId: values.location.id,
         items: processItems,
       });
-      toast(`Successfully updated inventory for ${values.location.name}`);
+      toast.success(
+        `Successfully updated inventory for ${values.location.name}`,
+      );
       setIsSubmitting(false);
     } catch (err) {
       console.error("Error submitting inventory items:", err);

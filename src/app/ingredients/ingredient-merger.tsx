@@ -2,7 +2,7 @@ import { type Table } from "@tanstack/react-table";
 
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
-import { toast } from "react-toastify";
+import { toast } from "sonner";
 import { IngredientPillLink } from "../_components/EntityPill";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
@@ -32,9 +32,8 @@ export function IngredientMerger({ table }: IngredientMergerProps) {
       target: target.id,
       aliases: aliases.map((x) => x.id),
     });
-    toast(
+    toast.success(
       `Merged ${target.name} with ${aliases.map((a) => a.name).join(", ")}`,
-      { type: "success" },
     );
   };
 

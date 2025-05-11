@@ -11,7 +11,6 @@ import {
 } from "@clerk/nextjs";
 
 import { TRPCReactProvider } from "~/trpc/react";
-import { ToastContainer } from "react-toastify";
 import { MainNav } from "./_components/MainNav";
 import Link from "next/link";
 import { PackageOpen } from "lucide-react";
@@ -57,7 +56,6 @@ export default function RootLayout({
           </div>
 
           <GlobalCommandMenu />
-          <ToastContainer />
           <Toaster />
           <TRPCReactProvider>
             <ReactQueryDevtools initialIsOpen={false} />
