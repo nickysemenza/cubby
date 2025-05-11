@@ -12,6 +12,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { useQuery } from "@tanstack/react-query";
+import { assertNever } from "~/lib/assert";
 
 export default function ImageDetailPage() {
   const params = useParams();
@@ -132,7 +133,7 @@ export default function ImageDetailPage() {
           />
         );
       default:
-        return <span>Unknown entity type</span>;
+        return assertNever(imageDetails.entityType);
     }
   };
 

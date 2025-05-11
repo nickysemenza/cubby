@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ndb, upc } from "./util";
 import { unitMappingBase } from "./unitmapping";
 import { productTopLevelOut } from "./product";
+import { assertNever } from "~/lib/assert";
 
 // select distinct unit_name from nutrient;
 export const nutrient_unit_name = z.enum([
@@ -30,8 +31,11 @@ export const branded_food_serving_size_unit = z.enum([
   "ml",
   "MLT",
 ]);
+export type BrandedFoodServingSizeUnit = z.infer<
+  typeof branded_food_serving_size_unit
+>;
 export const normalize_branded_food_serving_size_unit = (
-  unit: z.infer<typeof branded_food_serving_size_unit>,
+  unit: BrandedFoodServingSizeUnit,
 ) => {
   switch (unit) {
     case "GM":
@@ -40,8 +44,13 @@ export const normalize_branded_food_serving_size_unit = (
     case "MC":
     case "MLT":
       return "ml";
-    default:
+    case "g":
+    case "IU":
+    case "MG":
+    case "ml":
       return unit;
+    default:
+      return assertNever(unit);
   }
 };
 

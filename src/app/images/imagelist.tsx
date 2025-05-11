@@ -20,6 +20,7 @@ import { useTableState } from "~/app/_components/data-table/useTableState";
 import { useTableConfig } from "~/app/_components/data-table/useTableConfig";
 import Link from "next/link";
 import { type ImageWithEntity } from "~/schemas/image";
+import { assertNever } from "~/lib/assert";
 
 export default function ImageList() {
   const api = useTRPC();
@@ -178,7 +179,7 @@ export default function ImageList() {
                 />
               );
             default:
-              return <span>Unknown entity type</span>;
+              return assertNever(entityType);
           }
         },
       },

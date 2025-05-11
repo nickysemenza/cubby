@@ -1,10 +1,12 @@
 import { type RichItem } from "recipebridge/pkg/recipebridge";
 import { wasm } from "~/wasmContext";
 import { tryFormatMeasure } from "../inventory/format-amount";
+import { assertNever } from "~/lib/assert";
 
 export const formatRichText = (w: wasm, text: RichItem[]) => {
   return text.map((t, x) => {
-    switch (t.kind) {
+    const { kind } = t;
+    switch (kind) {
       case "Text":
         return t.value;
       case "Ing":
@@ -32,6 +34,8 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
             {tryFormatMeasure(w, val)}
           </div>
         );
+      default:
+        return assertNever(kind);
     }
   });
 };
