@@ -23,7 +23,7 @@ export const showAmountAndPrice = (
     // todo
     amount.unit = "Whole";
   }
-  if (w === undefined || mappings === undefined) {
+  if (mappings === undefined) {
     return "loading";
   }
   const price = convertAmountToPrice(w, amount, mappings);

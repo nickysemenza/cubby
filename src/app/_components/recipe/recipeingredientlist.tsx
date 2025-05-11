@@ -31,9 +31,9 @@ export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientWithRecipesAndProductOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
-  const { w } = useWasm();
+  const w = useWasm();
   const data = useMemo(() => {
-    return w && ingMap ? createIngredientData(w, ingredients, ingMap) : [];
+    return ingMap ? createIngredientData(w, ingredients, ingMap) : [];
   }, [ingredients, ingMap, w]);
 
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
@@ -47,7 +47,6 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.accessor("amounts", {
       header: "Amounts",
       cell: (info) => {
-        if (!w) return "Loading...";
         const amounts = info.getValue();
 
         // Format each amount using tryFormatMeasure
@@ -66,9 +65,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
         return (
-          w &&
-          measure &&
-          renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
+          measure && renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
         );
       },
     }),
@@ -78,9 +75,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
         return (
-          w &&
-          measure &&
-          renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
+          measure && renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
         );
       },
     }),
@@ -121,7 +116,7 @@ export const RecipeIngredientList: React.FC<{
       id: "mappings",
       header: "Unit Mappings",
       cell: (props) => {
-        if (ingMap === undefined || w === undefined) {
+        if (ingMap === undefined) {
           return "loading";
         }
 
@@ -157,15 +152,11 @@ export const RecipeIngredientList: React.FC<{
   });
 
   const totalPrice = useMemo(() => {
-    return (
-      w && ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName)
-    );
+    return ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName);
   }, [ingMap, ingredients, w]);
 
   // Format the total price information
   const formatTotalPrice = (totals: ReturnType<typeof calculateTotals>) => {
-    if (!w) return null;
-
     const summaryItems: SummaryItem[] = [
       {
         label: "Total Cost",
@@ -202,7 +193,7 @@ export const RecipeIngredientList: React.FC<{
       <RTable
         table={table}
         filterableColumns={[]}
-        isLoading={!w || data.length === 0}
+        isLoading={data.length === 0}
       />
     </div>
   );

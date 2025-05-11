@@ -1,5 +1,4 @@
 import { type Metadata } from "next";
-import { WasmContextProvider } from "~/wasmContext";
 import CreateInventoryItem from "./new-inventory";
 
 export const metadata: Metadata = {
@@ -9,9 +8,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <div>
-      <WasmContextProvider>
-        <CreateInventoryItem />
-      </WasmContextProvider>
+      <CreateInventoryItem />
     </div>
   );
 }

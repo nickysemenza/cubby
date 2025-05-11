@@ -27,11 +27,11 @@ export function AmountFieldGroup<
   unitPath,
   step = "1",
 }: AmountFieldGroupProps<TFieldValues>): ReactNode {
-  const { w } = useWasm();
+  const w = useWasm();
 
   // Function to get unit icon if enabled
   const getIcon = (x: string | null): ReactNode | undefined => {
-    if (!w || !x) return undefined;
+    if (!x) return undefined;
     return getHoverableMeasureUnitIcon(w, x);
   };
 

@@ -39,7 +39,7 @@ type RecipeFormValues = z.infer<typeof formSchema>;
 
 const NewCompactRecipe: React.FC = () => {
   const api = useTRPC();
-  const { w } = useWasm();
+  const w = useWasm();
   const router = useRouter();
 
   // Initialize form
@@ -69,7 +69,7 @@ const NewCompactRecipe: React.FC = () => {
 
   // Parse ingredients only when lines change
   const ingredientsParsed = useMemo(
-    () => (w ? ingredientLines.map((line) => w.parse_ingredient(line)) : []),
+    () => ingredientLines.map((line) => w.parse_ingredient(line)),
     [ingredientLines, w],
   );
 
@@ -227,12 +227,10 @@ const RichTextInstructions = React.memo(function RichTextInstructions({
   instructionLines: string[];
   ingredientNames: string[];
 }) {
-  const { w } = useWasm();
+  const w = useWasm();
 
   // Memoize the rich text parsing results to prevent recalculation on each render
   const parsedInstructions = useMemo(() => {
-    if (!w) return [];
-
     // Parse all instructions at once
     return instructionLines.map((line) =>
       formatRichText(w, w.parse_rich_text(line, ingredientNames)),
@@ -355,11 +353,10 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
 
 const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   const amounts = amount.amounts;
-  const { w } = useWasm();
+  const w = useWasm();
 
   // Memoize formatted measure values
   const formattedAmounts = useMemo(() => {
-    if (!w) return amounts.map(() => null);
     return amounts.map((a) => w.format_measure_value(a));
   }, [w, amounts]);
 

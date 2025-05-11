@@ -36,7 +36,7 @@ export function LocationList() {
       },
     }),
   );
-  const { w } = useWasm();
+  const w = useWasm();
 
   // Set up columns using helpers
   const data = itemsResp?.items || [];
@@ -86,7 +86,7 @@ export function LocationList() {
             {entries.map((entry) => (
               <div key={entry.id} className="flex items-center gap-2">
                 <span className="text-sm text-gray-600">
-                  {w && tryFormatMeasure(w, entry.amount)}
+                  {tryFormatMeasure(w, entry.amount)}
                 </span>
                 <ProductPillLink product={entry.product} />
               </div>

@@ -1,6 +1,5 @@
 import { api } from "~/trpc/server";
 import { ProductDetail } from "~/app/_components/products/product-detail";
-import { WasmContextProvider } from "~/wasmContext";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
@@ -16,9 +15,5 @@ export async function generateMetadata({ params }: PageParams) {
 export default async function Page({ params }: PageParams) {
   const id = (await params).id;
   const product = await api.product.getByID({ id });
-  return (
-    <WasmContextProvider>
-      <ProductDetail product={product} />
-    </WasmContextProvider>
-  );
+  return <ProductDetail product={product} />;
 }

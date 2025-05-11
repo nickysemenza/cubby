@@ -9,6 +9,7 @@ import { MainNav } from "./_components/MainNav";
 import { GlobalCommandMenu } from "./_components/command-menu";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "~/components/ui/sonner";
+import { WasmContextProvider } from "~/wasmContext";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -37,8 +38,7 @@ export default function RootLayout({
           <Toaster />
           <TRPCReactProvider>
             <ReactQueryDevtools initialIsOpen={false} />
-
-            {children}
+            <WasmContextProvider>{children}</WasmContextProvider>
           </TRPCReactProvider>
         </body>
       </html>

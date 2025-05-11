@@ -44,7 +44,7 @@ export function ProductList() {
     }),
   );
 
-  const { w } = useWasm();
+  const w = useWasm();
   const data = productsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
@@ -125,11 +125,9 @@ export function ProductList() {
           info.row.original,
         );
         return (
-          w && (
-            <div className="w-full">
-              <UnitMappingDisplay mappings={mappings} w={w} title="" />
-            </div>
-          )
+          <div className="w-full">
+            <UnitMappingDisplay mappings={mappings} w={w} title="" />
+          </div>
         );
       },
     }),
@@ -138,7 +136,7 @@ export function ProductList() {
       cell: (info) => (
         <div className="space-y-1">
           {info.getValue().map((e) => (
-            <div key={e.id}>{w && tryFormatMeasure(w, e.amount)}</div>
+            <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
           ))}
           <EntityPillLinkList
             items={info.getValue().map((e) => e.location)}

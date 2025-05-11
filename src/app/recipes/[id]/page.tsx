@@ -1,5 +1,4 @@
 import { api } from "~/trpc/server";
-import { WasmContextProvider } from "~/wasmContext";
 import RecipePageClient from "./page-client";
 
 type DetailParams = { id: string };
@@ -19,9 +18,7 @@ export default async function Page({ params }: PageParams) {
 
   return (
     <div className="container py-6">
-      <WasmContextProvider>
-        <RecipePageClient recipe={recipe} />
-      </WasmContextProvider>
+      <RecipePageClient recipe={recipe} />
     </div>
   );
 }

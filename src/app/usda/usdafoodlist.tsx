@@ -31,7 +31,7 @@ export function USDAFoodList() {
     }),
   );
 
-  const { w } = useWasm();
+  const w = useWasm();
   const data = foodsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
@@ -102,7 +102,7 @@ export function USDAFoodList() {
       header: "Portions",
       cell: (info) => {
         const portionInfo = info.getValue();
-        if (!w || portionInfo.raw.length === 0) return <NoneState />;
+        if (portionInfo.raw.length === 0) return <NoneState />;
 
         return (
           <div className="w-full">

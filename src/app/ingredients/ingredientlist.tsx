@@ -48,7 +48,7 @@ export function IngredientList() {
   const data = ingredientsResp?.items || [];
   type IngredientData = Flatten<typeof data>;
   const columnHelper = createColumnHelper<IngredientData>();
-  const { w } = useWasm();
+  const w = useWasm();
 
   // Set up columns using helpers where possible
   const columns = [
@@ -108,7 +108,7 @@ export function IngredientList() {
         const mappings = product.flatMap((product) =>
           unitMappingsFromProduct(product),
         );
-        return w && <UnitMappingDisplay mappings={mappings} w={w} title="" />;
+        return <UnitMappingDisplay mappings={mappings} w={w} title="" />;
       },
     }),
   ];

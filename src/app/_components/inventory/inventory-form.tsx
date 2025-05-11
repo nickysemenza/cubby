@@ -1,5 +1,4 @@
 "use client";
-import { useWasm } from "~/wasmContext";
 import { type FC } from "react";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
@@ -63,7 +62,6 @@ interface EditInventoryFormProps
 type InventoryFormProps = CreateInventoryFormProps | EditInventoryFormProps;
 
 export const InventoryForm: FC<InventoryFormProps> = (props) => {
-  const { w } = useWasm();
   const { mode, isPending, error, onCancel } = props;
 
   // Get the inventory item in edit mode
@@ -126,9 +124,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     }
   };
 
-  if (!w) {
-    return <div>Loading...</div>;
-  }
+  // We know w is always defined now with our updated useWasm hook
 
   const buttonText = getSubmitButtonText(mode, isPending);
 

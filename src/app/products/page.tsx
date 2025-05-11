@@ -1,7 +1,6 @@
 import { HydrateClient } from "~/trpc/server";
 import { ProductList } from "./productlist";
 import { type Metadata } from "next";
-import { WasmContextProvider } from "~/wasmContext";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 
@@ -20,9 +19,7 @@ export default function Page() {
             <Button>Create New Product</Button>
           </Link>
         </div>
-        <WasmContextProvider>
-          <ProductList />
-        </WasmContextProvider>
+        <ProductList />
       </div>
     </HydrateClient>
   );

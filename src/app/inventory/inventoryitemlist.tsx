@@ -32,7 +32,7 @@ export function InventoryItemList() {
     }),
   );
 
-  const { w } = useWasm();
+  const w = useWasm();
   const data = inventoryitemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
@@ -81,12 +81,11 @@ export function InventoryItemList() {
             href={`/inventory/${info.row.original.id}`}
           >
             view:{" "}
-            {w &&
-              showAmountAndPrice(
-                w,
-                info.getValue(),
-                info.row.original.product.unitMappings,
-              )}
+            {showAmountAndPrice(
+              w,
+              info.getValue(),
+              info.row.original.product.unitMappings,
+            )}
           </Link>
         );
       },
@@ -123,7 +122,7 @@ export function InventoryItemList() {
                 </div>
               )}
             </div>
-            <div>{w && buildunitMappingsGraph(w, unitMappings)}</div>
+            <div>{buildunitMappingsGraph(w, unitMappings)}</div>
           </div>
         );
       },

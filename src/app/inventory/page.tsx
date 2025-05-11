@@ -3,7 +3,6 @@ import { InventoryItemList } from "./inventoryitemlist";
 import { type Metadata } from "next";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
-import { WasmContextProvider } from "~/wasmContext";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +25,7 @@ export default function Page() {
         </div>
       </div>
       <HydrateClient>
-        <WasmContextProvider>
-          <InventoryItemList />
-        </WasmContextProvider>
+        <InventoryItemList />
       </HydrateClient>
     </div>
   );

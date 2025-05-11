@@ -1,5 +1,4 @@
 "use client";
-import { useWasm } from "~/wasmContext";
 import { type FC, useState } from "react";
 import { InventoryForm } from "~/app/_components/inventory/inventory-form";
 import { z } from "zod";
@@ -11,7 +10,6 @@ import { useMutation } from "@tanstack/react-query";
 
 const CreateInventoryItem: FC = () => {
   const api = useTRPC();
-  const { w } = useWasm();
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
 
@@ -31,9 +29,7 @@ const CreateInventoryItem: FC = () => {
     createMutation.mutate(data);
   };
 
-  if (!w) {
-    return <div>Loading...</div>;
-  }
+  // We know w is always defined now with our updated useWasm hook
 
   return (
     <div className="container mx-auto p-4">

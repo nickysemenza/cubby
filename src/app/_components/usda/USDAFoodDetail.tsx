@@ -25,7 +25,7 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
   // Debug linked products issue
   console.log("Food object:", food);
   console.log("Linked products:", linkedProducts);
-  const { w } = useWasm();
+  const w = useWasm();
   const mappings = unitMappingsFromFood(food);
 
   const foodInfoSection = (
@@ -130,11 +130,7 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
     </div>
   );
 
-  const unitMappingsSection = w ? (
-    <UnitMappingDisplay mappings={mappings} w={w} />
-  ) : (
-    <div>Loading unit mappings...</div>
-  );
+  const unitMappingsSection = <UnitMappingDisplay mappings={mappings} w={w} />;
 
   // Section for displaying linked products
   const linkedProductsSection = (

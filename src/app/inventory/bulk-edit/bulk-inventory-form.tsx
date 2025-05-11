@@ -11,7 +11,6 @@ import {
 } from "~/app/_components/combobox/utils";
 import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
-import { useWasm } from "~/wasmContext";
 import { toast } from "sonner";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -47,7 +46,6 @@ type BulkInventoryFormValues = z.infer<typeof formSchema>;
 
 export default function BulkInventoryForm() {
   const api = useTRPC();
-  const { w } = useWasm();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -187,9 +185,7 @@ export default function BulkInventoryForm() {
     }
   };
 
-  if (!w) {
-    return <div>Loading...</div>;
-  }
+  // We know w is always defined now with our updated useWasm hook
 
   return (
     <FormWrapper

@@ -291,10 +291,8 @@ export const createIngredientData = (
   ingredients: SectionIngredientOut[],
   ingMap: Record<string, IngredientWithRecipesAndProductOut> | undefined,
 ) => {
-  return w
-    ? ingredients.map((i) => ({
-        ...i,
-        priceInfo: ingMap && getIngredientMeasures(w, i, ingMap),
-      }))
-    : [];
+  return ingredients.map((i) => ({
+    ...i,
+    priceInfo: ingMap && getIngredientMeasures(w, i, ingMap),
+  }));
 };

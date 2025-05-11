@@ -6,7 +6,7 @@ import { useWasm } from "~/wasmContext";
 export const NYTView: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {
-  const { w } = useWasm();
+  const w = useWasm();
   return (
     <div className="container mx-auto">
       <div className="flex flex-col pt-2 md:flex-row">
@@ -19,14 +19,12 @@ export const NYTView: React.FC<{
             section.ingredients.map((i) => (
               <div key={i.id} className="flex flex-row justify-center py-1">
                 <div className="flex w-1/2 justify-end pr-1 font-light text-gray-600">
-                  {w &&
-                    i.amounts
-                      .filter(
-                        (a) =>
-                          !["money", "calories"].includes(w.measure_kind(a)),
-                      )
-                      .map((a) => w.format_amount(a))
-                      .join(" / ")}
+                  {i.amounts
+                    .filter(
+                      (a) => !["money", "calories"].includes(w.measure_kind(a)),
+                    )
+                    .map((a) => w.format_amount(a))
+                    .join(" / ")}
                 </div>
                 <div className="w-1/2">{getIngredientName(i)}</div>
               </div>

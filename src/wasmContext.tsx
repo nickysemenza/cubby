@@ -4,12 +4,12 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 export type wasm = typeof import("../recipebridge/pkg");
 
-export type wasmState = {
-  w: wasm | undefined;
+type wasmState = {
+  wasm: wasm | undefined;
   loading: boolean;
 };
-export const WasmContext = createContext<wasmState>({
-  w: undefined,
+const WasmContext = createContext<wasmState>({
+  wasm: undefined,
   loading: false,
 });
 
@@ -35,14 +35,21 @@ export const WasmContextProvider: React.FC<{
   }, [loading, state]);
 
   return (
-    state && (
-      <WasmContext.Provider value={{ w: state, loading: false }}>
-        {children}
-      </WasmContext.Provider>
-    )
+    <WasmContext.Provider value={{ wasm: state, loading }}>
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white">
+          <div className="h-8 w-8 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
+        </div>
+      )}
+      {state && children}
+    </WasmContext.Provider>
   );
 };
 
-export const useWasm = () => {
-  return useContext(WasmContext);
+export const useWasm = (): wasm => {
+  const { wasm } = useContext(WasmContext);
+  if (!wasm) {
+    throw new Error("WasmContext not initialized");
+  }
+  return wasm;
 };

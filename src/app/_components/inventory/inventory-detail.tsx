@@ -25,7 +25,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
   const api = useTRPC();
-  const { w } = useWasm();
+  const w = useWasm();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -46,9 +46,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     updateMutation.mutate(data);
   };
 
-  if (!w) {
-    return <div>Loading...</div>;
-  }
+  // w is always defined with our updated useWasm hook
 
   const InventoryContent = () => {
     if (isEditing) {

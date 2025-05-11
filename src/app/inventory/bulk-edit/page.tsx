@@ -1,4 +1,3 @@
-import { WasmContextProvider } from "~/wasmContext";
 import {
   Card,
   CardContent,
@@ -15,20 +14,18 @@ export const metadata = {
 
 export default function BulkInventoryEditPage() {
   return (
-    <WasmContextProvider>
-      <div className="container mx-auto py-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Bulk Inventory Edit</CardTitle>
-            <CardDescription>
-              Perform a full inventory check on a specific location
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <BulkInventoryForm />
-          </CardContent>
-        </Card>
-      </div>
-    </WasmContextProvider>
+    <div className="container mx-auto py-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Bulk Inventory Edit</CardTitle>
+          <CardDescription>
+            Perform a full inventory check on a specific location
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BulkInventoryForm />
+        </CardContent>
+      </Card>
+    </div>
   );
 }

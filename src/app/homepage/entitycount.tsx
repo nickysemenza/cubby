@@ -1,7 +1,7 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { SortParams } from "~/schemas/util";
 
 export default function EntityCount() {
@@ -12,12 +12,19 @@ export default function EntityCount() {
     sort,
     pagination: { pageIndex: 0, pageSize: 100 },
   };
-  const location = useQuery(api.location.list.queryOptions(opts));
-  const product = useQuery(api.product.list.queryOptions(opts));
-  const ingredient = useQuery(api.ingredient.list.queryOptions(opts));
-  const recipe = useQuery(api.recipe.list.queryOptions(opts));
-  const inventoryItem = useQuery(api.inventoryItem.list.queryOptions(opts));
-  const usda = useQuery(api.usda.list.queryOptions(opts));
+
+  const [location, product, ingredient, recipe, inventoryItem, usda, image] =
+    useQueries({
+      queries: [
+        api.location.list.queryOptions(opts),
+        api.product.list.queryOptions(opts),
+        api.ingredient.list.queryOptions(opts),
+        api.recipe.list.queryOptions(opts),
+        api.inventoryItem.list.queryOptions(opts),
+        api.usda.list.queryOptions(opts),
+        api.image.list.queryOptions(opts),
+      ],
+    });
   return (
     <ul>
       <li>location count: {location.data?.meta.totalCount}</li>
@@ -26,6 +33,7 @@ export default function EntityCount() {
       <li>recipe count: {recipe.data?.meta.totalCount}</li>
       <li>inventory count: {inventoryItem.data?.meta.totalCount}</li>
       <li>usda food: {usda.data?.meta.totalCount}</li>
+      <li>image count: {image.data?.meta.totalCount}</li>
     </ul>
   );
 }

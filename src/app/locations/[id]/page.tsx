@@ -1,6 +1,5 @@
 import { api } from "~/trpc/server";
 import { LocationDetail } from "~/app/_components/locations/location-detail";
-import { WasmContextProvider } from "~/wasmContext";
 import {
   BreadcrumbSeparator,
   BreadcrumbItem,
@@ -54,9 +53,7 @@ export default async function Page({ params }: PageParams) {
         </BreadcrumbList>
       </Breadcrumb>
 
-      <WasmContextProvider>
-        <LocationDetail location={location} />
-      </WasmContextProvider>
+      <LocationDetail location={location} />
     </div>
   );
 }

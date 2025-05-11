@@ -1,7 +1,6 @@
 import { HydrateClient } from "~/trpc/server";
 import { USDAFoodList } from "./usdafoodlist";
 import { type Metadata } from "next";
-import { WasmContextProvider } from "~/wasmContext";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -15,9 +14,7 @@ export default function Page() {
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">USDA Foods</h1>
         </div>
-        <WasmContextProvider>
-          <USDAFoodList />
-        </WasmContextProvider>
+        <USDAFoodList />
       </div>
     </HydrateClient>
   );

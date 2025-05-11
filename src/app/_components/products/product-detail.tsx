@@ -34,7 +34,7 @@ interface ProductDetailProps {
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
-  const { w } = useWasm();
+  const w = useWasm();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -166,7 +166,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     },
     {
       title: "Unit Mappings",
-      content: w && <UnitMappingDisplay mappings={mappings} w={w} title="" />,
+      content: <UnitMappingDisplay mappings={mappings} w={w} title="" />,
     },
     {
       title: "Raw Details",
