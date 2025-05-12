@@ -1,81 +1,81 @@
 locations:
-  - name: "garage"
-    type: "room"
+  - name: garage
+    type: room
     children:
-      - name: "toolbag"
-        type: "bag"
+      - name: toolbag
+        type: bag
         products:
-          - name: "Packout toolbag"
-            manufacturer: "Milwaukee"
+          - name: Packout toolbag
+            manufacturer: Milwaukee
             price_per: 99
             upc: "045242505296"
-            model: "48-22-8315"
-      - name: "chrome wire shelf"
-        type: "shelf"
+            model: 48-22-8315
+      - name: chrome wire shelf
+        type: shelf
         children:
-          - name: "oscillating and grinder"
-            type: "half-crate"
+          - name: oscillating and grinder
+            type: half-crate
             products:
-              - name: "Ryobi Angle Grinder"
-                manufacturer: "Ryobi"
+              - name: Ryobi Angle Grinder
+                manufacturer: Ryobi
                 price_per: 129
                 upc: "033287188048"
-                model: "PBLAG01B"
-              - name: "Ryobi Oscillating Tool"
-                manufacturer: "Ryobi"
+                model: PBLAG01B
+              - name: Ryobi Oscillating Tool
+                manufacturer: Ryobi
                 price_per: 129
                 upc: "033287190706"
-                model: "PBLMT50B"
-              - name: "angle grinder discs"
-                manufacturer: "generic"
-              - name: "oscillating toolblades"
-                manufacturer: "generic"
-          - name: "bin B"
-            type: "crate"
-          - name: "bin C"
-            type: "crate"
-      - name: "black wire shelf"
-        type: "shelf"
-      - name: "white metal shelf"
-        type: "shelf"
-      - name: "packout wall"
-        type: "shelf"
-      - name: "butcher block workbench"
-        type: "table"
-      - name: "rolling cart"
-        type: "cart"
+                model: PBLMT50B
+              - name: angle grinder discs
+                manufacturer: generic
+              - name: oscillating toolblades
+                manufacturer: generic
+          - name: bin B
+            type: crate
+          - name: bin C
+            type: crate
+      - name: black wire shelf
+        type: shelf
+      - name: white metal shelf
+        type: shelf
+      - name: packout wall
+        type: shelf
+      - name: butcher block workbench
+        type: table
+      - name: rolling cart
+        type: cart
         children:
-          - name: "top drawer"
-            type: "drawer"
-          - name: "MFT drawer"
-            type: "drawer"
-          - name: "hex drawer"
-            type: "drawer"
-      - name: "wooden cabinets"
-        type: "cabinet"
+          - name: top drawer
+            type: drawer
+          - name: MFT drawer
+            type: drawer
+          - name: hex drawer
+            type: drawer
+      - name: wooden cabinets
+        type: cabinet
 
-  - name: "kitchen"
-    type: "room"
+  - name: kitchen
+    type: room
     children:
-      - name: "pantry"
-        type: "cabinet"
+      - name: pantry
+        type: cabinet
         children:
-          - name: "spice drawer"
-            type: "drawer"
-          - name: "coffee drawer"
-            type: "drawer"
-      - name: "peninsula drawers"
-        type: "cabinet"
+          - name: spice drawer
+            type: drawer
+          - name: coffee drawer
+            type: drawer
+      - name: peninsula drawers
+        type: cabinet
         children:
-          - name: "small dry goods"
-            type: "drawer"
-          - name: "large dry goods"
-            type: "drawer"
+          - name: small dry goods
+            type: drawer
+          - name: large dry goods
+            type: drawer
 products:
-  - name: "White sugar"
+  - name: White sugar
     ingredient: true
     upc: "015800030621"
-    manufacturer: "C&H"
+    manufacturer: C&H
     unit_mappings:
       - a:
           unit: lb
@@ -84,10 +84,10 @@ products:
           unit: dollars
           value: 3
         source: whole foods
-  - name: "All Purpose Flour"
+  - name: All Purpose Flour
     ingredient: true
     upc: "071012010509"
-    manufacturer: "King Arthur"
+    manufacturer: King Arthur
     unit_mappings:
       - a:
           unit: lb
@@ -96,10 +96,10 @@ products:
           unit: dollars
           value: 8
         source: whole foods
-  - name: "All Purpose Flour"
+  - name: All Purpose Flour
     ingredient: true
     upc: "039978533012"
-    manufacturer: "Bob's Red Mill"
+    manufacturer: Bob's Red Mill
     unit_mappings:
       - a:
           unit: lb
@@ -108,9 +108,9 @@ products:
           unit: dollars
           value: 7
         source: whole foods
-  - name: "large brown eggs"
+  - name: large brown eggs
     ingredient: true
-    manufacturer: "generic"
+    manufacturer: generic
     unit_mappings:
       - a:
           unit: whole
@@ -128,8 +128,8 @@ products:
         source: whole foods
   - name: M18 Hackzall
     upc: "045242502776"
-    manufacturer: "Milwaukee"
-    model: "2719-20"
+    manufacturer: Milwaukee
+    model: 2719-20
     unit_mappings:
       - a:
           unit: dollars
