@@ -112,10 +112,7 @@ const getNutrientSummary = async (
     },
   };
 };
-const unitMappingFromPortionInfo = (
-  w: wasm,
-  portionInfo: FoodPortion,
-): UnitMapping => {
+const unitMappingFromPortionInfo = (portionInfo: FoodPortion): UnitMapping => {
   const inferredMapping = {
     a: {
       value: portionInfo.amount,
@@ -149,7 +146,6 @@ const getAmountFromBrandedFoodServingSize = (
   }
 
   const p = w.parse_ingredient(household_serving_fulltext);
-  console.log(`branded food ${fdc_id} parsed household_serving_fulltext`, p);
   const b = p.amounts.pop();
   if (b === undefined) {
     console.log(`branded food ${fdc_id} missing amounts`);
@@ -165,7 +161,6 @@ const getAmountFromBrandedFoodServingSize = (
     b,
     source: `USDA FDC ${fdc_id}`,
   };
-  console.log({ inferredMapping });
   return inferredMapping;
 };
 const brandedFoodDBToAPI = async (
@@ -255,7 +250,6 @@ export const getFoodSummaryByID = async (
   fdc_id: number,
 ): Promise<FoodSummary | null> => {
   const portionInfoRaw = await getFoodPortion(db, fdc_id);
-  const w = await import("recipebridge/pkg");
 
   // Get branded food info first as we need it for linked products
   const brandedFoodInfo = await getBrandedFoodByID(db, fdc_id);
@@ -280,7 +274,7 @@ export const getFoodSummaryByID = async (
     nutritionInfo: await getNutrientSummary(db, fdc_id),
     portionInfo: {
       raw: portionInfoRaw,
-      parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
+      parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(p)),
     },
     linkedProducts,
   };
@@ -328,7 +322,6 @@ export const listFoods = async (
   const foodSummaries: FoodSummary[] = await Promise.all(
     foods.map(async (food) => {
       const portionInfoRaw = await getFoodPortion(db, food.fdc_id);
-      const w = await import("recipebridge/pkg");
 
       // Get branded food info for linked products lookup
       const brandedFoodInfo = await getBrandedFoodByID(db, food.fdc_id);
@@ -343,7 +336,7 @@ export const listFoods = async (
         nutritionInfo: await getNutrientSummary(db, food.fdc_id),
         portionInfo: {
           raw: portionInfoRaw,
-          parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(w, p)),
+          parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(p)),
         },
         linkedProducts: [], // todo?
         legacyFoodInfo: null, // todo?
