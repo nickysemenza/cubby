@@ -15,6 +15,17 @@
               },
               "type": {
                 "type": "string",
+                "enum": [
+                  "room",
+                  "bag",
+                  "shelf",
+                  "crate",
+                  "half-crate",
+                  "table",
+                  "drawer",
+                  "cart",
+                  "cabinet"
+                ],
                 "description": "type of location (room, container, etc)"
               },
               "products": {
@@ -28,7 +39,14 @@
                     "upc": {
                       "type": "string",
                       "minLength": 12,
-                      "maxLength": 12
+                      "maxLength": 14,
+                      "description": "12 digit UPC code"
+                    },
+                    "ndb_number": {
+                      "type": "number",
+                      "maximum": 99999,
+                      "minimum": 1000,
+                      "description": "NDB number"
                     },
                     "manufacturer": {
                       "type": "string"
@@ -37,7 +55,8 @@
                       "type": "string"
                     },
                     "ingredient": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "if the product is an ingredient, an ingredient with the same name will be created and linked to this product"
                     },
                     "unit_mappings": {
                       "type": "array",
@@ -51,7 +70,8 @@
                                 "type": "number"
                               },
                               "unit": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1
                               }
                             },
                             "required": [
@@ -94,12 +114,28 @@
                       }
                     },
                     "price_per": {
-                      "type": "number"
+                      "type": "number",
+                      "description": "price per each, shorthand for unit_mappings"
                     }
                   },
                   "required": [
                     "name",
                     "manufacturer"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "productReferences": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name"
                   ],
                   "additionalProperties": false
                 }
@@ -125,6 +161,15 @@
             "$ref": "#/definitions/configuration/properties/locations/items/properties/products/items"
           },
           "description": "products that can be purchased"
+        },
+        "aliases": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [

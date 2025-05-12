@@ -9,7 +9,7 @@ export const productBase = z.object({
   upc: upc.nullable(),
   ndb_number: ndb.nullable(),
   manufacturer: z.string().describe("Manufacturer or 'generic'"),
-  model: z.string().nullable(),
+  model: z.string().nullable().describe("model number"),
 });
 
 // Input payload for creating/updating products (includes relationships)

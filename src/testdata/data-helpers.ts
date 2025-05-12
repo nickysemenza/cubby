@@ -1,5 +1,6 @@
 import { type Amount } from "~/codec/codec";
 import {
+  ProductReferenceItem,
   type InfLocationConfig,
   type ProductConfigItem,
 } from "~/schemas/config";
@@ -7,7 +8,7 @@ import { type LocationType } from "~/schemas/location";
 import { type UnitMapping } from "~/schemas/unitmapping";
 
 // amount from unit and value
-export const uv = (value: number, unit: string): Amount => ({ unit, value });
+const uv = (value: number, unit: string): Amount => ({ unit, value });
 // unit mappings from unit value pair
 export const uvp = (
   valueA: number,
@@ -21,82 +22,82 @@ export const uvp = (
   source: source,
 });
 // generic product
-export const gp = (name: string, price_per: number): ProductConfigItem => ({
-  kind: "product",
-  data: {
-    name,
-    manufacturer: "generic",
-    price_per,
-  },
+export const genericProduct = (
+  name: string,
+  price_per: number,
+): ProductConfigItem => ({
+  name,
+  manufacturer: "generic",
+  price_per,
 });
 // product (non-ingredient)
-export const p = (
+export const product = (
   name: string,
   upc: string,
   manufacturer: string,
   model: string,
   price_per: number,
 ): ProductConfigItem => ({
-  kind: "product",
-  data: {
-    name,
-    manufacturer,
-    upc,
-    model,
-    price_per,
-  },
+  name,
+  manufacturer,
+  upc,
+  model,
+  price_per,
 });
 // product (ingredient)
-export const i = (
+export const productIngredient = (
   name: string,
   upc: string,
   manufacturer: string,
-  unit_mappings: UnitMapping[],
+  unit_mappings?: UnitMapping[],
 ): ProductConfigItem => ({
-  kind: "product",
-  data: {
-    name,
-    ingredient: true,
-    manufacturer,
-    upc,
-    unit_mappings,
-  },
+  name,
+  ingredient: true,
+  manufacturer,
+  upc,
+  unit_mappings,
 });
 
-export const pr = (name: string): ProductConfigItem => ({
-  kind: "reference",
+export const productReference = (name: string): ProductReferenceItem => ({
   name,
 });
 
 // product (generic ingredient
-export const gi = (
+export const productGenericIngredient = (
   name: string,
   ndb_number: number | undefined,
   unit_mappings: UnitMapping[],
 ): ProductConfigItem => ({
-  kind: "product",
-  data: {
-    name,
-    ingredient: true,
-    manufacturer: "generic",
-    unit_mappings,
-    ndb_number,
-  },
+  name,
+  ingredient: true,
+  manufacturer: "generic",
+  unit_mappings,
+  ndb_number,
 });
 // location
-export const lp = (
+export const locationWithProducts = (
   name: string,
   type: LocationType,
-  products: ProductConfigItem[],
+  products?: ProductConfigItem[],
 ): InfLocationConfig => ({
   name,
   type,
   products,
 });
-export const lc = (
+
+export const locationWithProductReferences = (
   name: string,
   type: LocationType,
-  children: InfLocationConfig[],
+  productReferences: ProductReferenceItem[],
+): InfLocationConfig => ({
+  name,
+  type,
+  productReferences,
+});
+export const locationWithChildren = (
+  name: string,
+  type: LocationType,
+  children?: InfLocationConfig[],
 ): InfLocationConfig => ({
   name,
   type,

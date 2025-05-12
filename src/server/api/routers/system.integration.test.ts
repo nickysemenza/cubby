@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { insertDataConfig } from "./system";
-import { config } from "~/testdata/data-config";
+import { testConfig } from "~/testdata/test-config.data";
 import { createCallerFactory } from "../trpc";
 import { appRouter } from "../root";
 
@@ -15,7 +15,7 @@ describe("system test", () => {
     return res.teardown;
   });
   it("load data config", async () => {
-    await insertDataConfig(prisma, config);
+    await insertDataConfig(prisma, testConfig);
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller({
@@ -24,17 +24,26 @@ describe("system test", () => {
       auth: undefined,
     });
     const list = await caller.ingredient.list({
-      pagination: { pageSize: 12 },
+      pagination: { pageSize: 100 },
       filters: {},
     });
-    expect(list.items.length).toEqual(12);
-    const eggs = await caller.ingredient.getByName({
-      nameFilter: "large eggs",
+    expect(list.items.length).toEqual(3);
+    const ingredient = await caller.ingredient.getByName({
+      nameFilter: "AP flour",
     });
-    expect(eggs).not.toBeNull();
-    if (eggs === null) {
+    expect(ingredient).not.toBeNull();
+    if (ingredient === null) {
       return;
     }
-    expect(eggs.name).toBe("large brown eggs");
+    expect(ingredient.name).toBe("all purpose flour");
+
+    // create a recipe with the ingredient
+    const recipe = await caller.recipe.insertCompact({
+      name: "test recipe",
+      sections: [{ instructions: ["mix"], ingredients: ["AP flour"] }],
+    });
+    expect(recipe.id).toBeDefined();
+    const recipe2 = await caller.recipe.get({ id: recipe.id });
+    expect(recipe2.name).toBe("test recipe");
   });
 });

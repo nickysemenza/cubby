@@ -7,9 +7,9 @@ locations:
         products:
           - name: Packout toolbag
             manufacturer: Milwaukee
-            price_per: 99
             upc: "045242505296"
             model: 48-22-8315
+            price_per: 99
       - name: chrome wire shelf
         type: shelf
         children:
@@ -18,18 +18,20 @@ locations:
             products:
               - name: Ryobi Angle Grinder
                 manufacturer: Ryobi
-                price_per: 129
                 upc: "033287188048"
                 model: PBLAG01B
+                price_per: 129
               - name: Ryobi Oscillating Tool
                 manufacturer: Ryobi
-                price_per: 129
                 upc: "033287190706"
                 model: PBLMT50B
+                price_per: 129
               - name: angle grinder discs
                 manufacturer: generic
+                price_per: 4
               - name: oscillating toolblades
                 manufacturer: generic
+                price_per: 8
           - name: bin B
             type: crate
           - name: bin C
@@ -53,10 +55,17 @@ locations:
             type: drawer
       - name: wooden cabinets
         type: cabinet
-
   - name: kitchen
     type: room
     children:
+      - name: kitchen
+        type: room
+        children:
+          - name: fridge
+            type: cabinet
+            productReferences:
+              - name: cilantro
+              - name: white sugar
       - name: pantry
         type: cabinet
         children:
@@ -74,20 +83,39 @@ locations:
 products:
   - name: White sugar
     ingredient: true
-    upc: "015800030621"
     manufacturer: C&H
+    upc: "015800030621"
     unit_mappings:
       - a:
           unit: lb
           value: 4
         b:
           unit: dollars
-          value: 3
+          value: 5
         source: whole foods
+      - a:
+          unit: lb
+          value: 4
+        b:
+          unit: each
+          value: 1
+        source: general
+  - name: powdered sugar
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 2
+        b:
+          unit: dollars
+          value: 5
+        source: whole foods
+    ndb_number: 19336
   - name: All Purpose Flour
     ingredient: true
-    upc: "071012010509"
     manufacturer: King Arthur
+    upc: "071012010509"
     unit_mappings:
       - a:
           unit: lb
@@ -96,10 +124,17 @@ products:
           unit: dollars
           value: 8
         source: whole foods
+      - a:
+          unit: cup
+          value: 1
+        b:
+          unit: g
+          value: 120
+        source: unk
   - name: All Purpose Flour
     ingredient: true
-    upc: "039978533012"
     manufacturer: Bob's Red Mill
+    upc: "039978533012"
     unit_mappings:
       - a:
           unit: lb
@@ -108,6 +143,70 @@ products:
           unit: dollars
           value: 7
         source: whole foods
+      - a:
+          unit: cup
+          value: 1
+        b:
+          unit: g
+          value: 120
+        source: unk
+  - name: pastry flour
+    ingredient: true
+    manufacturer: generic
+    upc: "075211436504"
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 5
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+      - a:
+          unit: cup
+          value: 1
+        b:
+          unit: g
+          value: 120
+        source: unk
+  - name: cake flour
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 5
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+      - a:
+          unit: cup
+          value: 1
+        b:
+          unit: g
+          value: 120
+        source: unk
+    ndb_number: 20084
+  - name: whole wheat flour
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 5
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+      - a:
+          unit: cup
+          value: 1
+        b:
+          unit: g
+          value: 120
+        source: unk
+    ndb_number: 20649
   - name: large brown eggs
     ingredient: true
     manufacturer: generic
@@ -125,16 +224,367 @@ products:
         b:
           unit: grams
           value: 50
+        source: general
+    ndb_number: 1123
+  - name: large brown eggs
+    ingredient: true
+    manufacturer: Pete & Gerry's
+    upc: "815652004142"
+  - name: butter
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: stick
+          value: 1
+        b:
+          unit: g
+          value: 113
         source: whole foods
-  - name: M18 Hackzall
-    upc: "045242502776"
-    manufacturer: Milwaukee
-    model: 2719-20
+      - a:
+          unit: stick
+          value: 4
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+    ndb_number: 1145
+  - name: milk
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: ml
+          value: 1
+        b:
+          unit: g
+          value: 1
+        source: unk
+      - a:
+          unit: Quart
+          value: 0.5
+        b:
+          unit: dollars
+          value: 3
+        source: general
+      - a:
+          unit: Cup
+          value: 1
+        b:
+          unit: ml
+          value: 236.588
+        source: TEST, should be part of unit/lib.rs
+    ndb_number: 1077
+  - name: olive oil
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: ml
+          value: 1
+        b:
+          unit: g
+          value: 0.9
+        source: unk
+      - a:
+          unit: liter
+          value: 2
+        b:
+          unit: dollars
+          value: 23
+        source: costco
+    ndb_number: 4053
+  - name: olive oil
+    ingredient: true
+    manufacturer: CA olive range
+    upc: "850687100339"
     unit_mappings:
       - a:
           unit: dollars
-          value: 169
+          value: 15
+        b:
+          unit: ml
+          value: 500
+        source: whole foods
+  - name: vegetable oil
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: ml
+          value: 1
+        b:
+          unit: g
+          value: 0.9
+        source: unk
+      - a:
+          unit: liter
+          value: 1
+        b:
+          unit: dollars
+          value: 6
+        source: whole foods
+    ndb_number: 44005
+  - name: canola oil
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: ml
+          value: 1
+        b:
+          unit: g
+          value: 0.9
+        source: unk
+      - a:
+          unit: liter
+          value: 1
+        b:
+          unit: dollars
+          value: 6
+        source: whole foods
+    ndb_number: 4582
+  - name: avocado oil
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: ml
+          value: 1
+        b:
+          unit: g
+          value: 0.9
+        source: unk
+      - a:
+          unit: liter
+          value: 2
+        b:
+          unit: dollars
+          value: 23
+        source: costco
+    ndb_number: 4581
+  - name: water
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: ml
+          value: 1
+        b:
+          unit: g
+          value: 1
+        source: unk
+      - a:
+          unit: cups
+          value: 11968
+        b:
+          unit: dollars
+          value: 11.4
+        source: sf puc
+    ndb_number: 14411
+  - name: kosher salt
+    ingredient: true
+    manufacturer: Diamond Crystal
+    upc: "013600020019"
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 3
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+  - name: baking soda
+    ingredient: true
+    manufacturer: Arm & Hammer
+    upc: "033200011408"
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 10
+        b:
+          unit: dollars
+          value: 3
+        source: whole foods
+      - a:
+          unit: cup
+          value: 1
+        b:
+          unit: grams
+          value: 520.49
+        source: google search
+    ndb_number: 18372
+  - name: baking powder
+    ingredient: true
+    manufacturer: Clabber Girl
+    upc: "019900003202"
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 10
+        b:
+          unit: dollars
+          value: 3
+        source: whole foods
+    ndb_number: 18369
+  - name: ginger
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: lb
+          value: 1
+        b:
+          unit: dollars
+          value: 4
+        source: safeway
+    ndb_number: 11216
+  - name: ground ginger
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 2
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+    ndb_number: 2021
+  - name: ground cinnamon
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 2
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+    ndb_number: 2010
+  - name: nutmeg
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 2
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+    ndb_number: 2025
+  - name: black pepper
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 2
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+      - a:
+          unit: tsp
+          value: 1
+        b:
+          unit: tsp, ground
+          value: 1
+        source: tmp
+    ndb_number: 2030
+  - name: cilantro
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: bunch
+          value: 1
+        b:
+          unit: dollars
+          value: 2
+        source: whole foods
+      - a:
+          unit: bunch
+          value: 1
+        b:
+          unit: sprig
+          value: 100
+        source: general
+      - a:
+          unit: bunch
+          value: 1
         b:
           unit: each
           value: 1
-        source: home depot
+        source: general
+    ndb_number: 11165
+  - name: molasses
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 2
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+    ndb_number: 19304
+  - name: vanilla extract
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: oz
+          value: 2
+        b:
+          unit: dollars
+          value: 8
+        source: whole foods
+    ndb_number: 2050
+  - name: salsa
+    ingredient: true
+    manufacturer: generic
+    unit_mappings:
+      - a:
+          unit: cups
+          value: 2
+        b:
+          unit: dollars
+          value: 6
+        source: whole foods
+    ndb_number: 6164
+  - name: M18 Hackzall
+    manufacturer: Milwaukee
+    upc: "045242502776"
+    model: 2719-20
+    price_per: 169
+aliases:
+  all purpose flour:
+    - AP flour
+    - flour
+    - white flour
+    - all-purpose flour
+  white sugar:
+    - sugar
+    - granulated sugar
+  powdered sugar:
+    - confectioner's sugar
+    - confectioners sugar
+  olive oil:
+    - Extra Virgin Olive Oil
+    - evoo
+  butter:
+    - unsalted butter
+  salt:
+    - kosher salt
+  large brown eggs:
+    - eggs
+    - large egg
+    - large eggs
+    - egg
+    - large brown egg
+  black pepper:
+    - pepper

@@ -14,7 +14,7 @@ import {
   extractDbTimestampsFromDBRec,
 } from "~/schemas/util";
 import { type InfLocationConfig } from "../../schemas/config";
-import { findOrCreateProduct } from "./product";
+import { findOrCreateProduct, findProductByName } from "./product";
 import { formatSearchTerm, getSortDirection } from "./util";
 
 // Create a new location
@@ -206,6 +206,10 @@ export const loadLocations = async (
       const productsAtLocation = [];
       for (const product of child.products ?? []) {
         const productRow = await findOrCreateProduct(db, now, product);
+        productsAtLocation.push(productRow);
+      }
+      for (const product of child.productReferences ?? []) {
+        const productRow = await findProductByName(db, product.name);
         productsAtLocation.push(productRow);
       }
 

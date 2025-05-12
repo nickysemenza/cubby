@@ -19,32 +19,33 @@ import {
 import { formatSearchTerm } from "./util";
 import { getSortDirection } from "./util";
 
+export const findProductByName = async (
+  db: Prisma.TransactionClient,
+  name: string,
+): Promise<Product> => {
+  const p = await db.product.findMany({
+    where: {
+      name: {
+        equals: name,
+        mode: "insensitive",
+      },
+    },
+  });
+
+  switch (p.length) {
+    case 0:
+      throw new Error(`Product ${name} not found`);
+    case 1:
+      return p[0];
+    default:
+      throw new Error(`findProductByName: Product ${name} is ambiguous`);
+  }
+};
 export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
   now: Date,
   product: ProductConfigItem,
 ): Promise<Product> => {
-  if (product.kind === "reference") {
-    const p = await db.product.findMany({
-      where: {
-        name: {
-          equals: product.name,
-          mode: "insensitive",
-        },
-      },
-    });
-
-    switch (p.length) {
-      case 0:
-        throw new Error(`Product ${product.name} not found`);
-      case 1:
-        return p[0];
-      default:
-        throw new Error(
-          `findOrCreateProduct: Product ${product.name} is ambiguous`,
-        );
-    }
-  }
   const {
     name,
     manufacturer,
@@ -54,7 +55,7 @@ export const findOrCreateProduct = async (
     ingredient,
     price_per,
     unit_mappings,
-  } = product.data;
+  } = product;
   let ingredeintRef = undefined;
   if (ingredient) {
     //  only link item if its an ingredient
