@@ -1,0 +1,266 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { type PrismaClient } from "@prisma/client";
+import { buildTestDB } from "tooling/test-setup";
+import { productRouter } from "./product";
+import { createCallerFactory } from "../trpc";
+
+let prisma: PrismaClient;
+
+describe("product router", () => {
+  beforeEach(async () => {
+    // Get a isolated test database for each test
+    const res = await buildTestDB();
+    prisma = res.prisma;
+    return res.teardown;
+  });
+
+  it("should create and retrieve a product", async () => {
+    // Create a test caller for the product router
+    const createCaller = createCallerFactory(productRouter);
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
+
+    // Create a test product
+    const productData = {
+      name: "Test Product",
+      manufacturer: "Test Manufacturer",
+      model: "TEST-123",
+      upc: "123456789012",
+      ndb_number: null,
+      ingredientId: null,
+      images: [],
+    };
+
+    // Create the product
+    const createdProduct = await caller.create(productData);
+
+    // Verify the product was created correctly
+    expect(createdProduct.id).toBeDefined();
+    expect(createdProduct.name).toEqual(productData.name);
+    expect(createdProduct.manufacturer).toEqual(productData.manufacturer);
+    expect(createdProduct.model).toEqual(productData.model);
+    expect(createdProduct.upc).toEqual(productData.upc);
+
+    // Retrieve the product by ID
+    const retrievedProduct = await caller.getByID({ id: createdProduct.id });
+
+    // Verify retrieved product matches created product
+    expect(retrievedProduct.id).toEqual(createdProduct.id);
+    expect(retrievedProduct.name).toEqual(createdProduct.name);
+    expect(retrievedProduct.manufacturer).toEqual(createdProduct.manufacturer);
+    expect(retrievedProduct.model).toEqual(createdProduct.model);
+    expect(retrievedProduct.upc).toEqual(createdProduct.upc);
+    expect(retrievedProduct.unitMappings).toEqual([]);
+    expect(retrievedProduct.ingredient).toBeNull();
+  });
+
+  it("should list products with filtering", async () => {
+    // Create a test caller for the product router
+    const createCaller = createCallerFactory(productRouter);
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
+
+    // Create multiple test products
+    const productData1 = {
+      name: "Apple iPhone",
+      manufacturer: "Apple",
+      model: "iPhone 14",
+      upc: "123456789012",
+      ndb_number: null,
+      ingredientId: null,
+      images: [],
+    };
+
+    const productData2 = {
+      name: "Samsung Galaxy",
+      manufacturer: "Samsung",
+      model: "S23",
+      upc: "987654321098",
+      ndb_number: null,
+      ingredientId: null,
+      images: [],
+    };
+
+    const productData3 = {
+      name: "Apple MacBook",
+      manufacturer: "Apple",
+      model: "MacBook Pro",
+      upc: "654321987654",
+      ndb_number: null,
+      ingredientId: null,
+      images: [],
+    };
+
+    // Create the products
+    await caller.create(productData1);
+    await caller.create(productData2);
+    await caller.create(productData3);
+
+    // Test listing without filters
+    const allProducts = await caller.list({
+      filters: {},
+      pagination: { pageSize: 10, pageIndex: 0 },
+      sort: { orderBy: "name", direction: "asc" },
+    });
+
+    // Should return all products
+    expect(allProducts.items.length).toEqual(3);
+    expect(allProducts.meta.totalCount).toEqual(3);
+
+    // Test filtering by name
+    const appleProducts = await caller.list({
+      filters: { nameFilter: "Apple" },
+      pagination: { pageSize: 10, pageIndex: 0 },
+    });
+
+    // Should return only Apple products
+    expect(appleProducts.items.length).toEqual(2);
+    expect(appleProducts.meta.totalCount).toEqual(2);
+    expect(appleProducts.items[0].name).toContain("Apple");
+    expect(appleProducts.items[1].name).toContain("Apple");
+
+    // Test filtering by manufacturer
+    const samsungProducts = await caller.list({
+      filters: { manufacturerFilter: "Samsung" },
+      pagination: { pageSize: 10, pageIndex: 0 },
+    });
+
+    // Should return only Samsung products
+    expect(samsungProducts.items.length).toEqual(1);
+    expect(samsungProducts.meta.totalCount).toEqual(1);
+    expect(samsungProducts.items[0].manufacturer).toEqual("Samsung");
+
+    // Test filtering by UPC
+    const upcProducts = await caller.list({
+      filters: { upcFilter: "123456789012" },
+      pagination: { pageSize: 10, pageIndex: 0 },
+    });
+
+    // Should return product with matching UPC
+    expect(upcProducts.items.length).toEqual(1);
+    expect(upcProducts.meta.totalCount).toEqual(1);
+    expect(upcProducts.items[0].upc).toEqual("123456789012");
+  });
+
+  it("should update a product", async () => {
+    // Create a test caller for the product router
+    const createCaller = createCallerFactory(productRouter);
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
+
+    // Create a test product
+    const productData = {
+      name: "Original Product",
+      manufacturer: "Original Manufacturer",
+      model: "Original-123",
+      upc: "123456789012",
+      ndb_number: null,
+      ingredientId: null,
+      images: [],
+    };
+
+    // Create the product
+    const createdProduct = await caller.create(productData);
+
+    // Update the product
+    const updatedProduct = await caller.update({
+      id: createdProduct.id,
+      data: {
+        name: "Updated Product",
+        manufacturer: "Updated Manufacturer",
+        unitMappings: [
+          {
+            a: { value: 1, unit: "each" },
+            b: { value: 5.99, unit: "dollar" },
+            source: "test",
+          },
+        ],
+      },
+    });
+
+    // Verify the product was updated correctly
+    expect(updatedProduct.id).toEqual(createdProduct.id);
+    expect(updatedProduct.name).toEqual("Updated Product");
+    expect(updatedProduct.manufacturer).toEqual("Updated Manufacturer");
+    expect(updatedProduct.model).toEqual(productData.model); // Unchanged
+    expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
+
+    // Retrieve the product to verify unit mappings
+    const retrievedProduct = await caller.getByID({ id: createdProduct.id });
+
+    // Verify unit mappings were created
+    expect(retrievedProduct.unitMappings.length).toEqual(1);
+    expect(retrievedProduct.unitMappings[0].a).toEqual({
+      value: 1,
+      unit: "each",
+    });
+    expect(retrievedProduct.unitMappings[0].b).toEqual({
+      value: 5.99,
+      unit: "dollar",
+    });
+    expect(retrievedProduct.unitMappings[0].source).toEqual("test");
+  });
+
+  it("should handle partial updates correctly", async () => {
+    // Create a test caller for the product router
+    const createCaller = createCallerFactory(productRouter);
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
+
+    // Create a test product
+    const productData = {
+      name: "Test Product",
+      manufacturer: "Test Manufacturer",
+      model: "TEST-123",
+      upc: "123456789012",
+      ndb_number: null,
+      ingredientId: null,
+      images: [],
+    };
+
+    // Create the product
+    const createdProduct = await caller.create(productData);
+
+    // Update only the name
+    const updatedProduct = await caller.update({
+      id: createdProduct.id,
+      data: {
+        name: "Updated Name Only",
+      },
+    });
+
+    // Verify only the name was updated
+    expect(updatedProduct.id).toEqual(createdProduct.id);
+    expect(updatedProduct.name).toEqual("Updated Name Only");
+    expect(updatedProduct.manufacturer).toEqual(productData.manufacturer); // Unchanged
+    expect(updatedProduct.model).toEqual(productData.model); // Unchanged
+    expect(updatedProduct.upc).toEqual(productData.upc); // Unchanged
+  });
+
+  it("should throw error when retrieving product with invalid ID", async () => {
+    // Create a test caller for the product router
+    const createCaller = createCallerFactory(productRouter);
+    const caller = createCaller({
+      headers: new Headers(),
+      db: prisma,
+      auth: undefined,
+    });
+
+    // Try to retrieve a product with a non-existent ID
+    const nonExistentId = "00000000-0000-0000-0000-000000000000";
+
+    await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow();
+  });
+});
