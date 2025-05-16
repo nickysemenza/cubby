@@ -36,10 +36,10 @@
     "@clerk/nextjs": "^6.19.1",
     "@devoxa/integresql-client": "^2.1.1",
     "@hookform/resolvers": "^5.0.1",
-    "@opentelemetry/api-logs": "^0.200.0",
-    "@opentelemetry/instrumentation": "^0.200.0",
+    "@opentelemetry/api-logs": "^0.201.0",
+    "@opentelemetry/instrumentation": "^0.201.0",
     "@opentelemetry/resources": "^1.28.0",
-    "@opentelemetry/sdk-logs": "^0.200.0",
+    "@opentelemetry/sdk-logs": "^0.201.0",
     "@opentelemetry/sdk-trace-base": "^1.28.0",
     "@prisma/adapter-neon": "^6.7.0",
     "@prisma/client": "^6.1.0",
@@ -130,5 +130,5 @@
   "ct3aMetadata": {
     "initVersion": "7.38.1"
   },
-  "packageManager": "npm@11.3.0"
+  "packageManager": "npm@11.4.0"
 }
