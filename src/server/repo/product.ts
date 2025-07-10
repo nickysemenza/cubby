@@ -6,7 +6,7 @@ import {
   type SortParams,
   type PaginationParams,
   buildTakeSkip,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
 import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
@@ -16,8 +16,8 @@ import {
   type ProductTopLevelOut,
   type ProductInputPayload,
 } from "~/schemas/product";
-import { formatSearchTerm } from "./util";
-import { getSortDirection } from "./util";
+import { formatSearchTerm } from "~/server/repo/database-helpers";
+import { getSortDirection } from "~/server/repo/database-helpers";
 
 export const findProductByName = async (
   db: Prisma.TransactionClient,

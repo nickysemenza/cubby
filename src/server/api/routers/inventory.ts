@@ -2,10 +2,10 @@ import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
   createPaginatedResponseSchema,
-  IDInput,
   sortPaginationCombo,
   buildPaginatedResponse,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
+import { IDInput } from "~/schemas/common";
 import {
   getInventoryEntryByID,
   inventoryentryList,

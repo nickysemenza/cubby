@@ -4,9 +4,9 @@ import {
   buildPaginatedResponse,
   buildTakeSkip,
   createPaginatedResponseSchema,
-  extractDbTimestampsFromDBRec,
   type PaginationParams,
-} from "./util";
+} from "./pagination";
+import { extractDbTimestampsFromDBRec } from "./common";
 
 describe("buildPaginatedResponse", () => {
   test("builds correct response structure with data", () => {

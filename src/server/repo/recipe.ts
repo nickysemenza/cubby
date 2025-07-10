@@ -15,8 +15,11 @@ import {
   type SortParams,
   type PaginationParams,
   buildTakeSkip,
-} from "~/schemas/util";
-import { formatSearchTerm, getSortDirection } from "./util";
+} from "~/schemas/pagination";
+import {
+  formatSearchTerm,
+  getSortDirection,
+} from "~/server/repo/database-helpers";
 
 export const getRecipeByID = async (
   id: string,

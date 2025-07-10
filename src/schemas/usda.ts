@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ndb, upc } from "./util";
+import { ndb, upc } from "~/schemas/identifiers";
 import { unitMappingBase } from "./unitmapping";
 import { productTopLevelOut } from "./product";
 import { assertNever } from "~/lib/assert";

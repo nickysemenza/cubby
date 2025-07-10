@@ -7,7 +7,7 @@ import {
   buildPaginatedResponse,
   createPaginatedResponseSchema,
   sortPaginationCombo,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
 import {

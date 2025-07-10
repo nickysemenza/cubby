@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { type SortParams } from "~/schemas/util";
+import { type SortParams } from "~/schemas/pagination";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (

@@ -8,7 +8,7 @@ import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
-} from "~/app/_components/combobox/utils";
+} from "~/app/_components/combobox/combobox-builders";
 import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";

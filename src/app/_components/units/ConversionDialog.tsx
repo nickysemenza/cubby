@@ -20,7 +20,7 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Scale } from "lucide-react";
-import { Result } from "~/misc/util";
+import { Result } from "~/misc/result-types";
 import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 

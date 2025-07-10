@@ -1,6 +1,6 @@
 import { WMeasure, MeasureKind } from "recipebridge/pkg/recipebridge";
 import { Amount } from "~/codec/codec";
-import { Result, withFailure, withSuccess } from "~/misc/util";
+import { Result, withFailure, withSuccess } from "~/misc/result-types";
 import {
   ProductWithMappingsAndFoodOut,
   IngredientWithRecipesAndProductOut,

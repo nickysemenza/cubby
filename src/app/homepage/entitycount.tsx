@@ -2,7 +2,7 @@
 import { useTRPC } from "~/trpc/react";
 
 import { useQueries } from "@tanstack/react-query";
-import { SortParams } from "~/schemas/util";
+import { SortParams } from "~/schemas/pagination";
 
 export default function EntityCount() {
   const api = useTRPC();

@@ -5,7 +5,7 @@ import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { buildLocationComboboxItem } from "~/app/_components/combobox/utils";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   locationType,
   type LocationOut,

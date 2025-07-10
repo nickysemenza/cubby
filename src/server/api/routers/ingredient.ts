@@ -3,9 +3,9 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
   buildPaginatedResponse,
   createPaginatedResponseSchema,
-  IDInput,
   sortPaginationCombo,
-} from "../../../schemas/util";
+} from "~/schemas/pagination";
+import { IDInput } from "~/schemas/common";
 import {
   getIngredientByID,
   mergeIngredients,

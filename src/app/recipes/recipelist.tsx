@@ -1,7 +1,7 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/util";
+import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";

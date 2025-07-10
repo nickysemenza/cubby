@@ -4,7 +4,7 @@ import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
-} from "~/app/_components/combobox/utils";
+} from "~/app/_components/combobox/combobox-builders";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";

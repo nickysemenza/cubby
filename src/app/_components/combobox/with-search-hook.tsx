@@ -8,7 +8,7 @@ import {
   buildLocationComboboxItem,
   buildProductComboboxItem,
   buildRecipeComboboxItem,
-} from "./utils";
+} from "./combobox-builders";
 import { toast } from "sonner";
 import { type LocationOut, type LocationType } from "~/schemas/location";
 import { type ProductTopLevelOut } from "~/schemas/product";

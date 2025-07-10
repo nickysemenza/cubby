@@ -11,7 +11,7 @@ import {
   defaultSortState,
   buildSortParams,
 } from "./tableUtils";
-import { type SortParams } from "~/schemas/util";
+import { type SortParams } from "~/schemas/pagination";
 
 export interface TableStateOptions {
   initialSort?: string;

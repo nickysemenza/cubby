@@ -1,15 +1,18 @@
 import { type Prisma, type PrismaClient } from "@prisma/client";
-import { dedupe } from "~/misc/util";
+import { dedupe } from "~/misc/array-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { findFood } from "./usda";
 import { foodLookupParamFromProduct } from "./product";
-import { formatSearchTerm, getSortDirection } from "./util";
+import {
+  formatSearchTerm,
+  getSortDirection,
+} from "~/server/repo/database-helpers";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
 

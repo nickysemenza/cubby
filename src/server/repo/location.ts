@@ -11,11 +11,14 @@ import {
   type SortParams,
   type PaginationParams,
   buildTakeSkip,
-  extractDbTimestampsFromDBRec,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
+import { extractDbTimestampsFromDBRec } from "~/schemas/common";
 import { type InfLocationConfig } from "../../schemas/config";
 import { findOrCreateProduct, findProductByName } from "./product";
-import { formatSearchTerm, getSortDirection } from "./util";
+import {
+  formatSearchTerm,
+  getSortDirection,
+} from "~/server/repo/database-helpers";
 
 // Create a new location
 export const createLocation = async (

@@ -16,7 +16,7 @@ import {
   imageList,
   cullPendingImages,
 } from "~/server/repo/image";
-import { buildPaginatedResponse } from "~/schemas/util";
+import { buildPaginatedResponse } from "~/schemas/pagination";
 
 export const imageRouter = createTRPCRouter({
   /**

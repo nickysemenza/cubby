@@ -6,7 +6,7 @@ import {
   createPaginatedResponseSchema,
   sortPaginationCombo,
   buildPaginatedResponse,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
 
 const getByAlternateID = publicProcedure
   .input(foodLookupParam)

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { unitMappingBase } from "~/schemas/unitmapping";
 import { locationBase } from "~/schemas/location";
-import { ndb, upc } from "./util";
+import { ndb, upc } from "~/schemas/identifiers";
 
 const newProductConfig = z.object({
   name: z.string(),

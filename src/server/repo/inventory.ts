@@ -4,10 +4,10 @@ import {
   type SortParams,
   type PaginationParams,
   buildTakeSkip,
-} from "~/schemas/util";
+} from "~/schemas/pagination";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
-import { getSortDirection } from "./util";
+import { getSortDirection } from "~/server/repo/database-helpers";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 
 const inventoryentryInclude = {

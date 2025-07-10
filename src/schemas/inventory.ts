@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { amount } from "~/codec/codec";
-import { dbTimestampsOut } from "./util";
+import { dbTimestampsOut } from "./common";
 
 export const inventoryEntryOut = z
   .object({

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "~/schemas/util";
+import { dbTimestampsOut } from "~/schemas/common";
 
 export const ingredientBase = z.object({
   name: z.string(),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./util";
+import { dbTimestampsOut } from "./common";
 import { amount } from "~/codec/codec";
 
 export const unitMappingBase = z.object({

@@ -6,7 +6,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/util";
+import { type Flatten } from "~/misc/array-helpers";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import {
