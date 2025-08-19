@@ -217,7 +217,6 @@ dependencies = [
 [[package]]
 name = "ingredient"
 version = "0.3.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?branch=main#b94d6f10e4bf1bcbd19099a5ae9096aef472c8ff"
 dependencies = [
  "anyhow",
  "itertools",
@@ -495,7 +494,6 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 [[package]]
 name = "recipe-scraper"
 version = "0.1.0"
-source = "git+https://github.com/nickysemenza/ingredient-parser?branch=main#b94d6f10e4bf1bcbd19099a5ae9096aef472c8ff"
 dependencies = [
  "ingredient",
  "scraper",

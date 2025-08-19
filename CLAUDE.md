@@ -3,3 +3,5 @@
 - ensure the typechecker and linter  is happy with all changes (npm run check)
 - whenever possible, types should be derived from common zod schemas
 - since many of the forms / routers / repos / etc are the same between entities (recipes, locations, products, etc), try to use common helper functions as much as possible
+- todos are kept in @docs/todos.md
+- helper functions should not be added without being used
