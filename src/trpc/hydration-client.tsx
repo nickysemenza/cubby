@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { HydrationBoundary } from "@tanstack/react-query";
+import { HydrationBoundary, type DehydratedState } from "@tanstack/react-query";
 
 // Client component to hydrate the query client with server-fetched data
 export function HydrateClient({
@@ -9,7 +9,7 @@ export function HydrateClient({
   state,
 }: {
   children: React.ReactNode;
-  state?: unknown;
+  state?: DehydratedState;
 }) {
-  return <HydrationBoundary state={state || {}}>{children}</HydrationBoundary>;
+  return <HydrationBoundary state={state}>{children}</HydrationBoundary>;
 }
