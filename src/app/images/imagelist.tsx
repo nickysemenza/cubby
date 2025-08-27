@@ -3,7 +3,6 @@
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useState } from "react";
-import Image from "next/image";
 import {
   ProductPillLink,
   LocationPillLink,
@@ -13,7 +12,6 @@ import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { Input } from "~/components/ui/input";
 import RTable from "~/app/_components/data-table/Table";
 import { NoneState } from "~/app/_components/NoneState";
-import { Badge } from "~/components/ui/badge";
 import useDebounce from "~/hooks/useDebounce";
 import { useQuery } from "@tanstack/react-query";
 import { useTableState } from "~/app/_components/data-table/useTableState";
@@ -21,6 +19,11 @@ import { useTableConfig } from "~/app/_components/data-table/useTableConfig";
 import Link from "next/link";
 import { type ImageWithEntity } from "~/schemas/image";
 import { assertNever } from "~/lib/assert";
+import {
+  TableLink,
+  ImageThumbnail,
+  ImageStatusBadge,
+} from "~/app/_components/table";
 
 export default function ImageList() {
   const api = useTRPC();
@@ -70,19 +73,13 @@ export default function ImageList() {
         const image = row.original;
         return (
           <Link href={`/images/${image.id}`} className="block">
-            <div className="relative h-16 w-16 overflow-hidden rounded-md">
-              {row.original.status === "UPLOADED" ? (
-                <Image
-                  src={image.url}
-                  alt={image.filename}
-                  fill
-                  sizes="64px"
-                  className="object-cover"
-                />
-              ) : (
+            {row.original.status === "UPLOADED" ? (
+              <ImageThumbnail images={[image]} alt={image.filename} size="md" />
+            ) : (
+              <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-gray-100">
                 <NoneState />
-              )}
-            </div>
+              </div>
+            )}
           </Link>
         );
       },
@@ -90,12 +87,9 @@ export default function ImageList() {
     columnHelper.accessor("filename", {
       header: "Filename",
       cell: ({ row }) => (
-        <Link
-          className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-          href={`/images/${row.original.id}`}
-        >
+        <TableLink href={`/images/${row.original.id}`}>
           {row.original.filename}
-        </Link>
+        </TableLink>
       ),
     }),
     columnHelper.accessor("contentType", {
@@ -110,26 +104,7 @@ export default function ImageList() {
       header: "Status",
       cell: ({ getValue }) => {
         const status = getValue();
-        let color = "";
-        switch (status) {
-          case "UPLOADED":
-            color = "green";
-            break;
-          case "PENDING":
-            color = "yellow";
-            break;
-          case "FAILED":
-            color = "red";
-            break;
-        }
-        return (
-          <Badge
-            variant={color === "green" ? "default" : "outline"}
-            className={color ? `border-${color}-600 text-${color}-700` : ""}
-          >
-            {status}
-          </Badge>
-        );
+        return <ImageStatusBadge status={status} />;
       },
     }),
     columnHelper.accessor(

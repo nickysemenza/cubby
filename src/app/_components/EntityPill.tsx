@@ -1,7 +1,29 @@
 import Link from "next/link";
 import type React from "react";
+import { cva } from "class-variance-authority";
 import { entities } from "~/entities/entities";
 import { type Entity } from "~/entities/types";
+
+const pillVariants = cva(
+  "inline-flex items-center truncate rounded-md px-2.5 py-1 text-sm font-medium ring-1 ring-inset transition-colors",
+  {
+    variants: {
+      variant: {
+        default: "bg-gray-50 text-gray-800 ring-gray-200 hover:bg-gray-100",
+        entity: "bg-blue-50 text-blue-700 ring-blue-200",
+        label: "bg-purple-50 text-purple-700 ring-purple-200",
+      },
+      size: {
+        default: "px-2.5 py-1 text-sm",
+        small: "px-1.5 py-0.5 text-xs",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  },
+);
 
 interface PillProps {
   text: string;
@@ -11,16 +33,28 @@ interface PillProps {
 
 const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
   return (
-    <span className="inline-flex items-center truncate rounded-md bg-gray-50 px-2.5 py-1 text-sm font-medium text-gray-800 ring-1 ring-gray-200 transition-colors ring-inset hover:bg-gray-100">
+    <span className={pillVariants({ variant: "default" })}>
       <span className="truncate">{text}</span>
       {entity && (
-        <span className="ml-1.5 inline-flex items-center rounded-sm bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-blue-200 ring-inset">
+        <span
+          className={pillVariants({
+            variant: "entity",
+            size: "small",
+            className: "ml-1.5 rounded-sm",
+          })}
+        >
           {entities[entity].icon}
           <span className="ml-1">{entities[entity].label}</span>
         </span>
       )}
       {label && (
-        <span className="ml-1.5 rounded-sm bg-purple-50 px-1.5 py-0.5 text-xs font-medium text-purple-700 ring-1 ring-purple-200 ring-inset">
+        <span
+          className={pillVariants({
+            variant: "label",
+            size: "small",
+            className: "ml-1.5 rounded-sm",
+          })}
+        >
           {label}
         </span>
       )}

@@ -104,7 +104,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             <TableRow>
               <TableCell
                 colSpan={table.getAllColumns().length}
-                className="h-24 text-center"
+                className="h-16 text-center"
               >
                 <div className="flex items-center justify-center space-x-2">
                   <div className="h-4 w-4 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
@@ -129,7 +129,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             <TableRow>
               <TableCell
                 colSpan={table.getAllColumns().length}
-                className="h-24 text-center"
+                className="h-16 text-center"
               >
                 No results.
               </TableCell>

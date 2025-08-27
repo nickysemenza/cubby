@@ -17,6 +17,7 @@ import {
   createCreatedAtColumn,
   createImageColumn,
 } from "../_components/data-table/columnHelpers";
+import { TableLink } from "../_components/table";
 import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
@@ -54,21 +55,20 @@ export function IngredientList() {
     columnHelper.accessor("name", {
       enableSorting: true,
       cell: (info) => (
-        <Link
-          className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-          href={`/ingredients/${info.row.original.id}`}
-        >
+        <TableLink href={`/ingredients/${info.row.original.id}`}>
           {String(info.getValue())}
-        </Link>
+        </TableLink>
       ),
     }),
     columnHelper.accessor("aliases", {
       cell: (info) => (
-        <ul>
+        <div className="space-y-0.5 text-xs">
           {info.getValue().map((alias) => (
-            <li key={alias}>{alias}</li>
+            <div key={alias} className="truncate">
+              {alias}
+            </div>
           ))}
-        </ul>
+        </div>
       ),
     }),
     createCreatedAtColumn(columnHelper),

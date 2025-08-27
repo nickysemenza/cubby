@@ -3,7 +3,6 @@ import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
-import Link from "next/link";
 import React from "react";
 import {
   IngredientPillLink,
@@ -23,6 +22,7 @@ import {
   createImageColumn,
 } from "../_components/data-table/columnHelpers";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
+import { TableLink } from "../_components/table";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -56,12 +56,9 @@ export function ProductList() {
         const ingredient = info.row.original.ingredient;
         return (
           <div className="flex flex-col">
-            <Link
-              className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-              href={`products/${info.row.original.id}`}
-            >
+            <TableLink href={`products/${info.row.original.id}`}>
               {info.getValue()}
-            </Link>
+            </TableLink>
             {ingredient && (
               <IngredientPillLink name={ingredient.name} id={ingredient.id} />
             )}
@@ -76,12 +73,9 @@ export function ProductList() {
       cell: (info) => {
         const upc = info.getValue();
         return upc ? (
-          <Link
-            href={`/usda/upc/${upc}`}
-            className="font-mono text-blue-600 hover:underline"
-          >
+          <TableLink href={`/usda/upc/${upc}`} variant="mono">
             {upc}
-          </Link>
+          </TableLink>
         ) : (
           <NoneState />
         );
@@ -91,12 +85,9 @@ export function ProductList() {
       header: "NDB",
       cell: (info) =>
         info.getValue() ? (
-          <Link
-            href={`/usda/ndb/${info.getValue()}`}
-            className="font-mono text-blue-600 hover:underline"
-          >
+          <TableLink href={`/usda/ndb/${info.getValue()}`} variant="mono">
             {info.getValue()}
-          </Link>
+          </TableLink>
         ) : (
           <NoneState />
         ),
@@ -112,8 +103,8 @@ export function ProductList() {
         if (!food) return <NoneState />;
         const { nutritionInfo } = food;
         return (
-          <div className="w-64">
-            <NutritionInfoTable n={nutritionInfo} limit={5} />
+          <div className="w-48">
+            <NutritionInfoTable n={nutritionInfo} limit={3} />
           </div>
         );
       },
@@ -134,10 +125,12 @@ export function ProductList() {
     columnHelper.accessor("inventoryEntry", {
       enableSorting: false,
       cell: (info) => (
-        <div className="space-y-1">
-          {info.getValue().map((e) => (
-            <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
-          ))}
+        <div className="space-y-0.5">
+          <div className="space-y-0.5 text-xs">
+            {info.getValue().map((e) => (
+              <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
+            ))}
+          </div>
           <EntityPillLinkList
             items={info.getValue().map((e) => e.location)}
             Pill={LocationPillLink}

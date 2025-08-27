@@ -3,13 +3,13 @@ import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
-import Link from "next/link";
 import React from "react";
 import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
+import { TableLink } from "../_components/table";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -38,12 +38,9 @@ export function USDAFoodList() {
     columnHelper.accessor("fdc_id", {
       header: "FDC ID",
       cell: (info) => (
-        <Link
-          className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-          href={`usda/${info.getValue()}`}
-        >
+        <TableLink href={`usda/${info.getValue()}`}>
           {info.getValue()}
-        </Link>
+        </TableLink>
       ),
     }),
     columnHelper.accessor("foodInfo.description", {
@@ -63,22 +60,24 @@ export function USDAFoodList() {
         if (!brandedFood) return <NoneState />;
 
         return (
-          <div className="flex flex-col">
-            <div>{brandedFood.brand_owner || <NoneState />}</div>
+          <div className="flex flex-col space-y-0.5">
+            <div className="text-sm">
+              {brandedFood.brand_owner || <NoneState />}
+            </div>
             {brandedFood.branded_food_category && (
-              <div className="text-xs text-gray-500">
+              <div className="truncate text-xs text-gray-500">
                 {brandedFood.branded_food_category}
               </div>
             )}
             {brandedFood.gtin_upc && (
               <div className="font-mono text-xs">
                 UPC:{" "}
-                <Link
+                <TableLink
                   href={`/usda/upc/${brandedFood.gtin_upc}`}
-                  className="text-blue-600 hover:underline"
+                  variant="mono"
                 >
                   {brandedFood.gtin_upc}
-                </Link>
+                </TableLink>
               </div>
             )}
           </div>
@@ -90,8 +89,8 @@ export function USDAFoodList() {
       cell: (info) => {
         const nutritionInfo = info.getValue();
         return (
-          <div className="w-64">
-            <NutritionInfoTable n={nutritionInfo} limit={5} />
+          <div className="w-48">
+            <NutritionInfoTable n={nutritionInfo} limit={3} />
           </div>
         );
       },

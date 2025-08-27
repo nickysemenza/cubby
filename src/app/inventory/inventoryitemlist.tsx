@@ -10,8 +10,8 @@ import { showAmountAndPrice } from "../_components/inventory/format-amount";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
+import { ImageThumbnail, TableLink } from "../_components/table";
 import Link from "next/link";
-import Image from "next/image";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -45,32 +45,7 @@ export function InventoryItemList() {
       enableSorting: false,
       cell: (info) => {
         const product = info.getValue();
-        if (!product.images || product.images.length === 0) {
-          return (
-            <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-gray-100">
-              <span className="text-xs text-gray-500">No image</span>
-            </div>
-          );
-        }
-
-        // Use the first image
-        const image = product.images[0];
-        return (
-          <div className="relative h-12 w-12 overflow-hidden rounded-md border">
-            <Image
-              src={image.url}
-              alt={image.filename || "Product image"}
-              fill
-              sizes="48px"
-              className="object-cover"
-            />
-            {product.images.length > 1 && (
-              <div className="absolute right-0 bottom-0 flex h-5 w-5 items-center justify-center rounded-tl-md bg-black/70 text-xs text-white">
-                +{product.images.length - 1}
-              </div>
-            )}
-          </div>
-        );
+        return <ImageThumbnail images={product.images} alt="Product image" />;
       },
     }),
     columnHelper.accessor("amount", {
@@ -96,29 +71,23 @@ export function InventoryItemList() {
         const product = info.getValue();
         const { upc, ndb_number, unitMappings } = product;
         return (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <ProductPillLink product={product} />
-            <div className="mb-2 space-y-1">
+            <div className="space-y-0.5 text-xs">
               {upc && (
-                <div className="text-xs">
+                <div>
                   UPC:{" "}
-                  <Link
-                    href={`/usda/upc/${upc}`}
-                    className="text-blue-600 hover:underline"
-                  >
+                  <TableLink href={`/usda/upc/${upc}`} variant="mono">
                     {upc}
-                  </Link>
+                  </TableLink>
                 </div>
               )}
               {ndb_number && (
-                <div className="text-xs">
+                <div>
                   NDB:{" "}
-                  <Link
-                    href={`/usda/ndb/${ndb_number}`}
-                    className="text-blue-600 hover:underline"
-                  >
+                  <TableLink href={`/usda/ndb/${ndb_number}`} variant="mono">
                     {ndb_number}
-                  </Link>
+                  </TableLink>
                 </div>
               )}
             </div>

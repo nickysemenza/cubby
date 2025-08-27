@@ -51,7 +51,7 @@ export const RecipeIngredientList: React.FC<{
 
         // Format each amount using tryFormatMeasure
         return (
-          <div className="space-y-1">
+          <div className="space-y-0.5 text-sm">
             {amounts.map((amount, index) => (
               <div key={index}>{tryFormatMeasure(w, amount)}</div>
             ))}

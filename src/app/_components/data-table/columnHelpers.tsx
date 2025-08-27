@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
 import { type ColumnHelper } from "@tanstack/react-table";
 import { HoverableTimestamp } from "../HoverableTimestamp";
+import { TableLink, ImageThumbnail } from "../table";
 
 // Initialize dayjs relative time plugin
 
@@ -31,12 +30,9 @@ export function createNameColumn<T extends BaseRow>(
   return columnHelper.accessor((row) => row.name, {
     id: "name",
     cell: (info) => (
-      <Link
-        className="font-medium text-blue-600 hover:underline dark:text-blue-500"
-        href={`${pathPrefix}/${info.row.original.id}`}
-      >
+      <TableLink href={`${pathPrefix}/${info.row.original.id}`}>
         {String(info.getValue())}
-      </Link>
+      </TableLink>
     ),
   });
 }
@@ -67,34 +63,8 @@ export function createImageColumn<T extends ImageRow>(
     id: "image",
     header: headerText,
     enableSorting: false,
-    cell: (info) => {
-      const images = info.getValue();
-      if (!images || images.length === 0) {
-        return (
-          <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-gray-100">
-            <span className="text-xs text-gray-500">No image</span>
-          </div>
-        );
-      }
-
-      // Use the first image
-      const image = images[0];
-      return (
-        <div className="relative h-12 w-12 overflow-hidden rounded-md border">
-          <Image
-            src={image.url}
-            alt={image.filename || "Image"}
-            fill
-            sizes="48px"
-            className="object-cover"
-          />
-          {images.length > 1 && (
-            <div className="absolute right-0 bottom-0 flex h-5 w-5 items-center justify-center rounded-tl-md bg-black/70 text-xs text-white">
-              +{images.length - 1}
-            </div>
-          )}
-        </div>
-      );
-    },
+    cell: (info) => (
+      <ImageThumbnail images={info.getValue()} alt={headerText} />
+    ),
   });
 }

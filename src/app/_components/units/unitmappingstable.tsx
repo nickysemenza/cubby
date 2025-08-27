@@ -20,15 +20,15 @@ export const UnitMappingsTable: React.FC<{
     <Table className="table-auto text-xs">
       <TableHeader>
         <TableRow>
-          <TableHead>a</TableHead>
-          <TableHead>b</TableHead>
-          <TableHead>source</TableHead>
+          <TableHead className="p-0.5">a</TableHead>
+          <TableHead className="p-0.5">b</TableHead>
+          <TableHead className="p-0.5">source</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {mappings.length === 0 && (
           <TableRow>
-            <TableCell colSpan={3} className="text-center">
+            <TableCell colSpan={3} className="p-0.5 text-center">
               <NoneState />
             </TableCell>
           </TableRow>
@@ -36,9 +36,15 @@ export const UnitMappingsTable: React.FC<{
         {mappings.map((unitMapping, x) => {
           return (
             <TableRow key={`${x}-${unitMapping.source}`}>
-              <TableCell>{w.format_amount(unitMapping.a)}</TableCell>
-              <TableCell>{w.format_amount(unitMapping.b)}</TableCell>
-              <TableCell>{unitMapping.source}</TableCell>
+              <TableCell className="p-0.5">
+                {w.format_amount(unitMapping.a)}
+              </TableCell>
+              <TableCell className="p-0.5">
+                {w.format_amount(unitMapping.b)}
+              </TableCell>
+              <TableCell className="truncate p-0.5">
+                {unitMapping.source}
+              </TableCell>
             </TableRow>
           );
         })}

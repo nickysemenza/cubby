@@ -9,7 +9,7 @@ import {
   LocationPillLink,
   RecipePillLink,
 } from "~/app/_components/EntityPill";
-import { Badge } from "~/components/ui/badge";
+import { ImageStatusBadge } from "~/app/_components/table";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { useQuery } from "@tanstack/react-query";
 import { assertNever } from "~/lib/assert";
@@ -49,31 +49,6 @@ export default function ImageDetailPage() {
       </div>
     );
   }
-
-  // Render status badge with appropriate color
-  const getStatusBadge = (status: string) => {
-    let variant: "default" | "outline" = "outline";
-    let className = "";
-
-    switch (status) {
-      case "UPLOADED":
-        variant = "default";
-        className = "bg-green-500 hover:bg-green-600";
-        break;
-      case "PENDING":
-        className = "border-yellow-600 text-yellow-700";
-        break;
-      case "FAILED":
-        className = "border-red-600 text-red-700";
-        break;
-    }
-
-    return (
-      <Badge variant={variant} className={className}>
-        {status}
-      </Badge>
-    );
-  };
 
   // Format bytes to human-readable format
   const formatBytes = (bytes: number, decimals = 2) => {
@@ -184,7 +159,9 @@ export default function ImageDetailPage() {
 
             <div>
               <h3 className="text-sm font-medium text-gray-500">Status</h3>
-              <div className="mt-1">{getStatusBadge(imageDetails.status)}</div>
+              <div className="mt-1">
+                <ImageStatusBadge status={imageDetails.status} />
+              </div>
             </div>
 
             <div>

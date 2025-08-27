@@ -1,7 +1,9 @@
 - read the readme.md to understand project structure
 - after touching files, format them with prettier
-- ensure the typechecker and linter  is happy with all changes (npm run check)
+- ensure the typechecker and linter is happy with all changes (npm run check)
 - whenever possible, types should be derived from common zod schemas
+- import existing types instead of redefining or casting them
 - since many of the forms / routers / repos / etc are the same between entities (recipes, locations, products, etc), try to use common helper functions as much as possible
+- use class-variance-authority (CVA) for component variants when there are multiple styling options
 - todos are kept in @docs/todos.md
 - helper functions should not be added without being used
