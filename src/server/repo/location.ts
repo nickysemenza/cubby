@@ -356,7 +356,7 @@ const buildLocationWithChildren = (
                 excludeId,
               ),
             )
-        : undefined,
+        : [],
     parent: x.parent
       ? buildLocationWithChildren(
           x.parent as LocationWithParentChild,
@@ -378,8 +378,15 @@ export const buildLocationTypeCount = async (db: PrismaClient) => {
       },
     },
   });
-  const res = Object.fromEntries(types.map((t) => [t.type, t._count.type]));
-  return res;
+  const present = Object.fromEntries(
+    types.map((t) => [t.type, t._count.type] as const),
+  ) as Record<string, number>;
+  // Ensure all enum values are present with a default of 0
+  const allKeys = (locationType.options ?? []) as readonly string[];
+  const full = Object.fromEntries(
+    allKeys.map((k) => [k, present[k] ?? 0] as const),
+  );
+  return full as Record<(typeof allKeys)[number], number>;
 };
 export const buildLocationTree = async (db: PrismaClient) => {
   const res = await db.location.findMany({

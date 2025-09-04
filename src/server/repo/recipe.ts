@@ -398,6 +398,24 @@ export const updateRecipe = async (
 
     // Handle section updates if provided
     if (updates.sections) {
+      const sectionIdsInUpdate = updates.sections
+        .map((s) => s.id)
+        .filter((id): id is string => Boolean(id));
+
+      // If no IDs are provided, treat as full replacement: delete all existing sections first
+      if (sectionIdsInUpdate.length === 0) {
+        // Delete all ingredients for existing sections, then delete sections
+        const allSectionIds = existingRecipe.sections.map((s) => s.id);
+        if (allSectionIds.length > 0) {
+          await tx.recipeSectionIngredient.deleteMany({
+            where: { recipeSectionId: { in: allSectionIds } },
+          });
+          await tx.recipeSection.deleteMany({
+            where: { id: { in: allSectionIds } },
+          });
+        }
+      }
+
       for (const sectionUpdate of updates.sections) {
         // If this is a new section (no ID), create it
         if (!sectionUpdate.id) {
@@ -504,6 +522,22 @@ export const updateRecipe = async (
               data: {
                 instructions: instructionsJson,
               },
+            });
+          }
+        }
+
+        // If we are doing partial update with specific section IDs, remove any sections not referenced
+        if (sectionIdsInUpdate.length > 0) {
+          const sectionsToDelete = existingRecipe.sections
+            .map((s) => s.id)
+            .filter((sid) => !sectionIdsInUpdate.includes(sid));
+          if (sectionsToDelete.length > 0) {
+            // Delete their ingredients first, then the sections
+            await tx.recipeSectionIngredient.deleteMany({
+              where: { recipeSectionId: { in: sectionsToDelete } },
+            });
+            await tx.recipeSection.deleteMany({
+              where: { id: { in: sectionsToDelete } },
             });
           }
         }
