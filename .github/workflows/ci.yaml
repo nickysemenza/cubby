@@ -54,7 +54,10 @@ jobs:
         run: npm run db:push
       - run: npm test -- --coverage
         name: "run unit and integration tests"
-      - run: npm run lint
+      - run: npm run format:check
+        name: "check prettier formatting"
+      - run: npm run check
+        name: "lint and type check"
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
       - name: Run Playwright tests
