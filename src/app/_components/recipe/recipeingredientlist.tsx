@@ -24,7 +24,10 @@ import {
 } from "~/app/_components/units/univ-conversion";
 import { tryFormatMeasure } from "../inventory/format-amount";
 import { IngredientPillLink, RecipePillLink } from "../EntityPill";
-import { SummaryCard, type SummaryItem } from "../SummaryCard";
+import {
+  EntitySummaryCard,
+  type RecipeSummaryData,
+} from "~/components/ui/entity-summary-card";
 import { getIngredientName } from "./recipeutils";
 
 export const RecipeIngredientList: React.FC<{
@@ -155,41 +158,28 @@ export const RecipeIngredientList: React.FC<{
     return ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName);
   }, [ingMap, ingredients, w]);
 
-  // Format the total price information
-  const formatTotalPrice = (totals: ReturnType<typeof calculateTotals>) => {
-    const summaryItems: SummaryItem[] = [
-      {
-        label: "Total Cost",
-        value: totals.price,
-        formatter: (value) => `$${Number(value).toFixed(2)}`,
-      },
-      {
-        label: "Total Weight",
-        value: totals.weight,
-        formatter: (value) => `${Number(value).toFixed(0)}g`,
-      },
-      {
-        label: "Total Calories",
-        value: totals.kcal,
-        formatter: (value) => `${Number(value).toFixed(0)} kcal`,
-      },
-      {
-        label: "Total Protein",
-        value: totals.protein,
-        formatter: (value) => `${Number(value).toFixed(0)}g`,
-      },
-      {
-        label: "Missing Data",
-        value: totals.missing.join(", "),
-      },
-    ];
-
-    return <SummaryCard title="Recipe Summary" items={summaryItems} />;
-  };
+  // Convert totals to RecipeSummaryData format
+  const getRecipeSummaryData = (
+    totals: ReturnType<typeof calculateTotals>,
+  ): RecipeSummaryData => ({
+    price: totals.price,
+    weight: totals.weight,
+    kcal: totals.kcal,
+    protein: totals.protein,
+    missing: totals.missing,
+  });
 
   return (
     <div>
-      {totalPrice && formatTotalPrice(totalPrice)}
+      {totalPrice && (
+        <EntitySummaryCard
+          title="Recipe Summary"
+          summaryData={{
+            type: "recipe",
+            data: getRecipeSummaryData(totalPrice),
+          }}
+        />
+      )}
       <RTable
         table={table}
         filterableColumns={[]}

@@ -17,9 +17,8 @@ import {
   getSubmitButtonText,
   buildUpdateObject,
 } from "../form-utils";
-import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { X } from "lucide-react";
+import { ArrayFieldManager } from "~/components/ui/array-field-manager";
 
 // Form schema for ingredient
 const formSchema = z.object({
@@ -61,28 +60,6 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       aliases: ingredient ? ingredient.aliases : [],
     },
   });
-
-  const { setValue, getValues, watch } = form;
-  const aliases = watch("aliases");
-
-  const addAlias = () => {
-    const currentAliases = getValues("aliases");
-    setValue("aliases", [...currentAliases, ""]);
-  };
-
-  const removeAlias = (index: number) => {
-    const currentAliases = getValues("aliases");
-    setValue(
-      "aliases",
-      currentAliases.filter((_, i) => i !== index),
-    );
-  };
-
-  const updateAlias = (index: number, value: string) => {
-    const currentAliases = [...getValues("aliases")];
-    currentAliases[index] = value;
-    setValue("aliases", currentAliases);
-  };
 
   const handleSubmit = (values: IngredientFormValues) => {
     // Filter out empty alias strings
@@ -143,39 +120,21 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
         nullable={false}
       />
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium">Aliases</label>
-          <Button type="button" variant="outline" size="sm" onClick={addAlias}>
-            Add Alias
-          </Button>
-        </div>
-
-        {aliases.length === 0 ? (
-          <div className="text-muted-foreground text-sm">No aliases added</div>
-        ) : (
-          <div className="space-y-2">
-            {aliases.map((alias, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <Input
-                  value={alias}
-                  onChange={(e) => updateAlias(index, e.target.value)}
-                  placeholder="Alias name"
-                  className="flex-1"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeAlias(index)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
+      <ArrayFieldManager<string, IngredientFormValues>
+        form={form}
+        name="aliases"
+        title="Aliases"
+        addButtonText="Add Alias"
+        emptyValue=""
+      >
+        {(field, index) => (
+          <Input
+            {...form.register(`aliases.${index}`)}
+            placeholder="Alias name"
+            className="flex-1"
+          />
         )}
-      </div>
+      </ArrayFieldManager>
     </FormWrapper>
   );
 };

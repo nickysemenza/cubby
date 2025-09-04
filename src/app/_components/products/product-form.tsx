@@ -1,7 +1,7 @@
 "use client";
 
 import { type FC } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -24,9 +24,8 @@ import {
   NullableNumericField,
 } from "../form-utils";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
-import { Button } from "~/components/ui/button";
-import { Plus, X } from "lucide-react";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
+import { ArrayFieldManager } from "~/components/ui/array-field-manager";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
@@ -106,11 +105,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
     },
-  });
-
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "unitMappings",
   });
 
   const handleSubmit = (values: ProductFormValues) => {
@@ -254,40 +248,19 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         className="mt-4"
       />
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium">Unit Mappings</h3>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              append({
-                a: { value: 1, unit: "" },
-                b: { value: 1, unit: "" },
-                source: null,
-              })
-            }
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Mapping
-          </Button>
-        </div>
-
-        {fields.map((field, index) => (
-          <div key={field.id} className="space-y-4 rounded-lg border p-4">
-            <div className="flex justify-between">
-              <h4 className="font-medium">Mapping {index + 1}</h4>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => remove(index)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
+      <ArrayFieldManager<UnitMappingInput, ProductFormValues>
+        form={form}
+        name="unitMappings"
+        title="Unit Mappings"
+        addButtonText="Add Mapping"
+        emptyValue={{
+          a: { value: 1, unit: "" },
+          b: { value: 1, unit: "" },
+          source: null,
+        }}
+      >
+        {(_, index) => (
+          <>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <h5 className="text-sm font-medium">From</h5>
@@ -315,9 +288,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               placeholder="Enter source"
               nullable={true}
             />
-          </div>
-        ))}
-      </div>
+          </>
+        )}
+      </ArrayFieldManager>
     </FormWrapper>
   );
 };
