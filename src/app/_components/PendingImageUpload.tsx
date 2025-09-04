@@ -17,6 +17,8 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import Webcam from "react-webcam";
+import { cn } from "~/lib/utils";
+import { ImageGrid } from "~/components/ui/image-grid";
 
 export interface PendingImage {
   id: string;
@@ -249,7 +251,7 @@ export function PendingImageUpload({
   );
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={cn("space-y-4", className)}>
       <div className="space-y-2">
         <Label htmlFor="image">Upload images</Label>
         <div className="flex gap-2">
@@ -309,7 +311,7 @@ export function PendingImageUpload({
       {pendingImages.length > 0 && (
         <div className="space-y-2">
           <Label>New images</Label>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+          <ImageGrid variant="images">
             {pendingImages.map((image) => (
               <div
                 key={image.id}
@@ -333,7 +335,7 @@ export function PendingImageUpload({
                 </Button>
               </div>
             ))}
-          </div>
+          </ImageGrid>
         </div>
       )}
 
@@ -341,7 +343,7 @@ export function PendingImageUpload({
       {currentExistingImages.length > 0 && (
         <div className="space-y-2">
           <Label>Existing images</Label>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+          <ImageGrid variant="images">
             {currentExistingImages.map((image) => (
               <div
                 key={image.id}
@@ -365,7 +367,7 @@ export function PendingImageUpload({
                 </Button>
               </div>
             ))}
-          </div>
+          </ImageGrid>
         </div>
       )}
     </div>

@@ -8,6 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { cn } from "~/lib/utils";
+import { SummaryGrid } from "~/components/ui/summary-grid";
 
 export interface SummaryItem {
   label: string;
@@ -29,13 +31,13 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
   className,
 }) => {
   return (
-    <Card className={`mb-4 ${className || ""}`}>
+    <Card className={cn("mb-4", className)}>
       <CardHeader className="pb-2">
         <CardTitle>{title}</CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-4 gap-4 md:grid-cols-8">
+        <SummaryGrid>
           {items.map((item, index) => (
             <div key={index}>
               <div className="text-muted-foreground text-sm">{item.label}</div>
@@ -44,7 +46,7 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({
               </div>
             </div>
           ))}
-        </div>
+        </SummaryGrid>
       </CardContent>
     </Card>
   );

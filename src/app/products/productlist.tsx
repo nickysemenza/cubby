@@ -9,6 +9,8 @@ import {
   LocationPillLink,
 } from "../_components/EntityPill";
 import { useWasm } from "~/hooks/useWasm";
+import { FlexContainer } from "~/components/ui/flex-container";
+import { SpacedContainer } from "~/components/ui/spaced-container";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappingsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
@@ -55,14 +57,14 @@ export function ProductList() {
       cell: (info) => {
         const ingredient = info.row.original.ingredient;
         return (
-          <div className="flex flex-col">
+          <FlexContainer direction="col">
             <TableLink href={`products/${info.row.original.id}`}>
               {info.getValue()}
             </TableLink>
             {ingredient && (
               <IngredientPillLink name={ingredient.name} id={ingredient.id} />
             )}
-          </div>
+          </FlexContainer>
         );
       },
     }),
@@ -125,7 +127,7 @@ export function ProductList() {
     columnHelper.accessor("inventoryEntry", {
       enableSorting: false,
       cell: (info) => (
-        <div className="space-y-0.5">
+        <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
             {info.getValue().map((e) => (
               <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
@@ -136,7 +138,7 @@ export function ProductList() {
             Pill={LocationPillLink}
             pillPropName="location"
           />
-        </div>
+        </SpacedContainer>
       ),
     }),
     createCreatedAtColumn(columnHelper),

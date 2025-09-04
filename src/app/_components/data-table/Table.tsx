@@ -15,6 +15,8 @@ import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { type ReactNode } from "react";
+import { SpacedContainer } from "~/components/ui/spaced-container";
+import { LoadingContainer } from "~/components/ui/loading-spinner";
 
 interface FilterOption {
   value: string;
@@ -44,7 +46,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   } = props;
 
   return (
-    <div className="space-y-4">
+    <SpacedContainer space={4}>
       <DataTableToolbar
         table={table}
         additionalFilters={additionalFilters}
@@ -106,10 +108,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 colSpan={table.getAllColumns().length}
                 className="h-16 text-center"
               >
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
-                  <span>Loading...</span>
-                </div>
+                <LoadingContainer />
               </TableCell>
             </TableRow>
           ) : table.getRowModel().rows?.length ? (
@@ -138,6 +137,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         </TableBody>
       </Table>
       <DataTablePagination table={table} />
-    </div>
+    </SpacedContainer>
   );
 }
