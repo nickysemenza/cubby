@@ -7,22 +7,51 @@ on:
   pull_request:
     branches:
       - main
-
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  # https://github.com/dorny/test-reporter/issues/149
 jobs:
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Build recipebridge WASM
+        run: npm run wasm
+        env:
+          RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+      - name: Upload WASM pkg artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-pkg
+          path: recipebridge/pkg
+
   lint-format:
     name: Lint and Format
     runs-on: ubuntu-latest
+    needs: [build-wasm]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
       - name: Install dependencies
         run: npm ci
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: recipebridge/pkg
       - run: npm run format:check
         name: "check prettier formatting"
       - run: npm run check
         name: "lint and type check"
 
   build-test:
+    needs: [build-wasm]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -51,14 +80,11 @@ jobs:
       - uses: actions/setup-node@v4
       - name: Install dependencies and playwright binaries
         run: npm ci
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install wasm pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-      - run: npm run wasm
-        env:
-          # todo: why is cargo.toml not good enough?
-          RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: recipebridge/pkg
       - name: Setup environment variables
         run: |
           cp .env.example .env
@@ -74,6 +100,61 @@ jobs:
             --reporter=github-actions \
             --reporter=junit \
             --outputFile.junit=test-results/vitest-junit.xml
+      - name: Publish Vitest Results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit/Integration Tests
+          path: test-results/vitest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/recipehub
+
+  e2e-tests:
+    name: Playwright E2E
+    needs: [build-wasm]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      integresql:
+        image: ghcr.io/allaboutapps/integresql:latest
+        ports:
+          - 5000:5000
+        env:
+          PGHOST: postgres
+          PGUSER: postgres
+          PGPASSWORD: password
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Download WASM pkg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-pkg
+          path: recipebridge/pkg
+      - name: Setup environment variables
+        run: |
+          cp .env.example .env
+          echo "NEXTAUTH_SECRET=supersecret" >> .env
+      - name: Push schema to database
+        run: npm run db:push
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
       - name: Run Playwright tests
@@ -93,22 +174,9 @@ jobs:
           path: test-results/junit.xml
           reporter: java-junit
           fail-on-error: false
-      - name: Publish Vitest Results
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Unit/Integration Tests
-          path: test-results/vitest-junit.xml
-          reporter: java-junit
-          fail-on-error: false
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 30
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/recipehub
