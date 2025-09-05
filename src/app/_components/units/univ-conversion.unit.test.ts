@@ -119,10 +119,14 @@ describe("getGramAndNutrient", () => {
     // Act
     const result = getGramAndNutrient(wasm, amount, mappings, product);
 
-    // Assert
-    expect(result.gram.success).toBe(false);
-    expect(result.gram.error).toBe("Product(s) have no nutrients");
+    // Assert - Weight conversion should succeed
+    expect(result.gram.success).toBe(true);
+    if (result.gram.success) {
+      expect(result.gram.value.unit).toBe("Gram");
+      expect(result.gram.value.value).toBe(240);
+    }
 
+    // Nutrient conversion should fail due to missing nutrition data
     expect(result.nutrient.success).toBe(false);
     expect(result.nutrient.error).toBe("Product(s) have no nutrients");
   });
@@ -143,9 +147,14 @@ describe("getGramAndNutrient", () => {
     // Act
     const result = getGramAndNutrient(wasm, amount, mappings, product);
 
-    // Assert
-    expect(result.gram.success).toBe(false);
-    expect(result.gram.error).toBe("Product(s) have no nutrients");
+    // Assert - Weight conversion should succeed even with undefined product
+    expect(result.gram.success).toBe(true);
+    if (result.gram.success) {
+      expect(result.gram.value.unit).toBe("Gram");
+      expect(result.gram.value.value).toBe(240);
+    }
+
+    // Nutrient conversion should fail due to undefined product
     expect(result.nutrient.success).toBe(false);
     expect(result.nutrient.error).toBe("Product(s) have no nutrients");
   });

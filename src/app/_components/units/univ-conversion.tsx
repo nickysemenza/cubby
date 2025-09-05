@@ -72,24 +72,12 @@ export const convertAmountToPrice = (
 };
 
 /**
- * Calculates nutrients based on amount, mappings, and product
+ * Calculates nutrients based on weight in grams and product data
  */
 export const calculateNutrients = (
-  w: wasm,
-  amount: Amount,
-  mappings: UnitMapping[],
+  weightInGrams: number,
   product: ProductWithMappingsAndFoodOut[] | undefined,
-): Result<{
-  gram: WMeasure;
-  nutrient: NutrientsPer100;
-}> => {
-  // Convert the amount to weight in grams
-  const grams = safeConvertAmount(w, amount, mappings, "weight");
-  if (!grams.success) {
-    return grams;
-  }
-  const gramsValue = grams.value;
-
+): Result<NutrientsPer100> => {
   // Try to find nutrient information from products
   const firstNutrient = product
     ?.flatMap((p) => getProductNutrients(p))
@@ -101,19 +89,13 @@ export const calculateNutrients = (
   }
 
   // Scale nutrients based on weight
-  const scaledNutrient = scaleNutrientsByWeight(
-    firstNutrient,
-    gramsValue.value,
-  );
+  const scaledNutrient = scaleNutrientsByWeight(firstNutrient, weightInGrams);
 
-  return withSuccess({
-    gram: gramsValue,
-    nutrient: scaledNutrient,
-  });
+  return withSuccess(scaledNutrient);
 };
 
 /**
- * Extracts gram and nutrient results from calculateNutrients result
+ * Extracts gram and nutrient results separately
  * (Previously known as getGramAndNutrient)
  */
 export const getGramAndNutrient = (
@@ -122,18 +104,19 @@ export const getGramAndNutrient = (
   mappings: UnitMapping[],
   product: ProductWithMappingsAndFoodOut[] | undefined,
 ): { gram: Result<WMeasure>; nutrient: Result<NutrientsPer100> } => {
-  const result = calculateNutrients(w, amount, mappings, product);
+  // Convert the amount to weight in grams - this should work independently
+  const gramResult = safeConvertAmount(w, amount, mappings, "weight");
 
-  if (!result.success) {
-    return {
-      gram: withFailure(result.error),
-      nutrient: withFailure(result.error),
-    };
-  }
+  // Calculate nutrients if we have a successful weight conversion
+  const nutrientResult: Result<NutrientsPer100> = gramResult.success
+    ? calculateNutrients(gramResult.value.value, product)
+    : withFailure<NutrientsPer100>(
+        "Cannot calculate nutrients without weight conversion",
+      );
 
   return {
-    gram: withSuccess(result.value.gram),
-    nutrient: withSuccess(result.value.nutrient),
+    gram: gramResult,
+    nutrient: nutrientResult,
   };
 };
 

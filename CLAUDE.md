@@ -43,6 +43,15 @@
 - integration tests: .integration.test.ts suffix
 - e2e tests: in /tests/e2e directory
 - test common utilities like cn() function for class merging
+- use Playwright MCP for browser automation and e2e testing when working with web UI interactions
+
+## Git & GitHub Patterns
+
+- use GitHub CLI (gh) for GitHub-related operations: issues, pull requests, releases
+- follow standard git commit message format with descriptive summaries
+- use conventional commit prefixes when appropriate (feat:, fix:, refactor:, etc.)
+- only commit changes when explicitly requested by the user
+- when creating PRs, include clear summary and test plan sections
 
 ## UI/UX Patterns
 
@@ -51,3 +60,19 @@
 - use SideBySideFields component for two-column form layouts
 - follow shadcn/ui component patterns in src/components/ui
 - use class-variance-authority (CVA) for component variants when there are multiple styling options
+
+## Unit Conversion & WASM Architecture
+
+**Critical**: The unit conversion system is powered by a separate WASM-compiled Rust crate from `../ingredient-parser/ingredient-parser/`.
+
+### Key Architecture Points:
+- **Separate Repository**: `ingredient-parser` is a separate Git repository containing the Rust unit conversion engine
+- **WASM Integration**: The Rust code is compiled to WebAssembly and loaded via `useWasm()` hook
+- **Chained Conversions**: The WASM engine supports powerful chained conversions (e.g., "2 cups → $5.00 → 333g" through intermediate units)
+- **Graph-Based**: Uses graph algorithms to find conversion paths through multiple unit mappings
+
+### Unit Mapping System:
+- **Product Unit Mappings**: Products can have multiple unit mappings (volume→price, weight→price, etc.)
+- **Bidirectional Graphs**: WASM creates bidirectional conversion graphs from mappings
+- **Error Handling**: Weight conversion should work independently of nutrition data availability
+

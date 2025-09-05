@@ -57,3 +57,5 @@ node_modules/
 **/.claude/settings.local.json
 
 certificates
+# clerk configuration (can include secrets)
+/.clerk/
