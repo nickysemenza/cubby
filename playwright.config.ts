@@ -11,6 +11,8 @@ import { defineConfig, devices } from "@playwright/test";
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   /* Run tests in files in parallel */
@@ -22,7 +24,23 @@ export default defineConfig({
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: "html",
+  reporter: isCI
+    ? [
+        ["github"],
+        [
+          "junit",
+          {
+            outputFile: "test-results/junit.xml",
+            embedAnnotationsAsProperties: true,
+          },
+        ],
+        ["html"],
+      ]
+    : "html",
+  expect: {
+    // Allow a bit more time on CI for client-side navigations
+    timeout: isCI ? 10000 : 5000,
+  },
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
@@ -72,8 +90,11 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
+    // Use a built server on CI for stability; dev server locally for faster iteration
+    // command: isCI ? "npm run preview" : "npm run dev",
     command: "npm run dev",
     url: "http://127.0.0.1:3000",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !isCI,
+    timeout: isCI ? 180_000 : 60_000,
   },
 });

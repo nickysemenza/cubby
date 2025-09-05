@@ -9,6 +9,19 @@ on:
       - main
 
 jobs:
+  lint-format:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+      - name: Install dependencies
+        run: npm ci
+      - run: npm run format:check
+        name: "check prettier formatting"
+      - run: npm run check
+        name: "lint and type check"
+
   build-test:
     runs-on: ubuntu-latest
     services:
@@ -52,16 +65,42 @@ jobs:
           echo "NEXTAUTH_SECRET=supersecret" >> .env
       - name: Push schema to database
         run: npm run db:push
-      - run: npm test -- --coverage
-        name: "run unit and integration tests"
-      - run: npm run format:check
-        name: "check prettier formatting"
-      - run: npm run check
-        name: "lint and type check"
+      - name: run unit and integration tests
+        run: |
+          mkdir -p test-results
+          npm test -- \
+            --coverage \
+            --reporter=default \
+            --reporter=github-actions \
+            --reporter=junit \
+            --outputFile.junit=test-results/vitest-junit.xml
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
       - name: Run Playwright tests
         run: npx playwright test
+      - name: List test-results contents
+        if: always()
+        run: |
+          echo "PWD=$(pwd)"
+          ls -la
+          echo "Contents of test-results:"
+          ls -la test-results || true
+      - name: Publish Playwright Results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: E2E Tests
+          path: test-results/junit.xml
+          reporter: java-junit
+          fail-on-error: false
+      - name: Publish Vitest Results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit/Integration Tests
+          path: test-results/vitest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
