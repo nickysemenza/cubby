@@ -11,6 +11,7 @@ import { GlobalCommandMenu } from "./_components/command-menu";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "~/components/ui/sonner";
 import { WasmContextProvider } from "~/hooks/useWasm";
+import { DebugContextProvider } from "~/hooks/useDebug";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -27,20 +28,22 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className={cn(GeistSans.variable)}>
         <body>
-          <div className="flex flex-col">
-            <div className="border-b">
-              <div className="flex h-16 items-center px-4">
-                <MainNav className="mx-0" />
+          <DebugContextProvider>
+            <div className="flex flex-col">
+              <div className="border-b">
+                <div className="flex h-16 items-center px-4">
+                  <MainNav className="mx-0" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <GlobalCommandMenu />
-          <Toaster />
-          <TRPCReactProvider>
-            <ReactQueryDevtools initialIsOpen={false} />
-            <WasmContextProvider>{children}</WasmContextProvider>
-          </TRPCReactProvider>
+            <GlobalCommandMenu />
+            <Toaster />
+            <TRPCReactProvider>
+              <ReactQueryDevtools initialIsOpen={false} />
+              <WasmContextProvider>{children}</WasmContextProvider>
+            </TRPCReactProvider>
+          </DebugContextProvider>
         </body>
       </html>
     </ClerkProvider>

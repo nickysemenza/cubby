@@ -13,10 +13,12 @@ import {
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
 import { type ReactNode } from "react";
 import { SpacedContainer } from "~/components/ui/spaced-container";
 import { LoadingContainer } from "~/components/ui/loading-spinner";
+import { useDebug } from "~/hooks/useDebug";
+import { DebugDialog } from "./DebugDialog";
 
 interface FilterOption {
   value: string;
@@ -44,6 +46,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     filterableColumns,
     isLoading = false,
   } = props;
+
+  const { isDebugEnabled } = useDebug();
 
   return (
     <SpacedContainer space={4}>
@@ -98,6 +102,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   </TableHead>
                 );
               })}
+              {/* Add debug header when debug mode is enabled */}
+              {isDebugEnabled && (
+                <TableHead>Debug</TableHead>
+              )}
             </TableRow>
           ))}
         </TableHeader>
@@ -105,7 +113,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           {isLoading ? (
             <TableRow>
               <TableCell
-                colSpan={table.getAllColumns().length}
+                colSpan={table.getAllColumns().length + (isDebugEnabled ? 1 : 0)}
                 className="h-16 text-center"
               >
                 <LoadingContainer />
@@ -122,12 +130,27 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
+                {/* Add debug cell when debug mode is enabled */}
+                {isDebugEnabled && (
+                  <TableCell>
+                    <DebugDialog
+                      data={row.original}
+                      title={`Debug Data - Row ${row.id}`}
+                      trigger={
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <Bug className="h-4 w-4" />
+                          <span className="sr-only">Debug row data</span>
+                        </Button>
+                      }
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))
           ) : (
             <TableRow>
               <TableCell
-                colSpan={table.getAllColumns().length}
+                colSpan={table.getAllColumns().length + (isDebugEnabled ? 1 : 0)}
                 className="h-16 text-center"
               >
                 No results.

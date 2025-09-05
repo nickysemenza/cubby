@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
-import { Menu, PackageOpen, X } from "lucide-react";
+import { Menu, PackageOpen, X, Bug, BugOff } from "lucide-react";
 import { useState } from "react";
+import { useDebug } from "~/hooks/useDebug";
+import { Button } from "~/components/ui/button";
 
 type NavItem = {
   href: string;
@@ -41,6 +43,7 @@ export function MainNav({
 }: React.HTMLAttributes<HTMLElement>) {
   const pathName = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { isDebugEnabled, toggleDebug } = useDebug();
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -97,6 +100,26 @@ export function MainNav({
       </nav>
 
       <div className="flex items-center space-x-4">
+        {/* Debug Toggle */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleDebug}
+          className={cn(
+            "hidden md:flex",
+            isDebugEnabled &&
+              "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
+          )}
+          title={isDebugEnabled ? "Disable debug mode" : "Enable debug mode"}
+        >
+          {isDebugEnabled ? (
+            <BugOff className="h-4 w-4" />
+          ) : (
+            <Bug className="h-4 w-4" />
+          )}
+          <span className="sr-only">Toggle debug mode</span>
+        </Button>
+
         <SignedOut>
           <SignInButton />
         </SignedOut>
@@ -118,6 +141,26 @@ export function MainNav({
       {mobileMenuOpen && (
         <div className="bg-background fixed inset-0 top-16 z-50 md:hidden">
           <nav className="flex flex-col space-y-4 p-4">
+            {/* Debug Toggle for Mobile */}
+            <Button
+              variant="ghost"
+              onClick={() => {
+                toggleDebug();
+                setMobileMenuOpen(false);
+              }}
+              className={cn(
+                "h-auto justify-start p-2",
+                isDebugEnabled &&
+                  "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
+              )}
+            >
+              {isDebugEnabled ? (
+                <BugOff className="mr-2 h-4 w-4" />
+              ) : (
+                <Bug className="mr-2 h-4 w-4" />
+              )}
+              {isDebugEnabled ? "Disable Debug Mode" : "Enable Debug Mode"}
+            </Button>
             {NavItems.map((item) => {
               const active = item.isActive(pathName);
 

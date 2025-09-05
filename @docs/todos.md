@@ -6,8 +6,15 @@
   - No data: "No data available" 
   - Partial data: "$8.30 (3/5 ingredients)"
   - Missing data grouped by type: "Missing Data: Price (chicken, oil), Weight (salt)"
-## add table debug column
-* Let's add a column (default hidden) on all tables that launches a `Dialog` that shows the raw json data of the given row.
+## ✅ add table debug column
+* ~~Let's add a column (default hidden) on all tables that launches a `Dialog` that shows the raw json data of the given row.~~
+* **COMPLETED**: Global debug toggle system implemented:
+  - Debug toggle button in navigation (bug icon) 
+  - Debug columns automatically appear on all tables when enabled
+  - Dialog shows formatted JSON data with copy functionality
+  - Persistent setting saved to localStorage
+  - Responsive design for mobile and desktop
+  - Centralized implementation in Table component
 ## make tables look better on mobile
 * right now they are really wide and you have to laterally scroll.
 ## when querying USDA and we are logged out it just appears to not load
