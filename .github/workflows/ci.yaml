@@ -50,74 +50,13 @@ jobs:
       - run: npm run check
         name: "lint and type check"
 
-  build-test:
+  test:
+    name: Tests
     needs: [build-wasm]
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_HOST_AUTH_METHOD: trust
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      integresql:
-        image: ghcr.io/allaboutapps/integresql:latest
-        ports:
-          - 5000:5000
-        env:
-          PGHOST: postgres
-          PGUSER: postgres
-          PGPASSWORD: password
-
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
-      - name: Install dependencies
-        run: npm ci
-      - name: Download WASM pkg artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: wasm-pkg
-          path: recipebridge/pkg
-      - name: Setup environment variables
-        run: |
-          cp .env.example .env
-          echo "NEXTAUTH_SECRET=supersecret" >> .env
-      - name: Push schema to database
-        run: npm run db:push
-      - name: run unit and integration tests
-        run: |
-          mkdir -p test-results
-          npm test -- \
-            --coverage \
-            --reporter=default \
-            --reporter=github-actions \
-            --reporter=junit \
-            --outputFile.junit=test-results/vitest-junit.xml
-      - name: Publish Vitest Results
-        if: always()
-        uses: dorny/test-reporter@v1
-        with:
-          name: Unit/Integration Tests
-          path: test-results/vitest-junit.xml
-          reporter: java-junit
-          fail-on-error: false
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: nickysemenza/recipehub
-
-  e2e-tests:
-    name: Playwright E2E
-    needs: [build-wasm]
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-type: [unit, e2e]
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y29uY2lzZS1zaGVwaGVyZC00MS5jbGVyay5hY2NvdW50cy5kZXYk
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
@@ -142,6 +81,7 @@ jobs:
           PGHOST: postgres
           PGUSER: postgres
           PGPASSWORD: password
+
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v4
@@ -158,19 +98,42 @@ jobs:
           echo "NEXTAUTH_SECRET=supersecret" >> .env
       - name: Push schema to database
         run: npm run db:push
+      
+      # Unit/Integration Tests
+      - name: Run unit and integration tests
+        if: matrix.test-type == 'unit'
+        run: |
+          mkdir -p test-results
+          npm test -- \
+            --coverage \
+            --reporter=default \
+            --reporter=github-actions \
+            --reporter=junit \
+            --outputFile.junit=test-results/vitest-junit.xml
+      - name: Publish Vitest Results
+        if: matrix.test-type == 'unit' && always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Unit/Integration Tests
+          path: test-results/vitest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
+      - name: Upload coverage reports to Codecov
+        if: matrix.test-type == 'unit'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/recipehub
+
+      # E2E Tests
       - name: Install Playwright Browsers
+        if: matrix.test-type == 'e2e'
         run: npx playwright install --with-deps
       - name: Run Playwright tests
+        if: matrix.test-type == 'e2e'
         run: npx playwright test
-      - name: List test-results contents
-        if: always()
-        run: |
-          echo "PWD=$(pwd)"
-          ls -la
-          echo "Contents of test-results:"
-          ls -la test-results || true
       - name: Publish Playwright Results
-        if: always()
+        if: matrix.test-type == 'e2e' && always()
         uses: dorny/test-reporter@v1
         with:
           name: E2E Tests
@@ -178,7 +141,7 @@ jobs:
           reporter: java-junit
           fail-on-error: false
       - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
+        if: matrix.test-type == 'e2e' && !cancelled()
         with:
           name: playwright-report
           path: playwright-report/
