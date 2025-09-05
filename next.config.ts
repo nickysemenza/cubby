@@ -36,10 +36,10 @@ const nextConfig: NextConfig = {
 
     config.module.rules.push({
       test: /\.wasm$/,
-      type: "webassembly/async",
+      type: "webassembly/sync",
     });
     config.experiments = {
-      asyncWebAssembly: true,
+      syncWebAssembly: true,
       topLevelAwait: true,
       layers: true,
     };
