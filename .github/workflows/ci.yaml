@@ -104,7 +104,7 @@ jobs:
             --outputFile.junit=test-results/vitest-junit.xml
       - name: Publish Vitest Results
         if: matrix.test-type == 'unit' && always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         with:
           name: Unit/Integration Tests
           path: test-results/vitest-junit.xml
@@ -126,7 +126,7 @@ jobs:
         run: npx playwright test
       - name: Publish Playwright Results
         if: matrix.test-type == 'e2e' && always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         with:
           name: E2E Tests
           path: test-results/junit.xml
