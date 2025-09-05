@@ -45,7 +45,7 @@ test.describe("Main navigation", () => {
     ).toBeVisible();
   });
 
-  test("mobile menu toggles and links work", async ({ page, browserName }) => {
+  test("mobile menu toggles and links work", async ({ page }) => {
     await page.goto("/");
     await page.setViewportSize({ width: 375, height: 812 });
 
