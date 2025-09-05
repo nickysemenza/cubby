@@ -21,7 +21,6 @@ export function DebugDialog({
   trigger,
   title = "Debug Data",
 }: DebugDialogProps) {
-
   return (
     <Dialog>
       <DialogTrigger asChild>{trigger}</DialogTrigger>

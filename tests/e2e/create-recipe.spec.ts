@@ -60,9 +60,11 @@ test.describe("Create Recipe", () => {
 
     // Wait for the form to appear with more robust selectors
     await page.waitForSelector('text="Unit Mapping 1"', { timeout: 10000 });
-    
+
     // Wait specifically for the unit input fields to be present and visible
-    await page.waitForSelector('input[placeholder="Enter unit"]', { timeout: 10000 });
+    await page.waitForSelector('input[placeholder="Enter unit"]', {
+      timeout: 10000,
+    });
 
     // Fill in From section: 1 cup (first value is already "1" by default)
     const fromUnitField1 = page

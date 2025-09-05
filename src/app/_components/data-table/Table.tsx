@@ -103,9 +103,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 );
               })}
               {/* Add debug header when debug mode is enabled */}
-              {isDebugEnabled && (
-                <TableHead>Debug</TableHead>
-              )}
+              {isDebugEnabled && <TableHead>Debug</TableHead>}
             </TableRow>
           ))}
         </TableHeader>
@@ -113,7 +111,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           {isLoading ? (
             <TableRow>
               <TableCell
-                colSpan={table.getAllColumns().length + (isDebugEnabled ? 1 : 0)}
+                colSpan={
+                  table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
+                }
                 className="h-16 text-center"
               >
                 <LoadingContainer />
@@ -137,7 +137,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       data={row.original}
                       title={`Debug Data - Row ${row.id}`}
                       trigger={
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                        >
                           <Bug className="h-4 w-4" />
                           <span className="sr-only">Debug row data</span>
                         </Button>
@@ -150,7 +154,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           ) : (
             <TableRow>
               <TableCell
-                colSpan={table.getAllColumns().length + (isDebugEnabled ? 1 : 0)}
+                colSpan={
+                  table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
+                }
                 className="h-16 text-center"
               >
                 No results.
