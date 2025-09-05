@@ -12,6 +12,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "~/components/ui/sonner";
 import { WasmContextProvider } from "~/hooks/useWasm";
 import { DebugContextProvider } from "~/hooks/useDebug";
+import { ThemeProvider } from "~/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -26,24 +27,35 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider>
-      <html lang="en" className={cn(GeistSans.variable)}>
+      <html
+        lang="en"
+        className={cn(GeistSans.variable)}
+        suppressHydrationWarning
+      >
         <body>
-          <DebugContextProvider>
-            <div className="flex flex-col">
-              <div className="border-b">
-                <div className="flex h-16 items-center px-4">
-                  <MainNav className="mx-0" />
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <DebugContextProvider>
+              <div className="flex flex-col">
+                <div className="border-b">
+                  <div className="flex h-16 items-center px-4">
+                    <MainNav className="mx-0" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <GlobalCommandMenu />
-            <Toaster />
-            <TRPCReactProvider>
-              <ReactQueryDevtools initialIsOpen={false} />
-              <WasmContextProvider>{children}</WasmContextProvider>
-            </TRPCReactProvider>
-          </DebugContextProvider>
+              <GlobalCommandMenu />
+              <Toaster />
+              <TRPCReactProvider>
+                <ReactQueryDevtools initialIsOpen={false} />
+                <WasmContextProvider>{children}</WasmContextProvider>
+              </TRPCReactProvider>
+            </DebugContextProvider>
+          </ThemeProvider>
         </body>
       </html>
     </ClerkProvider>

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MainNav } from "./_components/MainNav";
+import { DebugContextProvider } from "../hooks/useDebug";
 
 // Mock matchMedia
 Object.defineProperty(window, "matchMedia", {
@@ -15,6 +16,17 @@ Object.defineProperty(window, "matchMedia", {
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
   })),
+});
+
+// Mock localStorage
+const localStorageMock = {
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+Object.defineProperty(window, "localStorage", {
+  value: localStorageMock,
 });
 
 // Mock Clerk components
@@ -50,10 +62,12 @@ describe("App Router: Works with Client Components", () => {
   it("renders the main nav", () => {
     // Mock the layout to avoid html/body nesting issues in tests
     const LayoutContent = () => (
-      <div className="flex flex-col">
-        <MainNav />
-        <div>hello</div>
-      </div>
+      <DebugContextProvider>
+        <div className="flex flex-col">
+          <MainNav />
+          <div>hello</div>
+        </div>
+      </DebugContextProvider>
     );
 
     render(<LayoutContent />);

@@ -9,6 +9,7 @@ import { Menu, PackageOpen, X, Bug, BugOff } from "lucide-react";
 import { useState } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
+import { ThemeToggle } from "~/components/ui/theme-toggle";
 
 type NavItem = {
   href: string;
@@ -100,6 +101,9 @@ export function MainNav({
       </nav>
 
       <div className="flex items-center space-x-4">
+        {/* Theme Toggle */}
+        <ThemeToggle />
+
         {/* Debug Toggle */}
         <Button
           variant="ghost"
@@ -141,6 +145,12 @@ export function MainNav({
       {mobileMenuOpen && (
         <div className="bg-background fixed inset-0 top-16 z-50 md:hidden">
           <nav className="flex flex-col space-y-4 p-4">
+            {/* Theme Toggle for Mobile */}
+            <div className="flex items-center justify-between p-2">
+              <span className="text-base font-medium">Theme</span>
+              <ThemeToggle />
+            </div>
+
             {/* Debug Toggle for Mobile */}
             <Button
               variant="ghost"
