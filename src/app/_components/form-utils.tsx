@@ -25,7 +25,7 @@ import {
 } from "~/components/ui/select";
 
 // Base props shared by all forms
-export interface BaseFormProps {
+interface BaseFormProps {
   isPending: boolean;
   error?: string;
   onCancel?: () => void;
@@ -341,8 +341,8 @@ export function UnifiedTextField<
         return (
           <FormItem>
             <FormLabel>{label}</FormLabel>
-            <FormControl>
-              <div className="relative">
+            <div className="relative">
+              <FormControl>
                 <Input
                   placeholder={placeholder}
                   {...field}
@@ -353,13 +353,13 @@ export function UnifiedTextField<
                   }}
                   className={icon ? "pr-10" : undefined}
                 />
-                {icon && (
-                  <span className="absolute inset-y-0 right-3 flex items-center">
-                    {icon}
-                  </span>
-                )}
-              </div>
-            </FormControl>
+              </FormControl>
+              {icon && (
+                <span className="absolute inset-y-0 right-3 flex items-center">
+                  {icon}
+                </span>
+              )}
+            </div>
             <FormMessage />
           </FormItem>
         );

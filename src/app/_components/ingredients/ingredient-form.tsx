@@ -26,7 +26,7 @@ const formSchema = z.object({
   aliases: z.array(z.string()),
 });
 
-export type IngredientFormValues = z.infer<typeof formSchema>;
+type IngredientFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
 interface CreateIngredientFormProps

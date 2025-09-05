@@ -10,7 +10,7 @@ import {
   buildRecipeComboboxItem,
 } from "./combobox-builders";
 import { toast } from "sonner";
-import { type LocationOut, type LocationType } from "~/schemas/location";
+import { type LocationOut } from "~/schemas/location";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -67,55 +67,6 @@ export function CreateIngredientDialog({
           <DialogTitle>Create New Ingredient</DialogTitle>
         </DialogHeader>
         <IngredientForm
-          mode="create"
-          isPending={isPending}
-          error={error}
-          onCancel={onCancel}
-          onCreate={onCreate}
-          initialName={initialName}
-        />
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-export function CreateLocationDialog({
-  isOpen,
-  onOpenChange,
-  onCancel,
-  onCreate,
-  isPending,
-  error,
-  initialName,
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCancel: () => void;
-  onCreate: (data: {
-    name: string;
-    type: LocationType;
-    parentId: string | null;
-    pendingImageIds?: string[];
-  }) => Promise<LocationOut>;
-  isPending: boolean;
-  error?: string;
-  initialName?: string;
-}) {
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent
-        onPointerDownOutside={(e) => {
-          // Prevent closing when clicking on Popover contents
-          const target = e.target as HTMLElement;
-          if (target.closest("[data-radix-popper-content-wrapper]")) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Create New Location</DialogTitle>
-        </DialogHeader>
-        <LocationForm
           mode="create"
           isPending={isPending}
           error={error}
@@ -302,20 +253,34 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
 
   return (
     <>
-      <CreateLocationDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        onCancel={() => {
-          setIsDialogOpen(false);
-          setPendingResolve(null);
-        }}
-        onCreate={async (data) => {
-          return await createMutation.mutateAsync(data);
-        }}
-        isPending={createMutation.isPending}
-        error={createMutation.error?.message}
-        initialName={pendingName}
-      />
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent
+          onPointerDownOutside={(e) => {
+            // Prevent closing when clicking on Popover contents
+            const target = e.target as HTMLElement;
+            if (target.closest("[data-radix-popper-content-wrapper]")) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Create New Location</DialogTitle>
+          </DialogHeader>
+          <LocationForm
+            mode="create"
+            isPending={createMutation.isPending}
+            error={createMutation.error?.message}
+            onCancel={() => {
+              setIsDialogOpen(false);
+              setPendingResolve(null);
+            }}
+            onCreate={async (data) => {
+              return await createMutation.mutateAsync(data);
+            }}
+            initialName={pendingName}
+          />
+        </DialogContent>
+      </Dialog>
       {children({ findItems, onCreateNew })}
     </>
   );

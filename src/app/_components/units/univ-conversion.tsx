@@ -156,7 +156,7 @@ export const renderNutrients = (
 /**
  * Sums multiple nutrient objects
  */
-export const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
+const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
   return nutrients.reduce(
     (acc, curr) => ({
       protein: acc.protein + (curr.protein || 0),
@@ -169,7 +169,7 @@ export const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
 /**
  * Gets price, weight, and nutrient information for an ingredient
  */
-export const getIngredientMeasures = (
+const getIngredientMeasures = (
   w: wasm,
   ingredient: SectionIngredientOut,
   ingMap: Record<string, IngredientWithRecipesAndProductOut>,

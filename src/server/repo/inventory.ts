@@ -159,7 +159,7 @@ export const inventoryentryList = async (
   return { data: inventoryentrys, count: totalCount };
 };
 
-export interface UpdateInventoryEntryData {
+interface UpdateInventoryEntryData {
   amount?: z.infer<typeof import("~/codec/codec").amount>;
   productId?: string;
   locationId?: string;
@@ -185,7 +185,7 @@ export const updateInventoryEntry = async (
   return dbInventoryEntryToAPI(updated);
 };
 
-export interface CreateInventoryEntryData {
+interface CreateInventoryEntryData {
   amount: z.infer<typeof import("~/codec/codec").amount>;
   productId: string;
   locationId: string;

@@ -47,7 +47,7 @@ const formSchema = z
     ndb_number: data.ndb_number === 0 ? null : data.ndb_number,
   }));
 
-export type ProductFormValues = z.infer<typeof formSchema>;
+type ProductFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
 interface CreateProductFormProps extends CreateModeProps<ProductInputPayload> {

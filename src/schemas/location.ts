@@ -22,7 +22,6 @@ export const locationBase = z.object({
   name: z.string().describe("name of location"),
   type: locationType,
 });
-export type LocationBase = z.infer<typeof locationBase>;
 export const locationOut = z
   .object({
     id: z.string().uuid(),

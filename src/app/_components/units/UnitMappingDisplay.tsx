@@ -5,7 +5,7 @@ import { UnitMappingsTable } from "./unitmappingstable";
 import { UnitMappingGraph } from "./UnitMappingGraph";
 import { ConversionDialog } from "./ConversionDialog";
 
-export interface UnitMappingDisplayProps {
+interface UnitMappingDisplayProps {
   mappings: UnitMapping[];
   title?: string;
 }

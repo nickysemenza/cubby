@@ -44,7 +44,7 @@ export const formSchema = z.object({
 export type RecipeFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
-export interface CreateRecipeFormProps {
+interface CreateRecipeFormProps {
   mode: "create";
   isPending: boolean;
   error?: string;
@@ -54,7 +54,7 @@ export interface CreateRecipeFormProps {
 }
 
 // Props for edit mode
-export interface EditRecipeFormProps {
+interface EditRecipeFormProps {
   mode: "edit";
   isPending: boolean;
   error?: string;

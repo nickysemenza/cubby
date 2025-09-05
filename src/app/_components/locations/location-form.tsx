@@ -35,7 +35,7 @@ const formSchema = z.object({
   parent: ComboboxItem.nullable(),
 });
 
-export type LocationFormValues = z.infer<typeof formSchema>;
+type LocationFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
 interface CreateLocationFormProps extends CreateModeProps<LocationCreateInput> {

@@ -46,6 +46,8 @@ jobs:
         name: "check prettier formatting"
       - run: npm run check
         name: "lint and type check"
+      - run: npx knip --no-exit-code
+        name: "check for unused code with knip"
 
   test:
     name: Tests

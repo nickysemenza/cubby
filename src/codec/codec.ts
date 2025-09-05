@@ -17,7 +17,7 @@ export const amount = z.object({
   unit: z.string().min(1),
 });
 export type Amount = z.infer<typeof amount>;
-export const parsedIngredient = z.object({
+const parsedIngredient = z.object({
   name: z.string(),
   amounts: z.array(amount),
   modifier: z.string().optional(),

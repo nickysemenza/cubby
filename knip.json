@@ -1,0 +1,22 @@
+{
+  "ignore": [
+    "recipebridge/**",
+    "types.ts",
+    "src/components/ui/**",
+    "src/trpc/react.tsx"
+  ],
+  "ignoreBinaries": ["wasm-pack"],
+  "ignoreDependencies": [
+    "@eslint/compat",
+    "@eslint/js",
+    "@testing-library/jest-dom",
+    "@types/eslint",
+    "@typescript-eslint/eslint-plugin",
+    "@typescript-eslint/parser",
+    "@vitest/coverage-v8",
+    "eslint-config-next",
+    "eslint-plugin-react-hooks",
+    "prisma-dbml-generator",
+    "prisma-json-types-generator"
+  ]
+}

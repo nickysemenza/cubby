@@ -16,7 +16,7 @@ const s3Client = new S3Client({
   },
 });
 
-export interface PresignedUrlParams {
+interface PresignedUrlParams {
   key: string;
   contentType: string;
   expiresIn?: number; // in seconds

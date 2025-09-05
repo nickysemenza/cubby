@@ -49,73 +49,13 @@ export const initiateImageUploadWithoutEntity = async (
   };
 };
 
-/**
- * Associate an image with a product
- */
-export const associateImageWithProduct = async (
-  db: PrismaClient,
-  imageId: string,
-  productId: string,
-) => {
-  // Associate the image with the product
-  return db.productImage.create({
-    data: {
-      imageId,
-      productId,
-    },
-    include: {
-      image: true,
-    },
-  });
-};
-
-/**
- * Associate an image with a location
- */
-export const associateImageWithLocation = async (
-  db: PrismaClient,
-  imageId: string,
-  locationId: string,
-) => {
-  // Associate the image with the location
-  return db.locationImage.create({
-    data: {
-      imageId,
-      locationId,
-    },
-    include: {
-      image: true,
-    },
-  });
-};
-
-/**
- * Associate an image with a recipe
- */
-export const associateImageWithRecipe = async (
-  db: PrismaClient,
-  imageId: string,
-  recipeId: string,
-) => {
-  // Associate the image with the recipe
-  return db.recipeImage.create({
-    data: {
-      imageId,
-      recipeId,
-    },
-    include: {
-      image: true,
-    },
-  });
-};
-
 // Define the type for database image
 type ImageDB = Prisma.ImageGetPayload<object>;
 
 /**
  * Get image with entity information (DB to API helper function)
  */
-export const dbImageToAPI = async (
+const dbImageToAPI = async (
   db: PrismaClient,
   image: ImageDB,
 ): Promise<ImageWithEntity> => {

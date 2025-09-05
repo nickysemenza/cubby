@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   test: {
-    workspace: [
+    projects: [
       {
         // will inherit options from this config like plugins and pool
         extends: true,

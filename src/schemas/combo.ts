@@ -8,13 +8,13 @@ import { recipeTopLevel } from "./recipe";
 import { FoodSummary, foodSummary } from "./usda";
 import { imageOut } from "./image";
 
-export const inventoryWithProductOut = inventoryEntryOut.merge(
+const inventoryWithProductOut = inventoryEntryOut.merge(
   z.object({
     product: productTopLevelOut,
   }),
 );
 
-export const inventoryWithLocationOut = inventoryEntryOut.merge(
+const inventoryWithLocationOut = inventoryEntryOut.merge(
   z.object({
     location: locationOut,
   }),

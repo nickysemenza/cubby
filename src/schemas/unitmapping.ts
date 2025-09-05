@@ -21,4 +21,3 @@ export const unitMappingOut = z
 
 export type UnitMapping = z.infer<typeof unitMappingBase>;
 export type UnitMappingInput = z.infer<typeof unitMappingInput>;
-export type UnitMappingOut = z.infer<typeof unitMappingOut>;

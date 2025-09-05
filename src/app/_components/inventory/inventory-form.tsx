@@ -41,7 +41,7 @@ const formSchema = z.object({
   amount: amount,
 });
 
-export type InventoryFormValues = z.infer<typeof formSchema>;
+type InventoryFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
 interface CreateInventoryFormProps

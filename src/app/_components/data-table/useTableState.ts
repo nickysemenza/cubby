@@ -13,7 +13,7 @@ import {
 } from "./tableUtils";
 import { type SortParams } from "~/schemas/pagination";
 
-export interface TableStateOptions {
+interface TableStateOptions {
   initialSort?: string;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;

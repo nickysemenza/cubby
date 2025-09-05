@@ -32,6 +32,30 @@ describe("formatSearchTerm", () => {
       mode: "insensitive",
     });
   });
+
+  it("should handle special characters", () => {
+    const result = formatSearchTerm("test@example.com");
+    expect(result).toEqual({
+      contains: "test@example.com",
+      mode: "insensitive",
+    });
+  });
+
+  it("should handle unicode characters", () => {
+    const result = formatSearchTerm("café résumé");
+    expect(result).toEqual({
+      contains: "café résumé",
+      mode: "insensitive",
+    });
+  });
+
+  it("should preserve whitespace in search term", () => {
+    const result = formatSearchTerm("  trimmed  ");
+    expect(result).toEqual({
+      contains: "  trimmed  ",
+      mode: "insensitive",
+    });
+  });
 });
 
 describe("getSortDirection", () => {
@@ -48,5 +72,20 @@ describe("getSortDirection", () => {
   it("should handle desc direction", () => {
     const sort = { orderBy: "createdAt", direction: "desc" as const };
     expect(getSortDirection(sort, "createdAt")).toBe("desc");
+  });
+
+  it("should handle different field names correctly", () => {
+    const sort = { orderBy: "manufacturer", direction: "asc" as const };
+
+    expect(getSortDirection(sort, "manufacturer")).toBe("asc");
+    expect(getSortDirection(sort, "name")).toBeUndefined();
+    expect(getSortDirection(sort, "price")).toBeUndefined();
+  });
+
+  it("should be case sensitive for field matching", () => {
+    const sort = { orderBy: "Name", direction: "asc" as const };
+
+    expect(getSortDirection(sort, "name")).toBeUndefined();
+    expect(getSortDirection(sort, "Name")).toBe("asc");
   });
 });

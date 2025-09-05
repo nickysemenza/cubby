@@ -12,7 +12,7 @@ export const ImageStatus = z.enum(["PENDING", "UPLOADED", "FAILED"]);
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
 // Base schema for image data
-export const imageBase = z.object({
+const imageBase = z.object({
   url: z.string().url(),
   key: z.string(),
   filename: z.string(),
@@ -35,8 +35,6 @@ export type ImageOut = z.infer<typeof imageOut>;
 export const createInputImages = z.object({
   pendingImageIds: z.array(z.string().uuid()).optional(),
 });
-
-export type CreateInputImages = z.infer<typeof createInputImages>;
 
 export const updateInputImages = z
   .object({
@@ -66,16 +64,10 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
   url: z.string().url(),
 });
 
-export type InitiateUploadWithoutEntityResponse = z.infer<
-  typeof initiateUploadWithoutEntityResponseSchema
->;
-
 // Schema for getting image by ID
 export const getImageByIdSchema = z.object({
   id: id,
 });
-
-export type GetImageByIdInput = z.infer<typeof getImageByIdSchema>;
 
 // Image with entity information
 export const imageWithEntitySchema = imageOut.extend({
@@ -95,8 +87,6 @@ export const imageListFiltersSchema = z
   })
   .merge(sortPaginationCombo);
 
-export type ImageListFilters = z.infer<typeof imageListFiltersSchema>;
-
 // New response schema using the standard paginated response format
 export const imageListResponseSchema = createPaginatedResponseSchema(
   imageWithEntitySchema,
@@ -107,15 +97,9 @@ export const cullPendingImagesSchema = z.object({
   olderThanHours: z.number().int().positive().default(24),
 });
 
-export type CullPendingImagesInput = z.infer<typeof cullPendingImagesSchema>;
-
 // Response schema for culling pending images
 export const cullPendingImagesResponseSchema = z.object({
   count: z.number().int(),
   deletedIds: z.array(id),
   deletedKeys: z.array(z.string()),
 });
-
-export type CullPendingImagesResponse = z.infer<
-  typeof cullPendingImagesResponseSchema
->;

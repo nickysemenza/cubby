@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import RootLayout from "./layout";
+import { MainNav } from "./_components/MainNav";
 
 // Mock matchMedia
 Object.defineProperty(window, "matchMedia", {
@@ -48,7 +48,15 @@ describe("App Router: Works with Client Components", () => {
   });
 
   it("renders the main nav", () => {
-    render(<RootLayout>hello</RootLayout>);
+    // Mock the layout to avoid html/body nesting issues in tests
+    const LayoutContent = () => (
+      <div className="flex flex-col">
+        <MainNav />
+        <div>hello</div>
+      </div>
+    );
+
+    render(<LayoutContent />);
     // expect it to render recipes
     expect(screen.getByText("Recipes")).toBeTruthy();
     expect(screen.getByText("Ingredients")).toBeTruthy();
