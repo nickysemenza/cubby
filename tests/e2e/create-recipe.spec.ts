@@ -58,12 +58,15 @@ test.describe("Create Recipe", () => {
     // Add first unit mapping for cost calculation (1 cup = $2.50)
     await page.getByRole("button", { name: "Add Mapping" }).click();
 
-    // Wait for the form to appear
-    await page.waitForSelector('h4:text("Unit Mapping 1")');
+    // Wait for the form to appear with more robust selectors
+    await page.waitForSelector('text="Unit Mapping 1"', { timeout: 10000 });
+    
+    // Wait specifically for the unit input fields to be present and visible
+    await page.waitForSelector('input[placeholder="Enter unit"]', { timeout: 10000 });
 
     // Fill in From section: 1 cup (first value is already "1" by default)
     const fromUnitField1 = page
-      .getByRole("textbox", { name: "Enter unit" })
+      .getByRole("textbox", { name: "Amount Unit" })
       .first();
     await fromUnitField1.fill("cup");
 
@@ -73,7 +76,7 @@ test.describe("Create Recipe", () => {
       .last();
     await toValueField1.fill("2.50");
     const toUnitField1 = page
-      .getByRole("textbox", { name: "Enter unit" })
+      .getByRole("textbox", { name: "Amount Unit" })
       .last();
     await toUnitField1.fill("dollar");
 
@@ -89,7 +92,7 @@ test.describe("Create Recipe", () => {
       .nth(2); // Third amount field (0-indexed: 0,1,2)
     await fromValueField2.fill("100");
     const fromUnitField2 = page
-      .getByRole("textbox", { name: "Enter unit" })
+      .getByRole("textbox", { name: "Amount Unit" })
       .nth(2); // Third unit field
     await fromUnitField2.fill("grams");
 
@@ -99,7 +102,7 @@ test.describe("Create Recipe", () => {
       .nth(3); // Fourth amount field
     await toValueField2.fill("1.50");
     const toUnitField2 = page
-      .getByRole("textbox", { name: "Enter unit" })
+      .getByRole("textbox", { name: "Amount Unit" })
       .nth(3); // Fourth unit field
     await toUnitField2.fill("dollar");
 
@@ -147,7 +150,7 @@ test.describe("Create Recipe", () => {
     // Add amount and unit for the ingredient (2 cups)
     const amountInput = page.getByLabel("Amount Value");
     await amountInput.fill("2");
-    const unitInput = page.getByRole("textbox", { name: "Enter unit" });
+    const unitInput = page.getByRole("textbox", { name: "Amount Unit" });
     await unitInput.fill("cups");
 
     // Add an instruction

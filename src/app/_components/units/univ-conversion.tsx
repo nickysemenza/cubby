@@ -217,8 +217,12 @@ export const calculateTotals = (
 ) => {
   const prices: WMeasure[] = [];
   const grams: WMeasure[] = [];
-  const missing = [];
   const nutrients: NutrientsPer100[] = [];
+  const missingByType = {
+    price: [] as string[],
+    weight: [] as string[],
+    nutrients: [] as string[],
+  };
 
   for (const ingredient of ingredients) {
     const ingName = getIngredientName(ingredient);
@@ -232,23 +236,26 @@ export const calculateTotals = (
       if (price.success) {
         prices.push(price.value);
       } else {
-        missing.push(`price-${ingName}`);
+        missingByType.price.push(ingName);
       }
 
       if (gram.success) {
         grams.push(gram.value);
       } else {
-        missing.push(`gram-${ingName}`);
+        missingByType.weight.push(ingName);
       }
 
       if (nutrient.success) {
         nutrients.push(nutrient.value);
       } else {
-        missing.push(`nutrient-${ingName}`);
+        missingByType.nutrients.push(ingName);
       }
     } catch (e) {
       console.log(`Error calculating measures for ${ingName}`, e);
-      missing.push(ingName);
+      // If there's a general error, add to all missing categories
+      missingByType.price.push(ingName);
+      missingByType.weight.push(ingName);
+      missingByType.nutrients.push(ingName);
     }
   }
 
@@ -262,7 +269,8 @@ export const calculateTotals = (
     protein: totalNutrients.protein,
     kcal: totalNutrients.kcal,
     weight: totalWeight,
-    missing,
+    totalIngredients: ingredients.length,
+    missingByType,
   };
 };
 

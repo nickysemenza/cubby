@@ -75,4 +75,5 @@
 - **Product Unit Mappings**: Products can have multiple unit mappings (volume→price, weight→price, etc.)
 - **Bidirectional Graphs**: WASM creates bidirectional conversion graphs from mappings
 - **Error Handling**: Weight conversion should work independently of nutrition data availability
-
+- todos are stored in @@docs/todos.md
+- always run prettier to format files

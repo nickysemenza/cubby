@@ -7,11 +7,14 @@ import {
   scaleNutrientsByWeight,
   calculateNutrients,
   formatNutrients,
+  calculateTotals,
 } from "./univ-conversion";
 import { type Amount } from "~/codec/codec";
 import { type UnitMapping } from "~/schemas/unitmapping";
 import { ProductWithMappingsAndFoodOut } from "~/schemas/combo";
 import { NutrientsPer100 } from "~/schemas/usda";
+import { SectionIngredientOut } from "~/schemas/recipe";
+import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
 // Import real wasm
 const loadWasm = async () => {
@@ -687,5 +690,453 @@ describe("WASM Error Scenarios", () => {
       expect(result.value.value).toBe(2.99);
       expect(result.value.unit).toBe("Dollar");
     }
+  });
+});
+
+describe("calculateTotals", () => {
+  const mockGetIngredientName = (ingredient: SectionIngredientOut): string => {
+    return ingredient.type === "ingredient"
+      ? ingredient.ingredient.name
+      : "recipe";
+  };
+
+  test("calculates totals with all data available", async () => {
+    const wasm = await loadWasm();
+
+    const ingredients: SectionIngredientOut[] = [
+      {
+        id: "ing1",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing1",
+          name: "chicken",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [{ value: 1, unit: "pound" }],
+      },
+      {
+        id: "ing2",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing2",
+          name: "rice",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [{ value: 2, unit: "cup" }],
+      },
+    ];
+
+    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+      ing1: {
+        id: "ing1",
+        name: "chicken",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [
+          {
+            id: "prod1",
+            name: "chicken",
+            food: {
+              legacyFoodInfo: null,
+              nutritionInfo: {
+                nutrientsPer100: { protein: 20, kcal: 200 },
+                nutrientSummary: [],
+              },
+              fdc_id: 0,
+              brandedFoodInfo: null,
+              foodInfo: { data_type: "", description: "" },
+              portionInfo: { raw: [], parsed: [] },
+            },
+            upc: null,
+            ndb_number: null,
+            manufacturer: "",
+            model: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            unitMappings: [
+              {
+                id: "map1",
+                a: { value: 1, unit: "pound" },
+                b: { value: 453.59, unit: "gram" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: "map2",
+                a: { value: 1, unit: "pound" },
+                b: { value: 5.99, unit: "dollar" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ],
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      ing2: {
+        id: "ing2",
+        name: "rice",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [
+          {
+            id: "prod2",
+            name: "rice",
+            food: {
+              legacyFoodInfo: null,
+              nutritionInfo: {
+                nutrientsPer100: { protein: 7, kcal: 130 },
+                nutrientSummary: [],
+              },
+              fdc_id: 0,
+              brandedFoodInfo: null,
+              foodInfo: { data_type: "", description: "" },
+              portionInfo: { raw: [], parsed: [] },
+            },
+            upc: null,
+            ndb_number: null,
+            manufacturer: "",
+            model: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            unitMappings: [
+              {
+                id: "map3",
+                a: { value: 1, unit: "cup" },
+                b: { value: 200, unit: "gram" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: "map4",
+                a: { value: 1, unit: "cup" },
+                b: { value: 2.5, unit: "dollar" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ],
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = calculateTotals(
+      wasm,
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
+
+    expect(result.totalIngredients).toBe(2);
+    expect(result.price).toBeCloseTo(10.99, 2); // 5.99 + 5.00
+    expect(result.weight).toBeCloseTo(854, 1); // WASM rounds: ~454 + 400
+    expect(result.missingByType.price).toEqual([]);
+    expect(result.missingByType.weight).toEqual([]);
+    expect(result.missingByType.nutrients).toEqual([]);
+  });
+
+  test("handles completely missing data", async () => {
+    const wasm = await loadWasm();
+
+    const ingredients: SectionIngredientOut[] = [
+      {
+        id: "ing1",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing1",
+          name: "unknown ingredient",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [{ value: 1, unit: "unknownunit" }],
+      },
+    ];
+
+    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+      ing1: {
+        id: "ing1",
+        name: "unknown ingredient",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [], // No products
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = calculateTotals(
+      wasm,
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
+
+    expect(result.totalIngredients).toBe(1);
+    expect(result.price).toBe(0);
+    expect(result.weight).toBe(0);
+    expect(result.protein).toBe(0);
+    expect(result.kcal).toBe(0);
+    expect(result.missingByType.price).toEqual(["unknown ingredient"]);
+    expect(result.missingByType.weight).toEqual(["unknown ingredient"]);
+    expect(result.missingByType.nutrients).toEqual(["unknown ingredient"]);
+  });
+
+  test("handles partially missing data", async () => {
+    const wasm = await loadWasm();
+
+    const ingredients: SectionIngredientOut[] = [
+      {
+        id: "ing1",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing1",
+          name: "chicken",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [{ value: 1, unit: "pound" }],
+      },
+      {
+        id: "ing2",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing2",
+          name: "unknown spice",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [{ value: 1, unit: "teaspoon" }],
+      },
+    ];
+
+    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+      ing1: {
+        id: "ing1",
+        name: "chicken",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [
+          {
+            id: "prod1",
+            name: "chicken",
+            food: {
+              legacyFoodInfo: null,
+              nutritionInfo: {
+                nutrientsPer100: { protein: 20, kcal: 200 },
+                nutrientSummary: [],
+              },
+              fdc_id: 0,
+              brandedFoodInfo: null,
+              foodInfo: { data_type: "", description: "" },
+              portionInfo: { raw: [], parsed: [] },
+            },
+            upc: null,
+            ndb_number: null,
+            manufacturer: "",
+            model: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            unitMappings: [
+              {
+                id: "map1",
+                a: { value: 1, unit: "pound" },
+                b: { value: 453.59, unit: "gram" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: "map2",
+                a: { value: 1, unit: "pound" },
+                b: { value: 5.99, unit: "dollar" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ],
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      ing2: {
+        id: "ing2",
+        name: "unknown spice",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [], // No products - will cause missing data
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = calculateTotals(
+      wasm,
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
+
+    expect(result.totalIngredients).toBe(2);
+    expect(result.price).toBeCloseTo(5.99, 2); // Only chicken has price
+    expect(result.weight).toBeCloseTo(454, 1); // WASM rounds: ~454
+    expect(result.missingByType.price).toEqual(["unknown spice"]);
+    expect(result.missingByType.weight).toEqual(["unknown spice"]);
+    expect(result.missingByType.nutrients).toEqual(["unknown spice"]);
+  });
+
+  test("handles missing only specific data types", async () => {
+    const wasm = await loadWasm();
+
+    const ingredients: SectionIngredientOut[] = [
+      {
+        id: "ing1",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing1",
+          name: "ingredient with weight only",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [{ value: 1, unit: "cup" }],
+      },
+    ];
+
+    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+      ing1: {
+        id: "ing1",
+        name: "ingredient with weight only",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [
+          {
+            id: "prod1",
+            name: "ingredient with weight only",
+            food: null, // No nutrition data
+            upc: null,
+            ndb_number: null,
+            manufacturer: "",
+            model: null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            unitMappings: [
+              {
+                id: "map5",
+                a: { value: 1, unit: "cup" },
+                b: { value: 240, unit: "gram" },
+                source: "test",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              // No price mapping
+            ],
+          },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = calculateTotals(
+      wasm,
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
+
+    expect(result.totalIngredients).toBe(1);
+    expect(result.price).toBe(0);
+    expect(result.weight).toBe(240); // Has weight
+    expect(result.protein).toBe(0);
+    expect(result.kcal).toBe(0);
+    expect(result.missingByType.price).toEqual(["ingredient with weight only"]);
+    expect(result.missingByType.weight).toEqual([]);
+    expect(result.missingByType.nutrients).toEqual([
+      "ingredient with weight only",
+    ]);
+  });
+
+  test("handles error in ingredient processing", async () => {
+    const wasm = await loadWasm();
+
+    const ingredients: SectionIngredientOut[] = [
+      {
+        id: "ing1",
+        type: "ingredient",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ingredient: {
+          id: "ing1",
+          name: "problematic ingredient",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        recipe: null,
+        amounts: [], // Empty amounts - will cause error
+      },
+    ];
+
+    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+      ing1: {
+        id: "ing1",
+        name: "problematic ingredient",
+        recipe: null,
+        appearsInRecipes: [],
+        aliases: [],
+        product: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    };
+
+    const result = calculateTotals(
+      wasm,
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
+
+    expect(result.totalIngredients).toBe(1);
+    expect(result.price).toBe(0);
+    expect(result.weight).toBe(0);
+    expect(result.protein).toBe(0);
+    expect(result.kcal).toBe(0);
+    // Error case should add to all missing categories
+    expect(result.missingByType.price).toEqual(["problematic ingredient"]);
+    expect(result.missingByType.weight).toEqual(["problematic ingredient"]);
+    expect(result.missingByType.nutrients).toEqual(["problematic ingredient"]);
   });
 });

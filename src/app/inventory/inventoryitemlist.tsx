@@ -55,7 +55,6 @@ export function InventoryItemList() {
             className="block max-w-64"
             href={`/inventory/${info.row.original.id}`}
           >
-            view:{" "}
             {showAmountAndPrice(
               w,
               info.getValue(),

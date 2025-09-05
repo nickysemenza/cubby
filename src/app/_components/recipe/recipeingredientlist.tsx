@@ -166,7 +166,8 @@ export const RecipeIngredientList: React.FC<{
     weight: totals.weight,
     kcal: totals.kcal,
     protein: totals.protein,
-    missing: totals.missing,
+    totalIngredients: totals.totalIngredients,
+    missingByType: totals.missingByType,
   });
 
   return (

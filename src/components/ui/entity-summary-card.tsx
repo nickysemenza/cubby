@@ -9,7 +9,13 @@ export interface RecipeSummaryData {
   weight: number;
   kcal: number;
   protein: number;
-  missing: string[];
+  // New fields for better missing data tracking
+  totalIngredients: number;
+  missingByType: {
+    price: string[];
+    weight: string[];
+    nutrients: string[];
+  };
 }
 
 // Nutrition summary data
@@ -50,36 +56,97 @@ export interface EntitySummaryCardProps {
 }
 
 // Helper functions for each summary type
-const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => [
-  {
-    label: "Total Cost",
-    value: data.price,
-    formatter: (value) => `$${Number(value).toFixed(2)}`,
-  },
-  {
-    label: "Total Weight",
-    value: data.weight,
-    formatter: (value) => `${Number(value).toFixed(0)}g`,
-  },
-  {
-    label: "Total Calories",
-    value: data.kcal,
-    formatter: (value) => `${Number(value).toFixed(0)} kcal`,
-  },
-  {
-    label: "Total Protein",
-    value: data.protein,
-    formatter: (value) => `${Number(value).toFixed(0)}g`,
-  },
-  ...(data.missing.length > 0
-    ? [
-        {
-          label: "Missing Data",
-          value: data.missing.join(", "),
-        },
-      ]
-    : []),
-];
+const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
+  const formatWithCoverage = (
+    value: number,
+    missingCount: number,
+    total: number,
+    unit: string,
+    prefix = "",
+  ) => {
+    const successCount = total - missingCount;
+    if (successCount === 0) {
+      return "No data available";
+    }
+    if (successCount === total) {
+      return `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit}`;
+    }
+    return `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit} (${successCount}/${total} ingredients)`;
+  };
+
+  return [
+    {
+      label: "Total Cost",
+      value: data.price,
+      formatter: () =>
+        formatWithCoverage(
+          data.price,
+          data.missingByType.price.length,
+          data.totalIngredients,
+          "",
+          "$",
+        ),
+    },
+    {
+      label: "Total Weight",
+      value: data.weight,
+      formatter: () =>
+        formatWithCoverage(
+          data.weight,
+          data.missingByType.weight.length,
+          data.totalIngredients,
+          "g",
+        ),
+    },
+    {
+      label: "Total Calories",
+      value: data.kcal,
+      formatter: () =>
+        formatWithCoverage(
+          data.kcal,
+          data.missingByType.nutrients.length,
+          data.totalIngredients,
+          " kcal",
+        ),
+    },
+    {
+      label: "Total Protein",
+      value: data.protein,
+      formatter: () =>
+        formatWithCoverage(
+          data.protein,
+          data.missingByType.nutrients.length,
+          data.totalIngredients,
+          "g",
+        ),
+    },
+    ...(data.missingByType.price.length > 0 ||
+    data.missingByType.weight.length > 0 ||
+    data.missingByType.nutrients.length > 0
+      ? [
+          {
+            label: "Missing Data",
+            value: "",
+            formatter: () => {
+              const parts = [];
+              if (data.missingByType.price.length > 0) {
+                parts.push(`Price (${data.missingByType.price.join(", ")})`);
+              }
+              if (data.missingByType.weight.length > 0) {
+                parts.push(`Weight (${data.missingByType.weight.join(", ")})`);
+              }
+              if (data.missingByType.nutrients.length > 0) {
+                parts.push(
+                  `Nutrition (${data.missingByType.nutrients.join(", ")})`,
+                );
+              }
+              return parts.join(", ");
+            },
+          },
+        ]
+      : []),
+  ];
+};
 
 const formatNutritionSummary = (data: NutritionSummaryData): SummaryItem[] => [
   {
