@@ -19,7 +19,11 @@ export function RecipeList() {
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: recipesResp, isLoading } = useQuery(
+  const {
+    data: recipesResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.recipe.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -61,6 +65,7 @@ export function RecipeList() {
         table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
+        error={error}
       />
     </div>
   );

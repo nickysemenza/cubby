@@ -34,7 +34,11 @@ export function ProductList() {
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: productsResp, isLoading } = useQuery(
+  const {
+    data: productsResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.product.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -176,6 +180,7 @@ export function ProductList() {
         table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
+        error={error}
       />
     </div>
   );

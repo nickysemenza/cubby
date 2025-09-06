@@ -26,7 +26,11 @@ export function LocationList() {
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: itemsResp, isLoading } = useQuery(
+  const {
+    data: itemsResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.location.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -129,6 +133,7 @@ export function LocationList() {
         table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
+        error={error}
       />
     </div>
   );

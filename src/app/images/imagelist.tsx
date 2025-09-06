@@ -39,7 +39,11 @@ export default function ImageList() {
   }, 300);
 
   // Query for images using the new list endpoint
-  const { data: imagesResp, isLoading } = useQuery(
+  const {
+    data: imagesResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.image.list.queryOptions({
       filters: {
         searchFilter: searchQuery || undefined,
@@ -192,6 +196,7 @@ export default function ImageList() {
           },
         ]}
         isLoading={isLoading}
+        error={error}
       />
     </div>
   );

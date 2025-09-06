@@ -21,7 +21,11 @@ export function InventoryItemList() {
   const tableState = useTableState({ initialSort: "createdAt" });
 
   // Query data with params from table state
-  const { data: inventoryitemsResp, isLoading } = useQuery(
+  const {
+    data: inventoryitemsResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.inventoryItem.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -141,6 +145,7 @@ export function InventoryItemList() {
         table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
+        error={error}
       />
     </div>
   );

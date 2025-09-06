@@ -185,6 +185,7 @@ export const RecipeIngredientList: React.FC<{
         table={table}
         filterableColumns={[]}
         isLoading={data.length === 0}
+        error={undefined}
       />
     </div>
   );

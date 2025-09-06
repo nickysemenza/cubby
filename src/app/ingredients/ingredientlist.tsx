@@ -35,7 +35,11 @@ export function IngredientList() {
   });
 
   // Query data with params from table state
-  const { data: ingredientsResp, isLoading } = useQuery(
+  const {
+    data: ingredientsResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.ingredient.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -138,6 +142,7 @@ export function IngredientList() {
         table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
+        error={error}
         additionalFilters={
           <div className="flex items-center space-x-2">
             <Checkbox

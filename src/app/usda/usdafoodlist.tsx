@@ -19,7 +19,11 @@ export function USDAFoodList() {
   const tableState = useTableState({ initialSort: "fdc_id" });
 
   // Query data with params from table state
-  const { data: foodsResp, isLoading } = useQuery(
+  const {
+    data: foodsResp,
+    isLoading,
+    error,
+  } = useQuery(
     api.usda.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -129,6 +133,7 @@ export function USDAFoodList() {
         table={table}
         filterableColumns={filterableColumns}
         isLoading={isLoading}
+        error={error}
       />
     </div>
   );

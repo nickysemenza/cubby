@@ -13,7 +13,13 @@ import {
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Bug,
+  AlertCircle,
+} from "lucide-react";
 import { type ReactNode } from "react";
 import { SpacedContainer } from "~/components/ui/spaced-container";
 import { LoadingContainer } from "~/components/ui/loading-spinner";
@@ -38,6 +44,7 @@ interface TTableProps<TItem> {
   additionalFilters?: ReactNode;
   filterableColumns: FilterableColumn[];
   isLoading?: boolean;
+  error?: unknown;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -46,6 +53,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     additionalFilters,
     filterableColumns,
     isLoading = false,
+    error,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -161,6 +169,24 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 )}
               </TableRow>
             ))
+          ) : error ? (
+            <TableRow>
+              <TableCell
+                colSpan={
+                  table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
+                }
+                className="h-16 text-center"
+              >
+                <div className="flex items-center justify-center gap-2 text-red-600">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>
+                    {(error as any)?.data?.code === "UNAUTHORIZED"
+                      ? "Please sign in to continue"
+                      : (error as any)?.message || "An error occurred"}
+                  </span>
+                </div>
+              </TableCell>
+            </TableRow>
           ) : (
             <TableRow>
               <TableCell
@@ -180,6 +206,17 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       {isLoading ? (
         <div className="block py-8 lg:hidden">
           <LoadingContainer />
+        </div>
+      ) : error ? (
+        <div className="block py-8 lg:hidden">
+          <div className="flex items-center justify-center gap-2 text-red-600">
+            <AlertCircle className="h-4 w-4" />
+            <span>
+              {(error as any)?.data?.code === "UNAUTHORIZED"
+                ? "Please sign in to continue"
+                : (error as any)?.message || "An error occurred"}
+            </span>
+          </div>
         </div>
       ) : (
         <MobileCardView table={table} />
