@@ -19,6 +19,7 @@ import {
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
+import { entities } from "~/entities/entities";
 
 import { useQuery } from "@tanstack/react-query";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
@@ -128,7 +129,7 @@ export function IngredientList() {
       <div className="mb-4 flex items-center justify-between">
         <IngredientMerger table={table} />
         <Button asChild variant="default">
-          <Link href="/ingredients/new">Create New Ingredient</Link>
+          <Link href={`/${entities.ingredient.basePath}/new`}>Create New Ingredient</Link>
         </Button>
       </div>
       <RTable

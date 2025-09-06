@@ -5,6 +5,7 @@ import { z } from "zod";
 import { inventoryCreatePayloadData } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
+import { entities } from "~/entities/entities";
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -17,7 +18,7 @@ const CreateInventoryItem: FC = () => {
     api.inventoryItem.create.mutationOptions({
       onSuccess: (data) => {
         // Redirect to the new inventory item's detail page
-        router.push(`/inventory/${data.id}`);
+        router.push(`/${entities["inventory-item"].basePath}/${data.id}`);
       },
       onError: (error) => {
         setError(error.message);

@@ -5,6 +5,7 @@ import { LocationForm } from "./location-form";
 import { type LocationCreateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { entities } from "~/entities/entities";
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -16,7 +17,7 @@ export function NewLocation() {
   const createLocation = useMutation(
     api.location.create.mutationOptions({
       onSuccess: (location) => {
-        router.push(`/locations/${location.id}`);
+        router.push(`/${entities.location.basePath}/${location.id}`);
       },
       onError: (error) => {
         setError(error.message);
@@ -29,7 +30,7 @@ export function NewLocation() {
   };
 
   const handleCancel = () => {
-    router.push("/locations");
+    router.push(`/${entities.location.basePath}`);
   };
 
   return (

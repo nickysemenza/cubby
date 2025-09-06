@@ -7,6 +7,7 @@ import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import { type RecipeCreateInput } from "~/schemas/recipe";
 import { toast } from "sonner";
+import { entities } from "~/entities/entities";
 
 export default function NewRecipeForm() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function NewRecipeForm() {
     api.recipe.create.mutationOptions({
       onSuccess: (data) => {
         toast.success("Recipe created successfully!");
-        router.push(`/recipes/${data.id}`);
+        router.push(`/${entities.recipe.basePath}/${data.id}`);
       },
       onError: (error) => {
         setError(error.message);

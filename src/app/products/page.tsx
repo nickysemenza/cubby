@@ -3,6 +3,7 @@ import { ProductList } from "./productlist";
 import { type Metadata } from "next";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
+import { entities } from "~/entities/entities";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function Page() {
       <div className="container mx-auto py-10">
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Products</h1>
-          <Link href="/products/new">
+          <Link href={`/${entities.product.basePath}/new`}>
             <Button>Create New Product</Button>
           </Link>
         </div>

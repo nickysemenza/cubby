@@ -69,7 +69,7 @@ export const IngredientPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ name, id, openInNewTab }) => (
   <PillLink
-    href={`/ingredients/${id}`}
+    href={`/${entities.ingredient.basePath}/${id}`}
     text={name}
     entity="ingredient"
     openInNewTab={openInNewTab}
@@ -80,7 +80,7 @@ export const LocationPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ location: { name, id, type }, openInNewTab }) => (
   <PillLink
-    href={`/locations/${id}`}
+    href={`/${entities.location.basePath}/${id}`}
     text={name}
     entity={"location"}
     label={type}
@@ -92,7 +92,7 @@ export const InventoryEntryPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ entry, openInNewTab }) => (
   <PillLink
-    href={`/inventory/${entry.id}`}
+    href={`/${entities["inventory-item"].basePath}/${entry.id}`}
     text={entry.product.name}
     entity={"inventory-item"}
     openInNewTab={openInNewTab}
@@ -103,7 +103,7 @@ export const RecipePillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ recipe: { name, id }, openInNewTab }) => (
   <PillLink
-    href={`/recipes/${id}`}
+    href={`/${entities.recipe.basePath}/${id}`}
     text={name}
     entity={"recipe"}
     openInNewTab={openInNewTab}
@@ -114,7 +114,7 @@ export const ProductPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ product: { name, id, manufacturer }, openInNewTab }) => (
   <PillLink
-    href={`/products/${id}`}
+    href={`/${entities.product.basePath}/${id}`}
     text={name}
     label={manufacturer}
     entity={"product"}

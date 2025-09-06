@@ -3,6 +3,7 @@ import { InventoryItemList } from "./inventoryitemlist";
 import { type Metadata } from "next";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
+import { entities } from "~/entities/entities";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,10 @@ export default function Page() {
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inventory Items</h1>
         <div className="flex gap-2">
-          <Link href="/inventory/bulk-edit">
+          <Link href={`/${entities["inventory-item"].basePath}/bulk-edit`}>
             <Button variant="outline">Bulk Edit</Button>
           </Link>
-          <Link href="/inventory/new">
+          <Link href={`/${entities["inventory-item"].basePath}/new`}>
             <Button>Create New</Button>
           </Link>
         </div>

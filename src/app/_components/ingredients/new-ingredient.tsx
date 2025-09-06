@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { entities } from "~/entities/entities";
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -17,7 +18,7 @@ export function NewIngredient() {
   const createIngredient = useMutation(
     api.ingredient.create.mutationOptions({
       onSuccess: (ingredient) => {
-        router.push(`/ingredients/${ingredient.id}`);
+        router.push(`/${entities.ingredient.basePath}/${ingredient.id}`);
       },
       onError: (error) => {
         setError(error.message);
@@ -30,7 +31,7 @@ export function NewIngredient() {
   };
 
   const handleCancel = () => {
-    router.push("/ingredients");
+    router.push(`/${entities.ingredient.basePath}`);
   };
 
   return (

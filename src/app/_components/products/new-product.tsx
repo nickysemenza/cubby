@@ -5,6 +5,7 @@ import { ProductForm } from "./product-form";
 import { type ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { entities } from "~/entities/entities";
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -16,7 +17,7 @@ export function NewProduct() {
   const createProduct = useMutation(
     api.product.create.mutationOptions({
       onSuccess: (product) => {
-        router.push(`/products/${product.id}`);
+        router.push(`/${entities.product.basePath}/${product.id}`);
       },
       onError: (error) => {
         setError(error.message);
@@ -29,7 +30,7 @@ export function NewProduct() {
   };
 
   const handleCancel = () => {
-    router.push("/products");
+    router.push(`/${entities.product.basePath}`);
   };
 
   return (

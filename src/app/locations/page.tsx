@@ -5,6 +5,7 @@ import LocationTreeGraph from "../_components/inventory/location-tree-graph";
 import LocationTreeView from "../_components/inventory/location-tree-view";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
+import { entities } from "~/entities/entities";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Locations",
@@ -16,7 +17,7 @@ export default function Page() {
       <div>
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Locations</h1>
-          <Link href="/locations/new">
+          <Link href={`/${entities.location.basePath}/new`}>
             <Button>New Location</Button>
           </Link>
         </div>
