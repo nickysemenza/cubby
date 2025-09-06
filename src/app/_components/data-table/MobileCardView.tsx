@@ -73,7 +73,7 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
 
   return (
-    <div className="block space-y-4 md:hidden">
+    <div className="block space-y-4 lg:hidden">
       {table.getRowModel().rows?.length ? (
         table.getRowModel().rows.map((row) => {
           // Categorize all fields for this row

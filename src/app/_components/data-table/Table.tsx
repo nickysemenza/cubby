@@ -87,7 +87,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   </>
                 );
                 return (
-                  <TableHead key={header.id} colSpan={header.colSpan}>
+                  <TableHead 
+                    key={header.id} 
+                    colSpan={header.colSpan}
+                    className={header.column.columnDef.meta?.className}
+                  >
                     {canSort ? (
                       <Button
                         variant="ghost"
@@ -129,7 +133,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 data-state={row.getIsSelected() && "selected"}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell 
+                    key={cell.id}
+                    className={cell.column.columnDef.meta?.className}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
@@ -171,7 +178,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
       {/* Mobile Card View */}
       {isLoading ? (
-        <div className="block py-8 md:hidden">
+        <div className="block py-8 lg:hidden">
           <LoadingContainer />
         </div>
       ) : (

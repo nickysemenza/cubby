@@ -74,6 +74,7 @@ export function IngredientList() {
     createCreatedAtColumn(columnHelper),
     columnHelper.accessor("appearsInRecipes", {
       enableSorting: false,
+      meta: { className: "w-48 max-w-48" },
       cell: (info) => (
         <EntityPillLinkList
           items={info
@@ -89,6 +90,7 @@ export function IngredientList() {
     }),
     columnHelper.accessor("product", {
       enableSorting: false,
+      meta: { className: "w-48 max-w-48" },
       cell: (info) => (
         <EntityPillLinkList
           items={info.getValue()}
@@ -100,6 +102,7 @@ export function IngredientList() {
     columnHelper.accessor("product", {
       id: "product2",
       enableSorting: false,
+      meta: { className: "w-72 max-w-72" },
       cell: (info) => {
         const product = info.getValue();
         const mappings = product.flatMap((product) =>
