@@ -20,10 +20,10 @@ import Link from "next/link";
 import { type ImageWithEntity } from "~/schemas/image";
 import { assertNever } from "~/lib/assert";
 import {
-  TableLink,
   ImageThumbnail,
   ImageStatusBadge,
 } from "~/app/_components/table";
+import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
 
 export default function ImageList() {
   const api = useTRPC();
@@ -84,14 +84,7 @@ export default function ImageList() {
         );
       },
     }),
-    columnHelper.accessor("filename", {
-      header: "Filename",
-      cell: ({ row }) => (
-        <TableLink href={`/images/${row.original.id}`}>
-          {row.original.filename}
-        </TableLink>
-      ),
-    }),
+    createNameColumn(columnHelper, "image", "filename"),
     columnHelper.accessor("contentType", {
       header: "Type",
       cell: ({ getValue }) => <span>{getValue()}</span>,

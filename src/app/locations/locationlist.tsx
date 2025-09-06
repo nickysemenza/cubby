@@ -45,7 +45,7 @@ export function LocationList() {
     // Image column
     createImageColumn(columnHelper),
     // Name column with link to detail page
-    createNameColumn(columnHelper, "locations"),
+    createNameColumn(columnHelper, "location"),
     columnHelper.accessor("children", {
       enableSorting: false,
       cell: (info) => (

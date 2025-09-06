@@ -20,13 +20,6 @@ interface CategorizedField {
   category: FieldCategory;
 }
 
-// Extend TanStack Table's meta type to include our mobile category
-declare module "@tanstack/react-table" {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  interface ColumnMeta<TData, TValue> {
-    mobileCategory?: FieldCategory;
-  }
-}
 
 function categorizeField(
   columnId: string,

@@ -16,8 +16,8 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
   createImageColumn,
+  createNameColumn,
 } from "../_components/data-table/columnHelpers";
-import { TableLink } from "../_components/table";
 import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
@@ -52,14 +52,7 @@ export function IngredientList() {
   const columns = [
     buildSelectColumn<IngredientData>(),
     createImageColumn(columnHelper),
-    columnHelper.accessor("name", {
-      enableSorting: true,
-      cell: (info) => (
-        <TableLink href={`/ingredients/${info.row.original.id}`}>
-          {String(info.getValue())}
-        </TableLink>
-      ),
-    }),
+    createNameColumn(columnHelper, "ingredient"),
     columnHelper.accessor("aliases", {
       cell: (info) => (
         <div className="space-y-0.5 text-xs">

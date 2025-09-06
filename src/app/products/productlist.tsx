@@ -21,6 +21,7 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
   createImageColumn,
+  createNameColumn,
 } from "../_components/data-table/columnHelpers";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { TableLink } from "../_components/table";
@@ -52,13 +53,7 @@ export function ProductList() {
   // Set up columns using helpers where possible
   const columns = [
     createImageColumn(columnHelper),
-    columnHelper.accessor("name", {
-      cell: (info) => (
-        <TableLink href={`products/${info.row.original.id}`}>
-          {info.getValue()}
-        </TableLink>
-      ),
-    }),
+    createNameColumn(columnHelper, "product"),
     columnHelper.accessor("ingredient", {
       cell: (info) => {
         const ingredient = info.getValue();

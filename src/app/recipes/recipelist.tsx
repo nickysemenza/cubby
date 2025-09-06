@@ -34,7 +34,7 @@ export function RecipeList() {
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     createImageColumn(columnHelper),
-    createNameColumn(columnHelper, "recipes"),
+    createNameColumn(columnHelper, "recipe"),
     createCreatedAtColumn(columnHelper),
     columnHelper.accessor("meta", {
       enableSorting: false,

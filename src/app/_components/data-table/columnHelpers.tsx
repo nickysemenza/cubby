@@ -1,8 +1,19 @@
 "use client";
 
-import { type ColumnHelper } from "@tanstack/react-table";
+import { type ColumnHelper, type CellContext } from "@tanstack/react-table";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { TableLink, ImageThumbnail } from "../table";
+import { entities } from "~/entities/entities";
+import { type Entity } from "~/entities/types";
+
+// Extend TanStack Table's meta type to include our custom properties
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    mobileCategory?: "hero" | "compact" | "medium" | "wide";
+    className?: string;
+  }
+}
 
 // Initialize dayjs relative time plugin
 
@@ -25,16 +36,29 @@ interface ImageRow extends BaseRow {
  */
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
-  pathPrefix: string,
+  entity: Entity,
+  fieldName: keyof T = "name" as keyof T,
 ) {
-  return columnHelper.accessor((row) => row.name, {
-    id: "name",
-    cell: (info) => (
-      <TableLink href={`${pathPrefix}/${info.row.original.id}`}>
+  const config = {
+    id: String(fieldName),
+    enableSorting: true,
+    meta: { className: "w-48 max-w-48" },
+    cell: (info: CellContext<T, T[keyof T]>) => (
+      <TableLink href={`/${entities[entity].basePath}/${info.row.original.id}`}>
         {String(info.getValue())}
       </TableLink>
     ),
-  });
+  };
+
+  // Only add header if it's not the default "name" field
+  if (fieldName === "filename") {
+    return columnHelper.accessor((row) => row[fieldName], {
+      ...config,
+      header: "Filename",
+    });
+  }
+
+  return columnHelper.accessor((row) => row[fieldName], config);
 }
 
 /**
