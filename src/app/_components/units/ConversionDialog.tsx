@@ -116,7 +116,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
           <span>Convert</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[700px]">
         <DialogHeader>
           <DialogTitle>Unit Conversion</DialogTitle>
           <DialogDescription>
@@ -125,11 +125,13 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          <ConversionCapabilities mappings={mappings} />
-
-          <div className="space-y-2">
-            <h4 className="text-sm font-medium">Conversion Graph</h4>
-            <UnitMappingGraph unitMapping={mappings} />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <ConversionCapabilities mappings={mappings} />
+            
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Conversion Graph</h4>
+              <UnitMappingGraph unitMapping={mappings} />
+            </div>
           </div>
 
           <FormWrapper

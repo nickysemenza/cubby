@@ -1,7 +1,6 @@
 "use client";
 
 import { UnitMapping } from "~/schemas/unitmapping";
-import { UnitMappingsTable } from "./unitmappingstable";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { ConversionDialog } from "./ConversionDialog";
 
