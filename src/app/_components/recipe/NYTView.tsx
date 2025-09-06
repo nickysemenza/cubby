@@ -18,7 +18,7 @@ export const NYTView: React.FC<{
           {recipe.sections.map((section) =>
             section.ingredients.map((i) => (
               <div key={i.id} className="flex flex-row justify-center py-1">
-                <div className="flex w-1/2 justify-end pr-1 font-light text-gray-600">
+                <div className="text-muted-foreground flex w-1/2 justify-end pr-1 font-light">
                   {i.amounts
                     .filter(
                       (a) => !["money", "calories"].includes(w.measure_kind(a)),

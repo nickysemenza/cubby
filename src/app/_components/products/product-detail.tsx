@@ -98,7 +98,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             {product.upc ? (
               <Link
                 href={`/usda/upc/${product.upc}`}
-                className="text-blue-600 hover:underline"
+                className="text-primary hover:underline"
               >
                 {product.upc}
               </Link>
@@ -111,7 +111,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             {product.ndb_number ? (
               <Link
                 href={`/usda/ndb/${product.ndb_number}`}
-                className="text-blue-600 hover:underline"
+                className="text-primary hover:underline"
               >
                 {product.ndb_number}
               </Link>

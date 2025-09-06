@@ -298,9 +298,9 @@ export function PendingImageUpload({
       {uploading && (
         <div className="py-2 text-center">
           <div className="mb-2">Uploading...</div>
-          <div className="mx-auto h-1 w-full max-w-md rounded-full bg-gray-200">
+          <div className="bg-muted mx-auto h-1 w-full max-w-md rounded-full">
             <div
-              className="h-1 animate-pulse rounded-full bg-blue-600"
+              className="bg-primary h-1 animate-pulse rounded-full"
               style={{ width: "100%" }}
             ></div>
           </div>

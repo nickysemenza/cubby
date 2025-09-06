@@ -5,10 +5,9 @@ import { cva, type VariantProps } from "class-variance-authority";
 const tableLinkVariants = cva("hover:underline transition-colors", {
   variants: {
     variant: {
-      default: "font-medium text-blue-600 dark:text-blue-500",
-      mono: "font-mono text-blue-600",
-      muted:
-        "font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200",
+      default: "font-medium text-primary",
+      mono: "font-mono text-primary",
+      muted: "font-medium text-muted-foreground hover:text-foreground",
     },
   },
   defaultVariants: {

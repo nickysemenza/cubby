@@ -38,7 +38,7 @@ export function IngredientMerger({ table }: IngredientMergerProps) {
   };
 
   return (
-    <div className="border-1 border-dashed border-orange-500 p-2">
+    <div className="border-border border-1 border-dashed p-2">
       <h3>target</h3>
       <IngredientPillLink name={target.name} id={target.id} />
       <h3>aliases to create</h3>

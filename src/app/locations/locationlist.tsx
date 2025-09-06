@@ -85,7 +85,7 @@ export function LocationList() {
           <div className="space-y-0.5 text-xs">
             {entries.map((entry) => (
               <div key={entry.id} className="flex items-center gap-1">
-                <span className="text-gray-600">
+                <span className="text-muted-foreground">
                   {tryFormatMeasure(w, entry.amount)}
                 </span>
                 <ProductPillLink product={entry.product} />

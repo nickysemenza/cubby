@@ -71,7 +71,7 @@ const renderForeignObjectNode = ({
         {nodeDatum.name !== rootName && (
           <>
             <Link
-              className="text-blue-600 hover:underline dark:text-blue-500"
+              className="text-primary hover:underline"
               //@ts-expect-error id is a prop
               href={`locations/${nodeDatum.id}`}
             >

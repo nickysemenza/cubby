@@ -76,7 +76,7 @@ export default function ImageList() {
             {row.original.status === "UPLOADED" ? (
               <ImageThumbnail images={[image]} alt={image.filename} size="md" />
             ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-gray-100">
+              <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-md border">
                 <NoneState />
               </div>
             )}
@@ -120,7 +120,7 @@ export default function ImageList() {
           const { entityType, entityId, entityName } = getValue();
 
           if (!entityType || !entityId || !entityName) {
-            return <span className="text-gray-500 italic">None</span>;
+            return <span className="text-muted-foreground italic">None</span>;
           }
 
           switch (entityType) {

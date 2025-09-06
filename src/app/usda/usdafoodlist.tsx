@@ -65,7 +65,7 @@ export function USDAFoodList() {
               {brandedFood.brand_owner || <NoneState />}
             </div>
             {brandedFood.branded_food_category && (
-              <div className="truncate text-xs text-gray-500">
+              <div className="text-muted-foreground truncate text-xs">
                 {brandedFood.branded_food_category}
               </div>
             )}

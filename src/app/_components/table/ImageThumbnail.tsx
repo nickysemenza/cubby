@@ -42,8 +42,8 @@ interface ImageThumbnailProps extends VariantProps<typeof thumbnailVariants> {
 const EmptyImagePlaceholder = ({
   size,
 }: VariantProps<typeof thumbnailVariants>) => (
-  <div className={thumbnailVariants({ size, className: "bg-gray-100" })}>
-    <span className="text-xs text-gray-500">-</span>
+  <div className={thumbnailVariants({ size, className: "bg-muted" })}>
+    <span className="text-muted-foreground text-xs">-</span>
   </div>
 );
 

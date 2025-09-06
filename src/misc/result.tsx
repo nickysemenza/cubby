@@ -8,5 +8,5 @@ export const renderValueOrError = <T, E = string>(
   if (result.success) {
     return renderValue(result.value);
   }
-  return <div className="text-red-500">{`${result.error}`}</div>;
+  return <div className="text-destructive">{`${result.error}`}</div>;
 };

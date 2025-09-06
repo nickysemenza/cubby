@@ -298,7 +298,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         {sectionFields.map((sectionField, sectionIndex) => (
           <div
             key={sectionField.id}
-            className="space-y-3 rounded border border-gray-100 p-3"
+            className="border-border space-y-3 rounded border p-3"
           >
             <div className="flex items-center justify-between">
               <h4 className="font-medium">

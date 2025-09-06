@@ -5,9 +5,9 @@ import { type ImageStatus } from "~/schemas/image";
 const statusBadgeVariants = cva("", {
   variants: {
     status: {
-      UPLOADED: "bg-green-500 hover:bg-green-600",
-      PENDING: "border-yellow-600 text-yellow-700",
-      FAILED: "border-red-600 text-red-700",
+      UPLOADED: "bg-accent text-accent-foreground hover:bg-accent/80",
+      PENDING: "border-muted-foreground text-muted-foreground",
+      FAILED: "border-destructive text-destructive",
     },
   },
   defaultVariants: {

@@ -262,7 +262,7 @@ export default function BulkInventoryForm() {
                 </div>
               ))
             ) : (
-              <div className="py-4 text-center text-gray-500">
+              <div className="text-muted-foreground py-4 text-center">
                 No inventory items yet.
               </div>
             )}

@@ -11,7 +11,7 @@ export const loadingSpinnerVariants = cva(
         xl: "h-8 w-8",
       },
       color: {
-        default: "border-gray-900",
+        default: "border-foreground",
         primary: "border-primary",
         white: "border-white",
       },

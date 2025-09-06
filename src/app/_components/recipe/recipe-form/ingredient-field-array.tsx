@@ -31,7 +31,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
   return (
     <div className="w-full space-y-2">
       {fields.length === 0 ? (
-        <div className="text-sm text-gray-500 italic">
+        <div className="text-muted-foreground text-sm italic">
           No ingredients added yet
         </div>
       ) : (
@@ -39,7 +39,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           {fields.map((field, ingredientIndex) => (
             <div
               key={field.id}
-              className="border-opacity-50 space-y-2 rounded border border-gray-100 px-2 py-2"
+              className="border-opacity-50 border-border space-y-2 rounded border px-2 py-2"
             >
               <div className="flex flex-row items-center">
                 <div className="flex w-8 flex-col items-center justify-center">

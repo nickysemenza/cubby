@@ -88,7 +88,7 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
           <h4 className="mb-2 font-semibold">Portion Information</h4>
           <table className="min-w-full border-collapse">
             <thead>
-              <tr className="bg-gray-100">
+              <tr className="bg-muted">
                 <th className="border p-2 text-left">Amount</th>
                 <th className="border p-2 text-left">Portion</th>
                 <th className="border p-2 text-left">Grams</th>
@@ -135,7 +135,9 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
     <div>
       <h3 className="mb-3">Associated Products</h3>
       {!linkedProducts || linkedProducts.length === 0 ? (
-        <div className="text-gray-500 italic">No associated products found</div>
+        <div className="text-muted-foreground italic">
+          No associated products found
+        </div>
       ) : (
         <div className="space-y-4">
           <EntityPillLinkList

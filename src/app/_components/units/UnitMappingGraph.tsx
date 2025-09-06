@@ -11,7 +11,9 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
 
   if (unitMapping.length === 0) {
     return (
-      <div className="border-red border-2 text-red-400">No unit mappings</div>
+      <div className="border-destructive text-destructive border-2">
+        No unit mappings
+      </div>
     );
   }
   try {
@@ -36,6 +38,6 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
     );
   } catch (e) {
     console.log({ e });
-    return <div className="text-red-400">{JSON.stringify(e)}</div>;
+    return <div className="text-destructive">{JSON.stringify(e)}</div>;
   }
 };

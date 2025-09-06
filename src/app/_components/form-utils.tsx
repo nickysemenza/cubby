@@ -95,7 +95,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
       >
         {children}
 
-        {error && <div className="text-sm text-red-500">{error}</div>}
+        {error && <div className="text-destructive text-sm">{error}</div>}
 
         <div className="flex justify-end space-x-2">
           <Button

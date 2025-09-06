@@ -319,11 +319,11 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
         initialName={selectedIngredient}
       />
 
-      <div className="mt-4 rounded border border-orange-200 bg-orange-50 p-3">
-        <h3 className="mb-2 font-medium text-orange-800">
+      <div className="border-border bg-muted mt-4 rounded border p-3">
+        <h3 className="text-foreground mb-2 font-medium">
           Missing Ingredients
         </h3>
-        <div className="mb-2 text-sm text-orange-700">
+        <div className="text-muted-foreground mb-2 text-sm">
           These ingredients don&apos;t exist in your database yet:
         </div>
         <ul className="space-y-1">
@@ -365,21 +365,23 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
       <div className="inline">
         {amounts.map((a, x) => (
           <div key={x} className="inline">
-            <div className="inline pr-1 text-blue-600">
+            <div className="text-primary inline pr-1">
               {formattedAmounts[x]}
             </div>
-            <div className="inline text-green-800">{a.unit}</div>
+            <div className="text-accent-foreground inline">{a.unit}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}
           </div>
         ))}
       </div>
-      <div className="inline pl-2 text-orange-800">
+      <div className="text-foreground inline pl-2">
         <IngredientByName name={amount.name} />
       </div>
       {amount.modifier && (
         <div className="inline">
           {", "}
-          <div className="inline text-gray-400 italic">{amount.modifier}</div>
+          <div className="text-muted-foreground inline italic">
+            {amount.modifier}
+          </div>
         </div>
       )}
     </div>

@@ -12,7 +12,7 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
       case "Ing":
         return (
           <div
-            className="decoration-grey m-0 inline text-orange-800 underline decoration-solid"
+            className="text-foreground m-0 inline underline decoration-solid"
             key={x + "a"}
           >
             {t.value}
@@ -28,7 +28,7 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
         }
         return (
           <div
-            className="decoration-grey m-0 inline text-green-800 underline decoration-solid"
+            className="text-accent-foreground m-0 inline underline decoration-solid"
             key={x}
           >
             {tryFormatMeasure(w, val)}

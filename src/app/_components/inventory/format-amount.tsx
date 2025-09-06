@@ -42,7 +42,9 @@ export const tryFormatMeasure = (w: wasm, measure: WMeasure) => {
     return w.format_amount(measure);
   } catch (error) {
     return (
-      <div className="text-red-400">{"Error formatting measure: " + error}</div>
+      <div className="text-destructive">
+        {"Error formatting measure: " + error}
+      </div>
     );
   }
 };

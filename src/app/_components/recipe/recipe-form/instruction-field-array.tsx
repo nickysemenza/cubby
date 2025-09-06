@@ -23,7 +23,7 @@ export const InstructionFieldArray: FC<InstructionFieldArrayProps> = ({
   return (
     <div className="w-full space-y-2">
       {fields.length === 0 ? (
-        <div className="text-sm text-gray-500 italic">
+        <div className="text-muted-foreground text-sm italic">
           No instructions added yet
         </div>
       ) : (

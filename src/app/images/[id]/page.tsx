@@ -30,7 +30,7 @@ export default function ImageDetailPage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="h-4 w-4 animate-spin rounded-full border-t-2 border-b-2 border-gray-900"></div>
+          <div className="border-foreground h-4 w-4 animate-spin rounded-full border-t-2 border-b-2"></div>
           <span>Loading image details...</span>
         </div>
       </div>
@@ -42,7 +42,7 @@ export default function ImageDetailPage() {
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
           <h2 className="text-xl font-semibold">Image Not Found</h2>
-          <p className="mt-2 text-gray-500">
+          <p className="text-muted-foreground mt-2">
             The image you are looking for does not exist.
           </p>
         </div>
@@ -71,7 +71,7 @@ export default function ImageDetailPage() {
       !imageDetails.entityName
     ) {
       return (
-        <span className="text-gray-500 italic">
+        <span className="text-muted-foreground italic">
           Not associated with any entity
         </span>
       );
@@ -141,45 +141,53 @@ export default function ImageDetailPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h3 className="text-sm font-medium text-gray-500">Filename</h3>
+              <h3 className="text-muted-foreground text-sm font-medium">
+                Filename
+              </h3>
               <p className="mt-1">{imageDetails.filename}</p>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500">
+              <h3 className="text-muted-foreground text-sm font-medium">
                 Content Type
               </h3>
               <p className="mt-1">{imageDetails.contentType}</p>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500">Size</h3>
+              <h3 className="text-muted-foreground text-sm font-medium">
+                Size
+              </h3>
               <p className="mt-1">{formatBytes(imageDetails.size)}</p>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500">Status</h3>
+              <h3 className="text-muted-foreground text-sm font-medium">
+                Status
+              </h3>
               <div className="mt-1">
                 <ImageStatusBadge status={imageDetails.status} />
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500">
+              <h3 className="text-muted-foreground text-sm font-medium">
                 Associated Entity
               </h3>
               <div className="mt-1">{renderEntityLink()}</div>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500">Created</h3>
+              <h3 className="text-muted-foreground text-sm font-medium">
+                Created
+              </h3>
               <p className="mt-1">
                 <HoverableTimestamp timestamp={imageDetails.createdAt} />
               </p>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium text-gray-500">
+              <h3 className="text-muted-foreground text-sm font-medium">
                 Last Updated
               </h3>
               <p className="mt-1">

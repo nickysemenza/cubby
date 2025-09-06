@@ -9,9 +9,9 @@ const pillVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-gray-50 text-gray-800 ring-gray-200 hover:bg-gray-100",
-        entity: "bg-blue-50 text-blue-700 ring-blue-200",
-        label: "bg-purple-50 text-purple-700 ring-purple-200",
+        default: "bg-muted text-muted-foreground ring-border hover:bg-accent",
+        entity: "bg-primary/10 text-primary ring-primary/20",
+        label: "bg-secondary text-secondary-foreground ring-border",
       },
       size: {
         default: "px-2.5 py-1 text-sm",

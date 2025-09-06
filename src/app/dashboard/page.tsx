@@ -15,9 +15,9 @@ export default async function DashboardPage() {
         Welcome to your protected dashboard! This page is only visible to
         authenticated users.
       </p>
-      <div className="mt-8 rounded-lg bg-gray-100 p-6">
+      <div className="bg-muted mt-8 rounded-lg p-6">
         <h2 className="mb-3 text-xl font-semibold">User ID</h2>
-        <p className="rounded bg-gray-200 p-2 font-mono">{userId}</p>
+        <p className="bg-accent rounded p-2 font-mono">{userId}</p>
       </div>
     </div>
   );
