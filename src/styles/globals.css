@@ -55,60 +55,60 @@
   ---break---
 */
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(240 10% 3.9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(240 10% 3.9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(240 10% 3.9%);
-  --primary: hsl(240 5.9% 10%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(240 4.8% 95.9%);
-  --secondary-foreground: hsl(240 5.9% 10%);
-  --muted: hsl(240 4.8% 95.9%);
-  --muted-foreground: hsl(240 3.8% 46.1%);
-  --accent: hsl(240 4.8% 95.9%);
-  --accent-foreground: hsl(240 5.9% 10%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 5.9% 90%);
-  --input: hsl(240 5.9% 90%);
-  --ring: hsl(240 10% 3.9%);
-  --chart-1: hsl(12 76% 61%);
-  --chart-2: hsl(173 58% 39%);
-  --chart-3: hsl(197 37% 24%);
-  --chart-4: hsl(43 74% 66%);
-  --chart-5: hsl(27 87% 67%);
+  --background: #eff1f5; /* Catppuccin Latte Base */
+  --foreground: #4c4f69; /* Catppuccin Latte Text */
+  --card: #e6e9ef; /* Catppuccin Latte Mantle */
+  --card-foreground: #4c4f69; /* Catppuccin Latte Text */
+  --popover: #e6e9ef; /* Catppuccin Latte Mantle */
+  --popover-foreground: #4c4f69; /* Catppuccin Latte Text */
+  --primary: #1e66f5; /* Catppuccin Latte Blue */
+  --primary-foreground: #eff1f5; /* Catppuccin Latte Base */
+  --secondary: #ccd0da; /* Catppuccin Latte Surface0 */
+  --secondary-foreground: #5c5f77; /* Catppuccin Latte Subtext1 */
+  --muted: #ccd0da; /* Catppuccin Latte Surface0 */
+  --muted-foreground: #6c6f85; /* Catppuccin Latte Subtext0 */
+  --accent: #bcc0cc; /* Catppuccin Latte Surface1 */
+  --accent-foreground: #4c4f69; /* Catppuccin Latte Text */
+  --destructive: #d20f39; /* Catppuccin Latte Red */
+  --destructive-foreground: #eff1f5; /* Catppuccin Latte Base */
+  --border: #ccd0da; /* Catppuccin Latte Surface0 */
+  --input: #bcc0cc; /* Catppuccin Latte Surface1 */
+  --ring: #7287fd; /* Catppuccin Latte Lavender */
+  --chart-1: #1e66f5; /* Catppuccin Latte Blue */
+  --chart-2: #179299; /* Catppuccin Latte Teal */
+  --chart-3: #40a02b; /* Catppuccin Latte Green */
+  --chart-4: #8839ef; /* Catppuccin Latte Mauve */
+  --chart-5: #fe640b; /* Catppuccin Latte Peach */
   --radius: 0.6rem;
 }
 /*
   ---break---
 */
 .dark {
-  --background: hsl(240 10% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(240 10% 3.9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(240 10% 3.9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(240 5.9% 10%);
-  --secondary: hsl(240 3.7% 15.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(240 3.7% 15.9%);
-  --muted-foreground: hsl(240 5% 64.9%);
-  --accent: hsl(240 3.7% 15.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 3.7% 15.9%);
-  --input: hsl(240 3.7% 15.9%);
-  --ring: hsl(240 4.9% 83.9%);
-  --chart-1: hsl(220 70% 50%);
-  --chart-2: hsl(160 60% 45%);
-  --chart-3: hsl(30 80% 55%);
-  --chart-4: hsl(280 65% 60%);
-  --chart-5: hsl(340 75% 55%);
+  --background: #303446; /* Catppuccin Frappe Base */
+  --foreground: #c6d0f5; /* Catppuccin Frappe Text */
+  --card: #292c3c; /* Catppuccin Frappe Mantle */
+  --card-foreground: #c6d0f5; /* Catppuccin Frappe Text */
+  --popover: #292c3c; /* Catppuccin Frappe Mantle */
+  --popover-foreground: #c6d0f5; /* Catppuccin Frappe Text */
+  --primary: #8caaee; /* Catppuccin Frappe Blue */
+  --primary-foreground: #303446; /* Catppuccin Frappe Base */
+  --secondary: #414559; /* Catppuccin Frappe Surface0 */
+  --secondary-foreground: #b5bfe2; /* Catppuccin Frappe Subtext1 */
+  --muted: #414559; /* Catppuccin Frappe Surface0 */
+  --muted-foreground: #a5adce; /* Catppuccin Frappe Subtext0 */
+  --accent: #51576d; /* Catppuccin Frappe Surface1 */
+  --accent-foreground: #c6d0f5; /* Catppuccin Frappe Text */
+  --destructive: #e78284; /* Catppuccin Frappe Red */
+  --destructive-foreground: #303446; /* Catppuccin Frappe Base */
+  --border: #414559; /* Catppuccin Frappe Surface0 */
+  --input: #51576d; /* Catppuccin Frappe Surface1 */
+  --ring: #babbf1; /* Catppuccin Frappe Lavender */
+  --chart-1: #8caaee; /* Catppuccin Frappe Blue */
+  --chart-2: #81c8be; /* Catppuccin Frappe Teal */
+  --chart-3: #a6d189; /* Catppuccin Frappe Green */
+  --chart-4: #ca9ee6; /* Catppuccin Frappe Mauve */
+  --chart-5: #ef9f76; /* Catppuccin Frappe Peach */
 }
 /*
   ---break---
