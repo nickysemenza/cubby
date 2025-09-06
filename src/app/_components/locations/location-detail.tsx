@@ -1,6 +1,5 @@
 "use client";
 import { type FC, useState } from "react";
-import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { InfLocation } from "~/schemas/location";
@@ -123,17 +122,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         />
       ),
     },
-    {
-      title: "Raw Details",
-      content: (
-        <div className="bg-muted rounded-md p-4">
-          <JsonRenderer input={location} />
-        </div>
-      ),
-    },
   ];
 
   return (
-    <DetailPage sections={sections} entity="location" name={location.name} />
+    <DetailPage 
+      sections={sections} 
+      entity="location" 
+      name={location.name}
+      rawData={location}
+    />
   );
 };

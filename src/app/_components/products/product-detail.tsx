@@ -1,6 +1,5 @@
 "use client";
 import { type FC, useState } from "react";
-import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import {
@@ -166,14 +165,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Unit Mappings",
       content: <UnitMappingDisplay mappings={mappings} title="" />,
     },
-    {
-      title: "Raw Details",
-      content: (
-        <div className="bg-muted rounded-md p-4">
-          <JsonRenderer input={product} />
-        </div>
-      ),
-    },
   ];
 
   // Add nutrition section if available
@@ -189,6 +180,6 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   }
 
   return (
-    <DetailPage sections={sections} entity="product" name={product.name} />
+    <DetailPage sections={sections} entity="product" name={product.name} rawData={product} />
   );
 };

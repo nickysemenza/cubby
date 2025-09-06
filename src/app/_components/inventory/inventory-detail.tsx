@@ -1,5 +1,4 @@
 "use client";
-import JsonRenderer from "~/app/_components/json-renderer";
 import { useWasm } from "~/hooks/useWasm";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { z } from "zod";
@@ -88,14 +87,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       title: "Inventory Item Details",
       content: <InventoryContent />,
     },
-    {
-      title: "Raw Details",
-      content: (
-        <div className="bg-muted rounded-md p-4">
-          <JsonRenderer input={inventoryitem} />
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -103,6 +94,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       sections={sections}
       entity="inventory-item"
       name={inventoryitem.product.name}
+      rawData={inventoryitem}
     />
   );
 };

@@ -164,6 +164,7 @@ export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
       sections={sections}
       entity="usda-food"
       name={foodInfo.description}
+      rawData={food}
     />
   );
 };

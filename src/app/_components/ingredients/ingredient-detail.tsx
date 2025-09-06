@@ -1,7 +1,6 @@
 "use client";
 
 import { type FC, useState } from "react";
-import JsonRenderer from "~/app/_components/json-renderer";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
@@ -113,14 +112,6 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
         />
       ),
     },
-    {
-      title: "Raw Details",
-      content: (
-        <div className="bg-muted rounded-md p-4">
-          <JsonRenderer input={ingredient} />
-        </div>
-      ),
-    },
   ];
 
   // Add nutrition section if any product has nutrition info
@@ -142,6 +133,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
       sections={sections}
       entity="ingredient"
       name={ingredient.name}
+      rawData={ingredient}
     />
   );
 };
