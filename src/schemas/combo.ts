@@ -71,6 +71,36 @@ export const locationOutWithParentChildrenAndInventoryOut = z
 export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut
 >;
+/**
+ * Creates unit mappings from nutrition data (e.g., 100g → 374kcal)
+ */
+export const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
+  const nutrition = food.nutritionInfo?.nutrientsPer100;
+  if (!nutrition) return [];
+
+  const mappings: UnitMapping[] = [];
+
+  // Create calorie mapping: 100g → X kcal
+  if (nutrition.kcal > 0) {
+    mappings.push({
+      a: { value: 100, unit: "g" },
+      b: { value: nutrition.kcal, unit: "kcal" },
+      source: "nutrition-data",
+    });
+  }
+
+  // Create protein mapping: 100g → X g protein
+  if (nutrition.protein > 0) {
+    mappings.push({
+      a: { value: 100, unit: "g" },
+      b: { value: nutrition.protein, unit: "g protein" },
+      source: "nutrition-data",
+    });
+  }
+
+  return mappings;
+};
+
 export const unitMappingsFromProduct = (
   product: ProductWithMappingsAndFoodOut,
 ): UnitMapping[] => {
@@ -81,5 +111,9 @@ export const unitMappingsFromProduct = (
 
 export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] => {
   const serving = food.brandedFoodInfo?.serving_as_amount;
-  return [...food.portionInfo.parsed, ...(serving ? [serving] : [])];
+  return [
+    ...food.portionInfo.parsed,
+    ...(serving ? [serving] : []),
+    ...(food ? unitMappingsFromNutrition(food) : []),
+  ];
 };
