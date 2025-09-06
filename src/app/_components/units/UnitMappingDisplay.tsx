@@ -2,7 +2,7 @@
 
 import { UnitMapping } from "~/schemas/unitmapping";
 import { UnitMappingsTable } from "./unitmappingstable";
-import { UnitMappingGraph } from "./UnitMappingGraph";
+import { ConversionCapabilities } from "./ConversionCapabilities";
 import { ConversionDialog } from "./ConversionDialog";
 
 interface UnitMappingDisplayProps {
@@ -21,10 +21,8 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
         <ConversionDialog mappings={mappings} />
       </div>
       <div className="space-y-4">
-        <UnitMappingsTable mappings={mappings} />
-        <div className="pt-2">
-          <UnitMappingGraph unitMapping={mappings} />
-        </div>
+        <ConversionCapabilities mappings={mappings} />
+        {/* <UnitMappingsTable mappings={mappings} /> */}
       </div>
     </div>
   );

@@ -23,6 +23,8 @@ import { Scale } from "lucide-react";
 import { Result } from "~/misc/result-types";
 import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { ConversionCapabilities } from "./ConversionCapabilities";
+import { UnitMappingGraph } from "./UnitMappingGraph";
 
 const formSchema = z.object({
   amount: amount,
@@ -123,6 +125,13 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          <ConversionCapabilities mappings={mappings} />
+
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Conversion Graph</h4>
+            <UnitMappingGraph unitMapping={mappings} />
+          </div>
+
           <FormWrapper
             form={form}
             onSubmit={() => {
