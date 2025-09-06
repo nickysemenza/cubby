@@ -43,14 +43,14 @@ export function USDAFoodList() {
         </TableLink>
       ),
     }),
-    columnHelper.accessor("foodInfo.description", {
-      id: "foodinfo-description",
-      header: "Description",
-      cell: (info) => info.getValue(),
-    }),
     columnHelper.accessor("foodInfo.data_type", {
       id: "foodInfo-data_type",
       header: "Type",
+      cell: (info) => info.getValue(),
+    }),
+    columnHelper.accessor("foodInfo.description", {
+      id: "foodinfo-description",
+      header: "Description",
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("brandedFoodInfo", {

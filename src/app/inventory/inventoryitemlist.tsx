@@ -66,6 +66,9 @@ export function InventoryItemList() {
     }),
     columnHelper.accessor("product", {
       enableSorting: false,
+      meta: {
+        mobileCategory: "wide",
+      },
       cell: (info) => {
         const product = info.getValue();
         const { upc, ndb_number, unitMappings } = product;
@@ -96,6 +99,9 @@ export function InventoryItemList() {
       },
     }),
     columnHelper.accessor("location", {
+      meta: {
+        mobileCategory: "wide",
+      },
       enableSorting: false,
       cell: (info) => {
         const item = info.getValue();

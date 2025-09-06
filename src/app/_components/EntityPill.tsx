@@ -33,14 +33,16 @@ interface PillProps {
 
 const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
   return (
-    <span className={pillVariants({ variant: "default" })}>
-      <span className="truncate">{text}</span>
+    <span
+      className={pillVariants({ variant: "default", className: "max-w-full" })}
+    >
+      <span className="min-w-0 truncate">{text}</span>
       {entity && (
         <span
           className={pillVariants({
             variant: "entity",
             size: "small",
-            className: "ml-1.5 rounded-sm",
+            className: "ml-1.5 flex-shrink-0 rounded-sm",
           })}
         >
           {entities[entity].icon}
@@ -52,7 +54,7 @@ const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
           className={pillVariants({
             variant: "label",
             size: "small",
-            className: "ml-1.5 rounded-sm",
+            className: "ml-1.5 flex-shrink-0 rounded-sm",
           })}
         >
           {label}
@@ -138,6 +140,7 @@ const PillLink: React.FC<
     href={href}
     target={openInNewTab ? "_blank" : undefined}
     rel={openInNewTab ? "noopener noreferrer" : undefined}
+    className="inline-block max-w-full min-w-0"
   >
     <EntityPill {...pillProps} />
   </Link>

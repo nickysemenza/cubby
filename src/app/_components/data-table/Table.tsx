@@ -19,6 +19,7 @@ import { SpacedContainer } from "~/components/ui/spaced-container";
 import { LoadingContainer } from "~/components/ui/loading-spinner";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
+import { MobileCardView } from "./MobileCardView";
 
 interface FilterOption {
   value: string;
@@ -56,6 +57,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         additionalFilters={additionalFilters}
         filterableColumns={filterableColumns}
       />
+
+      {/* Desktop Table View */}
       <Table aria-label="Tasks">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -165,6 +168,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           )}
         </TableBody>
       </Table>
+
+      {/* Mobile Card View */}
+      {isLoading ? (
+        <div className="block py-8 md:hidden">
+          <LoadingContainer />
+        </div>
+      ) : (
+        <MobileCardView table={table} />
+      )}
+
       <DataTablePagination table={table} />
     </SpacedContainer>
   );

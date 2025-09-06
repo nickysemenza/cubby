@@ -25,13 +25,17 @@ export function DataTablePagination<TData>({
   table,
 }: DataTablePaginationProps<TData>) {
   return (
-    <div className="flex items-center justify-between px-2">
-      <div className="text-muted-foreground flex-1 text-sm">
+    <div className="flex flex-col space-y-3 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
+      {/* Selected rows info - hidden on mobile to save space */}
+      <div className="text-muted-foreground hidden text-sm sm:block">
         {table.getFilteredSelectedRowModel().rows.length} of{" "}
         {table.getFilteredRowModel().rows.length} row(s) selected.
       </div>
-      <div className="flex items-center space-x-6 lg:space-x-8">
-        <div className="flex items-center space-x-2">
+
+      {/* Main pagination controls */}
+      <div className="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-4 lg:space-x-6">
+        {/* Rows per page - simplified on mobile */}
+        <div className="flex items-center justify-between space-x-2 sm:justify-start">
           <p className="text-sm font-medium">Rows per page</p>
           <Select
             value={`${table.getState().pagination.pageSize}`}
@@ -39,7 +43,7 @@ export function DataTablePagination<TData>({
               table.setPageSize(Number(value));
             }}
           >
-            <SelectTrigger className="h-8 w-[70px]">
+            <SelectTrigger className="h-8 w-16">
               <SelectValue placeholder={table.getState().pagination.pageSize} />
             </SelectTrigger>
             <SelectContent side="top">
@@ -51,11 +55,21 @@ export function DataTablePagination<TData>({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex w-[180px] items-center justify-center text-sm font-medium">
-          Page {table.getState().pagination.pageIndex + 1} of{" "}
-          {table.getPageCount()} ({table.getRowCount()} records)
+
+        {/* Page info - responsive text */}
+        <div className="flex min-w-0 flex-1 items-center justify-center text-sm font-medium sm:flex-none">
+          <span className="hidden sm:inline">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()} ({table.getRowCount()} records)
+          </span>
+          <span className="sm:hidden">
+            {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </span>
         </div>
-        <div className="flex items-center space-x-2">
+
+        {/* Navigation buttons */}
+        <div className="flex items-center justify-center space-x-1">
           <Button
             variant="outline"
             className="hidden h-8 w-8 p-0 lg:flex"

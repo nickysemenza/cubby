@@ -9,7 +9,6 @@ import {
   LocationPillLink,
 } from "../_components/EntityPill";
 import { useWasm } from "~/hooks/useWasm";
-import { FlexContainer } from "~/components/ui/flex-container";
 import { SpacedContainer } from "~/components/ui/spaced-container";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { unitMappingsFromProduct } from "~/schemas/combo";
@@ -54,21 +53,27 @@ export function ProductList() {
   const columns = [
     createImageColumn(columnHelper),
     columnHelper.accessor("name", {
+      cell: (info) => (
+        <TableLink href={`products/${info.row.original.id}`}>
+          {info.getValue()}
+        </TableLink>
+      ),
+    }),
+    columnHelper.accessor("ingredient", {
       cell: (info) => {
-        const ingredient = info.row.original.ingredient;
-        return (
-          <FlexContainer direction="col">
-            <TableLink href={`products/${info.row.original.id}`}>
-              {info.getValue()}
-            </TableLink>
-            {ingredient && (
-              <IngredientPillLink name={ingredient.name} id={ingredient.id} />
-            )}
-          </FlexContainer>
+        const ingredient = info.getValue();
+        return ingredient ? (
+          <IngredientPillLink name={ingredient.name} id={ingredient.id} />
+        ) : (
+          <NoneState />
         );
       },
     }),
+
     columnHelper.accessor("manufacturer", {
+      meta: {
+        mobileCategory: "compact", // Override default "medium" categorization
+      },
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("upc", {
@@ -100,6 +105,9 @@ export function ProductList() {
     }),
     columnHelper.accessor("food", {
       id: "food info",
+      meta: {
+        mobileCategory: "compact", // Override default "medium" categorization
+      },
       cell: (info) => {
         const food = info.getValue();
         if (!food) return <NoneState />;

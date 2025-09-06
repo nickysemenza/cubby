@@ -37,6 +37,7 @@ const eslintConfig = [
       "next-env.d.ts",
       // others
       "recipebridge/**",
+      "playwright-report/**",
       ".vercel/**",
     ],
   },
