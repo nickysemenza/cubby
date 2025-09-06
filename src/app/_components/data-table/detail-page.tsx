@@ -19,7 +19,12 @@ interface DetailPageProps {
   rawData: unknown; // The full entity data for debug display
 }
 
-export const DetailPage: FC<DetailPageProps> = ({ sections, entity, name, rawData }) => {
+export const DetailPage: FC<DetailPageProps> = ({
+  sections,
+  entity,
+  name,
+  rawData,
+}) => {
   const entityDetails = entities[entity];
   const { isDebugEnabled } = useDebug();
 
@@ -42,9 +47,7 @@ export const DetailPage: FC<DetailPageProps> = ({ sections, entity, name, rawDat
                 {section.title}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              {section.content}
-            </CardContent>
+            <CardContent className="p-4 sm:p-6">{section.content}</CardContent>
           </Card>
         ))}
       </div>

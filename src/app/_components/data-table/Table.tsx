@@ -87,8 +87,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   </>
                 );
                 return (
-                  <TableHead 
-                    key={header.id} 
+                  <TableHead
+                    key={header.id}
                     colSpan={header.colSpan}
                     className={header.column.columnDef.meta?.className}
                   >
@@ -133,7 +133,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 data-state={row.getIsSelected() && "selected"}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell 
+                  <TableCell
                     key={cell.id}
                     className={cell.column.columnDef.meta?.className}
                   >

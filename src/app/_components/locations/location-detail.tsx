@@ -125,9 +125,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   ];
 
   return (
-    <DetailPage 
-      sections={sections} 
-      entity="location" 
+    <DetailPage
+      sections={sections}
+      entity="location"
       name={location.name}
       rawData={location}
     />

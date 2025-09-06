@@ -22,7 +22,6 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
       </div>
       <div className="space-y-4">
         <ConversionCapabilities mappings={mappings} />
-        {/* <UnitMappingsTable mappings={mappings} /> */}
       </div>
     </div>
   );

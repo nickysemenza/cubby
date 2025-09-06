@@ -19,10 +19,7 @@ import { useTableConfig } from "~/app/_components/data-table/useTableConfig";
 import Link from "next/link";
 import { type ImageWithEntity } from "~/schemas/image";
 import { assertNever } from "~/lib/assert";
-import {
-  ImageThumbnail,
-  ImageStatusBadge,
-} from "~/app/_components/table";
+import { ImageThumbnail, ImageStatusBadge } from "~/app/_components/table";
 import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
 
 export default function ImageList() {

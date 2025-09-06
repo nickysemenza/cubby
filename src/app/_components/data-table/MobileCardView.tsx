@@ -20,7 +20,6 @@ interface CategorizedField {
   category: FieldCategory;
 }
 
-
 function categorizeField(
   columnId: string,
   metaCategory?: FieldCategory,

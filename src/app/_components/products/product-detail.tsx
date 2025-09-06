@@ -180,6 +180,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   }
 
   return (
-    <DetailPage sections={sections} entity="product" name={product.name} rawData={product} />
+    <DetailPage
+      sections={sections}
+      entity="product"
+      name={product.name}
+      rawData={product}
+    />
   );
 };
