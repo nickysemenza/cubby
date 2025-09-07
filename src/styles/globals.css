@@ -7,11 +7,15 @@
   ---break---
 */
 @custom-variant dark (&:is(.dark *));
+@custom-variant terminal (&:is(.terminal *));
 
 @theme {
   --font-sans:
     var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
+    "Roboto Mono", Consolas, "Courier New", monospace;
 }
 
 /*
@@ -113,6 +117,35 @@
 /*
   ---break---
 */
+.terminal {
+  --background: #f8f8f2; /* Light terminal background */
+  --foreground: #282a36; /* Dark text on light background */
+  --card: #ffffff; /* White card background */
+  --card-foreground: #282a36; /* Dark text */
+  --popover: #ffffff; /* White popover */
+  --popover-foreground: #282a36; /* Dark text */
+  --primary: #44475a; /* Dark gray primary */
+  --primary-foreground: #f8f8f2; /* Light background on primary */
+  --secondary: #e5e5e5; /* Light gray secondary */
+  --secondary-foreground: #6272a4; /* Blue-gray text */
+  --muted: #f4f4f4; /* Very light gray */
+  --muted-foreground: #6272a4; /* Blue-gray muted text */
+  --accent: #e5e5e5; /* Light gray accent */
+  --accent-foreground: #282a36; /* Dark text on accent */
+  --destructive: #ff5555; /* Light terminal red */
+  --destructive-foreground: #f8f8f2; /* Light text on destructive */
+  --border: #d4d4d4; /* Light border */
+  --input: #ffffff; /* White input background */
+  --ring: #44475a; /* Dark ring color */
+  --chart-1: #00a000; /* Dark green for better contrast */
+  --chart-2: #b8860b; /* Dark goldenrod - much more readable than light yellow */
+  --chart-3: #0066cc; /* Dark blue instead of light cyan */
+  --chart-4: #cc0066; /* Dark pink for better contrast */
+  --chart-5: #cc0000; /* Dark red for better contrast */
+}
+/*
+  ---break---
+*/
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -152,5 +185,35 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  /* Terminal theme specific styling */
+  .terminal {
+    font-family: var(--font-mono);
+    font-feature-settings: "liga" 0; /* Disable ligatures in terminal mode */
+    font-variant-ligatures: none;
+  }
+  
+  .terminal code,
+  .terminal pre,
+  .terminal .font-mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+  }
+  
+  .terminal * {
+    font-family: var(--font-mono);
+  }
+  
+  .terminal table {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    border-collapse: collapse;
+  }
+  
+  .terminal th,
+  .terminal td {
+    border: 1px solid var(--border);
+    padding: 0.25rem 0.5rem;
   }
 }
