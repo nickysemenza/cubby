@@ -1,31 +1,15 @@
-import { type Amount } from "~/codec/codec";
 import {
   ProductReferenceItem,
-  type InfLocationConfig,
-  type ProductConfigItem,
+  type InfLocationConfigInput,
+  type ProductConfigItemInput,
 } from "~/schemas/config";
 import { type LocationType } from "~/schemas/location";
-import { type UnitMapping } from "~/schemas/unitmapping";
 
-// amount from unit and value
-const uv = (value: number, unit: string): Amount => ({ unit, value });
-// unit mappings from unit value pair
-export const uvp = (
-  valueA: number,
-  unitA: string,
-  valueB: number,
-  unitB: string,
-  source: string,
-): UnitMapping => ({
-  a: uv(valueA, unitA),
-  b: uv(valueB, unitB),
-  source: source,
-});
 // generic product
 export const genericProduct = (
   name: string,
   price_per: number,
-): ProductConfigItem => ({
+): ProductConfigItemInput => ({
   name,
   manufacturer: "generic",
   price_per,
@@ -37,7 +21,7 @@ export const product = (
   manufacturer: string,
   model: string,
   price_per: number,
-): ProductConfigItem => ({
+): ProductConfigItemInput => ({
   name,
   manufacturer,
   upc,
@@ -49,13 +33,15 @@ export const productIngredient = (
   name: string,
   upc: string,
   manufacturer: string,
-  unit_mappings?: UnitMapping[],
-): ProductConfigItem => ({
+  unit_mappings?: string[],
+  aliases?: string[],
+): ProductConfigItemInput => ({
   name,
   ingredient: true,
   manufacturer,
   upc,
   unit_mappings,
+  aliases,
 });
 
 export const productReference = (name: string): ProductReferenceItem => ({
@@ -66,20 +52,22 @@ export const productReference = (name: string): ProductReferenceItem => ({
 export const productGenericIngredient = (
   name: string,
   ndb_number: number | undefined,
-  unit_mappings: UnitMapping[],
-): ProductConfigItem => ({
+  unit_mappings: string[],
+  aliases?: string[],
+): ProductConfigItemInput => ({
   name,
   ingredient: true,
   manufacturer: "generic",
   unit_mappings,
   ndb_number,
+  aliases,
 });
 // location
 export const locationWithProducts = (
   name: string,
   type: LocationType,
-  products?: ProductConfigItem[],
-): InfLocationConfig => ({
+  products?: ProductConfigItemInput[],
+): InfLocationConfigInput => ({
   name,
   type,
   products,
@@ -89,7 +77,7 @@ export const locationWithProductReferences = (
   name: string,
   type: LocationType,
   productReferences: ProductReferenceItem[],
-): InfLocationConfig => ({
+): InfLocationConfigInput => ({
   name,
   type,
   productReferences,
@@ -97,8 +85,8 @@ export const locationWithProductReferences = (
 export const locationWithChildren = (
   name: string,
   type: LocationType,
-  children?: InfLocationConfig[],
-): InfLocationConfig => ({
+  children?: InfLocationConfigInput[],
+): InfLocationConfigInput => ({
   name,
   type,
   children,

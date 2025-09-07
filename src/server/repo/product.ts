@@ -53,6 +53,7 @@ export const findOrCreateProduct = async (
     model,
     ndb_number,
     ingredient,
+    aliases,
     price_per,
     unit_mappings,
   } = product;
@@ -60,7 +61,7 @@ export const findOrCreateProduct = async (
   if (ingredient) {
     //  only link item if its an ingredient
 
-    ingredeintRef = await findOrCreateIngredient(db, name);
+    ingredeintRef = await findOrCreateIngredient(db, name, aliases);
   }
   const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
     price_per !== undefined

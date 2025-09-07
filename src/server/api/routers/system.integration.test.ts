@@ -3,6 +3,7 @@ import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { insertDataConfig } from "./system";
 import { testConfig } from "~/testdata/test-config.data";
+import { transformConfig } from "~/schemas/config";
 import { createCallerFactory } from "../trpc";
 import { appRouter } from "../root";
 
@@ -15,7 +16,7 @@ describe("system test", () => {
     return res.teardown;
   });
   it("load data config", async () => {
-    await insertDataConfig(prisma, testConfig);
+    await insertDataConfig(prisma, transformConfig(testConfig));
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller({

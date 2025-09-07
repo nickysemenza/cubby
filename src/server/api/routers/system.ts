@@ -1,20 +1,22 @@
-import { type DataConfig, configSchema } from "~/schemas/config";
+import { configSchema, transformConfig } from "~/schemas/config";
 import { publicProcedure, createTRPCRouter } from "../trpc";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { type PrismaClient } from "@prisma/client";
 
 const loadConfig = publicProcedure
   .input(configSchema)
-  .mutation(async ({ ctx, input }) => await insertDataConfig(ctx.db, input));
+  .mutation(async ({ ctx, input }) => {
+    const transformedInput = transformConfig(input);
+    return await insertDataConfig(ctx.db, transformedInput);
+  });
 
-export const insertDataConfig = async (db: PrismaClient, input: DataConfig) => {
+export const insertDataConfig = async (
+  db: PrismaClient,
+  input: ReturnType<typeof transformConfig>,
+) => {
   return await db.$transaction(async (tx) => {
     await loadProducts(tx, input.products);
-    for (const [name, aliases] of Object.entries(input.aliases ?? {})) {
-      await findOrCreateIngredient(tx, name, aliases);
-    }
     await loadLocations(tx, input.locations);
   });
 };

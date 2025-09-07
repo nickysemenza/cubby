@@ -58,64 +58,22 @@
                       "type": "boolean",
                       "description": "if the product is an ingredient, an ingredient with the same name will be created and linked to this product"
                     },
-                    "unit_mappings": {
+                    "aliases": {
                       "type": "array",
                       "items": {
-                        "type": "object",
-                        "properties": {
-                          "a": {
-                            "type": "object",
-                            "properties": {
-                              "value": {
-                                "type": "number"
-                              },
-                              "unit": {
-                                "type": "string",
-                                "minLength": 1
-                              }
-                            },
-                            "required": [
-                              "value",
-                              "unit"
-                            ],
-                            "additionalProperties": false,
-                            "description": "first of pair"
-                          },
-                          "b": {
-                            "type": "object",
-                            "properties": {
-                              "value": {
-                                "$ref": "#/definitions/configuration/properties/locations/items/properties/products/items/properties/unit_mappings/items/properties/a/properties/value"
-                              },
-                              "unit": {
-                                "$ref": "#/definitions/configuration/properties/locations/items/properties/products/items/properties/unit_mappings/items/properties/a/properties/unit"
-                              }
-                            },
-                            "required": [
-                              "value",
-                              "unit"
-                            ],
-                            "additionalProperties": false,
-                            "description": "second of pair"
-                          },
-                          "source": {
-                            "type": [
-                              "string",
-                              "null"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "a",
-                          "b",
-                          "source"
-                        ],
-                        "additionalProperties": false
-                      }
+                        "type": "string"
+                      },
+                      "description": "alternative names for this ingredient"
                     },
                     "price_per": {
                       "type": "number",
                       "description": "price per each, shorthand for unit_mappings"
+                    },
+                    "unit_mappings": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [

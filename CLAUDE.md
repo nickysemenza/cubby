@@ -12,6 +12,8 @@
 - import existing types instead of redefining or casting them
 - avoid using `any` type - use proper typing with generics, unions, or specific types instead
 - do not add @typescript-eslint/no-explicit-any disable comments - fix the typing instead
+- create base Zod schemas for shared fields using `.extend()` to avoid duplication (e.g., baseProductConfig with common fields extended by input/output variants)
+- use separate input/output schemas when data transformation is needed (e.g., strings -> parsed objects)
 
 ## Architecture Patterns
 
@@ -66,12 +68,14 @@
 **Critical**: The unit conversion system is powered by a separate WASM-compiled Rust crate from `../ingredient-parser/ingredient-parser/`.
 
 ### Key Architecture Points:
+
 - **Separate Repository**: `ingredient-parser` is a separate Git repository containing the Rust unit conversion engine
 - **WASM Integration**: The Rust code is compiled to WebAssembly and loaded via `useWasm()` hook
 - **Chained Conversions**: The WASM engine supports powerful chained conversions (e.g., "2 cups → $5.00 → 333g" through intermediate units)
 - **Graph-Based**: Uses graph algorithms to find conversion paths through multiple unit mappings
 
 ### Unit Mapping System:
+
 - **Product Unit Mappings**: Products can have multiple unit mappings (volume→price, weight→price, etc.)
 - **Bidirectional Graphs**: WASM creates bidirectional conversion graphs from mappings
 - **Error Handling**: Weight conversion should work independently of nutrition data availability

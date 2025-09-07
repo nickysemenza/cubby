@@ -2,13 +2,14 @@ import { type db } from "../db";
 import { type ParsedCompactRecipe } from "~/codec/codec";
 import { findOrCreateIngredient } from "./ingredient";
 import { RecipeCreateInput } from "~/schemas/recipe";
-import { createRecipe } from "./recipe";
+import { upsertRecipe } from "./recipe";
 
-export const upsertRecipeFromCompact = async (
+// Convert ParsedCompactRecipe to RecipeCreateInput format
+const convertParsedCompactToRecipeInput = async (
   recipe: ParsedCompactRecipe,
   prismaClient: typeof db,
-) => {
-  const i: RecipeCreateInput = {
+): Promise<RecipeCreateInput> => {
+  return {
     name: recipe.name,
     meta: {
       url: recipe.meta?.url ?? null,
@@ -35,7 +36,18 @@ export const upsertRecipeFromCompact = async (
       })),
     ),
   };
+};
 
-  const newRecipe = await createRecipe(i, prismaClient);
-  return { id: newRecipe.id };
+export const upsertRecipeFromCompact = async (
+  recipe: ParsedCompactRecipe,
+  prismaClient: typeof db,
+) => {
+  // Convert compact recipe format to standard recipe input format
+  const recipeInput = await convertParsedCompactToRecipeInput(
+    recipe,
+    prismaClient,
+  );
+
+  // Use the centralized upsert logic
+  return await upsertRecipe(recipeInput, prismaClient);
 };

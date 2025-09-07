@@ -316,6 +316,84 @@ const processIngredients = async (
   );
 };
 
+export const upsertRecipe = async (
+  input: RecipeCreateInput,
+  db: PrismaClient,
+): Promise<{ id: string }> => {
+  // Check if recipe already exists
+  const existingRecipe = await db.recipe.findUnique({
+    where: { name: input.name },
+  });
+
+  if (existingRecipe) {
+    // Recipe exists - delete existing sections and recreate with new data
+    // First delete ingredients that reference the sections
+    const existingSections = await db.recipeSection.findMany({
+      where: { recipeId: existingRecipe.id },
+      select: { id: true },
+    });
+
+    if (existingSections.length > 0) {
+      await db.recipeSectionIngredient.deleteMany({
+        where: {
+          recipeSectionId: {
+            in: existingSections.map((s) => s.id),
+          },
+        },
+      });
+
+      // Now safe to delete the sections
+      await db.recipeSection.deleteMany({
+        where: { recipeId: existingRecipe.id },
+      });
+    }
+
+    // Process ingredients for the update (same as in createRecipe)
+    const processedSections = await Promise.all(
+      input.sections.map(async (section) => {
+        const processedIngredients = (section.ingredients || []).map(
+          (ingredient) => ({
+            ingredientId: ingredient.ingredientId,
+            amounts: ingredient.amounts,
+          }),
+        );
+
+        return {
+          name: section.name,
+          processedIngredients,
+          instructions: section.instructions,
+        };
+      }),
+    );
+
+    // Update the recipe with new data
+    const updatedRecipe = await db.recipe.update({
+      where: { id: existingRecipe.id },
+      data: {
+        SourceType: input.meta?.url ? ("Website" as const) : ("Other" as const),
+        SourceData: input.meta?.url || null,
+        updatedAt: new Date(),
+        sections: {
+          create: processedSections.map((section) => ({
+            name: section.name,
+            ingredients: {
+              create: section.processedIngredients,
+            },
+            instructions: section.instructions?.map((instruction) => ({
+              text: instruction.instruction,
+            })),
+          })),
+        },
+      },
+    });
+
+    return { id: updatedRecipe.id };
+  } else {
+    // Recipe doesn't exist - create new one
+    return await createRecipe(input, db);
+  }
+};
+
 export const updateRecipe = async (
   id: string,
   updates: RecipeUpdateInput["data"],
