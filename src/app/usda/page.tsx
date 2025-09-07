@@ -1,6 +1,7 @@
 import { HydrateClient } from "~/trpc/server";
 import { USDAFoodList } from "./usdafoodlist";
 import { type Metadata } from "next";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -10,12 +11,12 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <HydrateClient>
-      <div className="container mx-auto py-10">
+      <PageWrapper>
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold">USDA Foods</h1>
         </div>
         <USDAFoodList />
-      </div>
+      </PageWrapper>
     </HydrateClient>
   );
 }

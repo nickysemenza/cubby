@@ -32,7 +32,7 @@ export const DetailPage: FC<DetailPageProps> = ({
   const gridSections = sections;
 
   return (
-    <div className="container mx-auto space-y-4 p-4 sm:space-y-6 sm:p-6">
+    <div className="space-y-4 sm:space-y-6">
       <h1 className="text-xl font-bold capitalize sm:text-2xl">
         <span>{entityDetails.icon}</span>
         {entityDetails.label} Detail: {name}

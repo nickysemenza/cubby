@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import ImageList from "./imagelist";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export const metadata = {
   title: "Images - RecipeHub",
@@ -8,8 +9,10 @@ export const metadata = {
 
 export default function ImagesPage() {
   return (
-    <Suspense fallback={<div>Loading images...</div>}>
-      <ImageList />
-    </Suspense>
+    <PageWrapper>
+      <Suspense fallback={<div>Loading images...</div>}>
+        <ImageList />
+      </Suspense>
+    </PageWrapper>
   );
 }

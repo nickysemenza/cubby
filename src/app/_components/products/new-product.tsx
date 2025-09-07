@@ -34,21 +34,19 @@ export function NewProduct() {
   };
 
   return (
-    <div className="container mx-auto py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create New Product</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProductForm
-            mode="create"
-            isPending={createProduct.isPending}
-            error={error}
-            onCreate={handleCreate}
-            onCancel={handleCancel}
-          />
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Create New Product</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ProductForm
+          mode="create"
+          isPending={createProduct.isPending}
+          error={error}
+          onCreate={handleCreate}
+          onCancel={handleCancel}
+        />
+      </CardContent>
+    </Card>
   );
 }

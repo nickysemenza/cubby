@@ -4,6 +4,7 @@ import { type Metadata } from "next";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <div className="container mx-auto p-4">
+    <PageWrapper>
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Inventory Items</h1>
         <div className="flex gap-2">
@@ -28,6 +29,6 @@ export default function Page() {
       <HydrateClient>
         <InventoryItemList />
       </HydrateClient>
-    </div>
+    </PageWrapper>
   );
 }

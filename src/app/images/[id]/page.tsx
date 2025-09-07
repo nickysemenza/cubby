@@ -13,6 +13,7 @@ import { ImageStatusBadge } from "~/app/_components/table";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { useQuery } from "@tanstack/react-query";
 import { assertNever } from "~/lib/assert";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export default function ImageDetailPage() {
   const params = useParams();
@@ -113,90 +114,92 @@ export default function ImageDetailPage() {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-8">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight">Image Details</h1>
-      </div>
+    <PageWrapper>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">Image Details</h1>
+        </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Preview</CardTitle>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-md border">
-              <Image
-                src={imageDetails.url}
-                alt={imageDetails.filename}
-                fill
-                className="object-contain"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Image Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Filename
-              </h3>
-              <p className="mt-1">{imageDetails.filename}</p>
-            </div>
-
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Content Type
-              </h3>
-              <p className="mt-1">{imageDetails.contentType}</p>
-            </div>
-
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Size
-              </h3>
-              <p className="mt-1">{formatBytes(imageDetails.size)}</p>
-            </div>
-
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Status
-              </h3>
-              <div className="mt-1">
-                <ImageStatusBadge status={imageDetails.status} />
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Preview</CardTitle>
+            </CardHeader>
+            <CardContent className="flex justify-center">
+              <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-md border">
+                <Image
+                  src={imageDetails.url}
+                  alt={imageDetails.filename}
+                  fill
+                  className="object-contain"
+                />
               </div>
-            </div>
+            </CardContent>
+          </Card>
 
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Associated Entity
-              </h3>
-              <div className="mt-1">{renderEntityLink()}</div>
-            </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Image Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Filename
+                </h3>
+                <p className="mt-1">{imageDetails.filename}</p>
+              </div>
 
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Created
-              </h3>
-              <p className="mt-1">
-                <HoverableTimestamp timestamp={imageDetails.createdAt} />
-              </p>
-            </div>
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Content Type
+                </h3>
+                <p className="mt-1">{imageDetails.contentType}</p>
+              </div>
 
-            <div>
-              <h3 className="text-muted-foreground text-sm font-medium">
-                Last Updated
-              </h3>
-              <p className="mt-1">
-                <HoverableTimestamp timestamp={imageDetails.updatedAt} />
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Size
+                </h3>
+                <p className="mt-1">{formatBytes(imageDetails.size)}</p>
+              </div>
+
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Status
+                </h3>
+                <div className="mt-1">
+                  <ImageStatusBadge status={imageDetails.status} />
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Associated Entity
+                </h3>
+                <div className="mt-1">{renderEntityLink()}</div>
+              </div>
+
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Created
+                </h3>
+                <p className="mt-1">
+                  <HoverableTimestamp timestamp={imageDetails.createdAt} />
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  Last Updated
+                </h3>
+                <p className="mt-1">
+                  <HoverableTimestamp timestamp={imageDetails.updatedAt} />
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-    </div>
+    </PageWrapper>
   );
 }

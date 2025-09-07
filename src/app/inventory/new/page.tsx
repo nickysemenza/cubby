@@ -1,5 +1,6 @@
 import { type Metadata } from "next";
 import CreateInventoryItem from "./new-inventory";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export const metadata: Metadata = {
   title: "New Inventory",
@@ -7,8 +8,8 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <div>
+    <PageWrapper>
       <CreateInventoryItem />
-    </div>
+    </PageWrapper>
   );
 }

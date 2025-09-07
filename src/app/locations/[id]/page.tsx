@@ -9,6 +9,7 @@ import {
 } from "~/components/ui/breadcrumb";
 import { collectInfiniteParents } from "~/schemas/location";
 import Link from "next/link";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
@@ -26,8 +27,8 @@ export default async function Page({ params }: PageParams) {
   const location = await api.location.getByID({ id });
 
   return (
-    <div>
-      <Breadcrumb className="p-6">
+    <PageWrapper>
+      <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
@@ -54,6 +55,6 @@ export default async function Page({ params }: PageParams) {
       </Breadcrumb>
 
       <LocationDetail location={location} />
-    </div>
+    </PageWrapper>
   );
 }

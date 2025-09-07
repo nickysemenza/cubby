@@ -34,21 +34,19 @@ export function NewLocation() {
   };
 
   return (
-    <div className="container mx-auto py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create New Location</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LocationForm
-            mode="create"
-            isPending={createLocation.isPending}
-            error={error}
-            onCreate={handleCreate}
-            onCancel={handleCancel}
-          />
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Create New Location</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <LocationForm
+          mode="create"
+          isPending={createLocation.isPending}
+          error={error}
+          onCreate={handleCreate}
+          onCancel={handleCancel}
+        />
+      </CardContent>
+    </Card>
   );
 }

@@ -6,6 +6,7 @@ import LocationTreeView from "../_components/inventory/location-tree-view";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Locations",
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <HydrateClient>
-      <div>
+      <PageWrapper>
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold">Locations</h1>
           <Link href={`/${entities.location.basePath}/new`}>
@@ -26,7 +27,7 @@ export default function Page() {
           <LocationTreeGraph />
         </div>
         <LocationList />
-      </div>
+      </PageWrapper>
     </HydrateClient>
   );
 }

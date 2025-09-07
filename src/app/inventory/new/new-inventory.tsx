@@ -33,7 +33,7 @@ const CreateInventoryItem: FC = () => {
   // We know w is always defined now with our updated useWasm hook
 
   return (
-    <div className="container mx-auto p-4">
+    <div>
       <h1 className="mb-6 text-2xl font-bold">Create New Inventory Item</h1>
       <InventoryForm
         mode="create"

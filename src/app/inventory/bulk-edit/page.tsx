@@ -6,6 +6,7 @@ import {
   CardDescription,
 } from "~/components/ui/card";
 import BulkInventoryForm from "./bulk-inventory-form";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export const metadata = {
   title: "Bulk Inventory Edit",
@@ -14,7 +15,7 @@ export const metadata = {
 
 export default function BulkInventoryEditPage() {
   return (
-    <div className="container mx-auto py-6">
+    <PageWrapper>
       <Card>
         <CardHeader>
           <CardTitle>Bulk Inventory Edit</CardTitle>
@@ -26,6 +27,6 @@ export default function BulkInventoryEditPage() {
           <BulkInventoryForm />
         </CardContent>
       </Card>
-    </div>
+    </PageWrapper>
   );
 }

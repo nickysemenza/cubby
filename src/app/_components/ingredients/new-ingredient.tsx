@@ -35,21 +35,19 @@ export function NewIngredient() {
   };
 
   return (
-    <div className="container mx-auto py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create New Ingredient</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <IngredientForm
-            mode="create"
-            isPending={createIngredient.isPending}
-            error={error}
-            onCreate={handleCreate}
-            onCancel={handleCancel}
-          />
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Create New Ingredient</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <IngredientForm
+          mode="create"
+          isPending={createIngredient.isPending}
+          error={error}
+          onCreate={handleCreate}
+          onCancel={handleCancel}
+        />
+      </CardContent>
+    </Card>
   );
 }

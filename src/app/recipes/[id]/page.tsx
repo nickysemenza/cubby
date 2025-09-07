@@ -1,5 +1,6 @@
 import { api } from "~/trpc/server";
 import RecipePageClient from "./page-client";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
@@ -17,8 +18,8 @@ export default async function Page({ params }: PageParams) {
   const recipe = await api.recipe.get({ id });
 
   return (
-    <div className="container py-6">
+    <PageWrapper>
       <RecipePageClient recipe={recipe} />
-    </div>
+    </PageWrapper>
   );
 }

@@ -53,20 +53,18 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
     {
       title: "Basic Information",
       content: isEditing ? (
-        <div className="container mx-auto py-10">
-          <Card>
-            <CardContent className="pt-6">
-              <IngredientForm
-                mode="edit"
-                entity={ingredient}
-                isPending={updateIngredient.isPending}
-                error={error}
-                onEdit={handleEdit}
-                onCancel={handleCancel}
-              />
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <IngredientForm
+              mode="edit"
+              entity={ingredient}
+              isPending={updateIngredient.isPending}
+              error={error}
+              onEdit={handleEdit}
+              onCancel={handleCancel}
+            />
+          </CardContent>
+        </Card>
       ) : (
         <div className="space-y-2">
           <div>

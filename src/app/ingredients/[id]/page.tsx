@@ -1,5 +1,6 @@
 import { api } from "~/trpc/server";
 import { IngredientDetail } from "~/app/_components/ingredients/ingredient-detail";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };
@@ -15,5 +16,9 @@ export async function generateMetadata({ params }: PageParams) {
 export default async function Page({ params }: PageParams) {
   const id = (await params).id;
   const ingredient = await api.ingredient.getByID({ id });
-  return <IngredientDetail ingredient={ingredient} />;
+  return (
+    <PageWrapper>
+      <IngredientDetail ingredient={ingredient} />
+    </PageWrapper>
+  );
 }

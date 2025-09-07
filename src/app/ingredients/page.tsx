@@ -1,6 +1,7 @@
 import { HydrateClient } from "~/trpc/server";
 import { IngredientList } from "./ingredientlist";
 import { type Metadata } from "next";
+import { PageWrapper } from "~/components/ui/page-wrapper";
 
 export const dynamic = "force-dynamic";
 
@@ -11,9 +12,9 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <HydrateClient>
-      <div className="container mx-auto">
+      <PageWrapper>
         <IngredientList />
-      </div>
+      </PageWrapper>
     </HydrateClient>
   );
 }
