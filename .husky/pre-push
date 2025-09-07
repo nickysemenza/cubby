@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "Running checks before push..."
+npm run -s check || exit 1
+echo "Checks passed. Proceeding with push."
+

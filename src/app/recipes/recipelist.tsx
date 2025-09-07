@@ -66,6 +66,7 @@ export function RecipeList() {
         filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
+        ariaLabel="Recipes Table"
       />
     </div>
   );

@@ -181,6 +181,7 @@ export function ProductList() {
         filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
+        ariaLabel="Products Table"
       />
     </div>
   );

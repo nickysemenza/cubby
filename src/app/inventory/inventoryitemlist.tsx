@@ -146,6 +146,7 @@ export function InventoryItemList() {
         filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
+        ariaLabel="Inventory Items Table"
       />
     </div>
   );

@@ -18,10 +18,10 @@ import { useWasm } from "~/hooks/useWasm";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { renderValueOrError } from "~/misc/result";
 import {
-  renderNutrients,
   calculateTotals,
   createIngredientData,
 } from "~/app/_components/units/univ-conversion";
+import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
 import { tryFormatMeasure } from "../inventory/format-amount";
 import { IngredientPillLink, RecipePillLink } from "../EntityPill";
 import {
@@ -89,9 +89,9 @@ export const RecipeIngredientList: React.FC<{
         const nutrientResult = props.row.original.priceInfo?.nutrient;
         return (
           nutrientResult &&
-          renderValueOrError(nutrientResult, (nutrients) =>
-            renderNutrients(nutrients),
-          )
+          renderValueOrError(nutrientResult, (nutrients) => (
+            <NutrientsSummary nutrients={nutrients} />
+          ))
         );
       },
     }),
@@ -186,6 +186,7 @@ export const RecipeIngredientList: React.FC<{
         filterableColumns={[]}
         isLoading={data.length === 0}
         error={undefined}
+        ariaLabel="Recipe Ingredients Table"
       />
     </div>
   );

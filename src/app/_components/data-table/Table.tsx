@@ -40,6 +40,7 @@ interface TTableProps<TItem> {
   filterableColumns: FilterableColumn[];
   isLoading?: boolean;
   error?: unknown;
+  ariaLabel?: string;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -49,6 +50,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     filterableColumns,
     isLoading = false,
     error,
+    ariaLabel = "Data Table",
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -62,7 +64,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       />
 
       {/* Desktop Table View */}
-      <Table aria-label="Tasks">
+      <Table aria-label={ariaLabel}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -93,6 +95,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   <TableHead
                     key={header.id}
                     colSpan={header.colSpan}
+                    aria-sort={
+                      sortDirection === "asc"
+                        ? "ascending"
+                        : sortDirection === "desc"
+                          ? "descending"
+                          : "none"
+                    }
                     className={header.column.columnDef.meta?.className}
                   >
                     {canSort ? (

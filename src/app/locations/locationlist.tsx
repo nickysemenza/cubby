@@ -134,6 +134,7 @@ export function LocationList() {
         filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
+        ariaLabel="Locations Table"
       />
     </div>
   );

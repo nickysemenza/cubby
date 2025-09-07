@@ -143,6 +143,7 @@ export function IngredientList() {
         filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
+        ariaLabel="Ingredients Table"
         additionalFilters={
           <div className="flex items-center space-x-2">
             <Checkbox

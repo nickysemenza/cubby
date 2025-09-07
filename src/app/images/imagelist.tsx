@@ -197,6 +197,7 @@ export default function ImageList() {
         ]}
         isLoading={isLoading}
         error={error}
+        ariaLabel="Images Table"
       />
     </div>
   );

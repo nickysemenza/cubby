@@ -134,6 +134,7 @@ export function USDAFoodList() {
         filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
+        ariaLabel="USDA Foods Table"
       />
     </div>
   );

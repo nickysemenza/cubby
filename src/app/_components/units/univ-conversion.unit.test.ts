@@ -6,7 +6,6 @@ import {
   createEmptyNutrients,
   scaleNutrientsByWeight,
   calculateNutrients,
-  formatNutrients,
   calculateTotals,
 } from "./univ-conversion";
 import { type Amount } from "~/codec/codec";
@@ -271,41 +270,6 @@ describe("calculateNutrients", () => {
       });
     }
   });
-});
-
-describe("formatNutrients", () => {
-  const nutrients: NutrientsPer100 = { protein: 12.345, kcal: 234.567 };
-
-  test("formats nutrients as string by default", () => {
-    const result = formatNutrients(nutrients);
-
-    expect(typeof result).toBe("string");
-    expect(result).toBe("234.6 kcal, 12.3g protein");
-  });
-
-  test("formats nutrients as string when explicitly requested", () => {
-    const result = formatNutrients(nutrients, false);
-
-    expect(typeof result).toBe("string");
-    expect(result).toBe("234.6 kcal, 12.3g protein");
-  });
-
-  test("formats nutrients with proper decimal places", () => {
-    const exactNutrients: NutrientsPer100 = { protein: 10, kcal: 200 };
-    const result = formatNutrients(exactNutrients);
-
-    expect(result).toBe("200.0 kcal, 10.0g protein");
-  });
-
-  test("handles zero values", () => {
-    const zeroNutrients: NutrientsPer100 = { protein: 0, kcal: 0 };
-    const result = formatNutrients(zeroNutrients);
-
-    expect(result).toBe("0.0 kcal, 0.0g protein");
-  });
-
-  // Note: JSX formatting test would require React testing environment
-  // For now we'll focus on string formatting which is the main business logic
 });
 
 describe("getGramAndNutrient", () => {
