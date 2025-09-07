@@ -120,7 +120,11 @@ const dairy = [
   productGenericIngredient(
     "large brown eggs",
     1123,
-    ["12 whole = $7 @ whole foods", "1 whole = 50grams @ general"],
+    [
+      "12 whole = $7 @ whole foods",
+      "1 whole = 50grams @ general",
+      "4.86 large = 1 cup @ usda",
+    ],
     ["eggs", "large egg", "large eggs", "egg", "large brown egg"],
   ),
   productIngredient(

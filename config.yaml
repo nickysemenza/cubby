@@ -151,6 +151,7 @@ products:
     unit_mappings:
       - 12 whole = $7 @ whole foods
       - 1 whole = 50grams @ general
+      - 4.86 large = 1 cup @ usda
     ndb_number: 1123
     aliases:
       - eggs

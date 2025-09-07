@@ -34,3 +34,46 @@
   - Replace `calculateNutrients` with WASM-based version
   - Keep array operations manual (WASM can't sum arrays)
 * **Decision**: Current working solution is good. Consider full consolidation only if we need complex nutrition conversions or are already updating WASM code.
+
+## Enhanced Location Inventory Management
+* **Bulk Move Operations Between Locations**
+  - Create `/inventory/bulk-move/page.tsx` - Bulk move interface  
+  - Create `BulkMoveForm.tsx` component:
+    - Source location selector
+    - Multi-select for inventory items with checkboxes
+    - Target location selector
+    - Preview of items to be moved
+    - Quantity adjustment option for partial moves
+  - Add `bulkMove` procedure to inventory router:
+    - Move multiple items in single transaction
+    - Update quantities at both locations
+    - Handle partial moves (e.g., move 5 of 10 units)
+
+* **Quick Inventory Management from Location View**
+  - Update `location-detail.tsx`:
+    - Add inline "Quick Add" button for new inventory items
+    - Add inline edit capabilities for quantities  
+    - Add "Move to..." action for individual items
+    - Add delete action for removing items
+  - Create `QuickInventoryAdd.tsx` component:
+    - Compact inline form for adding products
+    - Product search with amount input
+    - Add without leaving location page
+
+* **Inventory Value Totals**
+  - Create `InventoryValueSummary.tsx` component:
+    - Calculate total value using price mappings (e.g., "$5 = 1 lb")
+    - Show breakdown by product category
+    - Display "No pricing data" for items without mappings
+  - Create `calculateInventoryValue.ts` utility:
+    - Use WASM conversion to convert amounts to prices
+    - Sum values across all products
+    - Handle missing price data gracefully
+  - Update `LocationCardGrid` and `location-detail.tsx`:
+    - Show total inventory value on location cards
+    - Add value summary section to location detail
+
+* **Additional Enhancements**
+  - Add checkboxes to location table for bulk delete/move
+  - Add drag-drop between locations in tree view (future)
+  - Update `lastBulkInventory` timestamp on bulk operations

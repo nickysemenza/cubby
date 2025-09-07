@@ -1,14 +1,6 @@
 import { api } from "~/trpc/server";
 import { LocationDetail } from "~/app/_components/locations/location-detail";
-import {
-  BreadcrumbSeparator,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  Breadcrumb,
-  BreadcrumbList,
-} from "~/components/ui/breadcrumb";
-import { collectInfiniteParents } from "~/schemas/location";
-import Link from "next/link";
+import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
 import { PageWrapper } from "~/components/ui/page-wrapper";
 
 type DetailParams = { id: string };
@@ -28,32 +20,7 @@ export default async function Page({ params }: PageParams) {
 
   return (
     <PageWrapper>
-      <Breadcrumb className="mb-4">
-        <BreadcrumbList>
-          <BreadcrumbItem>
-            <BreadcrumbLink asChild>
-              <Link href="/">Home</Link>
-            </BreadcrumbLink>
-          </BreadcrumbItem>
-          {collectInfiniteParents(location)
-            .reverse()
-            .map((parentLocation) => (
-              <>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem key={parentLocation.id}>
-                  <BreadcrumbLink asChild>
-                    <Link href={`/locations/${parentLocation.id}`}>
-                      {parentLocation.name}
-                    </Link>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-              </>
-            ))}
-          <BreadcrumbSeparator />
-          <BreadcrumbItem>{location.name}</BreadcrumbItem>
-        </BreadcrumbList>
-      </Breadcrumb>
-
+      <EnhancedBreadcrumbs location={location} className="mb-4" />
       <LocationDetail location={location} />
     </PageWrapper>
   );

@@ -12,6 +12,8 @@ import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import EntityImageList from "../EntityImageList";
+import { LocationCardGrid } from "./location-card-grid";
+import { LocationIconWithLabel } from "./location-icons";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -74,9 +76,13 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           />
         </div>
       ) : (
-        <div className="space-y-2">
-          <div>
-            <span className="font-medium">Name:</span> {location.name}
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <LocationIconWithLabel
+              type={location.type}
+              label={location.name}
+              size={20}
+            />
           </div>
           <div>
             <span className="font-medium">Type:</span> {location.type}
@@ -104,13 +110,15 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     },
     {
       title: "Child Locations",
-      content: (
-        <EntityPillLinkList
-          items={location.children}
-          Pill={LocationPillLink}
-          pillPropName="location"
-        />
-      ),
+      content:
+        location.children && location.children.length > 0 ? (
+          <LocationCardGrid
+            locations={location.children}
+            showParentPath={false}
+          />
+        ) : (
+          <NoneState />
+        ),
     },
     {
       title: "Inventory Items",

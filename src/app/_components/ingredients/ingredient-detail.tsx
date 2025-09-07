@@ -14,6 +14,7 @@ import { type IngredientUpdateInput } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
+import { UnitMappingsTable } from "../units/unitmappingstable";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithRecipesAndProductOut;
@@ -97,6 +98,14 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
           items={ingredient.product}
           Pill={ProductPillLink}
           pillPropName="product"
+        />
+      ),
+    },
+    {
+      title: "Unit Mappings",
+      content: (
+        <UnitMappingsTable
+          mappings={ingredient.product.flatMap((p) => p.unitMappings)}
         />
       ),
     },

@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/array-helpers";
@@ -15,12 +16,17 @@ import { LocationType, locationType } from "~/schemas/location";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { useWasm } from "~/hooks/useWasm";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
+import { LocationCardGrid } from "../_components/locations/location-card-grid";
+import { Button } from "~/components/ui/button";
+import { LayoutGrid, List } from "lucide-react";
+import { type InfLocation } from "~/schemas/location";
 
 import { useQuery } from "@tanstack/react-query";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { NoneState } from "../_components/NoneState";
 
 export function LocationList() {
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const api = useTRPC();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
@@ -127,15 +133,64 @@ export function LocationList() {
     },
   ];
 
+  // Get flat list of all locations for card view
+  const flattenLocations = (locations: InfLocation[]): InfLocation[] => {
+    const result: InfLocation[] = [];
+    for (const loc of locations) {
+      result.push(loc);
+      if (loc.children) {
+        result.push(...flattenLocations(loc.children));
+      }
+    }
+    return result;
+  };
+
   return (
-    <div>
-      <RTable
-        table={table}
-        filterableColumns={filterableColumns}
-        isLoading={isLoading}
-        error={error}
-        ariaLabel="Locations Table"
-      />
+    <div className="space-y-4">
+      {/* View Toggle */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">All Locations</h2>
+        <div className="flex items-center rounded-md border">
+          <Button
+            variant={viewMode === "table" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("table")}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === "cards" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setViewMode("cards")}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Content */}
+      {viewMode === "table" ? (
+        <RTable
+          table={table}
+          filterableColumns={filterableColumns}
+          isLoading={isLoading}
+          error={error}
+          ariaLabel="Locations Table"
+        />
+      ) : (
+        <div>
+          {isLoading ? (
+            <div>Loading locations...</div>
+          ) : data.length > 0 ? (
+            <LocationCardGrid
+              locations={flattenLocations(data as InfLocation[])}
+              showParentPath={true}
+            />
+          ) : (
+            <div>No locations found.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
