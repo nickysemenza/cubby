@@ -13,19 +13,14 @@ import {
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  Bug,
-  AlertCircle,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
 import { type ReactNode } from "react";
 import { SpacedContainer } from "~/components/ui/spaced-container";
 import { LoadingContainer } from "~/components/ui/loading-spinner";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
 import { MobileCardView } from "./MobileCardView";
+import { ErrorDisplay } from "~/components/ui/error-display";
 
 interface FilterOption {
   value: string;
@@ -177,14 +172,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 }
                 className="h-16 text-center"
               >
-                <div className="flex items-center justify-center gap-2 text-red-600">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>
-                    {(error as any)?.data?.code === "UNAUTHORIZED"
-                      ? "Please sign in to continue"
-                      : (error as any)?.message || "An error occurred"}
-                  </span>
-                </div>
+                <ErrorDisplay error={error} />
               </TableCell>
             </TableRow>
           ) : (
@@ -209,14 +197,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         </div>
       ) : error ? (
         <div className="block py-8 lg:hidden">
-          <div className="flex items-center justify-center gap-2 text-red-600">
-            <AlertCircle className="h-4 w-4" />
-            <span>
-              {(error as any)?.data?.code === "UNAUTHORIZED"
-                ? "Please sign in to continue"
-                : (error as any)?.message || "An error occurred"}
-            </span>
-          </div>
+          <ErrorDisplay error={error} />
         </div>
       ) : (
         <MobileCardView table={table} />
