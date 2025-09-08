@@ -5,7 +5,7 @@ import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 
 // Base schema for product data (without relationships)
-export const productBase = z.object({
+const productBase = z.object({
   name: z.string(),
   upc: upc.nullable(),
   ndb_number: ndb.nullable(),

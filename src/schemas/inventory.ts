@@ -31,15 +31,17 @@ export const inventoryCreatePayloadData = z.object({
 });
 
 // Schema for bulk inventory operations
-export const inventoryBulkOperationItem = z.object({
+const inventoryBulkOperationItem = z.object({
   id: z.string().optional(),
   productId: z.uuid(),
   locationId: z.uuid(),
   amount: amount,
 });
+
 export type InventoryBulkOperationItem = z.infer<
   typeof inventoryBulkOperationItem
 >;
+
 export const inventoryBulkOperationPayload = z.object({
   // All operations for a given location
   locationId: z.uuid(),

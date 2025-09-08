@@ -31,7 +31,7 @@ export const branded_food_serving_size_unit = z.enum([
   "ml",
   "MLT",
 ]);
-export type BrandedFoodServingSizeUnit = z.infer<
+type BrandedFoodServingSizeUnit = z.infer<
   typeof branded_food_serving_size_unit
 >;
 export const normalize_branded_food_serving_size_unit = (

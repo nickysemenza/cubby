@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { type Amount } from "~/codec/codec";
 
 /**
@@ -121,34 +120,3 @@ function convertPriceShorthand(input: string): string {
 
   return `${formattedAmount} = $${price}${source}`;
 }
-
-// Validation schemas for the new formats
-export const conversionStringSchema = z.string().refine(
-  (val) => {
-    try {
-      parseConversionString(val);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  {
-    error:
-      "Invalid conversion format. Expected: '4 lb = $5' or '4 lb = $5 @ store'",
-  },
-);
-
-export const productShorthandSchema = z.string().refine(
-  (val) => {
-    try {
-      parseProductShorthand(val);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  {
-    error:
-      "Invalid product shorthand. Expected: 'Product Name: $5/4lb @ store'",
-  },
-);
