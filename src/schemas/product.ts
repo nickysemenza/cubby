@@ -30,5 +30,12 @@ export const productTopLevelOut = z
   .extend(productBase.shape)
   .extend(dbTimestampsOut.shape);
 
+// Update input schema for products
+export const productUpdateInput = z.object({
+  id: z.uuid(),
+  data: productInputPayload.partial(),
+});
+
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductInputPayload = z.infer<typeof productInputPayload>;
+export type ProductUpdateInput = z.infer<typeof productUpdateInput>;

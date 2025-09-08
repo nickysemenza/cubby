@@ -3,11 +3,6 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 
 import { z } from "zod";
 import { compactRecipeSchema } from "~/codec/codec";
-import {
-  buildPaginatedResponse,
-  createPaginatedResponseSchema,
-  sortPaginationCombo,
-} from "~/schemas/pagination";
 import { seedRealRecipes } from "~/testdata/seed";
 import { scrapeToCompact } from "./scraper";
 import {
@@ -22,38 +17,40 @@ import {
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
+import { createEntityCrudProcedures } from "../crud-factory";
 
-const list = publicProcedure
-  .input(
-    z
-      .object({
-        filters: z.object({
-          nameFilter: z.string().optional(),
-        }),
-      })
-      .extend(sortPaginationCombo.shape),
-  )
-  .output(createPaginatedResponseSchema(recipeOut))
-  .query(async ({ ctx, input }) => {
-    const { data, count } = await recipeList(
-      ctx.db,
-      input.filters.nameFilter,
-      input.sort,
-      input.pagination,
-    );
-    return buildPaginatedResponse(input.pagination, data, count);
-  });
-const get = publicProcedure
-  .input(z.object({ id: z.uuid() }))
-  .output(recipeOut)
-  .query(async ({ ctx, input }) => {
-    const res = await getRecipeByID(input.id, ctx.db);
+// Define filters schema for recipes
+const recipeFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+});
 
-    if (res === null) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Recipe not found" });
-    }
-    return res;
-  });
+// Create standardized CRUD procedures using factory
+const { getByID, list, create, update } = createEntityCrudProcedures({
+  schemas: {
+    createInput: recipeCreateInput,
+    updateInput: recipeUpdateInput.shape.data,
+    output: recipeOut,
+    filters: recipeFiltersSchema,
+  },
+  repository: {
+    getByID: async (db, id) => {
+      const res = await getRecipeByID(id, db);
+      if (res === null) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Recipe not found" });
+      }
+      return res;
+    },
+    list: async (db, filters, sort, pagination) => {
+      return await recipeList(db, filters.nameFilter, sort, pagination);
+    },
+    create: async (db, data) => {
+      return await createRecipe(data, db);
+    },
+    update: async (db, id, data) => {
+      return await updateRecipe(id, data, db);
+    },
+  },
+});
 
 const seed = publicProcedure.mutation(
   async ({ ctx }) => await seedRealRecipes(ctx.db),
@@ -66,25 +63,12 @@ const insertCompact = publicProcedure
   .input(compactRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => await insertCompactRecipe(input, ctx.db));
-const create = publicProcedure
-  .input(recipeCreateInput)
-  .output(z.object({ id: z.uuid() }))
-  .mutation(async ({ ctx, input }) => {
-    return await createRecipe(input, ctx.db);
-  });
-
-const update = publicProcedure
-  .input(recipeUpdateInput)
-  .output(z.object({ id: z.uuid() }))
-  .mutation(async ({ ctx, input }) => {
-    return await updateRecipe(input.id, input.data, ctx.db);
-  });
 
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   scrape,
   seed,
-  get,
+  getByID,
   list,
   create,
   update,

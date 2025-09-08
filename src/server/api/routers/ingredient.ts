@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
-  buildPaginatedResponse,
-  createPaginatedResponseSchema,
-  sortPaginationCombo,
-} from "~/schemas/pagination";
-import { IDInput } from "~/schemas/common";
-import {
   getIngredientByID,
   mergeIngredients,
   ingredientList,
@@ -15,7 +9,38 @@ import {
   updateIngredient,
 } from "~/server/repo/ingredient";
 import { ingredientWithRecipesAndProductOut } from "~/schemas/combo";
-import { ingredientBase, ingredientUpdateInput } from "~/schemas/ingredient";
+import { ingredientBase } from "~/schemas/ingredient";
+import { createEntityCrudProcedures } from "../crud-factory";
+
+// Define filters schema for ingredients
+const ingredientFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  missingProductsOnly: z.boolean().optional().prefault(false),
+});
+
+// Create standardized CRUD procedures using factory
+const { getByID, list, create, update } = createEntityCrudProcedures({
+  schemas: {
+    createInput: ingredientBase,
+    updateInput: ingredientBase.partial(),
+    output: ingredientWithRecipesAndProductOut,
+    filters: ingredientFiltersSchema,
+  },
+  repository: {
+    getByID: getIngredientByID,
+    list: async (db, filters, sort, pagination) => {
+      return await ingredientList(
+        db,
+        filters.nameFilter,
+        sort,
+        pagination,
+        filters.missingProductsOnly,
+      );
+    },
+    create: createIngredient,
+    update: updateIngredient,
+  },
+});
 
 const merge = publicProcedure
   .input(
@@ -30,34 +55,6 @@ const merge = publicProcedure
     return await getIngredientByID(ctx.db, input.target);
   });
 
-const getByID = publicProcedure
-  .input(IDInput)
-  .output(ingredientWithRecipesAndProductOut)
-  .query(async ({ ctx, input }) => await getIngredientByID(ctx.db, input.id));
-
-const list = publicProcedure
-  .input(
-    z
-      .object({
-        filters: z.object({
-          nameFilter: z.string().optional(),
-          missingProductsOnly: z.boolean().optional().prefault(false),
-        }),
-      })
-      .extend(sortPaginationCombo.shape),
-  )
-  .output(createPaginatedResponseSchema(ingredientWithRecipesAndProductOut))
-  .query(async ({ ctx, input }) => {
-    const { data, count } = await ingredientList(
-      ctx.db,
-      input.filters.nameFilter,
-      input.sort,
-      input.pagination,
-      input.filters.missingProductsOnly,
-    );
-
-    return buildPaginatedResponse(input.pagination, data, count);
-  });
 const getByName = publicProcedure
   .input(
     z.object({
@@ -69,20 +66,6 @@ const getByName = publicProcedure
     async ({ ctx, input }) =>
       await getIngredientByName(ctx.db, input.nameFilter),
   );
-
-const create = publicProcedure
-  .input(ingredientBase)
-  .output(ingredientWithRecipesAndProductOut)
-  .mutation(async ({ ctx, input }) => {
-    return await createIngredient(ctx.db, input);
-  });
-
-const update = publicProcedure
-  .input(ingredientUpdateInput)
-  .output(ingredientWithRecipesAndProductOut)
-  .mutation(async ({ ctx, input }) => {
-    return await updateIngredient(ctx.db, input.id, input.data);
-  });
 
 export const ingredientRouter = createTRPCRouter({
   getByName,

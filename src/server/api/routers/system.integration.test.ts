@@ -44,7 +44,7 @@ describe("system test", () => {
       sections: [{ instructions: ["mix"], ingredients: ["AP flour"] }],
     });
     expect(recipe.id).toBeDefined();
-    const recipe2 = await caller.recipe.get({ id: recipe.id });
+    const recipe2 = await caller.recipe.getByID({ id: recipe.id });
     expect(recipe2.name).toBe("test recipe");
   });
 });

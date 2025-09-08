@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { publicProcedure, createTRPCRouter } from "../trpc";
 import {
-  createPaginatedResponseSchema,
-  sortPaginationCombo,
-  buildPaginatedResponse,
-} from "~/schemas/pagination";
-import { IDInput } from "~/schemas/common";
-import {
   infLocation,
   locationType,
   locationCreateInput,
@@ -21,38 +15,49 @@ import {
   updateLocation,
 } from "~/server/repo/location";
 import { locationOutWithParentChildrenAndInventoryOut } from "~/schemas/combo";
+import {
+  createEntityListProcedure,
+  createEntityCrudWithoutListProcedures,
+} from "../crud-factory";
 
-const list = publicProcedure
-  .input(
-    z
-      .object({
-        filters: z.object({
-          nameFilter: z.string().optional(),
-          itemTypeFilter: locationType.optional(),
-        }),
-      })
-      .extend(sortPaginationCombo.shape),
-  )
-  .output(
-    createPaginatedResponseSchema(locationOutWithParentChildrenAndInventoryOut),
-  )
-  .query(async ({ ctx, input }) => {
-    const { data, count } = await locationList(
-      ctx.db,
-      input.filters.nameFilter,
-      input.filters.itemTypeFilter,
-      input.sort,
-      input.pagination,
-    );
+// Define filters schema for locations
+const locationFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  itemTypeFilter: locationType.optional(),
+});
 
-    return buildPaginatedResponse(input.pagination, data, count);
-  });
+// Create standardized list procedure using factory
+const { list } = createEntityListProcedure({
+  schemas: {
+    output: locationOutWithParentChildrenAndInventoryOut,
+    filters: locationFiltersSchema,
+  },
+  repository: {
+    list: async (db, filters, sort, pagination) => {
+      return await locationList(
+        db,
+        filters.nameFilter,
+        filters.itemTypeFilter,
+        sort,
+        pagination,
+      );
+    },
+  },
+});
 
-const getByID = publicProcedure
-  .meta({ description: "location with infiinte parent and 1 child" })
-  .input(IDInput)
-  .output(infLocation)
-  .query(async ({ ctx, input }) => await getLocationById(ctx.db, input.id));
+// Create standardized getByID, create, update procedures using factory
+const { getByID, create, update } = createEntityCrudWithoutListProcedures({
+  schemas: {
+    createInput: locationCreateInput,
+    updateInput: locationUpdateInput.shape.data,
+    output: infLocation,
+  },
+  repository: {
+    getByID: getLocationById,
+    create: createLocation,
+    update: updateLocation,
+  },
+});
 
 const getLocationTypesCount = publicProcedure
   .output(z.record(locationType, z.number()))
@@ -63,22 +68,6 @@ const getLocationTypesCount = publicProcedure
 const makeTree = publicProcedure
   .output(z.array(infLocation))
   .query(async ({ ctx }) => await buildLocationTree(ctx.db));
-
-// Create location endpoint
-const create = publicProcedure
-  .input(locationCreateInput)
-  .output(infLocation)
-  .mutation(async ({ ctx, input }) => {
-    return await createLocation(ctx.db, input);
-  });
-
-// Update location endpoint
-const update = publicProcedure
-  .input(locationUpdateInput)
-  .output(infLocation)
-  .mutation(async ({ ctx, input }) => {
-    return await updateLocation(ctx.db, input.id, input.data);
-  });
 
 export const locationRouter = createTRPCRouter({
   list,

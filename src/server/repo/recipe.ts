@@ -23,7 +23,7 @@ import {
 
 export const getRecipeByID = async (
   id: string,
-  prismaClient: PrismaClient,
+  prismaClient: PrismaClient | Prisma.TransactionClient,
 ): Promise<RecipeOut | null> => {
   const res: RecipeDeepDB | null = await prismaClient.recipe.findFirst({
     where: { id: id },
@@ -183,7 +183,7 @@ export const recipeList = async (
 export const createRecipe = async (
   recipe: RecipeCreateInput,
   db: PrismaClient,
-): Promise<{ id: string }> => {
+): Promise<RecipeOut> => {
   const sourceType = recipe.meta?.url
     ? RecipeSource.Website
     : RecipeSource.Other;
@@ -249,7 +249,11 @@ export const createRecipe = async (
       );
     }
 
-    return { id: createdRecipe.id };
+    const fullRecipe = await getRecipeByID(createdRecipe.id, tx);
+    if (!fullRecipe) {
+      throw new Error("Failed to retrieve created recipe");
+    }
+    return fullRecipe;
   });
 };
 
@@ -398,7 +402,7 @@ export const updateRecipe = async (
   id: string,
   updates: RecipeUpdateInput["data"],
   db: PrismaClient,
-): Promise<{ id: string }> => {
+): Promise<RecipeOut> => {
   // Check if recipe exists
   const existingRecipe = await db.recipe.findUnique({
     where: { id },
@@ -622,6 +626,10 @@ export const updateRecipe = async (
       }
     }
 
-    return { id };
+    const fullRecipe = await getRecipeByID(id, tx);
+    if (!fullRecipe) {
+      throw new Error("Failed to retrieve updated recipe");
+    }
+    return fullRecipe;
   });
 };

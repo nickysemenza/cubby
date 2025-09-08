@@ -1,12 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 import {
-  createPaginatedResponseSchema,
-  sortPaginationCombo,
-  buildPaginatedResponse,
-} from "~/schemas/pagination";
-import { IDInput } from "~/schemas/common";
-import {
   getInventoryEntryByID,
   inventoryentryList,
   updateInventoryEntry,
@@ -20,77 +14,48 @@ import {
   inventoryBulkOperationPayload,
   inventoryUpdateInput,
 } from "~/schemas/inventory";
+import { createEntityCrudProcedures } from "../crud-factory";
 
-const getByID = publicProcedure
-  .input(IDInput)
-  .output(inventoryWithLocationAndProductOut)
-  .query(async ({ ctx, input }) => {
-    const res = await getInventoryEntryByID(ctx.db, input.id);
-    if (res === null) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Inventory entry not found",
-      });
-    }
-    return res;
-  });
+// Define filters schema for inventory entries
+const inventoryFiltersSchema = z.object({
+  productNameFilter: z.string().optional(),
+  locationNameFilter: z.string().optional(),
+  locationIdFilter: z.string().optional(),
+});
 
-const list = publicProcedure
-  .input(
-    z
-      .object({
-        filters: z.object({
-          productNameFilter: z.string().optional(),
-          locationNameFilter: z.string().optional(),
-          locationIdFilter: z.string().optional(),
-        }),
-      })
-      .extend(sortPaginationCombo.shape),
-  )
-  .output(createPaginatedResponseSchema(inventoryWithLocationAndProductOut))
-  .query(async ({ ctx, input }) => {
-    const { data, count } = await inventoryentryList(
-      ctx.db,
-      input.sort,
-      input.pagination,
-      input.filters.productNameFilter,
-      input.filters.locationNameFilter,
-      input.filters.locationIdFilter,
-    );
-    return buildPaginatedResponse(input.pagination, data, count);
-  });
-
-const update = publicProcedure
-  .input(inventoryUpdateInput)
-  .output(inventoryWithLocationAndProductOut)
-  .mutation(async ({ ctx, input }) => {
-    try {
-      const result = await updateInventoryEntry(ctx.db, input.id, input.data);
-      return result;
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to update inventory entry",
-        cause: error,
-      });
-    }
-  });
-
-const create = publicProcedure
-  .input(inventoryCreatePayloadData)
-  .output(inventoryWithLocationAndProductOut)
-  .mutation(async ({ ctx, input }) => {
-    try {
-      const result = await createInventoryEntry(ctx.db, input);
-      return result;
-    } catch (error) {
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message: "Failed to create inventory entry",
-        cause: error,
-      });
-    }
-  });
+// Create standardized CRUD procedures using factory
+const { getByID, list, create, update } = createEntityCrudProcedures({
+  schemas: {
+    createInput: inventoryCreatePayloadData,
+    updateInput: inventoryUpdateInput.shape.data,
+    output: inventoryWithLocationAndProductOut,
+    filters: inventoryFiltersSchema,
+  },
+  repository: {
+    getByID: async (db, id) => {
+      const res = await getInventoryEntryByID(db, id);
+      if (res === null) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Inventory entry not found",
+        });
+      }
+      return res;
+    },
+    list: async (db, filters, sort, pagination) => {
+      return await inventoryentryList(
+        db,
+        sort,
+        pagination,
+        filters.productNameFilter,
+        filters.locationNameFilter,
+        filters.locationIdFilter,
+      );
+    },
+    create: createInventoryEntry,
+    update: updateInventoryEntry,
+  },
+});
 
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = publicProcedure

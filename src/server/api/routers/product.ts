@@ -1,72 +1,52 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
-import {
-  createPaginatedResponseSchema,
-  sortPaginationCombo,
-  buildPaginatedResponse,
-} from "~/schemas/pagination";
-import { IDInput } from "~/schemas/common";
+import { createTRPCRouter } from "../trpc";
 import {
   createProduct,
   getProductByID,
   productList,
   updateProduct,
 } from "~/server/repo/product";
-import { productInputPayload, productTopLevelOut } from "~/schemas/product";
+import { productInputPayload } from "~/schemas/product";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
+import { createEntityCrudProcedures } from "../crud-factory";
 
-const getByID = publicProcedure
-  .input(IDInput)
-  .output(productWithIngredientAndInventoryAndMappingsOut)
-  .query(async ({ ctx, input }) => await getProductByID(ctx.db, input.id));
+// Define filters schema for products
+const productFiltersSchema = z.object({
+  nameFilter: z.string().optional(),
+  manufacturerFilter: z.string().optional(),
+  upcFilter: z.string().optional(),
+});
 
-const list = publicProcedure
-  .input(
-    z
-      .object({
-        filters: z.object({
-          nameFilter: z.string().optional(),
-          manufacturerFilter: z.string().optional(),
-          upcFilter: z.string().optional(),
-        }),
-      })
-      .extend(sortPaginationCombo.shape),
-  )
-  .output(
-    createPaginatedResponseSchema(
-      productWithIngredientAndInventoryAndMappingsOut,
-    ),
-  )
-  .query(async ({ ctx, input }) => {
-    const { data, count } = await productList(
-      ctx.db,
-      input.filters.nameFilter,
-      input.filters.manufacturerFilter,
-      input.filters.upcFilter,
-      input.sort,
-      input.pagination,
-    );
-    return buildPaginatedResponse(input.pagination, data, count);
-  });
-
-const create = publicProcedure
-  .input(productInputPayload)
-  .output(productTopLevelOut)
-  .mutation(async ({ ctx, input }) => {
-    return await createProduct(ctx.db, input);
-  });
-
-const update = publicProcedure
-  .input(
-    z.object({
-      id: z.uuid(),
-      data: productInputPayload.partial(),
-    }),
-  )
-  .output(productTopLevelOut)
-  .mutation(async ({ ctx, input }) => {
-    return await updateProduct(ctx.db, input.id, input.data);
-  });
+// Create standardized CRUD procedures using factory
+const { getByID, list, create, update } = createEntityCrudProcedures({
+  schemas: {
+    createInput: productInputPayload,
+    updateInput: productInputPayload.partial(),
+    output: productWithIngredientAndInventoryAndMappingsOut,
+    filters: productFiltersSchema,
+  },
+  repository: {
+    getByID: getProductByID,
+    list: async (db, filters, sort, pagination) => {
+      return await productList(
+        db,
+        filters.nameFilter,
+        filters.manufacturerFilter,
+        filters.upcFilter,
+        sort,
+        pagination,
+      );
+    },
+    create: async (db, data) => {
+      const product = await createProduct(db, data);
+      return await getProductByID(db, product.id);
+    },
+    update: async (db, id, data) => {
+      await updateProduct(db, id, data);
+      return await getProductByID(db, id);
+    },
+  },
+});
 
 export const productRouter = createTRPCRouter({
   getByID,

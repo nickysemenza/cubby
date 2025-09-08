@@ -480,7 +480,7 @@ describe("inventory router", () => {
         locationId: nonExistentId,
         amount: { value: 1, unit: "piece" },
       }),
-    ).rejects.toThrow("Failed to create inventory entry");
+    ).rejects.toThrow("Foreign key constraint violated");
 
     // Create a valid entry first
     const location = await prisma.location.create({
@@ -513,6 +513,6 @@ describe("inventory router", () => {
           productId: nonExistentId,
         },
       }),
-    ).rejects.toThrow("Failed to update inventory entry");
+    ).rejects.toThrow("Foreign key constraint violated");
   });
 });

@@ -66,7 +66,7 @@ describe("recipe router", () => {
     expect(createdRecipe.id).toBeDefined();
 
     // Retrieve the recipe by ID
-    const retrievedRecipe = await caller.get({ id: createdRecipe.id });
+    const retrievedRecipe = await caller.getByID({ id: createdRecipe.id });
 
     // Verify retrieved recipe matches created recipe
     expect(retrievedRecipe.id).toEqual(createdRecipe.id);
@@ -267,7 +267,7 @@ describe("recipe router", () => {
     expect(updatedRecipe.id).toEqual(createdRecipe.id);
 
     // Retrieve the updated recipe
-    const retrievedRecipe = await caller.get({ id: createdRecipe.id });
+    const retrievedRecipe = await caller.getByID({ id: createdRecipe.id });
 
     // Verify updates were applied
     expect(retrievedRecipe.name).toEqual("Updated Recipe");
@@ -332,7 +332,7 @@ describe("recipe router", () => {
     expect(updatedRecipe.id).toEqual(createdRecipe.id);
 
     // Retrieve the recipe to verify other fields unchanged
-    const retrievedRecipe = await caller.get({ id: createdRecipe.id });
+    const retrievedRecipe = await caller.getByID({ id: createdRecipe.id });
 
     expect(retrievedRecipe.name).toEqual("Updated Name Only");
     expect(retrievedRecipe.meta?.url).toEqual("https://example.com/original"); // Unchanged
@@ -352,7 +352,7 @@ describe("recipe router", () => {
     // Try to retrieve a recipe with a non-existent ID
     const nonExistentId = "00000000-0000-0000-0000-000000000000";
 
-    await expect(caller.get({ id: nonExistentId })).rejects.toThrow(
+    await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow(
       "Recipe not found",
     );
   });
@@ -416,7 +416,7 @@ describe("recipe router", () => {
     const complexRecipe = await caller.create(complexRecipeData);
 
     // Retrieve and verify the complex recipe
-    const retrievedRecipe = await caller.get({ id: complexRecipe.id });
+    const retrievedRecipe = await caller.getByID({ id: complexRecipe.id });
 
     expect(retrievedRecipe.sections[0].ingredients).toHaveLength(1);
     expect(retrievedRecipe.sections[0].ingredients[0].type).toEqual("recipe");
@@ -458,7 +458,7 @@ describe("recipe router", () => {
     expect(insertedRecipe.id).toBeDefined();
 
     // Retrieve and verify the recipe
-    const retrievedRecipe = await caller.get({ id: insertedRecipe.id });
+    const retrievedRecipe = await caller.getByID({ id: insertedRecipe.id });
 
     expect(retrievedRecipe.name).toEqual("Compact Recipe");
     expect(retrievedRecipe.sections).toHaveLength(1);
