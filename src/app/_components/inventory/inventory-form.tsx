@@ -33,10 +33,10 @@ import { amount } from "~/codec/codec";
 // Form schema for inventory form
 const formSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a product",
+    error: "Please select a product",
   }),
   location: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a location",
+    error: "Please select a location",
   }),
   amount: amount,
 });

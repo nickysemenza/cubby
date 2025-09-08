@@ -7,14 +7,14 @@ export const ingredientBase = z.object({
 });
 export const ingredientOut = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   })
-  .merge(ingredientBase)
-  .merge(dbTimestampsOut);
+  .extend(ingredientBase.shape)
+  .extend(dbTimestampsOut.shape);
 
 // Input schema for updating ingredients
 export const ingredientUpdateInput = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   data: ingredientBase.partial(),
 });
 

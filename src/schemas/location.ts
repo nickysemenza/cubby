@@ -24,12 +24,12 @@ export const locationBase = z.object({
 });
 export const locationOut = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     lastBulkInventory: z.date().nullable(),
     images: z.array(imageOut),
   })
-  .merge(locationBase)
-  .merge(dbTimestampsOut);
+  .extend(locationBase.shape)
+  .extend(dbTimestampsOut.shape);
 
 export type LocationOut = z.infer<typeof locationOut>;
 
@@ -50,14 +50,14 @@ export type LocationOutWithParentChildren = z.infer<
 // Input schema for creating locations
 export const locationCreateInput = locationBase
   .extend({
-    parentId: z.string().uuid().nullable(),
+    parentId: z.uuid().nullable(),
   })
   .merge(createInputImages);
 
 // Input schema for updating locations
 export const locationUpdateInput = z.object({
-  id: z.string().uuid(),
-  data: locationCreateInput.partial().merge(updateInputImages),
+  id: z.uuid(),
+  data: locationCreateInput.partial().extend(updateInputImages.shape),
 });
 
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;

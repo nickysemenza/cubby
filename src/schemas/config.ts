@@ -86,7 +86,7 @@ export const configSchema = z
     products: newProductConfigInput
       .array()
       .describe("products that can be purchased"),
-    aliases: z.record(z.array(z.string())).optional(),
+    aliases: z.record(z.string(), z.array(z.string())).optional(),
   })
   .describe("system config");
 

@@ -45,7 +45,7 @@ const list = publicProcedure
           locationIdFilter: z.string().optional(),
         }),
       })
-      .merge(sortPaginationCombo),
+      .extend(sortPaginationCombo.shape),
   )
   .output(createPaginatedResponseSchema(inventoryWithLocationAndProductOut))
   .query(async ({ ctx, input }) => {

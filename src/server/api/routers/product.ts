@@ -30,7 +30,7 @@ const list = publicProcedure
           upcFilter: z.string().optional(),
         }),
       })
-      .merge(sortPaginationCombo),
+      .extend(sortPaginationCombo.shape),
   )
   .output(
     createPaginatedResponseSchema(
@@ -59,7 +59,7 @@ const create = publicProcedure
 const update = publicProcedure
   .input(
     z.object({
-      id: z.string().uuid(),
+      id: z.uuid(),
       data: productInputPayload.partial(),
     }),
   )

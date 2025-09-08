@@ -20,8 +20,8 @@ import { ingredientBase, ingredientUpdateInput } from "~/schemas/ingredient";
 const merge = publicProcedure
   .input(
     z.object({
-      target: z.string().uuid(),
-      aliases: z.array(z.string().uuid()).min(1),
+      target: z.uuid(),
+      aliases: z.array(z.uuid()).min(1),
     }),
   )
   .output(ingredientWithRecipesAndProductOut)
@@ -41,10 +41,10 @@ const list = publicProcedure
       .object({
         filters: z.object({
           nameFilter: z.string().optional(),
-          missingProductsOnly: z.boolean().optional().default(false),
+          missingProductsOnly: z.boolean().optional().prefault(false),
         }),
       })
-      .merge(sortPaginationCombo),
+      .extend(sortPaginationCombo.shape),
   )
   .output(createPaginatedResponseSchema(ingredientWithRecipesAndProductOut))
   .query(async ({ ctx, input }) => {

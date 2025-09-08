@@ -29,7 +29,7 @@ const cleanupLinesToArray = (lines: string) =>
 
 // Form schema for recipe
 const formSchema = z.object({
-  url: z.string().url("Please enter a valid URL"),
+  url: z.url("Please enter a valid URL"),
   name: z.string().min(1, "Name is required"),
   ingredientsText: z.string().min(1, "Ingredients are required"),
   instructionsText: z.string().min(1, "Instructions are required"),

@@ -7,14 +7,14 @@ import { type ImageOut } from "~/schemas/image";
 
 const ingItem = z.discriminatedUnion("type", [
   z.object({
-    id: z.string().uuid().optional(),
+    id: z.uuid().optional(),
     type: z.literal("ingredient"),
     ingredient: ComboboxItem,
     recipe: z.null(),
     amounts: z.array(amount),
   }),
   z.object({
-    id: z.string().uuid().optional(),
+    id: z.uuid().optional(),
     type: z.literal("recipe"),
     ingredient: z.null(),
     recipe: ComboboxItem,
@@ -28,12 +28,12 @@ export const formSchema = z.object({
   meta: recipeTopLevel.shape.meta,
   sections: z.array(
     z.object({
-      id: z.string().uuid().optional(),
+      id: z.uuid().optional(),
       name: z.string().nullable(),
       ingredients: z.array(ingItem),
       instructions: z.array(
         z.object({
-          id: z.string().uuid().optional(),
+          id: z.uuid().optional(),
           instruction: z.string(),
         }),
       ),

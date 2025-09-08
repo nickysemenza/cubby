@@ -28,7 +28,7 @@ import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a product",
+    error: "Please select a product",
   }),
   amount: amount,
   id: z.string().optional(), // For existing items
@@ -37,7 +37,7 @@ const inventoryItemSchema = z.object({
 // Schema for the entire form
 const formSchema = z.object({
   location: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a location",
+    error: "Please select a location",
   }),
   items: z.array(inventoryItemSchema),
 });

@@ -13,10 +13,10 @@ export type ImageStatus = z.infer<typeof ImageStatus>;
 
 // Base schema for image data
 const imageBase = z.object({
-  url: z.string().url(),
+  url: z.url(),
   key: z.string(),
   filename: z.string(),
-  size: z.number().int().positive(),
+  size: z.int().positive(),
   contentType: z.string(),
   status: ImageStatus,
 });
@@ -26,21 +26,21 @@ export const imageOut = z
   .object({
     id: id,
   })
-  .merge(imageBase)
-  .merge(dbTimestampsOut);
+  .extend(imageBase.shape)
+  .extend(dbTimestampsOut.shape);
 
 export type ImageOut = z.infer<typeof imageOut>;
 
 // Common image input schemas for create and update operations
 export const createInputImages = z.object({
-  pendingImageIds: z.array(z.string().uuid()).optional(),
+  pendingImageIds: z.array(z.uuid()).optional(),
 });
 
 export const updateInputImages = z
   .object({
-    removeImageIds: z.array(z.string().uuid()).optional(),
+    removeImageIds: z.array(z.uuid()).optional(),
   })
-  .merge(createInputImages);
+  .extend(createInputImages.shape);
 
 export type UpdateInputImages = z.infer<typeof updateInputImages>;
 
@@ -48,7 +48,7 @@ export type UpdateInputImages = z.infer<typeof updateInputImages>;
 export const initiateUploadWithoutEntitySchema = z.object({
   filename: z.string(),
   contentType: z.string(),
-  size: z.number().int().positive(),
+  size: z.int().positive(),
   entityType: entityImage,
 });
 
@@ -58,10 +58,10 @@ export type InitiateUploadWithoutEntityInput = z.infer<
 
 // Response for initiating an upload without entity ID
 export const initiateUploadWithoutEntityResponseSchema = z.object({
-  uploadUrl: z.string().url(),
+  uploadUrl: z.url(),
   imageId: id,
   key: z.string(),
-  url: z.string().url(),
+  url: z.url(),
 });
 
 // Schema for getting image by ID
@@ -85,7 +85,7 @@ export const imageListFiltersSchema = z
       searchFilter: z.string().optional(),
     }),
   })
-  .merge(sortPaginationCombo);
+  .extend(sortPaginationCombo.shape);
 
 // New response schema using the standard paginated response format
 export const imageListResponseSchema = createPaginatedResponseSchema(
@@ -94,12 +94,12 @@ export const imageListResponseSchema = createPaginatedResponseSchema(
 
 // Schema for culling pending images
 export const cullPendingImagesSchema = z.object({
-  olderThanHours: z.number().int().positive().default(24),
+  olderThanHours: z.int().positive().prefault(24),
 });
 
 // Response schema for culling pending images
 export const cullPendingImagesResponseSchema = z.object({
-  count: z.number().int(),
+  count: z.int(),
   deletedIds: z.array(id),
   deletedKeys: z.array(z.string()),
 });

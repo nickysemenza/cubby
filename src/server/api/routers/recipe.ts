@@ -31,7 +31,7 @@ const list = publicProcedure
           nameFilter: z.string().optional(),
         }),
       })
-      .merge(sortPaginationCombo),
+      .extend(sortPaginationCombo.shape),
   )
   .output(createPaginatedResponseSchema(recipeOut))
   .query(async ({ ctx, input }) => {
@@ -44,7 +44,7 @@ const list = publicProcedure
     return buildPaginatedResponse(input.pagination, data, count);
   });
 const get = publicProcedure
-  .input(z.object({ id: z.string().uuid() }))
+  .input(z.object({ id: z.uuid() }))
   .output(recipeOut)
   .query(async ({ ctx, input }) => {
     const res = await getRecipeByID(input.id, ctx.db);
@@ -59,23 +59,23 @@ const seed = publicProcedure.mutation(
   async ({ ctx }) => await seedRealRecipes(ctx.db),
 );
 const scrape = publicProcedure
-  .input(z.string().url())
+  .input(z.url())
   .output(compactRecipeSchema)
   .mutation(async ({ input }) => await scrapeToCompact(input));
 const insertCompact = publicProcedure
   .input(compactRecipeSchema)
-  .output(z.object({ id: z.string().uuid() }))
+  .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => await insertCompactRecipe(input, ctx.db));
 const create = publicProcedure
   .input(recipeCreateInput)
-  .output(z.object({ id: z.string().uuid() }))
+  .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
     return await createRecipe(input, ctx.db);
   });
 
 const update = publicProcedure
   .input(recipeUpdateInput)
-  .output(z.object({ id: z.string().uuid() }))
+  .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
     return await updateRecipe(input.id, input.data, ctx.db);
   });

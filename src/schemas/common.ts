@@ -29,4 +29,4 @@ export const baseEntitySchema = z
     id: id,
     name: z.string(),
   })
-  .merge(dbTimestampsOut);
+  .extend(dbTimestampsOut.shape);

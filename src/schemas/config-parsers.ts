@@ -133,7 +133,7 @@ export const conversionStringSchema = z.string().refine(
     }
   },
   {
-    message:
+    error:
       "Invalid conversion format. Expected: '4 lb = $5' or '4 lb = $5 @ store'",
   },
 );
@@ -148,7 +148,7 @@ export const productShorthandSchema = z.string().refine(
     }
   },
   {
-    message:
+    error:
       "Invalid product shorthand. Expected: 'Product Name: $5/4lb @ store'",
   },
 );

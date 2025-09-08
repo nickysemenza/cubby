@@ -8,44 +8,44 @@ import { recipeTopLevel } from "./recipe";
 import { FoodSummary, foodSummary } from "./usda";
 import { imageOut } from "./image";
 
-const inventoryWithProductOut = inventoryEntryOut.merge(
+const inventoryWithProductOut = inventoryEntryOut.extend(
   z.object({
     product: productTopLevelOut,
-  }),
+  }).shape,
 );
 
-const inventoryWithLocationOut = inventoryEntryOut.merge(
+const inventoryWithLocationOut = inventoryEntryOut.extend(
   z.object({
     location: locationOut,
-  }),
+  }).shape,
 );
 
-export const inventoryWithLocationAndProductOut = inventoryEntryOut.merge(
+export const inventoryWithLocationAndProductOut = inventoryEntryOut.extend(
   z.object({
-    product: productTopLevelOut.merge(
+    product: productTopLevelOut.extend(
       z.object({
         unitMappings: z.array(unitMappingOut),
-      }),
+      }).shape,
     ),
     location: locationOut,
-  }),
+  }).shape,
 );
 
 export const productWithIngredientAndInventoryAndMappingsOut =
-  productTopLevelOut.merge(
+  productTopLevelOut.extend(
     z.object({
       ingredient: ingredientOut.nullable(),
       unitMappings: z.array(unitMappingOut),
       inventoryEntry: z.array(inventoryWithLocationOut),
       food: foodSummary.nullable(),
-    }),
+    }).shape,
   );
 
-const productWithMappingsAndFoodOut = productTopLevelOut.merge(
+const productWithMappingsAndFoodOut = productTopLevelOut.extend(
   z.object({
     unitMappings: z.array(unitMappingOut),
     food: foodSummary.nullable(),
-  }),
+  }).shape,
 );
 export type IngredientWithRecipesAndProductOut = z.infer<
   typeof ingredientWithRecipesAndProductOut
@@ -57,7 +57,7 @@ export const ingredientWithRecipesAndProductOut = z
     appearsInRecipes: z.array(recipeTopLevel),
     product: z.array(productWithMappingsAndFoodOut),
   })
-  .merge(ingredientOut);
+  .extend(ingredientOut.shape);
 
 export const locationOutWithParentChildrenAndInventoryOut = z
   .object({
@@ -66,7 +66,7 @@ export const locationOutWithParentChildrenAndInventoryOut = z
     inventoryEntries: z.array(inventoryWithProductOut),
     images: z.array(imageOut).optional(),
   })
-  .merge(locationOut);
+  .extend(locationOut.shape);
 
 export type ProductWithMappingsAndFoodOut = z.infer<
   typeof productWithMappingsAndFoodOut

@@ -7,15 +7,15 @@ export const env = createEnv({
    * isn't built with invalid env vars.
    */
   server: {
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
-      .default("development"),
+      .prefault("development"),
     R2_ACCESS_KEY_ID: z.string().min(1),
     R2_SECRET_ACCESS_KEY: z.string().min(1),
-    R2_ENDPOINT: z.string().url(),
+    R2_ENDPOINT: z.url(),
     R2_BUCKET_NAME: z.string().min(1),
-    R2_PUBLIC_URL: z.string().url(),
+    R2_PUBLIC_URL: z.url(),
   },
 
   /**

@@ -31,7 +31,7 @@ const list = protectedProcedure
           dataTypeFilter: z.string().optional(),
         }),
       })
-      .merge(sortPaginationCombo),
+      .extend(sortPaginationCombo.shape),
   )
   .output(createPaginatedResponseSchema(foodSummary))
   .query(async ({ ctx, input }) => {

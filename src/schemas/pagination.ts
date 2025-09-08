@@ -1,20 +1,20 @@
 import { z } from "zod";
 
 const sortParams = z.object({
-  orderBy: z.string().default("createdAt"),
-  direction: z.enum(["asc", "desc"]).default("asc"),
+  orderBy: z.string().prefault("createdAt"),
+  direction: z.enum(["asc", "desc"]).prefault("asc"),
 });
 
 const paginationParams = z.object({
-  pageIndex: z.number().default(0),
-  pageSize: z.number().default(10),
+  pageIndex: z.number().prefault(0),
+  pageSize: z.number().prefault(10),
 });
 
 export const sortPaginationCombo = z.object({
   sort: sortParams
     .optional()
-    .default({ orderBy: "createdAt", direction: "desc" }),
-  pagination: paginationParams.optional().default({ pageSize: 10 }),
+    .prefault({ orderBy: "createdAt", direction: "desc" }),
+  pagination: paginationParams.optional().prefault({ pageSize: 10 }),
 });
 
 export const buildTakeSkip = (pagination: PaginationParams) => {

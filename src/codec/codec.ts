@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const compactMeta = z.object({ url: z.string().url().optional() }).optional();
+const compactMeta = z.object({ url: z.url().optional() }).optional();
 export const compactRecipeSchema = z.object({
   name: z.string(),
   meta: compactMeta,

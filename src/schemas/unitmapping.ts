@@ -6,7 +6,7 @@ import { parseConversionString } from "./config-parsers";
 export const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("product"),
-    productId: z.string().uuid(),
+    productId: z.uuid(),
   }),
   z.object({
     type: z.literal("food"),
@@ -40,7 +40,7 @@ export const unitMappingFlexible = z.string().refine(
     }
   },
   {
-    message: "Invalid unit mapping format. Expected: '4 lb = $5 @ store'",
+    error: "Invalid unit mapping format. Expected: '4 lb = $5 @ store'",
   },
 );
 
@@ -57,15 +57,15 @@ export function transformUnitMapping(
 }
 
 export const unitMappingInput = unitMappingBase.extend({
-  id: z.string().uuid().optional(),
+  id: z.uuid().optional(),
 });
 
 export const unitMappingOut = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   })
-  .merge(unitMappingWithMetadata)
-  .merge(dbTimestampsOut);
+  .extend(unitMappingWithMetadata.shape)
+  .extend(dbTimestampsOut.shape);
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
 export type UnitMappingInput = z.infer<typeof unitMappingInput>;

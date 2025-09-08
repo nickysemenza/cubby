@@ -9,7 +9,7 @@ const ingredientOut = baseEntitySchema;
 export const recipeTopLevel = baseEntitySchema.extend({
   meta: z
     .object({
-      url: z.string().url().nullable(),
+      url: z.url().nullable(),
     })
     .nullable(),
 });
@@ -17,10 +17,10 @@ export const recipeTopLevel = baseEntitySchema.extend({
 // Create a base schema with common fields
 const sectioningredientOut = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     amounts: z.array(amount),
   })
-  .merge(dbTimestampsOut);
+  .extend(dbTimestampsOut.shape);
 
 // Create a discriminated union to ensure either recipe or ingredient is set
 const sectionIngredientOut = z.discriminatedUnion("type", [
@@ -40,12 +40,12 @@ export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 
 const recipeSectionOut = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     name: z.string().nullable(),
     ingredients: z.array(sectionIngredientOut),
     instructions: z.array(z.object({ instruction: z.string() })),
   })
-  .merge(dbTimestampsOut);
+  .extend(dbTimestampsOut.shape);
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 
@@ -54,7 +54,7 @@ export const recipeOut = z
     sections: z.array(recipeSectionOut),
     images: z.array(imageOut).optional(),
   })
-  .merge(recipeTopLevel);
+  .extend(recipeTopLevel.shape);
 
 export type RecipeOut = z.infer<typeof recipeOut>;
 
@@ -97,11 +97,11 @@ export const recipeCreateInput = z
     meta: recipeTopLevel.shape.meta,
     sections: z.array(recipeSectionInput),
   })
-  .merge(createInputImages);
+  .extend(createInputImages.shape);
 
 export const recipeUpdateInput = z.object({
   id: id,
-  data: recipeCreateInput.partial().merge(updateInputImages),
+  data: recipeCreateInput.partial().extend(updateInputImages.shape),
 });
 
 export type RecipeCreateInput = z.infer<typeof recipeCreateInput>;

@@ -16,7 +16,7 @@ export const productBase = z.object({
 // Input payload for creating/updating products (includes relationships)
 export const productInputPayload = productBase
   .extend({
-    ingredientId: z.string().uuid().nullable(),
+    ingredientId: z.uuid().nullable(),
     unitMappings: z.array(unitMappingInput).optional(),
   })
   .merge(updateInputImages);
@@ -24,11 +24,11 @@ export const productInputPayload = productBase
 // Response schema for product data
 export const productTopLevelOut = z
   .object({
-    id: z.string().uuid(),
+    id: z.uuid(),
     images: z.array(imageOut).optional(),
   })
-  .merge(productBase)
-  .merge(dbTimestampsOut);
+  .extend(productBase.shape)
+  .extend(dbTimestampsOut.shape);
 
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductInputPayload = z.infer<typeof productInputPayload>;

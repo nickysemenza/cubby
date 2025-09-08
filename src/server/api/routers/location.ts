@@ -31,7 +31,7 @@ const list = publicProcedure
           itemTypeFilter: locationType.optional(),
         }),
       })
-      .merge(sortPaginationCombo),
+      .extend(sortPaginationCombo.shape),
   )
   .output(
     createPaginatedResponseSchema(locationOutWithParentChildrenAndInventoryOut),
