@@ -82,7 +82,6 @@ const renderSourceWithMetadata = (mapping: UnitMapping) => {
   );
 };
 
-
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
 }> = ({ mappings }) => {

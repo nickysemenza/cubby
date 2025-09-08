@@ -6,14 +6,36 @@ import { type RecipeCreateInput } from "~/schemas/recipe";
 
 let prisma: PrismaClient;
 
+let testIngredients: { id: string; name: string }[] = [];
+
 describe("upsertRecipe", () => {
   beforeEach(async () => {
     const res = await buildTestDB();
     prisma = res.prisma;
+
+    // Create the required ingredients for the tests and store their IDs
+    const ingredient1 = await prisma.ingredient.create({
+      data: {
+        name: "Test Ingredient 1",
+      },
+    });
+    const ingredient2 = await prisma.ingredient.create({
+      data: {
+        name: "Test Ingredient 2",
+      },
+    });
+    const ingredient3 = await prisma.ingredient.create({
+      data: {
+        name: "Test Ingredient 3",
+      },
+    });
+
+    testIngredients = [ingredient1, ingredient2, ingredient3];
+
     return res.teardown;
   });
 
-  const mockRecipeInput: RecipeCreateInput = {
+  const getMockRecipeInput = (): RecipeCreateInput => ({
     name: "Test Recipe Direct",
     meta: {
       url: "https://example.com/recipe",
@@ -27,22 +49,22 @@ describe("upsertRecipe", () => {
         ingredients: [
           {
             type: "ingredient" as const,
-            ingredientId: "550e8400-e29b-41d4-a716-446655440001", // Mock UUID
+            ingredientId: testIngredients[0]!.id,
             recipeId: null,
             amounts: [{ value: 2, unit: "cups" }],
           },
           {
             type: "ingredient" as const,
-            ingredientId: "550e8400-e29b-41d4-a716-446655440002", // Mock UUID
+            ingredientId: testIngredients[1]!.id,
             recipeId: null,
             amounts: [{ value: 1, unit: "cup" }],
           },
         ],
       },
     ],
-  };
+  });
 
-  const mockRecipeUpdated: RecipeCreateInput = {
+  const getMockRecipeUpdated = (): RecipeCreateInput => ({
     name: "Test Recipe Direct", // Same name
     meta: {
       url: "https://example.com/recipe-updated",
@@ -56,7 +78,7 @@ describe("upsertRecipe", () => {
         ingredients: [
           {
             type: "ingredient" as const,
-            ingredientId: "550e8400-e29b-41d4-a716-446655440001", // Same ingredient
+            ingredientId: testIngredients[0]!.id, // Same ingredient
             recipeId: null,
             amounts: [{ value: 3, unit: "cups" }], // Different amount
           },
@@ -67,17 +89,17 @@ describe("upsertRecipe", () => {
         ingredients: [
           {
             type: "ingredient" as const,
-            ingredientId: "550e8400-e29b-41d4-a716-446655440003", // New ingredient
+            ingredientId: testIngredients[2]!.id, // New ingredient
             recipeId: null,
             amounts: [{ value: 1, unit: "tsp" }],
           },
         ],
       },
     ],
-  };
+  });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(mockRecipeInput, prisma);
+    const result = await upsertRecipe(getMockRecipeInput(), prisma);
 
     expect(result.id).toBeDefined();
 
@@ -103,10 +125,10 @@ describe("upsertRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipe(mockRecipeInput, prisma);
+    const firstResult = await upsertRecipe(getMockRecipeInput(), prisma);
 
     // Now update with different data
-    const secondResult = await upsertRecipe(mockRecipeUpdated, prisma);
+    const secondResult = await upsertRecipe(getMockRecipeUpdated(), prisma);
 
     // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
@@ -141,9 +163,9 @@ describe("upsertRecipe", () => {
 
   it("can be called multiple times without conflicts", async () => {
     // This tests that the function is idempotent
-    const firstRun = await upsertRecipe(mockRecipeInput, prisma);
-    const secondRun = await upsertRecipe(mockRecipeInput, prisma); // Same input
-    const thirdRun = await upsertRecipe(mockRecipeInput, prisma); // Same input again
+    const firstRun = await upsertRecipe(getMockRecipeInput(), prisma);
+    const secondRun = await upsertRecipe(getMockRecipeInput(), prisma); // Same input
+    const thirdRun = await upsertRecipe(getMockRecipeInput(), prisma); // Same input again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);

@@ -55,11 +55,9 @@ export function EnhancedBreadcrumbs({
 
         {/* Current Location */}
         <BreadcrumbSeparator />
-        <BreadcrumbItem>
-          <div className="text-foreground flex items-center gap-1 font-medium">
-            <LocationIcon type={location.type} size={14} />
-            <span>{location.name}</span>
-          </div>
+        <BreadcrumbItem className="text-foreground font-medium">
+          <LocationIcon type={location.type} size={14} />
+          <span>{location.name}</span>
         </BreadcrumbItem>
       </BreadcrumbList>
     </Breadcrumb>

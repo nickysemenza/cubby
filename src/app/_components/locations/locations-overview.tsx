@@ -33,22 +33,28 @@ export function LocationsOverview() {
 
   if (!locations || locations.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>No locations found</CardTitle>
-          <CardDescription>
-            Get started by creating your first location.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/locations/new">
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Location
-            </Button>
-          </Link>
-        </CardContent>
-      </Card>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Locations</h1>
+          <p className="text-muted-foreground">No locations found</p>
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Get Started</CardTitle>
+            <CardDescription>
+              Create your first location to begin organizing your space.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/locations/new">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                New Location
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 

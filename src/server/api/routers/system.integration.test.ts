@@ -36,7 +36,7 @@ describe("system test", () => {
     if (ingredient === null) {
       return;
     }
-    expect(ingredient.name).toBe("all purpose flour");
+    expect(ingredient.name).toBe("All Purpose Flour");
 
     // create a recipe with the ingredient
     const recipe = await caller.recipe.insertCompact({
