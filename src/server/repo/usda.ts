@@ -115,7 +115,10 @@ const getNutrientSummary = async (
     },
   };
 };
-const unitMappingFromPortionInfo = (portionInfo: FoodPortion): UnitMapping => {
+const unitMappingFromPortionInfo = (
+  portionInfo: FoodPortion,
+  fdc_id: number,
+): UnitMapping => {
   const inferredMapping = {
     a: {
       value: portionInfo.amount,
@@ -125,7 +128,8 @@ const unitMappingFromPortionInfo = (portionInfo: FoodPortion): UnitMapping => {
       value: portionInfo.gram_weight,
       unit: "g",
     },
-    source: "USDA portion",
+    source: `USDA portion`,
+    sourceMetadata: { type: "food" as const, fdcId: fdc_id },
   };
   return inferredMapping;
 };
@@ -162,7 +166,8 @@ const getAmountFromBrandedFoodServingSize = (
       unit: normalize_branded_food_serving_size_unit(servingSizeUnit),
     },
     b,
-    source: `USDA FDC ${fdc_id}`,
+    source: `USDA FDC serving`,
+    sourceMetadata: { type: "food" as const, fdcId: fdc_id },
   };
   return inferredMapping;
 };
@@ -277,7 +282,7 @@ export const getFoodSummaryByID = async (
     nutritionInfo: await getNutrientSummary(db, fdc_id),
     portionInfo: {
       raw: portionInfoRaw,
-      parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(p)),
+      parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(p, fdc_id)),
     },
     linkedProducts,
   };
@@ -339,7 +344,9 @@ export const listFoods = async (
         nutritionInfo: await getNutrientSummary(db, food.fdc_id),
         portionInfo: {
           raw: portionInfoRaw,
-          parsed: portionInfoRaw.map((p) => unitMappingFromPortionInfo(p)),
+          parsed: portionInfoRaw.map((p) =>
+            unitMappingFromPortionInfo(p, food.fdc_id),
+          ),
         },
         linkedProducts: [], // todo?
         legacyFoodInfo: null, // todo?

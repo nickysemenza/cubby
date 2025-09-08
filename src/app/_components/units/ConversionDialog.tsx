@@ -25,6 +25,7 @@ import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { UnitMappingGraph } from "./UnitMappingGraph";
+import { UnitMappingsTable } from "./unitmappingstable";
 
 const formSchema = z.object({
   amount: amount,
@@ -116,7 +117,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
           <span>Convert</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px]">
+      <DialogContent className="sm:max-w-[900px]">
         <DialogHeader>
           <DialogTitle>Unit Conversion</DialogTitle>
           <DialogDescription>
@@ -133,47 +134,58 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
               <UnitMappingGraph unitMapping={mappings} />
             </div>
           </div>
-
-          <FormWrapper
-            form={form}
-            onSubmit={() => {
-              setOpen(false);
-            }}
-            isPending={false}
-            submitButtonText="Apply"
-            onCancel={() => setOpen(false)}
-          >
-            <AmountFieldGroup
-              form={form}
-              valuePath="amount.value"
-              unitPath="amount.unit"
-              step="0.01"
-            />
-          </FormWrapper>
-
-          {Object.keys(conversions).length > 0 && (
-            <div className="mt-6 space-y-4">
-              <h4 className="text-sm font-medium">Conversion Results</h4>
-              <div className="space-y-2">
-                {measureKinds.map((kind) => {
-                  const result = conversions[kind];
-                  return (
-                    <div
-                      key={kind}
-                      className="flex items-center justify-between border-b py-1"
-                    >
-                      <span className="font-medium capitalize">{kind}:</span>
-                      <span>
-                        {result?.success
-                          ? w.format_amount(result.value)
-                          : "Not convertible"}
-                      </span>
-                    </div>
-                  );
-                })}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium">Available Unit Mappings</h4>
+              <div className="max-h-60 overflow-y-auto rounded-md border">
+                <UnitMappingsTable mappings={mappings} />
               </div>
             </div>
-          )}
+            <div>
+              <FormWrapper
+                form={form}
+                onSubmit={() => {
+                  setOpen(false);
+                }}
+                isPending={false}
+                submitButtonText="Apply"
+                onCancel={() => setOpen(false)}
+              >
+                <AmountFieldGroup
+                  form={form}
+                  valuePath="amount.value"
+                  unitPath="amount.unit"
+                  step="0.01"
+                />
+              </FormWrapper>
+
+              {Object.keys(conversions).length > 0 && (
+                <div className="mt-6 space-y-4">
+                  <h4 className="text-sm font-medium">Conversion Results</h4>
+                  <div className="space-y-2">
+                    {measureKinds.map((kind) => {
+                      const result = conversions[kind];
+                      return (
+                        <div
+                          key={kind}
+                          className="flex items-center justify-between border-b py-1"
+                        >
+                          <span className="font-medium capitalize">
+                            {kind}:
+                          </span>
+                          <span>
+                            {result?.success
+                              ? w.format_amount(result.value)
+                              : "Not convertible"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

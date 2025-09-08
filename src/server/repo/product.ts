@@ -237,7 +237,10 @@ const dbProductToAPI: (
   return {
     ...restOfProduct,
     ingredient: Ingredient,
-    unitMappings,
+    unitMappings: unitMappings.map((mapping) => ({
+      ...mapping,
+      sourceMetadata: { type: "product" as const, productId: product.id },
+    })),
     food,
     images: productImages,
     inventoryEntry: InventoryEntry.map((entry) => {

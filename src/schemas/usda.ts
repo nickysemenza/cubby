@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ndb, upc } from "~/schemas/identifiers";
-import { unitMappingBase } from "./unitmapping";
+import { unitMappingWithMetadata } from "./unitmapping";
 import { productTopLevelOut } from "./product";
 import { assertNever } from "~/lib/assert";
 
@@ -86,7 +86,7 @@ const brandedFoodInfo = z.object({
   gtin_upc: upc,
   ingredients: z.string().nullable(),
   serving: BrandedFoodServingInfo,
-  serving_as_amount: unitMappingBase.optional(),
+  serving_as_amount: unitMappingWithMetadata.optional(),
 });
 
 const nutritionInfo = z.object({
@@ -114,7 +114,7 @@ export const foodSummary = z.object({
   nutritionInfo,
   portionInfo: z.object({
     raw: z.array(foodPortion),
-    parsed: z.array(unitMappingBase),
+    parsed: z.array(unitMappingWithMetadata),
   }),
   linkedProducts: z.array(productTopLevelOut).optional(),
 });

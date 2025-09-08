@@ -113,6 +113,10 @@ const dbIngredientToAPI: (
       const food = lookupParam ? await findFood(db, lookupParam) : null;
       return {
         ...product,
+        unitMappings: product.unitMappings.map((mapping) => ({
+          ...mapping,
+          sourceMetadata: { type: "product" as const, productId: product.id },
+        })),
         food,
       };
     }),

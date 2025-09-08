@@ -77,15 +77,16 @@ export type ProductWithMappingsAndFoodOut = z.infer<
 export const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
   const nutrition = food.nutritionInfo?.nutrientsPer100;
   if (!nutrition) return [];
-
   const mappings: UnitMapping[] = [];
+  const { fdc_id } = food;
 
   // Create calorie mapping: 100g → X kcal
   if (nutrition.kcal > 0) {
     mappings.push({
       a: { value: 100, unit: "g" },
       b: { value: nutrition.kcal, unit: "kcal" },
-      source: "nutrition-data",
+      source: `USDA nutrition`,
+      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
     });
   }
 
@@ -94,7 +95,8 @@ export const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
     mappings.push({
       a: { value: 100, unit: "g" },
       b: { value: nutrition.protein, unit: "g protein" },
-      source: "nutrition-data",
+      source: `USDA nutrition`,
+      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
     });
   }
 

@@ -282,6 +282,7 @@ describe("getGramAndNutrient", () => {
         a: { value: 1, unit: "Cup" },
         b: { value: 240, unit: "gram" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -361,6 +362,7 @@ describe("getGramAndNutrient", () => {
         a: { value: 1, unit: "Cup" },
         b: { value: 240, unit: "gram" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
     const product: ProductWithMappingsAndFoodOut[] = [
@@ -402,6 +404,7 @@ describe("getGramAndNutrient", () => {
         a: { value: 1, unit: "Cup" },
         b: { value: 240, unit: "gram" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
     const product = undefined;
@@ -432,6 +435,7 @@ describe("convertAmountToPrice", () => {
         a: { value: 1, unit: "Pound" },
         b: { value: 2.99, unit: "Dollar" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -483,6 +487,7 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "meter" }, // Length unit
         b: { value: 100, unit: "centimeter" }, // Length unit - no path to money
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -500,6 +505,7 @@ describe("WASM Error Scenarios", () => {
         a: { value: 0, unit: "cup" }, // Zero value
         b: { value: 5.99, unit: "dollar" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -523,6 +529,7 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "cup" },
         b: { value: 2.99, unit: "dollar" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -546,6 +553,7 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "cup" },
         b: { value: 2.99, unit: "dollar" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -567,6 +575,7 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "cup" }, // Lowercase
         b: { value: 2.99, unit: "dollar" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -588,16 +597,19 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "cup" },
         b: { value: 240, unit: "ml" }, // Volume to volume
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
       {
         a: { value: 1000, unit: "ml" },
         b: { value: 1, unit: "liter" }, // Volume to volume
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
       {
         a: { value: 1, unit: "liter" },
         b: { value: 3.99, unit: "dollar" }, // Volume to price
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -620,11 +632,13 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "cup" },
         b: { value: 240, unit: "ml" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
       {
         a: { value: 240, unit: "ml" },
         b: { value: 1, unit: "cup" }, // Circular reference
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -643,6 +657,7 @@ describe("WASM Error Scenarios", () => {
         a: { value: 1, unit: "invalid_unit_xyz" },
         b: { value: 2.99, unit: "dollar" },
         source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
@@ -732,6 +747,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "pound" },
                 b: { value: 453.59, unit: "gram" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -740,6 +756,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "pound" },
                 b: { value: 5.99, unit: "dollar" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -782,6 +799,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "cup" },
                 b: { value: 200, unit: "gram" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -790,6 +808,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "cup" },
                 b: { value: 2.5, unit: "dollar" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -934,6 +953,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "pound" },
                 b: { value: 453.59, unit: "gram" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -942,6 +962,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "pound" },
                 b: { value: 5.99, unit: "dollar" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
@@ -1022,6 +1043,7 @@ describe("calculateTotals", () => {
                 a: { value: 1, unit: "cup" },
                 b: { value: 240, unit: "gram" },
                 source: "test",
+                sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },

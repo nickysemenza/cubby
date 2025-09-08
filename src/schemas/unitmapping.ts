@@ -3,10 +3,30 @@ import { dbTimestampsOut } from "./common";
 import { amount } from "~/codec/codec";
 import { parseConversionString } from "./config-parsers";
 
+export const sourceMetadata = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("product"),
+    productId: z.string().uuid(),
+  }),
+  z.object({
+    type: z.literal("food"),
+    fdcId: z.number(),
+  }),
+  z.object({
+    type: z.literal("manual"),
+  }),
+]);
+
+// Base unit mapping without sourceMetadata (for input)
 export const unitMappingBase = z.object({
   a: amount.describe("first of pair"),
   b: amount.describe("second of pair"),
   source: z.string().nullable(),
+});
+
+// Unit mapping with sourceMetadata (for output/computed)
+export const unitMappingWithMetadata = unitMappingBase.extend({
+  sourceMetadata: sourceMetadata,
 });
 
 // Shorthand string format like "4 lb = $5 @ whole foods" - validation only
@@ -44,8 +64,8 @@ export const unitMappingOut = z
   .object({
     id: z.string().uuid(),
   })
-  .merge(unitMappingBase)
+  .merge(unitMappingWithMetadata)
   .merge(dbTimestampsOut);
 
-export type UnitMapping = z.infer<typeof unitMappingBase>;
+export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
 export type UnitMappingInput = z.infer<typeof unitMappingInput>;

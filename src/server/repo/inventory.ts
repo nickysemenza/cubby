@@ -80,7 +80,10 @@ const dbInventoryEntryToAPI: (
     },
     product: {
       ...Product,
-      unitMappings: Product.unitMappings,
+      unitMappings: Product.unitMappings.map((mapping) => ({
+        ...mapping,
+        sourceMetadata: { type: "product" as const, productId: Product.id },
+      })),
       images: productImages,
     },
   };

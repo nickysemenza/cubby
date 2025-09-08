@@ -15,6 +15,7 @@ import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
+import { unitMappingsFromProduct } from "~/schemas/combo";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithRecipesAndProductOut;
@@ -105,7 +106,9 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
       title: "Unit Mappings",
       content: (
         <UnitMappingsTable
-          mappings={ingredient.product.flatMap((p) => p.unitMappings)}
+          mappings={ingredient.product.flatMap((p) =>
+            unitMappingsFromProduct(p),
+          )}
         />
       ),
     },
