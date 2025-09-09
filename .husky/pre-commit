@@ -1,22 +1,2 @@
 #!/usr/bin/env sh
-set -e
-
-# Get staged files, excluding files in .gitignore
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|mdx)$' | grep -v -f .gitignore || true)
-
-if [ -n "$STAGED_FILES" ]; then
-  # Run lint fix only on staged files
-  echo "$STAGED_FILES" | xargs npx eslint --fix
-  
-  # Run prettier only on staged files  
-  echo "$STAGED_FILES" | xargs npx prettier --write
-  
-  # Run typecheck only on staged TypeScript files
-  STAGED_TS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(ts|tsx)$' || true)
-  if [ -n "$STAGED_TS_FILES" ]; then
-    echo "$STAGED_TS_FILES" | xargs npx tsc --noEmit
-  fi
-  
-  # Add the fixed files back to staging
-  echo "$STAGED_FILES" | xargs git add
-fi
+npx lint-staged
