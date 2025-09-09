@@ -127,7 +127,10 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
 
         <div className="space-y-4 py-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <ConversionCapabilities mappings={mappings} />
+            <ConversionCapabilities
+              mappings={mappings}
+              hideConvertButton={true}
+            />
 
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Conversion Graph</h4>

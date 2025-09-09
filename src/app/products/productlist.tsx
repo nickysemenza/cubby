@@ -5,6 +5,7 @@ import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
 import React from "react";
 import {
+  FoodPillLink,
   IngredientPillLink,
   LocationPillLink,
 } from "../_components/EntityPill";
@@ -106,6 +107,7 @@ export function ProductList() {
       id: "food info",
       meta: {
         mobileCategory: "compact", // Override default "medium" categorization
+        className: "w-96 max-w-96",
       },
       cell: (info) => {
         const food = info.getValue();
@@ -113,6 +115,7 @@ export function ProductList() {
         const { nutritionInfo } = food;
         return (
           <div className="w-48">
+            <FoodPillLink food={food} />
             <NutritionInfoTable n={nutritionInfo} limit={3} />
           </div>
         );
@@ -120,6 +123,7 @@ export function ProductList() {
     }),
     columnHelper.accessor("unitMappings", {
       enableSorting: false,
+      meta: { className: "w-96 max-w-96" },
       cell: (info) => {
         const mappings: UnitMapping[] = unitMappingsFromProduct(
           info.row.original,

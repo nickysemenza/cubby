@@ -114,7 +114,7 @@ export default function ImageList() {
           const { entityType, entityId, entityName } = getValue();
 
           if (!entityType || !entityId || !entityName) {
-            return <span className="text-muted-foreground italic">None</span>;
+            return <NoneState />;
           }
 
           switch (entityType) {

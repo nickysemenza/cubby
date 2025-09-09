@@ -20,7 +20,7 @@ export const NutritionInfoTable: React.FC<{
   const items = limit ? nutrientSummary.slice(0, limit) : nutrientSummary;
   const remaining = nutrientSummary.length - items.length;
   return (
-    <ScrollArea className="h-[200px] w-[250px] rounded-md border">
+    <ScrollArea className="w-[150px] rounded-md border">
       <Table className="text-xs">
         <TableHeader>
           <TableRow>

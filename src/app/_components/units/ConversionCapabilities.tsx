@@ -7,9 +7,11 @@ import { Amount } from "~/codec/codec";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { useWasm } from "~/hooks/useWasm";
 import { safeConvertAmount } from "./univ-conversion";
+import { ConversionDialog } from "./ConversionDialog";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];
+  hideConvertButton?: boolean;
 }
 
 interface ConversionTest {
@@ -37,6 +39,7 @@ const testConversions: ConversionTest[] = [
 
 export function ConversionCapabilities({
   mappings,
+  hideConvertButton = false,
 }: ConversionCapabilitiesProps) {
   const w = useWasm();
 
@@ -57,16 +60,19 @@ export function ConversionCapabilities({
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium">Conversion Capabilities</h4>
-        <span className="text-muted-foreground text-xs">
-          {successCount}/{totalCount} available
-        </span>
+        <div className="flex items-center gap-2">
+          {!hideConvertButton && <ConversionDialog mappings={mappings} />}
+          <span className="text-muted-foreground text-xs">
+            {successCount}/{totalCount} available
+          </span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-1 text-xs">
+      <div className="grid grid-cols-3 gap-0.5 text-xs">
         {capabilities.map((capability, index) => (
           <div
             key={index}
-            className={`rounded border px-1 py-1 ${
+            className={`rounded border px-0 py-0 ${
               capability.success
                 ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
                 : "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"

@@ -1,26 +1,12 @@
 import Image from "next/image";
 import { cva, type VariantProps } from "class-variance-authority";
+import { NoneState } from "~/app/_components/NoneState";
 
 interface ImageData {
   id: string;
   url: string;
   filename?: string;
 }
-
-const thumbnailVariants = cva(
-  "flex items-center justify-center rounded-md border",
-  {
-    variants: {
-      size: {
-        sm: "h-8 w-8",
-        md: "h-12 w-12",
-      },
-    },
-    defaultVariants: {
-      size: "sm",
-    },
-  },
-);
 
 const containerVariants = cva("relative overflow-hidden rounded-md border", {
   variants: {
@@ -34,18 +20,10 @@ const containerVariants = cva("relative overflow-hidden rounded-md border", {
   },
 });
 
-interface ImageThumbnailProps extends VariantProps<typeof thumbnailVariants> {
+interface ImageThumbnailProps extends VariantProps<typeof containerVariants> {
   images?: ImageData[];
   alt?: string;
 }
-
-const EmptyImagePlaceholder = ({
-  size,
-}: VariantProps<typeof thumbnailVariants>) => (
-  <div className={thumbnailVariants({ size, className: "bg-muted" })}>
-    <span className="text-muted-foreground text-xs">-</span>
-  </div>
-);
 
 const ImageBadge = ({ count }: { count: number }) => (
   <div className="absolute right-0 bottom-0 flex h-3 w-3 items-center justify-center rounded-tl-md bg-black/70 text-xs text-white">
@@ -59,7 +37,7 @@ export const ImageThumbnail = ({
   size = "sm",
 }: ImageThumbnailProps) => {
   if (!images || images.length === 0) {
-    return <EmptyImagePlaceholder size={size} />;
+    return <NoneState />;
   }
 
   const image = images[0];

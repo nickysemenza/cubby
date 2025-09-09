@@ -2,7 +2,6 @@
 
 import { UnitMapping } from "~/schemas/unitmapping";
 import { ConversionCapabilities } from "./ConversionCapabilities";
-import { ConversionDialog } from "./ConversionDialog";
 
 interface UnitMappingDisplayProps {
   mappings: UnitMapping[];
@@ -15,10 +14,7 @@ export const UnitMappingDisplay: React.FC<UnitMappingDisplayProps> = ({
 }) => {
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        {title && <h3>{title}</h3>}
-        <ConversionDialog mappings={mappings} />
-      </div>
+      {title && <h3 className="mb-3">{title}</h3>}
       <div className="space-y-4">
         <ConversionCapabilities mappings={mappings} />
       </div>
