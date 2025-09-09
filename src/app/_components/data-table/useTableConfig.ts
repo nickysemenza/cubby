@@ -10,20 +10,19 @@ import {
 } from "@tanstack/react-table";
 import { type TableStateReturn } from "./useTableState";
 
-interface UseTableConfigOptions<TData, GLobalFilterData = unknown> {
+interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   data: TData[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  columns: ColumnDef<TData, any>[];
+  columns: ColumnDef<TData, unknown>[];
   tableState: TableStateReturn;
   totalCount: number;
   manualPagination?: boolean;
   manualSorting?: boolean;
   manualFiltering?: boolean;
-  globalFilter?: GLobalFilterData;
-  onGlobalFilterChange?: (value: GLobalFilterData) => void;
+  globalFilter?: GlobalFilterData;
+  onGlobalFilterChange?: (value: GlobalFilterData) => void;
 }
 
-export function useTableConfig<TData, GLobalFilterData>({
+export function useTableConfig<TData, GlobalFilterData>({
   data,
   columns,
   tableState,
@@ -33,7 +32,7 @@ export function useTableConfig<TData, GLobalFilterData>({
   manualFiltering = true,
   globalFilter,
   onGlobalFilterChange,
-}: UseTableConfigOptions<TData, GLobalFilterData>): Table<TData> {
+}: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
   const {
     sorting,
     setSorting,
