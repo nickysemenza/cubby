@@ -41,6 +41,7 @@ export function USDAFoodList() {
   const columns = [
     columnHelper.accessor("fdc_id", {
       header: "FDC ID",
+      meta: { className: "w-32 max-w-32" },
       cell: (info) => (
         <TableLink href={`usda/${info.getValue()}`}>
           {info.getValue()}
@@ -48,17 +49,20 @@ export function USDAFoodList() {
       ),
     }),
     columnHelper.accessor("foodInfo.data_type", {
+      meta: { className: "w-32 max-w-32" },
       id: "foodInfo-data_type",
       header: "Type",
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("foodInfo.description", {
+      meta: { className: "w-92 max-w-92" },
       id: "foodinfo-description",
       header: "Description",
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("brandedFoodInfo", {
       header: "Brand Info",
+      meta: { className: "w-92 max-w-92" },
       cell: (info) => {
         const brandedFood = info.getValue();
         if (!brandedFood) return <NoneState />;
@@ -90,6 +94,7 @@ export function USDAFoodList() {
     }),
     columnHelper.accessor("nutritionInfo", {
       header: "Nutrition",
+      meta: { className: "w-92 max-w-92" },
       cell: (info) => {
         const nutritionInfo = info.getValue();
         return (

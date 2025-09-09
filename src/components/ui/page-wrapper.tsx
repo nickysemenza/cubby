@@ -8,7 +8,9 @@ export interface PageWrapperProps {
 
 export const PageWrapper = ({ children, className }: PageWrapperProps) => {
   return (
-    <div className={cn("container mx-auto p-1 sm:p-2", className)}>
+    <div
+      className={cn("container mx-auto p-1", "terminal:max-w-none", className)}
+    >
       {children}
     </div>
   );

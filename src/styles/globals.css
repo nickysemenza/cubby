@@ -118,30 +118,30 @@
   ---break---
 */
 .terminal {
-  --background: #f8f8f2; /* Light terminal background */
-  --foreground: #282a36; /* Dark text on light background */
-  --card: #ffffff; /* White card background */
-  --card-foreground: #282a36; /* Dark text */
+  --background: #fdf6e3; /* NeoHtop warm cream background */
+  --foreground: #586e75; /* NeoHtop muted blue-gray text */
+  --card: #ffffff; /* Pure white cards with shadow */
+  --card-foreground: #586e75; /* Consistent text color */
   --popover: #ffffff; /* White popover */
-  --popover-foreground: #282a36; /* Dark text */
-  --primary: #44475a; /* Dark gray primary */
-  --primary-foreground: #f8f8f2; /* Light background on primary */
-  --secondary: #e5e5e5; /* Light gray secondary */
-  --secondary-foreground: #6272a4; /* Blue-gray text */
-  --muted: #f4f4f4; /* Very light gray */
-  --muted-foreground: #6272a4; /* Blue-gray muted text */
-  --accent: #e5e5e5; /* Light gray accent */
-  --accent-foreground: #282a36; /* Dark text on accent */
-  --destructive: #ff5555; /* Light terminal red */
-  --destructive-foreground: #f8f8f2; /* Light text on destructive */
-  --border: #d4d4d4; /* Light border */
-  --input: #ffffff; /* White input background */
-  --ring: #44475a; /* Dark ring color */
-  --chart-1: #00a000; /* Dark green for better contrast */
-  --chart-2: #b8860b; /* Dark goldenrod - much more readable than light yellow */
-  --chart-3: #0066cc; /* Dark blue instead of light cyan */
-  --chart-4: #cc0066; /* Dark pink for better contrast */
-  --chart-5: #cc0000; /* Dark red for better contrast */
+  --popover-foreground: #586e75; /* Consistent text */
+  --primary: #268bd2; /* NeoHtop blue accent */
+  --primary-foreground: #fdf6e3; /* Light text on primary */
+  --secondary: #f5ede1; /* Subtle cream for secondary */
+  --secondary-foreground: #657b83; /* Slightly darker text */
+  --muted: #f5ede1; /* Muted cream background */
+  --muted-foreground: #93a1a1; /* Lighter muted text */
+  --accent: #2aa198; /* NeoHtop teal accent */
+  --accent-foreground: #fdf6e3; /* Light text on accent */
+  --destructive: #dc322f; /* NeoHtop red */
+  --destructive-foreground: #fdf6e3; /* Light text on destructive */
+  --border: #e5d9c7; /* Subtle tan borders */
+  --input: #f5ede1; /* Cream input background */
+  --ring: #268bd2; /* Blue focus ring */
+  --chart-1: #268bd2; /* Primary blue */
+  --chart-2: #b58900; /* Amber/gold */
+  --chart-3: #2aa198; /* Teal */
+  --chart-4: #6c71c4; /* Violet */
+  --chart-5: #dc322f; /* Red */
 }
 /*
   ---break---
@@ -186,34 +186,46 @@
   body {
     @apply bg-background text-foreground;
   }
-  
-  /* Terminal theme specific styling */
+
+  /* Terminal theme specific styling - monospace and borders only */
   .terminal {
     font-family: var(--font-mono);
     font-feature-settings: "liga" 0; /* Disable ligatures in terminal mode */
     font-variant-ligatures: none;
+    font-size: 0.75rem; /* 12px base for dense display */
+    line-height: 1.3;
   }
-  
+
   .terminal code,
   .terminal pre,
   .terminal .font-mono {
     font-family: var(--font-mono);
     font-variant-ligatures: none;
   }
-  
+
   .terminal * {
     font-family: var(--font-mono);
   }
-  
+
+  /* Terminal-specific table font and borders */
   .terminal table {
     font-family: var(--font-mono);
-    font-size: 0.875rem;
-    border-collapse: collapse;
+    font-size: 0.6875rem; /* 11px for tables */
+    line-height: 1.2;
   }
-  
+
   .terminal th,
   .terminal td {
     border: 1px solid var(--border);
-    padding: 0.25rem 0.5rem;
+  }
+
+  .terminal th {
+    background-color: var(--muted);
+  }
+
+  /* Remove excess container padding for terminal tables */
+  .terminal .container {
+    padding-left: 0.25rem; /* 4px */
+    padding-right: 0.25rem; /* 4px */
   }
 }

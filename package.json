@@ -139,7 +139,7 @@
       "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "tsc --noEmit"
+      "bash -c 'tsc --noEmit'"
     ]
   }
 }

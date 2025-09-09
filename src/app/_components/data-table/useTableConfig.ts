@@ -12,7 +12,8 @@ import { type TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   data: TData[];
-  columns: ColumnDef<TData, unknown>[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  columns: ColumnDef<TData, any>[];
   tableState: TableStateReturn;
   totalCount: number;
   manualPagination?: boolean;
