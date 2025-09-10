@@ -1,20 +1,18 @@
-import { HydrateClient } from "~/trpc/server";
 import { IngredientList } from "./ingredientlist";
 import { type Metadata } from "next";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { EntityLayout } from "~/components/layouts/entity-layout";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Recipes",
+  title: "Ingredients - RecipeHub",
+  description: "Browse and manage ingredients in your RecipeHub",
 };
 
 export default function Page() {
   return (
-    <HydrateClient>
-      <PageWrapper>
-        <IngredientList />
-      </PageWrapper>
-    </HydrateClient>
+    <EntityLayout title="Ingredients">
+      <IngredientList />
+    </EntityLayout>
   );
 }

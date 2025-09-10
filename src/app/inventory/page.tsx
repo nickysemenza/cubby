@@ -1,10 +1,9 @@
-import { HydrateClient } from "~/trpc/server";
 import { InventoryItemList } from "./inventoryitemlist";
 import { type Metadata } from "next";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { EntityLayout } from "~/components/layouts/entity-layout";
 
 export const dynamic = "force-dynamic";
 
@@ -14,21 +13,20 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <PageWrapper>
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Inventory Items</h1>
-        <div className="flex gap-2">
+    <EntityLayout
+      title="Inventory Items"
+      actions={
+        <>
           <Link href={`/${entities["inventory-item"].basePath}/bulk-edit`}>
             <Button variant="outline">Bulk Edit</Button>
           </Link>
           <Link href={`/${entities["inventory-item"].basePath}/new`}>
             <Button>Create New</Button>
           </Link>
-        </div>
-      </div>
-      <HydrateClient>
-        <InventoryItemList />
-      </HydrateClient>
-    </PageWrapper>
+        </>
+      }
+    >
+      <InventoryItemList />
+    </EntityLayout>
   );
 }
