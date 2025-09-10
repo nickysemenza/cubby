@@ -10,7 +10,7 @@ export default function EntityCount() {
   const opts = {
     filters: {},
     sort,
-    pagination: { pageIndex: 0, pageSize: 100 },
+    pagination: { pageIndex: 0, pageSize: 0 },
   };
 
   const [location, product, ingredient, recipe, inventoryItem, usda, image] =
