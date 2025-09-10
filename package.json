@@ -10,7 +10,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
-    "db:rebuild": "npm run db:push",
+    "db:rebuild": "pnpm run db:push",
     "dev": "next dev --turbo",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
@@ -25,7 +25,7 @@
     "gen:config-schema": "tsx scripts/generate-json-schemas.ts",
     "gen:write-config": "tsx scripts/write-config.ts",
     "load-data": "tsx scripts/load-data.ts",
-    "regenerate": "npm run db:rebuild && npm run wasm",
+    "regenerate": "pnpm run db:rebuild && pnpm run wasm",
     "test:e2e": " NODE_ENV=test playwright test",
     "knip": "knip",
     "prepare": "husky"
@@ -124,6 +124,7 @@
     "prisma": "^6.14.0",
     "prisma-dbml-generator": "^0.12.0",
     "prisma-json-types-generator": "^3.6.0",
+    "tailwindcss": "^4.1.13",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
     "vite-plugin-top-level-await": "^1.6.0",
@@ -132,7 +133,7 @@
   "ct3aMetadata": {
     "initVersion": "7.38.1"
   },
-  "packageManager": "npm@11.5.2",
+  "packageManager": "pnpm@9.15.1",
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mdx}": [
       "eslint --fix",

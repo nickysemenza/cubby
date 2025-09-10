@@ -2,7 +2,7 @@
 
 - read the readme.md to understand project structure
 - after touching files, format them with prettier
-- ensure the typechecker and linter is happy with all changes (npm run check)
+- ensure the typechecker and linter is happy with all changes (pnpm run check)
 - todos are kept in @docs/todos.md
 - helper functions should not be added without being used
 
