@@ -4,7 +4,7 @@ import { buildTestDB } from "tooling/test-setup";
 import { insertDataConfig } from "./system";
 import { testConfig } from "~/testdata/test-config.data";
 import { transformConfig } from "~/schemas/config";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 
 let prisma: PrismaClient;
@@ -19,11 +19,9 @@ describe("system test", () => {
     await insertDataConfig(prisma, transformConfig(testConfig));
 
     const createCaller = createCallerFactory(appRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
     const list = await caller.ingredient.list({
       pagination: { pageSize: 100 },
       filters: {},

@@ -9,7 +9,8 @@ import {
   type ProductInputPayload,
   type ProductTopLevelOut,
 } from "~/schemas/product";
-import { upc, ndb } from "~/schemas/identifiers";
+import { upc } from "~/schemas/identifiers";
+import { ndb } from "~/schemas/usda";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
   type CreateModeProps,

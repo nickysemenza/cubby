@@ -1,13 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter } from "../trpc";
-import {
-  createProduct,
-  getProductByID,
-  productList,
-  updateProduct,
-} from "~/server/repo/product";
+import { productWithFoodOut } from "~/server/services/product.service";
 import { productInputPayload } from "~/schemas/product";
-import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { createEntityCrudProcedures } from "../crud-factory";
 
 // Define filters schema for products
@@ -22,14 +16,15 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   schemas: {
     createInput: productInputPayload,
     updateInput: productInputPayload.partial(),
-    output: productWithIngredientAndInventoryAndMappingsOut,
+    output: productWithFoodOut,
     filters: productFiltersSchema,
   },
   repository: {
-    getByID: getProductByID,
-    list: async (db, filters, sort, pagination) => {
-      return await productList(
-        db,
+    getByID: async (services, id) => {
+      return await services.services.product.getProductByID(id);
+    },
+    list: async (services, filters, sort, pagination) => {
+      return await services.services.product.productList(
         filters.nameFilter,
         filters.manufacturerFilter,
         filters.upcFilter,
@@ -37,13 +32,11 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         pagination,
       );
     },
-    create: async (db, data) => {
-      const product = await createProduct(db, data);
-      return await getProductByID(db, product.id);
+    create: async (services, data) => {
+      return await services.services.product.createProduct(data);
     },
-    update: async (db, id, data) => {
-      await updateProduct(db, id, data);
-      return await getProductByID(db, id);
+    update: async (services, id, data) => {
+      return await services.services.product.updateProduct(id, data);
     },
   },
 });

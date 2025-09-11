@@ -10,10 +10,12 @@ import {
 } from "./univ-conversion";
 import { type Amount } from "~/codec/codec";
 import { type UnitMapping } from "~/schemas/unitmapping";
-import { ProductWithMappingsAndFoodOut } from "~/schemas/combo";
+import {
+  type ProductWithMappingsAndFoodOut,
+  type IngredientWithFoodOut,
+} from "~/server/services/ingredient.service";
 import { NutrientsPer100 } from "~/schemas/usda";
 import { SectionIngredientOut } from "~/schemas/recipe";
-import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 
 // Import real wasm
 const loadWasm = async () => {
@@ -714,7 +716,7 @@ describe("calculateTotals", () => {
       },
     ];
 
-    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+    const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
         id: "ing1",
         name: "chicken",
@@ -856,7 +858,7 @@ describe("calculateTotals", () => {
       },
     ];
 
-    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+    const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
         id: "ing1",
         name: "unknown ingredient",
@@ -920,7 +922,7 @@ describe("calculateTotals", () => {
       },
     ];
 
-    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+    const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
         id: "ing1",
         name: "chicken",
@@ -1020,7 +1022,7 @@ describe("calculateTotals", () => {
       },
     ];
 
-    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+    const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
         id: "ing1",
         name: "ingredient with weight only",
@@ -1096,7 +1098,7 @@ describe("calculateTotals", () => {
       },
     ];
 
-    const ingMap: Record<string, IngredientWithRecipesAndProductOut> = {
+    const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
         id: "ing1",
         name: "problematic ingredient",

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
-import { upc, ndb } from "./identifiers";
+import { upc } from "./identifiers";
+import { ndb } from "./usda";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 

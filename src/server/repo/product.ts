@@ -10,7 +10,6 @@ import {
 import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
-import { USDAClient } from "./usda";
 import { foodLookupParam, FoodLookupParam } from "~/schemas/usda";
 import {
   type ProductTopLevelOut,
@@ -228,10 +227,6 @@ const dbProductToAPI: (
   const { Ingredient, unitMappings, InventoryEntry, images, ...restOfProduct } =
     product;
 
-  const lookupParam = foodLookupParamFromProduct(product);
-  const usdaClient = new USDAClient(db);
-  const food = lookupParam ? await usdaClient.findFood(lookupParam) : null;
-
   // Extract images from the join table records
   const productImages = images.map((pi) => pi.image);
 
@@ -242,7 +237,6 @@ const dbProductToAPI: (
       ...mapping,
       sourceMetadata: { type: "product" as const, productId: product.id },
     })),
-    food,
     images: productImages,
     inventoryEntry: InventoryEntry.map((entry) => {
       const {

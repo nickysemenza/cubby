@@ -5,7 +5,7 @@ import { productRouter } from "./product";
 import { recipeRouter } from "./recipe";
 import { ingredientRouter } from "./ingredient";
 import { locationRouter } from "./location";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
 let prisma: PrismaClient;
 
@@ -19,11 +19,9 @@ describe("API Error Handling", () => {
   describe("Product Router Error Cases", () => {
     it("should allow creating product with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Empty name is actually allowed by the current schema
       const result = await caller.create({
@@ -43,11 +41,9 @@ describe("API Error Handling", () => {
 
     it("should throw error when updating non-existent product", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       const nonExistentId = "00000000-0000-0000-0000-000000000000";
 
@@ -61,11 +57,9 @@ describe("API Error Handling", () => {
 
     it("should handle duplicate product constraint violations", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       const productData = {
         name: "Test Product",
@@ -86,11 +80,9 @@ describe("API Error Handling", () => {
 
     it("should handle invalid foreign key relationships", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Try to create product with non-existent ingredient ID
       await expect(
@@ -110,11 +102,9 @@ describe("API Error Handling", () => {
   describe("Recipe Router Error Cases", () => {
     it("should allow creating recipe with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Empty name is actually allowed by the current schema
       const result = await caller.create({
@@ -130,11 +120,9 @@ describe("API Error Handling", () => {
 
     it("should throw error when updating non-existent recipe", async () => {
       const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       const nonExistentId = "00000000-0000-0000-0000-000000000000";
 
@@ -148,11 +136,9 @@ describe("API Error Handling", () => {
 
     it("should handle recipe with invalid ingredient references", async () => {
       const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Try to create recipe with non-existent ingredient
       await expect(
@@ -180,11 +166,9 @@ describe("API Error Handling", () => {
 
     it("should handle recipe with invalid recipe references", async () => {
       const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Try to create recipe referencing non-existent sub-recipe
       await expect(
@@ -214,11 +198,9 @@ describe("API Error Handling", () => {
   describe("Ingredient Router Error Cases", () => {
     it("should allow creating ingredient with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(ingredientRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Empty name is actually allowed by the current schema
       const result = await caller.create({
@@ -232,11 +214,9 @@ describe("API Error Handling", () => {
 
     it("should handle duplicate ingredient names", async () => {
       const createCaller = createCallerFactory(ingredientRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       const ingredientData = {
         name: "Flour",
@@ -252,11 +232,9 @@ describe("API Error Handling", () => {
 
     it("should throw error when updating non-existent ingredient", async () => {
       const createCaller = createCallerFactory(ingredientRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       const nonExistentId = "00000000-0000-0000-0000-000000000000";
 
@@ -272,11 +250,9 @@ describe("API Error Handling", () => {
   describe("Location Router Error Cases", () => {
     it("should allow creating location with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Empty names are allowed per schema
       const result = await caller.create({
@@ -292,11 +268,9 @@ describe("API Error Handling", () => {
 
     it("should throw error when creating location with invalid parent", async () => {
       const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Try to create location with non-existent parent
       await expect(
@@ -311,11 +285,9 @@ describe("API Error Handling", () => {
 
     it("should throw error when creating circular parent-child relationship", async () => {
       const createCaller = createCallerFactory(locationRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Create parent location (using valid location type)
       const parent = await caller.create({
@@ -346,11 +318,9 @@ describe("API Error Handling", () => {
   describe("Input Validation Error Cases", () => {
     it("should validate pagination parameters at database level", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Test that negative page size causes database error (Prisma validates skip must be positive)
       await expect(
@@ -374,11 +344,9 @@ describe("API Error Handling", () => {
 
     it("should handle sort parameters gracefully", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Test valid sort parameters work
       const result1 = await caller.list({
@@ -399,11 +367,9 @@ describe("API Error Handling", () => {
 
     it("should validate UPC format", async () => {
       const createCaller = createCallerFactory(productRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Try to create product with invalid UPC format
       await expect(
@@ -422,11 +388,9 @@ describe("API Error Handling", () => {
   describe("Database Constraint Violations", () => {
     it("should handle database transaction failures gracefully", async () => {
       const createCaller = createCallerFactory(recipeRouter);
-      const caller = createCaller({
-        headers: new Headers(),
-        db: prisma,
-        auth: undefined,
-      });
+      const caller = createCaller(
+        createTestTRPCContext(prisma, { auth: undefined }),
+      );
 
       // Create a recipe that should cause a database constraint violation
       // by trying to create multiple sections with ingredients that reference

@@ -1,20 +1,15 @@
 import { Prisma, PrismaClient } from "@prisma/client";
-import { UnitMapping } from "~/schemas/unitmapping";
 import {
   FoodInfo,
   NutrientSummary,
   nutrient_unit_name,
   FoodSummary,
-  branded_food_serving_size_unit,
-  normalize_branded_food_serving_size_unit,
   NutritionInfo,
   BrandedFoodInfo,
   FoodPortion,
   FoodLookupParam,
   LegacyFoodInfo,
 } from "~/schemas/usda";
-import { wasm } from "~/hooks/useWasm";
-import { type Span, trace } from "@opentelemetry/api";
 import {
   type SortParams,
   type PaginationParams,
@@ -24,7 +19,6 @@ import {
   formatSearchTerm,
   getSortDirection,
 } from "~/server/repo/database-helpers";
-import { findProductsByFoodIdentifier } from "./product";
 
 export class USDAClient {
   constructor(private db: PrismaClient) {}
@@ -112,68 +106,9 @@ export class USDAClient {
     };
   }
 
-  private unitMappingFromPortionInfo(
-    portionInfo: FoodPortion,
-    fdc_id: number,
-  ): UnitMapping {
-    const inferredMapping = {
-      a: {
-        value: portionInfo.amount,
-        unit: portionInfo.modifier ?? "portion",
-      },
-      b: {
-        value: portionInfo.gram_weight,
-        unit: "g",
-      },
-      source: `USDA portion`,
-      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
-    };
-    return inferredMapping;
-  }
-
-  private getAmountFromBrandedFoodServingSize(
-    w: wasm,
-    brandedFood: Prisma.usda_branded_foodGetPayload<object>,
-  ): UnitMapping | undefined {
-    const {
-      fdc_id,
-      serving_size,
-      serving_size_unit,
-      household_serving_fulltext,
-    } = brandedFood;
-    if (
-      serving_size === null ||
-      serving_size_unit === null ||
-      household_serving_fulltext === null
-    ) {
-      console.log(`branded food ${fdc_id} missing serving info`);
-      return undefined;
-    }
-
-    const p = w.parse_ingredient(household_serving_fulltext);
-    const b = p.amounts.pop();
-    if (b === undefined) {
-      console.log(`branded food ${fdc_id} missing amounts`);
-      return undefined;
-    }
-    const servingSizeUnit =
-      branded_food_serving_size_unit.parse(serving_size_unit);
-    const inferredMapping = {
-      a: {
-        value: serving_size.toNumber(),
-        unit: normalize_branded_food_serving_size_unit(servingSizeUnit),
-      },
-      b,
-      source: `USDA FDC serving`,
-      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
-    };
-    return inferredMapping;
-  }
-
   private async brandedFoodDBToAPI(
     brandedFood: Prisma.usda_branded_foodGetPayload<object>,
   ): Promise<BrandedFoodInfo> {
-    const w = await import("recipebridge/pkg");
     return {
       brand_owner: brandedFood.brand_owner,
       brand_name: brandedFood.brand_name,
@@ -185,15 +120,11 @@ export class USDAClient {
         serving_size_unit: brandedFood.serving_size_unit,
         household_serving_fulltext: brandedFood.household_serving_fulltext,
       },
-      serving_as_amount: this.getAmountFromBrandedFoodServingSize(
-        w,
-        brandedFood,
-      ),
     };
   }
 
-  private async getBrandedFoodByID(fdc_id: number) {
-    const brandedFood = await this.db.usda_branded_food.findFirst({
+  async getBrandedFoodByID(fdc_id: number) {
+    return await this.db.usda_branded_food.findFirst({
       where: {
         fdc_id,
       },
@@ -201,11 +132,6 @@ export class USDAClient {
         modified_date: "desc",
       },
     });
-    if (brandedFood === null) {
-      return null;
-    }
-
-    return await this.brandedFoodDBToAPI(brandedFood);
   }
 
   private async getBrandedFoodIDByUPC(gtin_upc: string) {
@@ -234,38 +160,24 @@ export class USDAClient {
   }
 
   async findFood(lookup: FoodLookupParam): Promise<FoodSummary | null> {
-    return trace
-      .getTracer("repo")
-      .startActiveSpan(`findFood`, async (span: Span) => {
-        span.setAttributes(lookup);
-        const fdc_id =
-          lookup.kind === "upc"
-            ? await this.getBrandedFoodIDByUPC(lookup.gtin_upc)
-            : await this.getLegacyFoodIDByNDBNumber(lookup.ndb_number);
-        if (fdc_id === undefined) {
-          return null;
-        }
-        return this.getFoodSummaryByID(fdc_id);
-      });
+    const fdc_id =
+      lookup.kind === "upc"
+        ? await this.getBrandedFoodIDByUPC(lookup.gtin_upc)
+        : await this.getLegacyFoodIDByNDBNumber(lookup.ndb_number);
+    if (fdc_id === undefined) {
+      return null;
+    }
+    return this.getFoodSummaryByID(fdc_id);
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {
     const portionInfoRaw = await this.getFoodPortion(fdc_id);
 
-    // Get branded food info first as we need it for linked products
-    const brandedFoodInfo = await this.getBrandedFoodByID(fdc_id);
+    const brandedFood = await this.getBrandedFoodByID(fdc_id);
+    const brandedFoodInfo = brandedFood
+      ? await this.brandedFoodDBToAPI(brandedFood)
+      : null;
     const legacyFoodInfo = await this.getLegacyFoodByID(fdc_id);
-    const upc = brandedFoodInfo?.gtin_upc;
-    // const ndb_number = brandedFoodInfo?.ndb_number;
-    // Get linked products
-    const linkedProducts = await findProductsByFoodIdentifier(
-      this.db,
-      upc !== undefined
-        ? { kind: "upc", gtin_upc: upc }
-        : legacyFoodInfo !== null
-          ? { kind: "ndb", ndb_number: legacyFoodInfo.ndb_number }
-          : undefined,
-    );
 
     return {
       fdc_id,
@@ -275,11 +187,8 @@ export class USDAClient {
       nutritionInfo: await this.getNutrientSummary(fdc_id),
       portionInfo: {
         raw: portionInfoRaw,
-        parsed: portionInfoRaw.map((p) =>
-          this.unitMappingFromPortionInfo(p, fdc_id),
-        ),
+        parsed: [], // To be populated at service layer
       },
-      linkedProducts,
     };
   }
 
@@ -325,8 +234,10 @@ export class USDAClient {
       foods.map(async (food) => {
         const portionInfoRaw = await this.getFoodPortion(food.fdc_id);
 
-        // Get branded food info for linked products lookup
-        const brandedFoodInfo = await this.getBrandedFoodByID(food.fdc_id);
+        const brandedFood = await this.getBrandedFoodByID(food.fdc_id);
+        const brandedFoodInfo = brandedFood
+          ? await this.brandedFoodDBToAPI(brandedFood)
+          : null;
 
         return {
           fdc_id: food.fdc_id,
@@ -338,12 +249,9 @@ export class USDAClient {
           nutritionInfo: await this.getNutrientSummary(food.fdc_id),
           portionInfo: {
             raw: portionInfoRaw,
-            parsed: portionInfoRaw.map((p) =>
-              this.unitMappingFromPortionInfo(p, food.fdc_id),
-            ),
+            parsed: [], // To be populated at service layer
           },
-          linkedProducts: [], // todo?
-          legacyFoodInfo: null, // todo?
+          legacyFoodInfo: null, // Not fetched in list view for performance
         };
       }),
     );

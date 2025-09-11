@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { inventoryentryRouter } from "./inventory";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
 let prisma: PrismaClient;
 
@@ -17,11 +17,9 @@ describe("inventory router", () => {
   it("should create and retrieve an inventory entry", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test location
     const location = await prisma.location.create({
@@ -75,11 +73,9 @@ describe("inventory router", () => {
   it("should list inventory entries with filtering", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test locations
     const kitchen = await prisma.location.create({
@@ -202,11 +198,9 @@ describe("inventory router", () => {
   it("should update an inventory entry", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test location and product
     const location = await prisma.location.create({
@@ -262,11 +256,9 @@ describe("inventory router", () => {
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test location and products
     const location1 = await prisma.location.create({
@@ -339,11 +331,9 @@ describe("inventory router", () => {
   it("should perform bulk operations correctly", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test location
     const location = await prisma.location.create({
@@ -448,11 +438,9 @@ describe("inventory router", () => {
   it("should throw error when retrieving inventory entry with invalid ID", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Try to retrieve an inventory entry with a non-existent ID
     const nonExistentId = "00000000-0000-0000-0000-000000000000";
@@ -465,11 +453,9 @@ describe("inventory router", () => {
   it("should handle create and update failures gracefully", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     const nonExistentId = "00000000-0000-0000-0000-000000000000";
 

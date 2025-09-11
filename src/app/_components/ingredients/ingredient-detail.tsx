@@ -3,7 +3,7 @@
 import { type FC, useState } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
-import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
@@ -15,10 +15,10 @@ import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
-import { unitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
 
 interface IngredientDetailProps {
-  ingredient: IngredientWithRecipesAndProductOut;
+  ingredient: IngredientWithFoodOut;
 }
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({
@@ -26,7 +26,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
 }) => {
   const api = useTRPC();
   const [ingredient, setIngredient] =
-    useState<IngredientWithRecipesAndProductOut>(initialIngredient);
+    useState<IngredientWithFoodOut>(initialIngredient);
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -106,9 +106,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
       title: "Unit Mappings",
       content: (
         <UnitMappingsTable
-          mappings={ingredient.product.flatMap((p) =>
-            unitMappingsFromProduct(p),
-          )}
+          mappings={ingredient.product.flatMap(getAllUnitMappingsFromProduct)}
         />
       ),
     },

@@ -5,7 +5,8 @@ import {
   transformUnitMapping,
 } from "~/schemas/unitmapping";
 import { locationBase } from "~/schemas/location";
-import { ndb, upc } from "~/schemas/identifiers";
+import { upc } from "~/schemas/identifiers";
+import { ndb } from "~/schemas/usda";
 
 // Base product config schema with shared fields
 const baseProductConfig = z.object({

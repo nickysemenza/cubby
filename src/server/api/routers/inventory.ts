@@ -32,8 +32,8 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     filters: inventoryFiltersSchema,
   },
   repository: {
-    getByID: async (db, id) => {
-      const res = await getInventoryEntryByID(db, id);
+    getByID: async (services, id) => {
+      const res = await getInventoryEntryByID(services.db, id);
       if (res === null) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -42,9 +42,9 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       }
       return res;
     },
-    list: async (db, filters, sort, pagination) => {
+    list: async (services, filters, sort, pagination) => {
       return await inventoryentryList(
-        db,
+        services.db,
         sort,
         pagination,
         filters.productNameFilter,
@@ -52,8 +52,12 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         filters.locationIdFilter,
       );
     },
-    create: createInventoryEntry,
-    update: updateInventoryEntry,
+    create: async (services, data) => {
+      return await createInventoryEntry(services.db, data);
+    },
+    update: async (services, id, data) => {
+      return await updateInventoryEntry(services.db, id, data);
+    },
   },
 });
 

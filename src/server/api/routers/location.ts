@@ -33,9 +33,9 @@ const { list } = createEntityListProcedure({
     filters: locationFiltersSchema,
   },
   repository: {
-    list: async (db, filters, sort, pagination) => {
+    list: async (services, filters, sort, pagination) => {
       return await locationList(
-        db,
+        services.db,
         filters.nameFilter,
         filters.itemTypeFilter,
         sort,
@@ -53,9 +53,15 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
     output: infLocation,
   },
   repository: {
-    getByID: getLocationById,
-    create: createLocation,
-    update: updateLocation,
+    getByID: async (services, id) => {
+      return await getLocationById(services.db, id);
+    },
+    create: async (services, data) => {
+      return await createLocation(services.db, data);
+    },
+    update: async (services, id, data) => {
+      return await updateLocation(services.db, id, data);
+    },
   },
 });
 

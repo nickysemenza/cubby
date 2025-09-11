@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { productRouter } from "./product";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
 let prisma: PrismaClient;
 
@@ -17,11 +17,9 @@ describe("product router", () => {
   it("should create and retrieve a product", async () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test product
     const productData = {
@@ -60,11 +58,9 @@ describe("product router", () => {
   it("should list products with filtering", async () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create multiple test products
     const productData1 = {
@@ -151,11 +147,9 @@ describe("product router", () => {
   it("should update a product", async () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test product
     const productData = {
@@ -213,11 +207,9 @@ describe("product router", () => {
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test product
     const productData = {
@@ -252,11 +244,9 @@ describe("product router", () => {
   it("should throw error when retrieving product with invalid ID", async () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Try to retrieve a product with a non-existent ID
     const nonExistentId = "00000000-0000-0000-0000-000000000000";

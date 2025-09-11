@@ -14,6 +14,33 @@ import { db } from "~/server/db";
 import { flatten } from "flat";
 import { type Span, trace } from "@opentelemetry/api";
 import { auth } from "@clerk/nextjs/server";
+import { USDAClient } from "~/server/clients/usda";
+import { ProductService } from "~/server/services/product.service";
+import { IngredientService } from "~/server/services/ingredient.service";
+import { USDAService } from "~/server/services/usda.service";
+import { findProductsByFoodIdentifier } from "~/server/repo/product";
+import { type PrismaClient } from "@prisma/client";
+
+/**
+ * Helper function to build crud services for both production and test contexts
+ */
+const buildCrudServices = (database: PrismaClient) => {
+  const usdaClient = new USDAClient(database);
+  const usdaService = new USDAService(usdaClient, (lookup) =>
+    findProductsByFoodIdentifier(database, lookup),
+  );
+  const services = {
+    product: new ProductService(database, usdaClient),
+    ingredient: new IngredientService(database, usdaClient),
+  };
+
+  return {
+    db: database,
+    usdaClient,
+    usdaService,
+    services,
+  };
+};
 
 /**
  * 1. CONTEXT
@@ -28,8 +55,10 @@ import { auth } from "@clerk/nextjs/server";
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
+  const crudServices = buildCrudServices(db);
+
   return {
-    db,
+    ...crudServices,
     auth: opts.headers.has("skip-auth") ? undefined : await auth(),
     ...opts,
   };
@@ -166,3 +195,19 @@ export const publicProcedure = t.procedure
   .use(tracingMiddleWare);
 
 export const protectedProcedure = publicProcedure.use(isAuthed);
+
+/**
+ * Test helper to create a TRPC context for testing purposes
+ */
+export const createTestTRPCContext = (
+  db: PrismaClient,
+  opts: { headers?: Headers; auth?: undefined } = {},
+) => {
+  const crudServices = buildCrudServices(db);
+
+  return {
+    ...crudServices,
+    auth: opts.auth,
+    headers: opts.headers ?? new Headers(),
+  };
+};

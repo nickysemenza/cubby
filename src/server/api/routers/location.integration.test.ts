@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { locationRouter } from "./location";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
 let prisma: PrismaClient;
 
@@ -17,11 +17,9 @@ describe("location router", () => {
   it("should create and retrieve a location", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test location
     const locationData = {
@@ -52,11 +50,9 @@ describe("location router", () => {
   it("should create location with parent-child relationship", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a parent location
     const parentLocationData = {
@@ -90,11 +86,9 @@ describe("location router", () => {
   it("should list locations with filtering", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create multiple test locations
     const locationData1 = {
@@ -169,11 +163,9 @@ describe("location router", () => {
   it("should update a location", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test location
     const locationData = {
@@ -208,11 +200,9 @@ describe("location router", () => {
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test location
     const locationData = {
@@ -246,11 +236,9 @@ describe("location router", () => {
   it("should build location tree correctly", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a hierarchical structure: Kitchen -> Cabinet -> Shelf
     const kitchen = await caller.create({
@@ -303,11 +291,9 @@ describe("location router", () => {
   it("should get location types count", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create locations of different types
     await caller.create({
@@ -358,11 +344,9 @@ describe("location router", () => {
   it("should handle deep parent-child hierarchy", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a deep hierarchy: Room -> Cabinet -> Shelf -> Crate
     const room = await caller.create({

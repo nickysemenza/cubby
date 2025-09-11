@@ -1,14 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
-import {
-  getIngredientByID,
-  mergeIngredients,
-  ingredientList,
-  getIngredientByName,
-  createIngredient,
-  updateIngredient,
-} from "~/server/repo/ingredient";
-import { ingredientWithRecipesAndProductOut } from "~/schemas/combo";
+import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
+import { mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientBase } from "~/schemas/ingredient";
 import { createEntityCrudProcedures } from "../crud-factory";
 
@@ -23,22 +16,27 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   schemas: {
     createInput: ingredientBase,
     updateInput: ingredientBase.partial(),
-    output: ingredientWithRecipesAndProductOut,
+    output: ingredientWithFoodOut,
     filters: ingredientFiltersSchema,
   },
   repository: {
-    getByID: getIngredientByID,
-    list: async (db, filters, sort, pagination) => {
-      return await ingredientList(
-        db,
+    getByID: async (services, id) => {
+      return await services.services.ingredient.getIngredientByID(id);
+    },
+    list: async (services, filters, sort, pagination) => {
+      return await services.services.ingredient.ingredientList(
         filters.nameFilter,
         sort,
         pagination,
         filters.missingProductsOnly,
       );
     },
-    create: createIngredient,
-    update: updateIngredient,
+    create: async (services, data) => {
+      return await services.services.ingredient.createIngredient(data);
+    },
+    update: async (services, id, data) => {
+      return await services.services.ingredient.updateIngredient(id, data);
+    },
   },
 });
 
@@ -49,10 +47,10 @@ const merge = publicProcedure
       aliases: z.array(z.uuid()).min(1),
     }),
   )
-  .output(ingredientWithRecipesAndProductOut)
+  .output(ingredientWithFoodOut)
   .mutation(async ({ ctx, input }) => {
     await mergeIngredients(ctx.db, input.target, input.aliases);
-    return await getIngredientByID(ctx.db, input.target);
+    return await ctx.services.ingredient.getIngredientByID(input.target);
   });
 
 const getByName = publicProcedure
@@ -61,11 +59,10 @@ const getByName = publicProcedure
       nameFilter: z.string(),
     }),
   )
-  .output(ingredientWithRecipesAndProductOut.nullable())
-  .query(
-    async ({ ctx, input }) =>
-      await getIngredientByName(ctx.db, input.nameFilter),
-  );
+  .output(ingredientWithFoodOut.nullable())
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.ingredient.getIngredientByName(input.nameFilter);
+  });
 
 export const ingredientRouter = createTRPCRouter({
   getByName,

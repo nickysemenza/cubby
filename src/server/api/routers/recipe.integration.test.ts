@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { recipeRouter } from "./recipe";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 
 let prisma: PrismaClient;
@@ -18,11 +18,9 @@ describe("recipe router", () => {
   it("should create and retrieve a recipe", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test ingredient first
     const ingredient = await findOrCreateIngredient(prisma, "flour");
@@ -94,11 +92,9 @@ describe("recipe router", () => {
   it("should list recipes with filtering", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test ingredients
     const flour = await findOrCreateIngredient(prisma, "flour");
@@ -204,11 +200,9 @@ describe("recipe router", () => {
   it("should update a recipe", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create test ingredients
     const flour = await findOrCreateIngredient(prisma, "flour");
@@ -285,11 +279,9 @@ describe("recipe router", () => {
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a test ingredient
     const flour = await findOrCreateIngredient(prisma, "flour");
@@ -343,11 +335,9 @@ describe("recipe router", () => {
   it("should throw error when retrieving recipe with invalid ID", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Try to retrieve a recipe with a non-existent ID
     const nonExistentId = "00000000-0000-0000-0000-000000000000";
@@ -360,11 +350,9 @@ describe("recipe router", () => {
   it("should create recipe with recipe ingredient (nested recipe)", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create an ingredient for the base recipe
     const flour = await findOrCreateIngredient(prisma, "flour");
@@ -434,11 +422,9 @@ describe("recipe router", () => {
   it("should insert compact recipe", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
 
     // Create a compact recipe (simplified format)
     const compactRecipeData = {

@@ -1,16 +1,19 @@
 "use client";
 
-import { FoodSummary } from "~/schemas/usda";
 import { NutritionInfoTable } from "./nutrition";
-import { unitMappingsFromFood } from "~/schemas/combo";
+import {
+  unitMappingsFromFood,
+  FoodSummaryWithLinkedProducts,
+} from "~/schemas/combo";
 import { ProductPillLink } from "../EntityPill";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 
-export const USDAFoodDetail: React.FC<{ id: number; food: FoodSummary }> = ({
-  food,
-}) => {
+export const USDAFoodDetail: React.FC<{
+  id: number;
+  food: FoodSummaryWithLinkedProducts;
+}> = ({ food }) => {
   const {
     brandedFoodInfo,
     foodInfo,

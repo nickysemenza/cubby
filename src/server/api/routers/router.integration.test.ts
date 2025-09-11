@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { seedRealRecipes } from "~/testdata/seed";
 import { recipeRouter } from "./recipe";
-import { createCallerFactory } from "../trpc";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { exampleRecipesCompact } from "~/testdata/fakeRecipes";
@@ -18,11 +18,9 @@ describe("recipe router", () => {
     await seedRealRecipes(prisma);
 
     const createCaller = createCallerFactory(recipeRouter);
-    const caller = createCaller({
-      headers: new Headers(),
-      db: prisma,
-      auth: undefined,
-    });
+    const caller = createCaller(
+      createTestTRPCContext(prisma, { auth: undefined }),
+    );
     const recipeList = await caller.list({ filters: {} });
     expect(recipeList.items.length).toEqual(exampleRecipesCompact.length);
   });

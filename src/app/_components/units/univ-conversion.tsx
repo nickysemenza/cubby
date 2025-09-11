@@ -1,11 +1,11 @@
 import { WMeasure, MeasureKind } from "recipebridge/pkg/recipebridge";
 import { Amount } from "~/codec/codec";
 import { Result, withFailure, withSuccess } from "~/misc/result-types";
+import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
 import {
-  ProductWithMappingsAndFoodOut,
-  IngredientWithRecipesAndProductOut,
-  unitMappingsFromProduct,
-} from "~/schemas/combo";
+  type IngredientWithFoodOut,
+  type ProductWithMappingsAndFoodOut,
+} from "~/server/services/ingredient.service";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { NutrientsPer100 } from "~/schemas/usda";
 import { wasm } from "~/hooks/useWasm";
@@ -14,9 +14,9 @@ import { SectionIngredientOut } from "~/schemas/recipe";
 /**
  * Extracts nutrient information from a product
  */
-export const getProductNutrients = (
-  product: ProductWithMappingsAndFoodOut,
-): NutrientsPer100 | undefined => {
+export const getProductNutrients = (product: {
+  food: { nutritionInfo: { nutrientsPer100: NutrientsPer100 } } | null;
+}): NutrientsPer100 | undefined => {
   return product.food?.nutritionInfo?.nutrientsPer100;
 };
 
@@ -138,7 +138,7 @@ const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
 const getIngredientMeasures = (
   w: wasm,
   ingredient: SectionIngredientOut,
-  ingMap: Record<string, IngredientWithRecipesAndProductOut>,
+  ingMap: Record<string, IngredientWithFoodOut>,
 ): {
   price: Result<WMeasure>;
   gram: Result<WMeasure>;
@@ -149,7 +149,7 @@ const getIngredientMeasures = (
     ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
-  const mappings = product?.flatMap((p) => unitMappingsFromProduct(p)) || [];
+  const mappings = product?.flatMap(getAllUnitMappingsFromProduct) || [];
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {
@@ -178,7 +178,7 @@ const getIngredientMeasures = (
 export const calculateTotals = (
   w: wasm,
   ingredients: SectionIngredientOut[],
-  ingMap: Record<string, IngredientWithRecipesAndProductOut>,
+  ingMap: Record<string, IngredientWithFoodOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
 ) => {
   const prices: WMeasure[] = [];
@@ -247,7 +247,7 @@ export const calculateTotals = (
 export const createIngredientData = (
   w: wasm,
   ingredients: SectionIngredientOut[],
-  ingMap: Record<string, IngredientWithRecipesAndProductOut> | undefined,
+  ingMap: Record<string, IngredientWithFoodOut> | undefined,
 ) => {
   return ingredients.map((i) => ({
     ...i,

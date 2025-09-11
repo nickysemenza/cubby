@@ -1,6 +1,9 @@
 import { z, type ZodSchema } from "zod";
 import { type PrismaClient } from "@prisma/client";
 import { publicProcedure } from "./trpc";
+import { type ProductService } from "~/server/services/product.service";
+import { type IngredientService } from "~/server/services/ingredient.service";
+import { type USDAClient } from "~/server/clients/usda";
 import { IDInput } from "~/schemas/common";
 import {
   buildPaginatedResponse,
@@ -17,35 +20,45 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
     data: dataSchema,
   });
 
+// Interface for services needed by CRUD operations
+export interface CrudServices {
+  db: PrismaClient;
+  services: {
+    product: ProductService;
+    ingredient: IngredientService;
+  };
+  usdaClient: USDAClient;
+}
+
 // Reusable procedure builders
 const createGetByIdProcedure = <T>(
   outputSchema: ZodSchema<T>,
-  getByIdFn: (db: PrismaClient, id: string) => Promise<T>,
+  getByIdFn: (ctx: CrudServices, id: string) => Promise<T>,
 ) =>
   publicProcedure
     .input(IDInput)
     .output(outputSchema)
-    .query(async ({ ctx, input }) => getByIdFn(ctx.db, input.id));
+    .query(async ({ ctx, input }) => getByIdFn(ctx, input.id));
 
 const createCreateProcedure = <TInput, TOutput>(
   inputSchema: ZodSchema<TInput>,
   outputSchema: ZodSchema<TOutput>,
-  createFn: (db: PrismaClient, data: TInput) => Promise<TOutput>,
+  createFn: (ctx: CrudServices, data: TInput) => Promise<TOutput>,
 ) =>
   publicProcedure
     .input(inputSchema)
     .output(outputSchema)
-    .mutation(async ({ ctx, input }) => createFn(ctx.db, input as TInput));
+    .mutation(async ({ ctx, input }) => createFn(ctx, input as TInput));
 
 const createUpdateProcedure = <TInput, TOutput>(
   inputSchema: ZodSchema<TInput>,
   outputSchema: ZodSchema<TOutput>,
-  updateFn: (db: PrismaClient, id: string, data: TInput) => Promise<TOutput>,
+  updateFn: (ctx: CrudServices, id: string, data: TInput) => Promise<TOutput>,
 ) =>
   publicProcedure
     .input(updateInputSchema(inputSchema))
     .output(outputSchema)
-    .mutation(async ({ ctx, input }) => updateFn(ctx.db, input.id, input.data));
+    .mutation(async ({ ctx, input }) => updateFn(ctx, input.id, input.data));
 
 // Simplified factory for just the list operation
 export function createEntityListProcedure<TOutput, TFilters>({
@@ -58,7 +71,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
   };
   repository: {
     list: (
-      db: PrismaClient,
+      ctx: CrudServices,
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
@@ -76,7 +89,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
     .output(createPaginatedResponseSchema(schemas.output))
     .query(async ({ ctx, input }) => {
       const { data, count } = await repository.list(
-        ctx.db,
+        ctx,
         input.filters,
         input.sort,
         input.pagination,
@@ -102,10 +115,10 @@ export function createEntityCrudWithoutListProcedures<
     output: ZodSchema<TOutput>;
   };
   repository: {
-    getByID: (db: PrismaClient, id: string) => Promise<TOutput>;
-    create: (db: PrismaClient, data: TCreateInput) => Promise<TOutput>;
+    getByID: (ctx: CrudServices, id: string) => Promise<TOutput>;
+    create: (ctx: CrudServices, data: TCreateInput) => Promise<TOutput>;
     update: (
-      db: PrismaClient,
+      ctx: CrudServices,
       id: string,
       data: TUpdateInput,
     ) => Promise<TOutput>;
@@ -143,16 +156,16 @@ export function createEntityCrudProcedures<
     filters: ZodSchema<TFilters>;
   };
   repository: {
-    getByID: (db: PrismaClient, id: string) => Promise<TOutput>;
+    getByID: (ctx: CrudServices, id: string) => Promise<TOutput>;
     list: (
-      db: PrismaClient,
+      ctx: CrudServices,
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
     ) => Promise<{ data: TOutput[]; count: number }>;
-    create: (db: PrismaClient, data: TCreateInput) => Promise<TOutput>;
+    create: (ctx: CrudServices, data: TCreateInput) => Promise<TOutput>;
     update: (
-      db: PrismaClient,
+      ctx: CrudServices,
       id: string,
       data: TUpdateInput,
     ) => Promise<TOutput>;

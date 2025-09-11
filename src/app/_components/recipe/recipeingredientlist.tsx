@@ -9,10 +9,8 @@ import {
 import { type Flatten } from "~/misc/array-helpers";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
-import {
-  IngredientWithRecipesAndProductOut,
-  unitMappingsFromProduct,
-} from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useMemo } from "react";
 import { useWasm } from "~/hooks/useWasm";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -32,7 +30,7 @@ import { getIngredientName } from "./recipeutils";
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
-  ingMap: Record<string, IngredientWithRecipesAndProductOut> | undefined;
+  ingMap: Record<string, IngredientWithFoodOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
   const w = useWasm();
   const data = useMemo(() => {
@@ -132,7 +130,7 @@ export const RecipeIngredientList: React.FC<{
 
         const entry = id ? ingMap[id] : undefined;
         const mappings =
-          entry?.product?.flatMap((p) => unitMappingsFromProduct(p)) || [];
+          entry?.product?.flatMap(getAllUnitMappingsFromProduct) || [];
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),

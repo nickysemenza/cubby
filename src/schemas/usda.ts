@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { ndb, upc } from "~/schemas/identifiers";
-import { unitMappingWithMetadata } from "./unitmapping";
-import { productTopLevelOut } from "./product";
-import { assertNever } from "~/lib/assert";
+import { upc } from "~/schemas/identifiers";
+
+// NDB (Nutrient Data Bank) number - USDA-specific identifier
+export const ndb = z.number().max(99999).min(1000).describe("NDB number");
 
 // select distinct unit_name from nutrient;
 export const nutrient_unit_name = z.enum([
@@ -31,28 +31,9 @@ export const branded_food_serving_size_unit = z.enum([
   "ml",
   "MLT",
 ]);
-type BrandedFoodServingSizeUnit = z.infer<
+export type BrandedFoodServingSizeUnit = z.infer<
   typeof branded_food_serving_size_unit
 >;
-export const normalize_branded_food_serving_size_unit = (
-  unit: BrandedFoodServingSizeUnit,
-) => {
-  switch (unit) {
-    case "GM":
-    case "GRM":
-      return "g";
-    case "MC":
-    case "MLT":
-      return "ml";
-    case "g":
-    case "IU":
-    case "MG":
-    case "ml":
-      return unit;
-    default:
-      return assertNever(unit);
-  }
-};
 
 const nutrientSummary = z
   .object({
@@ -86,7 +67,6 @@ const brandedFoodInfo = z.object({
   gtin_upc: upc,
   ingredients: z.string().nullable(),
   serving: BrandedFoodServingInfo,
-  serving_as_amount: unitMappingWithMetadata.optional(),
 });
 
 const nutritionInfo = z.object({
@@ -106,6 +86,14 @@ const legacyFoodInfo = z.object({
   ndb_number: ndb,
 });
 export type LegacyFoodInfo = z.infer<typeof legacyFoodInfo>;
+
+export const brandedFoodRaw = z.object({
+  fdc_id: z.number(),
+  serving_size: z.number().nullable(),
+  serving_size_unit: z.string().nullable(),
+  household_serving_fulltext: z.string().nullable(),
+});
+export type BrandedFoodRaw = z.infer<typeof brandedFoodRaw>;
 export const foodSummary = z.object({
   fdc_id: z.number(),
   brandedFoodInfo: brandedFoodInfo.nullable(),
@@ -114,9 +102,8 @@ export const foodSummary = z.object({
   nutritionInfo,
   portionInfo: z.object({
     raw: z.array(foodPortion),
-    parsed: z.array(unitMappingWithMetadata),
+    parsed: z.array(z.any()), // To be populated at service layer
   }),
-  linkedProducts: z.array(productTopLevelOut).optional(),
 });
 export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;

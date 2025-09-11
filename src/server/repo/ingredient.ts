@@ -7,8 +7,6 @@ import {
   type SortParams,
 } from "~/schemas/pagination";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import { USDAClient } from "./usda";
-import { foodLookupParamFromProduct } from "./product";
 import {
   formatSearchTerm,
   getSortDirection,
@@ -107,26 +105,20 @@ const dbIngredientToAPI: (
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
     ingredient;
 
-  const usdaClient = new USDAClient(db);
-  const productWithFood = await Promise.all(
-    Product.map(async (product) => {
-      const lookupParam = foodLookupParamFromProduct(product);
-      const food = lookupParam ? await usdaClient.findFood(lookupParam) : null;
-      return {
-        ...product,
-        unitMappings: product.unitMappings.map((mapping) => ({
-          ...mapping,
-          sourceMetadata: { type: "product" as const, productId: product.id },
-        })),
-        food,
-      };
-    }),
-  );
+  const productWithMappings = Product.map((product) => {
+    return {
+      ...product,
+      unitMappings: product.unitMappings.map((mapping) => ({
+        ...mapping,
+        sourceMetadata: { type: "product" as const, productId: product.id },
+      })),
+    };
+  });
 
   return {
     ...restOfIngredient,
     recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
-    product: productWithFood,
+    product: productWithMappings,
     appearsInRecipes: RecipeSectionIngredient.map((section) =>
       dbRecipeToAPIShallow(section.recipeSection.recipe),
     ),

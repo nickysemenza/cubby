@@ -2,10 +2,8 @@
 import { type FC, useState } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
-import {
-  unitMappingsFromProduct,
-  productWithIngredientAndInventoryAndMappingsOut,
-} from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { type ProductWithFoodOut } from "~/server/services/product.service";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
 import { ProductForm } from "./product-form";
@@ -15,7 +13,6 @@ import { useTRPC } from "~/trpc/react";
 import { useRouter } from "next/navigation";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import Link from "next/link";
-import { z } from "zod";
 import {
   IngredientPillLink,
   LocationPillLink,
@@ -27,7 +24,7 @@ import EntityImageList from "../EntityImageList";
 import { useMutation } from "@tanstack/react-query";
 
 interface ProductDetailProps {
-  product: z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>;
+  product: ProductWithFoodOut;
 }
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
@@ -63,7 +60,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   // Get product images from the product object
   const productImages = product.images || [];
 
-  const mappings = unitMappingsFromProduct(product);
+  const mappings = getAllUnitMappingsFromProduct(product);
   const sections: DetailSection[] = [
     {
       title: "Basic Information",

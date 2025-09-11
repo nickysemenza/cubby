@@ -11,8 +11,7 @@ import {
 } from "../_components/EntityPill";
 import { useWasm } from "~/hooks/useWasm";
 import { SpacedContainer } from "~/components/ui/spaced-container";
-import { UnitMapping } from "~/schemas/unitmapping";
-import { unitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
@@ -125,9 +124,8 @@ export function ProductList() {
       enableSorting: false,
       meta: { className: "w-96 max-w-96" },
       cell: (info) => {
-        const mappings: UnitMapping[] = unitMappingsFromProduct(
-          info.row.original,
-        );
+        const product = info.row.original;
+        const mappings = getAllUnitMappingsFromProduct(product);
         return (
           <div className="w-full">
             <UnitMappingDisplay mappings={mappings} title="" />

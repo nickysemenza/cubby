@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { SectionIngredientOut, type RecipeOut } from "~/schemas/recipe";
 import { RecipeIngredientList } from "./recipeingredientlist";
-import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import EntityImageList from "../EntityImageList";
 import { useTRPCClient } from "~/trpc/react";
 
@@ -20,7 +20,7 @@ const RecipeDetail: React.FC<{
     [recipe.sections],
   );
   const [data, dataSet] = useState<
-    Record<string, IngredientWithRecipesAndProductOut> | undefined
+    Record<string, IngredientWithFoodOut> | undefined
   >(undefined);
 
   // Get recipe images from the recipe object
@@ -28,17 +28,16 @@ const RecipeDetail: React.FC<{
 
   useEffect(() => {
     const getBulkIngredients = async (ids: string[]) => {
-      const ingredientsArray: IngredientWithRecipesAndProductOut[] =
-        await Promise.all(
-          ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
-        );
-      const ingredientMap: Record<string, IngredientWithRecipesAndProductOut> =
+      const ingredientsArray: IngredientWithFoodOut[] = await Promise.all(
+        ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
+      );
+      const ingredientMap: Record<string, IngredientWithFoodOut> =
         ingredientsArray.reduce(
           (acc, ingredient) => {
             acc[ingredient.id] = ingredient;
             return acc;
           },
-          {} as Record<string, IngredientWithRecipesAndProductOut>,
+          {} as Record<string, IngredientWithFoodOut>,
         );
       console.log({ somePosts: ingredientMap });
       return ingredientMap;

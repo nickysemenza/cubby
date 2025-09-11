@@ -7,7 +7,7 @@ import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
-import { unitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
@@ -102,10 +102,8 @@ export function IngredientList() {
       enableSorting: false,
       meta: { className: "w-72 max-w-72" },
       cell: (info) => {
-        const product = info.getValue();
-        const mappings = product.flatMap((product) =>
-          unitMappingsFromProduct(product),
-        );
+        const products = info.getValue();
+        const mappings = products.flatMap(getAllUnitMappingsFromProduct);
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),
