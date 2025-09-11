@@ -1,7 +1,7 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 import { foodLookupParam, foodSummary } from "~/schemas/usda";
 import { z } from "zod";
-import { findFood, getFoodSummaryByID, listFoods } from "~/server/repo/usda";
+import { USDAClient } from "~/server/repo/usda";
 import {
   createPaginatedResponseSchema,
   sortPaginationCombo,
@@ -11,7 +11,10 @@ import {
 const getByAlternateID = publicProcedure
   .input(foodLookupParam)
   .output(foodSummary.nullable())
-  .query(async ({ ctx, input }) => await findFood(ctx.db, input));
+  .query(async ({ ctx, input }) => {
+    const client = new USDAClient(ctx.db);
+    return await client.findFood(input);
+  });
 
 const getByID = publicProcedure
   .input(
@@ -20,7 +23,10 @@ const getByID = publicProcedure
     }),
   )
   .output(foodSummary.nullable())
-  .query(async ({ ctx, input }) => await getFoodSummaryByID(ctx.db, input.id));
+  .query(async ({ ctx, input }) => {
+    const client = new USDAClient(ctx.db);
+    return await client.getFoodSummaryByID(input.id);
+  });
 
 const list = protectedProcedure
   .input(
@@ -35,8 +41,8 @@ const list = protectedProcedure
   )
   .output(createPaginatedResponseSchema(foodSummary))
   .query(async ({ ctx, input }) => {
-    const { data, count } = await listFoods(
-      ctx.db,
+    const client = new USDAClient(ctx.db);
+    const { data, count } = await client.listFoods(
       input.filters.nameFilter,
       input.filters.dataTypeFilter,
       input.sort,
