@@ -10,7 +10,7 @@ export const env = createEnv({
     DATABASE_URL: z.url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
-      .prefault("development"),
+      .default("development"),
     R2_ACCESS_KEY_ID: z.string().min(1),
     R2_SECRET_ACCESS_KEY: z.string().min(1),
     R2_ENDPOINT: z.url(),

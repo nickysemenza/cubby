@@ -1,9 +1,9 @@
 import { configSchema } from "~/schemas/config";
+import fs from "fs";
+import { z } from "zod";
 
 const jsonSchema = z.toJSONSchema(configSchema);
 
-import fs from "fs";
-import z from "zod";
 fs.writeFileSync(
   "tooling/mapping_schema.json",
   JSON.stringify(jsonSchema, null, 2),

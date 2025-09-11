@@ -15,7 +15,7 @@ import { createEntityCrudProcedures } from "../crud-factory";
 // Define filters schema for ingredients
 const ingredientFiltersSchema = z.object({
   nameFilter: z.string().optional(),
-  missingProductsOnly: z.boolean().optional().prefault(false),
+  missingProductsOnly: z.boolean().optional().default(false),
 });
 
 // Create standardized CRUD procedures using factory

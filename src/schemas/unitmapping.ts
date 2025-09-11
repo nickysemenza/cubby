@@ -3,7 +3,7 @@ import { dbTimestampsOut } from "./common";
 import { amount } from "~/codec/codec";
 import { parseConversionString } from "./config-parsers";
 
-export const sourceMetadata = z.discriminatedUnion("type", [
+const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("product"),
     productId: z.uuid(),

@@ -25,13 +25,4 @@ export function EntityLayout({ children, title, actions }: EntityLayoutProps) {
   );
 }
 
-// Specific variants for different page types
-export function DetailLayout({ children }: { children: ReactNode }) {
-  return (
-    <HydrateClient>
-      <PageWrapper>
-        <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
-      </PageWrapper>
-    </HydrateClient>
-  );
-}
+// Specific variants for different page types (removed unused export)

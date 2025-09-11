@@ -74,7 +74,7 @@ export type ProductWithMappingsAndFoodOut = z.infer<
 /**
  * Creates unit mappings from nutrition data (e.g., 100g → 374kcal)
  */
-export const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
+const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
   const nutrition = food.nutritionInfo?.nutrientsPer100;
   if (!nutrition) return [];
   const mappings: UnitMapping[] = [];

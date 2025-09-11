@@ -94,7 +94,7 @@ export const imageListResponseSchema = createPaginatedResponseSchema(
 
 // Schema for culling pending images
 export const cullPendingImagesSchema = z.object({
-  olderThanHours: z.int().positive().prefault(24),
+  olderThanHours: z.int().positive().default(24),
 });
 
 // Response schema for culling pending images

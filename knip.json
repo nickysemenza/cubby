@@ -17,6 +17,9 @@
     "eslint-config-next",
     "eslint-plugin-react-hooks",
     "prisma-dbml-generator",
-    "prisma-json-types-generator"
+    "prisma-json-types-generator",
+    // CSS plugins used in Tailwind v4 pipeline or via @plugin directives
+    "tailwindcss",
+    "tailwindcss-animate"
   ]
 }

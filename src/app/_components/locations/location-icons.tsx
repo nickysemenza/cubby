@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { type LocationType } from "~/schemas/location";
 
-export const LocationTypeIcons: Record<LocationType, typeof Home> = {
+const LocationTypeIcons: Record<LocationType, typeof Home> = {
   room: Home,
   bag: ShoppingBag,
   shelf: Layers,

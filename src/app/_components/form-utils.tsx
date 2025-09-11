@@ -83,7 +83,9 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
 }) {
   return (
     <Form {...form}>
-      <DevTool control={form.control} />
+      {process.env.NODE_ENV !== "production" ? (
+        <DevTool control={form.control} />
+      ) : null}
       <form
         onSubmit={(e) => {
           // https://github.com/orgs/react-hook-form/discussions/7038#discussioncomment-11376398

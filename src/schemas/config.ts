@@ -61,9 +61,7 @@ export type InfLocationConfigInput = z.infer<
   children?: InfLocationConfigInput[];
 };
 
-export type InfLocationConfigOutput = z.infer<
-  typeof locationWithProductHintOutput
-> & {
+type InfLocationConfigOutput = z.infer<typeof locationWithProductHintOutput> & {
   children?: InfLocationConfigOutput[];
 };
 
