@@ -61,6 +61,8 @@ jobs:
     strategy:
       matrix:
         test-type: [unit, e2e]
+    outputs:
+      test-passed: ${{ (matrix.test-type == 'unit' && steps.unit-test.outcome == 'success') || (matrix.test-type == 'e2e' && steps.e2e-test.outcome == 'success') }}
     env:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y29uY2lzZS1zaGVwaGVyZC00MS5jbGVyay5hY2NvdW50cy5kZXYk
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
@@ -101,6 +103,7 @@ jobs:
 
       # Unit/Integration Tests
       - name: Run unit and integration tests
+        id: unit-test
         if: matrix.test-type == 'unit'
         run: |
           mkdir -p test-results
@@ -130,6 +133,7 @@ jobs:
         if: matrix.test-type == 'e2e'
         run: npx playwright install --with-deps
       - name: Run Playwright tests
+        id: e2e-test
         if: matrix.test-type == 'e2e'
         run: npx playwright test
       - name: Publish Playwright Results
@@ -146,3 +150,50 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 30
+
+  check-tests:
+    name: Check All Tests Passed
+    needs: [test]
+    runs-on: ubuntu-latest
+    if: always()
+    outputs:
+      all-passed: ${{ steps.check.outputs.all-passed }}
+    steps:
+      - name: Check test results
+        id: check
+        run: |
+          # Check if all test matrix jobs succeeded
+          unit_result="${{ needs.test.result }}"
+          if [[ "$unit_result" == "success" ]]; then
+            echo "all-passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "all-passed=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    name: Deploy to Vercel
+    needs: [build-wasm, lint-format, check-tests]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      needs.lint-format.result == 'success' &&
+      needs.check-tests.outputs.all-passed == 'true'
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          download-wasm: "true"
+      - name: Deploy to Vercel
+        id: deploy
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+          else
+            npx vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
+          fi
+        env:
+          VERCEL_ORG_ID: team_rAffu7VKl4KcVrPBRqaMYB7f
+          VERCEL_PROJECT_ID: prj_JPllV9ESJ1mzTBJZEmAtNrooLS00
