@@ -118,96 +118,6 @@ Table Location {
   type String [not null]
 }
 
-Table usda_branded_food {
-  fdc_id Int [pk]
-  brand_owner String
-  brand_name String
-  subbrand_name String
-  gtin_upc String [not null]
-  ingredients String
-  not_a_significant_source_of String
-  serving_size Decimal
-  serving_size_unit String
-  household_serving_fulltext String
-  branded_food_category String
-  data_source String
-  package_weight String
-  modified_date String
-  available_date String
-  market_country String
-  discontinued_date String
-  preparation_state_code String
-  trade_channel String
-  short_description String
-  material_code String
-  food usda_food [not null]
-}
-
-Table usda_food {
-  fdc_id Int [pk]
-  data_type String [not null]
-  description String [not null]
-  food_category_id String [not null]
-  publication_date String [not null]
-  branded_food usda_branded_food
-  food_nutrient usda_food_nutrient [not null]
-  food_portion usda_food_portion [not null]
-}
-
-Table usda_food_nutrient {
-  id Int [pk]
-  fdc_id Int [not null]
-  nutrient_id Int [not null]
-  amount Decimal [not null]
-  data_points String [not null]
-  derivation_id String [not null]
-  min String [not null]
-  max String [not null]
-  median String [not null]
-  loq String [not null]
-  footnote String [not null]
-  min_year_acquired String [not null]
-  percent_daily_value String [not null]
-  nutrient usda_nutrient [not null]
-  food usda_food [not null]
-}
-
-Table usda_nutrient {
-  id Int [pk]
-  name String [not null]
-  unit_name String [not null]
-  nutrient_nbr String [not null]
-  rank String [not null]
-  food_nutrient usda_food_nutrient [not null]
-}
-
-Table usda_measure_unit {
-  id Int [pk]
-  name String [not null]
-  usda_food_portion usda_food_portion [not null]
-}
-
-Table usda_food_portion {
-  id Int [pk]
-  fdc_id Int [not null]
-  food usda_food [not null]
-  seq_num String
-  amount Decimal [not null]
-  measure_unit_id Int [not null]
-  measure_unit usda_measure_unit [not null]
-  portion_description String
-  modifier String
-  gram_weight Decimal [not null]
-  data_points String
-  footnote String
-  min_year_acquired String
-}
-
-Table usda_sr_legacy_food {
-  fdc_id Int [pk]
-  NDB_number Int [unique, not null]
-}
-
 Table Image {
   id String [pk]
   url String [not null]
@@ -298,16 +208,6 @@ Ref: InventoryEntry.productId > Product.id
 Ref: InventoryEntry.locationId > Location.id
 
 Ref: Location.parentId - Location.id
-
-Ref: usda_branded_food.fdc_id - usda_food.fdc_id [delete: No Action]
-
-Ref: usda_food_nutrient.nutrient_id > usda_nutrient.id [delete: No Action]
-
-Ref: usda_food_nutrient.fdc_id > usda_food.fdc_id [delete: No Action]
-
-Ref: usda_food_portion.fdc_id > usda_food.fdc_id [delete: No Action]
-
-Ref: usda_food_portion.measure_unit_id > usda_measure_unit.id [delete: No Action]
 
 Ref: ProductImage.productId > Product.id
 

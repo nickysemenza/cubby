@@ -166,7 +166,7 @@ export const USDAFoodDetail: React.FC<{
     <DetailPage
       sections={sections}
       entity="usda-food"
-      name={foodInfo.description}
+      name={foodInfo.description || "Unnamed Food"}
       rawData={food}
     />
   );

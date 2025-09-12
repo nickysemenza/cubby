@@ -16,6 +16,7 @@ export const env = createEnv({
     R2_ENDPOINT: z.url(),
     R2_BUCKET_NAME: z.string().min(1),
     R2_PUBLIC_URL: z.url(),
+    USDA_API_URL: z.url().default("http://localhost:8080/"),
   },
 
   /**
@@ -39,6 +40,7 @@ export const env = createEnv({
     R2_ENDPOINT: process.env.R2_ENDPOINT,
     R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
+    USDA_API_URL: process.env.USDA_API_URL,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

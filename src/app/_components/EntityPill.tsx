@@ -124,12 +124,12 @@ export const ProductPillLink: React.FC<{
   />
 );
 export const FoodPillLink: React.FC<{
-  food: { foodInfo: { description: string }; fdc_id: number };
+  food: { foodInfo: { description: string | null }; fdc_id: number };
   openInNewTab?: boolean;
 }> = ({ food, openInNewTab }) => (
   <PillLink
     href={`/usda/${food.fdc_id}`}
-    text={food.foodInfo.description}
+    text={food.foodInfo.description || "Unnamed Food"}
     entity={"usda-food"}
     openInNewTab={openInNewTab}
   />

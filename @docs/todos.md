@@ -77,3 +77,31 @@
   - Add checkboxes to location table for bulk delete/move
   - Add drag-drop between locations in tree view (future)
   - Update `lastBulkInventory` timestamp on bulk operations
+
+## Convert to Monorepo with PNPM Workspaces
+* **Goal**: Combine RecipeHub and USDA DB repos to eliminate schema duplication and type drift
+* **Benefits**: 
+  - Single source of truth for Zod schemas
+  - No more OpenAPI type generation or sync issues
+  - Atomic changes across both services
+  - Shared tooling and dependencies
+* **Structure**:
+  ```
+  recipehub/
+  ├── packages/
+  │   ├── shared/          # Zod schemas, types shared between web + usda-api
+  │   └── database/        # USDA database schemas, queries, migrations
+  ├── apps/
+  │   ├── web/             # Main RecipeHub Next.js app
+  │   └── usda-api/        # USDA service (Hono server)
+  └── package.json         # pnpm workspace root
+  ```
+* **Migration Steps**:
+  1. Create monorepo structure with `packages/` and `apps/`
+  2. Move USDA DB → `apps/usda-api`
+  3. Move RecipeHub → `apps/web`
+  4. Extract shared schemas → `packages/shared`
+  5. Update package.json with pnpm workspaces configuration
+  6. Update imports to use workspace references (`@recipehub/shared`)
+  7. Remove OpenAPI generation and usda-api-client
+  8. Update deployment configs for independent service deployment

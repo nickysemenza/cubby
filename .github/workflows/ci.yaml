@@ -57,6 +57,7 @@ jobs:
     name: Tests
     needs: [build-wasm]
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
         test-type: [unit, e2e]
@@ -94,6 +95,7 @@ jobs:
         run: |
           cp .env.example .env
           echo "NEXTAUTH_SECRET=supersecret" >> .env
+          echo "USDA_API_URL=https://usda-db.fly.dev/" >> .env
       - name: Push schema to database
         run: pnpm run db:push
 

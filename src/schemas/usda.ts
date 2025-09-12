@@ -45,7 +45,7 @@ const nutrientSummary = z
 const foodInfo = z
   .object({
     data_type: z.string(),
-    description: z.string(),
+    description: z.string().nullable(),
   })
   .describe("usda food table");
 
@@ -55,7 +55,7 @@ const nutrientsPer100 = z.object({
 });
 export type NutrientsPer100 = z.infer<typeof nutrientsPer100>;
 const BrandedFoodServingInfo = z.object({
-  serving_size: z.number().optional(),
+  serving_size: z.number().nullable(),
   serving_size_unit: z.string().nullable(),
   household_serving_fulltext: z.string().nullable(),
 });

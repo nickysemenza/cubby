@@ -80,7 +80,7 @@ const brandedFoodInfoWithAmount = z.object({
   gtin_upc: z.string(),
   ingredients: z.string().nullable(),
   serving: z.object({
-    serving_size: z.number().optional(),
+    serving_size: z.number().nullable(),
     serving_size_unit: z.string().nullable(),
     household_serving_fulltext: z.string().nullable(),
   }),

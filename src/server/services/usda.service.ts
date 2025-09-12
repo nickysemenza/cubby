@@ -162,17 +162,14 @@ export class USDAService {
     // Calculate enhanced branded food info with serving_as_amount
     let enhancedBrandedFoodInfo = null;
     if (brandedFoodInfo) {
-      // Fetch raw branded food data for calculation via repository
-      const brandedFood = await this.usdaClient.getBrandedFoodByID(fdc_id);
-
-      const serving_as_amount = brandedFood
-        ? await this.getAmountFromBrandedFoodServingSize({
-            fdc_id: brandedFood.fdc_id,
-            serving_size: brandedFood.serving_size?.toNumber() ?? null,
-            serving_size_unit: brandedFood.serving_size_unit,
-            household_serving_fulltext: brandedFood.household_serving_fulltext,
-          })
-        : undefined;
+      // Use the branded food info we already have from the complete food response
+      const serving_as_amount = await this.getAmountFromBrandedFoodServingSize({
+        fdc_id: fdc_id,
+        serving_size: brandedFoodInfo.serving.serving_size ?? null,
+        serving_size_unit: brandedFoodInfo.serving.serving_size_unit,
+        household_serving_fulltext:
+          brandedFoodInfo.serving.household_serving_fulltext,
+      });
 
       enhancedBrandedFoodInfo = {
         ...brandedFoodInfo,
