@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { swaggerUI } from "@hono/swagger-ui";
 import { z } from "zod";
+import type { Context, Next } from "hono";
 import {
   countUsdaFood,
   countUsdaBrandedFood,
@@ -10,12 +11,42 @@ import {
   countUsdaMeasureUnit,
   countUsdaFoodPortion,
   countUsdaSrLegacyFood,
-  sqlite,
   closeAllConnections,
 } from "./db/client";
 import foodRoutes from "./routes/foods";
 
 const app = new OpenAPIHono();
+
+// Custom HTTP request logging middleware
+const httpLogger = async (c: Context, next: Next) => {
+  const start = Date.now();
+  const timestamp = new Date().toISOString();
+
+  await next();
+
+  const duration = Date.now() - start;
+  const method = c.req.method;
+  const url = c.req.url;
+  const status = c.res.status;
+  const userAgent = c.req.header('User-Agent') || 'Unknown';
+
+  // Color code status for better visibility
+  let statusColor = '';
+  if (status >= 200 && status < 300) {
+    statusColor = '\x1b[32m'; // Green
+  } else if (status >= 300 && status < 400) {
+    statusColor = '\x1b[33m'; // Yellow
+  } else if (status >= 400) {
+    statusColor = '\x1b[31m'; // Red
+  }
+
+  console.log(
+    `${timestamp} [${method}] ${url} - Status: ${statusColor}${status}\x1b[0m - Duration: ${duration}ms - UA: ${userAgent}`
+  );
+};
+
+// Apply logging middleware globally
+app.use('*', httpLogger);
 
 const CountsSchema = z.object({
   usda_food: z.number().int().min(0),
@@ -89,30 +120,10 @@ app.doc("/doc", {
 
 app.get("/ui", swaggerUI({ url: "/doc" }));
 
-// Validate FTS table exists on startup (lightweight)
-function validateFtsTable(): void {
-  try {
-    const exists = sqlite
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='food_search'",
-      )
-      .get();
-    if (!exists) {
-      console.warn(
-        'FTS table "food_search" not found; search routes may be limited.',
-      );
-    } else {
-      console.log("FTS search table present");
-    }
-  } catch (error) {
-    console.warn("FTS validation skipped:", error);
-  }
-}
 
 const port = Number(process.env.PORT || 8080);
 
 try {
-  validateFtsTable();
   console.log(`Server listening on :${port}`);
   serve({ fetch: app.fetch, port });
 } catch (error) {

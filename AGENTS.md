@@ -5,6 +5,7 @@
 - ensure the typechecker and linter is happy with all changes (pnpm run check)
 - todos are kept in @docs/todos.md
 - helper functions should not be added without being used
+- **IMPORTANT**: When architecture, routes, schemas, or integration patterns change, always update both AGENTS.md and relevant README.md files to keep documentation current and accurate
 
 ## Type Safety & Schema Patterns
 
@@ -79,5 +80,48 @@
 - **Product Unit Mappings**: Products can have multiple unit mappings (volume→price, weight→price, etc.)
 - **Bidirectional Graphs**: WASM creates bidirectional conversion graphs from mappings
 - **Error Handling**: Weight conversion should work independently of nutrition data availability
-- todos are stored in @@docs/todos.md
-- always run prettier to format files
+
+## USDA Database Integration
+
+**Overview**: The USDA FoodData Central database provides comprehensive nutrition and food information, integrated via a separate API service and shared schema package.
+
+### Key Integration Points:
+
+- **Shared Schemas**: Use `@recipehub/usda-schemas` package for type-safe data structures across API and web app
+- **USDAClient**: Abstraction layer in `src/server/clients/usda.ts` for all USDA API interactions
+- **Product Linking**: Products can be linked to USDA foods via UPC codes or legacy NDB numbers
+- **Nutrition Data**: USDA provides detailed nutrient information and portion mappings
+
+### Common Usage Patterns:
+
+- **Find by UPC**: `usdaClient.findFood({ kind: "upc", gtin_upc: "123456789012" })`
+- **Find by NDB**: `usdaClient.findFood({ kind: "ndb", ndb_number: 12345 })`
+- **Search Foods**: `usdaClient.listFoods(nameFilter, dataTypeFilter, sort, pagination)`
+- **Get Details**: `usdaClient.getFoodSummaryByID(fdcId)`
+
+### Service Layer Integration:
+
+- **WASM Processing**: Service layer processes USDA portion data through WASM for unit conversions
+- **tRPC Router**: `src/server/api/routers/usda.ts` exposes USDA functionality to frontend
+- **Type Safety**: All USDA data uses Zod schemas for runtime validation and TypeScript types
+
+### Database Management and Cache Busting:
+
+- **Automatic Updates**: USDA API automatically detects database updates via version comparison
+- **Cache Invalidation**: Upload script generates version timestamps and checksums for intelligent cache busting
+- **Integrity Verification**: SHA256 checksums ensure database integrity during downloads
+- **Manual Override**: Use `FORCE_DB_REFRESH=1` environment variable to force fresh database download
+
+### Database Deployment Workflow:
+
+1. **Local Import**: Run `pnpm import:usda` to process CSV files into SQLite
+2. **Upload to R2**: Run `pnpm upload:db` to compress and upload with versioning
+3. **Auto-Deploy**: Fly.io containers automatically detect and download updated database
+4. **Cache Busting**: Version timestamps ensure fresh downloads when database changes
+
+### Performance Considerations:
+
+- **Caching**: USDA API responses should be cached appropriately
+- **Batch Operations**: Use list endpoints for multiple food lookups
+- **Database Location**: USDA API runs as separate service with SQLite database on Fly.io
+- **Volume Persistence**: Database persists on Fly volumes between deployments

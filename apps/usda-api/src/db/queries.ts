@@ -19,8 +19,8 @@ const preparedStatements = {
     .where(
       and(
         sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.dataType, sql.placeholder("dataType"))
-      )
+        eq(foodSearch.dataType, sql.placeholder("dataType")),
+      ),
     )
     .orderBy(asc(foodSearch.description))
     .limit(sql.placeholder("limit"))
@@ -37,8 +37,8 @@ const preparedStatements = {
     .where(
       and(
         sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.dataType, sql.placeholder("dataType"))
-      )
+        eq(foodSearch.dataType, sql.placeholder("dataType")),
+      ),
     )
     .orderBy(desc(foodSearch.description))
     .limit(sql.placeholder("limit"))
@@ -51,8 +51,8 @@ const preparedStatements = {
     .where(
       and(
         sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.dataType, sql.placeholder("dataType"))
-      )
+        eq(foodSearch.dataType, sql.placeholder("dataType")),
+      ),
     )
     .prepare(),
 
@@ -113,7 +113,7 @@ const preparedStatements = {
         schema.usdaBrandedFood.householdServingFulltext,
       modified_date:
         sql<string>`COALESCE(${schema.usdaBrandedFood.modifiedDate}, datetime('now'))`.as(
-          "modified_date"
+          "modified_date",
         ),
     })
     .from(schema.usdaBrandedFood)
@@ -140,8 +140,8 @@ const preparedStatements = {
       and(
         eq(schema.usdaFoodPortion.fdcId, sql.placeholder("fdcId")),
         isNotNull(schema.usdaFoodPortion.amount),
-        isNotNull(schema.usdaFoodPortion.gramWeight)
-      )
+        isNotNull(schema.usdaFoodPortion.gramWeight),
+      ),
     )
     .prepare(),
 
@@ -155,7 +155,7 @@ const preparedStatements = {
     .from(schema.usdaFoodNutrient)
     .innerJoin(
       schema.usdaNutrient,
-      eq(schema.usdaFoodNutrient.nutrientId, schema.usdaNutrient.id)
+      eq(schema.usdaFoodNutrient.nutrientId, schema.usdaNutrient.id),
     )
     .where(eq(schema.usdaFoodNutrient.fdcId, sql.placeholder("fdcId")))
     .prepare(),
@@ -292,7 +292,7 @@ export const listFoods = ({
   }[orderBy];
 
   finalQuery = finalQuery.orderBy(
-    direction === "desc" ? desc(orderColumn) : asc(orderColumn)
+    direction === "desc" ? desc(orderColumn) : asc(orderColumn),
   ) as typeof baseQuery;
 
   const data = finalQuery

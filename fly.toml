@@ -11,7 +11,11 @@ primary_region = 'sjc'
 
 [env]
   DATABASE_PATH = '/data/usda.sqlite'
-  USDA_DB_URL = 'https://usda-sqlite.nickysemenza.com/usda.sqlite.gz'
+  # R2 configuration for optimized downloads
+  R2_ACCOUNT_ID = '9f10f078d35d86c78dedece2300a6b88'
+  AWS_ACCESS_KEY_ID = '650819737caf5b47afaf1b4c30b0bfdb'
+  R2_BUCKET = 'usda-sqlite'
+  R2_OBJECT_KEY = 'usda.sqlite.zst'
 
 [[mounts]]
   source = 'data'
@@ -29,6 +33,5 @@ primary_region = 'sjc'
   min_machines_running = 0
 
 [[vm]]
-  memory = '512mb'
-  cpu_kind = 'shared'
-  cpus = 1
+  # size = 'performance-16x'
+  size = 'shared-cpu-2x'

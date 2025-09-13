@@ -67,8 +67,9 @@ const createDatabase = (
   return db;
 };
 
-// Main read-write connection
-export const sqlite = createDatabase(DB_PATH);
+// Main connection - readonly in production since we never write
+const isProduction = process.env.NODE_ENV === "production";
+export const sqlite = createDatabase(DB_PATH, isProduction);
 
 // Connection pool for read-only queries (better concurrency)
 const READ_POOL_SIZE = 4;
@@ -93,8 +94,8 @@ export const closeAllConnections = () => {
 };
 
 // Disable logger in production for better performance
-const isDevelopment = process.env.NODE_ENV !== "production";
-export const db = drizzle(sqlite, { logger: isDevelopment });
+// const isDevelopment = process.env.NODE_ENV !== "production";
+export const db = drizzle(sqlite, { logger: false });
 
 export const countUsdaFood = (): number =>
   db.select({ count: count() }).from(schema.usdaFood).get()?.count ?? 0;

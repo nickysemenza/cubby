@@ -15,19 +15,11 @@ import {
   usdaFoodPortion,
   usdaSrLegacyFood,
 } from "./schema";
-import type {
-  MeasureUnitCsvRecord,
-  NutrientCsvRecord,
-  FoodCsvRecord,
-  SrLegacyFoodCsvRecord,
-  BrandedFoodCsvRecord,
-  FoodNutrientCsvRecord,
-  FoodPortionCsvRecord,
-} from "./csv-types";
+// CSV types are used for runtime parsing but not needed for TypeScript types
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
-    path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31")
+    path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31"),
 );
 const DEFAULT_BATCH_SIZE = 10000; // larger batches for better throughput
 
@@ -46,11 +38,11 @@ type RawPrepared<T extends Record<string, unknown> = Record<string, unknown>> =
   };
 
 type ImportOptions<
-  T extends Record<string, unknown> = Record<string, unknown>,
+  DbRecord extends Record<string, unknown> = Record<string, unknown>,
 > = {
   batchSize?: number;
   useRaw?: boolean;
-  rawPrepared?: RawPrepared<T>;
+  rawPrepared?: RawPrepared<DbRecord>;
 };
 
 interface SQLiteRunResult {
@@ -67,7 +59,7 @@ async function streamCsvFile<
   transformRecord: (record: CsvRecord) => DbRecord,
   table: Table,
   batchSize: number = DEFAULT_BATCH_SIZE,
-  opts: ImportOptions<CsvRecord> = {}
+  opts: ImportOptions<DbRecord> = {},
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
@@ -98,7 +90,7 @@ async function streamCsvFile<
           for (const record of batch) {
             try {
               const info = preparedStmt.run(
-                opts.rawPrepared.mapParams(record as unknown as CsvRecord)
+                opts.rawPrepared.mapParams(record), // record is already DbRecord type
               ) as SQLiteRunResult;
               const changes =
                 typeof info?.changes === "number" ? info.changes : 1;
@@ -148,7 +140,7 @@ async function streamCsvFile<
       if (stats.processed % (batchSize * 10) === 0) {
         const elapsedSec = Math.max(
           1,
-          Math.floor((Date.now() - startTime) / 1000)
+          Math.floor((Date.now() - startTime) / 1000),
         );
         const speed = stats.processed / elapsedSec;
         const remaining = Math.max(0, totalRows - stats.processed);
@@ -158,7 +150,7 @@ async function streamCsvFile<
             ? ((stats.processed / totalRows) * 100).toFixed(1)
             : "—";
         console.log(
-          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`
+          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`,
         );
       }
 
@@ -192,11 +184,11 @@ async function streamCsvFile<
       processBatch();
       const elapsedSec = Math.max(
         1,
-        Math.floor((Date.now() - startTime) / 1000)
+        Math.floor((Date.now() - startTime) / 1000),
       );
       const speed = stats.processed / elapsedSec;
       console.log(
-        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`
+        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`,
       );
       resolve(stats);
     });
@@ -262,14 +254,20 @@ function countCsvRows(filePath: string): Promise<number> {
 
 async function importMeasureUnits(
   batchSize?: number,
-  opts: ImportOptions<MeasureUnitCsvRecord> = {}
+  opts: ImportOptions<{ id: number | null; name: string | null }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing Measure Units ===");
   const filePath = path.join(USDA_DATA_PATH, "measure_unit.csv");
+
+  type TransformedMeasureUnit = {
+    id: number | null;
+    name: string | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_measure_unit (id, name) VALUES (?, ?)",
-        mapParams: (r: MeasureUnitCsvRecord) => [r.id, r.name],
+        mapParams: (r: TransformedMeasureUnit) => [r.id, r.name],
       }
     : undefined;
 
@@ -277,29 +275,44 @@ async function importMeasureUnits(
     filePath,
     (record) =>
       convertEmptyToNull({
-        id: parseInteger(record.id),
-        name: record.name,
-      }),
+        id: parseInteger(record.id as string),
+        name: record.name as string,
+      }) as TransformedMeasureUnit,
     usdaMeasureUnit,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
 async function importNutrients(
   batchSize?: number,
-  opts: ImportOptions<NutrientCsvRecord> = {}
+  opts: ImportOptions<{
+    id: number | null;
+    name: string | null;
+    unitName: string | null;
+    nutrientNbr: string | null;
+    rank: string | null;
+  }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "nutrient.csv");
+
+  type TransformedNutrient = {
+    id: number | null;
+    name: string | null;
+    unitName: string | null;
+    nutrientNbr: string | null;
+    rank: string | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_nutrient (id, name, unit_name, nutrient_nbr, rank) VALUES (?, ?, ?, ?, ?)",
-        mapParams: (r: NutrientCsvRecord) => [
+        mapParams: (r: TransformedNutrient) => [
           r.id,
           r.name,
-          r.unit_name,
-          r.nutrient_nbr,
+          r.unitName,
+          r.nutrientNbr,
           r.rank,
         ],
       }
@@ -309,33 +322,48 @@ async function importNutrients(
     filePath,
     (record) =>
       convertEmptyToNull({
-        id: parseInteger(record.id),
-        name: record.name,
-        unitName: record.unit_name,
-        nutrientNbr: record.nutrient_nbr,
-        rank: record.rank,
-      }),
+        id: parseInteger(record.id as string),
+        name: record.name as string,
+        unitName: record.unit_name as string,
+        nutrientNbr: record.nutrient_nbr as string,
+        rank: record.rank as string,
+      }) as TransformedNutrient,
     usdaNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
 async function importFoods(
   batchSize?: number,
-  opts: ImportOptions<FoodCsvRecord> = {}
+  opts: ImportOptions<{
+    fdcId: number | null;
+    dataType: string | null;
+    description: string | null;
+    foodCategoryId: string | null;
+    publicationDate: string | null;
+  }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "food.csv");
+
+  type TransformedFood = {
+    fdcId: number | null;
+    dataType: string | null;
+    description: string | null;
+    foodCategoryId: string | null;
+    publicationDate: string | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_food (fdc_id, data_type, description, food_category_id, publication_date) VALUES (?, ?, ?, ?, ?)",
-        mapParams: (r: FoodCsvRecord) => [
-          r.fdc_id,
-          r.data_type,
+        mapParams: (r: TransformedFood) => [
+          r.fdcId,
+          r.dataType,
           r.description,
-          r.food_category_id,
-          r.publication_date,
+          r.foodCategoryId,
+          r.publicationDate,
         ],
       }
     : undefined;
@@ -349,23 +377,32 @@ async function importFoods(
         description: record.description,
         foodCategoryId: record.food_category_id,
         publicationDate: record.publication_date,
-      }),
+      }) as TransformedFood,
     usdaFood,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
 async function importSrLegacyFoods(
   batchSize?: number,
-  opts: ImportOptions<SrLegacyFoodCsvRecord> = {}
+  opts: ImportOptions<{
+    fdcId: number | null;
+    ndbNumber: number | null;
+  }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing SR Legacy Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "sr_legacy_food.csv");
+
+  type TransformedSrLegacyFood = {
+    fdcId: number | null;
+    ndbNumber: number | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_sr_legacy_food (fdc_id, NDB_number) VALUES (?, ?)",
-        mapParams: (r: SrLegacyFoodCsvRecord) => [r.fdc_id, r.NDB_number],
+        mapParams: (r: TransformedSrLegacyFood) => [r.fdcId, r.ndbNumber],
       }
     : undefined;
 
@@ -375,44 +412,91 @@ async function importSrLegacyFoods(
       convertEmptyToNull({
         fdcId: parseInteger(record.fdc_id as string),
         ndbNumber: parseInteger(record.NDB_number as string),
-      }),
+      }) as TransformedSrLegacyFood,
     usdaSrLegacyFood,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
 async function importBrandedFoods(
   batchSize?: number,
-  opts: ImportOptions<BrandedFoodCsvRecord> = {}
+  opts: ImportOptions<{
+    fdcId: number | null;
+    brandOwner: string | null;
+    brandName: string | null;
+    subbrandName: string | null;
+    gtinUpc: string | null;
+    ingredients: string | null;
+    notASignificantSourceOf: string | null;
+    servingSize: number | null;
+    servingSizeUnit: string | null;
+    householdServingFulltext: string | null;
+    brandedFoodCategory: string | null;
+    dataSource: string | null;
+    packageWeight: string | null;
+    modifiedDate: string | null;
+    availableDate: string | null;
+    marketCountry: string | null;
+    discontinuedDate: string | null;
+    preparationStateCode: string | null;
+    tradeChannel: string | null;
+    shortDescription: string | null;
+    materialCode: string | null;
+  }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing Branded Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "branded_food.csv");
+
+  type TransformedBrandedFood = {
+    fdcId: number | null;
+    brandOwner: string | null;
+    brandName: string | null;
+    subbrandName: string | null;
+    gtinUpc: string | null;
+    ingredients: string | null;
+    notASignificantSourceOf: string | null;
+    servingSize: number | null;
+    servingSizeUnit: string | null;
+    householdServingFulltext: string | null;
+    brandedFoodCategory: string | null;
+    dataSource: string | null;
+    packageWeight: string | null;
+    modifiedDate: string | null;
+    availableDate: string | null;
+    marketCountry: string | null;
+    discontinuedDate: string | null;
+    preparationStateCode: string | null;
+    tradeChannel: string | null;
+    shortDescription: string | null;
+    materialCode: string | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_branded_food (fdc_id, brand_owner, brand_name, subbrand_name, gtin_upc, ingredients, not_a_significant_source_of, serving_size, serving_size_unit, household_serving_fulltext, branded_food_category, data_source, package_weight, modified_date, available_date, market_country, discontinued_date, preparation_state_code, trade_channel, short_description, material_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        mapParams: (r: BrandedFoodCsvRecord) => [
-          r.fdc_id,
-          r.brand_owner,
-          r.brand_name,
-          r.subbrand_name,
-          r.gtin_upc,
+        mapParams: (r: TransformedBrandedFood) => [
+          r.fdcId,
+          r.brandOwner,
+          r.brandName,
+          r.subbrandName,
+          r.gtinUpc,
           r.ingredients,
-          r.not_a_significant_source_of,
-          r.serving_size,
-          r.serving_size_unit,
-          r.household_serving_fulltext,
-          r.branded_food_category,
-          r.data_source,
-          r.package_weight,
-          r.modified_date,
-          r.available_date,
-          r.market_country,
-          r.discontinued_date,
-          r.preparation_state_code,
-          r.trade_channel,
-          r.short_description,
-          r.material_code,
+          r.notASignificantSourceOf,
+          r.servingSize,
+          r.servingSizeUnit,
+          r.householdServingFulltext,
+          r.brandedFoodCategory,
+          r.dataSource,
+          r.packageWeight,
+          r.modifiedDate,
+          r.availableDate,
+          r.marketCountry,
+          r.discontinuedDate,
+          r.preparationStateCode,
+          r.tradeChannel,
+          r.shortDescription,
+          r.materialCode,
         ],
       }
     : undefined;
@@ -442,36 +526,67 @@ async function importBrandedFoods(
         tradeChannel: record.trade_channel,
         shortDescription: record.short_description,
         materialCode: record.material_code,
-      }),
+      }) as TransformedBrandedFood,
     usdaBrandedFood,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
 async function importFoodNutrients(
   batchSize?: number,
-  opts: ImportOptions<FoodNutrientCsvRecord> = {}
+  opts: ImportOptions<{
+    id: number | null;
+    fdcId: number | null;
+    nutrientId: number | null;
+    amount: number | null;
+    dataPoints: string | null;
+    derivationId: string | null;
+    min: string | null;
+    max: string | null;
+    median: string | null;
+    loq: string | null;
+    footnote: string | null;
+    minYearAcquired: string | null;
+    percentDailyValue: string | null;
+  }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing Food Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "food_nutrient.csv");
+
+  type TransformedFoodNutrient = {
+    id: number | null;
+    fdcId: number | null;
+    nutrientId: number | null;
+    amount: number | null;
+    dataPoints: string | null;
+    derivationId: string | null;
+    min: string | null;
+    max: string | null;
+    median: string | null;
+    loq: string | null;
+    footnote: string | null;
+    minYearAcquired: string | null;
+    percentDailyValue: string | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_food_nutrient (id, fdc_id, nutrient_id, amount, data_points, derivation_id, min, max, median, loq, footnote, min_year_acquired, percent_daily_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        mapParams: (r: FoodNutrientCsvRecord) => [
+        mapParams: (r: TransformedFoodNutrient) => [
           r.id,
-          r.fdc_id,
-          r.nutrient_id,
+          r.fdcId,
+          r.nutrientId,
           r.amount,
-          r.data_points,
-          r.derivation_id,
+          r.dataPoints,
+          r.derivationId,
           r.min,
           r.max,
           r.median,
           r.loq,
           r.footnote,
-          r.min_year_acquired,
-          r.percent_daily_value,
+          r.minYearAcquired,
+          r.percentDailyValue,
         ],
       }
     : undefined;
@@ -493,34 +608,61 @@ async function importFoodNutrients(
         footnote: record.footnote,
         minYearAcquired: record.min_year_acquired,
         percentDailyValue: record.percent_daily_value,
-      }),
+      }) as TransformedFoodNutrient,
     usdaFoodNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
 async function importFoodPortions(
   batchSize?: number,
-  opts: ImportOptions<FoodPortionCsvRecord> = {}
+  opts: ImportOptions<{
+    id: number | null;
+    fdcId: number | null;
+    seqNum: string | null;
+    amount: number | null;
+    measureUnitId: number | null;
+    portionDescription: string | null;
+    modifier: string | null;
+    gramWeight: number | null;
+    dataPoints: string | null;
+    footnote: string | null;
+    minYearAcquired: string | null;
+  }> = {},
 ): Promise<ImportStats> {
   console.log("\n=== Importing Food Portions ===");
   const filePath = path.join(USDA_DATA_PATH, "food_portion.csv");
+
+  type TransformedFoodPortion = {
+    id: number | null;
+    fdcId: number | null;
+    seqNum: string | null;
+    amount: number | null;
+    measureUnitId: number | null;
+    portionDescription: string | null;
+    modifier: string | null;
+    gramWeight: number | null;
+    dataPoints: string | null;
+    footnote: string | null;
+    minYearAcquired: string | null;
+  };
+
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_food_portion (id, fdc_id, seq_num, amount, measure_unit_id, portion_description, modifier, gram_weight, data_points, footnote, min_year_acquired) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        mapParams: (r: FoodPortionCsvRecord) => [
+        mapParams: (r: TransformedFoodPortion) => [
           r.id,
-          r.fdc_id,
-          r.seq_num,
+          r.fdcId,
+          r.seqNum,
           r.amount,
-          r.measure_unit_id,
-          r.portion_description,
+          r.measureUnitId,
+          r.portionDescription,
           r.modifier,
-          r.gram_weight,
-          r.data_points,
+          r.gramWeight,
+          r.dataPoints,
           r.footnote,
-          r.min_year_acquired,
+          r.minYearAcquired,
         ],
       }
     : undefined;
@@ -540,10 +682,10 @@ async function importFoodPortions(
         dataPoints: record.data_points,
         footnote: record.footnote,
         minYearAcquired: record.min_year_acquired,
-      }),
+      }) as TransformedFoodPortion,
     usdaFoodPortion,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
@@ -662,7 +804,7 @@ async function main() {
   const batchSize = batchArg
     ? Math.max(
         1,
-        parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE
+        parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE,
       )
     : DEFAULT_BATCH_SIZE;
 
@@ -670,10 +812,10 @@ async function main() {
   console.log(`Data path: ${USDA_DATA_PATH}`);
   if (enableSafePragmas)
     console.log(
-      "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)"
+      "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)",
     );
   console.log(
-    `Batch size: ${batchSize}${useRaw ? " | raw prepared statements" : ""}`
+    `Batch size: ${batchSize}${useRaw ? " | raw prepared statements" : ""}`,
   );
 
   if (shouldClear) {
@@ -700,7 +842,7 @@ async function main() {
     try {
       const stats = await fn(batchSize, { useRaw });
       console.log(
-        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`
+        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
       );
       totalStats.processed += stats.processed;
       totalStats.inserted += stats.inserted;
