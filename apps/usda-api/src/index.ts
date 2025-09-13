@@ -12,8 +12,8 @@ import {
   countUsdaSrLegacyFood,
   sqlite,
   closeAllConnections,
-} from "./db/client.js";
-import foodRoutes from "./routes/foods.js";
+} from "./db/client";
+import foodRoutes from "./routes/foods";
 
 const app = new OpenAPIHono();
 

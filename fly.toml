@@ -7,7 +7,7 @@ app = 'usda-db'
 primary_region = 'sjc'
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = 'apps/usda-api/Dockerfile'
 
 [env]
   DATABASE_PATH = '/data/usda.sqlite'
@@ -29,6 +29,6 @@ primary_region = 'sjc'
   min_machines_running = 0
 
 [[vm]]
-  memory = '1gb'
+  memory = '512mb'
   cpu_kind = 'shared'
   cpus = 1

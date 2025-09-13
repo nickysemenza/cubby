@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { count } from "drizzle-orm";
 import fs from "node:fs";
 import path from "node:path";
-import * as schema from "./schema.js";
+import * as schema from "./schema";
 
 const DB_PATH =
   process.env.DATABASE_PATH || path.resolve("data", "usda.sqlite");

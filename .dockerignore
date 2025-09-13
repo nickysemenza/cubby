@@ -3,12 +3,15 @@ node_modules/
 npm-debug.log*
 pnpm-debug.log*
 
-# Build outputs
-dist/
+# Build outputs (keep usda-api dist since we need it)
+apps/web/dist/
+apps/web/.next/
+packages/*/dist/
 *.tsbuildinfo
 
 # Local database and large data assets
 data/
+apps/usda-api/data/
 
 # Environment files
 .env
@@ -39,6 +42,7 @@ test/
 tests/
 **/*.test.*
 **/*.spec.*
+coverage/
 
 # Development files
 .claude/
@@ -46,3 +50,19 @@ tests/
 # Temporary files
 temp/
 tmp/
+
+# Logs
+*.log
+
+# Other apps we don't need for usda-api deployment
+apps/web/
+
+# Large directories that aren't needed
+.git/
+node_modules/
+.next/
+.turbo/
+.claude/
+
+# Husky and lint-staged
+.husky/

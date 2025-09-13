@@ -1,4 +1,4 @@
-import { sqlite } from "./client.js";
+import { sqlite } from "./client";
 
 // Create a virtual FTS5 table to accelerate name/description search.
 // We index core text fields that users might search by.

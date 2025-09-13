@@ -1,7 +1,7 @@
 import { eq, and, asc, desc, count, sql, isNotNull } from "drizzle-orm";
-import { db } from "./client.js";
-import * as schema from "./schema.js";
-import { toFtsQuery } from "./fts.js";
+import { db } from "./client";
+import * as schema from "./schema";
+import { toFtsQuery } from "./fts";
 import type { z } from "zod";
 import { nutrient_unit_name } from "@recipehub/usda-schemas";
 

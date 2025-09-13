@@ -1,59 +1,38 @@
 # syntax=docker/dockerfile:1
 
-# Build stage
-FROM node:20-alpine AS builder
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Install pnpm globally
-RUN npm i -g pnpm@9
+# System deps and global tooling
+RUN apk add --no-cache su-exec wget gzip sqlite ca-certificates pv && update-ca-certificates \
+  && npm i -g pnpm@9 tsx@4
 
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
+# Workspace manifests (speeds up install caching)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/usda-api/package.json apps/usda-api/package.json
+COPY packages/usda-schemas/package.json packages/usda-schemas/package.json
 
-# Install dependencies including devDependencies for build
+# Install dependencies (including devDeps for tsx)
 RUN pnpm install --frozen-lockfile
 
-# Copy source code and config
-COPY tsconfig.json ./
-COPY drizzle.config.ts ./
-COPY drizzle ./drizzle
-COPY src ./src
+# Bring in source
+COPY apps/usda-api/ apps/usda-api/
+COPY packages/ packages/
 
-# Build the application
-RUN pnpm run build
+# Ensure workspace links are correct for the app package
+RUN pnpm --filter @recipehub/usda-api install --frozen-lockfile
 
-# Production stage  
-FROM node:20-alpine AS production
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs \
+  && adduser -S nodejs -u 1001 \
+  && chown -R nodejs:nodejs /app
 
-WORKDIR /app
-
-# Install pnpm globally
-RUN npm i -g pnpm@9 && apk add --no-cache su-exec wget gzip sqlite ca-certificates pv && update-ca-certificates
-
-# Copy package files
-COPY package.json pnpm-lock.yaml* ./
-
-# Install only production dependencies
-RUN pnpm install --frozen-lockfile --prod
-
-# Copy built application from builder stage
-COPY --from=builder /app/dist ./dist
-
-# Create data directory and optionally copy database
-RUN mkdir -p ./data
-
-## Note: We do not bake the SQLite DB into the image (Strategy A).
-## The DB is uploaded once to the Fly volume via `fly sftp` to keep image small.
-
-## Create non-root user but keep running as root for entrypoint; entrypoint will drop privileges
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
-    chown -R nodejs:nodejs /app
-
-# Entrypoint ensures /data ownership then execs as node user
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Entrypoint for DB bootstrap + drop privileges
+COPY apps/usda-api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+WORKDIR /app/apps/usda-api
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["pnpm", "start"]

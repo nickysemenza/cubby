@@ -3,8 +3,8 @@ import path from "node:path";
 import process from "node:process";
 import os from "node:os";
 import { parse } from "csv-parse";
-import { db, sqlite } from "./client.js";
-import { rebuildFoodSearchFts } from "./fts.js";
+import { db, sqlite } from "./client";
+import { rebuildFoodSearchFts } from "./fts";
 import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import {
   usdaFood,
@@ -14,7 +14,7 @@ import {
   usdaMeasureUnit,
   usdaFoodPortion,
   usdaSrLegacyFood,
-} from "./schema.js";
+} from "./schema";
 import type {
   MeasureUnitCsvRecord,
   NutrientCsvRecord,
@@ -23,7 +23,7 @@ import type {
   BrandedFoodCsvRecord,
   FoodNutrientCsvRecord,
   FoodPortionCsvRecord,
-} from "./csv-types.js";
+} from "./csv-types";
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
