@@ -1,4 +1,11 @@
-import { sqliteTable, integer, text, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  integer,
+  text,
+  real,
+  index,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const usdaFood = sqliteTable(
   "usda_food",
@@ -14,7 +21,7 @@ export const usdaFood = sqliteTable(
     // Postgres GIN not available in sqlite; create a normal index on description
     descriptionIdx: index("usda_food_description_idx").on(t.description),
     dataTypeIdx: index("usda_food_data_type_idx").on(t.dataType),
-  })
+  }),
 );
 
 export const usdaBrandedFood = sqliteTable(
@@ -22,7 +29,10 @@ export const usdaBrandedFood = sqliteTable(
   {
     fdcId: integer("fdc_id")
       .primaryKey()
-      .references(() => usdaFood.fdcId, { onDelete: "no action", onUpdate: "no action" }),
+      .references(() => usdaFood.fdcId, {
+        onDelete: "no action",
+        onUpdate: "no action",
+      }),
     brandOwner: text("brand_owner"),
     brandName: text("brand_name"),
     subbrandName: text("subbrand_name"),
@@ -47,7 +57,7 @@ export const usdaBrandedFood = sqliteTable(
   (t) => ({
     fdcIdIdx: index("branded_food_fdc_id").on(t.fdcId),
     upcIdx: index("branded_food_upc").on(t.gtinUpc),
-  })
+  }),
 );
 
 export const usdaNutrient = sqliteTable("usda_nutrient", {
@@ -64,10 +74,16 @@ export const usdaFoodNutrient = sqliteTable(
     id: integer("id").primaryKey(),
     fdcId: integer("fdc_id")
       .notNull()
-      .references(() => usdaFood.fdcId, { onDelete: "no action", onUpdate: "no action" }),
+      .references(() => usdaFood.fdcId, {
+        onDelete: "no action",
+        onUpdate: "no action",
+      }),
     nutrientId: integer("nutrient_id")
       .notNull()
-      .references(() => usdaNutrient.id, { onDelete: "no action", onUpdate: "no action" }),
+      .references(() => usdaNutrient.id, {
+        onDelete: "no action",
+        onUpdate: "no action",
+      }),
     amount: real("amount").notNull(),
     dataPoints: text("data_points"),
     derivationId: text("derivation_id"),
@@ -82,7 +98,7 @@ export const usdaFoodNutrient = sqliteTable(
   (t) => ({
     fdcIdIdx: index("food_nutrient_fdc_id").on(t.fdcId),
     nutrientIdIdx: index("food_nutrient_nutrient_id_idx").on(t.nutrientId),
-  })
+  }),
 );
 
 export const usdaMeasureUnit = sqliteTable("usda_measure_unit", {
@@ -96,12 +112,18 @@ export const usdaFoodPortion = sqliteTable(
     id: integer("id").primaryKey(),
     fdcId: integer("fdc_id")
       .notNull()
-      .references(() => usdaFood.fdcId, { onDelete: "no action", onUpdate: "no action" }),
+      .references(() => usdaFood.fdcId, {
+        onDelete: "no action",
+        onUpdate: "no action",
+      }),
     seqNum: text("seq_num"),
     amount: real("amount"),
     measureUnitId: integer("measure_unit_id")
       .notNull()
-      .references(() => usdaMeasureUnit.id, { onDelete: "no action", onUpdate: "no action" }),
+      .references(() => usdaMeasureUnit.id, {
+        onDelete: "no action",
+        onUpdate: "no action",
+      }),
     portionDescription: text("portion_description"),
     modifier: text("modifier"),
     gramWeight: real("gram_weight").notNull(),
@@ -111,8 +133,10 @@ export const usdaFoodPortion = sqliteTable(
   },
   (t) => ({
     fdcIdIdx: index("food_portion_fdc_id").on(t.fdcId),
-    measureUnitIdx: index("food_portion_measure_unit_id_idx").on(t.measureUnitId),
-  })
+    measureUnitIdx: index("food_portion_measure_unit_id_idx").on(
+      t.measureUnitId,
+    ),
+  }),
 );
 
 export const usdaSrLegacyFood = sqliteTable(
@@ -122,7 +146,8 @@ export const usdaSrLegacyFood = sqliteTable(
     ndbNumber: integer("NDB_number").notNull(),
   },
   (t) => ({
-    ndbUnique: uniqueIndex("usda_sr_legacy_food_NDB_number_unique").on(t.ndbNumber),
-  })
+    ndbUnique: uniqueIndex("usda_sr_legacy_food_NDB_number_unique").on(
+      t.ndbNumber,
+    ),
+  }),
 );
-

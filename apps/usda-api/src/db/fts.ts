@@ -16,7 +16,7 @@ export function ensureFoodSearchFts(): void {
       "description, short_description, brand_name, brand_owner, " +
       // Tokenizer: unicode with diacritics removed; porter can be added if desired
       "tokenize='unicode61 remove_diacritics 1'" +
-      ");"
+      ");",
   );
 }
 
@@ -43,7 +43,11 @@ export function rebuildFoodSearchFts(): void {
     sqlite.exec(insertSql);
 
     // Optimize the index after bulk load
-    try { sqlite.exec("INSERT INTO food_search(food_search) VALUES('optimize');"); } catch {}
+    try {
+      sqlite.exec("INSERT INTO food_search(food_search) VALUES('optimize');");
+    } catch {
+      // Ignore FTS optimization errors - not critical
+    }
   });
 
   trx();

@@ -20,16 +20,28 @@ try {
       path.resolve(process.cwd(), "data/usda.sqlite"),
     ];
     const seedPath = candidates.find((p) => {
-      try { return fs.existsSync(p); } catch { return false; }
+      try {
+        return fs.existsSync(p);
+      } catch {
+        return false;
+      }
     });
     if (seedPath && path.resolve(seedPath) !== path.resolve(DB_PATH)) {
       fs.copyFileSync(seedPath, DB_PATH);
       // Clean up any leftover journal files at target path
       for (const suffix of ["-wal", "-shm"]) {
-        try { fs.rmSync(`${DB_PATH}${suffix}`, { force: true }); } catch {}
+        try {
+          fs.rmSync(`${DB_PATH}${suffix}`, { force: true });
+        } catch {
+          // Ignore file removal errors - file may not exist
+        }
       }
       // Match permissions to ensure readable by app user
-      try { fs.chmodSync(DB_PATH, 0o644); } catch {}
+      try {
+        fs.chmodSync(DB_PATH, 0o644);
+      } catch {
+        // Ignore permission errors - not critical
+      }
       console.log(`Seeded database from ${seedPath} -> ${DB_PATH}`);
     }
   }
@@ -38,17 +50,20 @@ try {
 }
 
 // Create a function to configure database connections
-const createDatabase = (path: string, readonly: boolean = false): BetterSqlite3Database => {
+const createDatabase = (
+  path: string,
+  readonly: boolean = false,
+): BetterSqlite3Database => {
   const db = new BetterSqlite3(path, { readonly });
-  
+
   // Apply performance-optimized pragmas
   db.pragma("journal_mode = WAL");
-  db.pragma("cache_size = -64000");        // 64MB cache per connection
-  db.pragma("temp_store = MEMORY");        // Use memory for temp storage
-  db.pragma("mmap_size = 268435456");      // 256MB memory-mapped I/O  
-  db.pragma("synchronous = NORMAL");       // Safe for read-heavy workloads
-  db.pragma("foreign_keys = ON");          // Maintain referential integrity
-  
+  db.pragma("cache_size = -64000"); // 64MB cache per connection
+  db.pragma("temp_store = MEMORY"); // Use memory for temp storage
+  db.pragma("mmap_size = 268435456"); // 256MB memory-mapped I/O
+  db.pragma("synchronous = NORMAL"); // Safe for read-heavy workloads
+  db.pragma("foreign_keys = ON"); // Maintain referential integrity
+
   return db;
 };
 
@@ -74,11 +89,11 @@ export const getReadConnection = (): BetterSqlite3Database => {
 // Close all connections gracefully
 export const closeAllConnections = () => {
   sqlite.close();
-  readConnections.forEach(conn => conn.close());
+  readConnections.forEach((conn) => conn.close());
 };
 
 // Disable logger in production for better performance
-const isDevelopment = process.env.NODE_ENV !== 'production';
+const isDevelopment = process.env.NODE_ENV !== "production";
 export const db = drizzle(sqlite, { logger: isDevelopment });
 
 export const countUsdaFood = (): number =>

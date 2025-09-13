@@ -100,6 +100,7 @@ export interface paths {
                 brand_owner: string | null;
                 brand_name: string | null;
                 branded_food_category: string | null;
+                /** @description 12 digit UPC code */
                 gtin_upc: string;
                 ingredients: string | null;
                 serving: {
@@ -109,6 +110,7 @@ export interface paths {
                 };
               } | null;
               legacyFoodInfo: {
+                /** @description NDB number */
                 ndb_number: number;
               } | null;
               nutritionInfo: {
@@ -117,18 +119,18 @@ export interface paths {
                   name: string;
                   /** @enum {string} */
                   unit:
-                    | "G"
-                    | "IU"
-                    | "KCAL"
-                    | "MCG_RE"
-                    | "MG"
                     | "MG_ATE"
-                    | "MG_GAE"
-                    | "PH"
+                    | "kJ"
+                    | "MCG_RE"
+                    | "KCAL"
                     | "SP_GR"
+                    | "PH"
                     | "UG"
+                    | "MG_GAE"
                     | "UMOL_TE"
-                    | "kJ";
+                    | "G"
+                    | "MG"
+                    | "IU";
                 }[];
                 nutrientsPer100: {
                   protein: number;
@@ -205,6 +207,7 @@ export interface paths {
                 brand_owner: string | null;
                 brand_name: string | null;
                 branded_food_category: string | null;
+                /** @description 12 digit UPC code */
                 gtin_upc: string;
                 ingredients: string | null;
                 serving: {
@@ -214,6 +217,7 @@ export interface paths {
                 };
               } | null;
               legacyFoodInfo: {
+                /** @description NDB number */
                 ndb_number: number;
               } | null;
               nutritionInfo: {
@@ -222,18 +226,18 @@ export interface paths {
                   name: string;
                   /** @enum {string} */
                   unit:
-                    | "G"
-                    | "IU"
-                    | "KCAL"
-                    | "MCG_RE"
-                    | "MG"
                     | "MG_ATE"
-                    | "MG_GAE"
-                    | "PH"
+                    | "kJ"
+                    | "MCG_RE"
+                    | "KCAL"
                     | "SP_GR"
+                    | "PH"
                     | "UG"
+                    | "MG_GAE"
                     | "UMOL_TE"
-                    | "kJ";
+                    | "G"
+                    | "MG"
+                    | "IU";
                 }[];
                 nutrientsPer100: {
                   protein: number;
@@ -298,6 +302,7 @@ export interface paths {
                 brand_owner: string | null;
                 brand_name: string | null;
                 branded_food_category: string | null;
+                /** @description 12 digit UPC code */
                 gtin_upc: string;
                 ingredients: string | null;
                 serving: {
@@ -307,6 +312,7 @@ export interface paths {
                 };
               } | null;
               legacyFoodInfo: {
+                /** @description NDB number */
                 ndb_number: number;
               } | null;
               nutritionInfo: {
@@ -315,18 +321,18 @@ export interface paths {
                   name: string;
                   /** @enum {string} */
                   unit:
-                    | "G"
-                    | "IU"
-                    | "KCAL"
-                    | "MCG_RE"
-                    | "MG"
                     | "MG_ATE"
-                    | "MG_GAE"
-                    | "PH"
+                    | "kJ"
+                    | "MCG_RE"
+                    | "KCAL"
                     | "SP_GR"
+                    | "PH"
                     | "UG"
+                    | "MG_GAE"
                     | "UMOL_TE"
-                    | "kJ";
+                    | "G"
+                    | "MG"
+                    | "IU";
                 }[];
                 nutrientsPer100: {
                   protein: number;
@@ -397,6 +403,7 @@ export interface paths {
                   brand_owner: string | null;
                   brand_name: string | null;
                   branded_food_category: string | null;
+                  /** @description 12 digit UPC code */
                   gtin_upc: string;
                   ingredients: string | null;
                   serving: {
@@ -406,6 +413,7 @@ export interface paths {
                   };
                 } | null;
                 legacyFoodInfo: {
+                  /** @description NDB number */
                   ndb_number: number;
                 } | null;
                 nutritionInfo: {
@@ -414,18 +422,18 @@ export interface paths {
                     name: string;
                     /** @enum {string} */
                     unit:
-                      | "G"
-                      | "IU"
-                      | "KCAL"
-                      | "MCG_RE"
-                      | "MG"
                       | "MG_ATE"
-                      | "MG_GAE"
-                      | "PH"
+                      | "kJ"
+                      | "MCG_RE"
+                      | "KCAL"
                       | "SP_GR"
+                      | "PH"
                       | "UG"
+                      | "MG_GAE"
                       | "UMOL_TE"
-                      | "kJ";
+                      | "G"
+                      | "MG"
+                      | "IU";
                   }[];
                   nutrientsPer100: {
                     protein: number;

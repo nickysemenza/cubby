@@ -82,7 +82,8 @@ app.doc("/doc", {
   info: {
     version: "1.0.0",
     title: "USDA Database API",
-    description: "API for accessing USDA FoodData Central database with comprehensive food information, nutrients, and search capabilities",
+    description:
+      "API for accessing USDA FoodData Central database with comprehensive food information, nutrients, and search capabilities",
   },
 });
 
@@ -93,18 +94,18 @@ function validateFtsTable(): void {
   try {
     const exists = sqlite
       .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='food_search'"
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='food_search'",
       )
       .get();
     if (!exists) {
       console.warn(
-        'FTS table "food_search" not found; search routes may be limited.'
+        'FTS table "food_search" not found; search routes may be limited.',
       );
     } else {
-      console.log('FTS search table present');
+      console.log("FTS search table present");
     }
   } catch (error) {
-    console.warn('FTS validation skipped:', error);
+    console.warn("FTS validation skipped:", error);
   }
 }
 

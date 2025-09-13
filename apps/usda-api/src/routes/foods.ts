@@ -1,11 +1,6 @@
 import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { z } from "zod";
 import {
-  getFoodByIdResponse,
-  getLegacyFoodResponse,
-  getFoodPortionsResponse,
-  getNutrientSummaryResponse,
-  getBrandedFoodResponse,
   findFoodByUpcResponse,
   findFoodByNdbResponse,
   listFoodsQuery,
@@ -14,11 +9,6 @@ import {
   errorResponse,
 } from "../schemas/food.js";
 import {
-  getFoodById,
-  getLegacyFoodById,
-  getFoodPortions,
-  getNutrientSummary,
-  getBrandedFoodById,
   findFoodByUpc,
   findFoodByNdb,
   listFoods,
@@ -79,7 +69,7 @@ app.openapi(getFoodRoute, (c) => {
         error: "Food not found",
         message: `No food found with FDC ID ${fdc_id}`,
       },
-      404
+      404,
     );
   }
 

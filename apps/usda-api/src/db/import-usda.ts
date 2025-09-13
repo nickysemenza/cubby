@@ -16,7 +16,8 @@ import {
 } from "./schema.js";
 
 const USDA_DATA_PATH = path.resolve(
-  process.env.USDA_DATA_PATH || path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31")
+  process.env.USDA_DATA_PATH ||
+    path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31"),
 );
 const DEFAULT_BATCH_SIZE = 10000; // larger batches for better throughput
 
@@ -28,7 +29,7 @@ interface ImportStats {
 
 type RawPrepared = {
   sql: string;
-  mapParams: (record: any) => any[];
+  mapParams: (record: Record<string, any>) => any[];
 };
 
 type ImportOptions = {
@@ -42,14 +43,12 @@ interface SQLiteRunResult {
   lastInsertRowid?: number;
 }
 
-type PragmaValue = string | number;
-
 async function streamCsvFile<T extends Record<string, any>>(
   filePath: string,
-  transformRecord: (record: any) => T,
+  transformRecord: (record: Record<string, any>) => T,
   table: any,
   batchSize: number = DEFAULT_BATCH_SIZE,
-  opts: ImportOptions = {}
+  opts: ImportOptions = {},
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
@@ -67,7 +66,9 @@ async function streamCsvFile<T extends Record<string, any>>(
       escape: '"',
     });
 
-    const preparedStmt = opts.rawPrepared ? sqlite.prepare(opts.rawPrepared.sql) : null;
+    const preparedStmt = opts.rawPrepared
+      ? sqlite.prepare(opts.rawPrepared.sql)
+      : null;
 
     const processBatch = () => {
       if (batch.length === 0) return;
@@ -77,9 +78,13 @@ async function streamCsvFile<T extends Record<string, any>>(
           // Raw prepared per-row inside a transaction
           for (const record of batch) {
             try {
-              const info = preparedStmt.run(opts.rawPrepared.mapParams(record)) as SQLiteRunResult;
-              const changes = typeof info?.changes === 'number' ? info.changes : 1;
-              if (changes > 0) stats.inserted += 1; else stats.skipped += 1;
+              const info = preparedStmt.run(
+                opts.rawPrepared.mapParams(record),
+              ) as SQLiteRunResult;
+              const changes =
+                typeof info?.changes === "number" ? info.changes : 1;
+              if (changes > 0) stats.inserted += 1;
+              else stats.skipped += 1;
               stats.processed += 1;
             } catch (err) {
               console.warn(`Skipping record due to error:`, err);
@@ -94,11 +99,14 @@ async function streamCsvFile<T extends Record<string, any>>(
               .values(batch)
               .onConflictDoNothing()
               .run() as SQLiteRunResult;
-            const changes = typeof result?.changes === 'number' ? result.changes : batch.length;
+            const changes =
+              typeof result?.changes === "number"
+                ? result.changes
+                : batch.length;
             stats.inserted += changes;
             stats.skipped += batch.length - changes;
             stats.processed += batch.length;
-          } catch (error) {
+          } catch {
             // Fallback to per-row to salvage good records and log offenders
             for (const record of batch) {
               try {
@@ -119,13 +127,19 @@ async function streamCsvFile<T extends Record<string, any>>(
       transaction();
 
       if (stats.processed % (batchSize * 10) === 0) {
-        const elapsedSec = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
+        const elapsedSec = Math.max(
+          1,
+          Math.floor((Date.now() - startTime) / 1000),
+        );
         const speed = stats.processed / elapsedSec;
         const remaining = Math.max(0, totalRows - stats.processed);
         const etaSec = speed > 0 ? Math.round(remaining / speed) : 0;
-        const pct = totalRows > 0 ? ((stats.processed / totalRows) * 100).toFixed(1) : "—";
+        const pct =
+          totalRows > 0
+            ? ((stats.processed / totalRows) * 100).toFixed(1)
+            : "—";
         console.log(
-          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`
+          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`,
         );
       }
 
@@ -150,15 +164,20 @@ async function streamCsvFile<T extends Record<string, any>>(
       }
     });
 
-    parser.on("error", function (err) { reject(err); });
+    parser.on("error", function (err) {
+      reject(err);
+    });
 
     parser.on("end", function () {
       // Process any remaining records in the final batch
       processBatch();
-      const elapsedSec = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
+      const elapsedSec = Math.max(
+        1,
+        Math.floor((Date.now() - startTime) / 1000),
+      );
       const speed = stats.processed / elapsedSec;
       console.log(
-        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`
+        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`,
       );
       resolve(stats);
     });
@@ -222,7 +241,10 @@ function countCsvRows(filePath: string): Promise<number> {
   });
 }
 
-async function importMeasureUnits(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importMeasureUnits(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing Measure Units ===");
   const filePath = path.join(USDA_DATA_PATH, "measure_unit.csv");
   const raw = opts.useRaw
@@ -241,17 +263,26 @@ async function importMeasureUnits(batchSize?: number, opts: ImportOptions = {}):
       }),
     usdaMeasureUnit,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
-async function importNutrients(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importNutrients(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "nutrient.csv");
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_nutrient (id, name, unit_name, nutrient_nbr, rank) VALUES (?, ?, ?, ?, ?)",
-        mapParams: (r: any) => [r.id, r.name, r.unitName, r.nutrientNbr, r.rank],
+        mapParams: (r: any) => [
+          r.id,
+          r.name,
+          r.unitName,
+          r.nutrientNbr,
+          r.rank,
+        ],
       }
     : undefined;
 
@@ -267,17 +298,26 @@ async function importNutrients(batchSize?: number, opts: ImportOptions = {}): Pr
       }),
     usdaNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
-async function importFoods(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importFoods(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "food.csv");
   const raw = opts.useRaw
     ? {
         sql: "INSERT OR IGNORE INTO usda_food (fdc_id, data_type, description, food_category_id, publication_date) VALUES (?, ?, ?, ?, ?)",
-        mapParams: (r: any) => [r.fdcId, r.dataType, r.description, r.foodCategoryId, r.publicationDate],
+        mapParams: (r: any) => [
+          r.fdcId,
+          r.dataType,
+          r.description,
+          r.foodCategoryId,
+          r.publicationDate,
+        ],
       }
     : undefined;
 
@@ -293,11 +333,14 @@ async function importFoods(batchSize?: number, opts: ImportOptions = {}): Promis
       }),
     usdaFood,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
-async function importSrLegacyFoods(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importSrLegacyFoods(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing SR Legacy Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "sr_legacy_food.csv");
   const raw = opts.useRaw
@@ -316,11 +359,14 @@ async function importSrLegacyFoods(batchSize?: number, opts: ImportOptions = {})
       }),
     usdaSrLegacyFood,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
-async function importBrandedFoods(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importBrandedFoods(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing Branded Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "branded_food.csv");
   const raw = opts.useRaw
@@ -380,11 +426,14 @@ async function importBrandedFoods(batchSize?: number, opts: ImportOptions = {}):
       }),
     usdaBrandedFood,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
-async function importFoodNutrients(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importFoodNutrients(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing Food Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "food_nutrient.csv");
   const raw = opts.useRaw
@@ -428,11 +477,14 @@ async function importFoodNutrients(batchSize?: number, opts: ImportOptions = {})
       }),
     usdaFoodNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
-async function importFoodPortions(batchSize?: number, opts: ImportOptions = {}): Promise<ImportStats> {
+async function importFoodPortions(
+  batchSize?: number,
+  opts: ImportOptions = {},
+): Promise<ImportStats> {
   console.log("\n=== Importing Food Portions ===");
   const filePath = path.join(USDA_DATA_PATH, "food_portion.csv");
   const raw = opts.useRaw
@@ -472,7 +524,7 @@ async function importFoodPortions(batchSize?: number, opts: ImportOptions = {}):
       }),
     usdaFoodPortion,
     batchSize,
-    { ...opts, rawPrepared: raw }
+    { ...opts, rawPrepared: raw },
   );
 }
 
@@ -492,7 +544,7 @@ function clearTables() {
     try {
       sqlite.exec(`DELETE FROM ${table}`);
       console.log(`Cleared ${table}`);
-    } catch (error) {
+    } catch {
       console.log(`Table ${table} doesn't exist or is empty`);
     }
   }
@@ -511,28 +563,75 @@ type PragmasSnapshot = {
 function applySafePragmas(): PragmasSnapshot {
   console.log("\n=== Applying safe performance PRAGMAs ===");
   const prev: PragmasSnapshot = {
-    journal_mode: sqlite.pragma("journal_mode", { simple: true }) as string | number,
-    synchronous: sqlite.pragma("synchronous", { simple: true }) as string | number,
-    temp_store: sqlite.pragma("temp_store", { simple: true }) as string | number,
+    journal_mode: sqlite.pragma("journal_mode", { simple: true }) as
+      | string
+      | number,
+    synchronous: sqlite.pragma("synchronous", { simple: true }) as
+      | string
+      | number,
+    temp_store: sqlite.pragma("temp_store", { simple: true }) as
+      | string
+      | number,
     cache_size: sqlite.pragma("cache_size", { simple: true }) as number,
     mmap_size: sqlite.pragma("mmap_size", { simple: true }) as number,
   };
-  try { sqlite.pragma("journal_mode = WAL"); } catch {}
-  try { sqlite.pragma("synchronous = NORMAL"); } catch {}
-  try { sqlite.pragma("temp_store = MEMORY"); } catch {}
-  try { sqlite.pragma("cache_size = -200000"); } catch {}
-  try { sqlite.pragma("mmap_size = 268435456"); } catch {}
+  try {
+    sqlite.pragma("journal_mode = WAL");
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma("synchronous = NORMAL");
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma("temp_store = MEMORY");
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma("cache_size = -200000");
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma("mmap_size = 268435456");
+  } catch {
+    /* Ignore pragma errors */
+  }
   return prev;
 }
 
 function restorePragmas(prev: PragmasSnapshot) {
   console.log("\n=== Restoring PRAGMAs ===");
-  const toUpper = (v: any) => typeof v === 'string' ? v.toUpperCase() : v;
-  try { sqlite.pragma(`journal_mode = ${toUpper(prev.journal_mode)}`); } catch {}
-  try { sqlite.pragma(`synchronous = ${toUpper(prev.synchronous)}`); } catch {}
-  try { sqlite.pragma(`temp_store = ${toUpper(prev.temp_store)}`); } catch {}
-  try { sqlite.pragma(`cache_size = ${prev.cache_size}`); } catch {}
-  try { sqlite.pragma(`mmap_size = ${prev.mmap_size}`); } catch {}
+  const toUpper = (v: string | number) =>
+    typeof v === "string" ? v.toUpperCase() : v;
+  try {
+    sqlite.pragma(`journal_mode = ${toUpper(prev.journal_mode)}`);
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma(`synchronous = ${toUpper(prev.synchronous)}`);
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma(`temp_store = ${toUpper(prev.temp_store)}`);
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma(`cache_size = ${prev.cache_size}`);
+  } catch {
+    /* Ignore pragma errors */
+  }
+  try {
+    sqlite.pragma(`mmap_size = ${prev.mmap_size}`);
+  } catch {
+    /* Ignore pragma errors */
+  }
 }
 
 async function main() {
@@ -541,12 +640,22 @@ async function main() {
   const enableSafePragmas = args.includes("--fast");
   const useRaw = args.includes("--raw");
   const batchArg = args.find((a) => a.startsWith("--batch="));
-  const batchSize = batchArg ? Math.max(1, parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE) : DEFAULT_BATCH_SIZE;
+  const batchSize = batchArg
+    ? Math.max(
+        1,
+        parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE,
+      )
+    : DEFAULT_BATCH_SIZE;
 
   console.log("Starting USDA data import...");
   console.log(`Data path: ${USDA_DATA_PATH}`);
-  if (enableSafePragmas) console.log("Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)");
-  console.log(`Batch size: ${batchSize}${useRaw ? ' | raw prepared statements' : ''}`);
+  if (enableSafePragmas)
+    console.log(
+      "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)",
+    );
+  console.log(
+    `Batch size: ${batchSize}${useRaw ? " | raw prepared statements" : ""}`,
+  );
 
   if (shouldClear) {
     clearTables();
@@ -555,7 +664,7 @@ async function main() {
   const previousPragmas = enableSafePragmas ? applySafePragmas() : null;
 
   const startTime = Date.now();
-  let totalStats: ImportStats = { processed: 0, inserted: 0, skipped: 0 };
+  const totalStats: ImportStats = { processed: 0, inserted: 0, skipped: 0 };
 
   // Import in dependency order
   const importFunctions = [
@@ -572,7 +681,7 @@ async function main() {
     try {
       const stats = await fn(batchSize, { useRaw });
       console.log(
-        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`
+        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
       );
       totalStats.processed += stats.processed;
       totalStats.inserted += stats.inserted;
