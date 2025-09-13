@@ -28,14 +28,14 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build recipebridge WASM
-        run: pnpm run wasm
+        run: pnpm --filter @recipehub/web wasm
         env:
           RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       - name: Upload WASM pkg artifact
         uses: actions/upload-artifact@v4
         with:
           name: wasm-pkg
-          path: recipebridge/pkg
+          path: apps/web/recipebridge/pkg
 
   lint-format:
     name: Lint and Format
@@ -50,7 +50,7 @@ jobs:
         name: "check prettier formatting"
       - run: pnpm run check
         name: "lint and type check"
-      - run: npx knip --no-exit-code
+      - run: cd apps/web && npx knip --no-exit-code
         name: "check for unused code with knip"
 
   test:
@@ -95,19 +95,19 @@ jobs:
           download-wasm: "true"
       - name: Setup environment variables
         run: |
-          cp .env.example .env
-          echo "NEXTAUTH_SECRET=supersecret" >> .env
-          echo "USDA_API_URL=https://usda-db.fly.dev/" >> .env
+          cp apps/web/.env.example apps/web/.env
+          echo "NEXTAUTH_SECRET=supersecret" >> apps/web/.env
+          echo "USDA_API_URL=https://usda-db.fly.dev/" >> apps/web/.env
       - name: Push schema to database
-        run: pnpm run db:push
+        run: pnpm --filter @recipehub/web db:push
 
       # Unit/Integration Tests
       - name: Run unit and integration tests
         id: unit-test
         if: matrix.test-type == 'unit'
         run: |
-          mkdir -p test-results
-          pnpm test -- \
+          mkdir -p apps/web/test-results
+          pnpm --filter @recipehub/web test -- \
             --coverage \
             --reporter=default \
             --reporter=github-actions \
@@ -118,7 +118,7 @@ jobs:
         uses: dorny/test-reporter@v2
         with:
           name: Unit/Integration Tests
-          path: test-results/vitest-junit.xml
+          path: apps/web/test-results/vitest-junit.xml
           reporter: java-junit
           fail-on-error: false
       - name: Upload coverage reports to Codecov
@@ -131,24 +131,24 @@ jobs:
       # E2E Tests
       - name: Install Playwright Browsers
         if: matrix.test-type == 'e2e'
-        run: npx playwright install --with-deps
+        run: cd apps/web && npx playwright install --with-deps
       - name: Run Playwright tests
         id: e2e-test
         if: matrix.test-type == 'e2e'
-        run: npx playwright test
+        run: cd apps/web && npx playwright test
       - name: Publish Playwright Results
         if: matrix.test-type == 'e2e' && always()
         uses: dorny/test-reporter@v2
         with:
           name: E2E Tests
-          path: test-results/junit.xml
+          path: apps/web/test-results/junit.xml
           reporter: java-junit
           fail-on-error: false
       - uses: actions/upload-artifact@v4
         if: matrix.test-type == 'e2e' && !cancelled()
         with:
           name: playwright-report
-          path: playwright-report/
+          path: apps/web/playwright-report/
           retention-days: 30
 
   check-tests:

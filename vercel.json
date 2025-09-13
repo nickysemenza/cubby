@@ -3,5 +3,6 @@
     "deploymentEnabled": false
   },
   "regions": ["pdx1"],
-  "buildCommand": "npm run db:migrate && npm run build"
+  "rootDirectory": "apps/web",
+  "buildCommand": "pnpm db:migrate && pnpm build"
 }

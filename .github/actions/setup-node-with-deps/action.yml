@@ -29,4 +29,4 @@ runs:
       uses: actions/download-artifact@v5
       with:
         name: wasm-pkg
-        path: recipebridge/pkg
+        path: apps/web/recipebridge/pkg
