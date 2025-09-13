@@ -39,7 +39,7 @@ export default defineConfig({
     : "html",
   expect: {
     // Allow a bit more time on CI for client-side navigations
-    timeout: isCI ? 10000 : 5000,
+    timeout: isCI ? 15000 : 5000,
   },
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
@@ -61,7 +61,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     // Use a built server on CI for stability; dev server locally for faster iteration
-    command: isCI ? "npm run preview" : "npm run dev",
+    command: isCI ? "pnpm run preview" : "pnpm run dev",
     // command: "npm run dev",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !isCI,
