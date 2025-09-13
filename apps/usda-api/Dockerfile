@@ -6,7 +6,7 @@ WORKDIR /app
 
 # System deps and global tooling
 RUN apk add --no-cache su-exec wget sqlite ca-certificates pv bc bash curl rclone zstd && update-ca-certificates \
-  && npm i -g pnpm@9 tsx@4
+  && npm i -g pnpm@10 tsx@4
 
 # Workspace manifests (speeds up install caching)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
