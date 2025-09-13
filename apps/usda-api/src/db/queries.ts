@@ -4,87 +4,88 @@ import * as schema from "./schema";
 import { toFtsQuery } from "./fts";
 import type { z } from "zod";
 import { nutrient_unit_name } from "@recipehub/usda-schemas";
+import { foodSearch } from "./types";
 
 // Drizzle prepared statements for better performance and type safety
 const preparedStatements = {
   // FTS5 queries using Drizzle's sql operator for MATCH queries
   ftsWithDataType: db
     .select({
-      fdc_id: schema.foodSearch.fdcId,
-      data_type: schema.foodSearch.dataType,
-      description: schema.foodSearch.description,
+      fdc_id: foodSearch.fdcId,
+      data_type: foodSearch.dataType,
+      description: foodSearch.description,
     })
-    .from(schema.foodSearch)
+    .from(foodSearch)
     .where(
       and(
-        sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(schema.foodSearch.dataType, sql.placeholder("dataType")),
-      ),
+        sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
+        eq(foodSearch.dataType, sql.placeholder("dataType"))
+      )
     )
-    .orderBy(asc(schema.foodSearch.description))
+    .orderBy(asc(foodSearch.description))
     .limit(sql.placeholder("limit"))
     .offset(sql.placeholder("offset"))
     .prepare(),
 
   ftsWithDataTypeDesc: db
     .select({
-      fdc_id: schema.foodSearch.fdcId,
-      data_type: schema.foodSearch.dataType,
-      description: schema.foodSearch.description,
+      fdc_id: foodSearch.fdcId,
+      data_type: foodSearch.dataType,
+      description: foodSearch.description,
     })
-    .from(schema.foodSearch)
+    .from(foodSearch)
     .where(
       and(
-        sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(schema.foodSearch.dataType, sql.placeholder("dataType")),
-      ),
+        sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
+        eq(foodSearch.dataType, sql.placeholder("dataType"))
+      )
     )
-    .orderBy(desc(schema.foodSearch.description))
+    .orderBy(desc(foodSearch.description))
     .limit(sql.placeholder("limit"))
     .offset(sql.placeholder("offset"))
     .prepare(),
 
   ftsCountWithDataType: db
     .select({ count: count() })
-    .from(schema.foodSearch)
+    .from(foodSearch)
     .where(
       and(
-        sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(schema.foodSearch.dataType, sql.placeholder("dataType")),
-      ),
+        sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
+        eq(foodSearch.dataType, sql.placeholder("dataType"))
+      )
     )
     .prepare(),
 
   ftsNoFilter: db
     .select({
-      fdc_id: schema.foodSearch.fdcId,
-      data_type: schema.foodSearch.dataType,
-      description: schema.foodSearch.description,
+      fdc_id: foodSearch.fdcId,
+      data_type: foodSearch.dataType,
+      description: foodSearch.description,
     })
-    .from(schema.foodSearch)
-    .where(sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`)
-    .orderBy(asc(schema.foodSearch.description))
+    .from(foodSearch)
+    .where(sql`${foodSearch} MATCH ${sql.placeholder("query")}`)
+    .orderBy(asc(foodSearch.description))
     .limit(sql.placeholder("limit"))
     .offset(sql.placeholder("offset"))
     .prepare(),
 
   ftsNoFilterDesc: db
     .select({
-      fdc_id: schema.foodSearch.fdcId,
-      data_type: schema.foodSearch.dataType,
-      description: schema.foodSearch.description,
+      fdc_id: foodSearch.fdcId,
+      data_type: foodSearch.dataType,
+      description: foodSearch.description,
     })
-    .from(schema.foodSearch)
-    .where(sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`)
-    .orderBy(desc(schema.foodSearch.description))
+    .from(foodSearch)
+    .where(sql`${foodSearch} MATCH ${sql.placeholder("query")}`)
+    .orderBy(desc(foodSearch.description))
     .limit(sql.placeholder("limit"))
     .offset(sql.placeholder("offset"))
     .prepare(),
 
   ftsCount: db
     .select({ count: count() })
-    .from(schema.foodSearch)
-    .where(sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`)
+    .from(foodSearch)
+    .where(sql`${foodSearch} MATCH ${sql.placeholder("query")}`)
     .prepare(),
 
   // Standard table queries using Drizzle query builder
@@ -112,7 +113,7 @@ const preparedStatements = {
         schema.usdaBrandedFood.householdServingFulltext,
       modified_date:
         sql<string>`COALESCE(${schema.usdaBrandedFood.modifiedDate}, datetime('now'))`.as(
-          "modified_date",
+          "modified_date"
         ),
     })
     .from(schema.usdaBrandedFood)
@@ -139,8 +140,8 @@ const preparedStatements = {
       and(
         eq(schema.usdaFoodPortion.fdcId, sql.placeholder("fdcId")),
         isNotNull(schema.usdaFoodPortion.amount),
-        isNotNull(schema.usdaFoodPortion.gramWeight),
-      ),
+        isNotNull(schema.usdaFoodPortion.gramWeight)
+      )
     )
     .prepare(),
 
@@ -154,7 +155,7 @@ const preparedStatements = {
     .from(schema.usdaFoodNutrient)
     .innerJoin(
       schema.usdaNutrient,
-      eq(schema.usdaFoodNutrient.nutrientId, schema.usdaNutrient.id),
+      eq(schema.usdaFoodNutrient.nutrientId, schema.usdaNutrient.id)
     )
     .where(eq(schema.usdaFoodNutrient.fdcId, sql.placeholder("fdcId")))
     .prepare(),
@@ -291,7 +292,7 @@ export const listFoods = ({
   }[orderBy];
 
   finalQuery = finalQuery.orderBy(
-    direction === "desc" ? desc(orderColumn) : asc(orderColumn),
+    direction === "desc" ? desc(orderColumn) : asc(orderColumn)
   ) as typeof baseQuery;
 
   const data = finalQuery

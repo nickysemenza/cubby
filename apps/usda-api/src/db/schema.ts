@@ -18,10 +18,9 @@ export const usdaFood = sqliteTable(
   },
   (t) => ({
     fdcIdIdx: index("food_fdc_id").on(t.fdcId),
-    // Postgres GIN not available in sqlite; create a normal index on description
     descriptionIdx: index("usda_food_description_idx").on(t.description),
     dataTypeIdx: index("usda_food_data_type_idx").on(t.dataType),
-  }),
+  })
 );
 
 export const usdaBrandedFood = sqliteTable(
@@ -57,7 +56,7 @@ export const usdaBrandedFood = sqliteTable(
   (t) => ({
     fdcIdIdx: index("branded_food_fdc_id").on(t.fdcId),
     upcIdx: index("branded_food_upc").on(t.gtinUpc),
-  }),
+  })
 );
 
 export const usdaNutrient = sqliteTable("usda_nutrient", {
@@ -98,7 +97,7 @@ export const usdaFoodNutrient = sqliteTable(
   (t) => ({
     fdcIdIdx: index("food_nutrient_fdc_id").on(t.fdcId),
     nutrientIdIdx: index("food_nutrient_nutrient_id_idx").on(t.nutrientId),
-  }),
+  })
 );
 
 export const usdaMeasureUnit = sqliteTable("usda_measure_unit", {
@@ -134,9 +133,9 @@ export const usdaFoodPortion = sqliteTable(
   (t) => ({
     fdcIdIdx: index("food_portion_fdc_id").on(t.fdcId),
     measureUnitIdx: index("food_portion_measure_unit_id_idx").on(
-      t.measureUnitId,
+      t.measureUnitId
     ),
-  }),
+  })
 );
 
 export const usdaSrLegacyFood = sqliteTable(
@@ -147,18 +146,8 @@ export const usdaSrLegacyFood = sqliteTable(
   },
   (t) => ({
     ndbUnique: uniqueIndex("usda_sr_legacy_food_NDB_number_unique").on(
-      t.ndbNumber,
+      t.ndbNumber
     ),
-  }),
+  })
 );
 
-// FTS5 Virtual Table - matches the structure created by fts.ts
-// This will be excluded from migrations but allows type-safe queries
-export const foodSearch = sqliteTable("food_search", {
-  fdcId: integer("fdc_id"),
-  dataType: text("data_type"),
-  description: text("description"),
-  shortDescription: text("short_description"),
-  brandName: text("brand_name"),
-  brandOwner: text("brand_owner"),
-});

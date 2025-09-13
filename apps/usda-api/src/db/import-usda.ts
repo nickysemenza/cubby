@@ -27,9 +27,11 @@ import type {
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
-    path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31"),
+    path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31")
 );
 const DEFAULT_BATCH_SIZE = 10000; // larger batches for better throughput
+
+// USDA_DATA_PATH=~/dev/usda/FoodData_Central_csv_2024-10-31 pnpm run import:usda --clear --fast --raw
 
 interface ImportStats {
   processed: number;
@@ -65,7 +67,7 @@ async function streamCsvFile<
   transformRecord: (record: CsvRecord) => DbRecord,
   table: Table,
   batchSize: number = DEFAULT_BATCH_SIZE,
-  opts: ImportOptions<CsvRecord> = {},
+  opts: ImportOptions<CsvRecord> = {}
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
@@ -96,7 +98,7 @@ async function streamCsvFile<
           for (const record of batch) {
             try {
               const info = preparedStmt.run(
-                opts.rawPrepared.mapParams(record as unknown as CsvRecord),
+                opts.rawPrepared.mapParams(record as unknown as CsvRecord)
               ) as SQLiteRunResult;
               const changes =
                 typeof info?.changes === "number" ? info.changes : 1;
@@ -146,7 +148,7 @@ async function streamCsvFile<
       if (stats.processed % (batchSize * 10) === 0) {
         const elapsedSec = Math.max(
           1,
-          Math.floor((Date.now() - startTime) / 1000),
+          Math.floor((Date.now() - startTime) / 1000)
         );
         const speed = stats.processed / elapsedSec;
         const remaining = Math.max(0, totalRows - stats.processed);
@@ -156,7 +158,7 @@ async function streamCsvFile<
             ? ((stats.processed / totalRows) * 100).toFixed(1)
             : "—";
         console.log(
-          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`,
+          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`
         );
       }
 
@@ -190,11 +192,11 @@ async function streamCsvFile<
       processBatch();
       const elapsedSec = Math.max(
         1,
-        Math.floor((Date.now() - startTime) / 1000),
+        Math.floor((Date.now() - startTime) / 1000)
       );
       const speed = stats.processed / elapsedSec;
       console.log(
-        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`,
+        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`
       );
       resolve(stats);
     });
@@ -260,7 +262,7 @@ function countCsvRows(filePath: string): Promise<number> {
 
 async function importMeasureUnits(
   batchSize?: number,
-  opts: ImportOptions<MeasureUnitCsvRecord> = {},
+  opts: ImportOptions<MeasureUnitCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing Measure Units ===");
   const filePath = path.join(USDA_DATA_PATH, "measure_unit.csv");
@@ -280,13 +282,13 @@ async function importMeasureUnits(
       }),
     usdaMeasureUnit,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
 async function importNutrients(
   batchSize?: number,
-  opts: ImportOptions<NutrientCsvRecord> = {},
+  opts: ImportOptions<NutrientCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "nutrient.csv");
@@ -315,13 +317,13 @@ async function importNutrients(
       }),
     usdaNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
 async function importFoods(
   batchSize?: number,
-  opts: ImportOptions<FoodCsvRecord> = {},
+  opts: ImportOptions<FoodCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "food.csv");
@@ -350,13 +352,13 @@ async function importFoods(
       }),
     usdaFood,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
 async function importSrLegacyFoods(
   batchSize?: number,
-  opts: ImportOptions<SrLegacyFoodCsvRecord> = {},
+  opts: ImportOptions<SrLegacyFoodCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing SR Legacy Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "sr_legacy_food.csv");
@@ -376,13 +378,13 @@ async function importSrLegacyFoods(
       }),
     usdaSrLegacyFood,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
 async function importBrandedFoods(
   batchSize?: number,
-  opts: ImportOptions<BrandedFoodCsvRecord> = {},
+  opts: ImportOptions<BrandedFoodCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing Branded Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "branded_food.csv");
@@ -443,13 +445,13 @@ async function importBrandedFoods(
       }),
     usdaBrandedFood,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
 async function importFoodNutrients(
   batchSize?: number,
-  opts: ImportOptions<FoodNutrientCsvRecord> = {},
+  opts: ImportOptions<FoodNutrientCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing Food Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "food_nutrient.csv");
@@ -494,13 +496,13 @@ async function importFoodNutrients(
       }),
     usdaFoodNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
 async function importFoodPortions(
   batchSize?: number,
-  opts: ImportOptions<FoodPortionCsvRecord> = {},
+  opts: ImportOptions<FoodPortionCsvRecord> = {}
 ): Promise<ImportStats> {
   console.log("\n=== Importing Food Portions ===");
   const filePath = path.join(USDA_DATA_PATH, "food_portion.csv");
@@ -541,7 +543,7 @@ async function importFoodPortions(
       }),
     usdaFoodPortion,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    { ...opts, rawPrepared: raw }
   );
 }
 
@@ -660,7 +662,7 @@ async function main() {
   const batchSize = batchArg
     ? Math.max(
         1,
-        parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE,
+        parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE
       )
     : DEFAULT_BATCH_SIZE;
 
@@ -668,10 +670,10 @@ async function main() {
   console.log(`Data path: ${USDA_DATA_PATH}`);
   if (enableSafePragmas)
     console.log(
-      "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)",
+      "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)"
     );
   console.log(
-    `Batch size: ${batchSize}${useRaw ? " | raw prepared statements" : ""}`,
+    `Batch size: ${batchSize}${useRaw ? " | raw prepared statements" : ""}`
   );
 
   if (shouldClear) {
@@ -698,7 +700,7 @@ async function main() {
     try {
       const stats = await fn(batchSize, { useRaw });
       console.log(
-        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
+        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`
       );
       totalStats.processed += stats.processed;
       totalStats.inserted += stats.inserted;

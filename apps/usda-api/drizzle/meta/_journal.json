@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1757548618739,
-      "tag": "0000_groovy_lady_ursula",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1757549580915,
-      "tag": "0001_grey_war_machine",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1757549807656,
-      "tag": "0002_sour_brood",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1757550650570,
-      "tag": "0003_married_dorian_gray",
+      "when": 1757777362319,
+      "tag": "0000_early_diamondback",
       "breakpoints": true
     }
   ]

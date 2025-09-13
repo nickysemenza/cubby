@@ -28,8 +28,8 @@ CREATE INDEX `branded_food_upc` ON `usda_branded_food` (`gtin_upc`);--> statemen
 CREATE TABLE `usda_food` (
 	`fdc_id` integer PRIMARY KEY NOT NULL,
 	`data_type` text NOT NULL,
-	`description` text NOT NULL,
-	`food_category_id` text NOT NULL,
+	`description` text,
+	`food_category_id` text,
 	`publication_date` text NOT NULL
 );
 --> statement-breakpoint
@@ -41,15 +41,15 @@ CREATE TABLE `usda_food_nutrient` (
 	`fdc_id` integer NOT NULL,
 	`nutrient_id` integer NOT NULL,
 	`amount` real NOT NULL,
-	`data_points` text NOT NULL,
-	`derivation_id` text NOT NULL,
-	`min` text NOT NULL,
-	`max` text NOT NULL,
-	`median` text NOT NULL,
-	`loq` text NOT NULL,
-	`footnote` text NOT NULL,
-	`min_year_acquired` text NOT NULL,
-	`percent_daily_value` text NOT NULL,
+	`data_points` text,
+	`derivation_id` text,
+	`min` text,
+	`max` text,
+	`median` text,
+	`loq` text,
+	`footnote` text,
+	`min_year_acquired` text,
+	`percent_daily_value` text,
 	FOREIGN KEY (`fdc_id`) REFERENCES `usda_food`(`fdc_id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`nutrient_id`) REFERENCES `usda_nutrient`(`id`) ON UPDATE no action ON DELETE no action
 );
@@ -60,7 +60,7 @@ CREATE TABLE `usda_food_portion` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`fdc_id` integer NOT NULL,
 	`seq_num` text,
-	`amount` real NOT NULL,
+	`amount` real,
 	`measure_unit_id` integer NOT NULL,
 	`portion_description` text,
 	`modifier` text,
@@ -83,8 +83,8 @@ CREATE TABLE `usda_nutrient` (
 	`id` integer PRIMARY KEY NOT NULL,
 	`name` text NOT NULL,
 	`unit_name` text NOT NULL,
-	`nutrient_nbr` text NOT NULL,
-	`rank` text NOT NULL
+	`nutrient_nbr` text,
+	`rank` text
 );
 --> statement-breakpoint
 CREATE TABLE `usda_sr_legacy_food` (
