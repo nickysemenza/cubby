@@ -171,11 +171,11 @@ The SQLite database mirrors USDA FoodData Central structure:
 
 #### Nullability Rules
 
-- To ensure data quality and simplify APIs, the following columns are NOT NULL. Rows with null values for these fields are dropped during CSV import:
-  - `usda_food.description`
-  - `usda_food_nutrient.amount`
-  - `usda_food_portion.amount`
-  - `usda_food_portion.gram_weight`
+- To ensure data quality and simplify APIs, the following columns are NOT NULL. The importer enforces these rules as follows:
+  - `usda_food.description`: If the CSV value is an empty string, the importer substitutes "<empty>" to preserve the row and maintain referential integrity on `fdc_id`.
+  - `usda_food_nutrient.amount`: Rows with null/empty amounts are dropped during CSV import.
+  - `usda_food_portion.amount`: Rows with null/empty amounts are dropped during CSV import.
+  - `usda_food_portion.gram_weight`: Rows with null/empty gram weights are dropped during CSV import.
   These constraints are enforced by Drizzle migrations and the import script.
 
 ### Full-Text Search

@@ -54,6 +54,11 @@ interface TableConfig<TCsv, TSchema extends SQLiteTable> {
   transforms: Partial<Record<keyof TCsv, FieldTransformValue>>;
   // When set, records missing any of these fields (null/undefined) are skipped
   requiredNonNull?: Array<keyof TCsv>;
+  // When provided, empty string values for these fields will be replaced
+  // with the specified non-empty string BEFORE converting empties to nulls.
+  // Useful to preserve rows where NOT NULL constraints are required but
+  // source CSV sometimes contains empty strings (e.g., food.description).
+  fillEmptyWith?: Partial<Record<keyof TCsv, string>>;
 }
 
 // Configuration for each import table
@@ -89,6 +94,9 @@ const foodConfig: TableConfig<FoodCsvRecord, typeof schema.usdaFood> = {
     fdc_id: "integer",
   },
   requiredNonNull: ["description"],
+  // If description is empty in CSV, preserve row by using a placeholder
+  // to satisfy NOT NULL constraints and retain referential integrity.
+  fillEmptyWith: { description: "<empty>" },
 };
 
 const srLegacyFoodConfig: TableConfig<
@@ -178,11 +186,21 @@ function transformRecord<
   for (const csvField in csvRecord) {
     const csvValue = csvRecord[csvField] as string;
     const transformType = config.transforms[csvField as keyof TCsv] || "string";
-    const transformedValue = transformField(
-      csvValue,
-      transformType as FieldTransformValue,
-    );
-    result[csvField] = transformedValue;
+    // If the source value is an empty string and a fill value is configured
+    // for this field, use the non-empty placeholder instead of converting
+    // it to null. This happens BEFORE the generic empty-to-null pass below.
+    const fillValue = config.fillEmptyWith?.[csvField as keyof TCsv] as
+      | string
+      | undefined;
+    if (csvValue === "" && typeof fillValue === "string") {
+      result[csvField] = fillValue;
+    } else {
+      const transformedValue = transformField(
+        csvValue,
+        transformType as FieldTransformValue,
+      );
+      result[csvField] = transformedValue;
+    }
   }
 
   return convertEmptyToNull(result);

@@ -128,9 +128,9 @@
 
 ### Nullability Rules (USDA DB)
 
-- The following columns are NOT NULL and CSV import drops rows where these are missing:
-  - `usda_food.description`
-  - `usda_food_nutrient.amount`
-  - `usda_food_portion.amount`
-  - `usda_food_portion.gram_weight`
-  This is enforced in both the Drizzle schema and migrations; importer skips invalid rows.
+- The following columns are NOT NULL. The importer enforces this with targeted handling:
+  - `usda_food.description`: If empty string in CSV, importer writes "<empty>" to retain the row and preserve foreign keys on `fdc_id`.
+  - `usda_food_nutrient.amount`: Rows with null/empty values are skipped.
+  - `usda_food_portion.amount`: Rows with null/empty values are skipped.
+  - `usda_food_portion.gram_weight`: Rows with null/empty values are skipped.
+  This is enforced in both the Drizzle schema and migrations; importer substitutes for description and skips other invalid rows.
