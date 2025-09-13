@@ -100,7 +100,7 @@ export class USDAService {
       return undefined;
     }
 
-    const w = await import("recipebridge/pkg");
+    const w = await import("wasm");
     const p = w.parse_ingredient(household_serving_fulltext);
     const b = p.amounts.pop();
     if (b === undefined) {

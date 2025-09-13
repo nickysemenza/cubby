@@ -1,4 +1,4 @@
-import { type RichItem } from "recipebridge/pkg/recipebridge";
+import { type RichItem } from "wasm/recipebridge";
 import { wasm } from "~/hooks/useWasm";
 import { tryFormatMeasure } from "../inventory/format-amount";
 import { assertNever } from "~/lib/assert";

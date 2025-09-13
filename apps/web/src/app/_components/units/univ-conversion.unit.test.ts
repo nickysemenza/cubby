@@ -19,7 +19,7 @@ import { SectionIngredientOut } from "~/schemas/recipe";
 
 // Import real wasm
 const loadWasm = async () => {
-  const wasm = await import("recipebridge/pkg/recipebridge");
+  const wasm = await import("wasm/recipebridge");
   return wasm;
 };
 

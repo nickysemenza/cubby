@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { type WIngredient } from "recipebridge/pkg";
+import { type WIngredient } from "wasm";
 import { useTRPC } from "~/trpc/react";
 import { type CompactRecipe } from "~/codec/codec";
 import { Button } from "~/components/ui/button";

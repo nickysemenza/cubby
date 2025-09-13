@@ -1,3 +1,4 @@
 # Ignore generated WASM package files
-recipebridge/
+wasm/
+.next/
 

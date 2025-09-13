@@ -1,6 +1,6 @@
 {
   "ignore": [
-    "recipebridge/**",
+    "wasm/**",
     "types.ts",
     "src/components/ui/**",
     "src/trpc/react.tsx"
@@ -18,7 +18,6 @@
     "eslint-plugin-react-hooks",
     "prisma-dbml-generator",
     "prisma-json-types-generator",
-    // CSS plugins used in Tailwind v4 pipeline or via @plugin directives
     "tailwindcss",
     "tailwindcss-animate"
   ]

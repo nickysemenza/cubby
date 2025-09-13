@@ -2,8 +2,6 @@ import "~/styles/globals.css";
 
 import { type Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { cn } from "~/lib/utils";
-
 import { TRPCReactProvider } from "~/trpc/react";
 import { MainNav } from "./_components/MainNav";
 import { GlobalCommandMenu } from "./_components/command-menu";

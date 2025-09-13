@@ -1,4 +1,4 @@
-import { WMeasure, MeasureKind } from "recipebridge/pkg/recipebridge";
+import { WMeasure, MeasureKind } from "wasm/recipebridge";
 import { Amount } from "~/codec/codec";
 import { Result, withFailure, withSuccess } from "~/misc/result-types";
 import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
