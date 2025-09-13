@@ -151,3 +151,14 @@ export const usdaSrLegacyFood = sqliteTable(
     ),
   }),
 );
+
+// FTS5 Virtual Table - matches the structure created by fts.ts
+// This will be excluded from migrations but allows type-safe queries
+export const foodSearch = sqliteTable("food_search", {
+  fdcId: integer("fdc_id"),
+  dataType: text("data_type"),
+  description: text("description"),
+  shortDescription: text("short_description"),
+  brandName: text("brand_name"),
+  brandOwner: text("brand_owner"),
+});

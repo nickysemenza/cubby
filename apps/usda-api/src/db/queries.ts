@@ -1,147 +1,164 @@
-import { eq, and, asc, desc, count } from "drizzle-orm";
-import { db, sqlite } from "./client.js";
+import { eq, and, asc, desc, count, sql, isNotNull } from "drizzle-orm";
+import { db } from "./client.js";
 import * as schema from "./schema.js";
 import { toFtsQuery } from "./fts.js";
 import type { z } from "zod";
 import { nutrient_unit_name } from "@recipehub/usda-schemas";
 
-// Prepared statement cache for better performance - now without expensive JOINs!
+// Drizzle prepared statements for better performance and type safety
 const preparedStatements = {
-  ftsWithDataType: sqlite.prepare(`
-    SELECT fdc_id, data_type, description
-    FROM food_search
-    WHERE food_search MATCH ? AND data_type = ?
-    ORDER BY description ASC
-    LIMIT ? OFFSET ?;
-  `),
-  ftsWithDataTypeDesc: sqlite.prepare(`
-    SELECT fdc_id, data_type, description
-    FROM food_search
-    WHERE food_search MATCH ? AND data_type = ?
-    ORDER BY description DESC
-    LIMIT ? OFFSET ?;
-  `),
-  ftsCountWithDataType: sqlite.prepare(`
-    SELECT COUNT(*) AS count
-    FROM food_search
-    WHERE food_search MATCH ? AND data_type = ?;
-  `),
-  ftsNoFilter: sqlite.prepare(`
-    SELECT fdc_id, data_type, description
-    FROM food_search
-    WHERE food_search MATCH ?
-    ORDER BY description ASC
-    LIMIT ? OFFSET ?;
-  `),
-  ftsNoFilterDesc: sqlite.prepare(`
-    SELECT fdc_id, data_type, description
-    FROM food_search
-    WHERE food_search MATCH ?
-    ORDER BY description DESC
-    LIMIT ? OFFSET ?;
-  `),
-  ftsCount: sqlite.prepare(`
-    SELECT COUNT(*) AS count
-    FROM food_search
-    WHERE food_search MATCH ?;
-  `),
-  // Optimized complete food info queries
-  getFoodByIdStmt: sqlite.prepare(`
-    SELECT fdc_id, data_type, description FROM usda_food WHERE fdc_id = ?;
-  `),
-  getBrandedFoodByIdStmt: sqlite.prepare(`
-    SELECT fdc_id, brand_owner, brand_name, branded_food_category, gtin_upc, ingredients,
-           serving_size, serving_size_unit, household_serving_fulltext, 
-           COALESCE(modified_date, datetime('now')) as modified_date
-    FROM usda_branded_food WHERE fdc_id = ?;
-  `),
-  getLegacyFoodByIdStmt: sqlite.prepare(`
-    SELECT fdc_id, NDB_number as ndb_number FROM usda_sr_legacy_food WHERE fdc_id = ?;
-  `),
-  getFoodPortionsStmt: sqlite.prepare(`
-    SELECT amount, modifier, gram_weight 
-    FROM usda_food_portion 
-    WHERE fdc_id = ? AND amount IS NOT NULL AND gram_weight IS NOT NULL;
-  `),
-  getNutrientsStmt: sqlite.prepare(`
-    SELECT fn.amount, n.name, n.unit_name as unit, n.nutrient_nbr
-    FROM usda_food_nutrient fn
-    JOIN usda_nutrient n ON fn.nutrient_id = n.id
-    WHERE fn.fdc_id = ?;
-  `),
+  // FTS5 queries using Drizzle's sql operator for MATCH queries
+  ftsWithDataType: db
+    .select({
+      fdc_id: schema.foodSearch.fdcId,
+      data_type: schema.foodSearch.dataType,
+      description: schema.foodSearch.description,
+    })
+    .from(schema.foodSearch)
+    .where(
+      and(
+        sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`,
+        eq(schema.foodSearch.dataType, sql.placeholder("dataType")),
+      ),
+    )
+    .orderBy(asc(schema.foodSearch.description))
+    .limit(sql.placeholder("limit"))
+    .offset(sql.placeholder("offset"))
+    .prepare(),
+
+  ftsWithDataTypeDesc: db
+    .select({
+      fdc_id: schema.foodSearch.fdcId,
+      data_type: schema.foodSearch.dataType,
+      description: schema.foodSearch.description,
+    })
+    .from(schema.foodSearch)
+    .where(
+      and(
+        sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`,
+        eq(schema.foodSearch.dataType, sql.placeholder("dataType")),
+      ),
+    )
+    .orderBy(desc(schema.foodSearch.description))
+    .limit(sql.placeholder("limit"))
+    .offset(sql.placeholder("offset"))
+    .prepare(),
+
+  ftsCountWithDataType: db
+    .select({ count: count() })
+    .from(schema.foodSearch)
+    .where(
+      and(
+        sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`,
+        eq(schema.foodSearch.dataType, sql.placeholder("dataType")),
+      ),
+    )
+    .prepare(),
+
+  ftsNoFilter: db
+    .select({
+      fdc_id: schema.foodSearch.fdcId,
+      data_type: schema.foodSearch.dataType,
+      description: schema.foodSearch.description,
+    })
+    .from(schema.foodSearch)
+    .where(sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`)
+    .orderBy(asc(schema.foodSearch.description))
+    .limit(sql.placeholder("limit"))
+    .offset(sql.placeholder("offset"))
+    .prepare(),
+
+  ftsNoFilterDesc: db
+    .select({
+      fdc_id: schema.foodSearch.fdcId,
+      data_type: schema.foodSearch.dataType,
+      description: schema.foodSearch.description,
+    })
+    .from(schema.foodSearch)
+    .where(sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`)
+    .orderBy(desc(schema.foodSearch.description))
+    .limit(sql.placeholder("limit"))
+    .offset(sql.placeholder("offset"))
+    .prepare(),
+
+  ftsCount: db
+    .select({ count: count() })
+    .from(schema.foodSearch)
+    .where(sql`${schema.foodSearch} MATCH ${sql.placeholder("query")}`)
+    .prepare(),
+
+  // Standard table queries using Drizzle query builder
+  getFoodByIdStmt: db
+    .select({
+      fdc_id: schema.usdaFood.fdcId,
+      data_type: schema.usdaFood.dataType,
+      description: schema.usdaFood.description,
+    })
+    .from(schema.usdaFood)
+    .where(eq(schema.usdaFood.fdcId, sql.placeholder("fdcId")))
+    .prepare(),
+
+  getBrandedFoodByIdStmt: db
+    .select({
+      fdc_id: schema.usdaBrandedFood.fdcId,
+      brand_owner: schema.usdaBrandedFood.brandOwner,
+      brand_name: schema.usdaBrandedFood.brandName,
+      branded_food_category: schema.usdaBrandedFood.brandedFoodCategory,
+      gtin_upc: schema.usdaBrandedFood.gtinUpc,
+      ingredients: schema.usdaBrandedFood.ingredients,
+      serving_size: schema.usdaBrandedFood.servingSize,
+      serving_size_unit: schema.usdaBrandedFood.servingSizeUnit,
+      household_serving_fulltext:
+        schema.usdaBrandedFood.householdServingFulltext,
+      modified_date:
+        sql<string>`COALESCE(${schema.usdaBrandedFood.modifiedDate}, datetime('now'))`.as(
+          "modified_date",
+        ),
+    })
+    .from(schema.usdaBrandedFood)
+    .where(eq(schema.usdaBrandedFood.fdcId, sql.placeholder("fdcId")))
+    .prepare(),
+
+  getLegacyFoodByIdStmt: db
+    .select({
+      fdc_id: schema.usdaSrLegacyFood.fdcId,
+      ndb_number: schema.usdaSrLegacyFood.ndbNumber,
+    })
+    .from(schema.usdaSrLegacyFood)
+    .where(eq(schema.usdaSrLegacyFood.fdcId, sql.placeholder("fdcId")))
+    .prepare(),
+
+  getFoodPortionsStmt: db
+    .select({
+      amount: schema.usdaFoodPortion.amount,
+      modifier: schema.usdaFoodPortion.modifier,
+      gram_weight: schema.usdaFoodPortion.gramWeight,
+    })
+    .from(schema.usdaFoodPortion)
+    .where(
+      and(
+        eq(schema.usdaFoodPortion.fdcId, sql.placeholder("fdcId")),
+        isNotNull(schema.usdaFoodPortion.amount),
+        isNotNull(schema.usdaFoodPortion.gramWeight),
+      ),
+    )
+    .prepare(),
+
+  getNutrientsStmt: db
+    .select({
+      amount: schema.usdaFoodNutrient.amount,
+      name: schema.usdaNutrient.name,
+      unit: schema.usdaNutrient.unitName,
+      nutrient_nbr: schema.usdaNutrient.nutrientNbr,
+    })
+    .from(schema.usdaFoodNutrient)
+    .innerJoin(
+      schema.usdaNutrient,
+      eq(schema.usdaFoodNutrient.nutrientId, schema.usdaNutrient.id),
+    )
+    .where(eq(schema.usdaFoodNutrient.fdcId, sql.placeholder("fdcId")))
+    .prepare(),
 };
-
-export interface FoodBasic {
-  fdc_id: number;
-  data_type: string;
-  description: string | null;
-}
-
-interface PreparedFoodInfo {
-  fdc_id: number;
-  data_type: string;
-  description: string | null;
-}
-
-interface PreparedBrandedInfo {
-  fdc_id: number;
-  brand_owner: string | null;
-  brand_name: string | null;
-  branded_food_category: string | null;
-  gtin_upc: string;
-  ingredients: string | null;
-  serving_size: number | null;
-  serving_size_unit: string | null;
-  household_serving_fulltext: string | null;
-}
-
-interface PreparedLegacyInfo {
-  fdc_id: number;
-  ndb_number: number;
-}
-
-interface PreparedPortion {
-  amount: number;
-  modifier: string | null;
-  gram_weight: number;
-}
-
-interface PreparedNutrient {
-  amount: number;
-  name: string;
-  unit: string;
-  nutrient_nbr: string;
-}
-
-export interface LegacyFoodInfo {
-  fdc_id: number;
-  ndb_number: number;
-}
-
-export interface FoodPortion {
-  amount: number;
-  modifier: string | null;
-  gram_weight: number;
-}
-
-export interface NutrientSummary {
-  amount: number;
-  name: string;
-  unit: z.infer<typeof nutrient_unit_name>;
-}
-
-export interface BrandedFoodInfo {
-  fdc_id: number;
-  brand_owner: string | null;
-  brand_name: string | null;
-  branded_food_category: string | null;
-  gtin_upc: string;
-  ingredients: string | null;
-  serving_size: number | null;
-  serving_size_unit: string | null;
-  household_serving_fulltext: string | null;
-  modified_date: string;
-}
 
 // 6. Find Food by UPC - returns complete food info
 export const findFoodByUpc = (gtinUpc: string) => {
@@ -196,45 +213,55 @@ export const listFoods = ({
     const ftsQuery = toFtsQuery(nameFilter);
 
     if (dataTypeFilter) {
-      // With data_type filter: need to join back to main table
+      // With data_type filter
       const stmt =
         direction === "desc"
           ? preparedStatements.ftsWithDataTypeDesc
           : preparedStatements.ftsWithDataType;
-      const params = [ftsQuery, dataTypeFilter, pageSize, pageIndex * pageSize];
-      const countParams = [ftsQuery, dataTypeFilter];
 
-      const rows = stmt.all(...params) as Array<FoodBasic>;
-      const totalCount = preparedStatements.ftsCountWithDataType.get(
-        ...countParams,
-      ) as { count: number };
+      const rows = stmt.all({
+        query: ftsQuery,
+        dataType: dataTypeFilter,
+        limit: pageSize,
+        offset: pageIndex * pageSize,
+      });
+
+      const totalCountResult = preparedStatements.ftsCountWithDataType.get({
+        query: ftsQuery,
+        dataType: dataTypeFilter,
+      });
 
       // Get complete food data for each item
       const completeData = rows
-        .map((row) => getCompleteFoodInfo(row.fdc_id))
+        .filter((row) => row.fdc_id !== null)
+        .map((row) => getCompleteFoodInfo(row.fdc_id!))
         .filter((item): item is NonNullable<typeof item> => item !== null);
 
-      return { data: completeData, count: totalCount?.count ?? 0 };
+      return { data: completeData, count: totalCountResult?.count ?? 0 };
     } else {
       // Without data_type filter: can use FTS table directly (faster)
       const stmt =
         direction === "desc"
           ? preparedStatements.ftsNoFilterDesc
           : preparedStatements.ftsNoFilter;
-      const params = [ftsQuery, pageSize, pageIndex * pageSize];
-      const countParams = [ftsQuery];
 
-      const rows = stmt.all(...params) as Array<FoodBasic>;
-      const totalCount = preparedStatements.ftsCount.get(...countParams) as {
-        count: number;
-      };
+      const rows = stmt.all({
+        query: ftsQuery,
+        limit: pageSize,
+        offset: pageIndex * pageSize,
+      });
+
+      const totalCountResult = preparedStatements.ftsCount.get({
+        query: ftsQuery,
+      });
 
       // Get complete food data for each item
       const completeData = rows
-        .map((row) => getCompleteFoodInfo(row.fdc_id))
+        .filter((row) => row.fdc_id !== null)
+        .map((row) => getCompleteFoodInfo(row.fdc_id!))
         .filter((item): item is NonNullable<typeof item> => item !== null);
 
-      return { data: completeData, count: totalCount?.count ?? 0 };
+      return { data: completeData, count: totalCountResult?.count ?? 0 };
     }
   }
 
@@ -287,27 +314,17 @@ export const listFoods = ({
   return { data: completeData, count: totalCount };
 };
 
-// Optimized composite query for complete food info - uses prepared statements and faster approach
+// Optimized composite query for complete food info - uses Drizzle prepared statements
 export const getCompleteFoodInfo = (fdcId: number) => {
   // Get basic food info first
-  const foodInfo = preparedStatements.getFoodByIdStmt.get(fdcId) as
-    | PreparedFoodInfo
-    | undefined;
+  const foodInfo = preparedStatements.getFoodByIdStmt.get({ fdcId });
   if (!foodInfo) return null;
 
   // Execute all other queries using prepared statements (much faster than individual function calls)
-  const brandedInfo = preparedStatements.getBrandedFoodByIdStmt.get(fdcId) as
-    | PreparedBrandedInfo
-    | undefined;
-  const legacyInfo = preparedStatements.getLegacyFoodByIdStmt.get(fdcId) as
-    | PreparedLegacyInfo
-    | undefined;
-  const portions = preparedStatements.getFoodPortionsStmt.all(
-    fdcId,
-  ) as PreparedPortion[];
-  const nutrients = preparedStatements.getNutrientsStmt.all(
-    fdcId,
-  ) as PreparedNutrient[];
+  const brandedInfo = preparedStatements.getBrandedFoodByIdStmt.get({ fdcId });
+  const legacyInfo = preparedStatements.getLegacyFoodByIdStmt.get({ fdcId });
+  const portions = preparedStatements.getFoodPortionsStmt.all({ fdcId });
+  const nutrients = preparedStatements.getNutrientsStmt.all({ fdcId });
 
   // Process nutrients for per100 calculations
   const proteinNutrient = nutrients.find((n) => n.nutrient_nbr === "203");
@@ -353,7 +370,11 @@ export const getCompleteFoodInfo = (fdcId: number) => {
       : null,
     nutritionInfo,
     portionInfo: {
-      raw: portions,
+      raw: portions.filter((p) => p.amount !== null) as Array<{
+        amount: number;
+        modifier: string | null;
+        gram_weight: number;
+      }>,
     },
   };
 };

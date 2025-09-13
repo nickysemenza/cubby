@@ -9,4 +9,5 @@ export default {
   },
   verbose: true,
   strict: true,
+  tablesFilter: ["!food_search"], // Exclude FTS5 virtual table from migrations
 } satisfies Config;
