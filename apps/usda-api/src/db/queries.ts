@@ -139,7 +139,6 @@ const preparedStatements = {
     .where(
       and(
         eq(schema.usdaFoodPortion.fdc_id, sql.placeholder("fdcId")),
-        isNotNull(schema.usdaFoodPortion.amount),
         isNotNull(schema.usdaFoodPortion.gram_weight),
       ),
     )
@@ -370,12 +369,6 @@ export const getCompleteFoodInfo = (fdcId: number) => {
         }
       : null,
     nutritionInfo,
-    portionInfo: {
-      raw: portions.filter((p) => p.amount !== null) as Array<{
-        amount: number;
-        modifier: string | null;
-        gram_weight: number;
-      }>,
-    },
+    portionInfo: { raw: portions },
   };
 };

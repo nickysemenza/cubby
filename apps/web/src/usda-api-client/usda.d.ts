@@ -94,7 +94,7 @@ export interface paths {
               fdc_id: number;
               foodInfo: {
                 data_type: string;
-                description: string | null;
+                description: string;
               };
               brandedFoodInfo: {
                 brand_owner: string | null;
@@ -201,7 +201,7 @@ export interface paths {
               fdc_id: number;
               foodInfo: {
                 data_type: string;
-                description: string | null;
+                description: string;
               };
               brandedFoodInfo: {
                 brand_owner: string | null;
@@ -296,7 +296,7 @@ export interface paths {
               fdc_id: number;
               foodInfo: {
                 data_type: string;
-                description: string | null;
+                description: string;
               };
               brandedFoodInfo: {
                 brand_owner: string | null;
@@ -397,7 +397,7 @@ export interface paths {
                 fdc_id: number;
                 foodInfo: {
                   data_type: string;
-                  description: string | null;
+                  description: string;
                 };
                 brandedFoodInfo: {
                   brand_owner: string | null;

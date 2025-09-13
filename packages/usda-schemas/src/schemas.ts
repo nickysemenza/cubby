@@ -45,7 +45,7 @@ export const nutrientSummary = z
 export const foodInfo = z
   .object({
     data_type: z.string(),
-    description: z.string().nullable(),
+    description: z.string(),
   })
   .describe("usda food table");
 
@@ -64,7 +64,7 @@ export const brandedFoodInfo = z.object({
   brand_owner: z.string().nullable(),
   brand_name: z.string().nullable(),
   branded_food_category: z.string().nullable(),
-  gtin_upc: upc.nullable(),
+  gtin_upc: upc,
   ingredients: z.string().nullable(),
   serving: BrandedFoodServingInfo,
 });
@@ -77,13 +77,13 @@ export const nutritionInfo = z.object({
 export type NutritionInfo = z.infer<typeof nutritionInfo>;
 
 export const foodPortion = z.object({
-  amount: z.number().nullable(),
+  amount: z.number(),
   modifier: z.string().nullable(),
-  gram_weight: z.number().nullable(),
+  gram_weight: z.number(),
 });
 
 export const legacyFoodInfo = z.object({
-  ndb_number: ndb.nullable(),
+  ndb_number: ndb,
 });
 export type LegacyFoodInfo = z.infer<typeof legacyFoodInfo>;
 

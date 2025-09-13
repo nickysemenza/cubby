@@ -175,6 +175,7 @@ The SQLite database mirrors USDA FoodData Central structure:
   - `usda_food.description`
   - `usda_food_nutrient.amount`
   - `usda_food_portion.amount`
+  - `usda_food_portion.gram_weight`
   These constraints are enforced by Drizzle migrations and the import script.
 
 ### Full-Text Search

@@ -132,4 +132,5 @@
   - `usda_food.description`
   - `usda_food_nutrient.amount`
   - `usda_food_portion.amount`
+  - `usda_food_portion.gram_weight`
   This is enforced in both the Drizzle schema and migrations; importer skips invalid rows.

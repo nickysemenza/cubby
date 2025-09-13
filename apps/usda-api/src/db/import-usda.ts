@@ -147,7 +147,7 @@ const foodPortionConfig: TableConfig<
     measure_unit_id: "integer",
     gram_weight: "number",
   },
-  requiredNonNull: ["amount"],
+  requiredNonNull: ["amount", "gram_weight"],
 };
 
 // Generic transformation utilities
