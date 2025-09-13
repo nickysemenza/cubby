@@ -192,9 +192,6 @@ importers:
       flat:
         specifier: ^6.0.1
         version: 6.0.1
-      geist:
-        specifier: ^1.4.2
-        version: 1.5.1(next@15.5.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))
       graphviz-react:
         specifier: ^1.2.5
         version: 1.2.5(react@19.1.1)
@@ -4358,11 +4355,6 @@ packages:
 
   fuzzysort@2.0.4:
     resolution: {integrity: sha512-Api1mJL+Ad7W7vnDZnWq5pGaXJjyencT+iKGia2PlHUcSsSzWwIQ3S1isiMpwpavjYtGd2FzhUIhnnhOULZgDw==}
-
-  geist@1.5.1:
-    resolution: {integrity: sha512-mAHZxIsL2o3ZITFaBVFBnwyDOw+zNLYum6A6nIjpzCGIO8QtC3V76XF2RnZTyLx1wlDTmMDy8jg3Ib52MIjGvQ==}
-    peerDependencies:
-      next: '>=13.2.0'
 
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
@@ -11449,10 +11441,6 @@ snapshots:
   functions-have-names@1.2.3: {}
 
   fuzzysort@2.0.4: {}
-
-  geist@1.5.1(next@15.5.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)):
-    dependencies:
-      next: 15.5.0(@babel/core@7.28.4)(@opentelemetry/api@1.9.0)(@playwright/test@1.55.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
 
   gensync@1.0.0-beta.2: {}
 

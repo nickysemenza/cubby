@@ -1,6 +1,5 @@
 import "~/styles/globals.css";
 
-import { GeistSans } from "geist/font/sans";
 import { type Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { cn } from "~/lib/utils";
@@ -27,11 +26,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider>
-      <html
-        lang="en"
-        className={cn(GeistSans.variable)}
-        suppressHydrationWarning
-      >
+      <html lang="en" suppressHydrationWarning>
         <body>
           <ThemeProvider
             attribute="class"

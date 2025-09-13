@@ -28,7 +28,7 @@ jobs:
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
       - name: Build recipebridge WASM
-        run: pnpm --filter @recipehub/web wasm
+        run: pnpm wasm
         env:
           RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       - name: Upload WASM pkg artifact

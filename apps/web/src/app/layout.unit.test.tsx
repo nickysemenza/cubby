@@ -43,13 +43,6 @@ vi.mock("@clerk/nextjs", () => {
 });
 
 describe("App Router: Works with Client Components", () => {
-  vi.mock("geist/font/sans", () => {
-    return {
-      GeistSans: {
-        variable: "foo",
-      },
-    };
-  });
   vi.mock("next/navigation", () => {
     return {
       usePathname: () => "/recipes",

@@ -12,6 +12,7 @@
     "format:write": "pnpm -r format:write",
     "test": "pnpm -r test",
     "test:e2e": "pnpm -r test:e2e",
+    "wasm": "wasm-pack build --out-dir pkg apps/web/recipebridge",
     "prepare": "husky"
   },
   "devDependencies": {
