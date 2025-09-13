@@ -1,4 +1,4 @@
-import { NutrientsPer100 } from "~/schemas/usda";
+import { NutrientsPer100 } from "@recipehub/usda-schemas";
 
 export function NutrientsSummary({
   nutrients,

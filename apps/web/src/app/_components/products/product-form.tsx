@@ -9,8 +9,9 @@ import {
   type ProductInputPayload,
   type ProductTopLevelOut,
 } from "~/schemas/product";
-import { upc } from "~/schemas/identifiers";
-import { ndb } from "~/schemas/usda";
+import { upc } from "@recipehub/usda-schemas";
+
+import { ndb } from "@recipehub/usda-schemas";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
   type CreateModeProps,

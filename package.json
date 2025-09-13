@@ -10,6 +10,8 @@
     "lint": "pnpm -r lint",
     "format:check": "pnpm -r format:check",
     "format:write": "pnpm -r format:write",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm -r test:e2e",
     "prepare": "husky"
   },
   "devDependencies": {

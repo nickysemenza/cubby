@@ -9,7 +9,7 @@ import {
   unitMappingWithMetadata,
 } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
-import { FoodSummary, foodSummary } from "./usda";
+import { FoodSummary, foodSummary } from "@recipehub/usda-schemas";
 import { imageOut } from "./image";
 
 const inventoryWithProductOut = inventoryEntryOut.extend(

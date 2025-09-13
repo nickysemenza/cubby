@@ -7,7 +7,7 @@ import {
   type ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { NutrientsPer100 } from "~/schemas/usda";
+import { NutrientsPer100 } from "@recipehub/usda-schemas";
 import { wasm } from "~/hooks/useWasm";
 import { SectionIngredientOut } from "~/schemas/recipe";
 

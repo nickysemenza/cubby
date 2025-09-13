@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
-import { upc } from "./identifiers";
-import { ndb } from "./usda";
+import { upc, ndb } from "@recipehub/usda-schemas";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 

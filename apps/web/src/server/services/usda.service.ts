@@ -6,7 +6,7 @@ import {
   type BrandedFoodRaw,
   type BrandedFoodServingSizeUnit,
   branded_food_serving_size_unit,
-} from "~/schemas/usda";
+} from "@recipehub/usda-schemas";
 import { assertNever } from "~/lib/assert";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { type FoodSummaryWithLinkedProducts } from "~/schemas/combo";

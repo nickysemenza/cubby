@@ -10,7 +10,7 @@ import {
 import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
-import { foodLookupParam, FoodLookupParam } from "~/schemas/usda";
+import { foodLookupParam, FoodLookupParam } from "@recipehub/usda-schemas";
 import {
   type ProductTopLevelOut,
   type ProductInputPayload,

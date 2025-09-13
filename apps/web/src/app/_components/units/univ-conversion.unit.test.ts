@@ -14,7 +14,7 @@ import {
   type ProductWithMappingsAndFoodOut,
   type IngredientWithFoodOut,
 } from "~/server/services/ingredient.service";
-import { NutrientsPer100 } from "~/schemas/usda";
+import { NutrientsPer100 } from "@recipehub/usda-schemas";
 import { SectionIngredientOut } from "~/schemas/recipe";
 
 // Import real wasm

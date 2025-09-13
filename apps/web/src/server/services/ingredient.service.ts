@@ -15,7 +15,7 @@ import {
   ingredientWithRecipesAndProductOut,
   type ProductWithMappingsOut,
 } from "~/schemas/combo";
-import { foodSummary } from "~/schemas/usda";
+import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
 
 // Extended schemas that include food data

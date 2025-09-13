@@ -1,4 +1,8 @@
-import { FoodSummary, BrandedFoodInfo, FoodLookupParam } from "~/schemas/usda";
+import {
+  FoodSummary,
+  BrandedFoodInfo,
+  FoodLookupParam,
+} from "@recipehub/usda-schemas";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { UsdaApiClient } from "~/usda-api-client/usda-api";
 import type { paths } from "~/usda-api-client/usda";

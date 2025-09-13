@@ -1,5 +1,5 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { foodLookupParam } from "~/schemas/usda";
+import { foodLookupParam } from "@recipehub/usda-schemas";
 import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { z } from "zod";
 import {

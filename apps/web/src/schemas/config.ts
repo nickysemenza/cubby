@@ -5,8 +5,9 @@ import {
   transformUnitMapping,
 } from "~/schemas/unitmapping";
 import { locationBase } from "~/schemas/location";
-import { upc } from "~/schemas/identifiers";
-import { ndb } from "~/schemas/usda";
+import { upc } from "@recipehub/usda-schemas";
+
+import { ndb } from "@recipehub/usda-schemas";
 
 // Base product config schema with shared fields
 const baseProductConfig = z.object({

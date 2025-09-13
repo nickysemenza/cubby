@@ -3,6 +3,6 @@
     "deploymentEnabled": false
   },
   "regions": ["pdx1"],
-  "rootDirectory": "apps/web",
-  "buildCommand": "pnpm db:migrate && pnpm build"
+  "buildCommand": "cd apps/web && pnpm db:migrate && pnpm build",
+  "outputDirectory": "apps/web/.next"
 }
