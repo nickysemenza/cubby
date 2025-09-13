@@ -6,14 +6,23 @@ import { parse } from "csv-parse";
 import { db, sqlite } from "./client";
 import { rebuildFoodSearchFts } from "./fts";
 import * as schema from "./schema";
-import { sql } from "drizzle-orm";
-// CSV types are used for runtime parsing but not needed for TypeScript types
+import { sql, type InferInsertModel } from "drizzle-orm";
+import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import type {
+  MeasureUnitCsvRecord,
+  NutrientCsvRecord,
+  FoodCsvRecord,
+  SrLegacyFoodCsvRecord,
+  BrandedFoodCsvRecord,
+  FoodNutrientCsvRecord,
+  FoodPortionCsvRecord,
+} from "./csv-types";
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
     path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31"),
 );
-const DEFAULT_BATCH_SIZE = 10000; // larger batches for better throughput
+const DEFAULT_BATCH_SIZE = 5000; // larger batches for better throughput
 
 // USDA_DATA_PATH=~/dev/usda/FoodData_Central_csv_2024-10-31 pnpm run import:usda --clear --fast
 
@@ -35,6 +44,231 @@ type DrizzlePreparedStatement = {
   };
 };
 
+// Field mappings and transformations for each table
+type FieldTransformValue = "string" | "number" | "integer";
+
+interface TableConfig<TCsv, TSchema extends SQLiteTable> {
+  tableName: string;
+  csvFile: string;
+  schema: TSchema;
+  transforms: Partial<Record<keyof TCsv, FieldTransformValue>>;
+  // When set, records missing any of these fields (null/undefined) are skipped
+  requiredNonNull?: Array<keyof TCsv>;
+}
+
+// Configuration for each import table
+const measureUnitConfig: TableConfig<
+  MeasureUnitCsvRecord,
+  typeof schema.usdaMeasureUnit
+> = {
+  tableName: "Measure Units",
+  csvFile: "measure_unit.csv",
+  schema: schema.usdaMeasureUnit,
+  transforms: {
+    id: "integer",
+  },
+};
+
+const nutrientConfig: TableConfig<
+  NutrientCsvRecord,
+  typeof schema.usdaNutrient
+> = {
+  tableName: "Nutrients",
+  csvFile: "nutrient.csv",
+  schema: schema.usdaNutrient,
+  transforms: {
+    id: "integer",
+  },
+};
+
+const foodConfig: TableConfig<FoodCsvRecord, typeof schema.usdaFood> = {
+  tableName: "Foods",
+  csvFile: "food.csv",
+  schema: schema.usdaFood,
+  transforms: {
+    fdc_id: "integer",
+  },
+  requiredNonNull: ["description"],
+};
+
+const srLegacyFoodConfig: TableConfig<
+  SrLegacyFoodCsvRecord,
+  typeof schema.usdaSrLegacyFood
+> = {
+  tableName: "SR Legacy Foods",
+  csvFile: "sr_legacy_food.csv",
+  schema: schema.usdaSrLegacyFood,
+  transforms: {
+    fdc_id: "integer",
+    NDB_number: "integer",
+  },
+};
+
+const brandedFoodConfig: TableConfig<
+  BrandedFoodCsvRecord,
+  typeof schema.usdaBrandedFood
+> = {
+  tableName: "Branded Foods",
+  csvFile: "branded_food.csv",
+  schema: schema.usdaBrandedFood,
+  transforms: {
+    fdc_id: "integer",
+    serving_size: "number",
+  },
+};
+
+const foodNutrientConfig: TableConfig<
+  FoodNutrientCsvRecord,
+  typeof schema.usdaFoodNutrient
+> = {
+  tableName: "Food Nutrients",
+  csvFile: "food_nutrient.csv",
+  schema: schema.usdaFoodNutrient,
+  transforms: {
+    id: "integer",
+    fdc_id: "integer",
+    nutrient_id: "integer",
+    amount: "number",
+  },
+  requiredNonNull: ["amount"],
+};
+
+const foodPortionConfig: TableConfig<
+  FoodPortionCsvRecord,
+  typeof schema.usdaFoodPortion
+> = {
+  tableName: "Food Portions",
+  csvFile: "food_portion.csv",
+  schema: schema.usdaFoodPortion,
+  transforms: {
+    id: "integer",
+    fdc_id: "integer",
+    amount: "number",
+    measure_unit_id: "integer",
+    gram_weight: "number",
+  },
+  requiredNonNull: ["amount"],
+};
+
+// Generic transformation utilities
+function transformField(
+  value: string,
+  transformType: FieldTransformValue,
+): string | number | null {
+  switch (transformType) {
+    case "integer":
+      return parseInteger(value);
+    case "number":
+      return parseNumber(value);
+    case "string":
+    default:
+      return value;
+  }
+}
+
+function transformRecord<
+  TCsv extends Record<string, unknown>,
+  TSchema extends SQLiteTable,
+>(
+  csvRecord: TCsv,
+  config: TableConfig<TCsv, TSchema>,
+): Record<string, unknown> {
+  const result = {} as Record<string, unknown>;
+
+  for (const csvField in csvRecord) {
+    const csvValue = csvRecord[csvField] as string;
+    const transformType = config.transforms[csvField as keyof TCsv] || "string";
+    const transformedValue = transformField(
+      csvValue,
+      transformType as FieldTransformValue,
+    );
+    result[csvField] = transformedValue;
+  }
+
+  return convertEmptyToNull(result);
+}
+
+// Helper function to parse CSV header and get field names
+async function getCsvFieldNames(filePath: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const parser = parse({
+      columns: true,
+      to_line: 2, // Need to read 2 lines: when columns=true, the first line becomes headers
+      // and the parser only emits records starting from the second line
+    });
+
+    let fieldNames: string[] = [];
+
+    parser.on("readable", () => {
+      const record = parser.read();
+      if (record && fieldNames.length === 0) {
+        fieldNames = Object.keys(record);
+      }
+    });
+
+    parser.on("end", () => {
+      resolve(fieldNames);
+    });
+
+    parser.on("error", (err) => {
+      reject(err);
+    });
+
+    const fileStream = fs.createReadStream(filePath);
+
+    fileStream.on("error", (err) => {
+      reject(err);
+    });
+
+    fileStream.pipe(parser);
+  });
+}
+
+// Generic import factory function
+function createImporter<
+  TCsv extends Record<string, unknown>,
+  TSchema extends SQLiteTable,
+>(config: TableConfig<TCsv, TSchema>) {
+  return async (batchSize?: number): Promise<ImportStats> => {
+    console.log(`\n=== Importing ${config.tableName} ===`);
+    const filePath = path.join(USDA_DATA_PATH, config.csvFile);
+
+    try {
+      // Parse CSV header to get field names
+      const csvFieldNames = await getCsvFieldNames(filePath);
+
+      // Create placeholder values for all fields
+      const placeholderValues = {} as Record<string, unknown>;
+      for (const csvField of csvFieldNames) {
+        placeholderValues[csvField] = sql.placeholder(csvField);
+      }
+
+      const drizzlePrepared = db
+        .insert(config.schema)
+        .values(placeholderValues as InferInsertModel<TSchema>)
+        .onConflictDoNothing()
+        .prepare();
+
+      // Optional filter for required non-null fields
+      const shouldInclude = config.requiredNonNull
+        ? (rec: Record<string, unknown>) =>
+            config.requiredNonNull!.every((k) => rec[k as string] !== null)
+        : undefined;
+
+      return streamCsvFile(
+        filePath,
+        (csvRecord: TCsv) => transformRecord(csvRecord, config),
+        batchSize,
+        drizzlePrepared,
+        shouldInclude,
+      );
+    } catch (error) {
+      console.error(`Error importing ${config.tableName}:`, error);
+      throw error;
+    }
+  };
+}
+
 async function streamCsvFile<
   CsvRecord extends Record<string, unknown>,
   DbRecord extends Record<string, unknown>,
@@ -43,6 +277,7 @@ async function streamCsvFile<
   transformRecord: (record: CsvRecord) => DbRecord,
   batchSize: number = DEFAULT_BATCH_SIZE,
   drizzlePrepared: DrizzlePreparedStatement,
+  shouldInclude?: (record: DbRecord) => boolean,
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
@@ -74,7 +309,12 @@ async function streamCsvFile<
             else stats.skipped += 1;
             stats.processed += 1;
           } catch (err) {
-            console.warn(`Skipping record due to error:`, err);
+            // Always print the offending record for easier diagnostics
+            console.warn(
+              `Skipping record due to error: ${
+                err instanceof Error ? err.message : String(err)
+              }\n  record: ${JSON.stringify(record)}`,
+            );
             stats.skipped += 1;
             stats.processed += 1;
           }
@@ -110,6 +350,11 @@ async function streamCsvFile<
       while ((record = parser.read())) {
         try {
           const transformedRecord = transformRecord(record);
+          if (shouldInclude && !shouldInclude(transformedRecord)) {
+            stats.skipped++;
+            stats.processed++;
+            continue;
+          }
           batch.push(transformedRecord);
 
           if (batch.length >= batchSize) {
@@ -200,350 +445,14 @@ function countCsvRows(filePath: string): Promise<number> {
   });
 }
 
-async function importMeasureUnits(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing Measure Units ===");
-  const filePath = path.join(USDA_DATA_PATH, "measure_unit.csv");
-
-  type TransformedMeasureUnit = {
-    id: number | null;
-    name: string | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaMeasureUnit)
-    .values({
-      id: sql.placeholder("id"),
-      name: sql.placeholder("name"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        id: parseInteger(record.id as string),
-        name: record.name as string,
-      }) as TransformedMeasureUnit,
-    batchSize,
-    drizzlePrepared,
-  );
-}
-
-async function importNutrients(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing Nutrients ===");
-  const filePath = path.join(USDA_DATA_PATH, "nutrient.csv");
-
-  type TransformedNutrient = {
-    id: number | null;
-    name: string | null;
-    unitName: string | null;
-    nutrientNbr: string | null;
-    rank: string | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaNutrient)
-    .values({
-      id: sql.placeholder("id"),
-      name: sql.placeholder("name"),
-      unitName: sql.placeholder("unitName"),
-      nutrientNbr: sql.placeholder("nutrientNbr"),
-      rank: sql.placeholder("rank"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        id: parseInteger(record.id as string),
-        name: record.name as string,
-        unitName: record.unit_name as string,
-        nutrientNbr: record.nutrient_nbr as string,
-        rank: record.rank as string,
-      }) as TransformedNutrient,
-    batchSize,
-    drizzlePrepared,
-  );
-}
-
-async function importFoods(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing Foods ===");
-  const filePath = path.join(USDA_DATA_PATH, "food.csv");
-
-  type TransformedFood = {
-    fdcId: number | null;
-    dataType: string | null;
-    description: string | null;
-    foodCategoryId: string | null;
-    publicationDate: string | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaFood)
-    .values({
-      fdcId: sql.placeholder("fdcId"),
-      dataType: sql.placeholder("dataType"),
-      description: sql.placeholder("description"),
-      foodCategoryId: sql.placeholder("foodCategoryId"),
-      publicationDate: sql.placeholder("publicationDate"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        fdcId: parseInteger(record.fdc_id as string),
-        dataType: record.data_type,
-        description: record.description,
-        foodCategoryId: record.food_category_id,
-        publicationDate: record.publication_date,
-      }) as TransformedFood,
-    batchSize,
-    drizzlePrepared,
-  );
-}
-
-async function importSrLegacyFoods(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing SR Legacy Foods ===");
-  const filePath = path.join(USDA_DATA_PATH, "sr_legacy_food.csv");
-
-  type TransformedSrLegacyFood = {
-    fdcId: number | null;
-    ndbNumber: number | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaSrLegacyFood)
-    .values({
-      fdcId: sql.placeholder("fdcId"),
-      ndbNumber: sql.placeholder("ndbNumber"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        fdcId: parseInteger(record.fdc_id as string),
-        ndbNumber: parseInteger(record.NDB_number as string),
-      }) as TransformedSrLegacyFood,
-    batchSize,
-    drizzlePrepared,
-  );
-}
-
-async function importBrandedFoods(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing Branded Foods ===");
-  const filePath = path.join(USDA_DATA_PATH, "branded_food.csv");
-
-  type TransformedBrandedFood = {
-    fdcId: number | null;
-    brandOwner: string | null;
-    brandName: string | null;
-    subbrandName: string | null;
-    gtinUpc: string | null;
-    ingredients: string | null;
-    notASignificantSourceOf: string | null;
-    servingSize: number | null;
-    servingSizeUnit: string | null;
-    householdServingFulltext: string | null;
-    brandedFoodCategory: string | null;
-    dataSource: string | null;
-    packageWeight: string | null;
-    modifiedDate: string | null;
-    availableDate: string | null;
-    marketCountry: string | null;
-    discontinuedDate: string | null;
-    preparationStateCode: string | null;
-    tradeChannel: string | null;
-    shortDescription: string | null;
-    materialCode: string | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaBrandedFood)
-    .values({
-      fdcId: sql.placeholder("fdcId"),
-      brandOwner: sql.placeholder("brandOwner"),
-      brandName: sql.placeholder("brandName"),
-      subbrandName: sql.placeholder("subbrandName"),
-      gtinUpc: sql.placeholder("gtinUpc"),
-      ingredients: sql.placeholder("ingredients"),
-      notASignificantSourceOf: sql.placeholder("notASignificantSourceOf"),
-      servingSize: sql.placeholder("servingSize"),
-      servingSizeUnit: sql.placeholder("servingSizeUnit"),
-      householdServingFulltext: sql.placeholder("householdServingFulltext"),
-      brandedFoodCategory: sql.placeholder("brandedFoodCategory"),
-      dataSource: sql.placeholder("dataSource"),
-      packageWeight: sql.placeholder("packageWeight"),
-      modifiedDate: sql.placeholder("modifiedDate"),
-      availableDate: sql.placeholder("availableDate"),
-      marketCountry: sql.placeholder("marketCountry"),
-      discontinuedDate: sql.placeholder("discontinuedDate"),
-      preparationStateCode: sql.placeholder("preparationStateCode"),
-      tradeChannel: sql.placeholder("tradeChannel"),
-      shortDescription: sql.placeholder("shortDescription"),
-      materialCode: sql.placeholder("materialCode"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        fdcId: parseInteger(record.fdc_id as string),
-        brandOwner: record.brand_owner,
-        brandName: record.brand_name,
-        subbrandName: record.subbrand_name,
-        gtinUpc: record.gtin_upc,
-        ingredients: record.ingredients,
-        notASignificantSourceOf: record.not_a_significant_source_of,
-        servingSize: parseNumber(record.serving_size as string),
-        servingSizeUnit: record.serving_size_unit,
-        householdServingFulltext: record.household_serving_fulltext,
-        brandedFoodCategory: record.branded_food_category,
-        dataSource: record.data_source,
-        packageWeight: record.package_weight,
-        modifiedDate: record.modified_date,
-        availableDate: record.available_date,
-        marketCountry: record.market_country,
-        discontinuedDate: record.discontinued_date,
-        preparationStateCode: record.preparation_state_code,
-        tradeChannel: record.trade_channel,
-        shortDescription: record.short_description,
-        materialCode: record.material_code,
-      }) as TransformedBrandedFood,
-    batchSize,
-    drizzlePrepared,
-  );
-}
-
-async function importFoodNutrients(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing Food Nutrients ===");
-  const filePath = path.join(USDA_DATA_PATH, "food_nutrient.csv");
-
-  type TransformedFoodNutrient = {
-    id: number | null;
-    fdcId: number | null;
-    nutrientId: number | null;
-    amount: number | null;
-    dataPoints: string | null;
-    derivationId: string | null;
-    min: string | null;
-    max: string | null;
-    median: string | null;
-    loq: string | null;
-    footnote: string | null;
-    minYearAcquired: string | null;
-    percentDailyValue: string | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaFoodNutrient)
-    .values({
-      id: sql.placeholder("id"),
-      fdcId: sql.placeholder("fdcId"),
-      nutrientId: sql.placeholder("nutrientId"),
-      amount: sql.placeholder("amount"),
-      dataPoints: sql.placeholder("dataPoints"),
-      derivationId: sql.placeholder("derivationId"),
-      min: sql.placeholder("min"),
-      max: sql.placeholder("max"),
-      median: sql.placeholder("median"),
-      loq: sql.placeholder("loq"),
-      footnote: sql.placeholder("footnote"),
-      minYearAcquired: sql.placeholder("minYearAcquired"),
-      percentDailyValue: sql.placeholder("percentDailyValue"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        id: parseInteger(record.id as string),
-        fdcId: parseInteger(record.fdc_id as string),
-        nutrientId: parseInteger(record.nutrient_id as string),
-        amount: parseNumber(record.amount as string),
-        dataPoints: record.data_points,
-        derivationId: record.derivation_id,
-        min: record.min,
-        max: record.max,
-        median: record.median,
-        loq: record.loq,
-        footnote: record.footnote,
-        minYearAcquired: record.min_year_acquired,
-        percentDailyValue: record.percent_daily_value,
-      }) as TransformedFoodNutrient,
-    batchSize,
-    drizzlePrepared,
-  );
-}
-
-async function importFoodPortions(batchSize?: number): Promise<ImportStats> {
-  console.log("\n=== Importing Food Portions ===");
-  const filePath = path.join(USDA_DATA_PATH, "food_portion.csv");
-
-  type TransformedFoodPortion = {
-    id: number | null;
-    fdcId: number | null;
-    seqNum: string | null;
-    amount: number | null;
-    measureUnitId: number | null;
-    portionDescription: string | null;
-    modifier: string | null;
-    gramWeight: number | null;
-    dataPoints: string | null;
-    footnote: string | null;
-    minYearAcquired: string | null;
-  };
-
-  const drizzlePrepared = db
-    .insert(schema.usdaFoodPortion)
-    .values({
-      id: sql.placeholder("id"),
-      fdcId: sql.placeholder("fdcId"),
-      seqNum: sql.placeholder("seqNum"),
-      amount: sql.placeholder("amount"),
-      measureUnitId: sql.placeholder("measureUnitId"),
-      portionDescription: sql.placeholder("portionDescription"),
-      modifier: sql.placeholder("modifier"),
-      gramWeight: sql.placeholder("gramWeight"),
-      dataPoints: sql.placeholder("dataPoints"),
-      footnote: sql.placeholder("footnote"),
-      minYearAcquired: sql.placeholder("minYearAcquired"),
-    })
-    .onConflictDoNothing()
-    .prepare();
-
-  return streamCsvFile(
-    filePath,
-    (record) =>
-      convertEmptyToNull({
-        id: parseInteger(record.id as string),
-        fdcId: parseInteger(record.fdc_id as string),
-        seqNum: record.seq_num,
-        amount: parseNumber(record.amount as string),
-        measureUnitId: parseInteger(record.measure_unit_id as string),
-        portionDescription: record.portion_description,
-        modifier: record.modifier,
-        gramWeight: parseNumber(record.gram_weight as string),
-        dataPoints: record.data_points,
-        footnote: record.footnote,
-        minYearAcquired: record.min_year_acquired,
-      }) as TransformedFoodPortion,
-    batchSize,
-    drizzlePrepared,
-  );
-}
+// Create import functions using the factory
+const importMeasureUnits = createImporter(measureUnitConfig);
+const importNutrients = createImporter(nutrientConfig);
+const importFoods = createImporter(foodConfig);
+const importSrLegacyFoods = createImporter(srLegacyFoodConfig);
+const importBrandedFoods = createImporter(brandedFoodConfig);
+const importFoodNutrients = createImporter(foodNutrientConfig);
+const importFoodPortions = createImporter(foodPortionConfig);
 
 function clearTables() {
   console.log("\n=== Clearing existing data ===");

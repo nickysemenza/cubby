@@ -64,7 +64,7 @@ export const brandedFoodInfo = z.object({
   brand_owner: z.string().nullable(),
   brand_name: z.string().nullable(),
   branded_food_category: z.string().nullable(),
-  gtin_upc: upc,
+  gtin_upc: upc.nullable(),
   ingredients: z.string().nullable(),
   serving: BrandedFoodServingInfo,
 });
@@ -77,13 +77,13 @@ export const nutritionInfo = z.object({
 export type NutritionInfo = z.infer<typeof nutritionInfo>;
 
 export const foodPortion = z.object({
-  amount: z.number(),
+  amount: z.number().nullable(),
   modifier: z.string().nullable(),
-  gram_weight: z.number(),
+  gram_weight: z.number().nullable(),
 });
 
 export const legacyFoodInfo = z.object({
-  ndb_number: ndb,
+  ndb_number: ndb.nullable(),
 });
 export type LegacyFoodInfo = z.infer<typeof legacyFoodInfo>;
 

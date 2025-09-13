@@ -28,8 +28,8 @@ export {
 // Base food info schema (API-specific)
 const foodInfo = z.object({
   fdc_id: z.number(),
-  data_type: z.string(),
-  description: z.string().nullable(),
+  data_type: z.string().nullable(),
+  description: z.string(),
 });
 
 // API Response Schemas

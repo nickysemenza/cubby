@@ -169,6 +169,14 @@ The SQLite database mirrors USDA FoodData Central structure:
 - **`usda_food_portion`** - Portion size mappings (1 cup = 240g)
 - **`usda_sr_legacy_food`** - Legacy NDB number mappings
 
+#### Nullability Rules
+
+- To ensure data quality and simplify APIs, the following columns are NOT NULL. Rows with null values for these fields are dropped during CSV import:
+  - `usda_food.description`
+  - `usda_food_nutrient.amount`
+  - `usda_food_portion.amount`
+  These constraints are enforced by Drizzle migrations and the import script.
+
 ### Full-Text Search
 
 Uses SQLite FTS5 for fast food search:

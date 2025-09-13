@@ -125,3 +125,11 @@
 - **Batch Operations**: Use list endpoints for multiple food lookups
 - **Database Location**: USDA API runs as separate service with SQLite database on Fly.io
 - **Volume Persistence**: Database persists on Fly volumes between deployments
+
+### Nullability Rules (USDA DB)
+
+- The following columns are NOT NULL and CSV import drops rows where these are missing:
+  - `usda_food.description`
+  - `usda_food_nutrient.amount`
+  - `usda_food_portion.amount`
+  This is enforced in both the Drizzle schema and migrations; importer skips invalid rows.

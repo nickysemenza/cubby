@@ -11,15 +11,15 @@ const preparedStatements = {
   // FTS5 queries using Drizzle's sql operator for MATCH queries
   ftsWithDataType: db
     .select({
-      fdc_id: foodSearch.fdcId,
-      data_type: foodSearch.dataType,
+      fdc_id: foodSearch.fdc_id,
+      data_type: foodSearch.data_type,
       description: foodSearch.description,
     })
     .from(foodSearch)
     .where(
       and(
         sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.dataType, sql.placeholder("dataType")),
+        eq(foodSearch.data_type, sql.placeholder("dataType")),
       ),
     )
     .orderBy(asc(foodSearch.description))
@@ -29,15 +29,15 @@ const preparedStatements = {
 
   ftsWithDataTypeDesc: db
     .select({
-      fdc_id: foodSearch.fdcId,
-      data_type: foodSearch.dataType,
+      fdc_id: foodSearch.fdc_id,
+      data_type: foodSearch.data_type,
       description: foodSearch.description,
     })
     .from(foodSearch)
     .where(
       and(
         sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.dataType, sql.placeholder("dataType")),
+        eq(foodSearch.data_type, sql.placeholder("dataType")),
       ),
     )
     .orderBy(desc(foodSearch.description))
@@ -51,15 +51,15 @@ const preparedStatements = {
     .where(
       and(
         sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.dataType, sql.placeholder("dataType")),
+        eq(foodSearch.data_type, sql.placeholder("dataType")),
       ),
     )
     .prepare(),
 
   ftsNoFilter: db
     .select({
-      fdc_id: foodSearch.fdcId,
-      data_type: foodSearch.dataType,
+      fdc_id: foodSearch.fdc_id,
+      data_type: foodSearch.data_type,
       description: foodSearch.description,
     })
     .from(foodSearch)
@@ -71,8 +71,8 @@ const preparedStatements = {
 
   ftsNoFilterDesc: db
     .select({
-      fdc_id: foodSearch.fdcId,
-      data_type: foodSearch.dataType,
+      fdc_id: foodSearch.fdc_id,
+      data_type: foodSearch.data_type,
       description: foodSearch.description,
     })
     .from(foodSearch)
@@ -91,56 +91,56 @@ const preparedStatements = {
   // Standard table queries using Drizzle query builder
   getFoodByIdStmt: db
     .select({
-      fdc_id: schema.usdaFood.fdcId,
-      data_type: schema.usdaFood.dataType,
+      fdc_id: schema.usdaFood.fdc_id,
+      data_type: schema.usdaFood.data_type,
       description: schema.usdaFood.description,
     })
     .from(schema.usdaFood)
-    .where(eq(schema.usdaFood.fdcId, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaFood.fdc_id, sql.placeholder("fdcId")))
     .prepare(),
 
   getBrandedFoodByIdStmt: db
     .select({
-      fdc_id: schema.usdaBrandedFood.fdcId,
-      brand_owner: schema.usdaBrandedFood.brandOwner,
-      brand_name: schema.usdaBrandedFood.brandName,
-      branded_food_category: schema.usdaBrandedFood.brandedFoodCategory,
-      gtin_upc: schema.usdaBrandedFood.gtinUpc,
+      fdc_id: schema.usdaBrandedFood.fdc_id,
+      brand_owner: schema.usdaBrandedFood.brand_owner,
+      brand_name: schema.usdaBrandedFood.brand_name,
+      branded_food_category: schema.usdaBrandedFood.branded_food_category,
+      gtin_upc: schema.usdaBrandedFood.gtin_upc,
       ingredients: schema.usdaBrandedFood.ingredients,
-      serving_size: schema.usdaBrandedFood.servingSize,
-      serving_size_unit: schema.usdaBrandedFood.servingSizeUnit,
+      serving_size: schema.usdaBrandedFood.serving_size,
+      serving_size_unit: schema.usdaBrandedFood.serving_size_unit,
       household_serving_fulltext:
-        schema.usdaBrandedFood.householdServingFulltext,
+        schema.usdaBrandedFood.household_serving_fulltext,
       modified_date:
-        sql<string>`COALESCE(${schema.usdaBrandedFood.modifiedDate}, datetime('now'))`.as(
+        sql<string>`COALESCE(${schema.usdaBrandedFood.modified_date}, datetime('now'))`.as(
           "modified_date",
         ),
     })
     .from(schema.usdaBrandedFood)
-    .where(eq(schema.usdaBrandedFood.fdcId, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaBrandedFood.fdc_id, sql.placeholder("fdcId")))
     .prepare(),
 
   getLegacyFoodByIdStmt: db
     .select({
-      fdc_id: schema.usdaSrLegacyFood.fdcId,
-      ndb_number: schema.usdaSrLegacyFood.ndbNumber,
+      fdc_id: schema.usdaSrLegacyFood.fdc_id,
+      ndb_number: schema.usdaSrLegacyFood.NDB_number,
     })
     .from(schema.usdaSrLegacyFood)
-    .where(eq(schema.usdaSrLegacyFood.fdcId, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaSrLegacyFood.fdc_id, sql.placeholder("fdcId")))
     .prepare(),
 
   getFoodPortionsStmt: db
     .select({
       amount: schema.usdaFoodPortion.amount,
       modifier: schema.usdaFoodPortion.modifier,
-      gram_weight: schema.usdaFoodPortion.gramWeight,
+      gram_weight: schema.usdaFoodPortion.gram_weight,
     })
     .from(schema.usdaFoodPortion)
     .where(
       and(
-        eq(schema.usdaFoodPortion.fdcId, sql.placeholder("fdcId")),
+        eq(schema.usdaFoodPortion.fdc_id, sql.placeholder("fdcId")),
         isNotNull(schema.usdaFoodPortion.amount),
-        isNotNull(schema.usdaFoodPortion.gramWeight),
+        isNotNull(schema.usdaFoodPortion.gram_weight),
       ),
     )
     .prepare(),
@@ -149,15 +149,15 @@ const preparedStatements = {
     .select({
       amount: schema.usdaFoodNutrient.amount,
       name: schema.usdaNutrient.name,
-      unit: schema.usdaNutrient.unitName,
-      nutrient_nbr: schema.usdaNutrient.nutrientNbr,
+      unit: schema.usdaNutrient.unit_name,
+      nutrient_nbr: schema.usdaNutrient.nutrient_nbr,
     })
     .from(schema.usdaFoodNutrient)
     .innerJoin(
       schema.usdaNutrient,
-      eq(schema.usdaFoodNutrient.nutrientId, schema.usdaNutrient.id),
+      eq(schema.usdaFoodNutrient.nutrient_id, schema.usdaNutrient.id),
     )
-    .where(eq(schema.usdaFoodNutrient.fdcId, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaFoodNutrient.fdc_id, sql.placeholder("fdcId")))
     .prepare(),
 };
 
@@ -165,10 +165,10 @@ const preparedStatements = {
 export const findFoodByUpc = (gtinUpc: string) => {
   const result = db
     .select({
-      fdc_id: schema.usdaBrandedFood.fdcId,
+      fdc_id: schema.usdaBrandedFood.fdc_id,
     })
     .from(schema.usdaBrandedFood)
-    .where(eq(schema.usdaBrandedFood.gtinUpc, gtinUpc))
+    .where(eq(schema.usdaBrandedFood.gtin_upc, gtinUpc))
     .get();
 
   if (!result) return null;
@@ -181,10 +181,10 @@ export const findFoodByUpc = (gtinUpc: string) => {
 export const findFoodByNdb = (ndbNumber: number) => {
   const result = db
     .select({
-      fdc_id: schema.usdaSrLegacyFood.fdcId,
+      fdc_id: schema.usdaSrLegacyFood.fdc_id,
     })
     .from(schema.usdaSrLegacyFood)
-    .where(eq(schema.usdaSrLegacyFood.ndbNumber, ndbNumber))
+    .where(eq(schema.usdaSrLegacyFood.NDB_number, ndbNumber))
     .get();
 
   if (!result) return null;
@@ -269,13 +269,13 @@ export const listFoods = ({
   // No name filter: fall back to indexed exact filters and ordering via drizzle
   const conditions: Parameters<typeof and> = [];
   if (dataTypeFilter) {
-    conditions.push(eq(schema.usdaFood.dataType, dataTypeFilter));
+    conditions.push(eq(schema.usdaFood.data_type, dataTypeFilter));
   }
 
   const baseQuery = db
     .select({
-      fdc_id: schema.usdaFood.fdcId,
-      data_type: schema.usdaFood.dataType,
+      fdc_id: schema.usdaFood.fdc_id,
+      data_type: schema.usdaFood.data_type,
       description: schema.usdaFood.description,
     })
     .from(schema.usdaFood);
@@ -287,8 +287,8 @@ export const listFoods = ({
 
   const orderColumn = {
     description: schema.usdaFood.description,
-    data_type: schema.usdaFood.dataType,
-    fdc_id: schema.usdaFood.fdcId,
+    data_type: schema.usdaFood.data_type,
+    fdc_id: schema.usdaFood.fdc_id,
   }[orderBy];
 
   finalQuery = finalQuery.orderBy(

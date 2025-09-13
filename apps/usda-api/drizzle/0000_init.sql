@@ -28,7 +28,7 @@ CREATE INDEX `branded_food_upc` ON `usda_branded_food` (`gtin_upc`);--> statemen
 CREATE TABLE `usda_food` (
 	`fdc_id` integer PRIMARY KEY NOT NULL,
 	`data_type` text NOT NULL,
-	`description` text,
+	`description` text NOT NULL,
 	`food_category_id` text,
 	`publication_date` text NOT NULL
 );
@@ -38,8 +38,8 @@ CREATE INDEX `usda_food_description_idx` ON `usda_food` (`description`);--> stat
 CREATE INDEX `usda_food_data_type_idx` ON `usda_food` (`data_type`);--> statement-breakpoint
 CREATE TABLE `usda_food_nutrient` (
 	`id` integer PRIMARY KEY NOT NULL,
-	`fdc_id` integer NOT NULL,
-	`nutrient_id` integer NOT NULL,
+	`fdc_id` integer,
+	`nutrient_id` integer,
 	`amount` real NOT NULL,
 	`data_points` text,
 	`derivation_id` text,
@@ -58,10 +58,10 @@ CREATE INDEX `food_nutrient_fdc_id` ON `usda_food_nutrient` (`fdc_id`);--> state
 CREATE INDEX `food_nutrient_nutrient_id_idx` ON `usda_food_nutrient` (`nutrient_id`);--> statement-breakpoint
 CREATE TABLE `usda_food_portion` (
 	`id` integer PRIMARY KEY NOT NULL,
-	`fdc_id` integer NOT NULL,
+	`fdc_id` integer,
 	`seq_num` text,
-	`amount` real,
-	`measure_unit_id` integer NOT NULL,
+	`amount` real NOT NULL,
+	`measure_unit_id` integer,
 	`portion_description` text,
 	`modifier` text,
 	`gram_weight` real NOT NULL,
@@ -76,7 +76,7 @@ CREATE INDEX `food_portion_fdc_id` ON `usda_food_portion` (`fdc_id`);--> stateme
 CREATE INDEX `food_portion_measure_unit_id_idx` ON `usda_food_portion` (`measure_unit_id`);--> statement-breakpoint
 CREATE TABLE `usda_measure_unit` (
 	`id` integer PRIMARY KEY NOT NULL,
-	`name` text NOT NULL
+	`name` text
 );
 --> statement-breakpoint
 CREATE TABLE `usda_nutrient` (

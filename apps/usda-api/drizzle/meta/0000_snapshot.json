@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a529f432-fdc8-4068-84b2-e3d9827606ca",
+  "id": "319cba75-fd63-4297-bf48-2406e07b6a90",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "usda_branded_food": {
@@ -211,7 +211,7 @@
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "food_category_id": {
@@ -271,14 +271,14 @@
           "name": "fdc_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "nutrient_id": {
           "name": "nutrient_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "amount": {
@@ -414,7 +414,7 @@
           "name": "fdc_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "seq_num": {
@@ -428,14 +428,14 @@
           "name": "amount",
           "type": "real",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "measure_unit_id": {
           "name": "measure_unit_id",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "portion_description": {
@@ -543,7 +543,7 @@
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         }
       },
