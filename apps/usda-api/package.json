@@ -20,8 +20,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.3",
-    "@hono/swagger-ui": "^0.5.2",
-    "@hono/zod-openapi": "^1.1.0",
+    "@recipehub/usda-contract": "workspace:*",
     "@recipehub/usda-schemas": "workspace:*",
     "better-sqlite3": "^12.2.0",
     "commander": "^12.1.0",

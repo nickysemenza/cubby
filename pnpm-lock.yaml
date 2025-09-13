@@ -20,12 +20,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.13.3
         version: 1.19.2(hono@4.9.7)
-      '@hono/swagger-ui':
-        specifier: ^0.5.2
-        version: 0.5.2(hono@4.9.7)
-      '@hono/zod-openapi':
-        specifier: ^1.1.0
-        version: 1.1.0(hono@4.9.7)(zod@4.1.5)
+      '@recipehub/usda-contract':
+        specifier: workspace:*
+        version: link:../../packages/usda-contract
       '@recipehub/usda-schemas':
         specifier: workspace:*
         version: link:../../packages/usda-schemas
@@ -150,6 +147,9 @@ importers:
       '@radix-ui/react-tooltip':
         specifier: ^1.2.8
         version: 1.2.8(@types/react-dom@19.1.9(@types/react@19.1.12))(@types/react@19.1.12)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@recipehub/usda-contract':
+        specifier: workspace:*
+        version: link:../../packages/usda-contract
       '@recipehub/usda-schemas':
         specifier: workspace:*
         version: link:../../packages/usda-schemas
@@ -174,6 +174,9 @@ importers:
       '@trpc/tanstack-react-query':
         specifier: ^11.5.0
         version: 11.5.1(@tanstack/react-query@5.87.4(react@19.1.1))(@trpc/client@11.5.1(@trpc/server@11.5.1(typescript@5.9.2))(typescript@5.9.2))(@trpc/server@11.5.1(typescript@5.9.2))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2)
+      '@ts-rest/core':
+        specifier: 3.53.0-rc.1
+        version: 3.53.0-rc.1(@types/node@22.18.1)
       '@vercel/otel':
         specifier: ^1.13.0
         version: 1.13.0(@opentelemetry/api-logs@0.57.2)(@opentelemetry/api@1.9.0)(@opentelemetry/instrumentation@0.57.2(@opentelemetry/api@1.9.0))(@opentelemetry/resources@1.30.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-logs@0.57.2(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-metrics@1.30.1(@opentelemetry/api@1.9.0))(@opentelemetry/sdk-trace-base@1.30.1(@opentelemetry/api@1.9.0))
@@ -213,9 +216,6 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
-      openapi-fetch:
-        specifier: ^0.14.0
-        version: 0.14.0
       react:
         specifier: ^19.1.1
         version: 19.1.1
@@ -368,6 +368,18 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.18.1)(@vitest/ui@3.2.4)(jiti@2.5.1)(jsdom@26.1.0)(lightningcss@1.30.1)(terser@5.44.0)(tsx@4.20.5)(yaml@2.8.1)
 
+  packages/usda-contract:
+    dependencies:
+      '@recipehub/usda-schemas':
+        specifier: workspace:*
+        version: link:../usda-schemas
+      '@ts-rest/core':
+        specifier: 3.53.0-rc.1
+        version: 3.53.0-rc.1(@types/node@24.3.3)
+      zod:
+        specifier: ^4.1.5
+        version: 4.1.5
+
   packages/usda-schemas:
     dependencies:
       zod:
@@ -393,11 +405,6 @@ packages:
 
   '@asamuzakjp/css-color@3.2.0':
     resolution: {integrity: sha512-K1A6z8tS3XsmCMM86xoWdn7Fkdn9m6RSVtocUrJYIwZnFVkng/PvkEoWtOWmP+Scc6saYWHWZYbndEEXxl24jw==}
-
-  '@asteasolutions/zod-to-openapi@8.1.0':
-    resolution: {integrity: sha512-tQFxVs05J/6QXXqIzj6rTRk3nj1HFs4pe+uThwE95jL5II2JfpVXkK+CqkO7aT0Do5AYqO6LDrKpleLUFXgY+g==}
-    peerDependencies:
-      zod: ^4.0.0
 
   '@aws-crypto/crc32@5.2.0':
     resolution: {integrity: sha512-nLbCWqQNgUiwwtFsen1AdzAtvuLRsQS8rYgMuxCrdKf9kOssamGLuPwyTY9wyYblNr9+1XM8v6zoDTPPSIeANg==}
@@ -1154,24 +1161,6 @@ packages:
     engines: {node: '>=18.14.1'}
     peerDependencies:
       hono: ^4
-
-  '@hono/swagger-ui@0.5.2':
-    resolution: {integrity: sha512-7wxLKdb8h7JTdZ+K8DJNE3KXQMIpJejkBTQjrYlUWF28Z1PGOKw6kUykARe5NTfueIN37jbyG/sBYsbzXzG53A==}
-    peerDependencies:
-      hono: '*'
-
-  '@hono/zod-openapi@1.1.0':
-    resolution: {integrity: sha512-S4jVR+A/jI4MA/RKJqmpjdHAN2l/EsqLnKHBv68x3WxV1NGVe3Sh7f6LV6rHEGYNHfiqpD75664A/erc+r9dQA==}
-    engines: {node: '>=16.0.0'}
-    peerDependencies:
-      hono: '>=4.3.6'
-      zod: ^4.0.0
-
-  '@hono/zod-validator@0.7.2':
-    resolution: {integrity: sha512-ub5eL/NeZ4eLZawu78JpW/J+dugDAYhwqUIdp9KYScI6PZECij4Hx4UsrthlEUutqDDhPwRI0MscUfNkvn/mqQ==}
-    peerDependencies:
-      hono: '>=3.9.0'
-      zod: ^3.25.0 || ^4.0.0
 
   '@hookform/devtools@4.4.0':
     resolution: {integrity: sha512-Mtlic+uigoYBPXlfvPBfiYYUZuyMrD3pTjDpVIhL6eCZTvQkHsKBSKeZCvXWUZr8fqrkzDg27N+ZuazLKq6Vmg==}
@@ -2778,6 +2767,14 @@ packages:
       react-dom: '>=18.2.0'
       typescript: '>=5.7.2'
 
+  '@ts-rest/core@3.53.0-rc.1':
+    resolution: {integrity: sha512-hDMXqKHSys6w+kXFW1Q6EvN8QgRvtXKXJ2TpYByKI4TquaPjiTOv99aLD26X4LNRzdna8Ci1PVyzr0jYZv0oNQ==}
+    peerDependencies:
+      '@types/node': ^18.18.7 || >=20.8.4
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+
   '@tybys/wasm-util@0.10.0':
     resolution: {integrity: sha512-VyyPYFlOMNylG45GoAe0xDoLwWuowvf92F9kySqzYh8vmYm7D2u4iUJKa1tOUpS70Ku13ASrOkS4ScXFsTaCNQ==}
 
@@ -2849,9 +2846,6 @@ packages:
 
   '@types/node@22.18.1':
     resolution: {integrity: sha512-rzSDyhn4cYznVG+PCzGe1lwuMYJrcBS1fc3JqSa2PvtABwWo+dZ1ij5OVok3tqfpEBCBoaR4d7upFJk73HRJDw==}
-
-  '@types/node@22.18.3':
-    resolution: {integrity: sha512-gTVM8js2twdtqM+AE2PdGEe9zGQY4UvmFjan9rZcVb6FGdStfjWoWejdmy4CfWVO9rh5MiYQGZloKAGkJt8lMw==}
 
   '@types/node@24.3.3':
     resolution: {integrity: sha512-GKBNHjoNw3Kra1Qg5UXttsY5kiWMEfoHq2TmXb+b1rcm6N7B3wTrFYIf/oSZ1xNQ+hVVijgLkiDZh7jRRsh+Gw==}
@@ -5469,15 +5463,6 @@ packages:
     resolution: {integrity: sha512-MVHddDVweXZF3awtlAS+6pgKLlm/JgxZ90+/NBurBoQctVOOB/zDdVjcyPzQ+0laDGbsWgrRkflI65sQeOgT9Q==}
     engines: {node: '>=8'}
 
-  openapi-fetch@0.14.0:
-    resolution: {integrity: sha512-PshIdm1NgdLvb05zp8LqRQMNSKzIlPkyMxYFxwyHR+UlKD4t2nUjkDhNxeRbhRSEd3x5EUNh2w5sJYwkhOH4fg==}
-
-  openapi-typescript-helpers@0.0.15:
-    resolution: {integrity: sha512-opyTPaunsklCBpTK8JGef6mfPhLSnyy5a0IN9vKtx3+4aExf+KxEqYwIy3hqkedXIB97u357uLMJsOnm3GVjsw==}
-
-  openapi3-ts@4.5.0:
-    resolution: {integrity: sha512-jaL+HgTq2Gj5jRcfdutgRGLosCy/hT8sQf6VOy+P+g36cZOjI1iukdPnijC+4CmeRzg/jEllJUboEic2FhxhtQ==}
-
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -7012,11 +6997,6 @@ snapshots:
       '@csstools/css-tokenizer': 3.0.4
       lru-cache: 10.4.3
 
-  '@asteasolutions/zod-to-openapi@8.1.0(zod@4.1.5)':
-    dependencies:
-      openapi3-ts: 4.5.0
-      zod: 4.1.5
-
   '@aws-crypto/crc32@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
@@ -8024,23 +8004,6 @@ snapshots:
   '@hono/node-server@1.19.2(hono@4.9.7)':
     dependencies:
       hono: 4.9.7
-
-  '@hono/swagger-ui@0.5.2(hono@4.9.7)':
-    dependencies:
-      hono: 4.9.7
-
-  '@hono/zod-openapi@1.1.0(hono@4.9.7)(zod@4.1.5)':
-    dependencies:
-      '@asteasolutions/zod-to-openapi': 8.1.0(zod@4.1.5)
-      '@hono/zod-validator': 0.7.2(hono@4.9.7)(zod@4.1.5)
-      hono: 4.9.7
-      openapi3-ts: 4.5.0
-      zod: 4.1.5
-
-  '@hono/zod-validator@0.7.2(hono@4.9.7)(zod@4.1.5)':
-    dependencies:
-      hono: 4.9.7
-      zod: 4.1.5
 
   '@hookform/devtools@4.4.0(@types/react@19.1.12)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
     dependencies:
@@ -9686,6 +9649,14 @@ snapshots:
       react-dom: 19.1.1(react@19.1.1)
       typescript: 5.9.2
 
+  '@ts-rest/core@3.53.0-rc.1(@types/node@22.18.1)':
+    optionalDependencies:
+      '@types/node': 22.18.1
+
+  '@ts-rest/core@3.53.0-rc.1(@types/node@24.3.3)':
+    optionalDependencies:
+      '@types/node': 24.3.3
+
   '@tybys/wasm-util@0.10.0':
     dependencies:
       tslib: 2.8.1
@@ -9771,10 +9742,6 @@ snapshots:
   '@types/ms@2.1.0': {}
 
   '@types/node@22.18.1':
-    dependencies:
-      undici-types: 6.21.0
-
-  '@types/node@22.18.3':
     dependencies:
       undici-types: 6.21.0
 
@@ -11966,7 +11933,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 22.18.3
+      '@types/node': 24.3.3
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
@@ -12697,16 +12664,6 @@ snapshots:
     dependencies:
       is-docker: 2.2.1
       is-wsl: 2.2.0
-
-  openapi-fetch@0.14.0:
-    dependencies:
-      openapi-typescript-helpers: 0.0.15
-
-  openapi-typescript-helpers@0.0.15: {}
-
-  openapi3-ts@4.5.0:
-    dependencies:
-      yaml: 2.8.1
 
   optionator@0.9.4:
     dependencies:

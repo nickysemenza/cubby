@@ -193,14 +193,13 @@ Uses SQLite FTS5 for fast food search:
 - Composite queries combining multiple tables
 - FTS5 virtual table for text search
 
-## API Endpoints
+## API Endpoints (Zod-first)
 
 ### Core Endpoints
 
 - `GET /` - Database table counts
 - `GET /api/foods/{fdc_id}` - Complete food information by FDC ID
-- `GET /api/foods/search/upc/{gtin_upc}` - Find food by UPC code
-- `GET /api/foods/search/ndb/{ndb_number}` - Find food by legacy NDB number
+- `POST /api/foods/search` - Find food by lookup (UPC or NDB) using discriminated union body
 - `GET /api/foods` - Paginated food search with filters
 
 ### Query Parameters (List Foods)
@@ -214,7 +213,7 @@ Uses SQLite FTS5 for fast food search:
 
 ### Response Format
 
-All food endpoints return complete food information:
+All food endpoints return complete food information validated by Zod and defined in the shared contract `@recipehub/usda-contract`:
 
 ```json
 {
@@ -297,8 +296,9 @@ pnpm import:usda
 # Start development server
 pnpm dev
 
-# Visit API documentation
-open http://localhost:8080/ui
+# Verify API responds
+open http://localhost:8080/
+open http://localhost:8080/api/foods?pageSize=1
 ```
 
 ### Testing
@@ -314,6 +314,22 @@ pnpm lint
 pnpm format:write
 ```
 
+## Contract
+
+- The API contract lives in `packages/usda-contract` and is consumed by the web client via `@ts-rest/core`.
+- No OpenAPI generation is used; the contract is the single source of truth for request/response shapes.
+
 ## Route
 
 - `GET /` — returns JSON counts of: `usda_food`, `usda_branded_food`, `usda_nutrient`, `usda_food_nutrient`, `usda_measure_unit`, `usda_food_portion`, `usda_sr_legacy_food`.
+### Find Lookup Request Body
+
+Body uses the shared discriminated union `foodLookupParam`:
+
+```jsonc
+// UPC
+{ "kind": "upc", "gtin_upc": "123456789012" }
+
+// NDB
+{ "kind": "ndb", "ndb_number": 12345 }
+```

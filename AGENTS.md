@@ -87,15 +87,15 @@
 
 ### Key Integration Points:
 
-- **Shared Schemas**: Use `@recipehub/usda-schemas` package for type-safe data structures across API and web app
-- **USDAClient**: Abstraction layer in `src/server/clients/usda.ts` for all USDA API interactions
+- **Zod-First Contract**: `@recipehub/usda-contract` defines endpoints with Zod schemas via ts-rest. This is the single source of truth.
+- **Shared Schemas**: `@recipehub/usda-schemas` provides core entity schemas consumed by the contract and both apps.
+- **USDAClient**: Abstraction layer in `src/server/clients/usda.ts` calls the ts-rest client generated from the shared contract.
 - **Product Linking**: Products can be linked to USDA foods via UPC codes or legacy NDB numbers
 - **Nutrition Data**: USDA provides detailed nutrient information and portion mappings
 
 ### Common Usage Patterns:
 
-- **Find by UPC**: `usdaClient.findFood({ kind: "upc", gtin_upc: "123456789012" })`
-- **Find by NDB**: `usdaClient.findFood({ kind: "ndb", ndb_number: 12345 })`
+- **Find by Lookup**: `usdaClient.findFood({ kind: "upc", gtin_upc: "123456789012" })` or `usdaClient.findFood({ kind: "ndb", ndb_number: 12345 })` (single consolidated endpoint)
 - **Search Foods**: `usdaClient.listFoods(nameFilter, dataTypeFilter, sort, pagination)`
 - **Get Details**: `usdaClient.getFoodSummaryByID(fdcId)`
 
@@ -103,7 +103,7 @@
 
 - **WASM Processing**: Service layer processes USDA portion data through WASM for unit conversions
 - **tRPC Router**: `src/server/api/routers/usda.ts` exposes USDA functionality to frontend
-- **Type Safety**: All USDA data uses Zod schemas for runtime validation and TypeScript types
+- **Type Safety**: All USDA data uses Zod schemas from the shared contract/schemas for runtime validation and TS types
 
 ### Database Management and Cache Busting:
 
@@ -125,6 +125,11 @@
 - **Batch Operations**: Use list endpoints for multiple food lookups
 - **Database Location**: USDA API runs as separate service with SQLite database on Fly.io
 - **Volume Persistence**: Database persists on Fly volumes between deployments
+
+### Contract Notes
+
+- OpenAPI generation and Swagger UI have been removed. Consumers internal to Recipehub use the ts-rest client from `@recipehub/usda-contract`.
+- Server routes validate inputs/outputs with the same Zod schemas to prevent drift.
 
 ### Nullability Rules (USDA DB)
 

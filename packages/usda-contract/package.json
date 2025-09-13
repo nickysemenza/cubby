@@ -1,0 +1,13 @@
+{
+  "name": "@recipehub/usda-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@recipehub/usda-schemas": "workspace:*",
+    "@ts-rest/core": "3.53.0-rc.1",
+    "zod": "^4.1.5"
+  }
+}
+

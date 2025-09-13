@@ -20,15 +20,13 @@ import { IngredientService } from "~/server/services/ingredient.service";
 import { USDAService } from "~/server/services/usda.service";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { type PrismaClient } from "@prisma/client";
-import { UsdaApiClient } from "~/usda-api-client/usda-api";
 import { env } from "~/env";
 
 /**
  * Helper function to build crud services for both production and test contexts
  */
 const buildCrudServices = (database: PrismaClient) => {
-  const usdaApiClient = new UsdaApiClient(env.USDA_API_URL);
-  const usdaClient = new USDAClient(usdaApiClient);
+  const usdaClient = new USDAClient(env.USDA_API_URL);
   const usdaService = new USDAService(usdaClient, (lookup) =>
     findProductsByFoodIdentifier(database, lookup),
   );

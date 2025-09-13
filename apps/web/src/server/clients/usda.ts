@@ -1,66 +1,120 @@
+import { trace } from "@opentelemetry/api";
 import {
-  FoodSummary,
   BrandedFoodInfo,
   FoodLookupParam,
+  FoodSummary,
 } from "@recipehub/usda-schemas";
+import {
+  usdaContract,
+  type CompleteFoodResponse,
+} from "@recipehub/usda-contract";
+import { initClient } from "@ts-rest/core";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
-import { UsdaApiClient } from "~/usda-api-client/usda-api";
-import type { paths } from "~/usda-api-client/usda";
-
-type CompleteFoodResponse =
-  paths["/api/foods/{fdc_id}"]["get"]["responses"][200]["content"]["application/json"];
 
 export class USDAClient {
-  constructor(private usdaApi: UsdaApiClient) {}
+  private client: any;
+  constructor(private baseUrl: string) {
+    this.client = initClient(usdaContract, {
+      baseUrl: this.baseUrl,
+    });
+  }
 
+  // Transport helpers
+  private async traced<T>(name: string, fn: () => Promise<T>): Promise<T> {
+    const tracer = trace.getTracer("usda-api");
+    const span = tracer.startSpan(name);
+    try {
+      const res = await fn();
+      span.setStatus({ code: 1 });
+      return res;
+    } catch (e) {
+      const err = e instanceof Error ? e : new Error(String(e));
+      span.setStatus({ code: 2, message: err.message });
+      throw e;
+    } finally {
+      span.end();
+    }
+  }
+
+  // Raw calls via ts-rest client
+  private async fetchGetFood(
+    fdcId: number,
+  ): Promise<CompleteFoodResponse | null> {
+    return this.traced("tsClient.getFood", async () => {
+      const res = await this.client.getFood({ params: { fdc_id: fdcId } });
+      if (res.status !== 200) return null;
+      return res.body;
+    });
+  }
+
+  private async fetchFindByLookup(
+    lookup: FoodLookupParam,
+  ): Promise<CompleteFoodResponse | null> {
+    return this.traced("client.findByLookup", async () => {
+      const res = await this.client.findByLookup({ body: lookup });
+      if (res.status !== 200) return null;
+      return res.body;
+    });
+  }
+
+  private async fetchListFoods(params: {
+    nameFilter?: string;
+    dataTypeFilter?: string;
+    orderBy?: "description" | "data_type" | "fdc_id";
+    direction?: "asc" | "desc";
+    pageIndex?: number | null;
+    pageSize?: number | null;
+  }): Promise<{ data: CompleteFoodResponse[]; count: number }> {
+    return this.traced("client.listFoods", async () => {
+      const res = await this.client.listFoods({
+        query: {
+          nameFilter: params.nameFilter,
+          dataTypeFilter: params.dataTypeFilter,
+          orderBy: params.orderBy,
+          direction: params.direction,
+          pageIndex: params.pageIndex ?? undefined,
+          pageSize: params.pageSize ?? undefined,
+        },
+      });
+      if (res.status !== 200) return { data: [], count: 0 };
+      return res.body;
+    });
+  }
+
+  // Domain mapping
   private transformCompleteFoodToFoodSummary(
     completeFood: CompleteFoodResponse,
   ): FoodSummary {
-    // Server now returns data in expected format, just need to add parsed field and handle description null case
     return {
       ...completeFood,
-      foodInfo: {
-        data_type: completeFood.foodInfo.data_type,
-        description: completeFood.foodInfo.description,
-      },
       portionInfo: {
         raw: completeFood.portionInfo.raw,
-        parsed: [], // To be populated at service layer with WASM processing
+        parsed: [],
       },
     };
   }
 
   async getBrandedFoodByID(fdc_id: number): Promise<BrandedFoodInfo | null> {
-    const { data, error } = await this.usdaApi.getFood(fdc_id.toString());
-    if (error || !data || !data.brandedFoodInfo) {
-      return null;
-    }
-    return data.brandedFoodInfo;
+    const data = await this.fetchGetFood(fdc_id);
+    return data?.brandedFoodInfo ?? null;
   }
 
   async findFood(lookup: FoodLookupParam): Promise<FoodSummary | null> {
-    if (lookup.kind === "upc") {
-      const { data, error } = await this.usdaApi.findFoodByUPC(lookup.gtin_upc);
-      if (error || !data) {
-        return null;
-      }
-      return this.transformCompleteFoodToFoodSummary(data);
-    } else {
-      const { data, error } = await this.usdaApi.findFoodByNDB(
-        lookup.ndb_number.toString(),
-      );
-      if (error || !data) {
-        return null;
-      }
-      return this.transformCompleteFoodToFoodSummary(data);
-    }
+    const data = await this.traced(
+      "USDA API: POST /api/foods/search",
+      async () => {
+        const res = await this.client.findByLookup({ body: lookup });
+        if (res.status !== 200) return null;
+        return res.body;
+      },
+    );
+    if (!data) return null;
+    return this.transformCompleteFoodToFoodSummary(data);
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {
-    const { data, error } = await this.usdaApi.getFood(fdc_id.toString());
-    if (error || !data) {
-      return null;
-    }
+    const data = await this.fetchGetFood(fdc_id);
+    if (!data) return null;
     return this.transformCompleteFoodToFoodSummary(data);
   }
 
@@ -70,7 +124,7 @@ export class USDAClient {
     sort: SortParams,
     pagination: PaginationParams,
   ) {
-    const { data, error } = await this.usdaApi.listFoods({
+    const data = await this.fetchListFoods({
       nameFilter,
       dataTypeFilter,
       orderBy: sort.orderBy as "description" | "data_type" | "fdc_id",
@@ -79,15 +133,9 @@ export class USDAClient {
       pageSize: pagination.pageSize,
     });
 
-    if (error || !data) {
-      return { data: [], count: 0 };
-    }
-
-    // The list endpoint now returns complete food data, so we can transform directly
     const foodSummaries: FoodSummary[] = data.data.map((food) =>
       this.transformCompleteFoodToFoodSummary(food),
     );
-
     return { data: foodSummaries, count: data.count };
   }
 }
