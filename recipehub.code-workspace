@@ -3,27 +3,27 @@
     {
       // https://code.visualstudio.com/docs/editor/multi-root-workspaces
       "name": "next",
-      "path": ".",
+      "path": "."
     },
     {
       "name": "rust",
-      "path": "recipebridge",
+      "path": "apps/web/recipebridge"
     },
     {
-      "path": "../ingredient-parser",
-    },
+      "path": "../ingredient-parser"
+    }
   ],
   "settings": {
     "yaml.schemas": {
-      "tooling/mapping_schema.json": "config.yaml",
+      "tooling/mapping_schema.json": "config.yaml"
     },
     "workbench.colorCustomizations": {
       "titleBar.activeBackground": "#7236ff",
       "titleBar.activeForeground": "#e2e8f0",
       "titleBar.inactiveBackground": "#181239",
-      "titleBar.inactiveForeground": "#b1b6bd",
+      "titleBar.inactiveForeground": "#b1b6bd"
     },
     "css.validate": false,
-    "eslint.useFlatConfig": true,
-  },
+    "eslint.useFlatConfig": true
+  }
 }

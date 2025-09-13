@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Local database and large data assets
+data/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation and examples
+README.md
+*.md
+docs/
+
+# Test files
+test/
+tests/
+**/*.test.*
+**/*.spec.*
+
+# Development files
+.claude/
+
+# Temporary files
+temp/
+tmp/
