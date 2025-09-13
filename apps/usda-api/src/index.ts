@@ -28,25 +28,25 @@ const httpLogger = async (c: Context, next: Next) => {
   const method = c.req.method;
   const url = c.req.url;
   const status = c.res.status;
-  const userAgent = c.req.header('User-Agent') || 'Unknown';
+  const userAgent = c.req.header("User-Agent") || "Unknown";
 
   // Color code status for better visibility
-  let statusColor = '';
+  let statusColor = "";
   if (status >= 200 && status < 300) {
-    statusColor = '\x1b[32m'; // Green
+    statusColor = "\x1b[32m"; // Green
   } else if (status >= 300 && status < 400) {
-    statusColor = '\x1b[33m'; // Yellow
+    statusColor = "\x1b[33m"; // Yellow
   } else if (status >= 400) {
-    statusColor = '\x1b[31m'; // Red
+    statusColor = "\x1b[31m"; // Red
   }
 
   console.log(
-    `${timestamp} [${method}] ${url} - Status: ${statusColor}${status}\x1b[0m - Duration: ${duration}ms - UA: ${userAgent}`
+    `${timestamp} [${method}] ${url} - Status: ${statusColor}${status}\x1b[0m - Duration: ${duration}ms - UA: ${userAgent}`,
   );
 };
 
 // Apply logging middleware globally
-app.use('*', httpLogger);
+app.use("*", httpLogger);
 
 const CountsSchema = z.object({
   usda_food: z.number().int().min(0),
@@ -119,7 +119,6 @@ app.doc("/doc", {
 });
 
 app.get("/ui", swaggerUI({ url: "/doc" }));
-
 
 const port = Number(process.env.PORT || 8080);
 

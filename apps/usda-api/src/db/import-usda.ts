@@ -5,16 +5,8 @@ import os from "node:os";
 import { parse } from "csv-parse";
 import { db, sqlite } from "./client";
 import { rebuildFoodSearchFts } from "./fts";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
-import {
-  usdaFood,
-  usdaNutrient,
-  usdaFoodNutrient,
-  usdaBrandedFood,
-  usdaMeasureUnit,
-  usdaFoodPortion,
-  usdaSrLegacyFood,
-} from "./schema";
+import * as schema from "./schema";
+import { sql } from "drizzle-orm";
 // CSV types are used for runtime parsing but not needed for TypeScript types
 
 const USDA_DATA_PATH = path.resolve(
@@ -23,7 +15,7 @@ const USDA_DATA_PATH = path.resolve(
 );
 const DEFAULT_BATCH_SIZE = 10000; // larger batches for better throughput
 
-// USDA_DATA_PATH=~/dev/usda/FoodData_Central_csv_2024-10-31 pnpm run import:usda --clear --fast --raw
+// USDA_DATA_PATH=~/dev/usda/FoodData_Central_csv_2024-10-31 pnpm run import:usda --clear --fast
 
 interface ImportStats {
   processed: number;
@@ -31,35 +23,26 @@ interface ImportStats {
   skipped: number;
 }
 
-type RawPrepared<T extends Record<string, unknown> = Record<string, unknown>> =
-  {
-    sql: string;
-    mapParams: (record: T) => unknown[];
-  };
-
-type ImportOptions<
-  DbRecord extends Record<string, unknown> = Record<string, unknown>,
-> = {
-  batchSize?: number;
-  useRaw?: boolean;
-  rawPrepared?: RawPrepared<DbRecord>;
-};
-
 interface SQLiteRunResult {
   changes?: number;
-  lastInsertRowid?: number;
+  lastInsertRowid?: number | bigint;
 }
+
+type DrizzlePreparedStatement = {
+  run: (values: Record<string, unknown>) => {
+    changes: number;
+    lastInsertRowid: number | bigint;
+  };
+};
 
 async function streamCsvFile<
   CsvRecord extends Record<string, unknown>,
   DbRecord extends Record<string, unknown>,
-  Table extends SQLiteTable,
 >(
   filePath: string,
   transformRecord: (record: CsvRecord) => DbRecord,
-  table: Table,
   batchSize: number = DEFAULT_BATCH_SIZE,
-  opts: ImportOptions<DbRecord> = {},
+  drizzlePrepared: DrizzlePreparedStatement,
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
@@ -77,58 +60,23 @@ async function streamCsvFile<
       escape: '"',
     });
 
-    const preparedStmt = opts.rawPrepared
-      ? sqlite.prepare(opts.rawPrepared.sql)
-      : null;
-
     const processBatch = () => {
       if (batch.length === 0) return;
 
       const doInsertBatch = () => {
-        if (preparedStmt && opts.rawPrepared) {
-          // Raw prepared per-row inside a transaction
-          for (const record of batch) {
-            try {
-              const info = preparedStmt.run(
-                opts.rawPrepared.mapParams(record), // record is already DbRecord type
-              ) as SQLiteRunResult;
-              const changes =
-                typeof info?.changes === "number" ? info.changes : 1;
-              if (changes > 0) stats.inserted += 1;
-              else stats.skipped += 1;
-              stats.processed += 1;
-            } catch (err) {
-              console.warn(`Skipping record due to error:`, err);
-              stats.skipped += 1;
-              stats.processed += 1;
-            }
-          }
-        } else {
+        // Drizzle prepared statement per-row inside a transaction
+        for (const record of batch) {
           try {
-            const result = db
-              .insert(table)
-              .values(batch)
-              .onConflictDoNothing()
-              .run() as SQLiteRunResult;
+            const info = drizzlePrepared.run(record) as SQLiteRunResult;
             const changes =
-              typeof result?.changes === "number"
-                ? result.changes
-                : batch.length;
-            stats.inserted += changes;
-            stats.skipped += batch.length - changes;
-            stats.processed += batch.length;
-          } catch {
-            // Fallback to per-row to salvage good records and log offenders
-            for (const record of batch) {
-              try {
-                db.insert(table).values(record).onConflictDoNothing().run();
-                stats.inserted++;
-              } catch (err) {
-                console.warn(`Skipping record due to error:`, err);
-                stats.skipped++;
-              }
-              stats.processed++;
-            }
+              typeof info?.changes === "number" ? info.changes : 1;
+            if (changes > 0) stats.inserted += 1;
+            else stats.skipped += 1;
+            stats.processed += 1;
+          } catch (err) {
+            console.warn(`Skipping record due to error:`, err);
+            stats.skipped += 1;
+            stats.processed += 1;
           }
         }
       };
@@ -252,10 +200,7 @@ function countCsvRows(filePath: string): Promise<number> {
   });
 }
 
-async function importMeasureUnits(
-  batchSize?: number,
-  opts: ImportOptions<{ id: number | null; name: string | null }> = {},
-): Promise<ImportStats> {
+async function importMeasureUnits(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing Measure Units ===");
   const filePath = path.join(USDA_DATA_PATH, "measure_unit.csv");
 
@@ -264,12 +209,14 @@ async function importMeasureUnits(
     name: string | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_measure_unit (id, name) VALUES (?, ?)",
-        mapParams: (r: TransformedMeasureUnit) => [r.id, r.name],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaMeasureUnit)
+    .values({
+      id: sql.placeholder("id"),
+      name: sql.placeholder("name"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -278,22 +225,12 @@ async function importMeasureUnits(
         id: parseInteger(record.id as string),
         name: record.name as string,
       }) as TransformedMeasureUnit,
-    usdaMeasureUnit,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
-async function importNutrients(
-  batchSize?: number,
-  opts: ImportOptions<{
-    id: number | null;
-    name: string | null;
-    unitName: string | null;
-    nutrientNbr: string | null;
-    rank: string | null;
-  }> = {},
-): Promise<ImportStats> {
+async function importNutrients(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "nutrient.csv");
 
@@ -305,18 +242,17 @@ async function importNutrients(
     rank: string | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_nutrient (id, name, unit_name, nutrient_nbr, rank) VALUES (?, ?, ?, ?, ?)",
-        mapParams: (r: TransformedNutrient) => [
-          r.id,
-          r.name,
-          r.unitName,
-          r.nutrientNbr,
-          r.rank,
-        ],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaNutrient)
+    .values({
+      id: sql.placeholder("id"),
+      name: sql.placeholder("name"),
+      unitName: sql.placeholder("unitName"),
+      nutrientNbr: sql.placeholder("nutrientNbr"),
+      rank: sql.placeholder("rank"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -328,22 +264,12 @@ async function importNutrients(
         nutrientNbr: record.nutrient_nbr as string,
         rank: record.rank as string,
       }) as TransformedNutrient,
-    usdaNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
-async function importFoods(
-  batchSize?: number,
-  opts: ImportOptions<{
-    fdcId: number | null;
-    dataType: string | null;
-    description: string | null;
-    foodCategoryId: string | null;
-    publicationDate: string | null;
-  }> = {},
-): Promise<ImportStats> {
+async function importFoods(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "food.csv");
 
@@ -355,18 +281,17 @@ async function importFoods(
     publicationDate: string | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_food (fdc_id, data_type, description, food_category_id, publication_date) VALUES (?, ?, ?, ?, ?)",
-        mapParams: (r: TransformedFood) => [
-          r.fdcId,
-          r.dataType,
-          r.description,
-          r.foodCategoryId,
-          r.publicationDate,
-        ],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaFood)
+    .values({
+      fdcId: sql.placeholder("fdcId"),
+      dataType: sql.placeholder("dataType"),
+      description: sql.placeholder("description"),
+      foodCategoryId: sql.placeholder("foodCategoryId"),
+      publicationDate: sql.placeholder("publicationDate"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -378,19 +303,12 @@ async function importFoods(
         foodCategoryId: record.food_category_id,
         publicationDate: record.publication_date,
       }) as TransformedFood,
-    usdaFood,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
-async function importSrLegacyFoods(
-  batchSize?: number,
-  opts: ImportOptions<{
-    fdcId: number | null;
-    ndbNumber: number | null;
-  }> = {},
-): Promise<ImportStats> {
+async function importSrLegacyFoods(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing SR Legacy Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "sr_legacy_food.csv");
 
@@ -399,12 +317,14 @@ async function importSrLegacyFoods(
     ndbNumber: number | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_sr_legacy_food (fdc_id, NDB_number) VALUES (?, ?)",
-        mapParams: (r: TransformedSrLegacyFood) => [r.fdcId, r.ndbNumber],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaSrLegacyFood)
+    .values({
+      fdcId: sql.placeholder("fdcId"),
+      ndbNumber: sql.placeholder("ndbNumber"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -413,38 +333,12 @@ async function importSrLegacyFoods(
         fdcId: parseInteger(record.fdc_id as string),
         ndbNumber: parseInteger(record.NDB_number as string),
       }) as TransformedSrLegacyFood,
-    usdaSrLegacyFood,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
-async function importBrandedFoods(
-  batchSize?: number,
-  opts: ImportOptions<{
-    fdcId: number | null;
-    brandOwner: string | null;
-    brandName: string | null;
-    subbrandName: string | null;
-    gtinUpc: string | null;
-    ingredients: string | null;
-    notASignificantSourceOf: string | null;
-    servingSize: number | null;
-    servingSizeUnit: string | null;
-    householdServingFulltext: string | null;
-    brandedFoodCategory: string | null;
-    dataSource: string | null;
-    packageWeight: string | null;
-    modifiedDate: string | null;
-    availableDate: string | null;
-    marketCountry: string | null;
-    discontinuedDate: string | null;
-    preparationStateCode: string | null;
-    tradeChannel: string | null;
-    shortDescription: string | null;
-    materialCode: string | null;
-  }> = {},
-): Promise<ImportStats> {
+async function importBrandedFoods(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing Branded Foods ===");
   const filePath = path.join(USDA_DATA_PATH, "branded_food.csv");
 
@@ -472,34 +366,33 @@ async function importBrandedFoods(
     materialCode: string | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_branded_food (fdc_id, brand_owner, brand_name, subbrand_name, gtin_upc, ingredients, not_a_significant_source_of, serving_size, serving_size_unit, household_serving_fulltext, branded_food_category, data_source, package_weight, modified_date, available_date, market_country, discontinued_date, preparation_state_code, trade_channel, short_description, material_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        mapParams: (r: TransformedBrandedFood) => [
-          r.fdcId,
-          r.brandOwner,
-          r.brandName,
-          r.subbrandName,
-          r.gtinUpc,
-          r.ingredients,
-          r.notASignificantSourceOf,
-          r.servingSize,
-          r.servingSizeUnit,
-          r.householdServingFulltext,
-          r.brandedFoodCategory,
-          r.dataSource,
-          r.packageWeight,
-          r.modifiedDate,
-          r.availableDate,
-          r.marketCountry,
-          r.discontinuedDate,
-          r.preparationStateCode,
-          r.tradeChannel,
-          r.shortDescription,
-          r.materialCode,
-        ],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaBrandedFood)
+    .values({
+      fdcId: sql.placeholder("fdcId"),
+      brandOwner: sql.placeholder("brandOwner"),
+      brandName: sql.placeholder("brandName"),
+      subbrandName: sql.placeholder("subbrandName"),
+      gtinUpc: sql.placeholder("gtinUpc"),
+      ingredients: sql.placeholder("ingredients"),
+      notASignificantSourceOf: sql.placeholder("notASignificantSourceOf"),
+      servingSize: sql.placeholder("servingSize"),
+      servingSizeUnit: sql.placeholder("servingSizeUnit"),
+      householdServingFulltext: sql.placeholder("householdServingFulltext"),
+      brandedFoodCategory: sql.placeholder("brandedFoodCategory"),
+      dataSource: sql.placeholder("dataSource"),
+      packageWeight: sql.placeholder("packageWeight"),
+      modifiedDate: sql.placeholder("modifiedDate"),
+      availableDate: sql.placeholder("availableDate"),
+      marketCountry: sql.placeholder("marketCountry"),
+      discontinuedDate: sql.placeholder("discontinuedDate"),
+      preparationStateCode: sql.placeholder("preparationStateCode"),
+      tradeChannel: sql.placeholder("tradeChannel"),
+      shortDescription: sql.placeholder("shortDescription"),
+      materialCode: sql.placeholder("materialCode"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -527,30 +420,12 @@ async function importBrandedFoods(
         shortDescription: record.short_description,
         materialCode: record.material_code,
       }) as TransformedBrandedFood,
-    usdaBrandedFood,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
-async function importFoodNutrients(
-  batchSize?: number,
-  opts: ImportOptions<{
-    id: number | null;
-    fdcId: number | null;
-    nutrientId: number | null;
-    amount: number | null;
-    dataPoints: string | null;
-    derivationId: string | null;
-    min: string | null;
-    max: string | null;
-    median: string | null;
-    loq: string | null;
-    footnote: string | null;
-    minYearAcquired: string | null;
-    percentDailyValue: string | null;
-  }> = {},
-): Promise<ImportStats> {
+async function importFoodNutrients(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing Food Nutrients ===");
   const filePath = path.join(USDA_DATA_PATH, "food_nutrient.csv");
 
@@ -570,26 +445,25 @@ async function importFoodNutrients(
     percentDailyValue: string | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_food_nutrient (id, fdc_id, nutrient_id, amount, data_points, derivation_id, min, max, median, loq, footnote, min_year_acquired, percent_daily_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        mapParams: (r: TransformedFoodNutrient) => [
-          r.id,
-          r.fdcId,
-          r.nutrientId,
-          r.amount,
-          r.dataPoints,
-          r.derivationId,
-          r.min,
-          r.max,
-          r.median,
-          r.loq,
-          r.footnote,
-          r.minYearAcquired,
-          r.percentDailyValue,
-        ],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaFoodNutrient)
+    .values({
+      id: sql.placeholder("id"),
+      fdcId: sql.placeholder("fdcId"),
+      nutrientId: sql.placeholder("nutrientId"),
+      amount: sql.placeholder("amount"),
+      dataPoints: sql.placeholder("dataPoints"),
+      derivationId: sql.placeholder("derivationId"),
+      min: sql.placeholder("min"),
+      max: sql.placeholder("max"),
+      median: sql.placeholder("median"),
+      loq: sql.placeholder("loq"),
+      footnote: sql.placeholder("footnote"),
+      minYearAcquired: sql.placeholder("minYearAcquired"),
+      percentDailyValue: sql.placeholder("percentDailyValue"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -609,28 +483,12 @@ async function importFoodNutrients(
         minYearAcquired: record.min_year_acquired,
         percentDailyValue: record.percent_daily_value,
       }) as TransformedFoodNutrient,
-    usdaFoodNutrient,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
-async function importFoodPortions(
-  batchSize?: number,
-  opts: ImportOptions<{
-    id: number | null;
-    fdcId: number | null;
-    seqNum: string | null;
-    amount: number | null;
-    measureUnitId: number | null;
-    portionDescription: string | null;
-    modifier: string | null;
-    gramWeight: number | null;
-    dataPoints: string | null;
-    footnote: string | null;
-    minYearAcquired: string | null;
-  }> = {},
-): Promise<ImportStats> {
+async function importFoodPortions(batchSize?: number): Promise<ImportStats> {
   console.log("\n=== Importing Food Portions ===");
   const filePath = path.join(USDA_DATA_PATH, "food_portion.csv");
 
@@ -648,24 +506,23 @@ async function importFoodPortions(
     minYearAcquired: string | null;
   };
 
-  const raw = opts.useRaw
-    ? {
-        sql: "INSERT OR IGNORE INTO usda_food_portion (id, fdc_id, seq_num, amount, measure_unit_id, portion_description, modifier, gram_weight, data_points, footnote, min_year_acquired) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        mapParams: (r: TransformedFoodPortion) => [
-          r.id,
-          r.fdcId,
-          r.seqNum,
-          r.amount,
-          r.measureUnitId,
-          r.portionDescription,
-          r.modifier,
-          r.gramWeight,
-          r.dataPoints,
-          r.footnote,
-          r.minYearAcquired,
-        ],
-      }
-    : undefined;
+  const drizzlePrepared = db
+    .insert(schema.usdaFoodPortion)
+    .values({
+      id: sql.placeholder("id"),
+      fdcId: sql.placeholder("fdcId"),
+      seqNum: sql.placeholder("seqNum"),
+      amount: sql.placeholder("amount"),
+      measureUnitId: sql.placeholder("measureUnitId"),
+      portionDescription: sql.placeholder("portionDescription"),
+      modifier: sql.placeholder("modifier"),
+      gramWeight: sql.placeholder("gramWeight"),
+      dataPoints: sql.placeholder("dataPoints"),
+      footnote: sql.placeholder("footnote"),
+      minYearAcquired: sql.placeholder("minYearAcquired"),
+    })
+    .onConflictDoNothing()
+    .prepare();
 
   return streamCsvFile(
     filePath,
@@ -683,9 +540,8 @@ async function importFoodPortions(
         footnote: record.footnote,
         minYearAcquired: record.min_year_acquired,
       }) as TransformedFoodPortion,
-    usdaFoodPortion,
     batchSize,
-    { ...opts, rawPrepared: raw },
+    drizzlePrepared,
   );
 }
 
@@ -799,7 +655,6 @@ async function main() {
   const args = process.argv.slice(2);
   const shouldClear = args.includes("--clear");
   const enableSafePragmas = args.includes("--fast");
-  const useRaw = args.includes("--raw");
   const batchArg = args.find((a) => a.startsWith("--batch="));
   const batchSize = batchArg
     ? Math.max(
@@ -814,9 +669,7 @@ async function main() {
     console.log(
       "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)",
     );
-  console.log(
-    `Batch size: ${batchSize}${useRaw ? " | raw prepared statements" : ""}`,
-  );
+  console.log(`Batch size: ${batchSize} | Drizzle prepared statements`);
 
   if (shouldClear) {
     clearTables();
@@ -840,7 +693,7 @@ async function main() {
 
   for (const { name, fn } of importFunctions) {
     try {
-      const stats = await fn(batchSize, { useRaw });
+      const stats = await fn(batchSize);
       console.log(
         `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
       );

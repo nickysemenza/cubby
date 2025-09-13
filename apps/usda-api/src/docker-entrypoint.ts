@@ -43,7 +43,7 @@ class DatabaseManager {
 
   private async downloadDatabaseWithScript(
     url: string,
-    destPath: string
+    destPath: string,
   ): Promise<void> {
     console.log(`[entrypoint] Running optimized download script...`);
 
@@ -61,7 +61,7 @@ class DatabaseManager {
       child.on("exit", (code) => {
         if (code === 0) {
           console.log(
-            `[entrypoint] Database download pipeline completed successfully`
+            `[entrypoint] Database download pipeline completed successfully`,
           );
           resolve();
         } else {
@@ -109,7 +109,7 @@ class DatabaseManager {
         ["-s", "--connect-timeout", "2", "--max-time", "3", versionUrl],
         {
           stdio: ["ignore", "pipe", "pipe"],
-        }
+        },
       );
 
       let stdout = "";
@@ -120,7 +120,7 @@ class DatabaseManager {
       child.stderr.on("data", (d) => (stderr += d));
 
       const code: number = await new Promise((resolve) =>
-        child.on("exit", (c) => resolve(c || 0))
+        child.on("exit", (c) => resolve(c || 0)),
       );
       if (code !== 0) return null;
       return stdout.trim() || null;
@@ -139,7 +139,7 @@ class DatabaseManager {
     // Force refresh if environment variable is set
     if (this.config.forceRefresh) {
       console.log(
-        "[entrypoint] FORCE_DB_REFRESH=1, will download fresh database"
+        "[entrypoint] FORCE_DB_REFRESH=1, will download fresh database",
       );
       return true;
     }
@@ -147,7 +147,7 @@ class DatabaseManager {
     // If database doesn't exist, we need to download
     if (!(await this.fileExists(this.config.dbPath))) {
       console.log(
-        "[entrypoint] Database file does not exist, need to download"
+        "[entrypoint] Database file does not exist, need to download",
       );
       return true;
     }
@@ -163,20 +163,20 @@ class DatabaseManager {
 
       if (!remoteVersion) {
         console.log(
-          "[entrypoint] Could not check for updates (version endpoint unavailable)"
+          "[entrypoint] Could not check for updates (version endpoint unavailable)",
         );
         return false;
       }
 
       if (localVersion !== remoteVersion) {
         console.log(
-          `[entrypoint] Database update available (local: ${localVersion || "none"}, remote: ${remoteVersion})`
+          `[entrypoint] Database update available (local: ${localVersion || "none"}, remote: ${remoteVersion})`,
         );
         return true;
       }
 
       console.log(
-        `[entrypoint] Database is up to date (version: ${localVersion})`
+        `[entrypoint] Database is up to date (version: ${localVersion})`,
       );
     }
 
@@ -191,11 +191,11 @@ class DatabaseManager {
     try {
       await fs.writeFile(localVersionFile, version);
       console.log(
-        `[entrypoint] Database downloaded successfully (version: ${version})`
+        `[entrypoint] Database downloaded successfully (version: ${version})`,
       );
     } catch (error) {
       console.log(
-        `[entrypoint] Database downloaded successfully (could not save version: ${error})`
+        `[entrypoint] Database downloaded successfully (could not save version: ${error})`,
       );
     }
   }
@@ -204,12 +204,12 @@ class DatabaseManager {
     if (!this.config.r2Bucket || !this.config.r2ObjectKey) {
       throw new Error(
         `Database not found at ${this.config.dbPath} and R2 bucket/object key not set. ` +
-          "Set R2_BUCKET, R2_OBJECT_KEY, R2_ACCOUNT_ID, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY."
+          "Set R2_BUCKET, R2_OBJECT_KEY, R2_ACCOUNT_ID, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY.",
       );
     }
 
     console.log(
-      `[entrypoint] Database missing/outdated; downloading from r2:${this.config.r2Bucket}/${this.config.r2ObjectKey}`
+      `[entrypoint] Database missing/outdated; downloading from r2:${this.config.r2Bucket}/${this.config.r2ObjectKey}`,
     );
 
     // Use the optimized bash script for the entire pipeline
@@ -234,7 +234,7 @@ async function ensureDataDirOwnership(dataDir: string): Promise<void> {
     try {
       await fs.chown(dataDir, 1001, 1001);
       console.log(
-        `[entrypoint] Changed ownership of ${dataDir} to nodejs user`
+        `[entrypoint] Changed ownership of ${dataDir} to nodejs user`,
       );
     } catch (error) {
       console.log(`[entrypoint] Warning: Could not change ownership: ${error}`);
@@ -247,7 +247,7 @@ function dropPrivileges(args: string[]): Promise<void> {
     // Only drop privileges if running as root
     if (process.getuid && process.getuid() === 0) {
       console.log(
-        "[entrypoint] Dropping privileges to nodejs user (1001:1001)"
+        "[entrypoint] Dropping privileges to nodejs user (1001:1001)",
       );
 
       const child = spawn("su-exec", ["1001:1001", ...args], {
