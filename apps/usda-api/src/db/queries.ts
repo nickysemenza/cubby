@@ -3,7 +3,7 @@ import { db } from "./client";
 import * as schema from "./schema";
 import { toFtsQuery } from "./fts";
 import type { z } from "zod";
-import { nutrient_unit_name } from "@recipehub/usda-schemas";
+import { nutrient_unit_name, type DataType } from "@recipehub/usda-schemas";
 import { foodSearch } from "./types";
 
 // Drizzle prepared statements for better performance and type safety
@@ -202,7 +202,7 @@ export const listFoods = ({
   pageSize = 10,
 }: {
   nameFilter?: string;
-  dataTypeFilter?: string;
+  dataTypeFilter?: DataType;
   orderBy?: "description" | "data_type" | "fdc_id";
   direction?: "asc" | "desc";
   pageIndex?: number;

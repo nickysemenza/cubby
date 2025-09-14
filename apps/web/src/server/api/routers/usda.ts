@@ -1,5 +1,5 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { foodLookupParam } from "@recipehub/usda-schemas";
+import { foodLookupParam, dataTypeEnum } from "@recipehub/usda-schemas";
 import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { z } from "zod";
 import {
@@ -32,7 +32,7 @@ const list = protectedProcedure
       .object({
         filters: z.object({
           nameFilter: z.string().optional(),
-          dataTypeFilter: z.string().optional(),
+          dataTypeFilter: dataTypeEnum.optional(),
         }),
       })
       .extend(sortPaginationCombo.shape),

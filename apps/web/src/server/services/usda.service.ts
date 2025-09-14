@@ -3,6 +3,7 @@ import { USDAClient } from "../clients/usda";
 import {
   type FoodSummary,
   type FoodLookupParam,
+  type DataType,
 } from "@recipehub/usda-schemas";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
@@ -42,7 +43,7 @@ export class USDAService {
 
   async listFoods(
     nameFilter: string | undefined,
-    dataTypeFilter: string | undefined,
+    dataTypeFilter: DataType | undefined,
     sort: SortParams,
     pagination: PaginationParams,
   ): Promise<{

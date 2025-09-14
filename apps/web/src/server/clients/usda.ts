@@ -3,6 +3,7 @@ import {
   BrandedFoodInfo,
   FoodLookupParam,
   FoodSummary,
+  type DataType,
 } from "@recipehub/usda-schemas";
 import { usdaContract } from "@recipehub/usda-contract";
 import { initClient } from "@ts-rest/core";
@@ -45,7 +46,7 @@ export class USDAClient {
 
   private async fetchListFoods(params: {
     nameFilter?: string;
-    dataTypeFilter?: string;
+    dataTypeFilter?: DataType;
     orderBy?: "description" | "data_type" | "fdc_id";
     direction?: "asc" | "desc";
     pageIndex?: number | null;
@@ -86,7 +87,7 @@ export class USDAClient {
 
   async listFoods(
     nameFilter: string | undefined,
-    dataTypeFilter: string | undefined,
+    dataTypeFilter: DataType | undefined,
     sort: SortParams,
     pagination: PaginationParams,
   ) {

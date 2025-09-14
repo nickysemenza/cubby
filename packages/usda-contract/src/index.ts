@@ -4,6 +4,7 @@ import {
   // core shared schemas
   foodSummary,
   nutrient_unit_name,
+  dataTypeEnum,
   foodLookupParam,
   type FoodSummary,
   type NutritionInfo,
@@ -30,7 +31,7 @@ export const errorSchema = z.object({
 
 export const listFoodsQuery = z.object({
   nameFilter: z.string().optional(),
-  dataTypeFilter: z.string().optional(),
+  dataTypeFilter: dataTypeEnum.optional(),
   orderBy: z
     .enum(["description", "data_type", "fdc_id"])
     .optional()

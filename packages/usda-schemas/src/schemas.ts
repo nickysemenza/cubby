@@ -20,6 +20,20 @@ export const nutrient_unit_name = z.enum([
   "IU",
 ]);
 
+// select distinct data_type from usda_food;
+export const dataTypeEnum = z.enum([
+  "agricultural_acquisition",
+  "branded_food",
+  "experimental_food",
+  "foundation_food",
+  "market_acquisition",
+  "sample_food",
+  "sr_legacy_food",
+  "sub_sample_food",
+  "survey_fndds_food",
+]);
+export type DataType = z.infer<typeof dataTypeEnum>;
+
 //select distinct serving_size_unit from branded_food;
 export const branded_food_serving_size_unit = z.enum([
   "g",
@@ -44,7 +58,7 @@ export const nutrientSummary = z
   .describe("usda food_nutrient and nutrient tables");
 export const foodInfo = z
   .object({
-    data_type: z.string(),
+    data_type: dataTypeEnum,
     description: z.string(),
   })
   .describe("usda food table");

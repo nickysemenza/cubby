@@ -2,6 +2,7 @@
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/array-helpers";
+import { dataTypeEnum, type DataType } from "@recipehub/usda-schemas";
 import RTable from "../_components/data-table/Table";
 import React from "react";
 import { NoneState } from "../_components/NoneState";
@@ -30,7 +31,9 @@ export function USDAFoodList() {
       pagination: tableState.pagination,
       filters: {
         nameFilter: tableState.getColumnFilter("foodinfo-description"),
-        dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type"),
+        dataTypeFilter: tableState.getColumnFilter("foodInfo-data_type") as
+          | DataType
+          | undefined,
       },
     }),
   );
@@ -146,7 +149,15 @@ export function USDAFoodList() {
 
   const filterableColumns = [
     { id: "foodinfo-description", placeholder: "Filter by description..." },
-    { id: "foodInfo-data_type", placeholder: "Filter by type..." },
+    {
+      id: "foodInfo-data_type",
+      placeholder: "Filter by type...",
+      filterType: "select" as const,
+      options: Object.values(dataTypeEnum.enum).map((type) => ({
+        value: type,
+        label: type,
+      })),
+    },
   ];
 
   return (
