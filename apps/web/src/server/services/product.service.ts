@@ -56,19 +56,30 @@ export class ProductService {
       pagination,
     );
 
-    // Enrich each product with food data
-    const productsWithFood = await Promise.all(
-      products.map(async (product) => {
-        const lookupParam = foodLookupParamFromProduct(product);
-        const food = lookupParam
-          ? await this.usdaClient.findFood(lookupParam)
-          : null;
-        return {
-          ...product,
-          food,
-        };
-      }),
+    // Collect all lookup parameters
+    const lookupParams = products.map((product) =>
+      foodLookupParamFromProduct(product),
     );
+    const validLookups = lookupParams.filter(
+      (param): param is NonNullable<typeof param> => param !== null,
+    );
+
+    // Batch fetch food data
+    const foodResults =
+      validLookups.length > 0
+        ? await this.usdaClient.findFoodsBatch(validLookups)
+        : [];
+
+    // Map foods back to products
+    let foodIndex = 0;
+    const productsWithFood = products.map((product) => {
+      const lookupParam = foodLookupParamFromProduct(product);
+      const food = lookupParam ? foodResults[foodIndex++] : null;
+      return {
+        ...product,
+        food,
+      };
+    });
 
     return { data: productsWithFood, count };
   }

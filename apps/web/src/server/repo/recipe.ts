@@ -229,24 +229,19 @@ export const createRecipe = async (
 
     // Associate images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
-      // Create RecipeImage records for each image
-      await Promise.all(
-        pendingImageIds.map(async (imageId) => {
-          // Create association
-          await tx.recipeImage.create({
-            data: {
-              recipeId: createdRecipe.id,
-              imageId,
-            },
-          });
+      // Create RecipeImage records in batch
+      await tx.recipeImage.createMany({
+        data: pendingImageIds.map((imageId) => ({
+          recipeId: createdRecipe.id,
+          imageId,
+        })),
+      });
 
-          // Update image status to UPLOADED
-          await tx.image.update({
-            where: { id: imageId },
-            data: { status: "UPLOADED" },
-          });
-        }),
-      );
+      // Update all image statuses to UPLOADED in batch
+      await tx.image.updateMany({
+        where: { id: { in: pendingImageIds } },
+        data: { status: "UPLOADED" },
+      });
     }
 
     const fullRecipe = await getRecipeByID(createdRecipe.id, tx);
@@ -447,23 +442,19 @@ export const updateRecipe = async (
 
     // Add new images if provided
     if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
-      await Promise.all(
-        updates.pendingImageIds.map(async (imageId) => {
-          // Create association
-          await tx.recipeImage.create({
-            data: {
-              recipeId: id,
-              imageId,
-            },
-          });
+      // Create RecipeImage records in batch
+      await tx.recipeImage.createMany({
+        data: updates.pendingImageIds.map((imageId) => ({
+          recipeId: id,
+          imageId,
+        })),
+      });
 
-          // Update image status to UPLOADED
-          await tx.image.update({
-            where: { id: imageId },
-            data: { status: "UPLOADED" },
-          });
-        }),
-      );
+      // Update all image statuses to UPLOADED in batch
+      await tx.image.updateMany({
+        where: { id: { in: updates.pendingImageIds } },
+        data: { status: "UPLOADED" },
+      });
     }
 
     // Remove images if requested

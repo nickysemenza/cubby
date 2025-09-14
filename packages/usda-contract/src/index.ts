@@ -80,6 +80,19 @@ export const usdaContract = c.router({
     },
     summary: "Find complete food by lookup (UPC or NDB) via POST body",
   },
+  findByLookupBatch: {
+    method: "POST",
+    path: "/api/foods/search/batch",
+    body: z.object({
+      lookups: z.array(foodLookupParam),
+    }),
+    responses: {
+      200: z.object({
+        results: z.array(foodSummary.nullable()),
+      }),
+    },
+    summary: "Find multiple foods by lookup (UPC or NDB) in batch",
+  },
   listFoods: {
     method: "GET",
     path: "/api/foods",

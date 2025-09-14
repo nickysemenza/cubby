@@ -345,24 +345,19 @@ export const createProduct = async (
 
     // Associate images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
-      // Create ProductImage records for each image
-      await Promise.all(
-        pendingImageIds.map(async (imageId) => {
-          // Create association
-          await tx.productImage.create({
-            data: {
-              productId: product.id,
-              imageId,
-            },
-          });
+      // Create ProductImage records in batch
+      await tx.productImage.createMany({
+        data: pendingImageIds.map((imageId) => ({
+          productId: product.id,
+          imageId,
+        })),
+      });
 
-          // Update image status to UPLOADED
-          await tx.image.update({
-            where: { id: imageId },
-            data: { status: "UPLOADED" },
-          });
-        }),
-      );
+      // Update all image statuses to UPLOADED in batch
+      await tx.image.updateMany({
+        where: { id: { in: pendingImageIds } },
+        data: { status: "UPLOADED" },
+      });
     }
 
     return product;
@@ -464,23 +459,19 @@ export const updateProduct = async (
 
     // Add new images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
-      await Promise.all(
-        pendingImageIds.map(async (imageId) => {
-          // Create association
-          await tx.productImage.create({
-            data: {
-              productId: product.id,
-              imageId,
-            },
-          });
+      // Create ProductImage records in batch
+      await tx.productImage.createMany({
+        data: pendingImageIds.map((imageId) => ({
+          productId: product.id,
+          imageId,
+        })),
+      });
 
-          // Update image status to UPLOADED
-          await tx.image.update({
-            where: { id: imageId },
-            data: { status: "UPLOADED" },
-          });
-        }),
-      );
+      // Update all image statuses to UPLOADED in batch
+      await tx.image.updateMany({
+        where: { id: { in: pendingImageIds } },
+        data: { status: "UPLOADED" },
+      });
     }
 
     // Remove images if requested

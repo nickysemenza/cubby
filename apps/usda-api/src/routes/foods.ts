@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { z } from "zod";
 import {
   fdcIdParam,
   listFoodsQuery,
@@ -46,6 +47,29 @@ app.post("/api/foods/search", async (c) => {
       ? findFoodByUpc(lookup.gtin_upc)
       : findFoodByNdb(lookup.ndb_number);
   return c.json(food ? foodSummary.parse(food) : null, 200);
+});
+
+// 3. Batch Find Foods by Lookup
+app.post("/api/foods/search/batch", async (c) => {
+  const body = await c.req.json().catch(() => undefined);
+  const parsed = z
+    .object({
+      lookups: z.array(foodLookupParam),
+    })
+    .safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid batch lookup" }, 400);
+  }
+
+  const results = parsed.data.lookups.map((lookup) => {
+    const food =
+      lookup.kind === "upc"
+        ? findFoodByUpc(lookup.gtin_upc)
+        : findFoodByNdb(lookup.ndb_number);
+    return food ? foodSummary.parse(food) : null;
+  });
+
+  return c.json({ results }, 200);
 });
 
 // 4. List Foods with Pagination and Filtering

@@ -46,18 +46,32 @@ export class IngredientService {
   async enrichProductsWithFood(
     products: ProductWithMappingsOut[],
   ): Promise<ProductWithMappingsAndFoodOut[]> {
-    return Promise.all(
-      products.map(async (product) => {
-        const lookupParam = foodLookupParamFromProduct(product);
-        const food = lookupParam
-          ? await this.usdaClient.findFood(lookupParam)
-          : null;
-        return {
-          ...product,
-          food,
-        };
-      }),
+    if (products.length === 0) return [];
+
+    // Collect all lookup parameters
+    const lookupParams = products.map((product) =>
+      foodLookupParamFromProduct(product),
     );
+    const validLookups = lookupParams.filter(
+      (param): param is NonNullable<typeof param> => param !== null,
+    );
+
+    // Batch fetch food data
+    const foodResults =
+      validLookups.length > 0
+        ? await this.usdaClient.findFoodsBatch(validLookups)
+        : [];
+
+    // Map foods back to products
+    let foodIndex = 0;
+    return products.map((product) => {
+      const lookupParam = foodLookupParamFromProduct(product);
+      const food = lookupParam ? foodResults[foodIndex++] : null;
+      return {
+        ...product,
+        food,
+      };
+    });
   }
 
   async getIngredientByID(id: string): Promise<IngredientWithFoodOut> {
@@ -102,17 +116,34 @@ export class IngredientService {
       missingProductsOnly,
     );
 
-    // Enrich each ingredient's products with food data
-    const ingredientsWithFood = await Promise.all(
-      ingredients.map(async (ingredient) => {
-        const enrichedProducts = await this.enrichProductsWithFood(
-          ingredient.product,
+    // Collect all products from all ingredients for batch processing
+    const allProducts: ProductWithMappingsOut[] = [];
+    const ingredientProductCounts: number[] = [];
+
+    ingredients.forEach((ingredient) => {
+      ingredientProductCounts.push(ingredient.product.length);
+      allProducts.push(...ingredient.product);
+    });
+
+    // Batch enrich all products at once
+    const allEnrichedProducts = await this.enrichProductsWithFood(allProducts);
+
+    // Map enriched products back to their ingredients
+    let productIndex = 0;
+    const ingredientsWithFood = ingredients.map(
+      (ingredient, ingredientIndex) => {
+        const productCount = ingredientProductCounts[ingredientIndex] || 0;
+        const enrichedProducts = allEnrichedProducts.slice(
+          productIndex,
+          productIndex + productCount,
         );
+        productIndex += productCount;
+
         return {
           ...ingredient,
           product: enrichedProducts,
         };
-      }),
+      },
     );
 
     return { data: ingredientsWithFood, count };

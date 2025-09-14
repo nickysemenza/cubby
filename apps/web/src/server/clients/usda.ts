@@ -81,6 +81,21 @@ export class USDAClient {
     });
   }
 
+  async findFoodsBatch(
+    lookups: FoodLookupParam[],
+  ): Promise<(FoodSummary | null)[]> {
+    if (lookups.length === 0) return [];
+
+    return await this.traced(
+      "USDA API: POST /api/foods/search/batch",
+      async () => {
+        const res = await this.client.findByLookupBatch({ body: { lookups } });
+        if (res.status !== 200) return lookups.map(() => null);
+        return res.body.results;
+      },
+    );
+  }
+
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {
     return await this.fetchGetFood(fdc_id);
   }

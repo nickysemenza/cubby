@@ -47,23 +47,19 @@ export const createLocation = async (
 
     // Associate images if provided
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      // Create LocationImage records for each image
-      await Promise.all(
-        data.pendingImageIds.map(async (imageId) => {
-          await tx.locationImage.create({
-            data: {
-              locationId: location.id,
-              imageId,
-            },
-          });
+      // Create LocationImage records in batch
+      await tx.locationImage.createMany({
+        data: data.pendingImageIds.map((imageId) => ({
+          locationId: location.id,
+          imageId,
+        })),
+      });
 
-          // Update image status to UPLOADED
-          await tx.image.update({
-            where: { id: imageId },
-            data: { status: "UPLOADED" },
-          });
-        }),
-      );
+      // Update all image statuses to UPLOADED in batch
+      await tx.image.updateMany({
+        where: { id: { in: data.pendingImageIds } },
+        data: { status: "UPLOADED" },
+      });
     }
     return getLocationById(tx, location.id);
   });
@@ -124,22 +120,19 @@ export const updateLocation = async (
 
     // Add new images
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      await Promise.all(
-        data.pendingImageIds.map(async (imageId) => {
-          await tx.locationImage.create({
-            data: {
-              locationId: location.id,
-              imageId,
-            },
-          });
+      // Create LocationImage records in batch
+      await tx.locationImage.createMany({
+        data: data.pendingImageIds.map((imageId) => ({
+          locationId: location.id,
+          imageId,
+        })),
+      });
 
-          // Update image status to UPLOADED
-          await tx.image.update({
-            where: { id: imageId },
-            data: { status: "UPLOADED" },
-          });
-        }),
-      );
+      // Update all image statuses to UPLOADED in batch
+      await tx.image.updateMany({
+        where: { id: { in: data.pendingImageIds } },
+        data: { status: "UPLOADED" },
+      });
     }
 
     // Remove existing images
