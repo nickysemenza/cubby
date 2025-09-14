@@ -113,7 +113,7 @@
     "eslint": "^9.34.0",
     "eslint-config-next": "^15.5.0",
     "eslint-plugin-react-hooks": "^5.2.0",
-    "jsdom": "^26.1.0",
+    "jsdom": "^27.0.0",
     "knip": "^5.63.0",
     "postcss": "^8.4.49",
     "prettier": "^3.6.2",
