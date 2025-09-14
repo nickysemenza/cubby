@@ -9,7 +9,10 @@ import {
 } from "@recipehub/usda-schemas";
 import { assertNever } from "~/lib/assert";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
-import { type FoodSummaryWithLinkedProducts } from "~/schemas/combo";
+import {
+  unitMappingFromPortionInfo,
+  type FoodSummaryWithLinkedProducts,
+} from "~/schemas/combo";
 import { type UnitMapping } from "~/schemas/unitmapping";
 import { type Span, trace } from "@opentelemetry/api";
 
@@ -121,33 +124,10 @@ export class USDAService {
     return inferredMapping;
   }
 
-  private unitMappingFromPortionInfo(
-    portionInfo: {
-      amount: number;
-      modifier: string | null;
-      gram_weight: number;
-    },
-    fdc_id: number,
-  ): UnitMapping {
-    const inferredMapping = {
-      a: {
-        value: portionInfo.amount,
-        unit: portionInfo.modifier ?? "portion",
-      },
-      b: {
-        value: portionInfo.gram_weight,
-        unit: "g",
-      },
-      source: `USDA portion`,
-      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
-    };
-    return inferredMapping;
-  }
-
   private async enrichWithLinkedProducts(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryWithLinkedProducts> {
-    const { brandedFoodInfo, legacyFoodInfo, portionInfo, fdc_id } =
+    const { brandedFoodInfo, legacyFoodInfo, portionInfoRaw, fdc_id } =
       foodSummary;
     const upc = brandedFoodInfo?.gtin_upc;
 
@@ -178,17 +158,14 @@ export class USDAService {
     }
 
     // Calculate parsed portion info
-    const parsedPortionInfo = portionInfo.raw.map((p) =>
-      this.unitMappingFromPortionInfo(p, fdc_id),
+    const parsedPortionInfo = portionInfoRaw.map((p) =>
+      unitMappingFromPortionInfo(p, fdc_id),
     );
 
     return {
       ...foodSummary,
       brandedFoodInfo: enhancedBrandedFoodInfo,
-      portionInfo: {
-        raw: portionInfo.raw,
-        parsed: parsedPortionInfo,
-      },
+      portionInfoParsed: parsedPortionInfo,
       linkedProducts,
     };
   }

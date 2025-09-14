@@ -31,11 +31,6 @@ export const errorSchema = z.object({
   message: z.string().optional(),
 });
 
-// API exposes complete food objects (same as shared foodSummary but without parsed portions)
-export const completeFoodResponse = foodSummary.extend({
-  portionInfo: z.object({ raw: z.array(foodPortion) }),
-});
-export type CompleteFoodResponse = z.infer<typeof completeFoodResponse>;
 
 export const listFoodsQuery = z.object({
   nameFilter: z.string().optional(),
@@ -50,7 +45,7 @@ export const listFoodsQuery = z.object({
 });
 
 export const listFoodsResponse = z.object({
-  data: z.array(completeFoodResponse),
+  data: z.array(foodSummary),
   count: z.number(),
 });
 
@@ -74,7 +69,7 @@ export const usdaContract = c.router({
     path: "/api/foods/:fdc_id",
     pathParams: fdcIdParam,
     responses: {
-      200: completeFoodResponse,
+      200: foodSummary,
       404: errorSchema,
     },
     summary: "Get complete food by FDC ID",
@@ -84,7 +79,7 @@ export const usdaContract = c.router({
     path: "/api/foods/search",
     body: foodLookupParam,
     responses: {
-      200: completeFoodResponse.nullable(),
+      200: foodSummary.nullable(),
     },
     summary: "Find complete food by lookup (UPC or NDB) via POST body",
   },

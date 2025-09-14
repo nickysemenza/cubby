@@ -1,11 +1,10 @@
 import { Hono } from "hono";
 import {
-  completeFoodResponse,
   fdcIdParam,
   listFoodsQuery,
   listFoodsResponse,
 } from "@recipehub/usda-contract";
-import { foodLookupParam } from "@recipehub/usda-schemas";
+import { foodLookupParam, foodSummary } from "@recipehub/usda-schemas";
 import {
   findFoodByUpc,
   findFoodByNdb,
@@ -31,7 +30,7 @@ app.get("/api/foods/:fdc_id", (c) => {
       404,
     );
   }
-  return c.json(completeFoodResponse.parse(completeFood), 200);
+  return c.json(foodSummary.parse(completeFood), 200);
 });
 
 // 2. Consolidated: Find Food by Lookup (UPC or NDB) via POST body
@@ -46,7 +45,7 @@ app.post("/api/foods/search", async (c) => {
     lookup.kind === "upc"
       ? findFoodByUpc(lookup.gtin_upc)
       : findFoodByNdb(lookup.ndb_number);
-  return c.json(food ? completeFoodResponse.parse(food) : null, 200);
+  return c.json(food ? foodSummary.parse(food) : null, 200);
 });
 
 // 4. List Foods with Pagination and Filtering

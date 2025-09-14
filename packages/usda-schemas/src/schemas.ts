@@ -100,10 +100,7 @@ export const foodSummary = z.object({
   foodInfo,
   legacyFoodInfo: legacyFoodInfo.nullable(),
   nutritionInfo,
-  portionInfo: z.object({
-    raw: z.array(foodPortion),
-    parsed: z.array(z.any()), // To be populated at service layer
-  }),
+  portionInfoRaw: z.array(foodPortion),
 });
 export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;

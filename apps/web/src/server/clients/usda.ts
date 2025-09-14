@@ -4,14 +4,12 @@ import {
   FoodLookupParam,
   FoodSummary,
 } from "@recipehub/usda-schemas";
-import {
-  usdaContract,
-  type CompleteFoodResponse,
-} from "@recipehub/usda-contract";
+import { usdaContract } from "@recipehub/usda-contract";
 import { initClient } from "@ts-rest/core";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 
 export class USDAClient {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private client: any;
   constructor(private baseUrl: string) {
     this.client = initClient(usdaContract, {
@@ -37,9 +35,7 @@ export class USDAClient {
   }
 
   // Raw calls via ts-rest client
-  private async fetchGetFood(
-    fdcId: number,
-  ): Promise<CompleteFoodResponse | null> {
+  private async fetchGetFood(fdcId: number): Promise<FoodSummary | null> {
     return this.traced("tsClient.getFood", async () => {
       const res = await this.client.getFood({ params: { fdc_id: fdcId } });
       if (res.status !== 200) return null;
@@ -49,7 +45,7 @@ export class USDAClient {
 
   private async fetchFindByLookup(
     lookup: FoodLookupParam,
-  ): Promise<CompleteFoodResponse | null> {
+  ): Promise<FoodSummary | null> {
     return this.traced("client.findByLookup", async () => {
       const res = await this.client.findByLookup({ body: lookup });
       if (res.status !== 200) return null;
@@ -64,7 +60,7 @@ export class USDAClient {
     direction?: "asc" | "desc";
     pageIndex?: number | null;
     pageSize?: number | null;
-  }): Promise<{ data: CompleteFoodResponse[]; count: number }> {
+  }): Promise<{ data: FoodSummary[]; count: number }> {
     return this.traced("client.listFoods", async () => {
       const res = await this.client.listFoods({
         query: {
@@ -81,41 +77,21 @@ export class USDAClient {
     });
   }
 
-  // Domain mapping
-  private transformCompleteFoodToFoodSummary(
-    completeFood: CompleteFoodResponse,
-  ): FoodSummary {
-    return {
-      ...completeFood,
-      portionInfo: {
-        raw: completeFood.portionInfo.raw,
-        parsed: [],
-      },
-    };
-  }
-
   async getBrandedFoodByID(fdc_id: number): Promise<BrandedFoodInfo | null> {
     const data = await this.fetchGetFood(fdc_id);
     return data?.brandedFoodInfo ?? null;
   }
 
   async findFood(lookup: FoodLookupParam): Promise<FoodSummary | null> {
-    const data = await this.traced(
-      "USDA API: POST /api/foods/search",
-      async () => {
-        const res = await this.client.findByLookup({ body: lookup });
-        if (res.status !== 200) return null;
-        return res.body;
-      },
-    );
-    if (!data) return null;
-    return this.transformCompleteFoodToFoodSummary(data);
+    return await this.traced("USDA API: POST /api/foods/search", async () => {
+      const res = await this.client.findByLookup({ body: lookup });
+      if (res.status !== 200) return null;
+      return res.body;
+    });
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {
-    const data = await this.fetchGetFood(fdc_id);
-    if (!data) return null;
-    return this.transformCompleteFoodToFoodSummary(data);
+    return await this.fetchGetFood(fdc_id);
   }
 
   async listFoods(
@@ -133,9 +109,6 @@ export class USDAClient {
       pageSize: pagination.pageSize,
     });
 
-    const foodSummaries: FoodSummary[] = data.data.map((food) =>
-      this.transformCompleteFoodToFoodSummary(food),
-    );
-    return { data: foodSummaries, count: data.count };
+    return { data: data.data, count: data.count };
   }
 }

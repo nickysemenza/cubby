@@ -1,5 +1,5 @@
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
-import { foodLookupParam } from "@recipehub/usda-schemas";
+import { foodLookupParam, foodSummary } from "@recipehub/usda-schemas";
 import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { z } from "zod";
 import {
@@ -37,7 +37,7 @@ const list = protectedProcedure
       })
       .extend(sortPaginationCombo.shape),
   )
-  .output(createPaginatedResponseSchema(foodSummaryWithLinkedProducts))
+  .output(createPaginatedResponseSchema(foodSummary))
   .query(async ({ ctx, input }) => {
     const { data, count } = await ctx.usdaService.listFoods(
       input.filters.nameFilter,

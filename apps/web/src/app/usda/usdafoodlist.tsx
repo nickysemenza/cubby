@@ -8,8 +8,9 @@ import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
-import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { TableLink } from "../_components/table";
+import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
+import { unitMappingFromPortionInfo } from "~/schemas/combo";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -104,15 +105,21 @@ export function USDAFoodList() {
         );
       },
     }),
-    columnHelper.accessor("portionInfo", {
+    columnHelper.accessor("portionInfoRaw", {
       header: "Portions",
       cell: (info) => {
-        const portionInfo = info.getValue();
-        if (portionInfo.raw.length === 0) return <NoneState />;
+        const portionInfoRaw = info.getValue();
+        const row = info.row.original;
+        if (portionInfoRaw.length === 0) return <NoneState />;
+
+        // Parse raw portions to unit mappings on the client side
+        const parsedPortions = portionInfoRaw.map((p) =>
+          unitMappingFromPortionInfo(p, row.fdc_id),
+        );
 
         return (
           <div className="w-full">
-            <UnitMappingDisplay mappings={portionInfo.parsed} title="" />
+            <UnitMappingDisplay mappings={parsedPortions} title="" />
           </div>
         );
       },

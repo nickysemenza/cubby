@@ -18,7 +18,7 @@ export const USDAFoodDetail: React.FC<{
     brandedFoodInfo,
     foodInfo,
     nutritionInfo,
-    portionInfo,
+    portionInfoRaw,
     fdc_id,
     linkedProducts,
     legacyFoodInfo,
@@ -86,7 +86,7 @@ export const USDAFoodDetail: React.FC<{
           )}
         </div>
       )}
-      {portionInfo.raw.length > 0 && (
+      {portionInfoRaw.length > 0 && (
         <div className="mt-4">
           <h4 className="mb-2 font-semibold">Portion Information</h4>
           <table className="min-w-full border-collapse">
@@ -98,7 +98,7 @@ export const USDAFoodDetail: React.FC<{
               </tr>
             </thead>
             <tbody>
-              {portionInfo.raw.map((portion, idx) => (
+              {portionInfoRaw.map((portion, idx) => (
                 <tr key={idx} className="border-b">
                   <td className="border p-2">{portion.amount}</td>
                   <td className="border p-2">

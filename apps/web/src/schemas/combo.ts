@@ -90,22 +90,38 @@ const brandedFoodInfoWithAmount = z.object({
 // Enhanced food summary with unit mappings and linked products
 export const foodSummaryWithLinkedProducts = foodSummary.extend({
   brandedFoodInfo: brandedFoodInfoWithAmount.nullable(),
-  portionInfo: z.object({
-    raw: z.array(
-      z.object({
-        amount: z.number(),
-        modifier: z.string().nullable(),
-        gram_weight: z.number(),
-      }),
-    ),
-    parsed: z.array(unitMappingWithMetadata),
-  }),
+  portionInfoParsed: z.array(unitMappingWithMetadata),
   linkedProducts: z.array(productTopLevelOut).optional(),
 });
 
 export type FoodSummaryWithLinkedProducts = z.infer<
   typeof foodSummaryWithLinkedProducts
 >;
+
+/**
+ * Converts a raw food portion to a unit mapping
+ */
+export const unitMappingFromPortionInfo = (
+  portionInfo: {
+    amount: number;
+    modifier: string | null;
+    gram_weight: number;
+  },
+  fdc_id: number,
+): UnitMapping => {
+  return {
+    a: {
+      value: portionInfo.amount,
+      unit: portionInfo.modifier ?? "portion",
+    },
+    b: {
+      value: portionInfo.gram_weight,
+      unit: "g",
+    },
+    source: `USDA portion`,
+    sourceMetadata: { type: "food" as const, fdcId: fdc_id },
+  };
+};
 
 /**
  * Creates unit mappings from nutrition data (e.g., 100g → 374kcal)
@@ -149,8 +165,12 @@ export const unitMappingsFromFood = (
           .serving_as_amount
       : undefined;
 
+  // Only try to access portionInfoParsed if it exists (enhanced type)
+  const parsedPortions =
+    "portionInfoParsed" in food ? food.portionInfoParsed : [];
+
   return [
-    ...food.portionInfo.parsed,
+    ...parsedPortions,
     ...(serving ? [serving] : []),
     ...(food ? unitMappingsFromNutrition(food) : []),
   ];

@@ -369,6 +369,6 @@ export const getCompleteFoodInfo = (fdcId: number) => {
         }
       : null,
     nutritionInfo,
-    portionInfo: { raw: portions },
+    portionInfoRaw: portions,
   };
 };
