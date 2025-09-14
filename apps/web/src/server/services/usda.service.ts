@@ -3,17 +3,10 @@ import { USDAClient } from "../clients/usda";
 import {
   type FoodSummary,
   type FoodLookupParam,
-  type BrandedFoodRaw,
-  type BrandedFoodServingSizeUnit,
-  branded_food_serving_size_unit,
 } from "@recipehub/usda-schemas";
-import { assertNever } from "~/lib/assert";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
-import {
-  unitMappingFromPortionInfo,
-  type FoodSummaryWithLinkedProducts,
-} from "~/schemas/combo";
-import { type UnitMapping } from "~/schemas/unitmapping";
+import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
+import { type FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { type Span, trace } from "@opentelemetry/api";
 
 export class USDAService {
@@ -52,7 +45,10 @@ export class USDAService {
     dataTypeFilter: string | undefined,
     sort: SortParams,
     pagination: PaginationParams,
-  ) {
+  ): Promise<{
+    data: FoodSummaryWithLinkedProducts[];
+    count: number;
+  }> {
     const result = await this.usdaClient.listFoods(
       nameFilter,
       dataTypeFilter,
@@ -60,75 +56,31 @@ export class USDAService {
       pagination,
     );
 
-    // For list views, we might skip linking products for performance
-    // or implement it selectively based on needs
-    return result;
-  }
-
-  private normalizeBrandedFoodServingSizeUnit(
-    unit: BrandedFoodServingSizeUnit,
-  ): string {
-    switch (unit) {
-      case "GM":
-      case "GRM":
-        return "g";
-      case "MC":
-      case "MLT":
-        return "ml";
-      case "g":
-      case "IU":
-      case "MG":
-      case "ml":
-        return unit;
-      default:
-        return assertNever(unit);
-    }
-  }
-
-  private async getAmountFromBrandedFoodServingSize(
-    brandedFood: BrandedFoodRaw,
-  ): Promise<UnitMapping | undefined> {
-    const {
-      fdc_id,
-      serving_size,
-      serving_size_unit,
-      household_serving_fulltext,
-    } = brandedFood;
-    if (
-      serving_size === null ||
-      serving_size_unit === null ||
-      household_serving_fulltext === null
-    ) {
-      console.log(`branded food ${fdc_id} missing serving info`);
-      return undefined;
-    }
-
+    // For list views, we skip linking products for performance but include all unit mappings
     const w = await import("wasm");
-    const p = w.parse_ingredient(household_serving_fulltext);
-    const b = p.amounts.pop();
-    if (b === undefined) {
-      console.log(`branded food ${fdc_id} missing amounts`);
-      return undefined;
-    }
-    const servingSizeUnit =
-      branded_food_serving_size_unit.parse(serving_size_unit);
-    const inferredMapping = {
-      a: {
-        value: serving_size,
-        unit: this.normalizeBrandedFoodServingSizeUnit(servingSizeUnit),
+    const enhancedData: FoodSummaryWithLinkedProducts[] = result.data.map(
+      (food) => {
+        // Get all inferred unit mappings from the food
+        const inferredUnitMappings = unitMappingsFromFood(food, w);
+
+        return {
+          ...food,
+          inferredUnitMappings,
+          linkedProducts: [], // Skip linked products for performance in list view
+        };
       },
-      b,
-      source: `USDA FDC serving`,
-      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
+    );
+
+    return {
+      data: enhancedData,
+      count: result.count,
     };
-    return inferredMapping;
   }
 
   private async enrichWithLinkedProducts(
     foodSummary: FoodSummary,
   ): Promise<FoodSummaryWithLinkedProducts> {
-    const { brandedFoodInfo, legacyFoodInfo, portionInfoRaw, fdc_id } =
-      foodSummary;
+    const { brandedFoodInfo, legacyFoodInfo } = foodSummary;
     const upc = brandedFoodInfo?.gtin_upc;
 
     const linkedProducts: Product[] = await this.getLinkedProducts(
@@ -139,33 +91,13 @@ export class USDAService {
           : undefined,
     );
 
-    // Calculate enhanced branded food info with serving_as_amount
-    let enhancedBrandedFoodInfo = null;
-    if (brandedFoodInfo) {
-      // Use the branded food info we already have from the complete food response
-      const serving_as_amount = await this.getAmountFromBrandedFoodServingSize({
-        fdc_id: fdc_id,
-        serving_size: brandedFoodInfo.serving.serving_size ?? null,
-        serving_size_unit: brandedFoodInfo.serving.serving_size_unit,
-        household_serving_fulltext:
-          brandedFoodInfo.serving.household_serving_fulltext,
-      });
-
-      enhancedBrandedFoodInfo = {
-        ...brandedFoodInfo,
-        serving_as_amount,
-      };
-    }
-
-    // Calculate parsed portion info
-    const parsedPortionInfo = portionInfoRaw.map((p) =>
-      unitMappingFromPortionInfo(p, fdc_id),
-    );
+    // Get all inferred unit mappings from the food
+    const w = await import("wasm");
+    const inferredUnitMappings = unitMappingsFromFood(foodSummary, w);
 
     return {
       ...foodSummary,
-      brandedFoodInfo: enhancedBrandedFoodInfo,
-      portionInfoParsed: parsedPortionInfo,
+      inferredUnitMappings,
       linkedProducts,
     };
   }

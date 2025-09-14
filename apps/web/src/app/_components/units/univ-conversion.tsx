@@ -1,14 +1,14 @@
 import { WMeasure, MeasureKind } from "wasm/recipebridge";
 import { Amount } from "~/codec/codec";
 import { Result, withFailure, withSuccess } from "~/misc/result-types";
-import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import {
   type IngredientWithFoodOut,
   type ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { NutrientsPer100 } from "@recipehub/usda-schemas";
-import { wasm } from "~/hooks/useWasm";
+import { type wasm } from "~/hooks/useWasm";
 import { SectionIngredientOut } from "~/schemas/recipe";
 
 /**
@@ -149,7 +149,9 @@ const getIngredientMeasures = (
     ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
-  const mappings = product?.flatMap(getAllUnitMappingsFromProduct) || [];
+  const mappings =
+    product?.flatMap((product) => getAllUnitMappingsFromProduct(product, w)) ||
+    [];
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {

@@ -7,8 +7,9 @@ import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
-import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
+import { useWasm } from "~/hooks/useWasm";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { useTableState } from "../_components/data-table/useTableState";
@@ -26,6 +27,7 @@ import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 
 export function IngredientList() {
   const api = useTRPC();
+  const w = useWasm();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
@@ -103,7 +105,9 @@ export function IngredientList() {
       meta: { className: "w-72 max-w-72" },
       cell: (info) => {
         const products = info.getValue();
-        const mappings = products.flatMap(getAllUnitMappingsFromProduct);
+        const mappings = products.flatMap((product) =>
+          getAllUnitMappingsFromProduct(product, w),
+        );
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),

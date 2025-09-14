@@ -11,7 +11,7 @@ import {
 } from "../_components/EntityPill";
 import { useWasm } from "~/hooks/useWasm";
 import { SpacedContainer } from "~/components/ui/spaced-container";
-import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
@@ -30,6 +30,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export function ProductList() {
   const api = useTRPC();
+  const w = useWasm();
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
@@ -50,7 +51,6 @@ export function ProductList() {
     }),
   );
 
-  const w = useWasm();
   const data = productsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
@@ -125,7 +125,7 @@ export function ProductList() {
       meta: { className: "w-96 max-w-96" },
       cell: (info) => {
         const product = info.row.original;
-        const mappings = getAllUnitMappingsFromProduct(product);
+        const mappings = getAllUnitMappingsFromProduct(product, w);
         return (
           <div className="w-full">
             <UnitMappingDisplay mappings={mappings} title="" />

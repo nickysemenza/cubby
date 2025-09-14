@@ -54,19 +54,17 @@ const nutrientsPer100 = z.object({
   kcal: z.number(),
 });
 export type NutrientsPer100 = z.infer<typeof nutrientsPer100>;
-const BrandedFoodServingInfo = z.object({
-  serving_size: z.number().nullable(),
-  serving_size_unit: z.string().nullable(),
-  household_serving_fulltext: z.string().nullable(),
-});
-
 export const brandedFoodInfo = z.object({
   brand_owner: z.string().nullable(),
   brand_name: z.string().nullable(),
   branded_food_category: z.string().nullable(),
   gtin_upc: upc,
   ingredients: z.string().nullable(),
-  serving: BrandedFoodServingInfo,
+  serving: z.object({
+    serving_size: z.number().nullable(),
+    serving_size_unit: z.string().nullable(),
+    household_serving_fulltext: z.string().nullable(),
+  }),
 });
 
 export const nutritionInfo = z.object({

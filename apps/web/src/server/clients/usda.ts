@@ -43,16 +43,6 @@ export class USDAClient {
     });
   }
 
-  private async fetchFindByLookup(
-    lookup: FoodLookupParam,
-  ): Promise<FoodSummary | null> {
-    return this.traced("client.findByLookup", async () => {
-      const res = await this.client.findByLookup({ body: lookup });
-      if (res.status !== 200) return null;
-      return res.body;
-    });
-  }
-
   private async fetchListFoods(params: {
     nameFilter?: string;
     dataTypeFilter?: string;

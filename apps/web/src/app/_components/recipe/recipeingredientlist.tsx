@@ -9,7 +9,7 @@ import {
 import { type Flatten } from "~/misc/array-helpers";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
-import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useMemo } from "react";
 import { useWasm } from "~/hooks/useWasm";
@@ -130,7 +130,9 @@ export const RecipeIngredientList: React.FC<{
 
         const entry = id ? ingMap[id] : undefined;
         const mappings =
-          entry?.product?.flatMap(getAllUnitMappingsFromProduct) || [];
+          entry?.product?.flatMap((product) =>
+            getAllUnitMappingsFromProduct(product, w),
+          ) || [];
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),

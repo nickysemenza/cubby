@@ -17,9 +17,11 @@ interface UploadConfig {
 
 class R2Uploader {
   private config: UploadConfig;
+  private verbose: boolean;
 
-  constructor(config: UploadConfig) {
+  constructor(config: UploadConfig, verbose: boolean = false) {
     this.config = config;
+    this.verbose = verbose;
   }
 
   private async fileExists(filePath: string): Promise<boolean> {
@@ -150,6 +152,7 @@ class R2Uploader {
     localPath: string,
     key: string,
     description: string,
+    verbose: boolean = false,
   ): Promise<void> {
     const spinner = ora(`Uploading ${description}...`).start();
 
@@ -167,35 +170,48 @@ class R2Uploader {
         RCLONE_CONFIG_R2_ENDPOINT: `https://${this.config.accountId}.r2.cloudflarestorage.com`,
       };
 
+      const rcloneArgs = [
+        "copyto",
+        localPath,
+        `R2:${this.config.bucket}/${key}`,
+        "--transfers=32",
+        "--multi-thread-streams=8",
+        "--s3-chunk-size=200M",
+        "--s3-upload-concurrency=32",
+        "--s3-disable-checksum",
+        "--progress",
+      ];
+
+      if (verbose) {
+        rcloneArgs.push("--verbose");
+      }
+
       await new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          "rclone",
-          [
-            "copyto",
-            localPath,
-            `R2:${this.config.bucket}/${key}`,
-            "--transfers=32",
-            "--multi-thread-streams=8",
-            "--s3-chunk-size=200M",
-            "--s3-upload-concurrency=32",
-            "--s3-disable-checksum",
-            "--progress",
-          ],
-          {
-            env,
-            stdio: ["ignore", "pipe", "pipe"],
-          },
-        );
+        const child = spawn("rclone", rcloneArgs, {
+          env,
+          stdio: verbose ? "inherit" : ["ignore", "pipe", "pipe"],
+        });
+
+        let stderr = "";
+
+        if (!verbose && child.stderr) {
+          child.stderr.setEncoding("utf8");
+          child.stderr.on("data", (data) => {
+            stderr += data;
+          });
+        }
 
         child.on("error", (error) => {
-          reject(new Error(`rclone failed: ${error.message}`));
+          reject(new Error(`rclone spawn failed: ${error.message}`));
         });
 
         child.on("exit", (code) => {
           if (code === 0) {
             resolve();
           } else {
-            reject(new Error(`rclone exited with code ${code}`));
+            const errorMsg =
+              stderr.trim() || `Process exited with code ${code}`;
+            reject(new Error(`rclone failed: ${errorMsg}`));
           }
         });
       });
@@ -261,9 +277,20 @@ class R2Uploader {
           compressedPath,
           this.config.objectKey,
           "compressed database (.zst)",
+          this.verbose,
         ),
-        this.uploadFileWithRclone(versionPath, versionKey, "version file"),
-        this.uploadFileWithRclone(shaPath, shaKey, "checksum file"),
+        this.uploadFileWithRclone(
+          versionPath,
+          versionKey,
+          "version file",
+          this.verbose,
+        ),
+        this.uploadFileWithRclone(
+          shaPath,
+          shaKey,
+          "checksum file",
+          this.verbose,
+        ),
       ]);
 
       // Step 7: Display results
@@ -349,6 +376,7 @@ async function main(): Promise<void> {
       "Object key in bucket",
       process.env.R2_OBJECT_KEY || "usda.sqlite.zst",
     )
+    .option("--verbose", "Show detailed rclone output for debugging")
     .version("1.0.0")
     .action(async (databasePath, options) => {
       try {
@@ -361,7 +389,7 @@ async function main(): Promise<void> {
         config.bucket = options.bucket;
         config.objectKey = options.key;
         // No public base; downloads happen via R2 in the API
-        const uploader = new R2Uploader(config);
+        const uploader = new R2Uploader(config, options.verbose);
         await uploader.uploadDatabase();
 
         console.log();

@@ -15,7 +15,8 @@ import { useTRPC } from "~/trpc/react";
 import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
-import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { useWasm } from "~/hooks/useWasm";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
@@ -25,6 +26,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
   ingredient: initialIngredient,
 }) => {
   const api = useTRPC();
+  const w = useWasm();
   const [ingredient, setIngredient] =
     useState<IngredientWithFoodOut>(initialIngredient);
   const [isEditing, setIsEditing] = useState(false);
@@ -106,7 +108,9 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
       title: "Unit Mappings",
       content: (
         <UnitMappingsTable
-          mappings={ingredient.product.flatMap(getAllUnitMappingsFromProduct)}
+          mappings={ingredient.product.flatMap((product) =>
+            getAllUnitMappingsFromProduct(product, w),
+          )}
         />
       ),
     },

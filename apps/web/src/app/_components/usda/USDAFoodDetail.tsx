@@ -1,19 +1,19 @@
 "use client";
 
 import { NutritionInfoTable } from "./nutrition";
-import {
-  unitMappingsFromFood,
-  FoodSummaryWithLinkedProducts,
-} from "~/schemas/combo";
+import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
+import { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { ProductPillLink } from "../EntityPill";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import { useWasm } from "~/hooks/useWasm";
 
 export const USDAFoodDetail: React.FC<{
   id: number;
   food: FoodSummaryWithLinkedProducts;
 }> = ({ food }) => {
+  const w = useWasm();
   const {
     brandedFoodInfo,
     foodInfo,
@@ -27,7 +27,7 @@ export const USDAFoodDetail: React.FC<{
   // Debug linked products issue
   console.log("Food object:", food);
   console.log("Linked products:", linkedProducts);
-  const mappings = unitMappingsFromFood(food);
+  const mappings = unitMappingsFromFood(food, w);
 
   const foodInfoSection = (
     <div>

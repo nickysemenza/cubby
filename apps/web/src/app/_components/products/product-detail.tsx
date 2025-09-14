@@ -2,7 +2,8 @@
 import { type FC, useState } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
-import { getAllUnitMappingsFromProduct } from "~/schemas/combo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { useWasm } from "~/hooks/useWasm";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
@@ -30,6 +31,7 @@ interface ProductDetailProps {
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
   const router = useRouter();
+  const w = useWasm();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -60,7 +62,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   // Get product images from the product object
   const productImages = product.images || [];
 
-  const mappings = getAllUnitMappingsFromProduct(product);
+  const mappings = getAllUnitMappingsFromProduct(product, w);
   const sections: DetailSection[] = [
     {
       title: "Basic Information",

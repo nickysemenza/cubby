@@ -3,10 +3,7 @@ import { initContract } from "@ts-rest/core";
 import {
   // core shared schemas
   foodSummary,
-  foodPortion,
   nutrient_unit_name,
-  upc,
-  ndb,
   foodLookupParam,
   type FoodSummary,
   type NutritionInfo,
@@ -30,7 +27,6 @@ export const errorSchema = z.object({
   error: z.string(),
   message: z.string().optional(),
 });
-
 
 export const listFoodsQuery = z.object({
   nameFilter: z.string().optional(),
