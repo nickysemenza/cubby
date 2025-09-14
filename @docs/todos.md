@@ -39,18 +39,6 @@
     - Product search with amount input
     - Add without leaving location page
 
-* **Inventory Value Totals**
-  - Create `InventoryValueSummary.tsx` component:
-    - Calculate total value using price mappings (e.g., "$5 = 1 lb")
-    - Show breakdown by product category
-    - Display "No pricing data" for items without mappings
-  - Create `calculateInventoryValue.ts` utility:
-    - Use WASM conversion to convert amounts to prices
-    - Sum values across all products
-    - Handle missing price data gracefully
-  - Update `LocationCardGrid` and `location-detail.tsx`:
-    - Show total inventory value on location cards
-    - Add value summary section to location detail
 
 * **Additional Enhancements**
   - Add checkboxes to location table for bulk delete/move

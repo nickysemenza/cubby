@@ -14,6 +14,7 @@ import Link from "next/link";
 import EntityImageList from "../EntityImageList";
 import { LocationCardGrid } from "./location-card-grid";
 import { LocationIconWithLabel } from "./location-icons";
+import { InventoryValueSummary } from "./inventory-value-summary";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -101,6 +102,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               <Button variant="outline">Bulk Edit Inventory</Button>
             </Link>
           </div>
+        </div>
+      ),
+    },
+    {
+      title: "Inventory Value",
+      content: (
+        <div className="py-1">
+          <InventoryValueSummary locationId={location.id} variant="full" />
         </div>
       ),
     },

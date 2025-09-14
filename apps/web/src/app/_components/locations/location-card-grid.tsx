@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Package, MapPin, Calendar, ArrowRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ProductPillLink } from "../EntityPill";
+import { InventoryValueSummary } from "./inventory-value-summary";
 
 interface LocationCardGridProps {
   locations: InfLocation[];
@@ -104,6 +105,15 @@ function LocationCard({ location, showParentPath }: LocationCardProps) {
               </div>
             )}
           </div>
+
+          {/* Inventory Value (compact) */}
+          {hasInventory && (
+            <InventoryValueSummary
+              locationId={location.id}
+              variant="compact"
+              className=""
+            />
+          )}
 
           {/* Location Type */}
           <Badge variant="outline" className="text-xs">

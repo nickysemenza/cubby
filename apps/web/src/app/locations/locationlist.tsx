@@ -24,6 +24,7 @@ import { type InfLocation } from "~/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { NoneState } from "../_components/NoneState";
+import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
@@ -75,6 +76,19 @@ export function LocationList() {
     }),
     columnHelper.accessor("type", {
       cell: (info) => info.getValue(),
+    }),
+    columnHelper.display({
+      id: "inventory_value",
+      header: "Value",
+      cell: (info) => (
+        <InventoryValueSummary
+          locationId={info.row.original.id}
+          variant="compact"
+        />
+      ),
+      meta: {
+        className: "w-[180px]",
+      },
     }),
     createCreatedAtColumn(columnHelper),
     columnHelper.accessor("lastBulkInventory", {
