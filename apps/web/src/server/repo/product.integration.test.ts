@@ -27,6 +27,7 @@ describe("product repository", () => {
       model: "TEST-123",
       upc: "123456789012",
       ndb_number: null,
+      expectedQuantity: null,
       ingredientId: null,
     };
 
@@ -142,6 +143,7 @@ describe("product repository", () => {
       await createProduct(prisma, {
         ...product,
         ingredientId: null,
+        expectedQuantity: null,
       });
     }
 
@@ -201,6 +203,7 @@ describe("product repository", () => {
       model: "Original-123",
       upc: "123456789012",
       ndb_number: null,
+      expectedQuantity: null,
       ingredientId: null,
     };
 
@@ -259,6 +262,7 @@ describe("product repository", () => {
       model: "TEST-ING-123",
       upc: "123456789012",
       ndb_number: null,
+      expectedQuantity: null,
       ingredientId: ingredient.id,
     };
 
@@ -297,6 +301,7 @@ describe("product repository", () => {
       model: "TEST-ING-123",
       upc: "123456789012",
       ndb_number: null,
+      expectedQuantity: null,
       ingredientId: ingredient1.id,
     };
 

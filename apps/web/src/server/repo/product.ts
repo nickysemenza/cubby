@@ -489,3 +489,20 @@ export const updateProduct = async (
     return product;
   });
 };
+
+// Find products with expectedQuantity=1 that appear in multiple locations
+export const findDuplicateUniqueProducts = async (db: PrismaClient) => {
+  const duplicates = await db.product.findMany({
+    where: {
+      expectedQuantity: 1,
+    },
+    include: {
+      InventoryEntry: {
+        include: {
+          location: true,
+        },
+      },
+    },
+  });
+  return duplicates.filter((product) => product.InventoryEntry.length > 1);
+};

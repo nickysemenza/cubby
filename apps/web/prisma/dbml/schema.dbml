@@ -59,6 +59,7 @@ Table Product {
   upc String [unique]
   ndb_number Int [unique]
   model String
+  expectedQuantity Int
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime

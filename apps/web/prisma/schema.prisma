@@ -105,12 +105,13 @@ model Ingredient {
 }
 
 model Product {
-  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name         String
-  manufacturer String
-  upc          String? @unique
-  ndb_number   Int?    @unique
-  model        String?
+  id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String
+  manufacturer     String
+  upc              String? @unique
+  ndb_number       Int?    @unique
+  model            String?
+  expectedQuantity Int?    // null means unlimited, 1 for unique items
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @default(now()) @updatedAt

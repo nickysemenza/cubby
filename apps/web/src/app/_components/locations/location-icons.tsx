@@ -2,27 +2,41 @@ import {
   Home,
   ShoppingBag,
   Layers,
-  Package,
-  Archive,
   Table2,
   FileBox,
   ShoppingCart,
   Box,
+  type LucideIcon,
 } from "lucide-react";
+import { assertNever } from "~/lib/assert";
 import { type LocationType } from "~/schemas/location";
 
-const LocationTypeIcons: Record<LocationType, typeof Home> = {
-  room: Home,
-  bag: ShoppingBag,
-  shelf: Layers,
-  crate: Package,
-  "half-crate": Archive,
-  table: Table2,
-  drawer: FileBox,
-  cart: ShoppingCart,
-  cabinet: Box,
+// Helper to get icon for a location type
+export const getLocationIcon = (type: LocationType): LucideIcon => {
+  switch (type) {
+    case "room":
+      return Home;
+    case "bag":
+      return ShoppingBag;
+    case "shelf":
+      return Layers;
+    case "crate":
+    case "half-crate":
+      return Box;
+    case "table":
+      return Table2;
+    case "drawer":
+      return FileBox;
+    case "cart":
+      return ShoppingCart;
+    case "cabinet":
+      return Box;
+    default:
+      assertNever(type);
+  }
 };
 
+// Keep LocationIcon for backward compatibility
 interface LocationIconProps {
   type: LocationType;
   className?: string;
@@ -34,7 +48,7 @@ export function LocationIcon({
   className,
   size = 16,
 }: LocationIconProps) {
-  const IconComponent = LocationTypeIcons[type];
+  const IconComponent = getLocationIcon(type);
   return <IconComponent className={className} size={size} />;
 }
 

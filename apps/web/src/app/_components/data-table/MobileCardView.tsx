@@ -6,6 +6,8 @@ import { Button } from "~/components/ui/button";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
 import { type ReactNode } from "react";
+import { EntityPreviewCard } from "~/components/ui/entity-preview-card";
+import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
 
 interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
@@ -113,97 +115,65 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
             (f) => f.category === "wide",
           );
 
-          return (
-            <div
-              key={row.id}
-              className="bg-card rounded-lg border p-4 shadow-sm"
-            >
-              {/* Hero Section - Image and Name */}
-              {heroFields.length > 0 && (
-                <div className="mb-4 flex items-start gap-3 border-b pb-3">
-                  {heroFields.map((field) => (
-                    <div
-                      key={field.id}
-                      className={
-                        field.displayHeader.toLowerCase() === "image"
-                          ? "flex-shrink-0"
-                          : "min-w-0 flex-1 overflow-hidden"
-                      }
-                    >
-                      {field.displayHeader.toLowerCase() === "image" ? (
-                        field.content
-                      ) : (
-                        <div className="min-w-0">
-                          <div className="min-w-0 text-base leading-tight font-semibold break-words">
-                            {field.content}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+          // Extract raw data values directly from the row
+          const rowData = row.original as Record<string, unknown>;
 
-              {/* Medium and Compact Fields Grid */}
-              {(mediumFields.length > 0 || compactFields.length > 0) && (
-                <div className="mb-4 grid grid-cols-2 gap-x-4 gap-y-3">
-                  {[...mediumFields, ...compactFields].map((field) => (
-                    <div
-                      key={field.id}
-                      className={`min-w-0 ${compactFields.includes(field) ? "text-sm" : ""}`}
-                    >
-                      <div className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
-                        {field.displayHeader}
-                      </div>
-                      <div className="min-w-0 overflow-hidden text-sm break-words">
-                        {field.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+          // Get title using utility function
+          const titleString = extractEntityTitle(rowData);
 
-              {/* Wide Fields - Full Width */}
-              {wideFields.length > 0 && (
-                <div className="space-y-4">
-                  {wideFields.map((field) => (
-                    <div key={field.id} className="min-w-0">
-                      <div className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-                        {field.displayHeader}
-                      </div>
-                      <div className="min-w-0 overflow-hidden text-sm">
-                        {field.content}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+          // Get image using utility function, with fallback to rendered field
+          const entityImage = getEntityImage(rowData);
+          const imageField = heroFields.find(
+            (f) => f.displayHeader.toLowerCase() === "image",
+          );
+          const imageContent = entityImage || imageField?.content;
 
-              {/* Debug section for mobile */}
-              {isDebugEnabled && (
-                <div className="mt-4 border-t pt-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground text-sm font-medium">
-                      Debug
-                    </span>
-                    <DebugDialog
-                      data={row.original}
-                      title={`Debug Data - Row ${row.id}`}
-                      trigger={
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
-                        >
-                          <Bug className="h-4 w-4" />
-                          <span className="sr-only">Debug row data</span>
-                        </Button>
-                      }
-                    />
-                  </div>
-                </div>
-              )}
+          // Create details from medium and compact fields
+          const details = [...mediumFields, ...compactFields].map((field) => (
+            <div key={field.id} className="flex items-center justify-between">
+              <span className="text-muted-foreground text-xs font-medium">
+                {field.displayHeader}:
+              </span>
+              <span className="text-sm">{field.content}</span>
             </div>
+          ));
+
+          // Create badges from wide fields (simplified representation)
+          const badges = wideFields.map((field) => (
+            <div key={field.id} className="text-muted-foreground text-xs">
+              {field.displayHeader}
+            </div>
+          ));
+
+          const footer = isDebugEnabled ? (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground text-sm font-medium">
+                Debug
+              </span>
+              <DebugDialog
+                data={row.original}
+                title={`Debug Data - Row ${row.id}`}
+                trigger={
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <Bug className="h-4 w-4" />
+                    <span className="sr-only">Debug row data</span>
+                  </Button>
+                }
+              />
+            </div>
+          ) : undefined;
+
+          return (
+            <EntityPreviewCard
+              key={row.id}
+              title={titleString}
+              image={imageContent}
+              details={details}
+              badges={badges}
+              footer={footer}
+              variant="compact"
+              className="shadow-sm"
+            />
           );
         })
       ) : (

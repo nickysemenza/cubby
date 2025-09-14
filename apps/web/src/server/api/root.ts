@@ -8,6 +8,7 @@ import { systemRouter } from "./routers/system";
 import { inventoryentryRouter } from "./routers/inventory";
 import { usdaRouter } from "./routers/usda";
 import { imageRouter } from "./routers/image";
+import { problemsRouter } from "./routers/problems";
 
 /**
  * This is the primary router for your server.
@@ -24,6 +25,7 @@ export const appRouter = createTRPCRouter({
   inventoryItem: inventoryentryRouter,
   usda: usdaRouter,
   image: imageRouter,
+  problems: problemsRouter,
 });
 
 // export type definition of API

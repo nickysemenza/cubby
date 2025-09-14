@@ -11,6 +11,12 @@ const productBase = z.object({
   ndb_number: ndb.nullable(),
   manufacturer: z.string().describe("Manufacturer or 'generic'"),
   model: z.string().nullable().describe("model number"),
+  expectedQuantity: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .describe("null means unlimited, 1 for unique items"),
 });
 
 // Input payload for creating/updating products (includes relationships)

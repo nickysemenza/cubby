@@ -40,6 +40,7 @@ const formSchema = z
     model: z.string().nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
+    expectedQuantity: z.number().int().positive().nullable(),
     ingredient: ComboboxItem.nullable(), // Ingredient association
     unitMappings: z.array(unitMappingInput),
   })
@@ -104,6 +105,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       model: product ? product.model : null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
+      expectedQuantity: product ? product.expectedQuantity : null,
       ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
     },
@@ -118,6 +120,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         model: values.model,
         upc: values.upc,
         ndb_number: values.ndb_number,
+        expectedQuantity: values.expectedQuantity,
         ingredientId: values.ingredient?.id || null,
         unitMappings: values.unitMappings,
         ...getImageData(true), // Apply pending images for creation
@@ -131,7 +134,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           ...product,
         },
         values,
-        ["name", "manufacturer", "model", "upc", "ndb_number"],
+        [
+          "name",
+          "manufacturer",
+          "model",
+          "upc",
+          "ndb_number",
+          "expectedQuantity",
+        ],
       );
 
       // Check for ingredient changes
@@ -185,13 +195,24 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <UnifiedTextField
-        form={form}
-        name="name"
-        label="Name"
-        placeholder="Enter product name"
-        nullable={false}
-      />
+      {/* Start with model/name - primary identifiers for inventory */}
+      <SideBySideFields>
+        <UnifiedTextField
+          form={form}
+          name="model"
+          label="Model Number"
+          placeholder="Enter model number"
+          nullable={true}
+        />
+
+        <UnifiedTextField
+          form={form}
+          name="name"
+          label="Product Name"
+          placeholder="Enter product name"
+          nullable={false}
+        />
+      </SideBySideFields>
 
       <UnifiedTextField
         form={form}
@@ -201,14 +222,16 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         nullable={false}
       />
 
-      <UnifiedTextField
+      {/* Inventory-specific fields */}
+      <NullableNumericField
         form={form}
-        name="model"
-        label="Model (Optional)"
-        placeholder="Enter model"
-        nullable={true}
+        step="1"
+        name="expectedQuantity"
+        label="Expected Quantity (1 for unique items)"
+        placeholder="Leave empty for unlimited"
       />
 
+      {/* Secondary identifiers */}
       <SideBySideFields>
         <UnifiedTextField
           form={form}

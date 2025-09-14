@@ -42,6 +42,7 @@ function makeInventoryItem(params: {
       model: null,
       upc: null,
       ndb_number: null,
+      expectedQuantity: null,
       images: [],
       createdAt: now,
       updatedAt: now,

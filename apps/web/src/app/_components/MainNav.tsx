@@ -34,6 +34,11 @@ const NavItems: NavItem[] = [
     label: "Dashboard",
     isActive: (pathname) => pathname === "/dashboard",
   },
+  {
+    href: "/problems",
+    label: "Problems",
+    isActive: (pathname) => pathname.startsWith("/problems"),
+  },
   { href: "/api/panel", label: "API Panel", isActive: () => false },
 ];
 

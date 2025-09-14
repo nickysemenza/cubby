@@ -1,0 +1,411 @@
+"use client";
+
+import { useTRPC } from "~/trpc/react";
+import { useQuery } from "@tanstack/react-query";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { ErrorDisplay } from "~/components/ui/error-display";
+import {
+  CheckCircle,
+  Package,
+  MapPin,
+  DollarSign,
+  Zap,
+  Calendar,
+} from "lucide-react";
+import { SimpleLoading } from "~/components/ui/loading-skeletons";
+import { ProblemSection } from "./components/problem-section";
+import { formatDistanceToNow } from "date-fns";
+import Link from "next/link";
+import type {
+  DuplicateUniqueProduct,
+  OrphanedProduct,
+  InvalidUPC,
+  ProductWithoutMappings,
+  InvalidInventoryAmount,
+  EmptyLocation,
+} from "~/server/repo/problems";
+
+// Inline problem list components
+function DuplicateUniqueProductsList({
+  products,
+}: {
+  products: DuplicateUniqueProduct[];
+}) {
+  return (
+    <ProblemSection
+      title="Duplicate Unique Products"
+      description="Products marked as unique (expectedQuantity=1) but found in multiple locations. These should be consolidated or have their expectedQuantity updated."
+      icon={Package}
+      iconColor={products.length > 0 ? "text-red-500" : "text-green-500"}
+      items={products}
+      emptyMessage="No duplicate unique products found. All products with expectedQuantity=1 are in single locations."
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        badges: product.locations.map((location) => (
+          <Badge
+            key={location.id}
+            variant="outline"
+            className="flex items-center gap-1"
+          >
+            <MapPin className="h-3 w-3" />
+            {location.name}
+          </Badge>
+        )),
+        editUrl: `/products/${product.id}`,
+      })}
+    />
+  );
+}
+
+function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
+  return (
+    <ProblemSection
+      title="Orphaned Products"
+      description="Products with no inventory entries. These may be unused and can potentially be deleted."
+      icon={Package}
+      iconColor={products.length > 0 ? "text-gray-500" : "text-green-500"}
+      items={products}
+      emptyMessage="No orphaned products found. All products have inventory entries."
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        details: [
+          <div
+            key="created"
+            className="flex items-center gap-1 text-sm text-gray-500"
+          >
+            <Calendar className="h-3 w-3" />
+            Created {formatDistanceToNow(product.createdAt)} ago
+          </div>,
+        ],
+        editUrl: `/products/${product.id}`,
+      })}
+    />
+  );
+}
+
+function InvalidUPCsList({ products }: { products: InvalidUPC[] }) {
+  return (
+    <ProblemSection
+      title="Invalid UPCs"
+      description="Products with invalid UPC formats or duplicate UPC codes."
+      icon={Zap}
+      iconColor={products.length > 0 ? "text-yellow-500" : "text-green-500"}
+      items={products}
+      emptyMessage="No invalid UPC codes found. All UPCs are properly formatted and unique."
+      groupBy={(items) => {
+        const groups: { [key: string]: InvalidUPC[] } = {};
+        items.forEach((item) => {
+          const groupName =
+            item.issue === "invalid_format"
+              ? "Invalid Format"
+              : "Duplicate UPCs";
+          if (!groups[groupName]) {
+            groups[groupName] = [];
+          }
+          groups[groupName]!.push(item);
+        });
+        return groups;
+      }}
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        badges: [
+          <Badge key="issue" variant="destructive">
+            {product.issue === "invalid_format"
+              ? "Invalid UPC"
+              : "Duplicate UPC"}
+          </Badge>,
+          <code key="upc" className="rounded bg-gray-100 px-2 py-1 text-sm">
+            {product.upc}
+          </code>,
+        ],
+        editUrl: `/products/${product.id}`,
+        editLabel: "Fix",
+      })}
+    />
+  );
+}
+
+function ProductsWithoutMappingsList({
+  products,
+}: {
+  products: ProductWithoutMappings[];
+}) {
+  return (
+    <ProblemSection
+      title="Products Without Pricing"
+      description="Products missing unit mappings. Add pricing information to enable value calculations."
+      icon={DollarSign}
+      iconColor={products.length > 0 ? "text-red-500" : "text-green-500"}
+      items={products}
+      emptyMessage="All products have unit mappings for pricing information."
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        details: [
+          <div
+            key="created"
+            className="flex items-center gap-1 text-sm text-gray-500"
+          >
+            <Calendar className="h-3 w-3" />
+            Created {formatDistanceToNow(product.createdAt)} ago
+          </div>,
+        ],
+        badges: [
+          <Badge key="no-mappings" variant="outline" className="w-fit">
+            No unit mappings
+          </Badge>,
+        ],
+        editUrl: `/products/${product.id}`,
+        editLabel: "Add Pricing",
+      })}
+    />
+  );
+}
+
+function InvalidInventoryAmountsList({
+  entries,
+}: {
+  entries: InvalidInventoryAmount[];
+}) {
+  return (
+    <ProblemSection
+      title="Invalid Inventory Amounts"
+      description="Inventory entries with zero or negative amounts that should be fixed or removed."
+      icon={Package}
+      iconColor={entries.length > 0 ? "text-red-500" : "text-green-500"}
+      items={entries}
+      emptyMessage="All inventory entries have valid positive amounts."
+      groupBy={(items) => {
+        const groups: { [key: string]: InvalidInventoryAmount[] } = {};
+        items.forEach((item) => {
+          const groupName =
+            item.issue === "zero" ? "Zero Amounts" : "Negative Amounts";
+          if (!groups[groupName]) {
+            groups[groupName] = [];
+          }
+          groups[groupName]!.push(item);
+        });
+        return groups;
+      }}
+      renderItem={(entry) => ({
+        title: entry.productName,
+        details: [
+          <div
+            key="location"
+            className="flex items-center gap-2 text-sm text-gray-600"
+          >
+            <MapPin className="h-3 w-3" />
+            {entry.locationName}
+          </div>,
+        ],
+        badges: [
+          <Badge key="issue" variant="destructive">
+            {entry.issue === "zero" ? "Zero Amount" : "Negative Amount"}
+          </Badge>,
+          <code key="amount" className="rounded bg-gray-100 px-2 py-1 text-sm">
+            {entry.amount.value} {entry.amount.unit}
+          </code>,
+        ],
+        editUrl: `/inventory/${entry.id}`,
+        editLabel: "Fix",
+      })}
+    />
+  );
+}
+
+function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
+  return (
+    <ProblemSection
+      title="Empty Locations"
+      description="Locations with no inventory entries. Consider adding inventory or removing unused locations."
+      icon={MapPin}
+      iconColor={locations.length > 0 ? "text-purple-500" : "text-green-500"}
+      items={locations}
+      emptyMessage="All locations have inventory entries."
+      renderItem={(location) => {
+        const details = [
+          <div
+            key="created"
+            className="flex items-center gap-1 text-sm text-gray-500"
+          >
+            <Calendar className="h-3 w-3" />
+            Created {formatDistanceToNow(location.createdAt)} ago
+          </div>,
+        ];
+
+        if (location.lastBulkInventory) {
+          details.push(
+            <div
+              key="last-inventory"
+              className="flex items-center gap-1 text-sm text-gray-500"
+            >
+              <Calendar className="h-3 w-3" />
+              Last inventory {formatDistanceToNow(
+                location.lastBulkInventory,
+              )}{" "}
+              ago
+            </div>,
+          );
+        }
+
+        return {
+          title: location.name,
+          badges: [
+            <Badge key="type" variant="outline" className="capitalize">
+              {location.type}
+            </Badge>,
+          ],
+          details,
+          editUrl: `/locations/${location.id}`,
+          editLabel: "View",
+          customActions: (
+            <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
+              <Button size="sm">Add Inventory</Button>
+            </Link>
+          ),
+        };
+      }}
+    />
+  );
+}
+
+export function ProblemsOverview() {
+  const api = useTRPC();
+
+  const {
+    data: problems,
+    isLoading,
+    error,
+  } = useQuery(api.problems.getAllProblems.queryOptions());
+
+  if (isLoading) {
+    return <SimpleLoading text="Analyzing data consistency..." />;
+  }
+
+  if (error) {
+    return <ErrorDisplay error={error} className="rounded-md bg-red-50 p-4" />;
+  }
+
+  if (!problems) {
+    return (
+      <ErrorDisplay
+        error="No problem data available"
+        className="rounded-md bg-yellow-50 p-4"
+      />
+    );
+  }
+
+  const hasProblems = problems.totalProblems > 0;
+
+  return (
+    <div className="space-y-6">
+      {hasProblems ? (
+        <Tabs defaultValue="duplicates" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="duplicates" className="flex items-center gap-1">
+              Duplicates
+              {problems.duplicateUniqueProducts.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.duplicateUniqueProducts.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="orphaned" className="flex items-center gap-1">
+              Orphaned
+              {problems.orphanedProducts.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.orphanedProducts.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="upcs" className="flex items-center gap-1">
+              UPCs
+              {problems.invalidUPCs.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.invalidUPCs.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="pricing" className="flex items-center gap-1">
+              Pricing
+              {problems.productsWithoutMappings.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.productsWithoutMappings.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="amounts" className="flex items-center gap-1">
+              Amounts
+              {problems.invalidInventoryAmounts.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.invalidInventoryAmounts.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="locations" className="flex items-center gap-1">
+              Locations
+              {problems.emptyLocations.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.emptyLocations.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="duplicates">
+            <DuplicateUniqueProductsList
+              products={problems.duplicateUniqueProducts}
+            />
+          </TabsContent>
+
+          <TabsContent value="orphaned">
+            <OrphanedProductsList products={problems.orphanedProducts} />
+          </TabsContent>
+
+          <TabsContent value="upcs">
+            <InvalidUPCsList products={problems.invalidUPCs} />
+          </TabsContent>
+
+          <TabsContent value="pricing">
+            <ProductsWithoutMappingsList
+              products={problems.productsWithoutMappings}
+            />
+          </TabsContent>
+
+          <TabsContent value="amounts">
+            <InvalidInventoryAmountsList
+              entries={problems.invalidInventoryAmounts}
+            />
+          </TabsContent>
+
+          <TabsContent value="locations">
+            <EmptyLocationsList locations={problems.emptyLocations} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              All Good!
+            </CardTitle>
+            <CardDescription>
+              All data consistency checks passed. No issues found.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+    </div>
+  );
+}
