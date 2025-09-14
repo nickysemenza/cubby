@@ -21,7 +21,7 @@ runs:
         cache: 'pnpm'
     
     - name: Install dependencies
-      run: pnpm install --frozen-lockfile
+      run: pnpm install --frozen-lockfile --prefer-offline
       shell: bash
     
     - name: Download WASM pkg artifact

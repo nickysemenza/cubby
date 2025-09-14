@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "typecheck": "tsc --noEmit",
-    "check": "eslint . && tsc --noEmit",
+  "check": "eslint --cache --cache-location .eslintcache . && tsc --noEmit",
     "format:check": "prettier --check \"**/*.{ts,js}\" --cache",
     "format:write": "prettier --write \"**/*.{ts,js}\" --cache",
     "test": "vitest run",
