@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { Context, Next } from "hono";
+import { apiReference } from "@scalar/hono-api-reference";
 import {
   countUsdaFood,
   countUsdaBrandedFood,
@@ -13,6 +14,7 @@ import {
 } from "./db/client";
 import foodRoutes from "./routes/foods";
 import { countsSchema, errorSchema } from "@recipehub/usda-contract";
+import { openApiDocument } from "./openapi";
 
 const app = new Hono();
 
@@ -67,6 +69,22 @@ app.get("/", (c) => {
     );
   }
 });
+
+// OpenAPI JSON endpoint
+app.get("/openapi.json", (c) => {
+  return c.json(openApiDocument);
+});
+
+// Scalar API documentation
+app.get(
+  "/docs",
+  apiReference({
+    content: openApiDocument,
+    theme: "default",
+    layout: "modern",
+    darkMode: true,
+  }),
+);
 
 // Mount food routes
 app.route("/", foodRoutes);

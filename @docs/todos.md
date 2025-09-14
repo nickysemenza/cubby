@@ -78,30 +78,19 @@
   - Add drag-drop between locations in tree view (future)
   - Update `lastBulkInventory` timestamp on bulk operations
 
-## Convert to Monorepo with PNPM Workspaces
-* **Goal**: Combine RecipeHub and USDA DB repos to eliminate schema duplication and type drift
-* **Benefits**: 
-  - Single source of truth for Zod schemas
-  - No more OpenAPI type generation or sync issues
-  - Atomic changes across both services
-  - Shared tooling and dependencies
-* **Structure**:
-  ```
-  recipehub/
-  ├── packages/
-  │   ├── shared/          # Zod schemas, types shared between web + usda-api
-  │   └── database/        # USDA database schemas, queries, migrations
-  ├── apps/
-  │   ├── web/             # Main RecipeHub Next.js app
-  │   └── usda-api/        # USDA service (Hono server)
-  └── package.json         # pnpm workspace root
-  ```
-* **Migration Steps**:
-  1. Create monorepo structure with `packages/` and `apps/`
-  2. Move USDA DB → `apps/usda-api`
-  3. Move RecipeHub → `apps/web`
-  4. Extract shared schemas → `packages/shared`
-  5. Update package.json with pnpm workspaces configuration
-  6. Update imports to use workspace references (`@recipehub/shared`)
-  7. Remove OpenAPI generation and usda-api-client
-  8. Update deployment configs for independent service deployment
+## Schema Consistency Issues
+
+### Make Optional Fields Required with Empty Defaults
+Several fields are marked as `.optional()` but are always present (just sometimes empty). These should be made required with empty array defaults:
+
+- [ ] Change `images: z.array(imageOut).optional()` to `images: z.array(imageOut)` in:
+  - productTopLevelOut (`/apps/web/src/schemas/product.ts`)
+  - recipeOut (`/apps/web/src/schemas/recipe.ts`)
+  - combo schemas (`/apps/web/src/schemas/combo.ts`)
+
+- [ ] Change `unitMappings: z.array(unitMappingInput).optional()` to have a default empty array in productInputPayload
+
+- [ ] Update all code that checks for these fields' existence to assume they're always present
+
+### Rationale
+This will make the API more predictable and eliminate unnecessary null checks in the frontend code.  
