@@ -11,13 +11,22 @@
     "format:check": "pnpm -r format:check",
     "format:write": "pnpm -r format:write",
     "test": "pnpm -r test",
+    "test-ui": "vitest --ui",
     "test:e2e": "pnpm -r test:e2e",
     "wasm": "wasm-pack build --out-dir ../apps/web/wasm recipebridge",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@eslint/js": "^9.34.0",
+    "@vitest/ui": "3.2.4",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.34.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.1.6"
+    "lint-staged": "^16.1.6",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.20.0"
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx,js,jsx,mdx}": [
@@ -26,6 +35,27 @@
     ],
     "apps/web/**/*.{ts,tsx}": [
       "cd apps/web && bash -c 'tsc --noEmit'"
+    ],
+    "apps/usda-api/**/*.{ts,js}": [
+      "cd apps/usda-api && eslint --fix",
+      "cd apps/usda-api && prettier --write"
+    ],
+    "apps/usda-api/**/*.ts": [
+      "cd apps/usda-api && bash -c 'tsc --noEmit'"
+    ],
+    "packages/usda-contract/**/*.{ts,js}": [
+      "cd packages/usda-contract && eslint --fix",
+      "cd packages/usda-contract && prettier --write"
+    ],
+    "packages/usda-contract/**/*.ts": [
+      "cd packages/usda-contract && bash -c 'tsc --noEmit'"
+    ],
+    "packages/usda-schemas/**/*.{ts,js}": [
+      "cd packages/usda-schemas && eslint --fix",
+      "cd packages/usda-schemas && prettier --write"
+    ],
+    "packages/usda-schemas/**/*.ts": [
+      "cd packages/usda-schemas && bash -c 'tsc --noEmit'"
     ]
   }
 }

@@ -1,13 +1,13 @@
-import fs from "node:fs";
-import path from "node:path";
-import process from "node:process";
-import os from "node:os";
-import { parse } from "csv-parse";
-import { db, sqlite } from "./client";
-import { rebuildFoodSearchFts } from "./fts";
-import * as schema from "./schema";
-import { sql, type InferInsertModel } from "drizzle-orm";
-import type { SQLiteTable } from "drizzle-orm/sqlite-core";
+import fs from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
+import os from 'node:os';
+import { parse } from 'csv-parse';
+import { db, sqlite } from './client';
+import { rebuildFoodSearchFts } from './fts';
+import * as schema from './schema';
+import { sql, type InferInsertModel } from 'drizzle-orm';
+import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import type {
   MeasureUnitCsvRecord,
   NutrientCsvRecord,
@@ -16,11 +16,11 @@ import type {
   BrandedFoodCsvRecord,
   FoodNutrientCsvRecord,
   FoodPortionCsvRecord,
-} from "./csv-types";
+} from './csv-types';
 
 const USDA_DATA_PATH = path.resolve(
   process.env.USDA_DATA_PATH ||
-    path.join(os.homedir(), "dev/usda/FoodData_Central_csv_2024-10-31"),
+    path.join(os.homedir(), 'dev/usda/FoodData_Central_csv_2024-10-31')
 );
 const DEFAULT_BATCH_SIZE = 5000; // larger batches for better throughput
 
@@ -45,7 +45,7 @@ type DrizzlePreparedStatement = {
 };
 
 // Field mappings and transformations for each table
-type FieldTransformValue = "string" | "number" | "integer";
+type FieldTransformValue = 'string' | 'number' | 'integer';
 
 interface TableConfig<TCsv, TSchema extends SQLiteTable> {
   tableName: string;
@@ -66,11 +66,11 @@ const measureUnitConfig: TableConfig<
   MeasureUnitCsvRecord,
   typeof schema.usdaMeasureUnit
 > = {
-  tableName: "Measure Units",
-  csvFile: "measure_unit.csv",
+  tableName: 'Measure Units',
+  csvFile: 'measure_unit.csv',
   schema: schema.usdaMeasureUnit,
   transforms: {
-    id: "integer",
+    id: 'integer',
   },
 };
 
@@ -78,37 +78,37 @@ const nutrientConfig: TableConfig<
   NutrientCsvRecord,
   typeof schema.usdaNutrient
 > = {
-  tableName: "Nutrients",
-  csvFile: "nutrient.csv",
+  tableName: 'Nutrients',
+  csvFile: 'nutrient.csv',
   schema: schema.usdaNutrient,
   transforms: {
-    id: "integer",
+    id: 'integer',
   },
 };
 
 const foodConfig: TableConfig<FoodCsvRecord, typeof schema.usdaFood> = {
-  tableName: "Foods",
-  csvFile: "food.csv",
+  tableName: 'Foods',
+  csvFile: 'food.csv',
   schema: schema.usdaFood,
   transforms: {
-    fdc_id: "integer",
+    fdc_id: 'integer',
   },
-  requiredNonNull: ["description"],
+  requiredNonNull: ['description'],
   // If description is empty in CSV, preserve row by using a placeholder
   // to satisfy NOT NULL constraints and retain referential integrity.
-  fillEmptyWith: { description: "<empty>" },
+  fillEmptyWith: { description: '<empty>' },
 };
 
 const srLegacyFoodConfig: TableConfig<
   SrLegacyFoodCsvRecord,
   typeof schema.usdaSrLegacyFood
 > = {
-  tableName: "SR Legacy Foods",
-  csvFile: "sr_legacy_food.csv",
+  tableName: 'SR Legacy Foods',
+  csvFile: 'sr_legacy_food.csv',
   schema: schema.usdaSrLegacyFood,
   transforms: {
-    fdc_id: "integer",
-    NDB_number: "integer",
+    fdc_id: 'integer',
+    NDB_number: 'integer',
   },
 };
 
@@ -116,12 +116,12 @@ const brandedFoodConfig: TableConfig<
   BrandedFoodCsvRecord,
   typeof schema.usdaBrandedFood
 > = {
-  tableName: "Branded Foods",
-  csvFile: "branded_food.csv",
+  tableName: 'Branded Foods',
+  csvFile: 'branded_food.csv',
   schema: schema.usdaBrandedFood,
   transforms: {
-    fdc_id: "integer",
-    serving_size: "number",
+    fdc_id: 'integer',
+    serving_size: 'number',
   },
 };
 
@@ -129,46 +129,46 @@ const foodNutrientConfig: TableConfig<
   FoodNutrientCsvRecord,
   typeof schema.usdaFoodNutrient
 > = {
-  tableName: "Food Nutrients",
-  csvFile: "food_nutrient.csv",
+  tableName: 'Food Nutrients',
+  csvFile: 'food_nutrient.csv',
   schema: schema.usdaFoodNutrient,
   transforms: {
-    id: "integer",
-    fdc_id: "integer",
-    nutrient_id: "integer",
-    amount: "number",
+    id: 'integer',
+    fdc_id: 'integer',
+    nutrient_id: 'integer',
+    amount: 'number',
   },
-  requiredNonNull: ["amount"],
+  requiredNonNull: ['amount'],
 };
 
 const foodPortionConfig: TableConfig<
   FoodPortionCsvRecord,
   typeof schema.usdaFoodPortion
 > = {
-  tableName: "Food Portions",
-  csvFile: "food_portion.csv",
+  tableName: 'Food Portions',
+  csvFile: 'food_portion.csv',
   schema: schema.usdaFoodPortion,
   transforms: {
-    id: "integer",
-    fdc_id: "integer",
-    amount: "number",
-    measure_unit_id: "integer",
-    gram_weight: "number",
+    id: 'integer',
+    fdc_id: 'integer',
+    amount: 'number',
+    measure_unit_id: 'integer',
+    gram_weight: 'number',
   },
-  requiredNonNull: ["amount", "gram_weight"],
+  requiredNonNull: ['amount', 'gram_weight'],
 };
 
 // Generic transformation utilities
 function transformField(
   value: string,
-  transformType: FieldTransformValue,
+  transformType: FieldTransformValue
 ): string | number | null {
   switch (transformType) {
-    case "integer":
+    case 'integer':
       return parseInteger(value);
-    case "number":
+    case 'number':
       return parseNumber(value);
-    case "string":
+    case 'string':
     default:
       return value;
   }
@@ -179,25 +179,25 @@ function transformRecord<
   TSchema extends SQLiteTable,
 >(
   csvRecord: TCsv,
-  config: TableConfig<TCsv, TSchema>,
+  config: TableConfig<TCsv, TSchema>
 ): Record<string, unknown> {
   const result = {} as Record<string, unknown>;
 
   for (const csvField in csvRecord) {
     const csvValue = csvRecord[csvField] as string;
-    const transformType = config.transforms[csvField as keyof TCsv] || "string";
+    const transformType = config.transforms[csvField as keyof TCsv] || 'string';
     // If the source value is an empty string and a fill value is configured
     // for this field, use the non-empty placeholder instead of converting
     // it to null. This happens BEFORE the generic empty-to-null pass below.
     const fillValue = config.fillEmptyWith?.[csvField as keyof TCsv] as
       | string
       | undefined;
-    if (csvValue === "" && typeof fillValue === "string") {
+    if (csvValue === '' && typeof fillValue === 'string') {
       result[csvField] = fillValue;
     } else {
       const transformedValue = transformField(
         csvValue,
-        transformType as FieldTransformValue,
+        transformType as FieldTransformValue
       );
       result[csvField] = transformedValue;
     }
@@ -217,24 +217,24 @@ async function getCsvFieldNames(filePath: string): Promise<string[]> {
 
     let fieldNames: string[] = [];
 
-    parser.on("readable", () => {
+    parser.on('readable', () => {
       const record = parser.read();
       if (record && fieldNames.length === 0) {
         fieldNames = Object.keys(record);
       }
     });
 
-    parser.on("end", () => {
+    parser.on('end', () => {
       resolve(fieldNames);
     });
 
-    parser.on("error", (err) => {
+    parser.on('error', (err) => {
       reject(err);
     });
 
     const fileStream = fs.createReadStream(filePath);
 
-    fileStream.on("error", (err) => {
+    fileStream.on('error', (err) => {
       reject(err);
     });
 
@@ -278,7 +278,7 @@ function createImporter<
         (csvRecord: TCsv) => transformRecord(csvRecord, config),
         batchSize,
         drizzlePrepared,
-        shouldInclude,
+        shouldInclude
       );
     } catch (error) {
       console.error(`Error importing ${config.tableName}:`, error);
@@ -295,7 +295,7 @@ async function streamCsvFile<
   transformRecord: (record: CsvRecord) => DbRecord,
   batchSize: number = DEFAULT_BATCH_SIZE,
   drizzlePrepared: DrizzlePreparedStatement,
-  shouldInclude?: (record: DbRecord) => boolean,
+  shouldInclude?: (record: DbRecord) => boolean
 ): Promise<ImportStats> {
   const totalRows = await countCsvRows(filePath);
   return new Promise((resolve, reject) => {
@@ -322,7 +322,7 @@ async function streamCsvFile<
           try {
             const info = drizzlePrepared.run(record) as SQLiteRunResult;
             const changes =
-              typeof info?.changes === "number" ? info.changes : 1;
+              typeof info?.changes === 'number' ? info.changes : 1;
             if (changes > 0) stats.inserted += 1;
             else stats.skipped += 1;
             stats.processed += 1;
@@ -331,7 +331,7 @@ async function streamCsvFile<
             console.warn(
               `Skipping record due to error: ${
                 err instanceof Error ? err.message : String(err)
-              }\n  record: ${JSON.stringify(record)}`,
+              }\n  record: ${JSON.stringify(record)}`
             );
             stats.skipped += 1;
             stats.processed += 1;
@@ -346,7 +346,7 @@ async function streamCsvFile<
       if (stats.processed % (batchSize * 10) === 0) {
         const elapsedSec = Math.max(
           1,
-          Math.floor((Date.now() - startTime) / 1000),
+          Math.floor((Date.now() - startTime) / 1000)
         );
         const speed = stats.processed / elapsedSec;
         const remaining = Math.max(0, totalRows - stats.processed);
@@ -354,16 +354,16 @@ async function streamCsvFile<
         const pct =
           totalRows > 0
             ? ((stats.processed / totalRows) * 100).toFixed(1)
-            : "—";
+            : '—';
         console.log(
-          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`,
+          `  Progress: ${stats.processed}/${totalRows} (${pct}%) | speed: ${speed.toFixed(1)} rec/s | ETA: ${formatDuration(etaSec)}`
         );
       }
 
       batch = [];
     };
 
-    parser.on("readable", function () {
+    parser.on('readable', function () {
       let record;
       while ((record = parser.read())) {
         try {
@@ -386,20 +386,20 @@ async function streamCsvFile<
       }
     });
 
-    parser.on("error", function (err) {
+    parser.on('error', function (err) {
       reject(err);
     });
 
-    parser.on("end", function () {
+    parser.on('end', function () {
       // Process any remaining records in the final batch
       processBatch();
       const elapsedSec = Math.max(
         1,
-        Math.floor((Date.now() - startTime) / 1000),
+        Math.floor((Date.now() - startTime) / 1000)
       );
       const speed = stats.processed / elapsedSec;
       console.log(
-        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`,
+        `Completed: ${stats.inserted} inserted, ${stats.skipped} skipped | elapsed: ${formatDuration(elapsedSec)} | avg speed: ${speed.toFixed(1)} rec/s`
       );
       resolve(stats);
     });
@@ -411,31 +411,31 @@ async function streamCsvFile<
 function convertEmptyToNull<T extends Record<string, unknown>>(obj: T): T {
   const result = {} as T;
   for (const [key, value] of Object.entries(obj)) {
-    (result as Record<string, unknown>)[key] = value === "" ? null : value;
+    (result as Record<string, unknown>)[key] = value === '' ? null : value;
   }
   return result;
 }
 
 function parseNumber(value: string | null): number | null {
-  if (!value || value.trim() === "") return null;
+  if (!value || value.trim() === '') return null;
   const parsed = parseFloat(value);
   return isNaN(parsed) ? null : parsed;
 }
 
 function parseInteger(value: string | null): number | null {
-  if (!value || value.trim() === "") return null;
+  if (!value || value.trim() === '') return null;
   const parsed = parseInt(value);
   return isNaN(parsed) ? null : parsed;
 }
 
 function formatDuration(totalSeconds: number): string {
-  if (!isFinite(totalSeconds) || totalSeconds < 0) return "--:--:--";
+  if (!isFinite(totalSeconds) || totalSeconds < 0) return '--:--:--';
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = Math.floor(totalSeconds % 60);
-  const hh = String(hours).padStart(2, "0");
-  const mm = String(minutes).padStart(2, "0");
-  const ss = String(seconds).padStart(2, "0");
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
   return `${hh}:${mm}:${ss}`;
 }
 
@@ -445,7 +445,7 @@ function countCsvRows(filePath: string): Promise<number> {
     let lastByte: number | null = null;
     let sawData = false;
     const stream = fs.createReadStream(filePath);
-    stream.on("data", (chunk: string | Buffer) => {
+    stream.on('data', (chunk: string | Buffer) => {
       sawData = true;
       const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       for (let i = 0; i < buffer.length; i++) {
@@ -453,13 +453,13 @@ function countCsvRows(filePath: string): Promise<number> {
       }
       lastByte = buffer[buffer.length - 1];
     });
-    stream.on("end", () => {
+    stream.on('end', () => {
       let lineCount = newlineCount;
       if (sawData && lastByte !== 10) lineCount += 1; // count final line if no trailing newline
       const dataRows = Math.max(0, lineCount - 1); // subtract header
       resolve(dataRows);
     });
-    stream.on("error", (err) => reject(err));
+    stream.on('error', (err) => reject(err));
   });
 }
 
@@ -473,15 +473,15 @@ const importFoodNutrients = createImporter(foodNutrientConfig);
 const importFoodPortions = createImporter(foodPortionConfig);
 
 function clearTables() {
-  console.log("\n=== Clearing existing data ===");
+  console.log('\n=== Clearing existing data ===');
   const tables = [
-    "usda_food_portion",
-    "usda_food_nutrient",
-    "usda_branded_food",
-    "usda_sr_legacy_food",
-    "usda_food",
-    "usda_nutrient",
-    "usda_measure_unit",
+    'usda_food_portion',
+    'usda_food_nutrient',
+    'usda_branded_food',
+    'usda_sr_legacy_food',
+    'usda_food',
+    'usda_nutrient',
+    'usda_measure_unit',
   ];
 
   for (const table of tables) {
@@ -505,42 +505,42 @@ type PragmasSnapshot = {
 };
 
 function applySafePragmas(): PragmasSnapshot {
-  console.log("\n=== Applying safe performance PRAGMAs ===");
+  console.log('\n=== Applying safe performance PRAGMAs ===');
   const prev: PragmasSnapshot = {
-    journal_mode: sqlite.pragma("journal_mode", { simple: true }) as
+    journal_mode: sqlite.pragma('journal_mode', { simple: true }) as
       | string
       | number,
-    synchronous: sqlite.pragma("synchronous", { simple: true }) as
+    synchronous: sqlite.pragma('synchronous', { simple: true }) as
       | string
       | number,
-    temp_store: sqlite.pragma("temp_store", { simple: true }) as
+    temp_store: sqlite.pragma('temp_store', { simple: true }) as
       | string
       | number,
-    cache_size: sqlite.pragma("cache_size", { simple: true }) as number,
-    mmap_size: sqlite.pragma("mmap_size", { simple: true }) as number,
+    cache_size: sqlite.pragma('cache_size', { simple: true }) as number,
+    mmap_size: sqlite.pragma('mmap_size', { simple: true }) as number,
   };
   try {
-    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma('journal_mode = WAL');
   } catch {
     /* Ignore pragma errors */
   }
   try {
-    sqlite.pragma("synchronous = NORMAL");
+    sqlite.pragma('synchronous = NORMAL');
   } catch {
     /* Ignore pragma errors */
   }
   try {
-    sqlite.pragma("temp_store = MEMORY");
+    sqlite.pragma('temp_store = MEMORY');
   } catch {
     /* Ignore pragma errors */
   }
   try {
-    sqlite.pragma("cache_size = -200000");
+    sqlite.pragma('cache_size = -200000');
   } catch {
     /* Ignore pragma errors */
   }
   try {
-    sqlite.pragma("mmap_size = 268435456");
+    sqlite.pragma('mmap_size = 268435456');
   } catch {
     /* Ignore pragma errors */
   }
@@ -548,9 +548,9 @@ function applySafePragmas(): PragmasSnapshot {
 }
 
 function restorePragmas(prev: PragmasSnapshot) {
-  console.log("\n=== Restoring PRAGMAs ===");
+  console.log('\n=== Restoring PRAGMAs ===');
   const toUpper = (v: string | number) =>
-    typeof v === "string" ? v.toUpperCase() : v;
+    typeof v === 'string' ? v.toUpperCase() : v;
   try {
     sqlite.pragma(`journal_mode = ${toUpper(prev.journal_mode)}`);
   } catch {
@@ -580,21 +580,21 @@ function restorePragmas(prev: PragmasSnapshot) {
 
 async function main() {
   const args = process.argv.slice(2);
-  const shouldClear = args.includes("--clear");
-  const enableSafePragmas = args.includes("--fast");
-  const batchArg = args.find((a) => a.startsWith("--batch="));
+  const shouldClear = args.includes('--clear');
+  const enableSafePragmas = args.includes('--fast');
+  const batchArg = args.find((a) => a.startsWith('--batch='));
   const batchSize = batchArg
     ? Math.max(
         1,
-        parseInt(batchArg.split("=")[1] || "", 10) || DEFAULT_BATCH_SIZE,
+        parseInt(batchArg.split('=')[1] || '', 10) || DEFAULT_BATCH_SIZE
       )
     : DEFAULT_BATCH_SIZE;
 
-  console.log("Starting USDA data import...");
+  console.log('Starting USDA data import...');
   console.log(`Data path: ${USDA_DATA_PATH}`);
   if (enableSafePragmas)
     console.log(
-      "Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)",
+      'Fast mode: applying safe SQLite PRAGMAs (WAL, NORMAL, MEMORY, cache, mmap)'
     );
   console.log(`Batch size: ${batchSize} | Drizzle prepared statements`);
 
@@ -609,20 +609,20 @@ async function main() {
 
   // Import in dependency order
   const importFunctions = [
-    { name: "Measure Units", fn: importMeasureUnits },
-    { name: "Nutrients", fn: importNutrients },
-    { name: "Foods", fn: importFoods },
-    { name: "SR Legacy Foods", fn: importSrLegacyFoods },
-    { name: "Branded Foods", fn: importBrandedFoods },
-    { name: "Food Nutrients", fn: importFoodNutrients },
-    { name: "Food Portions", fn: importFoodPortions },
+    { name: 'Measure Units', fn: importMeasureUnits },
+    { name: 'Nutrients', fn: importNutrients },
+    { name: 'Foods', fn: importFoods },
+    { name: 'SR Legacy Foods', fn: importSrLegacyFoods },
+    { name: 'Branded Foods', fn: importBrandedFoods },
+    { name: 'Food Nutrients', fn: importFoodNutrients },
+    { name: 'Food Portions', fn: importFoodPortions },
   ];
 
   for (const { name, fn } of importFunctions) {
     try {
       const stats = await fn(batchSize);
       console.log(
-        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`,
+        `${name}: ${stats.inserted} inserted, ${stats.skipped} skipped`
       );
       totalStats.processed += stats.processed;
       totalStats.inserted += stats.inserted;
@@ -638,19 +638,19 @@ async function main() {
   const endTime = Date.now();
   const duration = Math.round((endTime - startTime) / 1000);
 
-  console.log("\n=== Import Complete ===");
+  console.log('\n=== Import Complete ===');
   console.log(`Total processed: ${totalStats.processed}`);
   console.log(`Total inserted: ${totalStats.inserted}`);
   console.log(`Total skipped: ${totalStats.skipped}`);
   console.log(`Duration: ${duration} seconds`);
 
   // Rebuild FTS search index for fast description/name queries
-  console.log("\n=== Building search index (FTS5) ===");
+  console.log('\n=== Building search index (FTS5) ===');
   try {
     rebuildFoodSearchFts();
-    console.log("FTS index built");
+    console.log('FTS index built');
   } catch (e) {
-    console.warn("Warning: Failed to build FTS index:", e);
+    console.warn('Warning: Failed to build FTS index:', e);
   }
 
   if (enableSafePragmas && previousPragmas) {

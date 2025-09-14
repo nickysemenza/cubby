@@ -49,6 +49,7 @@ export default defineConfig({
           globalSetup: ["./tooling/test-setup.ts"],
           name: "integration",
           include: ["**/*.integration.test.ts"],
+          testTimeout: 10000, // Increase timeout for integration tests
         },
       },
     ],

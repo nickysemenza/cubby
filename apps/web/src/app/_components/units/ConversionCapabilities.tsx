@@ -3,7 +3,6 @@
 import * as React from "react";
 import { useMemo } from "react";
 import { MeasureKind } from "wasm/recipebridge";
-import { Amount } from "~/codec/codec";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { useWasm } from "~/hooks/useWasm";
 import { safeConvertAmount } from "./univ-conversion";

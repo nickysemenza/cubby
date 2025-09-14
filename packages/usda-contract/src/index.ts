@@ -1,5 +1,5 @@
-import { z } from "zod";
-import { initContract } from "@ts-rest/core";
+import { z } from 'zod';
+import { initContract } from '@ts-rest/core';
 import {
   // core shared schemas
   foodSummary,
@@ -11,7 +11,7 @@ import {
   type FoodPortion,
   type BrandedFoodInfo,
   type LegacyFoodInfo,
-} from "@recipehub/usda-schemas";
+} from '@recipehub/usda-schemas';
 
 // API-specific schemas (compose from shared)
 export const countsSchema = z.object({
@@ -33,10 +33,10 @@ export const listFoodsQuery = z.object({
   nameFilter: z.string().optional(),
   dataTypeFilter: dataTypeEnum.optional(),
   orderBy: z
-    .enum(["description", "data_type", "fdc_id"])
+    .enum(['description', 'data_type', 'fdc_id'])
     .optional()
-    .default("description"),
-  direction: z.enum(["asc", "desc"]).optional().default("asc"),
+    .default('description'),
+  direction: z.enum(['asc', 'desc']).optional().default('asc'),
   pageIndex: z.coerce.number().default(0),
   pageSize: z.coerce.number().default(10),
 });
@@ -53,36 +53,36 @@ const c = initContract();
 
 export const usdaContract = c.router({
   health: {
-    method: "GET",
-    path: "/",
+    method: 'GET',
+    path: '/',
     responses: {
       200: countsSchema,
       500: errorSchema,
     },
-    summary: "Get database table counts",
+    summary: 'Get database table counts',
   },
   getFood: {
-    method: "GET",
-    path: "/api/foods/:fdc_id",
+    method: 'GET',
+    path: '/api/foods/:fdc_id',
     pathParams: fdcIdParam,
     responses: {
       200: foodSummary,
       404: errorSchema,
     },
-    summary: "Get complete food by FDC ID",
+    summary: 'Get complete food by FDC ID',
   },
   findByLookup: {
-    method: "POST",
-    path: "/api/foods/search",
+    method: 'POST',
+    path: '/api/foods/search',
     body: foodLookupParam,
     responses: {
       200: foodSummary.nullable(),
     },
-    summary: "Find complete food by lookup (UPC or NDB) via POST body",
+    summary: 'Find complete food by lookup (UPC or NDB) via POST body',
   },
   findByLookupBatch: {
-    method: "POST",
-    path: "/api/foods/search/batch",
+    method: 'POST',
+    path: '/api/foods/search/batch',
     body: z.object({
       lookups: z.array(foodLookupParam),
     }),
@@ -91,16 +91,16 @@ export const usdaContract = c.router({
         results: z.array(foodSummary.nullable()),
       }),
     },
-    summary: "Find multiple foods by lookup (UPC or NDB) in batch",
+    summary: 'Find multiple foods by lookup (UPC or NDB) in batch',
   },
   listFoods: {
-    method: "GET",
-    path: "/api/foods",
+    method: 'GET',
+    path: '/api/foods',
     query: listFoodsQuery,
     responses: {
       200: listFoodsResponse,
     },
-    summary: "List foods with pagination and filtering",
+    summary: 'List foods with pagination and filtering',
   },
 });
 

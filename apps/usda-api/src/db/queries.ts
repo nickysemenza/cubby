@@ -1,10 +1,10 @@
-import { eq, and, asc, desc, count, sql, isNotNull } from "drizzle-orm";
-import { db } from "./client";
-import * as schema from "./schema";
-import { toFtsQuery } from "./fts";
-import type { z } from "zod";
-import { nutrient_unit_name, type DataType } from "@recipehub/usda-schemas";
-import { foodSearch } from "./types";
+import { eq, and, asc, desc, count, sql, isNotNull } from 'drizzle-orm';
+import { db } from './client';
+import * as schema from './schema';
+import { toFtsQuery } from './fts';
+import type { z } from 'zod';
+import { nutrient_unit_name, type DataType } from '@recipehub/usda-schemas';
+import { foodSearch } from './types';
 
 // Drizzle prepared statements for better performance and type safety
 const preparedStatements = {
@@ -18,13 +18,13 @@ const preparedStatements = {
     .from(foodSearch)
     .where(
       and(
-        sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.data_type, sql.placeholder("dataType")),
-      ),
+        sql`${foodSearch} MATCH ${sql.placeholder('query')}`,
+        eq(foodSearch.data_type, sql.placeholder('dataType'))
+      )
     )
     .orderBy(asc(foodSearch.description))
-    .limit(sql.placeholder("limit"))
-    .offset(sql.placeholder("offset"))
+    .limit(sql.placeholder('limit'))
+    .offset(sql.placeholder('offset'))
     .prepare(),
 
   ftsWithDataTypeDesc: db
@@ -36,13 +36,13 @@ const preparedStatements = {
     .from(foodSearch)
     .where(
       and(
-        sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.data_type, sql.placeholder("dataType")),
-      ),
+        sql`${foodSearch} MATCH ${sql.placeholder('query')}`,
+        eq(foodSearch.data_type, sql.placeholder('dataType'))
+      )
     )
     .orderBy(desc(foodSearch.description))
-    .limit(sql.placeholder("limit"))
-    .offset(sql.placeholder("offset"))
+    .limit(sql.placeholder('limit'))
+    .offset(sql.placeholder('offset'))
     .prepare(),
 
   ftsCountWithDataType: db
@@ -50,9 +50,9 @@ const preparedStatements = {
     .from(foodSearch)
     .where(
       and(
-        sql`${foodSearch} MATCH ${sql.placeholder("query")}`,
-        eq(foodSearch.data_type, sql.placeholder("dataType")),
-      ),
+        sql`${foodSearch} MATCH ${sql.placeholder('query')}`,
+        eq(foodSearch.data_type, sql.placeholder('dataType'))
+      )
     )
     .prepare(),
 
@@ -63,10 +63,10 @@ const preparedStatements = {
       description: foodSearch.description,
     })
     .from(foodSearch)
-    .where(sql`${foodSearch} MATCH ${sql.placeholder("query")}`)
+    .where(sql`${foodSearch} MATCH ${sql.placeholder('query')}`)
     .orderBy(asc(foodSearch.description))
-    .limit(sql.placeholder("limit"))
-    .offset(sql.placeholder("offset"))
+    .limit(sql.placeholder('limit'))
+    .offset(sql.placeholder('offset'))
     .prepare(),
 
   ftsNoFilterDesc: db
@@ -76,16 +76,16 @@ const preparedStatements = {
       description: foodSearch.description,
     })
     .from(foodSearch)
-    .where(sql`${foodSearch} MATCH ${sql.placeholder("query")}`)
+    .where(sql`${foodSearch} MATCH ${sql.placeholder('query')}`)
     .orderBy(desc(foodSearch.description))
-    .limit(sql.placeholder("limit"))
-    .offset(sql.placeholder("offset"))
+    .limit(sql.placeholder('limit'))
+    .offset(sql.placeholder('offset'))
     .prepare(),
 
   ftsCount: db
     .select({ count: count() })
     .from(foodSearch)
-    .where(sql`${foodSearch} MATCH ${sql.placeholder("query")}`)
+    .where(sql`${foodSearch} MATCH ${sql.placeholder('query')}`)
     .prepare(),
 
   // Standard table queries using Drizzle query builder
@@ -96,7 +96,7 @@ const preparedStatements = {
       description: schema.usdaFood.description,
     })
     .from(schema.usdaFood)
-    .where(eq(schema.usdaFood.fdc_id, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaFood.fdc_id, sql.placeholder('fdcId')))
     .prepare(),
 
   getBrandedFoodByIdStmt: db
@@ -113,11 +113,11 @@ const preparedStatements = {
         schema.usdaBrandedFood.household_serving_fulltext,
       modified_date:
         sql<string>`COALESCE(${schema.usdaBrandedFood.modified_date}, datetime('now'))`.as(
-          "modified_date",
+          'modified_date'
         ),
     })
     .from(schema.usdaBrandedFood)
-    .where(eq(schema.usdaBrandedFood.fdc_id, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaBrandedFood.fdc_id, sql.placeholder('fdcId')))
     .prepare(),
 
   getLegacyFoodByIdStmt: db
@@ -126,7 +126,7 @@ const preparedStatements = {
       ndb_number: schema.usdaSrLegacyFood.NDB_number,
     })
     .from(schema.usdaSrLegacyFood)
-    .where(eq(schema.usdaSrLegacyFood.fdc_id, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaSrLegacyFood.fdc_id, sql.placeholder('fdcId')))
     .prepare(),
 
   getFoodPortionsStmt: db
@@ -138,9 +138,9 @@ const preparedStatements = {
     .from(schema.usdaFoodPortion)
     .where(
       and(
-        eq(schema.usdaFoodPortion.fdc_id, sql.placeholder("fdcId")),
-        isNotNull(schema.usdaFoodPortion.gram_weight),
-      ),
+        eq(schema.usdaFoodPortion.fdc_id, sql.placeholder('fdcId')),
+        isNotNull(schema.usdaFoodPortion.gram_weight)
+      )
     )
     .prepare(),
 
@@ -154,9 +154,9 @@ const preparedStatements = {
     .from(schema.usdaFoodNutrient)
     .innerJoin(
       schema.usdaNutrient,
-      eq(schema.usdaFoodNutrient.nutrient_id, schema.usdaNutrient.id),
+      eq(schema.usdaFoodNutrient.nutrient_id, schema.usdaNutrient.id)
     )
-    .where(eq(schema.usdaFoodNutrient.fdc_id, sql.placeholder("fdcId")))
+    .where(eq(schema.usdaFoodNutrient.fdc_id, sql.placeholder('fdcId')))
     .prepare(),
 };
 
@@ -196,15 +196,15 @@ export const findFoodByNdb = (ndbNumber: number) => {
 export const listFoods = ({
   nameFilter,
   dataTypeFilter,
-  orderBy = "description",
-  direction = "asc",
+  orderBy = 'description',
+  direction = 'asc',
   pageIndex = 0,
   pageSize = 10,
 }: {
   nameFilter?: string;
   dataTypeFilter?: DataType;
-  orderBy?: "description" | "data_type" | "fdc_id";
-  direction?: "asc" | "desc";
+  orderBy?: 'description' | 'data_type' | 'fdc_id';
+  direction?: 'asc' | 'desc';
   pageIndex?: number;
   pageSize?: number;
 }) => {
@@ -215,7 +215,7 @@ export const listFoods = ({
     if (dataTypeFilter) {
       // With data_type filter
       const stmt =
-        direction === "desc"
+        direction === 'desc'
           ? preparedStatements.ftsWithDataTypeDesc
           : preparedStatements.ftsWithDataType;
 
@@ -241,7 +241,7 @@ export const listFoods = ({
     } else {
       // Without data_type filter: can use FTS table directly (faster)
       const stmt =
-        direction === "desc"
+        direction === 'desc'
           ? preparedStatements.ftsNoFilterDesc
           : preparedStatements.ftsNoFilter;
 
@@ -291,7 +291,7 @@ export const listFoods = ({
   }[orderBy];
 
   finalQuery = finalQuery.orderBy(
-    direction === "desc" ? desc(orderColumn) : asc(orderColumn),
+    direction === 'desc' ? desc(orderColumn) : asc(orderColumn)
   ) as typeof baseQuery;
 
   const data = finalQuery
@@ -327,8 +327,8 @@ export const getCompleteFoodInfo = (fdcId: number) => {
   const nutrients = preparedStatements.getNutrientsStmt.all({ fdcId });
 
   // Process nutrients for per100 calculations
-  const proteinNutrient = nutrients.find((n) => n.nutrient_nbr === "203");
-  const energyNutrient = nutrients.find((n) => n.nutrient_nbr === "208");
+  const proteinNutrient = nutrients.find((n) => n.nutrient_nbr === '203');
+  const energyNutrient = nutrients.find((n) => n.nutrient_nbr === '208');
 
   const nutritionInfo = {
     nutrientSummary: nutrients.map((n) => ({

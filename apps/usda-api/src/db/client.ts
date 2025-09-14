@@ -1,13 +1,13 @@
-import BetterSqlite3 from "better-sqlite3";
-import type { Database as BetterSqlite3Database } from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { count } from "drizzle-orm";
-import fs from "node:fs";
-import path from "node:path";
-import * as schema from "./schema";
+import BetterSqlite3 from 'better-sqlite3';
+import type { Database as BetterSqlite3Database } from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import { count } from 'drizzle-orm';
+import fs from 'node:fs';
+import path from 'node:path';
+import * as schema from './schema';
 
 const DB_PATH =
-  process.env.DATABASE_PATH || path.resolve("data", "usda.sqlite");
+  process.env.DATABASE_PATH || path.resolve('data', 'usda.sqlite');
 
 // Ensure folder exists
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
@@ -16,8 +16,8 @@ fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 try {
   if (!fs.existsSync(DB_PATH)) {
     const candidates = [
-      path.resolve("/app/data/usda.sqlite"),
-      path.resolve(process.cwd(), "data/usda.sqlite"),
+      path.resolve('/app/data/usda.sqlite'),
+      path.resolve(process.cwd(), 'data/usda.sqlite'),
     ];
     const seedPath = candidates.find((p) => {
       try {
@@ -29,7 +29,7 @@ try {
     if (seedPath && path.resolve(seedPath) !== path.resolve(DB_PATH)) {
       fs.copyFileSync(seedPath, DB_PATH);
       // Clean up any leftover journal files at target path
-      for (const suffix of ["-wal", "-shm"]) {
+      for (const suffix of ['-wal', '-shm']) {
         try {
           fs.rmSync(`${DB_PATH}${suffix}`, { force: true });
         } catch {
@@ -46,29 +46,29 @@ try {
     }
   }
 } catch (e) {
-  console.warn("Database seed check failed:", e);
+  console.warn('Database seed check failed:', e);
 }
 
 // Create a function to configure database connections
 const createDatabase = (
   path: string,
-  readonly: boolean = false,
+  readonly: boolean = false
 ): BetterSqlite3Database => {
   const db = new BetterSqlite3(path, { readonly });
 
   // Apply performance-optimized pragmas
-  db.pragma("journal_mode = WAL");
-  db.pragma("cache_size = -64000"); // 64MB cache per connection
-  db.pragma("temp_store = MEMORY"); // Use memory for temp storage
-  db.pragma("mmap_size = 268435456"); // 256MB memory-mapped I/O
-  db.pragma("synchronous = NORMAL"); // Safe for read-heavy workloads
-  db.pragma("foreign_keys = ON"); // Maintain referential integrity
+  db.pragma('journal_mode = WAL');
+  db.pragma('cache_size = -64000'); // 64MB cache per connection
+  db.pragma('temp_store = MEMORY'); // Use memory for temp storage
+  db.pragma('mmap_size = 268435456'); // 256MB memory-mapped I/O
+  db.pragma('synchronous = NORMAL'); // Safe for read-heavy workloads
+  db.pragma('foreign_keys = ON'); // Maintain referential integrity
 
   return db;
 };
 
 // Main connection - readonly in production since we never write
-const isProduction = process.env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === 'production';
 export const sqlite = createDatabase(DB_PATH, isProduction);
 
 // Connection pool for read-only queries (better concurrency)

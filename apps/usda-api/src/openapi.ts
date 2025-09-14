@@ -1,16 +1,17 @@
-import { generateOpenApi } from "@ts-rest/open-api";
-import type { SchemaTransformerSync } from "@ts-rest/open-api";
-import { z } from "zod";
-import { usdaContract } from "@recipehub/usda-contract";
+import { generateOpenApi } from '@ts-rest/open-api';
+import type { SchemaTransformerSync } from '@ts-rest/open-api';
+import { z } from 'zod';
+import { usdaContract } from '@recipehub/usda-contract';
 
 // Zod 4 synchronous transformer implementation
 export const ZOD_4_TRANSFORMER: SchemaTransformerSync = ({ schema }) => {
   if (schema instanceof z.ZodType) {
     try {
-      const jsonSchema = z.toJSONSchema(schema, { unrepresentable: "any" });
+      const jsonSchema = z.toJSONSchema(schema, { unrepresentable: 'any' });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return jsonSchema as any;
     } catch (error) {
-      console.warn("Failed to transform Zod schema:", error);
+      console.warn('Failed to transform Zod schema:', error);
       return null;
     }
   }
@@ -20,10 +21,10 @@ export const ZOD_4_TRANSFORMER: SchemaTransformerSync = ({ schema }) => {
 export const openApiDocument = generateOpenApi(
   usdaContract,
   {
-    openapi: "3.0.0",
+    openapi: '3.0.0',
     info: {
-      title: "USDA Food Data Central API",
-      version: "1.0.0",
+      title: 'USDA Food Data Central API',
+      version: '1.0.0',
       description: `
 A comprehensive REST API for accessing USDA Food Data Central database information.
 This API provides access to detailed nutrition data, food portions, and branded food information.
@@ -39,24 +40,24 @@ All data is sourced from the USDA Food Data Central database, providing authorit
 nutrition information for thousands of foods.
       `.trim(),
       contact: {
-        name: "RecipeHub API Team",
-        email: "api@recipehub.com",
+        name: 'RecipeHub API Team',
+        email: 'api@recipehub.com',
       },
     },
     servers: [
       {
-        url: process.env.API_BASE_URL || "http://localhost:8080",
-        description: "USDA API Server",
+        url: process.env.API_BASE_URL || 'http://localhost:8080',
+        description: 'USDA API Server',
       },
     ],
     tags: [
       {
-        name: "Health",
-        description: "Health check and system status endpoints",
+        name: 'Health',
+        description: 'Health check and system status endpoints',
       },
       {
-        name: "Foods",
-        description: "Food data retrieval and search operations",
+        name: 'Foods',
+        description: 'Food data retrieval and search operations',
       },
     ],
   },
@@ -65,7 +66,7 @@ nutrition information for thousands of foods.
     schemaTransformer: ZOD_4_TRANSFORMER,
     operationMapper: (operation, appRoute) => ({
       ...operation,
-      tags: appRoute.path.startsWith("/api/foods") ? ["Foods"] : ["Health"],
+      tags: appRoute.path.startsWith('/api/foods') ? ['Foods'] : ['Health'],
     }),
-  },
+  }
 );
