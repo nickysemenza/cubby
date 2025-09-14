@@ -12,6 +12,7 @@ RUN apk add --no-cache su-exec wget sqlite ca-certificates pv bc bash curl rclon
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/usda-api/package.json apps/usda-api/package.json
 COPY packages/usda-schemas/package.json packages/usda-schemas/package.json
+COPY packages/usda-contract/package.json packages/usda-contract/package.json
 
 # Install dependencies (including devDeps for tsx)
 RUN pnpm install --frozen-lockfile
@@ -22,9 +23,6 @@ COPY packages/ packages/
 
 # Make download script executable
 RUN chmod +x apps/usda-api/src/download-database.sh
-
-# Ensure workspace links are correct for the app package
-RUN pnpm --filter @recipehub/usda-api install --frozen-lockfile
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs \

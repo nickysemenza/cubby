@@ -10,6 +10,7 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { TableLink } from "../_components/table";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
+import { ProductPillLink } from "../_components/EntityPill";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -113,6 +114,22 @@ export function USDAFoodList() {
         return (
           <div className="w-full">
             <UnitMappingDisplay mappings={inferredUnitMappings} title="" />
+          </div>
+        );
+      },
+    }),
+    columnHelper.accessor("linkedProducts", {
+      header: "Linked Products",
+      meta: { className: "w-48 max-w-48" },
+      cell: (info) => {
+        const products = info.getValue();
+        if (!products || products.length === 0) return <NoneState />;
+
+        return (
+          <div className="flex flex-wrap gap-1">
+            {products.map((product) => (
+              <ProductPillLink key={product.id} product={product} />
+            ))}
           </div>
         );
       },

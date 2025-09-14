@@ -56,19 +56,31 @@ export class USDAService {
       pagination,
     );
 
-    // For list views, we skip linking products for performance but include all unit mappings
+    // Load linked products and unit mappings for each food
     const w = await import("wasm");
-    const enhancedData: FoodSummaryWithLinkedProducts[] = result.data.map(
-      (food) => {
+    const enhancedData: FoodSummaryWithLinkedProducts[] = await Promise.all(
+      result.data.map(async (food) => {
         // Get all inferred unit mappings from the food
         const inferredUnitMappings = unitMappingsFromFood(food, w);
+
+        // Get linked products for this food
+        const { brandedFoodInfo, legacyFoodInfo } = food;
+        const upc = brandedFoodInfo?.gtin_upc;
+        const lookup =
+          upc !== undefined
+            ? { kind: "upc" as const, gtin_upc: upc }
+            : legacyFoodInfo !== null
+              ? { kind: "ndb" as const, ndb_number: legacyFoodInfo.ndb_number }
+              : undefined;
+
+        const linkedProducts = await this.getLinkedProducts(lookup);
 
         return {
           ...food,
           inferredUnitMappings,
-          linkedProducts: [], // Skip linked products for performance in list view
+          linkedProducts,
         };
-      },
+      }),
     );
 
     return {
