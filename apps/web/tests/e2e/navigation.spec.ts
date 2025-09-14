@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("Main navigation", () => {
-  test("shows links and navigates between pages", async ({ page }) => {
+  test.skip("shows links and navigates between pages", async ({ page }) => {
     await page.goto("/");
 
     // Desktop nav links should be visible

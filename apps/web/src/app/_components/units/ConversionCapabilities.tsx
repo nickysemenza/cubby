@@ -8,6 +8,14 @@ import { UnitMapping } from "~/schemas/unitmapping";
 import { useWasm } from "~/hooks/useWasm";
 import { safeConvertAmount } from "./univ-conversion";
 import { ConversionDialog } from "./ConversionDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
+import { kindIconMap, formatKindsLabel } from "./kind-icons";
+import { ArrowLeftRight } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];
@@ -15,27 +23,45 @@ interface ConversionCapabilitiesProps {
 }
 
 interface ConversionTest {
-  from: Amount;
+  unit: string;
+  from: MeasureKind;
   to: MeasureKind;
-  label: string;
 }
 
 const testConversions: ConversionTest[] = [
-  { from: { value: 1, unit: "g" }, to: "volume", label: "Weight ↔ Volume" },
-  { from: { value: 1, unit: "g" }, to: "money", label: "Weight ↔ Money" },
   {
-    from: { value: 1, unit: "g" },
-    to: "calories",
-    label: "Weight ↔ Cal",
+    unit: "g",
+    from: "weight",
+    to: "volume",
   },
-  { from: { value: 1, unit: "ml" }, to: "money", label: "Volume ↔ Money" },
   {
-    from: { value: 1, unit: "ml" },
-    to: "calories",
-    label: "Volume ↔ Cal",
+    unit: "g",
+    from: "weight",
+    to: "money",
   },
-  { from: { value: 1, unit: "$" }, to: "calories", label: "Money ↔ Cal" },
+  {
+    unit: "g",
+    from: "weight",
+    to: "calories",
+  },
+  {
+    unit: "ml",
+    from: "volume",
+    to: "money",
+  },
+  {
+    unit: "ml",
+    from: "volume",
+    to: "calories",
+  },
+  {
+    unit: "$",
+    from: "money",
+    to: "calories",
+  },
 ];
+
+// kindIconMap and formatKindsLabel shared in kind-icons.ts
 
 export function ConversionCapabilities({
   mappings,
@@ -45,7 +71,12 @@ export function ConversionCapabilities({
 
   const capabilities = useMemo(() => {
     return testConversions.map((test) => {
-      const result = safeConvertAmount(w, test.from, mappings, test.to);
+      const result = safeConvertAmount(
+        w,
+        { unit: test.unit, value: 1 },
+        mappings,
+        test.to,
+      );
       return {
         ...test,
         success: result.success,
@@ -59,28 +90,46 @@ export function ConversionCapabilities({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">Conversion Capabilities</h4>
+        <h4 className="text-xs font-medium">Unit Mappings</h4>
         <div className="flex items-center gap-2">
           {!hideConvertButton && <ConversionDialog mappings={mappings} />}
-          <span className="text-muted-foreground text-xs">
-            {successCount}/{totalCount} available
-          </span>
+          <Badge variant="outline" className="text-muted-foreground">
+            {successCount}/{totalCount}
+          </Badge>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-0.5 text-xs">
-        {capabilities.map((capability, index) => (
-          <div
-            key={index}
-            className={`rounded border px-0 py-0 ${
-              capability.success
-                ? "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200"
-                : "border-red-200 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
-            }`}
-          >
-            <span>{capability.label}</span>
-          </div>
-        ))}
+      <div className="grid grid-cols-3 gap-1 text-[11px]">
+        {capabilities.map((capability, index) => {
+          const label = formatKindsLabel(capability.from, capability.to);
+          const FromIcon = kindIconMap[capability.from].Icon;
+          const ToIcon = kindIconMap[capability.to].Icon;
+          return (
+            <div
+              key={index}
+              className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
+                capability.success
+                  ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                  : "text-muted-foreground/60 border border-red-100 bg-red-50/50"
+              }`}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center justify-center gap-1.5 p-0.5">
+                    <span className="sr-only">{label}</span>
+                    <FromIcon className="h-3.5 w-3.5" aria-hidden />
+                    <ArrowLeftRight
+                      className="h-3.5 w-3.5 opacity-60"
+                      aria-hidden
+                    />
+                    <ToIcon className="h-3.5 w-3.5" aria-hidden />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>{label}</TooltipContent>
+              </Tooltip>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

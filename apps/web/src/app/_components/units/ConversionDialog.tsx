@@ -19,7 +19,13 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { Scale } from "lucide-react";
+import { kindIconMap } from "./kind-icons";
 import { Result } from "~/misc/result-types";
 import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
@@ -111,12 +117,22 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="flex items-center gap-1">
-          <Scale className="h-4 w-4" />
-          <span>Convert</span>
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button
+              variant="secondary"
+              pop
+              size="sm"
+              className="flex items-center gap-1"
+            >
+              <Scale className="h-4 w-4" />
+              <span>Convert</span>
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>
+      </Tooltip>
       <DialogContent className="sm:max-w-[900px]">
         <DialogHeader>
           <DialogTitle>Unit Conversion</DialogTitle>
@@ -168,13 +184,15 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
                   <div className="space-y-2">
                     {measureKinds.map((kind) => {
                       const result = conversions[kind];
+                      const Meta = kindIconMap[kind];
                       return (
                         <div
                           key={kind}
                           className="flex items-center justify-between border-b py-1"
                         >
-                          <span className="font-medium capitalize">
-                            {kind}:
+                          <span className="flex items-center gap-2">
+                            <Meta.Icon className="h-4 w-4" aria-hidden />
+                            <span className="font-medium">{Meta.label}</span>
                           </span>
                           <span>
                             {result?.success
