@@ -4,6 +4,7 @@ import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import { mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientBase } from "~/schemas/ingredient";
 import { createEntityCrudProcedures } from "../crud-factory";
+import { ingredientId, type IngredientId } from "~/schemas/identifiers";
 
 // Define filters schema for ingredients
 const ingredientFiltersSchema = z.object({
@@ -18,9 +19,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     updateInput: ingredientBase.partial(),
     output: ingredientWithFoodOut,
     filters: ingredientFiltersSchema,
+    idSchema: ingredientId,
   },
   repository: {
-    getByID: async (services, id) => {
+    getByID: async (services, id: IngredientId) => {
       return await services.services.ingredient.getIngredientByID(
         id,
         services.projectId,
@@ -38,10 +40,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     create: async (services, data) => {
       return await services.services.ingredient.createIngredient(
         data,
-        services.projectId || "default-project",
+        services.projectId,
       );
     },
-    update: async (services, id, data) => {
+    update: async (services, id: IngredientId, data) => {
       return await services.services.ingredient.updateIngredient(
         id,
         services.projectId,
@@ -54,8 +56,8 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
 const merge = protectedProcedure
   .input(
     z.object({
-      target: z.uuid(),
-      aliases: z.array(z.uuid()).min(1),
+      target: ingredientId,
+      aliases: z.array(ingredientId).min(1),
     }),
   )
   .output(ingredientWithFoodOut)

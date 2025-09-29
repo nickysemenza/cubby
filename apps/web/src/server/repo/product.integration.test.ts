@@ -8,6 +8,11 @@ import {
   updateProduct,
   findProductByName,
 } from "./product";
+import {
+  unsafeIngredientId,
+  unsafeProjectId,
+  unsafeProductId,
+} from "~/schemas/identifiers";
 
 describe("product repository", () => {
   let prisma: PrismaClient;
@@ -33,7 +38,11 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(prisma, productData, projectId);
+    const createdProduct = await createProduct(
+      prisma,
+      productData,
+      unsafeProjectId(projectId),
+    );
 
     // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
@@ -45,8 +54,8 @@ describe("product repository", () => {
     // Retrieve the product by ID
     const retrievedProduct = await getProductByID(
       prisma,
-      createdProduct.id,
-      projectId,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
     );
 
     // Verify the retrieved product matches the created product
@@ -155,14 +164,14 @@ describe("product repository", () => {
           ingredientId: null,
           expectedQuantity: null,
         },
-        projectId,
+        unsafeProjectId(projectId),
       );
     }
 
     // Test listing with pagination - first page
     const firstPage = await productList(
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
       undefined,
       undefined,
       undefined,
@@ -179,7 +188,7 @@ describe("product repository", () => {
     // Test listing with pagination - second page
     const secondPage = await productList(
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
       undefined,
       undefined,
       undefined,
@@ -195,7 +204,7 @@ describe("product repository", () => {
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
       undefined,
       "Manufacturer X",
       undefined,
@@ -223,13 +232,17 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(prisma, productData, projectId);
+    const createdProduct = await createProduct(
+      prisma,
+      productData,
+      unsafeProjectId(projectId),
+    );
 
     // Update the product
     const updatedProduct = await updateProduct(
       prisma,
-      createdProduct.id,
-      projectId,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
       {
         name: "Updated Product",
         manufacturer: "Updated Manufacturer",
@@ -253,8 +266,8 @@ describe("product repository", () => {
     // Retrieve the product to verify unit mappings
     const retrievedProduct = await getProductByID(
       prisma,
-      createdProduct.id,
-      projectId,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
     );
 
     // Verify unit mappings were created
@@ -288,17 +301,21 @@ describe("product repository", () => {
       upc: "123456789012",
       ndb_number: null,
       expectedQuantity: null,
-      ingredientId: ingredient.id,
+      ingredientId: unsafeIngredientId(ingredient.id),
     };
 
     // Create the product
-    const createdProduct = await createProduct(prisma, productData, projectId);
+    const createdProduct = await createProduct(
+      prisma,
+      productData,
+      unsafeProjectId(projectId),
+    );
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
       prisma,
-      createdProduct.id,
-      projectId,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
     );
 
     // Verify the ingredient association
@@ -333,22 +350,31 @@ describe("product repository", () => {
       upc: "123456789012",
       ndb_number: null,
       expectedQuantity: null,
-      ingredientId: ingredient1.id,
+      ingredientId: unsafeIngredientId(ingredient1.id),
     };
 
     // Create the product
-    const createdProduct = await createProduct(prisma, productData, projectId);
+    const createdProduct = await createProduct(
+      prisma,
+      productData,
+      unsafeProjectId(projectId),
+    );
 
     // Update the product to link to the second ingredient
-    await updateProduct(prisma, createdProduct.id, projectId, {
-      ingredientId: ingredient2.id,
-    });
+    await updateProduct(
+      prisma,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
+      {
+        ingredientId: unsafeIngredientId(ingredient2.id),
+      },
+    );
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
       prisma,
-      createdProduct.id,
-      projectId,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
     );
 
     // Verify the ingredient association was updated
@@ -357,15 +383,20 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient!.name).toEqual("Ingredient 2");
 
     // Update the product to remove ingredient association
-    await updateProduct(prisma, createdProduct.id, projectId, {
-      ingredientId: null,
-    });
+    await updateProduct(
+      prisma,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
+      {
+        ingredientId: null,
+      },
+    );
 
     // Retrieve the product again
     const updatedProduct = await getProductByID(
       prisma,
-      createdProduct.id,
-      projectId,
+      unsafeProductId(createdProduct.id),
+      unsafeProjectId(projectId),
     );
 
     // Verify the ingredient association was removed

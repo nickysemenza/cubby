@@ -3,14 +3,15 @@ import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { unsafeProjectId } from "~/schemas/identifiers";
 
 describe("location router", () => {
   let prisma: PrismaClient;
-  let projectId: string;
+  let projectId: ReturnType<typeof unsafeProjectId>;
   beforeEach(async () => {
     const { prisma: db, projectId: pId, teardown } = await buildTestDB();
     prisma = db;
-    projectId = pId;
+    projectId = unsafeProjectId(pId);
 
     return teardown;
   });

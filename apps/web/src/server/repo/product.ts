@@ -17,6 +17,7 @@ import {
 } from "~/schemas/product";
 import { formatSearchTerm } from "~/server/repo/database-helpers";
 import { getSortDirection } from "~/server/repo/database-helpers";
+import { type ProductId, type ProjectId } from "~/schemas/identifiers";
 
 export const findProductByName = async (
   db: Prisma.TransactionClient,
@@ -44,7 +45,7 @@ export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
   now: Date,
   product: ProductConfigItem,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<Product> => {
   const {
     name,
@@ -125,7 +126,7 @@ export const findOrCreateProduct = async (
 export const loadProducts = async (
   db: Prisma.TransactionClient,
   data: ProductConfigItem[],
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   const now = new Date();
 
@@ -263,13 +264,15 @@ const dbProductToAPI: (
         },
       };
     }),
-  };
+  } as unknown as z.infer<
+    typeof productWithIngredientAndInventoryAndMappingsOut
+  >;
 };
 
 export const getProductByID = async (
   db: PrismaClient,
-  id: string,
-  projectId: string,
+  id: ProductId,
+  projectId: ProjectId,
 ) => {
   const res = await db.product.findFirstOrThrow({
     where: {
@@ -283,7 +286,7 @@ export const getProductByID = async (
 
 export const productList = async (
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
@@ -328,7 +331,7 @@ export const productList = async (
 export const createProduct = async (
   db: PrismaClient,
   data: ProductInputPayload,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
@@ -374,15 +377,15 @@ export const createProduct = async (
       });
     }
 
-    return product;
+    return product as unknown as ProductTopLevelOut;
   });
 };
 
 // Update an existing product
 export const updateProduct = async (
   db: PrismaClient,
-  id: string,
-  projectId: string,
+  id: ProductId,
+  projectId: ProjectId,
   data: Partial<ProductInputPayload>,
 ): Promise<ProductTopLevelOut> => {
   const {
@@ -501,14 +504,14 @@ export const updateProduct = async (
       });
     }
 
-    return product;
+    return product as unknown as ProductTopLevelOut;
   });
 };
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   const duplicates = await db.product.findMany({
     where: {

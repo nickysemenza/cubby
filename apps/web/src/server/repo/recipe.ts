@@ -20,11 +20,12 @@ import {
   formatSearchTerm,
   getSortDirection,
 } from "~/server/repo/database-helpers";
+import { type RecipeId, type ProjectId } from "~/schemas/identifiers";
 
 export const getRecipeByID = async (
-  id: string,
+  id: RecipeId,
   prismaClient: PrismaClient | Prisma.TransactionClient,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<RecipeOut | null> => {
   const res: RecipeDeepDB | null = await prismaClient.recipe.findFirst({
     where: { id: id, projectId }, // Ensure recipe belongs to project
@@ -131,7 +132,7 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
 export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   prismaClient: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   const parsed = await parseCompactRecipe(recipe);
   return await upsertRecipeFromCompact(parsed, prismaClient, projectId);
@@ -139,7 +140,7 @@ export const insertCompactRecipe = async (
 
 export const recipeList = async (
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
   name: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
@@ -187,7 +188,7 @@ export const recipeList = async (
 export const createRecipe = async (
   recipe: RecipeCreateInput,
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<RecipeOut> => {
   const sourceType = recipe.meta?.url
     ? RecipeSource.Website
@@ -250,7 +251,11 @@ export const createRecipe = async (
       });
     }
 
-    const fullRecipe = await getRecipeByID(createdRecipe.id, tx, projectId);
+    const fullRecipe = await getRecipeByID(
+      createdRecipe.id as RecipeId,
+      tx,
+      projectId,
+    );
     if (!fullRecipe) {
       throw new Error("Failed to retrieve created recipe");
     }
@@ -262,7 +267,7 @@ export const createRecipe = async (
 const processIngredient = async (
   tx: Prisma.TransactionClient,
   ingredient: z.infer<typeof recipeIngredientInput>,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }> => {
   // For ingredient types, just use the ingredient ID directly
   if (ingredient.type === "ingredient") {
@@ -317,7 +322,7 @@ const processIngredient = async (
 const processIngredients = async (
   tx: Prisma.TransactionClient,
   ingredients: z.infer<typeof recipeIngredientInput>[],
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
   return await Promise.all(
     ingredients.map((ing) => processIngredient(tx, ing, projectId)),
@@ -327,7 +332,7 @@ const processIngredients = async (
 export const upsertRecipe = async (
   input: RecipeCreateInput,
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<{ id: string }> => {
   // Check if recipe already exists
   const existingRecipe = await db.recipe.findUnique({
@@ -409,10 +414,10 @@ export const upsertRecipe = async (
 };
 
 export const updateRecipe = async (
-  id: string,
+  id: RecipeId,
   updates: RecipeUpdateInput["data"],
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<RecipeOut> => {
   // Check if recipe exists and belongs to project
   const existingRecipe = await db.recipe.findUnique({

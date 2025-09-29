@@ -81,7 +81,8 @@ export class USDAService {
         return {
           ...food,
           inferredUnitMappings,
-          linkedProducts,
+          linkedProducts:
+            linkedProducts as unknown as FoodSummaryWithLinkedProducts["linkedProducts"],
         };
       }),
     );
@@ -113,7 +114,8 @@ export class USDAService {
     return {
       ...foodSummary,
       inferredUnitMappings,
-      linkedProducts,
+      linkedProducts:
+        linkedProducts as unknown as FoodSummaryWithLinkedProducts["linkedProducts"],
     };
   }
 }

@@ -3,6 +3,7 @@ import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipe } from "./recipe";
 import { type RecipeCreateInput } from "~/schemas/recipe";
+import { unsafeIngredientId, unsafeProjectId } from "~/schemas/identifiers";
 
 describe("upsertRecipe", () => {
   let prisma: PrismaClient;
@@ -56,13 +57,13 @@ describe("upsertRecipe", () => {
         ingredients: [
           {
             type: "ingredient" as const,
-            ingredientId: testIngredients[0]!.id,
+            ingredientId: unsafeIngredientId(testIngredients[0]!.id),
             recipeId: null,
             amounts: [{ value: 2, unit: "cups" }],
           },
           {
             type: "ingredient" as const,
-            ingredientId: testIngredients[1]!.id,
+            ingredientId: unsafeIngredientId(testIngredients[1]!.id),
             recipeId: null,
             amounts: [{ value: 1, unit: "cup" }],
           },
@@ -85,7 +86,7 @@ describe("upsertRecipe", () => {
         ingredients: [
           {
             type: "ingredient" as const,
-            ingredientId: testIngredients[0]!.id, // Same ingredient
+            ingredientId: unsafeIngredientId(testIngredients[0]!.id), // Same ingredient
             recipeId: null,
             amounts: [{ value: 3, unit: "cups" }], // Different amount
           },
@@ -96,7 +97,7 @@ describe("upsertRecipe", () => {
         ingredients: [
           {
             type: "ingredient" as const,
-            ingredientId: testIngredients[2]!.id, // New ingredient
+            ingredientId: unsafeIngredientId(testIngredients[2]!.id), // New ingredient
             recipeId: null,
             amounts: [{ value: 1, unit: "tsp" }],
           },
@@ -106,7 +107,11 @@ describe("upsertRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), prisma, projectId);
+    const result = await upsertRecipe(
+      getMockRecipeInput(),
+      prisma,
+      unsafeProjectId(projectId),
+    );
 
     expect(result.id).toBeDefined();
 
@@ -140,14 +145,14 @@ describe("upsertRecipe", () => {
     const firstResult = await upsertRecipe(
       getMockRecipeInput(),
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
     );
 
     // Now update with different data
     const secondResult = await upsertRecipe(
       getMockRecipeUpdated(),
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -191,17 +196,17 @@ describe("upsertRecipe", () => {
     const firstRun = await upsertRecipe(
       getMockRecipeInput(),
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
     );
     const secondRun = await upsertRecipe(
       getMockRecipeInput(),
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
     ); // Same input
     const thirdRun = await upsertRecipe(
       getMockRecipeInput(),
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
     ); // Same input again
 
     // All should return the same recipe ID
@@ -233,7 +238,7 @@ describe("upsertRecipe", () => {
       ],
     };
 
-    await upsertRecipe(recipeNoUrl, prisma, projectId);
+    await upsertRecipe(recipeNoUrl, prisma, unsafeProjectId(projectId));
 
     const recipe = await prisma.recipe.findUnique({
       where: {

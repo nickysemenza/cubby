@@ -23,6 +23,11 @@ import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { type PrismaClient } from "@prisma/client";
 import { env } from "~/env";
 import { ProjectService } from "~/server/services/project.service";
+import {
+  projectId as projectIdSchema,
+  type ProjectId,
+  unsafeProjectId,
+} from "~/schemas/identifiers";
 
 /**
  * Helper function to build crud services for both production and test contexts
@@ -69,7 +74,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
     const crudServices = buildCrudServices(db);
     const authResult = opts.headers.has("skip-auth") ? undefined : await auth();
 
-    let projectId: string;
+    let projectId: ProjectId;
     let isSystemRequest = false;
 
     // Check for system API key
@@ -82,7 +87,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       if (!requestedProjectId) {
         throw new Error("x-project-id header is required for system requests");
       }
-      projectId = requestedProjectId;
+      projectId = projectIdSchema.parse(requestedProjectId);
     } else if (authResult?.userId) {
       const projectService = new ProjectService(db);
 
@@ -100,18 +105,18 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
         }
       }
 
-      // If no valid project, get default (this always returns a string)
+      // If no valid project, get default (this always returns a branded ProjectId)
       if (!requestedProjectId) {
-        projectId = await projectService.ensureDefaultProject(
-          authResult.userId,
+        projectId = projectIdSchema.parse(
+          await projectService.ensureDefaultProject(authResult.userId),
         );
       } else {
-        projectId = requestedProjectId;
+        projectId = projectIdSchema.parse(requestedProjectId);
       }
     } else {
       // For unauthenticated users, we'll provide a placeholder
       // but protected procedures will catch this and require auth
-      projectId = "unauthenticated";
+      projectId = "unauthenticated" as ProjectId;
     }
 
     return {
@@ -305,7 +310,7 @@ export const createTestTRPCContext = (
   opts: {
     headers?: Headers;
     auth?: { userId: string };
-    projectId?: string;
+    projectId?: ProjectId;
   } = {},
 ) => {
   const crudServices = buildCrudServices(db);
@@ -313,7 +318,8 @@ export const createTestTRPCContext = (
   return {
     ...crudServices,
     auth: opts.auth ? createTestAuth(opts.auth.userId) : undefined,
-    projectId: opts.projectId ?? "00000000-0000-0000-0000-000000000000",
+    projectId:
+      opts.projectId ?? unsafeProjectId("00000000-0000-0000-0000-000000000000"),
     isSystemRequest: false, // Test contexts are not system requests by default
     headers: opts.headers ?? new Headers(),
   };

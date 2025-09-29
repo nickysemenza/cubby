@@ -12,7 +12,7 @@ import {
 import { upc } from "@recipehub/usda-schemas";
 
 import { ndb } from "@recipehub/usda-schemas";
-import { ComboboxItem } from "../combobox/combobox-types";
+import { type IngredientId } from "~/schemas/identifiers";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -31,8 +31,9 @@ import { ArrayFieldManager } from "~/components/ui/array-field-manager";
 import { WithIngredientSearch } from "../combobox/with-search-hook";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
+import { ComboboxItem } from "../combobox/combobox-types";
 
-// Form schema for product form
+// Form schema for product form (simple Zod schema without z.custom)
 const formSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
@@ -121,7 +122,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         upc: values.upc,
         ndb_number: values.ndb_number,
         expectedQuantity: values.expectedQuantity,
-        ingredientId: values.ingredient?.id || null,
+        ingredientId: (values.ingredient?.id as IngredientId) ?? null,
         unitMappings: values.unitMappings,
         ...getImageData(true), // Apply pending images for creation
       };
@@ -151,7 +152,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       );
 
       if (ingredientId !== undefined) {
-        updates.ingredientId = ingredientId;
+        updates.ingredientId = ingredientId as IngredientId | null;
       }
 
       // Check for unit mapping changes

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "~/schemas/common";
+import { ingredientId } from "./identifiers";
 
 export const ingredientBase = z.object({
   name: z.string(),
@@ -7,14 +8,14 @@ export const ingredientBase = z.object({
 });
 export const ingredientOut = z
   .object({
-    id: z.uuid(),
+    id: ingredientId,
   })
   .extend(ingredientBase.shape)
   .extend(dbTimestampsOut.shape);
 
 // Input schema for updating ingredients
 export const ingredientUpdateInput = z.object({
-  id: z.uuid(),
+  id: ingredientId,
   data: ingredientBase.partial(),
 });
 

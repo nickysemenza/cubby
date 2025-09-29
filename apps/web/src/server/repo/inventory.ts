@@ -9,6 +9,15 @@ import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 import { getSortDirection } from "~/server/repo/database-helpers";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
+import {
+  type InventoryId,
+  type ProjectId,
+  type ProductId,
+  type LocationId,
+  unsafeInventoryId,
+  unsafeProductId,
+  unsafeLocationId,
+} from "~/schemas/identifiers";
 
 const inventoryentryInclude = {
   Product: {
@@ -73,16 +82,22 @@ const dbInventoryEntryToAPI: (
 
   return {
     ...restOfInventoryEntry,
+    id: unsafeInventoryId(restOfInventoryEntry.id),
     location: {
       ...restOfLocation,
+      id: unsafeLocationId(restOfLocation.id),
       type: locationType.parse(type),
       images: extractedLocationImages,
     },
     product: {
       ...Product,
+      id: unsafeProductId(Product.id),
       unitMappings: Product.unitMappings.map((mapping) => ({
         ...mapping,
-        sourceMetadata: { type: "product" as const, productId: Product.id },
+        sourceMetadata: {
+          type: "product" as const,
+          productId: unsafeProductId(Product.id),
+        },
       })),
       images: productImages,
     },
@@ -91,8 +106,8 @@ const dbInventoryEntryToAPI: (
 
 export const getInventoryEntryByID = async (
   db: PrismaClient,
-  id: string,
-  projectId: string,
+  id: InventoryId,
+  projectId: ProjectId,
 ) => {
   const res = await db.inventoryEntry.findFirst({
     where: {
@@ -169,14 +184,14 @@ export const inventoryentryList = async (
 
 interface UpdateInventoryEntryData {
   amount?: z.infer<typeof import("~/codec/codec").amount>;
-  productId?: string;
-  locationId?: string;
+  productId?: ProductId;
+  locationId?: LocationId;
 }
 
 export const updateInventoryEntry = async (
   db: PrismaClient,
-  id: string,
-  projectId: string,
+  id: InventoryId,
+  projectId: ProjectId,
   data: UpdateInventoryEntryData,
 ) => {
   const updated = await db.inventoryEntry.update({
@@ -197,14 +212,14 @@ export const updateInventoryEntry = async (
 
 interface CreateInventoryEntryData {
   amount: z.infer<typeof import("~/codec/codec").amount>;
-  productId: string;
-  locationId: string;
+  productId: ProductId;
+  locationId: LocationId;
 }
 
 export const createInventoryEntry = async (
   db: PrismaClient,
   data: CreateInventoryEntryData,
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   const created = await db.inventoryEntry.create({
     data: {
@@ -221,9 +236,9 @@ export const createInventoryEntry = async (
 
 export const bulkProcessInventoryEntries = async (
   db: PrismaClient,
-  locationId: string,
+  locationId: LocationId,
   items: InventoryBulkOperationItem[],
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await db.$transaction(async (tx) => {

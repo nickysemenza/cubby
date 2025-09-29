@@ -3,14 +3,15 @@ import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
+import { unsafeProjectId, type ProjectId } from "~/schemas/identifiers";
 
 describe("upsertRecipeFromCompact", () => {
   let prisma: PrismaClient;
-  let projectId: string;
+  let projectId: ProjectId;
   beforeEach(async () => {
     const { prisma: db, projectId: pId, teardown } = await buildTestDB();
     prisma = db;
-    projectId = pId;
+    projectId = unsafeProjectId(pId);
 
     return teardown;
   });

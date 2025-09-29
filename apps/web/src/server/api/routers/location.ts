@@ -20,6 +20,7 @@ import {
   createEntityListProcedure,
   createEntityCrudWithoutListProcedures,
 } from "../crud-factory";
+import { locationId, type LocationId } from "~/schemas/identifiers";
 
 // Define filters schema for locations
 const locationFiltersSchema = z.object({
@@ -53,9 +54,10 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
     createInput: locationCreateInput,
     updateInput: locationUpdateInput.shape.data,
     output: infLocation,
+    idSchema: locationId,
   },
   repository: {
-    getByID: async (services, id) => {
+    getByID: async (services, id: LocationId) => {
       return await getLocationById(services.db, id, services.projectId);
     },
     create: async (services, data) => {
@@ -67,7 +69,7 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
       }
       return await createLocation(services.db, data, services.projectId);
     },
-    update: async (services, id, data) => {
+    update: async (services, id: LocationId, data) => {
       return await updateLocation(services.db, id, services.projectId, data);
     },
   },

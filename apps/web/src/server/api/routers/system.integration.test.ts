@@ -6,14 +6,15 @@ import { testConfig } from "~/testdata/test-config.data";
 import { transformConfig } from "~/schemas/config";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { appRouter } from "../root";
+import { unsafeProjectId } from "~/schemas/identifiers";
 
 describe("system test", () => {
   let prisma: PrismaClient;
-  let projectId: string;
+  let projectId: ReturnType<typeof unsafeProjectId>;
   beforeEach(async () => {
     const { prisma: db, projectId: pId, teardown } = await buildTestDB();
     prisma = db;
-    projectId = pId;
+    projectId = unsafeProjectId(pId);
     return teardown;
   });
   it("load data config", async () => {

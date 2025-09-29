@@ -2,6 +2,7 @@ import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { type locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { createInputImages, imageOut, updateInputImages } from "./image";
+import { locationId } from "./identifiers";
 
 export const locationType = z
   //todo: remove this in the future to make it more flexible?
@@ -24,7 +25,7 @@ export const locationBase = z.object({
 });
 export const locationOut = z
   .object({
-    id: z.uuid(),
+    id: locationId,
     lastBulkInventory: z.date().nullable(),
     images: z.array(imageOut),
   })
@@ -50,13 +51,13 @@ export type LocationOutWithParentChildren = z.infer<
 // Input schema for creating locations
 export const locationCreateInput = locationBase
   .extend({
-    parentId: z.uuid().nullable(),
+    parentId: locationId.nullable(),
   })
   .merge(createInputImages);
 
 // Input schema for updating locations
 export const locationUpdateInput = z.object({
-  id: z.uuid(),
+  id: locationId,
   data: locationCreateInput.partial().extend(updateInputImages.shape),
 });
 

@@ -3,6 +3,7 @@ import { systemProcedure, createTRPCRouter } from "../trpc";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
 import { type PrismaClient } from "@prisma/client";
+import { type ProjectId } from "~/schemas/identifiers";
 
 const loadConfig = systemProcedure
   .input(configSchema)
@@ -14,7 +15,7 @@ const loadConfig = systemProcedure
 export const insertDataConfig = async (
   db: PrismaClient,
   input: ReturnType<typeof transformConfig>,
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   return await db.$transaction(async (tx) => {
     await loadProducts(tx, input.products, projectId);

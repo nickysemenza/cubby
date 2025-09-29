@@ -4,7 +4,10 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
-import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import {
+  type ComboboxItem,
+  ComboboxItem as ComboboxItemSchema,
+} from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -13,6 +16,7 @@ import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
+import { type LocationId, type ProductId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
@@ -25,10 +29,11 @@ import { ComboboxField } from "~/app/_components/form-utils";
 import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
 import { amount } from "~/codec/codec";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
-  product: ComboboxItem.refine((item) => item !== null, {
-    error: "Please select a product",
+  product: ComboboxItemSchema.refine((item) => item !== null, {
+    message: "Please select a product",
   }),
   amount: amount,
   id: z.string().optional(), // For existing items
@@ -36,8 +41,8 @@ const inventoryItemSchema = z.object({
 
 // Schema for the entire form
 const formSchema = z.object({
-  location: ComboboxItem.refine((item) => item !== null, {
-    error: "Please select a location",
+  location: ComboboxItemSchema.refine((item) => item !== null, {
+    message: "Please select a location",
   }),
   items: z.array(inventoryItemSchema),
 });
@@ -162,16 +167,16 @@ export default function BulkInventoryForm() {
       const processItems: InventoryBulkOperationItem[] = validItems.map(
         (item) => {
           const res: InventoryBulkOperationItem = {
-            locationId: values.location.id,
+            locationId: values.location.id as LocationId,
             ...(item.id && { id: item.id }),
-            productId: item.product.id,
+            productId: item.product.id as ProductId,
             amount: item.amount,
           };
           return res;
         },
       );
       await bulkProcessMutation.mutateAsync({
-        locationId: values.location.id,
+        locationId: values.location.id as LocationId,
         items: processItems,
       });
       toast.success(

@@ -4,7 +4,6 @@ import { useForm } from "react-hook-form";
 import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   locationType,
@@ -12,6 +11,7 @@ import {
   type LocationCreateInput,
   type LocationUpdateInput,
 } from "~/schemas/location";
+import { type LocationId } from "~/schemas/identifiers";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -25,10 +25,11 @@ import {
 } from "../form-utils";
 import { PendingImageUpload } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
+import { ComboboxItem } from "../combobox/combobox-types";
 
 import { WithLocationSearch } from "../combobox/with-search-hook";
 
-// Form schema for location form
+// Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   type: locationType,
@@ -88,7 +89,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
         const createData: LocationCreateInput = {
           name: values.name,
           type: values.type,
-          parentId: values.parent ? values.parent.id : null,
+          parentId: (values.parent?.id as LocationId) ?? null,
           ...getImageData(true), // Apply pending images for creation
         };
 
@@ -121,7 +122,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           values.parent,
         );
         if (parentIdChange !== undefined) {
-          updates.parentId = parentIdChange;
+          updates.parentId = parentIdChange as LocationId | null;
         }
 
         // Check if we have any changes (field changes or image changes)

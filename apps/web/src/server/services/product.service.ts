@@ -12,6 +12,7 @@ import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
+import { type ProductId, type ProjectId } from "~/schemas/identifiers";
 
 // Extended schema that includes food data
 export const productWithFoodOut =
@@ -28,8 +29,8 @@ export class ProductService {
   ) {}
 
   async getProductByID(
-    id: string,
-    projectId: string,
+    id: ProductId,
+    projectId: ProjectId,
   ): Promise<ProductWithFoodOut> {
     const product = await getProductByIDRepo(this.db, id, projectId);
     const lookupParam = foodLookupParamFromProduct(product);
@@ -44,7 +45,7 @@ export class ProductService {
   }
 
   async productList(
-    projectId: string,
+    projectId: ProjectId,
     nameFilter: string | undefined,
     manufacturerFilter: string | undefined,
     upcFilter: string | undefined,
@@ -91,15 +92,15 @@ export class ProductService {
 
   async createProduct(
     data: ProductInputPayload,
-    projectId: string,
+    projectId: ProjectId,
   ): Promise<ProductWithFoodOut> {
     const product = await createProductRepo(this.db, data, projectId);
     return this.getProductByID(product.id, projectId);
   }
 
   async updateProduct(
-    id: string,
-    projectId: string,
+    id: ProductId,
+    projectId: ProjectId,
     data: Partial<ProductInputPayload>,
   ): Promise<ProductWithFoodOut> {
     await updateProductRepo(this.db, id, projectId, data);

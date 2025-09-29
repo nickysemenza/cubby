@@ -3,6 +3,11 @@ import {
   calculateInventoryValue,
   type InventoryItem,
 } from "../locations/calculate-inventory-value";
+import {
+  unsafeInventoryId,
+  unsafeLocationId,
+  unsafeProductId,
+} from "~/schemas/identifiers";
 
 // Use real WASM for consistency with other conversion tests
 const loadWasm = async () => await import("wasm/recipebridge");
@@ -22,12 +27,12 @@ function makeInventoryItem(params: {
 }): InventoryItem {
   const now = new Date();
   return {
-    id: params.id,
+    id: unsafeInventoryId(params.id),
     createdAt: now,
     updatedAt: now,
     amount: params.amount,
     location: {
-      id: "loc-1",
+      id: unsafeLocationId("loc-1"),
       name: "Test Location",
       type: "room",
       images: [],
@@ -36,7 +41,7 @@ function makeInventoryItem(params: {
       lastBulkInventory: null,
     },
     product: {
-      id: params.product.id,
+      id: unsafeProductId(params.product.id),
       name: params.product.name,
       manufacturer: params.product.manufacturer ?? "Generic",
       model: null,

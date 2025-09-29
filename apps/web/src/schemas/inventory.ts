@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { amount } from "~/codec/codec";
 import { dbTimestampsOut } from "./common";
+import { inventoryId, productId, locationId } from "./identifiers";
 
 export const inventoryEntryOut = z
   .object({
-    id: z.uuid(),
+    id: inventoryId,
     // inventory entries do not have a name, just ID
     amount: amount,
   })
@@ -12,29 +13,29 @@ export const inventoryEntryOut = z
 
 export const inventoryUpdatePayloadData = z.object({
   amount: amount.optional(),
-  productId: z.uuid().optional(),
-  locationId: z.uuid().optional(),
+  productId: productId.optional(),
+  locationId: locationId.optional(),
 });
 
 // Input schema for updating inventory entries
 export const inventoryUpdateInput = z.object({
-  id: z.uuid(),
+  id: inventoryId,
   data: inventoryUpdatePayloadData,
 });
 
 export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 
 export const inventoryCreatePayloadData = z.object({
-  productId: z.uuid(),
-  locationId: z.uuid(),
+  productId: productId,
+  locationId: locationId,
   amount: amount,
 });
 
 // Schema for bulk inventory operations
 const inventoryBulkOperationItem = z.object({
   id: z.string().optional(),
-  productId: z.uuid(),
-  locationId: z.uuid(),
+  productId: productId,
+  locationId: locationId,
   amount: amount,
 });
 
@@ -44,6 +45,6 @@ export type InventoryBulkOperationItem = z.infer<
 
 export const inventoryBulkOperationPayload = z.object({
   // All operations for a given location
-  locationId: z.uuid(),
+  locationId: locationId,
   items: z.array(inventoryBulkOperationItem),
 });

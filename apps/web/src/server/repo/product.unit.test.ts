@@ -7,6 +7,7 @@ import {
 } from "./product";
 import { Product, PrismaClient } from "@prisma/client";
 import { type ProductConfigItem } from "~/schemas/config";
+import { unsafeProjectId } from "~/schemas/identifiers";
 
 describe("product repository helpers", () => {
   describe("foodLookupParamFromProduct", () => {
@@ -191,7 +192,7 @@ describe("product repository helpers", () => {
         mockDb,
         mockDate,
         productConfig,
-        "00000000-0000-0000-0000-000000000000",
+        unsafeProjectId("00000000-0000-0000-0000-000000000000"),
       );
 
       expect(mockDb.product.upsert).toHaveBeenCalledWith({
@@ -257,7 +258,7 @@ describe("product repository helpers", () => {
         mockDb,
         mockDate,
         productConfig,
-        "00000000-0000-0000-0000-000000000000",
+        unsafeProjectId("00000000-0000-0000-0000-000000000000"),
       );
 
       expect(mockDb.productUnitMappings.createMany).toHaveBeenCalledWith({
@@ -301,7 +302,7 @@ describe("product repository helpers", () => {
         mockDb,
         mockDate,
         productConfig,
-        "00000000-0000-0000-0000-000000000000",
+        unsafeProjectId("00000000-0000-0000-0000-000000000000"),
       );
 
       expect(mockDb.productUnitMappings.createMany).toHaveBeenCalledWith({
@@ -346,7 +347,7 @@ describe("product repository helpers", () => {
         mockDb,
         mockDate,
         productConfig,
-        "00000000-0000-0000-0000-000000000000",
+        unsafeProjectId("00000000-0000-0000-0000-000000000000"),
       );
 
       expect(mockDb.productUnitMappings.createMany).toHaveBeenCalledWith({
@@ -389,7 +390,7 @@ describe("product repository helpers", () => {
         mockDb,
         mockDate,
         productConfig,
-        "00000000-0000-0000-0000-000000000000",
+        unsafeProjectId("00000000-0000-0000-0000-000000000000"),
       );
 
       expect(mockDb.productUnitMappings.deleteMany).toHaveBeenCalledWith({

@@ -2,11 +2,12 @@ import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { amount } from "~/codec/codec";
 import { parseConversionString } from "./config-parsers";
+import { productId } from "./identifiers";
 
 const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("product"),
-    productId: z.uuid(),
+    productId: productId,
   }),
   z.object({
     type: z.literal("food"),

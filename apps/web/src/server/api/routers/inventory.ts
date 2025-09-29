@@ -16,6 +16,7 @@ import {
 } from "~/schemas/inventory";
 import { createEntityCrudProcedures } from "../crud-factory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
+import { inventoryId, type InventoryId } from "~/schemas/identifiers";
 
 // Define filters schema for inventory entries
 const inventoryFiltersSchema = z.object({
@@ -31,9 +32,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     updateInput: inventoryUpdateInput.shape.data,
     output: inventoryWithLocationAndProductOut,
     filters: inventoryFiltersSchema,
+    idSchema: inventoryId,
   },
   repository: {
-    getByID: async (services, id) => {
+    getByID: async (services, id: InventoryId) => {
       const res = await getInventoryEntryByID(
         services.db,
         id,
@@ -92,7 +94,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       }
       return await createInventoryEntry(services.db, data, services.projectId);
     },
-    update: async (services, id, data) => {
+    update: async (services, id: InventoryId, data) => {
       return await updateInventoryEntry(
         services.db,
         id,

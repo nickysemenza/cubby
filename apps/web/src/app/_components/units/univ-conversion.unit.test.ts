@@ -16,6 +16,7 @@ import {
 } from "~/server/services/ingredient.service";
 import { NutrientsPer100 } from "@recipehub/usda-schemas";
 import { SectionIngredientOut } from "~/schemas/recipe";
+import { unsafeProductId, unsafeIngredientId } from "~/schemas/identifiers";
 
 // Import real wasm
 const loadWasm = async () => {
@@ -26,7 +27,7 @@ const loadWasm = async () => {
 describe("getProductNutrients", () => {
   test("returns nutrients when product has food data", () => {
     const product: ProductWithMappingsAndFoodOut = {
-      id: "test-id",
+      id: unsafeProductId("test-id"),
       name: "Test Product",
       food: {
         legacyFoodInfo: null,
@@ -62,7 +63,7 @@ describe("getProductNutrients", () => {
 
   test("returns undefined when product has no food data", () => {
     const product: ProductWithMappingsAndFoodOut = {
-      id: "test-id",
+      id: unsafeProductId("test-id"),
       name: "Test Product",
       food: null,
       upc: null,
@@ -82,7 +83,7 @@ describe("getProductNutrients", () => {
 
   test("returns zero-value nutrients when product has nutrition info with zero values", () => {
     const product: ProductWithMappingsAndFoodOut = {
-      id: "test-id",
+      id: unsafeProductId("test-id"),
       name: "Test Product",
       food: {
         legacyFoodInfo: null,
@@ -163,7 +164,7 @@ describe("scaleNutrientsByWeight", () => {
 describe("calculateNutrients", () => {
   const mockProducts: ProductWithMappingsAndFoodOut[] = [
     {
-      id: "product-1",
+      id: unsafeProductId("product-1"),
       name: "Product 1",
       food: {
         legacyFoodInfo: null,
@@ -209,7 +210,7 @@ describe("calculateNutrients", () => {
   test("returns failure when products have no nutrients", () => {
     const productsWithoutNutrients: ProductWithMappingsAndFoodOut[] = [
       {
-        id: "product-1",
+        id: unsafeProductId("product-1"),
         name: "Product 1",
         food: null,
         upc: null,
@@ -232,7 +233,7 @@ describe("calculateNutrients", () => {
   test("uses first available nutrients from multiple products", () => {
     const multipleProducts: ProductWithMappingsAndFoodOut[] = [
       {
-        id: "product-1",
+        id: unsafeProductId("product-1"),
         name: "Product 1",
         food: null, // No nutrients
         upc: null,
@@ -245,7 +246,7 @@ describe("calculateNutrients", () => {
         unitMappings: [],
       },
       {
-        id: "product-2",
+        id: unsafeProductId("product-2"),
         name: "Product 2",
         food: {
           legacyFoodInfo: null,
@@ -297,7 +298,7 @@ describe("getGramAndNutrient", () => {
 
     const product: ProductWithMappingsAndFoodOut[] = [
       {
-        id: "123",
+        id: unsafeProductId("123"),
         name: "Test Product",
         food: {
           legacyFoodInfo: null,
@@ -374,7 +375,7 @@ describe("getGramAndNutrient", () => {
     ];
     const product: ProductWithMappingsAndFoodOut[] = [
       {
-        id: "123",
+        id: unsafeProductId("123"),
         name: "Test Product",
         food: null, // No nutritionInfo
         unitMappings: [],
@@ -693,12 +694,12 @@ describe("calculateTotals", () => {
 
     const ingredients: SectionIngredientOut[] = [
       {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing1",
+          id: unsafeIngredientId("ing1"),
           name: "chicken",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -707,12 +708,12 @@ describe("calculateTotals", () => {
         amounts: [{ value: 1, unit: "pound" }],
       },
       {
-        id: "ing2",
+        id: unsafeIngredientId("ing2"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing2",
+          id: unsafeIngredientId("ing2"),
           name: "rice",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -724,14 +725,14 @@ describe("calculateTotals", () => {
 
     const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         name: "chicken",
         recipe: null,
         appearsInRecipes: [],
         aliases: [],
         product: [
           {
-            id: "prod1",
+            id: unsafeProductId("prod1"),
             name: "chicken",
             food: {
               legacyFoodInfo: null,
@@ -777,14 +778,14 @@ describe("calculateTotals", () => {
         updatedAt: new Date(),
       },
       ing2: {
-        id: "ing2",
+        id: unsafeIngredientId("ing2"),
         name: "rice",
         recipe: null,
         appearsInRecipes: [],
         aliases: [],
         product: [
           {
-            id: "prod2",
+            id: unsafeProductId("prod2"),
             name: "rice",
             food: {
               legacyFoodInfo: null,
@@ -851,12 +852,12 @@ describe("calculateTotals", () => {
 
     const ingredients: SectionIngredientOut[] = [
       {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing1",
+          id: unsafeIngredientId("ing1"),
           name: "unknown ingredient",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -868,7 +869,7 @@ describe("calculateTotals", () => {
 
     const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         name: "unknown ingredient",
         recipe: null,
         appearsInRecipes: [],
@@ -901,12 +902,12 @@ describe("calculateTotals", () => {
 
     const ingredients: SectionIngredientOut[] = [
       {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing1",
+          id: unsafeIngredientId("ing1"),
           name: "chicken",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -915,12 +916,12 @@ describe("calculateTotals", () => {
         amounts: [{ value: 1, unit: "pound" }],
       },
       {
-        id: "ing2",
+        id: unsafeIngredientId("ing2"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing2",
+          id: unsafeIngredientId("ing2"),
           name: "unknown spice",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -932,14 +933,14 @@ describe("calculateTotals", () => {
 
     const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         name: "chicken",
         recipe: null,
         appearsInRecipes: [],
         aliases: [],
         product: [
           {
-            id: "prod1",
+            id: unsafeProductId("prod1"),
             name: "chicken",
             food: {
               legacyFoodInfo: null,
@@ -985,7 +986,7 @@ describe("calculateTotals", () => {
         updatedAt: new Date(),
       },
       ing2: {
-        id: "ing2",
+        id: unsafeIngredientId("ing2"),
         name: "unknown spice",
         recipe: null,
         appearsInRecipes: [],
@@ -1016,12 +1017,12 @@ describe("calculateTotals", () => {
 
     const ingredients: SectionIngredientOut[] = [
       {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing1",
+          id: unsafeIngredientId("ing1"),
           name: "ingredient with weight only",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -1033,14 +1034,14 @@ describe("calculateTotals", () => {
 
     const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         name: "ingredient with weight only",
         recipe: null,
         appearsInRecipes: [],
         aliases: [],
         product: [
           {
-            id: "prod1",
+            id: unsafeProductId("prod1"),
             name: "ingredient with weight only",
             food: null, // No nutrition data
             upc: null,
@@ -1093,12 +1094,12 @@ describe("calculateTotals", () => {
 
     const ingredients: SectionIngredientOut[] = [
       {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         type: "ingredient",
         createdAt: new Date(),
         updatedAt: new Date(),
         ingredient: {
-          id: "ing1",
+          id: unsafeIngredientId("ing1"),
           name: "problematic ingredient",
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -1110,7 +1111,7 @@ describe("calculateTotals", () => {
 
     const ingMap: Record<string, IngredientWithFoodOut> = {
       ing1: {
-        id: "ing1",
+        id: unsafeIngredientId("ing1"),
         name: "problematic ingredient",
         recipe: null,
         appearsInRecipes: [],

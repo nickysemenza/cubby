@@ -3,12 +3,13 @@ import { type ParsedCompactRecipe } from "~/codec/codec";
 import { findOrCreateIngredient } from "./ingredient";
 import { RecipeCreateInput } from "~/schemas/recipe";
 import { upsertRecipe } from "./recipe";
+import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
 
 // Convert ParsedCompactRecipe to RecipeCreateInput format
 const convertParsedCompactToRecipeInput = async (
   recipe: ParsedCompactRecipe,
   prismaClient: typeof db,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<RecipeCreateInput> => {
   return {
     name: recipe.name,
@@ -30,7 +31,7 @@ const convertParsedCompactToRecipeInput = async (
             );
             return {
               type: "ingredient" as const,
-              ingredientId: newIngredient.id,
+              ingredientId: unsafeIngredientId(newIngredient.id),
               recipeId: null,
               amounts: ingredient.amounts,
             };
@@ -44,7 +45,7 @@ const convertParsedCompactToRecipeInput = async (
 export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
   prismaClient: typeof db,
-  projectId: string,
+  projectId: ProjectId,
 ) => {
   // Convert compact recipe format to standard recipe input format
   const recipeInput = await convertParsedCompactToRecipeInput(

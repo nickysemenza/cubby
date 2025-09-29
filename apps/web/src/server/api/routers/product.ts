@@ -4,6 +4,11 @@ import { productWithFoodOut } from "~/server/services/product.service";
 import { productInputPayload } from "~/schemas/product";
 import { createEntityCrudProcedures } from "../crud-factory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
+import {
+  productId,
+  unsafeProjectId,
+  type ProductId,
+} from "~/schemas/identifiers";
 
 // Define filters schema for products
 const productFiltersSchema = z.object({
@@ -19,9 +24,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     updateInput: productInputPayload.partial(),
     output: productWithFoodOut,
     filters: productFiltersSchema,
+    idSchema: productId,
   },
   repository: {
-    getByID: async (services, id) => {
+    getByID: async (services, id: ProductId) => {
       return await services.services.product.getProductByID(
         id,
         services.projectId,
@@ -40,10 +46,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     create: async (services, data) => {
       return await services.services.product.createProduct(
         data,
-        services.projectId || "default-project",
+        services.projectId || unsafeProjectId("default-project"),
       );
     },
-    update: async (services, id, data) => {
+    update: async (services, id: ProductId, data) => {
       return await services.services.product.updateProduct(
         id,
         services.projectId,

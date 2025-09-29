@@ -13,11 +13,17 @@ import {
 } from "~/server/repo/database-helpers";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
+import {
+  type IngredientId,
+  type ProjectId,
+  unsafeProductId,
+  unsafeIngredientId,
+} from "~/schemas/identifiers";
 
 export const mergeIngredients = async (
   db: PrismaClient,
-  target: string,
-  aliases: string[],
+  target: IngredientId,
+  aliases: IngredientId[],
 ) => {
   return await db.$transaction(async (tx) => {
     const targetRec = await tx.ingredient.findFirstOrThrow({
@@ -108,15 +114,20 @@ const dbIngredientToAPI: (
   const productWithMappings = Product.map((product) => {
     return {
       ...product,
+      id: unsafeProductId(product.id),
       unitMappings: product.unitMappings.map((mapping) => ({
         ...mapping,
-        sourceMetadata: { type: "product" as const, productId: product.id },
+        sourceMetadata: {
+          type: "product" as const,
+          productId: unsafeProductId(product.id),
+        },
       })),
     };
   });
 
   return {
     ...restOfIngredient,
+    id: unsafeIngredientId(restOfIngredient.id),
     recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
     product: productWithMappings,
     appearsInRecipes: RecipeSectionIngredient.map((section) =>
@@ -127,8 +138,8 @@ const dbIngredientToAPI: (
 
 export const getIngredientByID = async (
   db: PrismaClient,
-  id: string,
-  projectId: string,
+  id: IngredientId,
+  projectId: ProjectId,
 ) => {
   const ingredient = await db.ingredient.findFirstOrThrow({
     where: { id: id, projectId }, // Ensure ingredient belongs to project
@@ -147,7 +158,7 @@ export const getIngredientByName = async (db: PrismaClient, name: string) => {
 export const createIngredient = async (
   db: PrismaClient,
   data: z.infer<typeof ingredientBase>,
-  projectId: string,
+  projectId: ProjectId,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const ingredient = await db.ingredient.create({
     data: {
@@ -163,8 +174,8 @@ export const createIngredient = async (
 
 export const updateIngredient = async (
   db: PrismaClient,
-  id: string,
-  projectId: string,
+  id: IngredientId,
+  projectId: ProjectId,
   data: Partial<z.infer<typeof ingredientBase>>,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const ingredient = await db.ingredient.update({
@@ -258,7 +269,7 @@ const buildIngredientWhere = (
 };
 export const ingredientList = async (
   db: PrismaClient,
-  projectId: string,
+  projectId: ProjectId,
   name: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,

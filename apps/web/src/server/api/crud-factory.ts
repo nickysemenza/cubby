@@ -12,6 +12,7 @@ import {
   type SortParams,
   type PaginationParams,
 } from "~/schemas/pagination";
+import { ProjectId } from "~/schemas/identifiers";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -23,7 +24,7 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
 // Interface for services needed by CRUD operations
 export interface CrudServices {
   db: PrismaClient;
-  projectId: string;
+  projectId: ProjectId;
   services: {
     product: ProductService;
     ingredient: IngredientService;
@@ -32,14 +33,20 @@ export interface CrudServices {
 }
 
 // Reusable procedure builders
-const createGetByIdProcedure = <T>(
+const createGetByIdProcedure = <T, TId extends string = string>(
   outputSchema: ZodSchema<T>,
-  getByIdFn: (ctx: CrudServices, id: string) => Promise<T>,
+  getByIdFn: (ctx: CrudServices, id: TId) => Promise<T>,
+  idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
-    .input(IDInput)
+    .input(idSchema ? z.object({ id: idSchema }) : IDInput)
     .output(outputSchema)
-    .query(async ({ ctx, input }) => getByIdFn(ctx, input.id));
+    .query(async ({ ctx, input }) => {
+      const id = idSchema
+        ? (idSchema.parse(input.id) as TId)
+        : (input.id as TId);
+      return getByIdFn(ctx, id);
+    });
 
 const createCreateProcedure = <TInput, TOutput>(
   inputSchema: ZodSchema<TInput>,
@@ -51,15 +58,25 @@ const createCreateProcedure = <TInput, TOutput>(
     .output(outputSchema)
     .mutation(async ({ ctx, input }) => createFn(ctx, input as TInput));
 
-const createUpdateProcedure = <TInput, TOutput>(
+const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
   inputSchema: ZodSchema<TInput>,
   outputSchema: ZodSchema<TOutput>,
-  updateFn: (ctx: CrudServices, id: string, data: TInput) => Promise<TOutput>,
+  updateFn: (ctx: CrudServices, id: TId, data: TInput) => Promise<TOutput>,
+  idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
-    .input(updateInputSchema(inputSchema))
+    .input(
+      idSchema
+        ? z.object({ id: idSchema, data: inputSchema })
+        : updateInputSchema(inputSchema),
+    )
     .output(outputSchema)
-    .mutation(async ({ ctx, input }) => updateFn(ctx, input.id, input.data));
+    .mutation(async ({ ctx, input }) => {
+      const id = idSchema
+        ? (idSchema.parse(input.id) as TId)
+        : (input.id as TId);
+      return updateFn(ctx, id, input.data);
+    });
 
 // Simplified factory for just the list operation
 export function createEntityListProcedure<TOutput, TFilters>({
@@ -106,6 +123,7 @@ export function createEntityCrudWithoutListProcedures<
   TCreateInput,
   TUpdateInput,
   TOutput,
+  TId extends string = string,
 >({
   schemas,
   repository,
@@ -114,19 +132,24 @@ export function createEntityCrudWithoutListProcedures<
     createInput: ZodSchema<TCreateInput>;
     updateInput: ZodSchema<TUpdateInput>;
     output: ZodSchema<TOutput>;
+    idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: CrudServices, id: string) => Promise<TOutput>;
+    getByID: (ctx: CrudServices, id: TId) => Promise<TOutput>;
     create: (ctx: CrudServices, data: TCreateInput) => Promise<TOutput>;
     update: (
       ctx: CrudServices,
-      id: string,
+      id: TId,
       data: TUpdateInput,
     ) => Promise<TOutput>;
   };
 }) {
   return {
-    getByID: createGetByIdProcedure(schemas.output, repository.getByID),
+    getByID: createGetByIdProcedure(
+      schemas.output,
+      repository.getByID,
+      schemas.idSchema,
+    ),
     create: createCreateProcedure(
       schemas.createInput,
       schemas.output,
@@ -136,6 +159,7 @@ export function createEntityCrudWithoutListProcedures<
       schemas.updateInput,
       schemas.output,
       repository.update,
+      schemas.idSchema,
     ),
   };
 }
@@ -146,6 +170,7 @@ export function createEntityCrudProcedures<
   TUpdateInput,
   TOutput,
   TFilters,
+  TId extends string = string,
 >({
   schemas,
   repository,
@@ -155,9 +180,10 @@ export function createEntityCrudProcedures<
     updateInput: ZodSchema<TUpdateInput>;
     output: ZodSchema<TOutput>;
     filters: ZodSchema<TFilters>;
+    idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: CrudServices, id: string) => Promise<TOutput>;
+    getByID: (ctx: CrudServices, id: TId) => Promise<TOutput>;
     list: (
       ctx: CrudServices,
       filters: TFilters,
@@ -167,7 +193,7 @@ export function createEntityCrudProcedures<
     create: (ctx: CrudServices, data: TCreateInput) => Promise<TOutput>;
     update: (
       ctx: CrudServices,
-      id: string,
+      id: TId,
       data: TUpdateInput,
     ) => Promise<TOutput>;
   };
@@ -187,6 +213,7 @@ export function createEntityCrudProcedures<
       createInput: schemas.createInput,
       updateInput: schemas.updateInput,
       output: schemas.output,
+      idSchema: schemas.idSchema,
     },
     repository: {
       getByID: repository.getByID,

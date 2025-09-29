@@ -4,14 +4,15 @@ import { buildTestDB } from "tooling/test-setup";
 import { recipeRouter } from "./recipe";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { unsafeProjectId } from "~/schemas/identifiers";
 
 describe("recipe router", () => {
   let prisma: PrismaClient;
-  let projectId: string;
+  let projectId: ReturnType<typeof unsafeProjectId>;
   beforeEach(async () => {
     const { prisma: db, projectId: pId, teardown } = await buildTestDB();
     prisma = db;
-    projectId = pId;
+    projectId = unsafeProjectId(pId);
 
     return teardown;
   });

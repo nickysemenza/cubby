@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { baseEntitySchema, dbTimestampsOut } from "./common";
-import { id } from "./identifiers";
+import { id, recipeId, ingredientId } from "./identifiers";
 import { amount } from "~/codec/codec";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
@@ -64,14 +64,14 @@ export type sectionIngredientType = "ingredient" | "recipe";
 export const recipeIngredientInput = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("ingredient"),
-    ingredientId: id,
+    ingredientId: ingredientId,
     recipeId: z.null(),
     amounts: z.array(amount),
     id: id.optional(),
   }),
   z.object({
     type: z.literal("recipe"),
-    recipeId: id,
+    recipeId: recipeId,
     ingredientId: z.null(),
     amounts: z.array(amount),
     id: id.optional(),
@@ -100,7 +100,7 @@ export const recipeCreateInput = z
   .extend(createInputImages.shape);
 
 export const recipeUpdateInput = z.object({
-  id: id,
+  id: recipeId,
   data: recipeCreateInput.partial().extend(updateInputImages.shape),
 });
 

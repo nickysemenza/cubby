@@ -18,6 +18,7 @@ import {
   updateRecipe,
 } from "~/server/repo/recipe";
 import { createEntityCrudProcedures } from "../crud-factory";
+import { recipeId, type RecipeId } from "~/schemas/identifiers";
 
 // Define filters schema for recipes
 const recipeFiltersSchema = z.object({
@@ -31,9 +32,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     updateInput: recipeUpdateInput.shape.data,
     output: recipeOut,
     filters: recipeFiltersSchema,
+    idSchema: recipeId,
   },
   repository: {
-    getByID: async (services, id) => {
+    getByID: async (services, id: RecipeId) => {
       const res = await getRecipeByID(id, services.db, services.projectId);
       if (res === null) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Recipe not found" });
@@ -58,7 +60,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       }
       return await createRecipe(data, services.db, services.projectId);
     },
-    update: async (services, id, data) => {
+    update: async (services, id: RecipeId, data) => {
       if (!services.projectId) {
         throw new TRPCError({
           code: "UNAUTHORIZED",

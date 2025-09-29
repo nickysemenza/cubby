@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { baseEntitySchema } from "./common";
-import { id } from "./identifiers";
+import { id, projectId, userId } from "./identifiers";
 
 // Base project schema
 export const projectBase = z.object({
@@ -23,11 +23,11 @@ export const projectOut = baseEntitySchema.extend({
 // Project member schema
 export const projectMemberOut = z.object({
   id: id,
-  projectId: id,
-  userId: z.string(),
+  projectId: projectId,
+  userId: userId,
   joinedAt: z.date(),
   user: z.object({
-    id: z.string(),
+    id: userId,
     email: z.string(),
     firstName: z.string().nullable(),
     lastName: z.string().nullable(),
@@ -37,7 +37,7 @@ export const projectMemberOut = z.object({
 
 // User schema (local cache of Clerk users)
 export const userOut = z.object({
-  id: z.string(),
+  id: userId,
   email: z.string(),
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
@@ -60,16 +60,16 @@ export const projectWithMembersOut = projectOut.extend({
 
 // Project access validation input
 export const projectAccessInput = z.object({
-  projectId: id,
+  projectId: projectId,
 });
 
 // Add member input
 export const addMemberInput = z.object({
-  projectId: id,
+  projectId: projectId,
   email: z.string().email(),
 });
 
 // Get members input
 export const getMembersInput = z.object({
-  projectId: id,
+  projectId: projectId,
 });

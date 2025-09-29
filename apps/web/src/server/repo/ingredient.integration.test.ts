@@ -3,6 +3,7 @@ import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
 import { type PrismaClient } from "@prisma/client";
 import { buildTestDB } from "tooling/test-setup";
 import { insertCompactRecipe } from "~/server/repo/recipe";
+import { unsafeProjectId, unsafeIngredientId } from "~/schemas/identifiers";
 
 describe("ingredient", () => {
   let prisma: PrismaClient;
@@ -34,7 +35,7 @@ describe("ingredient", () => {
         ],
       },
       prisma,
-      projectId,
+      unsafeProjectId(projectId),
     );
     const a = await findOrCreateIngredient(prisma, "egg", undefined, projectId);
     const b = await findOrCreateIngredient(
@@ -52,7 +53,10 @@ describe("ingredient", () => {
     const countAfterUpsert = await prisma.ingredient.count();
     expect(countAfterUpsert).toEqual(3);
 
-    await mergeIngredients(prisma, a.id, [b.id, c.id]);
+    await mergeIngredients(prisma, unsafeIngredientId(a.id), [
+      unsafeIngredientId(b.id),
+      unsafeIngredientId(c.id),
+    ]);
     const countAfterMerge = await prisma.ingredient.count();
     expect(countAfterMerge).toEqual(1);
 

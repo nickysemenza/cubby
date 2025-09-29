@@ -1,6 +1,5 @@
 "use client";
 import { type FC } from "react";
-import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -14,6 +13,7 @@ import {
   type InventoryUpdateInput,
   inventoryUpdatePayloadData,
 } from "~/schemas/inventory";
+import { type ProductId, type LocationId } from "~/schemas/identifiers";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -23,6 +23,7 @@ import {
   detectComboboxIdChange,
 } from "../form-utils";
 import { AmountFieldGroup } from "./amount-field-group";
+import { ComboboxItem } from "../combobox/combobox-types";
 
 import {
   WithLocationSearch,
@@ -31,12 +32,13 @@ import {
 import { amount } from "~/codec/codec";
 
 // Form schema for inventory form
+// Note: We use simple Zod schema for validation, TypeScript infers from Zod
 const formSchema = z.object({
   product: ComboboxItem.refine((item) => item !== null, {
-    error: "Please select a product",
+    message: "Please select a product",
   }),
   location: ComboboxItem.refine((item) => item !== null, {
-    error: "Please select a location",
+    message: "Please select a location",
   }),
   amount: amount,
 });
@@ -85,8 +87,8 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     const amount = values.amount;
     if (mode === "create") {
       const createData: z.infer<typeof inventoryCreatePayloadData> = {
-        productId: values.product!.id,
-        locationId: values.location!.id,
+        productId: values.product!.id as ProductId,
+        locationId: values.location!.id as LocationId,
         amount,
       };
       props.onCreate(createData);
@@ -103,14 +105,14 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         values.product,
       );
       if (productIdChange) {
-        updates.productId = productIdChange;
+        updates.productId = productIdChange as ProductId;
       }
       const locationIdChange = detectComboboxIdChange(
         inventoryItem.location.id,
         values.location,
       );
       if (locationIdChange) {
-        updates.locationId = locationIdChange;
+        updates.locationId = locationIdChange as LocationId;
       }
       if (Object.keys(updates).length > 0) {
         const updateData: InventoryUpdateInput = {

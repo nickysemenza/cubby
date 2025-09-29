@@ -42,7 +42,7 @@ import useDebounce from "~/hooks/useDebounce";
  * Implementation note: The standard Combobox uses cmdk which is built on Radix Dialog.
  * This creates nested dialogs with incompatible focus management when used inside another dialog.
  */
-export function DialogCompatibleCombobox({
+export function DialogCompatibleCombobox<TId extends string = string>({
   label,
   findItems,
   value,
@@ -50,14 +50,14 @@ export function DialogCompatibleCombobox({
   onCreateNew,
 }: {
   label: string;
-  findItems: (searchQuery: string) => Promise<ComboboxItem[]>;
-  value: ComboboxItem | null;
-  setValue: (item: ComboboxItem | null) => void;
-  onCreateNew?: (name: string) => Promise<ComboboxItem>;
+  findItems: (searchQuery: string) => Promise<ComboboxItem<TId>[]>;
+  value: ComboboxItem<TId> | null;
+  setValue: (item: ComboboxItem<TId> | null) => void;
+  onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
 }) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
-  const [results, setResults] = React.useState<ComboboxItem[]>([]);
+  const [results, setResults] = React.useState<ComboboxItem<TId>[]>([]);
   const debouncedInput = useDebounce(inputValue, 300);
 
   // Use a ref to store the dialog and input elements

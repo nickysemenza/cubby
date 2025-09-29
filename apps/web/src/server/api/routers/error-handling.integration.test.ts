@@ -6,14 +6,15 @@ import { recipeRouter } from "./recipe";
 import { ingredientRouter } from "./ingredient";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { unsafeProjectId } from "~/schemas/identifiers";
 
 describe("API Error Handling", () => {
   let prisma: PrismaClient;
-  let projectId: string;
+  let projectId: ReturnType<typeof unsafeProjectId>;
   beforeEach(async () => {
     const { prisma: db, projectId: pId, teardown } = await buildTestDB();
     prisma = db;
-    projectId = pId;
+    projectId = unsafeProjectId(pId);
 
     return teardown;
   });
