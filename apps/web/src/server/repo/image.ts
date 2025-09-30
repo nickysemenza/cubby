@@ -18,6 +18,7 @@ import { type Prisma, type PrismaClient } from "@prisma/client";
 export const initiateImageUploadWithoutEntity = async (
   db: PrismaClient,
   { filename, contentType, size }: InitiateUploadWithoutEntityInput,
+  projectId: string,
 ) => {
   // Generate S3 key for the image
   const key = generateImageKey(filename);
@@ -26,6 +27,7 @@ export const initiateImageUploadWithoutEntity = async (
   // Create image record in pending state
   const image = await db.image.create({
     data: {
+      projectId,
       key,
       filename,
       size,

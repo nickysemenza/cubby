@@ -25,9 +25,61 @@ datasource db {
   extensions = [pgcrypto, pg_trgm]
 }
 
+// Project tables for multi-tenancy
+model Project {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  members      ProjectMember[]
+  recipes      Recipe[]
+  products     Product[]
+  ingredients  Ingredient[]
+  locations    Location[]
+  inventoryEntries InventoryEntry[]
+  images       Image[]
+
+  @@index([createdAt])
+  @@index([name])
+}
+
+model User {
+  id            String   @id // Clerk user ID
+  email         String   @unique
+  firstName     String?
+  lastName      String?
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  // Relations
+  projects      ProjectMember[]
+
+  @@index([email])
+}
+
+model ProjectMember {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project   Project  @relation(fields: [projectId], references: [id])
+  projectId String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String   // Clerk user ID
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([projectId])
+  @@index([userId])
+}
+
 model Recipe {
   id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String          @unique
+  projectId         String          @db.Uuid
+  project           Project         @relation(fields: [projectId], references: [id])
+  name              String
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @default(now()) @updatedAt
   deletedAt         DateTime?
@@ -39,6 +91,8 @@ model Recipe {
   // recipe images
   images RecipeImage[]
 
+  @@unique([projectId, name])
+  @@index([projectId])
   @@index([createdAt])
   @@index([SourceType])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Recipe_name_gin_idx")
@@ -82,7 +136,9 @@ model RecipeSectionIngredient {
 
 model Ingredient {
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name      String    @unique
+  projectId String    @db.Uuid
+  project   Project   @relation(fields: [projectId], references: [id])
+  name      String
   aliases   String[]
   createdAt DateTime  @default(now())
   updatedAt DateTime  @default(now()) @updatedAt
@@ -98,6 +154,8 @@ model Ingredient {
   // what product(s) point to this ingredient
   Product Product[]
 
+  @@unique([projectId, name])
+  @@index([projectId])
   @@index([recipeId])
   @@index([createdAt])
   @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "Ingredient_name_gin_idx")
@@ -106,6 +164,8 @@ model Ingredient {
 
 model Product {
   id               String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String  @db.Uuid
+  project          Project @relation(fields: [projectId], references: [id])
   name             String
   manufacturer     String
   upc              String? @unique
@@ -131,7 +191,8 @@ model Product {
   // product images
   images ProductImage[]
 
-  @@unique([name, manufacturer])
+  @@unique([projectId, name, manufacturer])
+  @@index([projectId])
   @@index([ingredientId])
   @@index([createdAt])
   @@index([name])
@@ -160,6 +221,8 @@ model ProductUnitMappings {
 /// holds a mapping between an product and a location
 model InventoryEntry {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String  @db.Uuid
+  project   Project @relation(fields: [projectId], references: [id])
   // name      String
 
   /// what is the product
@@ -178,6 +241,7 @@ model InventoryEntry {
   locationId String   @db.Uuid
 
   @@unique([productId, locationId])
+  @@index([projectId])
   @@index([productId])
   @@index([locationId])
   @@index([createdAt])
@@ -185,7 +249,9 @@ model InventoryEntry {
 
 model Location {
   id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String    @unique
+  projectId         String    @db.Uuid
+  project           Project   @relation(fields: [projectId], references: [id])
+  name              String
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @default(now()) @updatedAt
   deletedAt         DateTime?
@@ -202,6 +268,8 @@ model Location {
 
   type String
 
+  @@unique([projectId, name])
+  @@index([projectId])
   @@index([name])
   @@index([type])
   @@index([parentId])
@@ -220,6 +288,8 @@ enum RecipeSource {
 // Image upload models
 model Image {
   id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String      @db.Uuid
+  project     Project     @relation(fields: [projectId], references: [id])
   url         String
   key         String      @unique
   filename    String
@@ -235,6 +305,7 @@ model Image {
   locationImages LocationImage[]
   recipeImages   RecipeImage[]
 
+  @@index([projectId])
   @@index([createdAt])
   @@index([status])
 }

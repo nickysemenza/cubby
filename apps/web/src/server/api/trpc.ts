@@ -12,7 +12,8 @@ import { ZodError } from "zod";
 
 import { db } from "~/server/db";
 import { flatten } from "flat";
-import { type Span, trace } from "@opentelemetry/api";
+import { type Span, context, propagation } from "@opentelemetry/api";
+import { getTracer, TraceNames } from "~/server/tracing";
 import { auth } from "@clerk/nextjs/server";
 import { USDAClient } from "~/server/clients/usda";
 import { ProductService } from "~/server/services/product.service";
@@ -21,6 +22,7 @@ import { USDAService } from "~/server/services/usda.service";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { type PrismaClient } from "@prisma/client";
 import { env } from "~/env";
+import { ProjectService } from "~/server/services/project.service";
 
 /**
  * Helper function to build crud services for both production and test contexts
@@ -56,13 +58,70 @@ const buildCrudServices = (database: PrismaClient) => {
  * @see https://trpc.io/docs/server/context
  */
 export const createTRPCContext = async (opts: { headers: Headers }) => {
-  const crudServices = buildCrudServices(db);
+  // Extract trace context from headers and set it as active context
+  const headersObj: Record<string, string> = {};
+  opts.headers.forEach((value, key) => {
+    headersObj[key] = value;
+  });
+  const parentContext = propagation.extract(context.active(), headersObj);
 
-  return {
-    ...crudServices,
-    auth: opts.headers.has("skip-auth") ? undefined : await auth(),
-    ...opts,
-  };
+  return await context.with(parentContext, async () => {
+    const crudServices = buildCrudServices(db);
+    const authResult = opts.headers.has("skip-auth") ? undefined : await auth();
+
+    let projectId: string;
+    let isSystemRequest = false;
+
+    // Check for system API key
+    const systemKey = opts.headers.get("x-system-key");
+    const expectedSystemKey = process.env.SYSTEM_API_KEY;
+    if (systemKey && expectedSystemKey && systemKey === expectedSystemKey) {
+      isSystemRequest = true;
+      // For system requests, projectId is required
+      const requestedProjectId = opts.headers.get("x-project-id");
+      if (!requestedProjectId) {
+        throw new Error("x-project-id header is required for system requests");
+      }
+      projectId = requestedProjectId;
+    } else if (authResult?.userId) {
+      const projectService = new ProjectService(db);
+
+      // Get projectId from header (sent by client from localStorage)
+      let requestedProjectId = opts.headers.get("x-project-id") || undefined;
+
+      // Verify access if projectId provided
+      if (requestedProjectId) {
+        const hasAccess = await projectService.verifyProjectAccess(
+          authResult.userId,
+          requestedProjectId,
+        );
+        if (!hasAccess) {
+          requestedProjectId = undefined;
+        }
+      }
+
+      // If no valid project, get default (this always returns a string)
+      if (!requestedProjectId) {
+        projectId = await projectService.ensureDefaultProject(
+          authResult.userId,
+        );
+      } else {
+        projectId = requestedProjectId;
+      }
+    } else {
+      // For unauthenticated users, we'll provide a placeholder
+      // but protected procedures will catch this and require auth
+      projectId = "unauthenticated";
+    }
+
+    return {
+      ...crudServices,
+      auth: authResult,
+      projectId,
+      isSystemRequest,
+      ...opts,
+    };
+  });
 };
 
 /**
@@ -153,9 +212,9 @@ const timingMiddleware = t.middleware(async ({ next, path }) => {
 });
 
 const tracingMiddleWare = t.middleware(async (opts) => {
-  const tracer = trace.getTracer("trpc");
+  const tracer = getTracer();
   return tracer.startActiveSpan(
-    `TRPC ${opts.type}: ${opts.path}`,
+    TraceNames.trpc(opts.type, opts.path),
     async (span: Span) => {
       const input = await opts.getRawInput();
       if (true && typeof input === "object") {
@@ -198,17 +257,64 @@ export const publicProcedure = t.procedure
 export const protectedProcedure = publicProcedure.use(isAuthed);
 
 /**
+ * System procedure for operations that can be authenticated with system API key
+ * Used for scripts and system-level operations
+ */
+const isSystemOrAuth = t.middleware(({ next, ctx }) => {
+  if (!ctx.auth?.userId && !ctx.isSystemRequest) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx,
+  });
+});
+
+export const systemProcedure = publicProcedure.use(isSystemOrAuth);
+
+/**
+ * Helper to create a minimal auth object for testing
+ */
+const createTestAuth = (userId: string): Awaited<ReturnType<typeof auth>> => {
+  return {
+    userId,
+    sessionClaims: {},
+    sessionId: "test-session-id",
+    sessionStatus: "active" as const,
+    actor: null,
+    orgId: null,
+    orgRole: null,
+    orgSlug: null,
+    orgPermissions: null,
+    getToken: async () => null,
+    has: () => false,
+    debug: () => null,
+    redirectToSignIn: () => {
+      throw new Error("redirectToSignIn not implemented in test");
+    },
+    redirectToSignUp: () => {
+      throw new Error("redirectToSignUp not implemented in test");
+    },
+  } as unknown as Awaited<ReturnType<typeof auth>>;
+};
+
+/**
  * Test helper to create a TRPC context for testing purposes
  */
 export const createTestTRPCContext = (
   db: PrismaClient,
-  opts: { headers?: Headers; auth?: undefined } = {},
+  opts: {
+    headers?: Headers;
+    auth?: { userId: string };
+    projectId?: string;
+  } = {},
 ) => {
   const crudServices = buildCrudServices(db);
 
   return {
     ...crudServices,
-    auth: opts.auth,
+    auth: opts.auth ? createTestAuth(opts.auth.userId) : undefined,
+    projectId: opts.projectId ?? "00000000-0000-0000-0000-000000000000",
+    isSystemRequest: false, // Test contexts are not system requests by default
     headers: opts.headers ?? new Headers(),
   };
 };

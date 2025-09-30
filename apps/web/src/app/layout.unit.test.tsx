@@ -20,7 +20,7 @@ Object.defineProperty(window, "matchMedia", {
 
 // Mock localStorage
 const localStorageMock = {
-  getItem: vi.fn(),
+  getItem: vi.fn(() => null),
   setItem: vi.fn(),
   removeItem: vi.fn(),
   clear: vi.fn(),
@@ -42,16 +42,24 @@ vi.mock("@clerk/nextjs", () => {
   };
 });
 
-describe("App Router: Works with Client Components", () => {
-  vi.mock("next/navigation", () => {
-    return {
-      usePathname: () => "/recipes",
-      useRouter: () => ({
-        push: vi.fn(),
-      }),
-    };
-  });
+// Mock ProjectSwitcher component that uses tRPC
+vi.mock("~/components/project/ProjectSwitcher", () => {
+  return {
+    ProjectSwitcher: () => <div>Project Switcher</div>,
+  };
+});
 
+// Mock next/navigation
+vi.mock("next/navigation", () => {
+  return {
+    usePathname: () => "/recipes",
+    useRouter: () => ({
+      push: vi.fn(),
+    }),
+  };
+});
+
+describe("App Router: Works with Client Components", () => {
   it("renders the main nav", () => {
     // Mock the layout to avoid html/body nesting issues in tests
     const LayoutContent = () => (

@@ -51,9 +51,16 @@ export const imageRouter = createTRPCRouter({
     .output(initiateUploadWithoutEntityResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
+        if (!ctx.projectId) {
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: "Project ID required",
+          });
+        }
         const uploadData = await initiateImageUploadWithoutEntity(
           ctx.db,
           input,
+          ctx.projectId,
         );
 
         return {

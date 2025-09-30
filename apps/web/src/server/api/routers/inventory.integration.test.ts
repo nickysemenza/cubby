@@ -4,26 +4,31 @@ import { buildTestDB } from "tooling/test-setup";
 import { inventoryentryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
-let prisma: PrismaClient;
-
 describe("inventory router", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
   beforeEach(async () => {
-    // Get a isolated test database for each test
-    const res = await buildTestDB();
-    prisma = res.prisma;
-    return res.teardown;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
+
+    return teardown;
   });
 
   it("should create and retrieve an inventory entry", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test location
     const location = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Test Kitchen",
         type: "room",
       },
@@ -32,6 +37,7 @@ describe("inventory router", () => {
     // Create test product
     const product = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Test Flour",
         manufacturer: "Test Brand",
         model: "Premium Flour",
@@ -74,12 +80,16 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test locations
     const kitchen = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Kitchen",
         type: "room",
       },
@@ -87,6 +97,7 @@ describe("inventory router", () => {
 
     const pantry = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Pantry",
         type: "room",
       },
@@ -95,6 +106,7 @@ describe("inventory router", () => {
     // Create test products
     const flour = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Flour",
         manufacturer: "Brand A",
         model: "All Purpose",
@@ -104,6 +116,7 @@ describe("inventory router", () => {
 
     const sugar = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Sugar",
         manufacturer: "Brand B",
         model: "White Sugar",
@@ -113,6 +126,7 @@ describe("inventory router", () => {
 
     const rice = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Rice",
         manufacturer: "Brand C",
         model: "Basmati Rice",
@@ -199,12 +213,16 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test location and product
     const location = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Test Location",
         type: "room",
       },
@@ -212,6 +230,7 @@ describe("inventory router", () => {
 
     const product = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Test Product",
         manufacturer: "Test Brand",
         model: "Test Model",
@@ -257,12 +276,16 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test location and products
     const location1 = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Location 1",
         type: "room",
       },
@@ -270,6 +293,7 @@ describe("inventory router", () => {
 
     const location2 = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Location 2",
         type: "shelf",
       },
@@ -277,6 +301,7 @@ describe("inventory router", () => {
 
     const product1 = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Product 1",
         manufacturer: "Brand",
         model: "Model 1",
@@ -286,6 +311,7 @@ describe("inventory router", () => {
 
     const product2 = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Product 2",
         manufacturer: "Brand",
         model: "Model 2",
@@ -332,12 +358,16 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test location
     const location = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Bulk Location",
         type: "room",
       },
@@ -346,6 +376,7 @@ describe("inventory router", () => {
     // Create test products
     const product1 = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Bulk Product 1",
         manufacturer: "Brand",
         model: "Model 1",
@@ -355,6 +386,7 @@ describe("inventory router", () => {
 
     const product2 = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Bulk Product 2",
         manufacturer: "Brand",
         model: "Model 2",
@@ -364,6 +396,7 @@ describe("inventory router", () => {
 
     const product3 = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Bulk Product 3",
         manufacturer: "Brand",
         model: "Model 3",
@@ -439,7 +472,10 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Try to retrieve an inventory entry with a non-existent ID
@@ -454,7 +490,10 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     const nonExistentId = "00000000-0000-0000-0000-000000000000";
@@ -471,6 +510,7 @@ describe("inventory router", () => {
     // Create a valid entry first
     const location = await prisma.location.create({
       data: {
+        projectId: projectId,
         name: "Test Location",
         type: "room",
       },
@@ -478,6 +518,7 @@ describe("inventory router", () => {
 
     const product = await prisma.product.create({
       data: {
+        projectId: projectId,
         name: "Test Product",
         manufacturer: "Brand",
         model: "Model",

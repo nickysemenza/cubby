@@ -33,17 +33,17 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             <DebugContextProvider>
-              <div className="flex flex-col">
-                <div className="border-b">
-                  <div className="flex h-16 items-center px-4">
-                    <MainNav className="mx-0" />
+              <TRPCReactProvider>
+                <div className="flex flex-col">
+                  <div className="border-b">
+                    <div className="flex h-16 items-center px-4">
+                      <MainNav className="mx-0" />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <GlobalCommandMenu />
-              <Toaster />
-              <TRPCReactProvider>
+                <GlobalCommandMenu />
+                <Toaster />
                 <ReactQueryDevtools initialIsOpen={false} />
                 <WasmContextProvider>{children}</WasmContextProvider>
               </TRPCReactProvider>

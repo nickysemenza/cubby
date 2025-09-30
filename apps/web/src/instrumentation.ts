@@ -1,5 +1,8 @@
 import { FetchInstrumentation, registerOTel } from "@vercel/otel";
 import { PrismaInstrumentation } from "@prisma/instrumentation";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import { W3CBaggagePropagator } from "@opentelemetry/core";
+import { CompositePropagator } from "@opentelemetry/core";
 
 export function register() {
   // ReferenceError: An error occurred while loading instrumentation hook: global is not defined
@@ -14,5 +17,13 @@ export function register() {
   registerOTel({
     serviceName: "recipehub",
     instrumentations: [new PrismaInstrumentation(), new FetchInstrumentation()],
+    propagators: [
+      new CompositePropagator({
+        propagators: [
+          new W3CTraceContextPropagator(),
+          new W3CBaggagePropagator(),
+        ],
+      }),
+    ],
   });
 }

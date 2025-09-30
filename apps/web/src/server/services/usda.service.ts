@@ -8,7 +8,8 @@ import {
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
 import { type FoodSummaryWithLinkedProducts } from "~/schemas/combo";
-import { type Span, trace } from "@opentelemetry/api";
+import { type Span } from "@opentelemetry/api";
+import { getTracer, TraceNames } from "~/server/tracing";
 
 export class USDAService {
   constructor(
@@ -19,12 +20,13 @@ export class USDAService {
   async findFood(
     lookup: FoodLookupParam,
   ): Promise<FoodSummaryWithLinkedProducts | null> {
-    const foodSummary = await trace
-      .getTracer("repo")
-      .startActiveSpan(`findFood`, async (span: Span) => {
+    const foodSummary = await getTracer().startActiveSpan(
+      TraceNames.service("usda", "findFood"),
+      async (span: Span) => {
         span.setAttributes(lookup);
         return await this.usdaClient.findFood(lookup);
-      });
+      },
+    );
     if (!foodSummary) {
       return null;
     }

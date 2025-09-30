@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { productWithFoodOut } from "~/server/services/product.service";
 import { productInputPayload } from "~/schemas/product";
 import { createEntityCrudProcedures } from "../crud-factory";
@@ -22,10 +22,14 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id) => {
-      return await services.services.product.getProductByID(id);
+      return await services.services.product.getProductByID(
+        id,
+        services.projectId,
+      );
     },
     list: async (services, filters, sort, pagination) => {
       return await services.services.product.productList(
+        services.projectId,
         filters.nameFilter,
         filters.manufacturerFilter,
         filters.upcFilter,
@@ -34,16 +38,23 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      return await services.services.product.createProduct(data);
+      return await services.services.product.createProduct(
+        data,
+        services.projectId || "default-project",
+      );
     },
     update: async (services, id, data) => {
-      return await services.services.product.updateProduct(id, data);
+      return await services.services.product.updateProduct(
+        id,
+        services.projectId,
+        data,
+      );
     },
   },
 });
 
 // Price lookup placeholder procedure (for Cloudflare Worker integration)
-const priceLookup = publicProcedure
+const priceLookup = protectedProcedure
   .input(
     z.object({
       name: z.string().optional(),
@@ -71,7 +82,7 @@ const priceLookup = publicProcedure
   });
 
 // Check for duplicate unique products procedure
-const findDuplicates = publicProcedure
+const findDuplicates = protectedProcedure
   .input(
     z.object({
       productId: z.string().optional(),
@@ -94,7 +105,7 @@ const findDuplicates = publicProcedure
     ),
   )
   .query(async ({ ctx }) => {
-    const duplicates = await findDuplicateUniqueProducts(ctx.db);
+    const duplicates = await findDuplicateUniqueProducts(ctx.db, ctx.projectId);
 
     return duplicates.map((product) => ({
       id: product.id,

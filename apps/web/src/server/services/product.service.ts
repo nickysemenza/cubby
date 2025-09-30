@@ -27,8 +27,11 @@ export class ProductService {
     private usdaClient: USDAClient,
   ) {}
 
-  async getProductByID(id: string): Promise<ProductWithFoodOut> {
-    const product = await getProductByIDRepo(this.db, id);
+  async getProductByID(
+    id: string,
+    projectId: string,
+  ): Promise<ProductWithFoodOut> {
+    const product = await getProductByIDRepo(this.db, id, projectId);
     const lookupParam = foodLookupParamFromProduct(product);
     const food = lookupParam
       ? await this.usdaClient.findFood(lookupParam)
@@ -41,6 +44,7 @@ export class ProductService {
   }
 
   async productList(
+    projectId: string,
     nameFilter: string | undefined,
     manufacturerFilter: string | undefined,
     upcFilter: string | undefined,
@@ -49,6 +53,7 @@ export class ProductService {
   ) {
     const { data: products, count } = await productListRepo(
       this.db,
+      projectId,
       nameFilter,
       manufacturerFilter,
       upcFilter,
@@ -84,16 +89,20 @@ export class ProductService {
     return { data: productsWithFood, count };
   }
 
-  async createProduct(data: ProductInputPayload): Promise<ProductWithFoodOut> {
-    const product = await createProductRepo(this.db, data);
-    return this.getProductByID(product.id);
+  async createProduct(
+    data: ProductInputPayload,
+    projectId: string,
+  ): Promise<ProductWithFoodOut> {
+    const product = await createProductRepo(this.db, data, projectId);
+    return this.getProductByID(product.id, projectId);
   }
 
   async updateProduct(
     id: string,
+    projectId: string,
     data: Partial<ProductInputPayload>,
   ): Promise<ProductWithFoodOut> {
-    await updateProductRepo(this.db, id, data);
-    return this.getProductByID(id);
+    await updateProductRepo(this.db, id, projectId, data);
+    return this.getProductByID(id, projectId);
   }
 }

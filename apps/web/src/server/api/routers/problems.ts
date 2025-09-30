@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { findAllProblems } from "~/server/repo/problems";
 
 // Output schemas for each problem type
@@ -69,10 +69,10 @@ const allProblemsSchema = z.object({
 });
 
 // Main procedure to get all problems
-const getAllProblems = publicProcedure
+const getAllProblems = protectedProcedure
   .output(allProblemsSchema)
   .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db);
+    return await findAllProblems(ctx.db, ctx.projectId);
   });
 
 export const problemsRouter = createTRPCRouter({

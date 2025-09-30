@@ -7,20 +7,24 @@ import { transformConfig } from "~/schemas/config";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { appRouter } from "../root";
 
-let prisma: PrismaClient;
 describe("system test", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
   beforeEach(async () => {
-    // Get a isolated test database
-    const res = await buildTestDB();
-    prisma = res.prisma;
-    return res.teardown;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
+    return teardown;
   });
   it("load data config", async () => {
-    await insertDataConfig(prisma, transformConfig(testConfig));
+    await insertDataConfig(prisma, transformConfig(testConfig), projectId);
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId,
+      }),
     );
     const list = await caller.ingredient.list({
       pagination: { pageSize: 100 },

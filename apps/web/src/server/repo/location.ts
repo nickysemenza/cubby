@@ -24,51 +24,52 @@ import {
 export const createLocation = async (
   db: PrismaClient,
   data: LocationCreateInput,
+  projectId: string,
 ) => {
-  return await db.$transaction(async (tx) => {
-    // Create the location
-    const location = await tx.location.create({
-      data: {
-        name: data.name,
-        type: data.type,
-        parent: data.parentId
-          ? {
-              connect: {
-                id: data.parentId,
-              },
-            }
-          : undefined,
-      },
-      include: {
-        parent: true,
-        children: true,
-      },
+  // Create the location
+  const location = await db.location.create({
+    data: {
+      project: { connect: { id: projectId } },
+      name: data.name,
+      type: data.type,
+      parent: data.parentId
+        ? {
+            connect: {
+              id: data.parentId,
+            },
+          }
+        : undefined,
+    },
+    include: {
+      parent: true,
+      children: true,
+    },
+  });
+
+  // Associate images if provided
+  if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+    // Create LocationImage records in batch
+    await db.locationImage.createMany({
+      data: data.pendingImageIds.map((imageId) => ({
+        locationId: location.id,
+        imageId,
+      })),
     });
 
-    // Associate images if provided
-    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      // Create LocationImage records in batch
-      await tx.locationImage.createMany({
-        data: data.pendingImageIds.map((imageId) => ({
-          locationId: location.id,
-          imageId,
-        })),
-      });
-
-      // Update all image statuses to UPLOADED in batch
-      await tx.image.updateMany({
-        where: { id: { in: data.pendingImageIds } },
-        data: { status: "UPLOADED" },
-      });
-    }
-    return getLocationById(tx, location.id);
-  });
+    // Update all image statuses to UPLOADED in batch
+    await db.image.updateMany({
+      where: { id: { in: data.pendingImageIds } },
+      data: { status: "UPLOADED" },
+    });
+  }
+  return getLocationById(db, location.id, projectId);
 };
 
 // Update an existing location
 export const updateLocation = async (
   db: PrismaClient,
   id: string,
+  projectId: string,
   data: LocationUpdateInput["data"],
 ) => {
   // Make sure we're not setting a location as its own parent
@@ -101,7 +102,7 @@ export const updateLocation = async (
   return await db.$transaction(async (tx) => {
     // Update the location
     const location = await tx.location.update({
-      where: { id },
+      where: { id, projectId },
       data: {
         name: data.name,
         type: data.type,
@@ -147,21 +148,26 @@ export const updateLocation = async (
       });
     }
 
-    return getLocationById(tx, location.id);
+    return getLocationById(tx, location.id, projectId);
   });
 };
 
 const upsertChild = async (
   db: Prisma.TransactionClient,
   now: Date,
-  parent: Prisma.LocationCreateInput | null,
+  parent: { id: string } | null,
   child: InfLocationConfig,
+  projectId: string,
 ) => {
   const res = await db.location.upsert({
     where: {
-      name: child.name,
+      projectId_name: {
+        projectId: projectId,
+        name: child.name,
+      },
     },
     create: {
+      project: { connect: { id: projectId } },
       name: child.name,
       type: child.type,
       updatedAt: now,
@@ -191,17 +197,23 @@ const upsertChild = async (
 export const loadLocations = async (
   db: Prisma.TransactionClient,
   data: InfLocationConfig[],
+  projectId: string,
 ) => {
   const now = new Date();
   const loadRecursive = async (
-    parent: Prisma.LocationCreateInput | null,
+    parent: { id: string } | null,
     children: InfLocationConfig[],
   ): Promise<void> => {
     for (const child of children) {
-      const res = await upsertChild(db, now, parent, child);
+      const res = await upsertChild(db, now, parent, child, projectId);
       const productsAtLocation = [];
       for (const product of child.products ?? []) {
-        const productRow = await findOrCreateProduct(db, now, product);
+        const productRow = await findOrCreateProduct(
+          db,
+          now,
+          product,
+          projectId,
+        );
         productsAtLocation.push(productRow);
       }
       for (const product of child.productReferences ?? []) {
@@ -216,6 +228,7 @@ export const loadLocations = async (
       });
       await db.inventoryEntry.createMany({
         data: productsAtLocation.map((product) => ({
+          projectId: projectId,
           locationId: res.id,
           productId: product.id,
           amount: { value: 1, unit: "each" },
@@ -230,6 +243,7 @@ export const loadLocations = async (
 
   const stale = await db.location.findMany({
     where: {
+      projectId, // Filter by project to prevent deleting other projects' data
       updatedAt: {
         not: now,
       },
@@ -359,9 +373,15 @@ const buildLocationWithChildren = (
     ...extractDbTimestampsFromDBRec(x),
   };
 };
-export const buildLocationTypeCount = async (db: PrismaClient) => {
+export const buildLocationTypeCount = async (
+  db: PrismaClient,
+  projectId: string,
+) => {
   const types = await db.location.groupBy({
     by: ["type"],
+    where: {
+      projectId, // Filter by project
+    },
     _count: {
       type: true,
     },
@@ -381,7 +401,10 @@ export const buildLocationTypeCount = async (db: PrismaClient) => {
   );
   return full as Record<(typeof allKeys)[number], number>;
 };
-export const buildLocationTree = async (db: PrismaClient) => {
+export const buildLocationTree = async (
+  db: PrismaClient,
+  projectId: string,
+) => {
   const res = await db.location.findMany({
     include: {
       children: recursiveLocationInclude(10, "children"),
@@ -393,6 +416,7 @@ export const buildLocationTree = async (db: PrismaClient) => {
       },
     },
     where: {
+      projectId, // Filter by project
       parentId: null,
     },
   });
@@ -405,6 +429,7 @@ export const buildLocationTree = async (db: PrismaClient) => {
 
 export const locationList = async (
   db: PrismaClient,
+  projectId: string,
   name: string | undefined,
   itemType: string | undefined,
   sort: SortParams,
@@ -417,6 +442,7 @@ export const locationList = async (
     lastBulkInventory: getSortDirection(sort, "lastBulkInventory"),
   };
   const where: Prisma.LocationWhereInput = {
+    projectId, // Filter by project
     name: formatSearchTerm(name),
     type: itemType,
   };
@@ -451,10 +477,12 @@ export const locationList = async (
 export const getLocationById = async (
   db: PrismaClient | Prisma.TransactionClient,
   id: string,
+  projectId: string,
 ) => {
   const res = await db.location.findFirstOrThrow({
     where: {
       id,
+      projectId, // Ensure location belongs to project
     },
     include: {
       parent: recursiveLocationInclude(10, "parent"),

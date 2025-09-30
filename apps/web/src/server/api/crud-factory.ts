@@ -1,6 +1,6 @@
 import { z, type ZodSchema } from "zod";
 import { type PrismaClient } from "@prisma/client";
-import { publicProcedure } from "./trpc";
+import { protectedProcedure } from "./trpc";
 import { type ProductService } from "~/server/services/product.service";
 import { type IngredientService } from "~/server/services/ingredient.service";
 import { type USDAClient } from "~/server/clients/usda";
@@ -23,6 +23,7 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
 // Interface for services needed by CRUD operations
 export interface CrudServices {
   db: PrismaClient;
+  projectId: string;
   services: {
     product: ProductService;
     ingredient: IngredientService;
@@ -35,7 +36,7 @@ const createGetByIdProcedure = <T>(
   outputSchema: ZodSchema<T>,
   getByIdFn: (ctx: CrudServices, id: string) => Promise<T>,
 ) =>
-  publicProcedure
+  protectedProcedure
     .input(IDInput)
     .output(outputSchema)
     .query(async ({ ctx, input }) => getByIdFn(ctx, input.id));
@@ -45,7 +46,7 @@ const createCreateProcedure = <TInput, TOutput>(
   outputSchema: ZodSchema<TOutput>,
   createFn: (ctx: CrudServices, data: TInput) => Promise<TOutput>,
 ) =>
-  publicProcedure
+  protectedProcedure
     .input(inputSchema)
     .output(outputSchema)
     .mutation(async ({ ctx, input }) => createFn(ctx, input as TInput));
@@ -55,7 +56,7 @@ const createUpdateProcedure = <TInput, TOutput>(
   outputSchema: ZodSchema<TOutput>,
   updateFn: (ctx: CrudServices, id: string, data: TInput) => Promise<TOutput>,
 ) =>
-  publicProcedure
+  protectedProcedure
     .input(updateInputSchema(inputSchema))
     .output(outputSchema)
     .mutation(async ({ ctx, input }) => updateFn(ctx, input.id, input.data));
@@ -78,7 +79,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
     ) => Promise<{ data: TOutput[]; count: number }>;
   };
 }) {
-  const list = publicProcedure
+  const list = protectedProcedure
     .input(
       z
         .object({

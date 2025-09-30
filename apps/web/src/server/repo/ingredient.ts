@@ -125,9 +125,13 @@ const dbIngredientToAPI: (
   };
 };
 
-export const getIngredientByID = async (db: PrismaClient, id: string) => {
+export const getIngredientByID = async (
+  db: PrismaClient,
+  id: string,
+  projectId: string,
+) => {
   const ingredient = await db.ingredient.findFirstOrThrow({
-    where: { id: id },
+    where: { id: id, projectId }, // Ensure ingredient belongs to project
     include: ingredientInclude,
   });
   return await dbIngredientToAPI(db, ingredient);
@@ -143,9 +147,11 @@ export const getIngredientByName = async (db: PrismaClient, name: string) => {
 export const createIngredient = async (
   db: PrismaClient,
   data: z.infer<typeof ingredientBase>,
+  projectId: string,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const ingredient = await db.ingredient.create({
     data: {
+      projectId: projectId,
       name: data.name,
       aliases: data.aliases || [],
     },
@@ -158,10 +164,11 @@ export const createIngredient = async (
 export const updateIngredient = async (
   db: PrismaClient,
   id: string,
+  projectId: string,
   data: Partial<z.infer<typeof ingredientBase>>,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const ingredient = await db.ingredient.update({
-    where: { id },
+    where: { id, projectId }, // Ensure ingredient belongs to project
     data: data,
     include: ingredientInclude,
   });
@@ -173,10 +180,11 @@ export const findOrCreateIngredient = async (
   db: Prisma.TransactionClient,
   name: string,
   aliases?: string[],
+  projectId?: string,
 ) => {
   const findOrCreate = async () => {
     const existing = await db.ingredient.findFirst({
-      where: buildIngredientWhere(true, name, aliases),
+      where: buildIngredientWhere(true, name, aliases, projectId),
     });
     if (existing !== null) {
       return existing;
@@ -184,7 +192,9 @@ export const findOrCreateIngredient = async (
 
     return await db.ingredient.create({
       data: {
+        projectId: projectId || "default-project",
         name: name,
+        aliases: aliases || [],
       },
     });
   };
@@ -218,6 +228,7 @@ const buildIngredientWhere = (
   exact: boolean,
   name: string,
   otherSearchNames?: string[],
+  projectId?: string,
 ) => {
   const list = [name, ...(otherSearchNames ?? [])];
   const where: Prisma.IngredientWhereInput = {
@@ -240,12 +251,14 @@ const buildIngredientWhere = (
         // Filter for standalone ingredients only, not recipe ingredients
         recipeId: { equals: null },
       },
+      ...(projectId ? [{ projectId: { equals: projectId } }] : []),
     ],
   };
   return where;
 };
 export const ingredientList = async (
   db: PrismaClient,
+  projectId: string,
   name: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
@@ -257,12 +270,19 @@ export const ingredientList = async (
     aliases: getSortDirection(sort, "aliases"),
   };
 
-  let where: Prisma.IngredientWhereInput = name
-    ? buildIngredientWhere(false, name)
-    : {
-        // Should only include standalone ingredients (not recipe ingredients)
-        recipeId: { equals: null },
-      };
+  let where: Prisma.IngredientWhereInput = {
+    projectId, // Filter by project
+    recipeId: { equals: null }, // Should only include standalone ingredients (not recipe ingredients)
+  };
+
+  // Add name filter if provided
+  if (name) {
+    const nameWhere = buildIngredientWhere(false, name);
+    where = {
+      ...where,
+      ...nameWhere,
+    };
+  }
 
   // Add missing products filter if requested
   if (missingProductsOnly) {

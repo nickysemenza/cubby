@@ -5,25 +5,34 @@ import { recipeRouter } from "./recipe";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 
-let prisma: PrismaClient;
-
 describe("recipe router", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
   beforeEach(async () => {
-    // Get a isolated test database for each test
-    const res = await buildTestDB();
-    prisma = res.prisma;
-    return res.teardown;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
+
+    return teardown;
   });
 
   it("should create and retrieve a recipe", async () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test ingredient first
-    const ingredient = await findOrCreateIngredient(prisma, "flour");
+    const ingredient = await findOrCreateIngredient(
+      prisma,
+      "flour",
+      undefined,
+      projectId,
+    );
 
     // Create a test recipe
     const recipeData = {
@@ -93,12 +102,25 @@ describe("recipe router", () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test ingredients
-    const flour = await findOrCreateIngredient(prisma, "flour");
-    const sugar = await findOrCreateIngredient(prisma, "sugar");
+    const flour = await findOrCreateIngredient(
+      prisma,
+      "flour",
+      undefined,
+      projectId,
+    );
+    const sugar = await findOrCreateIngredient(
+      prisma,
+      "sugar",
+      undefined,
+      projectId,
+    );
 
     // Create multiple test recipes
     const recipeData1 = {
@@ -201,12 +223,25 @@ describe("recipe router", () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create test ingredients
-    const flour = await findOrCreateIngredient(prisma, "flour");
-    const butter = await findOrCreateIngredient(prisma, "butter");
+    const flour = await findOrCreateIngredient(
+      prisma,
+      "flour",
+      undefined,
+      projectId,
+    );
+    const butter = await findOrCreateIngredient(
+      prisma,
+      "butter",
+      undefined,
+      projectId,
+    );
 
     // Create a test recipe
     const recipeData = {
@@ -280,11 +315,19 @@ describe("recipe router", () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test ingredient
-    const flour = await findOrCreateIngredient(prisma, "flour");
+    const flour = await findOrCreateIngredient(
+      prisma,
+      "flour",
+      undefined,
+      projectId,
+    );
 
     // Create a test recipe
     const recipeData = {
@@ -336,7 +379,10 @@ describe("recipe router", () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Try to retrieve a recipe with a non-existent ID
@@ -351,11 +397,19 @@ describe("recipe router", () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create an ingredient for the base recipe
-    const flour = await findOrCreateIngredient(prisma, "flour");
+    const flour = await findOrCreateIngredient(
+      prisma,
+      "flour",
+      undefined,
+      projectId,
+    );
 
     // Create a base recipe to be used as ingredient
     const baseRecipeData = {
@@ -423,7 +477,10 @@ describe("recipe router", () => {
     // Create a test caller for the recipe router
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a compact recipe (simplified format)

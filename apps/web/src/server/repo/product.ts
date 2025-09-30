@@ -44,6 +44,7 @@ export const findOrCreateProduct = async (
   db: Prisma.TransactionClient,
   now: Date,
   product: ProductConfigItem,
+  projectId: string,
 ): Promise<Product> => {
   const {
     name,
@@ -60,7 +61,7 @@ export const findOrCreateProduct = async (
   if (ingredient) {
     //  only link item if its an ingredient
 
-    ingredeintRef = await findOrCreateIngredient(db, name, aliases);
+    ingredeintRef = await findOrCreateIngredient(db, name, aliases, projectId);
   }
   const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
     price_per !== undefined
@@ -71,6 +72,7 @@ export const findOrCreateProduct = async (
         }
       : undefined;
   const upsertFields: Prisma.ProductCreateInput = {
+    project: { connect: { id: projectId } },
     name,
     manufacturer,
     upc,
@@ -83,7 +85,8 @@ export const findOrCreateProduct = async (
   };
   const productRow = await db.product.upsert({
     where: {
-      name_manufacturer: {
+      projectId_name_manufacturer: {
+        projectId: projectId,
         name: name,
         manufacturer: manufacturer,
       },
@@ -122,15 +125,17 @@ export const findOrCreateProduct = async (
 export const loadProducts = async (
   db: Prisma.TransactionClient,
   data: ProductConfigItem[],
+  projectId: string,
 ) => {
   const now = new Date();
 
   for (const product of data) {
-    await findOrCreateProduct(db, now, product);
+    await findOrCreateProduct(db, now, product, projectId);
   }
 
   const stale = await db.product.findMany({
     where: {
+      projectId, // Filter by project
       updatedAt: {
         not: now,
       },
@@ -261,10 +266,15 @@ const dbProductToAPI: (
   };
 };
 
-export const getProductByID = async (db: PrismaClient, id: string) => {
+export const getProductByID = async (
+  db: PrismaClient,
+  id: string,
+  projectId: string,
+) => {
   const res = await db.product.findFirstOrThrow({
     where: {
       id,
+      projectId, // Ensure product belongs to project
     },
     include: productInclude,
   });
@@ -273,6 +283,7 @@ export const getProductByID = async (db: PrismaClient, id: string) => {
 
 export const productList = async (
   db: PrismaClient,
+  projectId: string,
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
@@ -287,6 +298,7 @@ export const productList = async (
     upc: getSortDirection(sort, "upc"),
   };
   const where: Prisma.ProductWhereInput = {
+    projectId, // Filter by project
     name: formatSearchTerm(name),
     manufacturer: formatSearchTerm(manufacturer),
     upc: formatSearchTerm(upc),
@@ -316,6 +328,7 @@ export const productList = async (
 export const createProduct = async (
   db: PrismaClient,
   data: ProductInputPayload,
+  projectId: string,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
@@ -324,6 +337,7 @@ export const createProduct = async (
     // Create the product first
     const product = await tx.product.create({
       data: {
+        project: { connect: { id: projectId } },
         ...productData,
         Ingredient: ingredientId
           ? { connect: { id: ingredientId } }
@@ -368,6 +382,7 @@ export const createProduct = async (
 export const updateProduct = async (
   db: PrismaClient,
   id: string,
+  projectId: string,
   data: Partial<ProductInputPayload>,
 ): Promise<ProductTopLevelOut> => {
   const {
@@ -398,7 +413,7 @@ export const updateProduct = async (
 
     // Update the product
     const product = await tx.product.update({
-      where: { id },
+      where: { id, projectId }, // Ensure product belongs to project
       data: updateData,
     });
 
@@ -491,9 +506,13 @@ export const updateProduct = async (
 };
 
 // Find products with expectedQuantity=1 that appear in multiple locations
-export const findDuplicateUniqueProducts = async (db: PrismaClient) => {
+export const findDuplicateUniqueProducts = async (
+  db: PrismaClient,
+  projectId: string,
+) => {
   const duplicates = await db.product.findMany({
     where: {
+      projectId,
       expectedQuantity: 1,
     },
     include: {

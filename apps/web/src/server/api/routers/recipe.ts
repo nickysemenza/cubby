@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, systemProcedure } from "../trpc";
 
 import { z } from "zod";
 import { compactRecipeSchema } from "~/codec/codec";
@@ -34,7 +34,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id) => {
-      const res = await getRecipeByID(id, services.db);
+      const res = await getRecipeByID(id, services.db, services.projectId);
       if (res === null) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Recipe not found" });
       }
@@ -43,31 +43,46 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     list: async (services, filters, sort, pagination) => {
       return await recipeList(
         services.db,
+        services.projectId,
         filters.nameFilter,
         sort,
         pagination,
       );
     },
     create: async (services, data) => {
-      return await createRecipe(data, services.db);
+      if (!services.projectId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Project ID required",
+        });
+      }
+      return await createRecipe(data, services.db, services.projectId);
     },
     update: async (services, id, data) => {
-      return await updateRecipe(id, data, services.db);
+      if (!services.projectId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Project ID required",
+        });
+      }
+      return await updateRecipe(id, data, services.db, services.projectId);
     },
   },
 });
 
-const seed = publicProcedure.mutation(
-  async ({ ctx }) => await seedRealRecipes(ctx.db),
+const seed = systemProcedure.mutation(
+  async ({ ctx }) => await seedRealRecipes(ctx.db, ctx.projectId),
 );
-const scrape = publicProcedure
+const scrape = protectedProcedure
   .input(z.url())
   .output(compactRecipeSchema)
   .mutation(async ({ input }) => await scrapeToCompact(input));
-const insertCompact = publicProcedure
+const insertCompact = protectedProcedure
   .input(compactRecipeSchema)
   .output(z.object({ id: z.uuid() }))
-  .mutation(async ({ ctx, input }) => await insertCompactRecipe(input, ctx.db));
+  .mutation(async ({ ctx, input }) => {
+    return await insertCompactRecipe(input, ctx.db, ctx.projectId);
+  });
 
 export const recipeRouter = createTRPCRouter({
   insertCompact,

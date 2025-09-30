@@ -4,35 +4,42 @@ import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipe } from "./recipe";
 import { type RecipeCreateInput } from "~/schemas/recipe";
 
-let prisma: PrismaClient;
-
-let testIngredients: { id: string; name: string }[] = [];
-
 describe("upsertRecipe", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
+
+  let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    const res = await buildTestDB();
-    prisma = res.prisma;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
 
     // Create the required ingredients for the tests and store their IDs
     const ingredient1 = await prisma.ingredient.create({
       data: {
+        projectId,
         name: "Test Ingredient 1",
+        aliases: [],
       },
     });
     const ingredient2 = await prisma.ingredient.create({
       data: {
+        projectId,
         name: "Test Ingredient 2",
+        aliases: [],
       },
     });
     const ingredient3 = await prisma.ingredient.create({
       data: {
+        projectId,
         name: "Test Ingredient 3",
+        aliases: [],
       },
     });
 
     testIngredients = [ingredient1, ingredient2, ingredient3];
 
-    return res.teardown;
+    return teardown;
   });
 
   const getMockRecipeInput = (): RecipeCreateInput => ({
@@ -99,13 +106,18 @@ describe("upsertRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), prisma);
+    const result = await upsertRecipe(getMockRecipeInput(), prisma, projectId);
 
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
     const recipe = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe Direct" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe Direct",
+        },
+      },
       include: {
         sections: {
           include: {
@@ -125,17 +137,30 @@ describe("upsertRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipe(getMockRecipeInput(), prisma);
+    const firstResult = await upsertRecipe(
+      getMockRecipeInput(),
+      prisma,
+      projectId,
+    );
 
     // Now update with different data
-    const secondResult = await upsertRecipe(getMockRecipeUpdated(), prisma);
+    const secondResult = await upsertRecipe(
+      getMockRecipeUpdated(),
+      prisma,
+      projectId,
+    );
 
     // Should return same recipe ID (updated, not created new)
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
     const updatedRecipe = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe Direct" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe Direct",
+        },
+      },
       include: {
         sections: {
           include: {
@@ -163,9 +188,21 @@ describe("upsertRecipe", () => {
 
   it("can be called multiple times without conflicts", async () => {
     // This tests that the function is idempotent
-    const firstRun = await upsertRecipe(getMockRecipeInput(), prisma);
-    const secondRun = await upsertRecipe(getMockRecipeInput(), prisma); // Same input
-    const thirdRun = await upsertRecipe(getMockRecipeInput(), prisma); // Same input again
+    const firstRun = await upsertRecipe(
+      getMockRecipeInput(),
+      prisma,
+      projectId,
+    );
+    const secondRun = await upsertRecipe(
+      getMockRecipeInput(),
+      prisma,
+      projectId,
+    ); // Same input
+    const thirdRun = await upsertRecipe(
+      getMockRecipeInput(),
+      prisma,
+      projectId,
+    ); // Same input again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -173,7 +210,10 @@ describe("upsertRecipe", () => {
 
     // Should only be one recipe in the database
     const allRecipes = await prisma.recipe.findMany({
-      where: { name: "Test Recipe Direct" },
+      where: {
+        projectId: projectId,
+        name: "Test Recipe Direct",
+      },
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -193,10 +233,15 @@ describe("upsertRecipe", () => {
       ],
     };
 
-    await upsertRecipe(recipeNoUrl, prisma);
+    await upsertRecipe(recipeNoUrl, prisma, projectId);
 
     const recipe = await prisma.recipe.findUnique({
-      where: { name: "Manual Recipe" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Manual Recipe",
+        },
+      },
     });
 
     expect(recipe!.SourceType).toBe("Other");

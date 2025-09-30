@@ -116,6 +116,7 @@ export function DialogCompatibleCombobox({
         variant="outline"
         role="combobox"
         aria-expanded={open}
+        aria-label={label}
         className="w-full min-w-[200px] justify-between truncate"
         onClick={(e) => {
           // Prevent the click from bubbling up to the form and triggering a submit

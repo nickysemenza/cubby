@@ -16,6 +16,26 @@ const client = createTRPCClient<AppRouter>({
     httpBatchLink({
       url: "http://localhost:3000/api/trpc",
       transformer: SuperJSON,
+      headers: () => {
+        const systemKey = process.env.SYSTEM_API_KEY;
+        const projectId = process.env.PROJECT_ID;
+
+        if (!systemKey) {
+          throw new Error(
+            "SYSTEM_API_KEY environment variable is required for load-data script",
+          );
+        }
+        if (!projectId) {
+          throw new Error(
+            'PROJECT_ID environment variable is required for load-data script. Example: PROJECT_ID="88446b48-5885-4fbd-b378-2446af89a170"',
+          );
+        }
+
+        return {
+          "x-system-key": systemKey,
+          "x-project-id": projectId,
+        };
+      },
     }),
   ],
 });

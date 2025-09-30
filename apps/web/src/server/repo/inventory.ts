@@ -89,10 +89,15 @@ const dbInventoryEntryToAPI: (
   };
 };
 
-export const getInventoryEntryByID = async (db: PrismaClient, id: string) => {
+export const getInventoryEntryByID = async (
+  db: PrismaClient,
+  id: string,
+  projectId: string,
+) => {
   const res = await db.inventoryEntry.findFirst({
     where: {
       id,
+      projectId, // Ensure inventory entry belongs to project
     },
     include: inventoryentryInclude,
   });
@@ -171,11 +176,13 @@ interface UpdateInventoryEntryData {
 export const updateInventoryEntry = async (
   db: PrismaClient,
   id: string,
+  projectId: string,
   data: UpdateInventoryEntryData,
 ) => {
   const updated = await db.inventoryEntry.update({
     where: {
       id,
+      projectId, // Ensure inventory entry belongs to project
     },
     data: {
       ...(data.amount ? { amount: data.amount } : {}),
@@ -197,9 +204,11 @@ interface CreateInventoryEntryData {
 export const createInventoryEntry = async (
   db: PrismaClient,
   data: CreateInventoryEntryData,
+  projectId: string,
 ) => {
   const created = await db.inventoryEntry.create({
     data: {
+      projectId: projectId,
       productId: data.productId,
       locationId: data.locationId,
       amount: data.amount,
@@ -214,6 +223,7 @@ export const bulkProcessInventoryEntries = async (
   db: PrismaClient,
   locationId: string,
   items: InventoryBulkOperationItem[],
+  projectId: string,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await db.$transaction(async (tx) => {
@@ -251,6 +261,7 @@ export const bulkProcessInventoryEntries = async (
         }
         const created = await tx.inventoryEntry.create({
           data: {
+            projectId: projectId,
             productId: item.productId,
             locationId: locationId,
             amount: item.amount,

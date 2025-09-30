@@ -4,21 +4,25 @@ import { buildTestDB } from "tooling/test-setup";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
-let prisma: PrismaClient;
-
 describe("location router", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
   beforeEach(async () => {
-    // Get a isolated test database for each test
-    const res = await buildTestDB();
-    prisma = res.prisma;
-    return res.teardown;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
+
+    return teardown;
   });
 
   it("should create and retrieve a location", async () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test location
@@ -51,7 +55,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a parent location
@@ -87,7 +94,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create multiple test locations
@@ -164,7 +174,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test location
@@ -201,7 +214,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test location
@@ -237,7 +253,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a hierarchical structure: Kitchen -> Cabinet -> Shelf
@@ -292,7 +311,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create locations of different types
@@ -345,7 +367,10 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a deep hierarchy: Room -> Cabinet -> Shelf -> Crate

@@ -4,21 +4,25 @@ import { buildTestDB } from "tooling/test-setup";
 import { productRouter } from "./product";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 
-let prisma: PrismaClient;
-
 describe("product router", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
   beforeEach(async () => {
-    // Get a isolated test database for each test
-    const res = await buildTestDB();
-    prisma = res.prisma;
-    return res.teardown;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
+
+    return teardown;
   });
 
   it("should create and retrieve a product", async () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test product
@@ -29,7 +33,8 @@ describe("product router", () => {
       upc: "123456789012",
       ndb_number: null,
       ingredientId: null,
-      images: [],
+      pendingImageIds: [],
+      expectedQuantity: 1,
     };
 
     // Create the product
@@ -59,7 +64,10 @@ describe("product router", () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create multiple test products
@@ -70,7 +78,8 @@ describe("product router", () => {
       upc: "123456789012",
       ndb_number: null,
       ingredientId: null,
-      images: [],
+      pendingImageIds: [],
+      expectedQuantity: 1,
     };
 
     const productData2 = {
@@ -80,7 +89,8 @@ describe("product router", () => {
       upc: "987654321098",
       ndb_number: null,
       ingredientId: null,
-      images: [],
+      pendingImageIds: [],
+      expectedQuantity: 1,
     };
 
     const productData3 = {
@@ -90,7 +100,8 @@ describe("product router", () => {
       upc: "654321987654",
       ndb_number: null,
       ingredientId: null,
-      images: [],
+      pendingImageIds: [],
+      expectedQuantity: 1,
     };
 
     // Create the products
@@ -148,7 +159,10 @@ describe("product router", () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test product
@@ -159,7 +173,8 @@ describe("product router", () => {
       upc: "123456789012",
       ndb_number: null,
       ingredientId: null,
-      images: [],
+      pendingImageIds: [],
+      expectedQuantity: 1,
     };
 
     // Create the product
@@ -208,7 +223,10 @@ describe("product router", () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Create a test product
@@ -219,7 +237,8 @@ describe("product router", () => {
       upc: "123456789012",
       ndb_number: null,
       ingredientId: null,
-      images: [],
+      pendingImageIds: [],
+      expectedQuantity: 1,
     };
 
     // Create the product
@@ -245,7 +264,10 @@ describe("product router", () => {
     // Create a test caller for the product router
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, { auth: undefined }),
+      createTestTRPCContext(prisma, {
+        auth: { userId: "test-user-id" },
+        projectId: projectId,
+      }),
     );
 
     // Try to retrieve a product with a non-existent ID

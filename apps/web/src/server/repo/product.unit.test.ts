@@ -187,11 +187,17 @@ describe("product repository helpers", () => {
         ingredient: false,
       };
 
-      const result = await findOrCreateProduct(mockDb, mockDate, productConfig);
+      const result = await findOrCreateProduct(
+        mockDb,
+        mockDate,
+        productConfig,
+        "00000000-0000-0000-0000-000000000000",
+      );
 
       expect(mockDb.product.upsert).toHaveBeenCalledWith({
         where: {
-          name_manufacturer: {
+          projectId_name_manufacturer: {
+            projectId: "00000000-0000-0000-0000-000000000000",
             name: "Test Product",
             manufacturer: "Test Manufacturer",
           },
@@ -204,6 +210,11 @@ describe("product repository helpers", () => {
           model: "TEST-123",
           updatedAt: mockDate,
           Ingredient: undefined,
+          project: {
+            connect: {
+              id: "00000000-0000-0000-0000-000000000000",
+            },
+          },
         },
         update: {
           name: "Test Product",
@@ -213,6 +224,11 @@ describe("product repository helpers", () => {
           model: "TEST-123",
           updatedAt: mockDate,
           Ingredient: undefined,
+          project: {
+            connect: {
+              id: "00000000-0000-0000-0000-000000000000",
+            },
+          },
         },
       });
       expect(result).toEqual(mockProduct);
@@ -237,7 +253,12 @@ describe("product repository helpers", () => {
         price_per: 2.5,
       };
 
-      await findOrCreateProduct(mockDb, mockDate, productConfig);
+      await findOrCreateProduct(
+        mockDb,
+        mockDate,
+        productConfig,
+        "00000000-0000-0000-0000-000000000000",
+      );
 
       expect(mockDb.productUnitMappings.createMany).toHaveBeenCalledWith({
         data: [
@@ -276,7 +297,12 @@ describe("product repository helpers", () => {
         ],
       };
 
-      await findOrCreateProduct(mockDb, mockDate, productConfig);
+      await findOrCreateProduct(
+        mockDb,
+        mockDate,
+        productConfig,
+        "00000000-0000-0000-0000-000000000000",
+      );
 
       expect(mockDb.productUnitMappings.createMany).toHaveBeenCalledWith({
         data: [
@@ -316,7 +342,12 @@ describe("product repository helpers", () => {
         ],
       };
 
-      await findOrCreateProduct(mockDb, mockDate, productConfig);
+      await findOrCreateProduct(
+        mockDb,
+        mockDate,
+        productConfig,
+        "00000000-0000-0000-0000-000000000000",
+      );
 
       expect(mockDb.productUnitMappings.createMany).toHaveBeenCalledWith({
         data: [
@@ -354,7 +385,12 @@ describe("product repository helpers", () => {
         ingredient: false,
       };
 
-      await findOrCreateProduct(mockDb, mockDate, productConfig);
+      await findOrCreateProduct(
+        mockDb,
+        mockDate,
+        productConfig,
+        "00000000-0000-0000-0000-000000000000",
+      );
 
       expect(mockDb.productUnitMappings.deleteMany).toHaveBeenCalledWith({
         where: { productId: "product-1" },

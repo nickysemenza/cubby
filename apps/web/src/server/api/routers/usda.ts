@@ -1,4 +1,4 @@
-import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 import { foodLookupParam, dataTypeEnum } from "@recipehub/usda-schemas";
 import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { z } from "zod";
@@ -26,7 +26,7 @@ const getByID = publicProcedure
     return await ctx.usdaService.getFoodSummaryByID(input.id);
   });
 
-const list = protectedProcedure
+const list = publicProcedure
   .input(
     z
       .object({

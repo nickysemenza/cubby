@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { headers } from "next/headers";
+import { context, propagation } from "@opentelemetry/api";
 
 import { createCaller } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
@@ -14,6 +15,16 @@ import { HydrateClient } from "./hydration-client";
 const createContext = cache(async () => {
   const heads = new Headers(await headers());
   heads.set("x-trpc-source", "rsc");
+
+  // Inject current trace context into headers for propagation
+  const activeContext = context.active();
+  const traceHeaders: Record<string, string> = {};
+  propagation.inject(activeContext, traceHeaders);
+
+  // Add trace headers to the tRPC context
+  Object.entries(traceHeaders).forEach(([key, value]) => {
+    heads.set(key, value);
+  });
 
   return createTRPCContext({
     headers: heads,

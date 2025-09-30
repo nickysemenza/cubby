@@ -55,10 +55,18 @@ export async function buildTestDB() {
   const prisma = new PrismaClient({
     datasourceUrl: connectionUrl,
   });
+  // Automatically create a test project
+  const testProject = await prisma.project.create({
+    data: {
+      name: "Test Project",
+      description: "Auto-created project for testing",
+    },
+  });
+
   const teardown = async () => {
     await prisma.$disconnect();
   };
-  return { prisma, teardown };
+  return { prisma, projectId: testProject.id, teardown };
 }
 
 const remapDBConfig = (

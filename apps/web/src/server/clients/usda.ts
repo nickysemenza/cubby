@@ -1,4 +1,4 @@
-import { trace } from "@opentelemetry/api";
+import { getTracer, TraceNames } from "~/server/tracing";
 import {
   BrandedFoodInfo,
   FoodLookupParam,
@@ -19,25 +19,27 @@ export class USDAClient {
   }
 
   // Transport helpers
-  private async traced<T>(name: string, fn: () => Promise<T>): Promise<T> {
-    const tracer = trace.getTracer("usda-api");
-    const span = tracer.startSpan(name);
-    try {
-      const res = await fn();
-      span.setStatus({ code: 1 });
-      return res;
-    } catch (e) {
-      const err = e instanceof Error ? e : new Error(String(e));
-      span.setStatus({ code: 2, message: err.message });
-      throw e;
-    } finally {
-      span.end();
-    }
+  private async traced<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+    const tracer = getTracer();
+    return tracer.startActiveSpan(
+      TraceNames.api("usda", operation),
+      async (span) => {
+        try {
+          const res = await fn();
+          span.setStatus({ code: 1 });
+          return res;
+        } catch (e) {
+          const err = e instanceof Error ? e : new Error(String(e));
+          span.setStatus({ code: 2, message: err.message });
+          throw e;
+        }
+      },
+    );
   }
 
   // Raw calls via ts-rest client
   private async fetchGetFood(fdcId: number): Promise<FoodSummary | null> {
-    return this.traced("tsClient.getFood", async () => {
+    return this.traced("getFood", async () => {
       const res = await this.client.getFood({ params: { fdc_id: fdcId } });
       if (res.status !== 200) return null;
       return res.body;
@@ -52,7 +54,7 @@ export class USDAClient {
     pageIndex?: number | null;
     pageSize?: number | null;
   }): Promise<{ data: FoodSummary[]; count: number }> {
-    return this.traced("client.listFoods", async () => {
+    return this.traced("listFoods", async () => {
       const res = await this.client.listFoods({
         query: {
           nameFilter: params.nameFilter,
@@ -74,7 +76,7 @@ export class USDAClient {
   }
 
   async findFood(lookup: FoodLookupParam): Promise<FoodSummary | null> {
-    return await this.traced("USDA API: POST /api/foods/search", async () => {
+    return await this.traced("findByLookup", async () => {
       const res = await this.client.findByLookup({ body: lookup });
       if (res.status !== 200) return null;
       return res.body;
@@ -86,14 +88,11 @@ export class USDAClient {
   ): Promise<(FoodSummary | null)[]> {
     if (lookups.length === 0) return [];
 
-    return await this.traced(
-      "USDA API: POST /api/foods/search/batch",
-      async () => {
-        const res = await this.client.findByLookupBatch({ body: { lookups } });
-        if (res.status !== 200) return lookups.map(() => null);
-        return res.body.results;
-      },
-    );
+    return await this.traced("findByLookupBatch", async () => {
+      const res = await this.client.findByLookupBatch({ body: { lookups } });
+      if (res.status !== 200) return lookups.map(() => null);
+      return res.body.results;
+    });
   }
 
   async getFoodSummaryByID(fdc_id: number): Promise<FoodSummary | null> {

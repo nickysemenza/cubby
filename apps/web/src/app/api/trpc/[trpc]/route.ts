@@ -4,6 +4,7 @@ import { type NextRequest } from "next/server";
 import { env } from "~/env";
 import { appRouter } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 /**
  * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
@@ -15,20 +16,42 @@ const createContext = async (req: NextRequest) => {
   });
 };
 
-const handler = (req: NextRequest) =>
-  fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req,
-    router: appRouter,
-    createContext: () => createContext(req),
-    onError:
-      env.NODE_ENV === "development"
-        ? ({ path, error }) => {
-            console.error(
-              `❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`,
-            );
-          }
-        : undefined,
-  });
+const handler = async (req: NextRequest) => {
+  const url = new URL(req.url);
+  const pathSegments = url.pathname.split("/");
+  const trpcPath = pathSegments.slice(3).join("/"); // Remove /api/trpc/ prefix
+
+  return withTrace(
+    TraceNames.route(req.method, `/api/trpc/${trpcPath}`),
+    async (span) => {
+      span.setAttributes({
+        "http.method": req.method,
+        "http.url": req.url,
+        "trpc.path": trpcPath,
+      });
+
+      return fetchRequestHandler({
+        endpoint: "/api/trpc",
+        req,
+        router: appRouter,
+        createContext: () => createContext(req),
+        onError:
+          env.NODE_ENV === "development"
+            ? ({
+                path,
+                error,
+              }: {
+                path?: string;
+                error: { message: string };
+              }) => {
+                console.error(
+                  `❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`,
+                );
+              }
+            : undefined,
+      });
+    },
+  );
+};
 
 export { handler as GET, handler as POST };

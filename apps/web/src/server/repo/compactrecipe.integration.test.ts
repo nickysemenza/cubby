@@ -4,13 +4,15 @@ import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
 
-let prisma: PrismaClient;
-
 describe("upsertRecipeFromCompact", () => {
+  let prisma: PrismaClient;
+  let projectId: string;
   beforeEach(async () => {
-    const res = await buildTestDB();
-    prisma = res.prisma;
-    return res.teardown;
+    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
+    prisma = db;
+    projectId = pId;
+
+    return teardown;
   });
 
   const mockRecipe: ParsedCompactRecipe = {
@@ -67,13 +69,18 @@ describe("upsertRecipeFromCompact", () => {
   };
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipeFromCompact(mockRecipe, prisma);
+    const result = await upsertRecipeFromCompact(mockRecipe, prisma, projectId);
 
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
     const recipe = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe",
+        },
+      },
       include: {
         sections: {
           include: {
@@ -93,11 +100,20 @@ describe("upsertRecipeFromCompact", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipeFromCompact(mockRecipe, prisma);
+    const firstResult = await upsertRecipeFromCompact(
+      mockRecipe,
+      prisma,
+      projectId,
+    );
 
     // Verify initial state
     const initialRecipe = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe",
+        },
+      },
       include: {
         sections: {
           include: {
@@ -114,6 +130,7 @@ describe("upsertRecipeFromCompact", () => {
     const secondResult = await upsertRecipeFromCompact(
       mockRecipeUpdated,
       prisma,
+      projectId,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -121,7 +138,12 @@ describe("upsertRecipeFromCompact", () => {
 
     // Verify the recipe was updated
     const updatedRecipe = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe",
+        },
+      },
       include: {
         sections: {
           include: {
@@ -149,9 +171,21 @@ describe("upsertRecipeFromCompact", () => {
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
-    const firstRun = await upsertRecipeFromCompact(mockRecipe, prisma);
-    const secondRun = await upsertRecipeFromCompact(mockRecipe, prisma); // Same recipe
-    const thirdRun = await upsertRecipeFromCompact(mockRecipe, prisma); // Same recipe again
+    const firstRun = await upsertRecipeFromCompact(
+      mockRecipe,
+      prisma,
+      projectId,
+    );
+    const secondRun = await upsertRecipeFromCompact(
+      mockRecipe,
+      prisma,
+      projectId,
+    ); // Same recipe
+    const thirdRun = await upsertRecipeFromCompact(
+      mockRecipe,
+      prisma,
+      projectId,
+    ); // Same recipe again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -159,7 +193,10 @@ describe("upsertRecipeFromCompact", () => {
 
     // Should only be one recipe in the database
     const allRecipes = await prisma.recipe.findMany({
-      where: { name: "Test Recipe" },
+      where: {
+        projectId: projectId,
+        name: "Test Recipe",
+      },
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -167,10 +204,15 @@ describe("upsertRecipeFromCompact", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertRecipeFromCompact(mockRecipeUpdated, prisma);
+    await upsertRecipeFromCompact(mockRecipeUpdated, prisma, projectId);
 
     const beforeUpdate = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe",
+        },
+      },
       include: { sections: { include: { ingredients: true } } },
     });
 
@@ -181,10 +223,15 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertRecipeFromCompact(mockRecipe, prisma);
+    await upsertRecipeFromCompact(mockRecipe, prisma, projectId);
 
     const afterUpdate = await prisma.recipe.findUnique({
-      where: { name: "Test Recipe" },
+      where: {
+        projectId_name: {
+          projectId: projectId,
+          name: "Test Recipe",
+        },
+      },
       include: { sections: { include: { ingredients: true } } },
     });
 

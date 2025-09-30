@@ -72,6 +72,15 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
           headers: () => {
             const headers = new Headers();
             headers.set("x-trpc-source", "nextjs-react");
+
+            // Add project ID from localStorage if available
+            if (typeof window !== "undefined") {
+              const projectId = localStorage.getItem("activeProjectId");
+              if (projectId) {
+                headers.set("x-project-id", projectId);
+              }
+            }
+
             return headers;
           },
         }),

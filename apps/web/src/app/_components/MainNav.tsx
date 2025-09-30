@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
+import { ProjectSwitcher } from "~/components/project/ProjectSwitcher";
 
 type NavItem = {
   href: string;
@@ -133,6 +134,7 @@ export function MainNav({
           <SignInButton />
         </SignedOut>
         <SignedIn>
+          <ProjectSwitcher />
           <UserButton />
         </SignedIn>
 

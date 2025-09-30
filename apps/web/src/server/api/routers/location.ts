@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { publicProcedure, createTRPCRouter } from "../trpc";
+import { TRPCError } from "@trpc/server";
+import { protectedProcedure, createTRPCRouter } from "../trpc";
 import {
   infLocation,
   locationType,
@@ -36,6 +37,7 @@ const { list } = createEntityListProcedure({
     list: async (services, filters, sort, pagination) => {
       return await locationList(
         services.db,
+        services.projectId,
         filters.nameFilter,
         filters.itemTypeFilter,
         sort,
@@ -54,26 +56,32 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id) => {
-      return await getLocationById(services.db, id);
+      return await getLocationById(services.db, id, services.projectId);
     },
     create: async (services, data) => {
-      return await createLocation(services.db, data);
+      if (!services.projectId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Project ID required",
+        });
+      }
+      return await createLocation(services.db, data, services.projectId);
     },
     update: async (services, id, data) => {
-      return await updateLocation(services.db, id, data);
+      return await updateLocation(services.db, id, services.projectId, data);
     },
   },
 });
 
-const getLocationTypesCount = publicProcedure
+const getLocationTypesCount = protectedProcedure
   .output(z.record(locationType, z.number()))
   .query(async ({ ctx }) => {
-    return await buildLocationTypeCount(ctx.db);
+    return await buildLocationTypeCount(ctx.db, ctx.projectId);
   });
 
-const makeTree = publicProcedure
+const makeTree = protectedProcedure
   .output(z.array(infLocation))
-  .query(async ({ ctx }) => await buildLocationTree(ctx.db));
+  .query(async ({ ctx }) => await buildLocationTree(ctx.db, ctx.projectId));
 
 export const locationRouter = createTRPCRouter({
   list,

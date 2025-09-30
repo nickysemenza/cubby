@@ -2,9 +2,51 @@
 //// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 //// ------------------------------------------------------
 
+Table Project {
+  id String [pk]
+  name String [not null]
+  description String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [default: `now()`, not null]
+  deletedAt DateTime
+  members ProjectMember [not null]
+  recipes Recipe [not null]
+  products Product [not null]
+  ingredients Ingredient [not null]
+  locations Location [not null]
+  inventoryEntries InventoryEntry [not null]
+  images Image [not null]
+}
+
+Table User {
+  id String [pk]
+  email String [unique, not null]
+  firstName String
+  lastName String
+  imageUrl String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [default: `now()`, not null]
+  projects ProjectMember [not null]
+}
+
+Table ProjectMember {
+  id String [pk]
+  project Project [not null]
+  projectId String [not null]
+  user User [not null]
+  userId String [not null]
+  joinedAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (projectId, userId) [unique]
+  }
+}
+
 Table Recipe {
   id String [pk]
-  name String [unique, not null]
+  projectId String [not null]
+  project Project [not null]
+  name String [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
@@ -13,6 +55,10 @@ Table Recipe {
   SourceType RecipeSource
   SourceData String
   images RecipeImage [not null]
+
+  indexes {
+    (projectId, name) [unique]
+  }
 }
 
 Table RecipeSection {
@@ -41,7 +87,9 @@ Table RecipeSectionIngredient {
 
 Table Ingredient {
   id String [pk]
-  name String [unique, not null]
+  projectId String [not null]
+  project Project [not null]
+  name String [not null]
   aliases String[] [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
@@ -50,10 +98,16 @@ Table Ingredient {
   recipeId String [unique]
   RecipeSectionIngredient RecipeSectionIngredient [not null]
   Product Product [not null]
+
+  indexes {
+    (projectId, name) [unique]
+  }
 }
 
 Table Product {
   id String [pk]
+  projectId String [not null]
+  project Project [not null]
   name String [not null]
   manufacturer String [not null]
   upc String [unique]
@@ -70,7 +124,7 @@ Table Product {
   images ProductImage [not null]
 
   indexes {
-    (name, manufacturer) [unique]
+    (projectId, name, manufacturer) [unique]
   }
 }
 
@@ -88,6 +142,8 @@ Table ProductUnitMappings {
 
 Table InventoryEntry {
   id String [pk]
+  projectId String [not null]
+  project Project [not null]
   Product Product [not null, note: 'what is the product']
   productId String [not null]
   amount Json [not null, note: '[Amount]']
@@ -106,7 +162,9 @@ Table InventoryEntry {
 
 Table Location {
   id String [pk]
-  name String [unique, not null]
+  projectId String [not null]
+  project Project [not null]
+  name String [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   deletedAt DateTime
@@ -117,10 +175,16 @@ Table Location {
   InventoryEntries InventoryEntry [not null, note: 'products that are in this location']
   images LocationImage [not null]
   type String [not null]
+
+  indexes {
+    (projectId, name) [unique]
+  }
 }
 
 Table Image {
   id String [pk]
+  projectId String [not null]
+  project Project [not null]
   url String [not null]
   key String [unique, not null]
   filename String [not null]
@@ -192,23 +256,39 @@ Enum ImageStatus {
   FAILED
 }
 
+Ref: ProjectMember.projectId > Project.id
+
+Ref: ProjectMember.userId > User.id
+
+Ref: Recipe.projectId > Project.id
+
 Ref: RecipeSection.recipeId > Recipe.id
 
 Ref: RecipeSectionIngredient.recipeSectionId > RecipeSection.id
 
 Ref: RecipeSectionIngredient.ingredientId > Ingredient.id
 
+Ref: Ingredient.projectId > Project.id
+
 Ref: Ingredient.recipeId - Recipe.id
+
+Ref: Product.projectId > Project.id
 
 Ref: Product.ingredientId > Ingredient.id
 
 Ref: ProductUnitMappings.productId > Product.id
 
+Ref: InventoryEntry.projectId > Project.id
+
 Ref: InventoryEntry.productId > Product.id
 
 Ref: InventoryEntry.locationId > Location.id
 
+Ref: Location.projectId > Project.id
+
 Ref: Location.parentId - Location.id
+
+Ref: Image.projectId > Project.id
 
 Ref: ProductImage.productId > Product.id
 

@@ -42,8 +42,12 @@ test.describe("Create Recipe", () => {
     await page.getByPlaceholder("Enter product name").fill(productName);
     await page.getByPlaceholder("Enter manufacturer").fill(manufacturerName);
 
-    // Link to the ingredient we just created
-    await page.getByRole("combobox").click();
+    // Link to the ingredient we just created (scope to the Ingredient field's combobox)
+    await page
+      .locator('label:has-text("Ingredient")')
+      .locator("..")
+      .getByRole("combobox")
+      .click();
 
     // Search for the ingredient we created
     const ingredientSearch = page.getByRole("textbox", {
@@ -51,9 +55,13 @@ test.describe("Create Recipe", () => {
     });
     await ingredientSearch.fill(ingredientName);
 
-    // Wait for search results and click on our ingredient
-    await page.waitForTimeout(1000); // Wait for search results
-    await page.getByRole("button", { name: ingredientName }).click();
+    // Wait for search results deterministically and click the ingredient
+    await expect(
+      page.getByRole("button", { name: ingredientName, exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: ingredientName, exact: true })
+      .click();
 
     // Add first unit mapping for cost calculation (1 cup = $2.50)
     await page.getByRole("button", { name: "Add Mapping" }).click();
@@ -134,9 +142,11 @@ test.describe("Create Recipe", () => {
     // Add an ingredient - click the "Add Ingredient" button
     await page.getByRole("button", { name: /Add Ingredient/i }).click();
 
-    // Wait for the ingredient form to appear and find the combobox
-    await page.waitForSelector('[role="combobox"]');
-    const recipeIngredientCombobox = page.locator('[role="combobox"]').first();
+    // Wait for the ingredient form to appear and open the Ingredient combobox
+    const recipeIngredientCombobox = page
+      .locator('label:has-text("Ingredient")')
+      .locator("..")
+      .getByRole("combobox");
     await recipeIngredientCombobox.click();
 
     // Search for our existing ingredient (should now be found)
@@ -145,9 +155,13 @@ test.describe("Create Recipe", () => {
     });
     await recipeSearchBox.fill(ingredientName);
 
-    // Wait for search results and select the existing ingredient
-    await page.waitForTimeout(1000); // Wait for search results
-    await page.getByText(ingredientName, { exact: true }).first().click();
+    // Wait for search results deterministically and select the ingredient
+    await expect(
+      page.getByRole("button", { name: ingredientName, exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: ingredientName, exact: true })
+      .click();
 
     // Add amount and unit for the ingredient (2 cups)
     const amountInput = page.getByLabel("Amount Value");

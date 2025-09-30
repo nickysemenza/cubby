@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import {
   getInventoryEntryByID,
   inventoryentryList,
@@ -34,7 +34,11 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id) => {
-      const res = await getInventoryEntryByID(services.db, id);
+      const res = await getInventoryEntryByID(
+        services.db,
+        id,
+        services.projectId,
+      );
       if (res === null) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -80,16 +84,27 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         }
       }
 
-      return await createInventoryEntry(services.db, data);
+      if (!services.projectId) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Project ID required",
+        });
+      }
+      return await createInventoryEntry(services.db, data, services.projectId);
     },
     update: async (services, id, data) => {
-      return await updateInventoryEntry(services.db, id, data);
+      return await updateInventoryEntry(
+        services.db,
+        id,
+        services.projectId,
+        data,
+      );
     },
   },
 });
 
 // Bulk process inventory entries (creates and updates in one call)
-const bulkProcess = publicProcedure
+const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
@@ -103,12 +118,13 @@ const bulkProcess = publicProcedure
         locationId: item.locationId ?? input.locationId,
         amount: item.amount,
       })),
+      ctx.projectId,
     );
     return result;
   });
 
 // Find products with expectedQuantity=1 in multiple locations
-const findDuplicates = publicProcedure
+const findDuplicates = protectedProcedure
   .input(
     z.object({
       excludeLocationId: z.string().optional(),
@@ -131,7 +147,7 @@ const findDuplicates = publicProcedure
     ),
   )
   .query(async ({ ctx }) => {
-    const duplicates = await findDuplicateUniqueProducts(ctx.db);
+    const duplicates = await findDuplicateUniqueProducts(ctx.db, ctx.projectId);
 
     return duplicates.map((product) => ({
       id: product.id,

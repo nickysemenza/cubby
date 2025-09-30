@@ -74,8 +74,11 @@ export class IngredientService {
     });
   }
 
-  async getIngredientByID(id: string): Promise<IngredientWithFoodOut> {
-    const ingredient = await getIngredientByIDRepo(this.db, id);
+  async getIngredientByID(
+    id: string,
+    projectId: string,
+  ): Promise<IngredientWithFoodOut> {
+    const ingredient = await getIngredientByIDRepo(this.db, id, projectId);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -103,6 +106,7 @@ export class IngredientService {
   }
 
   async ingredientList(
+    projectId: string,
     nameFilter: string | undefined,
     sort: SortParams,
     pagination: PaginationParams,
@@ -110,6 +114,7 @@ export class IngredientService {
   ) {
     const { data: ingredients, count } = await ingredientListRepo(
       this.db,
+      projectId,
       nameFilter,
       sort,
       pagination,
@@ -151,8 +156,9 @@ export class IngredientService {
 
   async createIngredient(
     data: z.infer<typeof ingredientBase>,
+    projectId: string,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await createIngredientRepo(this.db, data);
+    const ingredient = await createIngredientRepo(this.db, data, projectId);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -165,9 +171,10 @@ export class IngredientService {
 
   async updateIngredient(
     id: string,
+    projectId: string,
     data: Partial<z.infer<typeof ingredientBase>>,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await updateIngredientRepo(this.db, id, data);
+    const ingredient = await updateIngredientRepo(this.db, id, projectId, data);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );

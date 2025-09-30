@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import { mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -21,10 +21,14 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id) => {
-      return await services.services.ingredient.getIngredientByID(id);
+      return await services.services.ingredient.getIngredientByID(
+        id,
+        services.projectId,
+      );
     },
     list: async (services, filters, sort, pagination) => {
       return await services.services.ingredient.ingredientList(
+        services.projectId,
         filters.nameFilter,
         sort,
         pagination,
@@ -32,15 +36,22 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      return await services.services.ingredient.createIngredient(data);
+      return await services.services.ingredient.createIngredient(
+        data,
+        services.projectId || "default-project",
+      );
     },
     update: async (services, id, data) => {
-      return await services.services.ingredient.updateIngredient(id, data);
+      return await services.services.ingredient.updateIngredient(
+        id,
+        services.projectId,
+        data,
+      );
     },
   },
 });
 
-const merge = publicProcedure
+const merge = protectedProcedure
   .input(
     z.object({
       target: z.uuid(),
@@ -50,10 +61,13 @@ const merge = publicProcedure
   .output(ingredientWithFoodOut)
   .mutation(async ({ ctx, input }) => {
     await mergeIngredients(ctx.db, input.target, input.aliases);
-    return await ctx.services.ingredient.getIngredientByID(input.target);
+    return await ctx.services.ingredient.getIngredientByID(
+      input.target,
+      ctx.projectId,
+    );
   });
 
-const getByName = publicProcedure
+const getByName = protectedProcedure
   .input(
     z.object({
       nameFilter: z.string(),

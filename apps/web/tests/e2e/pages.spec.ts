@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("Key pages render", () => {
+test.describe("Key pages render (unauthenticated)", () => {
   test("home page renders and has title", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/RecipeHub/i);

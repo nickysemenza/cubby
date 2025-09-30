@@ -24,9 +24,10 @@ import {
 export const getRecipeByID = async (
   id: string,
   prismaClient: PrismaClient | Prisma.TransactionClient,
+  projectId: string,
 ): Promise<RecipeOut | null> => {
   const res: RecipeDeepDB | null = await prismaClient.recipe.findFirst({
-    where: { id: id },
+    where: { id: id, projectId }, // Ensure recipe belongs to project
     include: {
       sections: {
         include: {
@@ -130,13 +131,15 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
 export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   prismaClient: PrismaClient,
+  projectId: string,
 ) => {
   const parsed = await parseCompactRecipe(recipe);
-  return await upsertRecipeFromCompact(parsed, prismaClient);
+  return await upsertRecipeFromCompact(parsed, prismaClient, projectId);
 };
 
 export const recipeList = async (
   db: PrismaClient,
+  projectId: string,
   name: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
@@ -146,6 +149,7 @@ export const recipeList = async (
     name: getSortDirection(sort, "name"),
   };
   const where: Prisma.RecipeWhereInput = {
+    projectId, // Filter by project
     name: formatSearchTerm(name),
   };
 
@@ -183,6 +187,7 @@ export const recipeList = async (
 export const createRecipe = async (
   recipe: RecipeCreateInput,
   db: PrismaClient,
+  projectId: string,
 ): Promise<RecipeOut> => {
   const sourceType = recipe.meta?.url
     ? RecipeSource.Website
@@ -196,7 +201,7 @@ export const createRecipe = async (
     const processedSections = await Promise.all(
       recipe.sections.map(async (section) => {
         const processedIngredients = section.ingredients
-          ? await processIngredients(tx, section.ingredients)
+          ? await processIngredients(tx, section.ingredients, projectId)
           : [];
 
         return {
@@ -210,6 +215,7 @@ export const createRecipe = async (
     // Create the main recipe
     const createdRecipe = await tx.recipe.create({
       data: {
+        projectId: projectId,
         name: recipe.name,
         SourceType: sourceType,
         SourceData: sourceData,
@@ -244,7 +250,7 @@ export const createRecipe = async (
       });
     }
 
-    const fullRecipe = await getRecipeByID(createdRecipe.id, tx);
+    const fullRecipe = await getRecipeByID(createdRecipe.id, tx, projectId);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve created recipe");
     }
@@ -256,6 +262,7 @@ export const createRecipe = async (
 const processIngredient = async (
   tx: Prisma.TransactionClient,
   ingredient: z.infer<typeof recipeIngredientInput>,
+  projectId: string,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }> => {
   // For ingredient types, just use the ingredient ID directly
   if (ingredient.type === "ingredient") {
@@ -293,6 +300,7 @@ const processIngredient = async (
   // Create a new ingredient that points to this recipe
   const newIngredient = await tx.ingredient.create({
     data: {
+      projectId: projectId,
       name: `Recipe: ${recipe.name}`,
       aliases: [],
       recipeId: ingredient.recipeId,
@@ -309,19 +317,26 @@ const processIngredient = async (
 const processIngredients = async (
   tx: Prisma.TransactionClient,
   ingredients: z.infer<typeof recipeIngredientInput>[],
+  projectId: string,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
   return await Promise.all(
-    ingredients.map((ing) => processIngredient(tx, ing)),
+    ingredients.map((ing) => processIngredient(tx, ing, projectId)),
   );
 };
 
 export const upsertRecipe = async (
   input: RecipeCreateInput,
   db: PrismaClient,
+  projectId: string,
 ): Promise<{ id: string }> => {
   // Check if recipe already exists
   const existingRecipe = await db.recipe.findUnique({
-    where: { name: input.name },
+    where: {
+      projectId_name: {
+        projectId: projectId,
+        name: input.name,
+      },
+    },
   });
 
   if (existingRecipe) {
@@ -389,7 +404,7 @@ export const upsertRecipe = async (
     return { id: updatedRecipe.id };
   } else {
     // Recipe doesn't exist - create new one
-    return await createRecipe(input, db);
+    return await createRecipe(input, db, projectId);
   }
 };
 
@@ -397,10 +412,11 @@ export const updateRecipe = async (
   id: string,
   updates: RecipeUpdateInput["data"],
   db: PrismaClient,
+  projectId: string,
 ): Promise<RecipeOut> => {
-  // Check if recipe exists
+  // Check if recipe exists and belongs to project
   const existingRecipe = await db.recipe.findUnique({
-    where: { id },
+    where: { id, projectId },
     include: {
       sections: {
         include: {
@@ -427,7 +443,7 @@ export const updateRecipe = async (
           : existingRecipe.SourceData;
 
       await tx.recipe.update({
-        where: { id },
+        where: { id, projectId },
         data: {
           ...(updates.name ? { name: updates.name } : {}),
           ...(updates.meta !== undefined
@@ -501,6 +517,7 @@ export const updateRecipe = async (
                     create: await processIngredients(
                       tx,
                       sectionUpdate.ingredients,
+                      projectId,
                     ),
                   }
                 : undefined,
@@ -543,6 +560,7 @@ export const updateRecipe = async (
                 const processedIngredient = await processIngredient(
                   tx,
                   ingredientUpdate,
+                  projectId,
                 );
                 await tx.recipeSectionIngredient.create({
                   data: {
@@ -556,6 +574,7 @@ export const updateRecipe = async (
                 const processedIngredient = await processIngredient(
                   tx,
                   ingredientUpdate,
+                  projectId,
                 );
                 await tx.recipeSectionIngredient.update({
                   where: { id: ingredientUpdate.id },
@@ -617,7 +636,7 @@ export const updateRecipe = async (
       }
     }
 
-    const fullRecipe = await getRecipeByID(id, tx);
+    const fullRecipe = await getRecipeByID(id, tx, projectId);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve updated recipe");
     }

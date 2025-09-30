@@ -53,8 +53,34 @@ export default defineConfig({
   /* Configure projects for major browsers */
   projects: [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      name: "global setup",
+      testMatch: /global\.setup\.ts/,
+    },
+    {
+      name: "Unauthenticated tests",
+      testMatch: /.*pages\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+      dependencies: ["global setup"],
+    },
+    {
+      name: "Authenticated tests",
+      testMatch: /.*create-.*.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        // Use prepared Clerk auth state
+        storageState: "playwright/.clerk/user.json",
+      },
+      dependencies: ["global setup"],
+    },
+    {
+      name: "Other tests",
+      testMatch: /(?!.*pages\.spec\.ts)(?!.*create-.*.spec\.ts).*\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+      },
+      dependencies: ["global setup"],
     },
   ],
 

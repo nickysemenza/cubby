@@ -11,6 +11,7 @@ describe("recipe repository helpers", () => {
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
+        projectId: "00000000-0000-0000-0000-000000000000",
         SourceType: RecipeSource.Website,
         SourceData: "https://example.com/recipe",
       };
@@ -20,6 +21,7 @@ describe("recipe repository helpers", () => {
       expect(result).toEqual({
         id: "recipe-1",
         name: "Test Recipe",
+        projectId: "00000000-0000-0000-0000-000000000000",
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
@@ -36,6 +38,7 @@ describe("recipe repository helpers", () => {
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
+        projectId: "00000000-0000-0000-0000-000000000000",
         SourceType: RecipeSource.Other,
         SourceData: "some data",
       };
@@ -45,6 +48,7 @@ describe("recipe repository helpers", () => {
       expect(result).toEqual({
         id: "recipe-1",
         name: "Test Recipe",
+        projectId: "00000000-0000-0000-0000-000000000000",
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,

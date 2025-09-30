@@ -1,5 +1,6 @@
 import { type WCompactRecipe } from "wasm";
-import { type Span, trace } from "@opentelemetry/api";
+import { type Span } from "@opentelemetry/api";
+import { getTracer, TraceNames } from "~/server/tracing";
 import { type CompactRecipe } from "~/codec/codec";
 
 const scrapeRecipe = async (url: string) => {
@@ -15,14 +16,17 @@ const scrapeRecipe = async (url: string) => {
   };
   const response = await fetch(url, options);
   const html = await response.text();
-  const tracer = trace.getTracer("wasm");
+  const tracer = getTracer();
 
-  return tracer.startActiveSpan(`parse_scraped_recipe`, async (span: Span) => {
-    span.setAttributes({ url });
-    const { parse_scraped_recipe } = await import("wasm");
-    const res = parse_scraped_recipe(html, url);
-    return res;
-  });
+  return tracer.startActiveSpan(
+    TraceNames.wasm("parse_scraped_recipe"),
+    async (span: Span) => {
+      span.setAttributes({ url });
+      const { parse_scraped_recipe } = await import("wasm");
+      const res = parse_scraped_recipe(html, url);
+      return res;
+    },
+  );
 };
 
 export const scrapeToCompact = async (url: string): Promise<CompactRecipe> => {
