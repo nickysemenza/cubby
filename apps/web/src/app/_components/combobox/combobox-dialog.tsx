@@ -44,33 +44,33 @@ import useDebounce from "~/hooks/useDebounce";
  */
 export function DialogCompatibleCombobox<TId extends string = string>({
   label,
-  findItems,
+  items,
+  onSearchChange,
+  isLoading,
   value,
   setValue,
   onCreateNew,
 }: {
   label: string;
-  findItems: (searchQuery: string) => Promise<ComboboxItem<TId>[]>;
+  items: ComboboxItem<TId>[];
+  onSearchChange: (query: string) => void;
+  isLoading?: boolean;
   value: ComboboxItem<TId> | null;
   setValue: (item: ComboboxItem<TId> | null) => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
 }) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
-  const [results, setResults] = React.useState<ComboboxItem<TId>[]>([]);
   const debouncedInput = useDebounce(inputValue, 300);
 
   // Use a ref to store the dialog and input elements
   const containerRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
+  // Notify parent when search changes
   React.useEffect(() => {
-    async function handleValueChange() {
-      const result = await findItems(debouncedInput);
-      setResults(result);
-    }
-    handleValueChange();
-  }, [debouncedInput, findItems]);
+    onSearchChange(debouncedInput);
+  }, [debouncedInput, onSearchChange]);
 
   // Focus the input when the dropdown is opened
   React.useEffect(() => {
@@ -148,7 +148,11 @@ export function DialogCompatibleCombobox<TId extends string = string>({
           </div>
 
           <div className="max-h-[300px] overflow-y-auto">
-            {results.length === 0 ? (
+            {isLoading ? (
+              <div className="text-muted-foreground px-3 py-6 text-center text-sm">
+                Loading...
+              </div>
+            ) : items.length === 0 ? (
               <div className="px-3 py-6 text-left text-sm">
                 No {label} found.
                 {onCreateNew && inputValue.trim() !== "" && (
@@ -175,7 +179,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
               </div>
             ) : (
               <div className="overflow-hidden p-1">
-                {results.map((result) => (
+                {items.map((result) => (
                   <Button
                     key={result.id}
                     variant="ghost"

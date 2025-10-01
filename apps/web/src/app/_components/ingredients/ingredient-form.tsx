@@ -1,7 +1,7 @@
 "use client";
 
 import { type FC } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
@@ -128,10 +128,16 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
         emptyValue=""
       >
         {(field, index) => (
-          <Input
-            {...form.register(`aliases.${index}`)}
-            placeholder="Alias name"
-            className="flex-1"
+          <Controller
+            control={form.control}
+            name={`aliases.${index}`}
+            render={({ field: controllerField }) => (
+              <Input
+                {...controllerField}
+                placeholder="Alias name"
+                className="flex-1"
+              />
+            )}
           />
         )}
       </ArrayFieldManager>

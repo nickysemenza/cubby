@@ -214,15 +214,18 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,
   label,
-  findItems,
+  items,
+  onSearchChange,
+  isLoading,
   onCreateNew,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
-  findItems: (query: string) => Promise<ComboboxItem[]>;
+  items: ComboboxItem[];
+  onSearchChange: (query: string) => void;
+  isLoading?: boolean;
   onCreateNew?: (name: string) => Promise<ComboboxItem>;
-  insideDialog?: boolean;
 }) {
   return (
     <FormField
@@ -234,7 +237,9 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
           <FormControl>
             <DialogCompatibleCombobox
               label={label.toLowerCase()}
-              findItems={findItems}
+              items={items}
+              onSearchChange={onSearchChange}
+              isLoading={isLoading}
               value={field.value as ComboboxItem | null}
               setValue={(value) =>
                 field.onChange(

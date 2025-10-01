@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useCallback, type ReactNode } from "react";
 import { type ComboboxItem } from "./combobox-types";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -26,7 +26,9 @@ import { ProductForm } from "~/app/_components/products/product-form";
 
 interface WithEntitySearchProps {
   children: (props: {
-    findItems: (query: string) => Promise<ComboboxItem[]>;
+    items: ComboboxItem[];
+    onSearchChange: (query: string) => void;
+    isLoading: boolean;
     onCreateNew?: (name: string) => Promise<ComboboxItem>;
   }) => ReactNode;
 }
@@ -139,7 +141,7 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     ((item: ComboboxItem) => void) | null
   >(null);
   const queryClient = useQueryClient();
-  const { data } = useQuery(
+  const { data, isLoading } = useQuery(
     api.ingredient.list.queryOptions({
       filters: {
         nameFilter: searchQuery,
@@ -148,10 +150,9 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const findItems = async (query: string): Promise<ComboboxItem[]> => {
+  const onSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
-    return data?.items.map(buildIngredientComboboxItem) ?? [];
-  };
+  }, []);
 
   const createMutation = useMutation(
     api.ingredient.create.mutationOptions({
@@ -196,7 +197,12 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
         error={createMutation.error?.message}
         initialName={pendingName}
       />
-      {children({ findItems, onCreateNew })}
+      {children({
+        items: data?.items.map(buildIngredientComboboxItem) ?? [],
+        onSearchChange,
+        isLoading,
+        onCreateNew,
+      })}
     </>
   );
 }
@@ -210,7 +216,7 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
     ((item: ComboboxItem) => void) | null
   >(null);
   const queryClient = useQueryClient();
-  const { data } = useQuery(
+  const { data, isLoading } = useQuery(
     api.location.list.queryOptions({
       filters: {
         nameFilter: searchQuery,
@@ -218,6 +224,10 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
       pagination,
     }),
   );
+
+  const onSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   const createMutation = useMutation(
     api.location.create.mutationOptions({
@@ -237,11 +247,6 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
       },
     }),
   );
-
-  const findItems = async (query: string): Promise<ComboboxItem[]> => {
-    setSearchQuery(query);
-    return data?.items.map(buildLocationComboboxItem) ?? [];
-  };
 
   const onCreateNew = async (name: string) => {
     setPendingName(name);
@@ -281,7 +286,12 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
           />
         </DialogContent>
       </Dialog>
-      {children({ findItems, onCreateNew })}
+      {children({
+        items: data?.items.map(buildLocationComboboxItem) ?? [],
+        onSearchChange,
+        isLoading,
+        onCreateNew,
+      })}
     </>
   );
 }
@@ -295,7 +305,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     ((item: ComboboxItem) => void) | null
   >(null);
   const queryClient = useQueryClient();
-  const { data } = useQuery(
+  const { data, isLoading } = useQuery(
     api.product.list.queryOptions({
       filters: {
         nameFilter: searchQuery,
@@ -303,6 +313,10 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
       pagination,
     }),
   );
+
+  const onSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
 
   const createMutation = useMutation(
     api.product.create.mutationOptions({
@@ -322,11 +336,6 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
       },
     }),
   );
-
-  const findItems = async (query: string): Promise<ComboboxItem[]> => {
-    setSearchQuery(query);
-    return data?.items.map(buildProductComboboxItem) ?? [];
-  };
 
   const onCreateNew = async (name: string) => {
     setPendingName(name);
@@ -352,7 +361,12 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
         error={createMutation.error?.message}
         initialName={pendingName}
       />
-      {children({ findItems, onCreateNew })}
+      {children({
+        items: data?.items.map(buildProductComboboxItem) ?? [],
+        onSearchChange,
+        isLoading,
+        onCreateNew,
+      })}
     </>
   );
 }
@@ -360,7 +374,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
 export function WithRecipeSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
   const [searchQuery, setSearchQuery] = useState("");
-  const { data } = useQuery(
+  const { data, isLoading } = useQuery(
     api.recipe.list.queryOptions({
       filters: {
         nameFilter: searchQuery,
@@ -369,11 +383,18 @@ export function WithRecipeSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const findItems = async (query: string): Promise<ComboboxItem[]> => {
+  const onSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
-    return data?.items.map(buildRecipeComboboxItem) ?? [];
-  };
+  }, []);
 
   // For recipes, we don't provide the ability to create from this interface
-  return <>{children({ findItems })}</>;
+  return (
+    <>
+      {children({
+        items: data?.items.map(buildRecipeComboboxItem) ?? [],
+        onSearchChange,
+        isLoading,
+      })}
+    </>
+  );
 }

@@ -251,14 +251,15 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         />
       </SideBySideFields>
       <WithIngredientSearch>
-        {({ findItems, onCreateNew }) => (
+        {({ items, onSearchChange, isLoading, onCreateNew }) => (
           <ComboboxField
             form={form}
             name="ingredient"
             label="Ingredient"
-            findItems={findItems}
+            items={items}
+            onSearchChange={onSearchChange}
+            isLoading={isLoading}
             onCreateNew={onCreateNew}
-            insideDialog={mode === "create"}
           />
         )}
       </WithIngredientSearch>

@@ -202,12 +202,14 @@ export default function BulkInventoryForm() {
     >
       <div className="mb-6 max-w-md">
         <WithLocationSearch>
-          {({ findItems, onCreateNew }) => (
+          {({ items, onSearchChange, isLoading, onCreateNew }) => (
             <ComboboxField
               form={form}
               name="location"
               label="Location"
-              findItems={findItems}
+              items={items}
+              onSearchChange={onSearchChange}
+              isLoading={isLoading}
               onCreateNew={onCreateNew}
             />
           )}
@@ -235,12 +237,14 @@ export default function BulkInventoryForm() {
                 >
                   <div className="flex-1">
                     <WithProductSearch>
-                      {({ findItems, onCreateNew }) => (
+                      {({ items, onSearchChange, isLoading, onCreateNew }) => (
                         <ComboboxField
                           form={form}
                           name={`items.${index}.product`}
                           label="Product"
-                          findItems={findItems}
+                          items={items}
+                          onSearchChange={onSearchChange}
+                          isLoading={isLoading}
                           onCreateNew={onCreateNew}
                         />
                       )}

@@ -188,14 +188,15 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       </SideBySideFields>
 
       <WithLocationSearch>
-        {({ findItems, onCreateNew }) => (
+        {({ items, onSearchChange, isLoading, onCreateNew }) => (
           <ComboboxField
             form={form}
             name="parent"
             label="Parent Location (Optional)"
-            findItems={findItems}
+            items={items}
+            onSearchChange={onSearchChange}
+            isLoading={isLoading}
             onCreateNew={onCreateNew}
-            insideDialog={mode === "create"}
           />
         )}
       </WithLocationSearch>

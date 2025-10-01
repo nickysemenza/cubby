@@ -140,24 +140,28 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       submitButtonText={buttonText}
     >
       <WithProductSearch>
-        {({ findItems, onCreateNew }) => (
+        {({ items, onSearchChange, isLoading, onCreateNew }) => (
           <ComboboxField
             form={form}
             name="product"
             label="Product"
-            findItems={findItems}
+            items={items}
+            onSearchChange={onSearchChange}
+            isLoading={isLoading}
             onCreateNew={onCreateNew}
           />
         )}
       </WithProductSearch>
 
       <WithLocationSearch>
-        {({ findItems, onCreateNew }) => (
+        {({ items, onSearchChange, isLoading, onCreateNew }) => (
           <ComboboxField
             form={form}
             name="location"
             label="Location"
-            findItems={findItems}
+            items={items}
+            onSearchChange={onSearchChange}
+            isLoading={isLoading}
             onCreateNew={onCreateNew}
           />
         )}

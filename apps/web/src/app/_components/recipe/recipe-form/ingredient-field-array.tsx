@@ -84,13 +84,20 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
                     <TabsContent value="ingredient">
                       <WithIngredientSearch>
-                        {({ findItems, onCreateNew }) => (
+                        {({
+                          items,
+                          onSearchChange,
+                          isLoading,
+                          onCreateNew,
+                        }) => (
                           <>
                             <ComboboxField
                               form={form}
                               name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`}
                               label="Ingredient"
-                              findItems={findItems}
+                              items={items}
+                              onSearchChange={onSearchChange}
+                              isLoading={isLoading}
                               onCreateNew={onCreateNew}
                             />
                             {form.watch(
@@ -115,13 +122,15 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
                     <TabsContent value="recipe">
                       <WithRecipeSearch>
-                        {({ findItems }) => (
+                        {({ items, onSearchChange, isLoading }) => (
                           <>
                             <ComboboxField
                               form={form}
                               name={`sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe`}
                               label="Recipe"
-                              findItems={findItems}
+                              items={items}
+                              onSearchChange={onSearchChange}
+                              isLoading={isLoading}
                             />
                             {form.watch(
                               `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe`,
