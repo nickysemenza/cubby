@@ -58,7 +58,7 @@ export default defineConfig({
     },
     {
       name: "Unauthenticated tests",
-      testMatch: /.*pages\.spec\.ts/,
+      testMatch: /unauth\..*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
       },
@@ -66,19 +66,11 @@ export default defineConfig({
     },
     {
       name: "Authenticated tests",
-      testMatch: /.*create-.*.spec\.ts/,
+      testMatch: /(?!unauth\.).*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         // Use prepared Clerk auth state
         storageState: "playwright/.clerk/user.json",
-      },
-      dependencies: ["global setup"],
-    },
-    {
-      name: "Other tests",
-      testMatch: /(?!.*pages\.spec\.ts)(?!.*create-.*.spec\.ts).*\.spec\.ts/,
-      use: {
-        ...devices["Desktop Chrome"],
       },
       dependencies: ["global setup"],
     },
