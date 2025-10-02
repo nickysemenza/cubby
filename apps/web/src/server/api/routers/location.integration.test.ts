@@ -8,10 +8,9 @@ import { type ProjectId } from "~/schemas/identifiers";
 describe("location router", () => {
   let db: Database;
   let projectId: ProjectId;
+  let teardown: () => Promise<void>;
   beforeEach(async () => {
-    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
-    db = dbInstance;
-    projectId = pId;
+    ({ db, projectId, teardown } = await buildTestDB());
 
     return teardown;
   });

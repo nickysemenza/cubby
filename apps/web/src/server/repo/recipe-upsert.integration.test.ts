@@ -8,12 +8,11 @@ import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
 describe("upsertRecipe", () => {
   let db: Database;
   let projectId: ProjectId;
+  let teardown: () => Promise<void>;
 
   let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
-    db = dbInstance;
-    projectId = pId;
+    ({ db, projectId, teardown } = await buildTestDB());
 
     // Create the required ingredients for the tests and store their IDs
     const ingredient1 = await db.ingredient.create({
