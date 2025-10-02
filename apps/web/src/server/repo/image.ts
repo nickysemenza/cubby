@@ -11,6 +11,7 @@ import {
 } from "~/schemas/image";
 import { type Prisma } from "@prisma/client";
 import { type Database } from "~/server/db";
+import { getDb } from "~/server/repo/database-helpers";
 
 /**
  * Initiate an image upload without associating it with an entity yet
@@ -26,7 +27,7 @@ export const initiateImageUploadWithoutEntity = async (
   const url = getS3ObjectUrl(key);
 
   // Create image record in pending state
-  const image = await db.image.create({
+  const image = await getDb(db).image.create({
     data: {
       projectId,
       key,
@@ -63,7 +64,7 @@ const dbImageToAPI = async (
   image: ImageDB,
 ): Promise<ImageWithEntity> => {
   // Check product associations
-  const productImage = await db.productImage.findFirst({
+  const productImage = await getDb(db).productImage.findFirst({
     where: { imageId: image.id },
     include: { product: true },
   });
@@ -78,7 +79,7 @@ const dbImageToAPI = async (
   }
 
   // Check location associations
-  const locationImage = await db.locationImage.findFirst({
+  const locationImage = await getDb(db).locationImage.findFirst({
     where: { imageId: image.id },
     include: { location: true },
   });
@@ -93,7 +94,7 @@ const dbImageToAPI = async (
   }
 
   // Check recipe associations
-  const recipeImage = await db.recipeImage.findFirst({
+  const recipeImage = await getDb(db).recipeImage.findFirst({
     where: { imageId: image.id },
     include: { recipe: true },
   });
@@ -161,14 +162,14 @@ export const imageList = async (
   const skip = pagination.pageIndex * pagination.pageSize;
 
   // Execute queries in a transaction for consistency
-  const [images, count] = await db.$transaction([
-    db.image.findMany({
+  const [images, count] = await getDb(db).$transaction([
+    getDb(db).image.findMany({
       orderBy,
       where,
       take,
       skip,
     }),
-    db.image.count({ where }),
+    getDb(db).image.count({ where }),
   ]);
 
   // Process images to include entity information
@@ -190,7 +191,7 @@ export const getImageById = async (
   imageId: string,
 ): Promise<ImageWithEntity> => {
   // Find the image by ID
-  const image = await db.image.findUnique({
+  const image = await getDb(db).image.findUnique({
     where: { id: imageId },
   });
 
@@ -220,7 +221,7 @@ export const cullPendingImages = async (
   cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
   // Find pending images older than the cutoff date
-  const pendingImages = await db.image.findMany({
+  const pendingImages = await getDb(db).image.findMany({
     where: {
       status: "PENDING",
       createdAt: {
@@ -246,7 +247,7 @@ export const cullPendingImages = async (
   const imageKeys = pendingImages.map((img) => img.key);
 
   // Delete the images from the database
-  await db.image.deleteMany({
+  await getDb(db).image.deleteMany({
     where: {
       id: { in: imageIds },
     },

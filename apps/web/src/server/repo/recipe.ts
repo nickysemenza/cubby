@@ -1,4 +1,4 @@
-import { type Prisma, RecipeSource } from "@prisma/client";
+import { type Prisma, RecipeSource, PrismaClient } from "@prisma/client";
 import { type Database } from "~/server/db";
 import { type z } from "zod";
 import { type CompactRecipe, amount } from "~/codec/codec";
@@ -20,15 +20,25 @@ import {
 import {
   formatSearchTerm,
   getSortDirection,
+  withTransaction,
+  getDb,
 } from "~/server/repo/database-helpers";
 import { type RecipeId, type ProjectId } from "~/schemas/identifiers";
+
+// Helper to safely unwrap Database or use TransactionClient directly
+const unwrapDb = (
+  db: Database | Prisma.TransactionClient,
+): PrismaClient | Prisma.TransactionClient => {
+  // If it already has Prisma methods (TransactionClient), use it directly
+  return "product" in db ? db : getDb(db);
+};
 
 export const getRecipeByID = async (
   id: RecipeId,
   db: Database | Prisma.TransactionClient,
   projectId: ProjectId,
 ): Promise<RecipeOut | null> => {
-  const res: RecipeDeepDB | null = await db.recipe.findFirst({
+  const res: RecipeDeepDB | null = await unwrapDb(db).recipe.findFirst({
     where: { id: id, projectId }, // Ensure recipe belongs to project
     include: {
       sections: {
@@ -177,9 +187,9 @@ export const recipeList = async (
   };
 
   // Execute both queries in a single transaction for better performance
-  const [results, totalCount] = await db.$transaction([
-    db.recipe.findMany(findManyParams),
-    db.recipe.count({ where }),
+  const [results, totalCount] = await getDb(db).$transaction([
+    getDb(db).recipe.findMany(findManyParams),
+    getDb(db).recipe.count({ where }),
   ]);
 
   const items = results.map(dbRecipeToAPI);
@@ -198,7 +208,7 @@ export const createRecipe = async (
   const { pendingImageIds } = recipe;
 
   // Create the recipe in a transaction
-  return await db.$transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Process all ingredients first
     const processedSections = await Promise.all(
       recipe.sections.map(async (section) => {
@@ -336,7 +346,7 @@ export const upsertRecipe = async (
   projectId: ProjectId,
 ): Promise<{ id: string }> => {
   // Check if recipe already exists
-  const existingRecipe = await db.recipe.findUnique({
+  const existingRecipe = await getDb(db).recipe.findUnique({
     where: {
       projectId_name: {
         projectId: projectId,
@@ -348,13 +358,13 @@ export const upsertRecipe = async (
   if (existingRecipe) {
     // Recipe exists - delete existing sections and recreate with new data
     // First delete ingredients that reference the sections
-    const existingSections = await db.recipeSection.findMany({
+    const existingSections = await getDb(db).recipeSection.findMany({
       where: { recipeId: existingRecipe.id },
       select: { id: true },
     });
 
     if (existingSections.length > 0) {
-      await db.recipeSectionIngredient.deleteMany({
+      await getDb(db).recipeSectionIngredient.deleteMany({
         where: {
           recipeSectionId: {
             in: existingSections.map((s) => s.id),
@@ -363,7 +373,7 @@ export const upsertRecipe = async (
       });
 
       // Now safe to delete the sections
-      await db.recipeSection.deleteMany({
+      await getDb(db).recipeSection.deleteMany({
         where: { recipeId: existingRecipe.id },
       });
     }
@@ -387,7 +397,7 @@ export const upsertRecipe = async (
     );
 
     // Update the recipe with new data
-    const updatedRecipe = await db.recipe.update({
+    const updatedRecipe = await getDb(db).recipe.update({
       where: { id: existingRecipe.id },
       data: {
         SourceType: input.meta?.url ? ("Website" as const) : ("Other" as const),
@@ -421,7 +431,7 @@ export const updateRecipe = async (
   projectId: ProjectId,
 ): Promise<RecipeOut> => {
   // Check if recipe exists and belongs to project
-  const existingRecipe = await db.recipe.findUnique({
+  const existingRecipe = await getDb(db).recipe.findUnique({
     where: { id, projectId },
     include: {
       sections: {
@@ -437,7 +447,7 @@ export const updateRecipe = async (
   }
 
   // Update in a transaction
-  return await db.$transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Update basic recipe properties
     if (updates.name || updates.meta !== undefined) {
       const sourceType = updates.meta?.url

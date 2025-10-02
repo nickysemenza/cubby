@@ -13,7 +13,6 @@ describe("recipe router", () => {
   let teardown: () => Promise<void>;
   beforeEach(async () => {
     ({ db, projectId, teardown } = await buildTestDB());
-
     return teardown;
   });
   it("recipe insert and retrieve", async () => {

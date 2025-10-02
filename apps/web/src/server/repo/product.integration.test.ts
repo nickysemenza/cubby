@@ -8,11 +8,13 @@ import {
   updateProduct,
   findProductByName,
 } from "./product";
+import { createIngredient } from "./ingredient";
 import {
   unsafeIngredientId,
   unsafeProductId,
   type ProjectId,
 } from "~/schemas/identifiers";
+import { withTransaction } from "./database-helpers";
 
 describe("product repository", () => {
   let db: Database;
@@ -20,7 +22,6 @@ describe("product repository", () => {
   let teardown: () => Promise<void>;
   beforeEach(async () => {
     ({ db, projectId, teardown } = await buildTestDB());
-
     return teardown;
   });
 
@@ -65,16 +66,20 @@ describe("product repository", () => {
     // Create test products in a transaction to use findProductByName
     const productName = "Unique Product Name";
 
-    await db.$transaction(async (tx) => {
-      await tx.product.create({
-        data: {
-          project: { connect: { id: projectId } },
+    await withTransaction(db, async (tx) => {
+      await createProduct(
+        tx,
+        {
           name: productName,
           manufacturer: "Test Manufacturer",
           model: "MODEL-123",
           upc: "123456789012",
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
         },
-      });
+        projectId,
+      );
 
       // Test finding the product by name
       const foundProduct = await findProductByName(tx, productName);
@@ -86,41 +91,43 @@ describe("product repository", () => {
   });
 
   it("should throw error when finding a non-existent product by name", async () => {
-    await expect(
-      db.$transaction(async (tx) => {
-        await findProductByName(tx, "Non-existent Product");
-      }),
-    ).rejects.toThrow("Product Non-existent Product not found");
+    await expect(findProductByName(db, "Non-existent Product")).rejects.toThrow(
+      "Product Non-existent Product not found",
+    );
   });
 
   it("should throw error when finding an ambiguous product by name", async () => {
     const ambiguousName = "Ambiguous Product";
 
     // Create two products with the same name
-    await db.product.createMany({
-      data: [
-        {
-          projectId: projectId,
-          name: ambiguousName,
-          manufacturer: "Manufacturer 1",
-          model: "MODEL-1",
-          upc: "111111111111",
-        },
-        {
-          projectId: projectId,
-          name: ambiguousName,
-          manufacturer: "Manufacturer 2",
-          model: "MODEL-2",
-          upc: "222222222222",
-        },
-      ],
-    });
+    await createProduct(
+      db,
+      {
+        name: ambiguousName,
+        manufacturer: "Manufacturer 1",
+        model: "MODEL-1",
+        upc: "111111111111",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
+      },
+      projectId,
+    );
+    await createProduct(
+      db,
+      {
+        name: ambiguousName,
+        manufacturer: "Manufacturer 2",
+        model: "MODEL-2",
+        upc: "222222222222",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
+      },
+      projectId,
+    );
 
-    await expect(
-      db.$transaction(async (tx) => {
-        await findProductByName(tx, ambiguousName);
-      }),
-    ).rejects.toThrow(
+    await expect(findProductByName(db, ambiguousName)).rejects.toThrow(
       `findProductByName: Product ${ambiguousName} is ambiguous`,
     );
   });
@@ -276,13 +283,14 @@ describe("product repository", () => {
 
   it("should link a product to an ingredient", async () => {
     // First create an ingredient
-    const ingredient = await db.ingredient.create({
-      data: {
-        project: { connect: { id: projectId } },
+    const ingredient = await createIngredient(
+      db,
+      {
         name: "Test Ingredient",
         aliases: ["test", "ingredient"],
       },
-    });
+      projectId,
+    );
 
     // Create a product linked to the ingredient
     const productData = {
@@ -313,21 +321,23 @@ describe("product repository", () => {
 
   it("should update ingredient association", async () => {
     // Create two ingredients
-    const ingredient1 = await db.ingredient.create({
-      data: {
-        project: { connect: { id: projectId } },
+    const ingredient1 = await createIngredient(
+      db,
+      {
         name: "Ingredient 1",
         aliases: ["ing1"],
       },
-    });
+      projectId,
+    );
 
-    const ingredient2 = await db.ingredient.create({
-      data: {
-        project: { connect: { id: projectId } },
+    const ingredient2 = await createIngredient(
+      db,
+      {
         name: "Ingredient 2",
         aliases: ["ing2"],
       },
-    });
+      projectId,
+    );
 
     // Create a product linked to the first ingredient
     const productData = {

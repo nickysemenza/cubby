@@ -27,8 +27,17 @@ const globalForPrisma = globalThis as unknown as {
   prisma: ReturnType<typeof createPrismaClient> | undefined;
 };
 
-export const db = globalForPrisma.prisma ?? createPrismaClient();
+const dbInstance = globalForPrisma.prisma ?? createPrismaClient();
 
-if (env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+if (env.NODE_ENV !== "production") globalForPrisma.prisma = dbInstance;
 
-export type Database = typeof db;
+// Opaque type that prevents ALL method calls outside of repo layer
+// This enforces that database access only happens in repo files
+// Database has NO methods - it can only be passed around
+declare const DatabaseBrand: unique symbol;
+export interface Database {
+  readonly [DatabaseBrand]: true;
+}
+
+// Export the branded instance - NO methods can be called on this outside repo/
+export const db = dbInstance as unknown as Database;

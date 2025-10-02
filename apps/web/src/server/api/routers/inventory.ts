@@ -6,6 +6,7 @@ import {
   updateInventoryEntry,
   createInventoryEntry,
   bulkProcessInventoryEntries,
+  checkUniqueProductDuplicate,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { TRPCError } from "@trpc/server";
@@ -60,30 +61,18 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      // Check if this is a product with expectedQuantity=1 (unique item)
-      const product = await services.db.product.findUnique({
-        where: { id: data.productId },
-        select: { expectedQuantity: true, name: true },
-      });
+      // Check if this is a unique product that already exists elsewhere
+      const duplicate = await checkUniqueProductDuplicate(
+        services.db,
+        data.productId,
+        data.locationId,
+      );
 
-      // If it's a unique item, check for duplicates
-      if (product?.expectedQuantity === 1) {
-        const existingEntry = await services.db.inventoryEntry.findFirst({
-          where: {
-            productId: data.productId,
-            locationId: { not: data.locationId },
-          },
-          include: {
-            location: { select: { name: true } },
-          },
+      if (duplicate) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
         });
-
-        if (existingEntry) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `This unique item "${product.name}" is already inventoried at "${existingEntry.location.name}". Please update the existing entry instead of creating a duplicate.`,
-          });
-        }
       }
 
       if (!services.projectId) {

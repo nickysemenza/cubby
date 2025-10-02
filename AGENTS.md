@@ -34,6 +34,17 @@
 
 ## Database & API Patterns
 
+### Database Access Control
+
+- **Opaque Database Type**: The `Database` type is opaque (branded) and prevents direct method calls outside of repo files
+- **Repo Layer Only**: All direct database operations (`.findMany()`, `.create()`, etc.) must be in `/server/repo/` files
+- **Services as Plumbing**: Services accept `Database` but cannot call methods on it - they only pass it to repo functions
+- **Using getDb()**: In repo functions that accept `db: Database`, call `const prisma = getDb(db)` to access PrismaClient methods
+- **Transactions**: Use `withTransaction(db, async (tx) => {...})` for atomic operations - `tx` is already a `PrismaClient`
+- **Pattern**: Functions that accept `Prisma.TransactionClient` (usually named `tx`) can call methods directly without `getDb()`
+
+### Other Patterns
+
 - extend baseEntitySchema for entities with id, name, and timestamps
 - use extractDbTimestampsFromDBRec helper for timestamp fields
 - use formatSearchTerm helper for consistent database searches

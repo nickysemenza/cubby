@@ -1,4 +1,5 @@
 import { type Database } from "~/server/db";
+import { getDb } from "~/server/repo/database-helpers";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -69,7 +70,7 @@ export const findDuplicateUniqueProducts = async (
   db: Database,
   projectId: string,
 ): Promise<DuplicateUniqueProduct[]> => {
-  const duplicates = await db.product.findMany({
+  const duplicates = await getDb(db).product.findMany({
     where: {
       projectId,
       expectedQuantity: 1,
@@ -102,7 +103,7 @@ export const findOrphanedProducts = async (
   db: Database,
   projectId: string,
 ): Promise<OrphanedProduct[]> => {
-  const orphaned = await db.product.findMany({
+  const orphaned = await getDb(db).product.findMany({
     where: {
       projectId,
       InventoryEntry: {
@@ -128,7 +129,7 @@ export const findInvalidUPCs = async (
   const problems: InvalidUPC[] = [];
 
   // Find products with UPCs
-  const productsWithUPCs = await db.product.findMany({
+  const productsWithUPCs = await getDb(db).product.findMany({
     where: {
       projectId,
       upc: {
@@ -187,7 +188,7 @@ export const findProductsWithoutMappings = async (
   db: Database,
   projectId: string,
 ): Promise<ProductWithoutMappings[]> => {
-  const productsWithoutMappings = await db.product.findMany({
+  const productsWithoutMappings = await getDb(db).product.findMany({
     where: {
       projectId,
       unitMappings: {
@@ -210,7 +211,7 @@ export const findInvalidInventoryAmounts = async (
   db: Database,
   projectId: string,
 ): Promise<InvalidInventoryAmount[]> => {
-  const inventoryEntries = await db.inventoryEntry.findMany({
+  const inventoryEntries = await getDb(db).inventoryEntry.findMany({
     where: {
       projectId,
     },
@@ -244,7 +245,7 @@ export const findEmptyLocations = async (
   db: Database,
   projectId: string,
 ): Promise<EmptyLocation[]> => {
-  const emptyLocations = await db.location.findMany({
+  const emptyLocations = await getDb(db).location.findMany({
     where: {
       projectId,
       InventoryEntries: {

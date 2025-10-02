@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipe } from "./recipe";
+import { createIngredient } from "./ingredient";
 import { type RecipeCreateInput } from "~/schemas/recipe";
 import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
+import { getDb } from "./database-helpers";
 
 describe("upsertRecipe", () => {
   let db: Database;
@@ -15,27 +17,30 @@ describe("upsertRecipe", () => {
     ({ db, projectId, teardown } = await buildTestDB());
 
     // Create the required ingredients for the tests and store their IDs
-    const ingredient1 = await db.ingredient.create({
-      data: {
-        projectId,
+    const ingredient1 = await createIngredient(
+      db,
+      {
         name: "Test Ingredient 1",
         aliases: [],
       },
-    });
-    const ingredient2 = await db.ingredient.create({
-      data: {
-        projectId,
+      projectId,
+    );
+    const ingredient2 = await createIngredient(
+      db,
+      {
         name: "Test Ingredient 2",
         aliases: [],
       },
-    });
-    const ingredient3 = await db.ingredient.create({
-      data: {
-        projectId,
+      projectId,
+    );
+    const ingredient3 = await createIngredient(
+      db,
+      {
         name: "Test Ingredient 3",
         aliases: [],
       },
-    });
+      projectId,
+    );
 
     testIngredients = [ingredient1, ingredient2, ingredient3];
 
@@ -111,7 +116,7 @@ describe("upsertRecipe", () => {
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
-    const recipe = await db.recipe.findUnique({
+    const recipe = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -150,7 +155,7 @@ describe("upsertRecipe", () => {
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
-    const updatedRecipe = await db.recipe.findUnique({
+    const updatedRecipe = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -193,7 +198,7 @@ describe("upsertRecipe", () => {
     expect(thirdRun.id).toBe(firstRun.id);
 
     // Should only be one recipe in the database
-    const allRecipes = await db.recipe.findMany({
+    const allRecipes = await getDb(db).recipe.findMany({
       where: {
         projectId: projectId,
         name: "Test Recipe Direct",
@@ -219,7 +224,7 @@ describe("upsertRecipe", () => {
 
     await upsertRecipe(recipeNoUrl, db, projectId);
 
-    const recipe = await db.recipe.findUnique({
+    const recipe = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,

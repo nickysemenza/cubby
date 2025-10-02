@@ -1,4 +1,4 @@
-import { type Prisma } from "@prisma/client";
+import { type Prisma, PrismaClient } from "@prisma/client";
 import { type Database } from "~/server/db";
 import {
   type LocationOutWithParentChildren,
@@ -26,16 +26,26 @@ import { findOrCreateProduct, findProductByName } from "./product";
 import {
   formatSearchTerm,
   getSortDirection,
+  withTransaction,
+  getDb,
 } from "~/server/repo/database-helpers";
+
+// Helper to safely unwrap Database or use TransactionClient directly
+const unwrapDb = (
+  db: Database | Prisma.TransactionClient,
+): PrismaClient | Prisma.TransactionClient => {
+  // If it already has Prisma methods (TransactionClient), use it directly
+  return "product" in db ? db : getDb(db);
+};
 
 // Create a new location
 export const createLocation = async (
-  db: Database,
+  db: Database | Prisma.TransactionClient,
   data: LocationCreateInput,
   projectId: ProjectId,
 ) => {
   // Create the location
-  const location = await db.location.create({
+  const location = await unwrapDb(db).location.create({
     data: {
       project: { connect: { id: projectId } },
       name: data.name,
@@ -57,7 +67,7 @@ export const createLocation = async (
   // Associate images if provided
   if (data.pendingImageIds && data.pendingImageIds.length > 0) {
     // Create LocationImage records in batch
-    await db.locationImage.createMany({
+    await unwrapDb(db).locationImage.createMany({
       data: data.pendingImageIds.map((imageId) => ({
         locationId: location.id,
         imageId,
@@ -65,7 +75,7 @@ export const createLocation = async (
     });
 
     // Update all image statuses to UPLOADED in batch
-    await db.image.updateMany({
+    await unwrapDb(db).image.updateMany({
       where: { id: { in: data.pendingImageIds } },
       data: { status: "UPLOADED" },
     });
@@ -87,7 +97,7 @@ export const updateLocation = async (
 
   // Check if the new parent would create a circular reference
   if (data.parentId) {
-    const potentialParent = await db.location.findUnique({
+    const potentialParent = await getDb(db).location.findUnique({
       where: { id: data.parentId },
       include: { parent: true },
     });
@@ -98,8 +108,8 @@ export const updateLocation = async (
       if (currentParent.id === id) {
         throw new Error("Circular parent-child relationship detected");
       }
-      currentParent = await db.location
-        .findUnique({
+      currentParent = await getDb(db)
+        .location.findUnique({
           where: { id: currentParent.id },
           include: { parent: true },
         })
@@ -107,7 +117,7 @@ export const updateLocation = async (
     }
   }
 
-  return await db.$transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Update the location
     const location = await tx.location.update({
       where: { id, projectId },
@@ -391,7 +401,7 @@ export const buildLocationTypeCount = async (
   db: Database,
   projectId: ProjectId,
 ) => {
-  const types = await db.location.groupBy({
+  const types = await getDb(db).location.groupBy({
     by: ["type"],
     where: {
       projectId, // Filter by project
@@ -416,7 +426,7 @@ export const buildLocationTypeCount = async (
   return full as Record<(typeof allKeys)[number], number>;
 };
 export const buildLocationTree = async (db: Database, projectId: ProjectId) => {
-  const res = await db.location.findMany({
+  const res = await getDb(db).location.findMany({
     include: {
       children: recursiveLocationInclude(10, "children"),
       parent: true,
@@ -476,9 +486,9 @@ export const locationList = async (
   };
 
   // Execute both queries in a single transaction for better performance
-  const [results, totalCount] = await db.$transaction([
-    db.location.findMany(findManyParams),
-    db.location.count({ where }),
+  const [results, totalCount] = await getDb(db).$transaction([
+    getDb(db).location.findMany(findManyParams),
+    getDb(db).location.count({ where }),
   ]);
 
   const items = results.map(dbLocationToAPIWithChildren);
@@ -490,7 +500,7 @@ export const getLocationById = async (
   id: LocationId,
   projectId: ProjectId,
 ) => {
-  const res = await db.location.findFirstOrThrow({
+  const res = await unwrapDb(db).location.findFirstOrThrow({
     where: {
       id,
       projectId, // Ensure location belongs to project

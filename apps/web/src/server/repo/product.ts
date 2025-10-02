@@ -1,4 +1,4 @@
-import { Product, type Prisma } from "@prisma/client";
+import { Product, type Prisma, PrismaClient } from "@prisma/client";
 import { type Database } from "~/server/db";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
@@ -16,15 +16,27 @@ import {
   type ProductTopLevelOut,
   type ProductInputPayload,
 } from "~/schemas/product";
-import { formatSearchTerm } from "~/server/repo/database-helpers";
-import { getSortDirection } from "~/server/repo/database-helpers";
+import {
+  formatSearchTerm,
+  getSortDirection,
+  withTransaction,
+  getDb,
+} from "~/server/repo/database-helpers";
 import { type ProductId, type ProjectId } from "~/schemas/identifiers";
 
+// Helper to safely unwrap Database or use TransactionClient directly
+const unwrapDb = (
+  db: Database | Prisma.TransactionClient,
+): PrismaClient | Prisma.TransactionClient => {
+  // If it already has Prisma methods (TransactionClient), use it directly
+  return "product" in db ? db : getDb(db);
+};
+
 export const findProductByName = async (
-  db: Prisma.TransactionClient,
+  db: Database | Prisma.TransactionClient,
   name: string,
 ): Promise<Product> => {
-  const p = await db.product.findMany({
+  const p = await unwrapDb(db).product.findMany({
     where: {
       name: {
         equals: name,
@@ -219,7 +231,7 @@ export const findProductsByFoodIdentifier = async (
       : { ndb_number: lookup.ndb_number };
 
   // Find all matching products
-  const res = await db.product.findMany({
+  const res = await getDb(db).product.findMany({
     where,
   });
   return res;
@@ -275,7 +287,7 @@ export const getProductByID = async (
   id: ProductId,
   projectId: ProjectId,
 ) => {
-  const res = await db.product.findFirstOrThrow({
+  const res = await getDb(db).product.findFirstOrThrow({
     where: {
       id,
       projectId, // Ensure product belongs to project
@@ -317,9 +329,10 @@ export const productList = async (
   };
 
   // Execute both queries in a single transaction for better performance
-  const [results, totalCount] = await db.$transaction([
-    db.product.findMany(findManyParams),
-    db.product.count({ where }),
+  const prisma = getDb(db);
+  const [results, totalCount] = await prisma.$transaction([
+    prisma.product.findMany(findManyParams),
+    prisma.product.count({ where }),
   ]);
 
   const products = await Promise.all(
@@ -330,56 +343,51 @@ export const productList = async (
 
 // Create a new product
 export const createProduct = async (
-  db: Database,
+  db: Database | Prisma.TransactionClient,
   data: ProductInputPayload,
   projectId: ProjectId,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
-  // Use a transaction to ensure atomicity
-  return await db.$transaction(async (tx) => {
-    // Create the product first
-    const product = await tx.product.create({
-      data: {
-        project: { connect: { id: projectId } },
-        ...productData,
-        Ingredient: ingredientId
-          ? { connect: { id: ingredientId } }
-          : undefined,
-      },
+  // Create the product first
+  const product = await unwrapDb(db).product.create({
+    data: {
+      project: { connect: { id: projectId } },
+      ...productData,
+      Ingredient: ingredientId ? { connect: { id: ingredientId } } : undefined,
+    },
+  });
+
+  // If there are unit mappings, create them
+  if (unitMappings) {
+    await unwrapDb(db).productUnitMappings.createMany({
+      data: unitMappings.map((mapping) => ({
+        productId: product.id,
+        a: mapping.a,
+        b: mapping.b,
+        source: mapping.source,
+      })),
+    });
+  }
+
+  // Associate images if provided
+  if (pendingImageIds && pendingImageIds.length > 0) {
+    // Create ProductImage records in batch
+    await unwrapDb(db).productImage.createMany({
+      data: pendingImageIds.map((imageId) => ({
+        productId: product.id,
+        imageId,
+      })),
     });
 
-    // If there are unit mappings, create them
-    if (unitMappings) {
-      await tx.productUnitMappings.createMany({
-        data: unitMappings.map((mapping) => ({
-          productId: product.id,
-          a: mapping.a,
-          b: mapping.b,
-          source: mapping.source,
-        })),
-      });
-    }
+    // Update all image statuses to UPLOADED in batch
+    await unwrapDb(db).image.updateMany({
+      where: { id: { in: pendingImageIds } },
+      data: { status: "UPLOADED" },
+    });
+  }
 
-    // Associate images if provided
-    if (pendingImageIds && pendingImageIds.length > 0) {
-      // Create ProductImage records in batch
-      await tx.productImage.createMany({
-        data: pendingImageIds.map((imageId) => ({
-          productId: product.id,
-          imageId,
-        })),
-      });
-
-      // Update all image statuses to UPLOADED in batch
-      await tx.image.updateMany({
-        where: { id: { in: pendingImageIds } },
-        data: { status: "UPLOADED" },
-      });
-    }
-
-    return product as unknown as ProductTopLevelOut;
-  });
+  return product as unknown as ProductTopLevelOut;
 };
 
 // Update an existing product
@@ -398,7 +406,7 @@ export const updateProduct = async (
   } = data;
 
   // Use a transaction to ensure atomicity
-  return await db.$transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     // Create the update data with relation handling
     const updateData: Prisma.ProductUpdateInput = {
       ...productData,
@@ -514,7 +522,7 @@ export const findDuplicateUniqueProducts = async (
   db: Database,
   projectId: ProjectId,
 ) => {
-  const duplicates = await db.product.findMany({
+  const duplicates = await getDb(db).product.findMany({
     where: {
       projectId,
       expectedQuantity: 1,

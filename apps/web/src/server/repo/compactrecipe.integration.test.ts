@@ -4,6 +4,7 @@ import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
 import { type ProjectId } from "~/schemas/identifiers";
+import { getDb } from "./database-helpers";
 
 describe("upsertRecipeFromCompact", () => {
   let db: Database;
@@ -11,7 +12,6 @@ describe("upsertRecipeFromCompact", () => {
   let teardown: () => Promise<void>;
   beforeEach(async () => {
     ({ db, projectId, teardown } = await buildTestDB());
-
     return teardown;
   });
 
@@ -74,7 +74,7 @@ describe("upsertRecipeFromCompact", () => {
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
-    const recipe = await db.recipe.findUnique({
+    const recipe = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -107,7 +107,7 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Verify initial state
-    const initialRecipe = await db.recipe.findUnique({
+    const initialRecipe = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -137,7 +137,7 @@ describe("upsertRecipeFromCompact", () => {
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
-    const updatedRecipe = await db.recipe.findUnique({
+    const updatedRecipe = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -180,7 +180,7 @@ describe("upsertRecipeFromCompact", () => {
     expect(thirdRun.id).toBe(firstRun.id);
 
     // Should only be one recipe in the database
-    const allRecipes = await db.recipe.findMany({
+    const allRecipes = await getDb(db).recipe.findMany({
       where: {
         projectId: projectId,
         name: "Test Recipe",
@@ -194,7 +194,7 @@ describe("upsertRecipeFromCompact", () => {
     // Create recipe with 2 sections
     await upsertRecipeFromCompact(mockRecipeUpdated, db, projectId);
 
-    const beforeUpdate = await db.recipe.findUnique({
+    const beforeUpdate = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -213,7 +213,7 @@ describe("upsertRecipeFromCompact", () => {
     // Update to recipe with 1 section
     await upsertRecipeFromCompact(mockRecipe, db, projectId);
 
-    const afterUpdate = await db.recipe.findUnique({
+    const afterUpdate = await getDb(db).recipe.findUnique({
       where: {
         projectId_name: {
           projectId: projectId,
@@ -236,7 +236,7 @@ describe("upsertRecipeFromCompact", () => {
     expect(ingredientCountAfter).toBeLessThan(ingredientCountBefore);
 
     // Verify no orphaned records exist
-    const orphanedSections = await db.recipeSection.findMany({
+    const orphanedSections = await getDb(db).recipeSection.findMany({
       where: { recipeId: { not: afterUpdate!.id } },
     });
     expect(orphanedSections).toHaveLength(0);

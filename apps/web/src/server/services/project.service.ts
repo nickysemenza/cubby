@@ -7,6 +7,7 @@ import {
   type addMemberInput,
 } from "~/schemas/project";
 import { TraceNames, withTrace } from "~/server/tracing";
+import { getDb } from "~/server/repo/database-helpers";
 
 export class ProjectService {
   constructor(private db: Database) {}
@@ -16,7 +17,7 @@ export class ProjectService {
    */
   async syncUser(userId: string): Promise<void> {
     // Check if user exists locally
-    const existingUser = await this.db.user.findUnique({
+    const existingUser = await getDb(this.db).user.findUnique({
       where: { id: userId },
     });
 
@@ -36,7 +37,7 @@ export class ProjectService {
         throw new Error("User has no primary email");
       }
 
-      await this.db.user.create({
+      await getDb(this.db).user.create({
         data: {
           id: userId,
           email: primaryEmail,
@@ -63,7 +64,7 @@ export class ProjectService {
         await this.syncUser(userId);
 
         // Check if user has any projects
-        const membership = await this.db.projectMember.findFirst({
+        const membership = await getDb(this.db).projectMember.findFirst({
           where: { userId },
           include: { project: true },
         });
@@ -77,11 +78,11 @@ export class ProjectService {
         }
 
         // Create default project
-        const user = await this.db.user.findUnique({
+        const user = await getDb(this.db).user.findUnique({
           where: { id: userId },
         });
 
-        const project = await this.db.project.create({
+        const project = await getDb(this.db).project.create({
           data: {
             name: `${user?.firstName || "My"} Household`,
             description: "Default project",
@@ -117,7 +118,7 @@ export class ProjectService {
           "user.id": userId,
         });
 
-        const membership = await this.db.projectMember.findUnique({
+        const membership = await getDb(this.db).projectMember.findUnique({
           where: {
             projectId_userId: { projectId, userId },
           },
@@ -139,7 +140,7 @@ export class ProjectService {
   async getUserProjects(userId: string) {
     await this.syncUser(userId);
 
-    return await this.db.project.findMany({
+    return await getDb(this.db).project.findMany({
       where: {
         members: {
           some: { userId },
@@ -169,7 +170,7 @@ export class ProjectService {
       throw new Error("Not a member of this project");
     }
 
-    return await this.db.project.findUnique({
+    return await getDb(this.db).project.findUnique({
       where: { id: projectId },
       include: {
         _count: {
@@ -193,7 +194,7 @@ export class ProjectService {
   ) {
     await this.syncUser(userId);
 
-    return await this.db.project.create({
+    return await getDb(this.db).project.create({
       data: {
         ...data,
         members: {
@@ -224,7 +225,7 @@ export class ProjectService {
       throw new Error("Not a member of this project");
     }
 
-    return await this.db.project.update({
+    return await getDb(this.db).project.update({
       where: { id: projectId },
       data,
       include: {
@@ -247,7 +248,7 @@ export class ProjectService {
     }
 
     // Find user by email
-    const user = await this.db.user.findUnique({
+    const user = await getDb(this.db).user.findUnique({
       where: { email: data.email },
     });
 
@@ -256,7 +257,7 @@ export class ProjectService {
     }
 
     // Check if already a member
-    const existingMembership = await this.db.projectMember.findUnique({
+    const existingMembership = await getDb(this.db).projectMember.findUnique({
       where: {
         projectId_userId: {
           projectId: data.projectId,
@@ -270,7 +271,7 @@ export class ProjectService {
     }
 
     // Add as member
-    return await this.db.projectMember.create({
+    return await getDb(this.db).projectMember.create({
       data: {
         projectId: data.projectId,
         userId: user.id,
@@ -288,7 +289,7 @@ export class ProjectService {
       throw new Error("Not a member of this project");
     }
 
-    return await this.db.projectMember.findMany({
+    return await getDb(this.db).projectMember.findMany({
       where: { projectId },
       include: {
         user: true,
@@ -307,7 +308,7 @@ export class ProjectService {
     }
 
     // Don't allow removing yourself if you're the last member
-    const memberCount = await this.db.projectMember.count({
+    const memberCount = await getDb(this.db).projectMember.count({
       where: { projectId },
     });
 
@@ -315,7 +316,7 @@ export class ProjectService {
       throw new Error("Cannot remove the last member from the project");
     }
 
-    return await this.db.projectMember.delete({
+    return await getDb(this.db).projectMember.delete({
       where: {
         projectId_userId: {
           projectId,

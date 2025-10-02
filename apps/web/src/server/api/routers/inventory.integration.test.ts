@@ -4,6 +4,8 @@ import { buildTestDB } from "tooling/test-setup";
 import { inventoryentryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { type ProjectId } from "~/schemas/identifiers";
+import { createLocation } from "~/server/repo/location";
+import { createProduct } from "~/server/repo/product";
 
 describe("inventory router", () => {
   let db: Database;
@@ -11,7 +13,6 @@ describe("inventory router", () => {
   let teardown: () => Promise<void>;
   beforeEach(async () => {
     ({ db, projectId, teardown } = await buildTestDB());
-
     return teardown;
   });
 
@@ -26,24 +27,30 @@ describe("inventory router", () => {
     );
 
     // Create test location
-    const location = await db.location.create({
-      data: {
-        projectId: projectId,
+    const location = await createLocation(
+      db,
+      {
         name: "Test Kitchen",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
     // Create test product
-    const product = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product = await createProduct(
+      db,
+      {
         name: "Test Flour",
         manufacturer: "Test Brand",
         model: "Premium Flour",
         upc: "123456789012",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
     // Create inventory entry data
     const inventoryData = {
@@ -87,52 +94,68 @@ describe("inventory router", () => {
     );
 
     // Create test locations
-    const kitchen = await db.location.create({
-      data: {
-        projectId: projectId,
+    const kitchen = await createLocation(
+      db,
+      {
         name: "Kitchen",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
-    const pantry = await db.location.create({
-      data: {
-        projectId: projectId,
+    const pantry = await createLocation(
+      db,
+      {
         name: "Pantry",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
     // Create test products
-    const flour = await db.product.create({
-      data: {
-        projectId: projectId,
+    const flour = await createProduct(
+      db,
+      {
         name: "Flour",
         manufacturer: "Brand A",
         model: "All Purpose",
         upc: "111111111111",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
-    const sugar = await db.product.create({
-      data: {
-        projectId: projectId,
+    const sugar = await createProduct(
+      db,
+      {
         name: "Sugar",
         manufacturer: "Brand B",
         model: "White Sugar",
         upc: "222222222222",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
-    const rice = await db.product.create({
-      data: {
-        projectId: projectId,
+    const rice = await createProduct(
+      db,
+      {
         name: "Rice",
         manufacturer: "Brand C",
         model: "Basmati Rice",
         upc: "333333333333",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
     // Create multiple inventory entries
     await caller.create({
@@ -220,23 +243,29 @@ describe("inventory router", () => {
     );
 
     // Create test location and product
-    const location = await db.location.create({
-      data: {
-        projectId: projectId,
+    const location = await createLocation(
+      db,
+      {
         name: "Test Location",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
-    const product = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product = await createProduct(
+      db,
+      {
         name: "Test Product",
         manufacturer: "Test Brand",
         model: "Test Model",
         upc: "123456789012",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
     // Create an inventory entry
     const inventoryData = {
@@ -283,41 +312,53 @@ describe("inventory router", () => {
     );
 
     // Create test location and products
-    const location1 = await db.location.create({
-      data: {
-        projectId: projectId,
+    const location1 = await createLocation(
+      db,
+      {
         name: "Location 1",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
-    const location2 = await db.location.create({
-      data: {
-        projectId: projectId,
+    const location2 = await createLocation(
+      db,
+      {
         name: "Location 2",
         type: "shelf",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
-    const product1 = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product1 = await createProduct(
+      db,
+      {
         name: "Product 1",
         manufacturer: "Brand",
         model: "Model 1",
         upc: "111111111111",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
-    const product2 = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product2 = await createProduct(
+      db,
+      {
         name: "Product 2",
         manufacturer: "Brand",
         model: "Model 2",
         upc: "222222222222",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
     // Create an inventory entry
     const createdEntry = await caller.create({
@@ -365,44 +406,58 @@ describe("inventory router", () => {
     );
 
     // Create test location
-    const location = await db.location.create({
-      data: {
-        projectId: projectId,
+    const location = await createLocation(
+      db,
+      {
         name: "Bulk Location",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
     // Create test products
-    const product1 = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product1 = await createProduct(
+      db,
+      {
         name: "Bulk Product 1",
         manufacturer: "Brand",
         model: "Model 1",
         upc: "111111111111",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
-    const product2 = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product2 = await createProduct(
+      db,
+      {
         name: "Bulk Product 2",
         manufacturer: "Brand",
         model: "Model 2",
         upc: "222222222222",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
-    const product3 = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product3 = await createProduct(
+      db,
+      {
         name: "Bulk Product 3",
         manufacturer: "Brand",
         model: "Model 3",
         upc: "333333333333",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
     // Create an existing entry to be updated
     const existingEntry = await caller.create({
@@ -508,23 +563,29 @@ describe("inventory router", () => {
     ).rejects.toThrow("Foreign key constraint violated");
 
     // Create a valid entry first
-    const location = await db.location.create({
-      data: {
-        projectId: projectId,
+    const location = await createLocation(
+      db,
+      {
         name: "Test Location",
         type: "room",
+        parentId: null,
       },
-    });
+      projectId,
+    );
 
-    const product = await db.product.create({
-      data: {
-        projectId: projectId,
+    const product = await createProduct(
+      db,
+      {
         name: "Test Product",
         manufacturer: "Brand",
         model: "Model",
         upc: "123456789012",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
       },
-    });
+      projectId,
+    );
 
     const entry = await caller.create({
       productId: product.id,

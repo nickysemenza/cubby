@@ -8,7 +8,11 @@ import {
 } from "~/schemas/pagination";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
-import { getSortDirection } from "~/server/repo/database-helpers";
+import {
+  getSortDirection,
+  withTransaction,
+  getDb,
+} from "~/server/repo/database-helpers";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import {
   type InventoryId,
@@ -105,12 +109,50 @@ const dbInventoryEntryToAPI: (
   };
 };
 
+/**
+ * Check if a product with expectedQuantity=1 already exists in a different location.
+ * Returns null if no duplicate found, or an object with conflicting location details.
+ */
+export const checkUniqueProductDuplicate = async (
+  db: Database,
+  productId: ProductId,
+  locationId: LocationId,
+): Promise<{ productName: string; locationName: string } | null> => {
+  // Check if this is a product with expectedQuantity=1 (unique item)
+  const product = await getDb(db).product.findUnique({
+    where: { id: productId },
+    select: { expectedQuantity: true, name: true },
+  });
+
+  // If it's a unique item, check for duplicates
+  if (product?.expectedQuantity === 1) {
+    const existingEntry = await getDb(db).inventoryEntry.findFirst({
+      where: {
+        productId,
+        locationId: { not: locationId },
+      },
+      include: {
+        location: { select: { name: true } },
+      },
+    });
+
+    if (existingEntry) {
+      return {
+        productName: product.name,
+        locationName: existingEntry.location.name,
+      };
+    }
+  }
+
+  return null;
+};
+
 export const getInventoryEntryByID = async (
   db: Database,
   id: InventoryId,
   projectId: ProjectId,
 ) => {
-  const res = await db.inventoryEntry.findFirst({
+  const res = await getDb(db).inventoryEntry.findFirst({
     where: {
       id,
       projectId, // Ensure inventory entry belongs to project
@@ -174,9 +216,10 @@ export const inventoryentryList = async (
   };
 
   // Execute both queries in a single transaction for better performance
-  const [results, totalCount] = await db.$transaction([
-    db.inventoryEntry.findMany(findManyParams),
-    db.inventoryEntry.count({ where }),
+  const prisma = getDb(db);
+  const [results, totalCount] = await prisma.$transaction([
+    prisma.inventoryEntry.findMany(findManyParams),
+    prisma.inventoryEntry.count({ where }),
   ]);
 
   const inventoryentrys = results.map(dbInventoryEntryToAPI);
@@ -195,7 +238,7 @@ export const updateInventoryEntry = async (
   projectId: ProjectId,
   data: UpdateInventoryEntryData,
 ) => {
-  const updated = await db.inventoryEntry.update({
+  const updated = await getDb(db).inventoryEntry.update({
     where: {
       id,
       projectId, // Ensure inventory entry belongs to project
@@ -222,7 +265,7 @@ export const createInventoryEntry = async (
   data: CreateInventoryEntryData,
   projectId: ProjectId,
 ) => {
-  const created = await db.inventoryEntry.create({
+  const created = await getDb(db).inventoryEntry.create({
     data: {
       projectId: projectId,
       productId: data.productId,
@@ -242,7 +285,7 @@ export const bulkProcessInventoryEntries = async (
   projectId: ProjectId,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
-  const processedItems = await db.$transaction(async (tx) => {
+  const processedItems = await withTransaction(db, async (tx) => {
     const results = [];
 
     // First, get all existing inventory entries for this location

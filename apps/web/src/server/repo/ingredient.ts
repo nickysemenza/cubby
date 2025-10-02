@@ -1,4 +1,4 @@
-import { type Prisma } from "@prisma/client";
+import { type Prisma, PrismaClient } from "@prisma/client";
 import { type Database } from "~/server/db";
 import { dedupe } from "~/misc/array-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
@@ -11,6 +11,8 @@ import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import {
   formatSearchTerm,
   getSortDirection,
+  withTransaction,
+  getDb,
 } from "~/server/repo/database-helpers";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -21,12 +23,20 @@ import {
   unsafeIngredientId,
 } from "~/schemas/identifiers";
 
+// Helper to safely unwrap Database or use TransactionClient directly
+const unwrapDb = (
+  db: Database | Prisma.TransactionClient,
+): PrismaClient | Prisma.TransactionClient => {
+  // If it already has Prisma methods (TransactionClient), use it directly
+  return "product" in db ? db : getDb(db);
+};
+
 export const mergeIngredients = async (
   db: Database,
   target: IngredientId,
   aliases: IngredientId[],
 ) => {
-  return await db.$transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     const targetRec = await tx.ingredient.findFirstOrThrow({
       where: { id: target },
     });
@@ -106,7 +116,7 @@ const ingredientInclude = {
 };
 
 const dbIngredientToAPI: (
-  db: Database,
+  db: Database | Prisma.TransactionClient,
   ingredient: IngredientDeepDB,
 ) => Promise<IngredientWithRecipesAndProductOut> = async (db, ingredient) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
@@ -142,14 +152,14 @@ export const getIngredientByID = async (
   id: IngredientId,
   projectId: ProjectId,
 ) => {
-  const ingredient = await db.ingredient.findFirstOrThrow({
+  const ingredient = await getDb(db).ingredient.findFirstOrThrow({
     where: { id: id, projectId }, // Ensure ingredient belongs to project
     include: ingredientInclude,
   });
   return await dbIngredientToAPI(db, ingredient);
 };
 export const getIngredientByName = async (db: Database, name: string) => {
-  const res = await db.ingredient.findFirst({
+  const res = await getDb(db).ingredient.findFirst({
     where: buildIngredientWhere(true, name),
     include: ingredientInclude,
   });
@@ -157,11 +167,11 @@ export const getIngredientByName = async (db: Database, name: string) => {
 };
 
 export const createIngredient = async (
-  db: Database,
+  db: Database | Prisma.TransactionClient,
   data: z.infer<typeof ingredientBase>,
   projectId: ProjectId,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const ingredient = await db.ingredient.create({
+  const ingredient = await unwrapDb(db).ingredient.create({
     data: {
       projectId: projectId,
       name: data.name,
@@ -179,7 +189,7 @@ export const updateIngredient = async (
   projectId: ProjectId,
   data: Partial<z.infer<typeof ingredientBase>>,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const ingredient = await db.ingredient.update({
+  const ingredient = await getDb(db).ingredient.update({
     where: { id, projectId }, // Ensure ingredient belongs to project
     data: data,
     include: ingredientInclude,
@@ -189,20 +199,20 @@ export const updateIngredient = async (
 };
 
 export const findOrCreateIngredient = async (
-  db: Prisma.TransactionClient,
+  db: Database | Prisma.TransactionClient,
   name: string,
   aliases?: string[],
   projectId?: string,
 ) => {
   const findOrCreate = async () => {
-    const existing = await db.ingredient.findFirst({
+    const existing = await unwrapDb(db).ingredient.findFirst({
       where: buildIngredientWhere(true, name, aliases, projectId),
     });
     if (existing !== null) {
       return existing;
     }
 
-    return await db.ingredient.create({
+    return await unwrapDb(db).ingredient.create({
       data: {
         projectId: projectId || "default-project",
         name: name,
@@ -222,7 +232,7 @@ export const findOrCreateIngredient = async (
     return entry;
   }
 
-  return await db.ingredient.update({
+  return await unwrapDb(db).ingredient.update({
     where: { id: entry.id },
     data: {
       name: name,
@@ -315,9 +325,10 @@ export const ingredientList = async (
   };
 
   // Execute both queries in a single transaction for better performance
-  const [results, totalCount] = await db.$transaction([
-    db.ingredient.findMany(findManyParams),
-    db.ingredient.count({ where }),
+  const prisma = getDb(db);
+  const [results, totalCount] = await prisma.$transaction([
+    prisma.ingredient.findMany(findManyParams),
+    prisma.ingredient.count({ where }),
   ]);
 
   // Process results after receiving both queries

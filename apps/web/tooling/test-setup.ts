@@ -5,6 +5,7 @@ import {
 import { PrismaClient } from "@prisma/client";
 import { execSync } from "child_process";
 import { unsafeProjectId } from "../src/schemas/identifiers";
+import { type Database } from "../src/server/db";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
@@ -67,7 +68,11 @@ export async function buildTestDB() {
   const teardown = async () => {
     await db.$disconnect();
   };
-  return { db, projectId: unsafeProjectId(testProject.id), teardown };
+  return {
+    db: db as unknown as Database,
+    projectId: unsafeProjectId(testProject.id),
+    teardown,
+  };
 }
 
 const remapDBConfig = (

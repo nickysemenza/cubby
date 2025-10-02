@@ -4,6 +4,7 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { insertCompactRecipe } from "~/server/repo/recipe";
 import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
+import { getDb, withTransaction } from "./database-helpers";
 
 describe("ingredient", () => {
   let db: Database;
@@ -12,14 +13,15 @@ describe("ingredient", () => {
 
   beforeEach(async () => {
     ({ db, projectId, teardown } = await buildTestDB());
-
     return teardown;
   });
 
   it("ingredient upsert with aliases", async () => {
-    await findOrCreateIngredient(db, "alias_1", undefined, projectId);
-    await findOrCreateIngredient(db, "test", ["alias_1"], projectId);
-    const countAfterUpsert = await db.ingredient.count();
+    await withTransaction(db, async (tx) => {
+      await findOrCreateIngredient(tx, "alias_1", undefined, projectId);
+      await findOrCreateIngredient(tx, "test", ["alias_1"], projectId);
+    });
+    const countAfterUpsert = await getDb(db).ingredient.count();
     expect(countAfterUpsert).toEqual(1);
   });
   it("ingredient merging works", async () => {
@@ -44,17 +46,17 @@ describe("ingredient", () => {
       ["large eggs"],
       projectId,
     );
-    const countAfterUpsert = await db.ingredient.count();
+    const countAfterUpsert = await getDb(db).ingredient.count();
     expect(countAfterUpsert).toEqual(3);
 
     await mergeIngredients(db, unsafeIngredientId(a.id), [
       unsafeIngredientId(b.id),
       unsafeIngredientId(c.id),
     ]);
-    const countAfterMerge = await db.ingredient.count();
+    const countAfterMerge = await getDb(db).ingredient.count();
     expect(countAfterMerge).toEqual(1);
 
-    const updatedIngredient = await db.ingredient.findFirstOrThrow({
+    const updatedIngredient = await getDb(db).ingredient.findFirstOrThrow({
       where: {
         id: a.id,
       },

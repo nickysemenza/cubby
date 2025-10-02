@@ -4,6 +4,7 @@ import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
 import { type Database } from "~/server/db";
 import { type ProjectId } from "~/schemas/identifiers";
+import { withTransaction } from "~/server/repo/database-helpers";
 
 const loadConfig = systemProcedure
   .input(configSchema)
@@ -17,7 +18,7 @@ export const insertDataConfig = async (
   input: ReturnType<typeof transformConfig>,
   projectId: ProjectId,
 ) => {
-  return await db.$transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     await loadProducts(tx, input.products, projectId);
     await loadLocations(tx, input.locations, projectId);
   });

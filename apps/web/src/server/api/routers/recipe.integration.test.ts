@@ -5,6 +5,7 @@ import { recipeRouter } from "./recipe";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { type ProjectId } from "~/schemas/identifiers";
+import { withTransaction } from "~/server/repo/database-helpers";
 
 describe("recipe router", () => {
   let db: Database;
@@ -12,7 +13,6 @@ describe("recipe router", () => {
   let teardown: () => Promise<void>;
   beforeEach(async () => {
     ({ db, projectId, teardown } = await buildTestDB());
-
     return teardown;
   });
 
@@ -27,11 +27,10 @@ describe("recipe router", () => {
     );
 
     // Create a test ingredient first
-    const ingredient = await findOrCreateIngredient(
+    const ingredient = await withTransaction(
       db,
-      "flour",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "flour", undefined, projectId),
     );
 
     // Create a test recipe
@@ -109,17 +108,15 @@ describe("recipe router", () => {
     );
 
     // Create test ingredients
-    const flour = await findOrCreateIngredient(
+    const flour = await withTransaction(
       db,
-      "flour",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "flour", undefined, projectId),
     );
-    const sugar = await findOrCreateIngredient(
+    const sugar = await withTransaction(
       db,
-      "sugar",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "sugar", undefined, projectId),
     );
 
     // Create multiple test recipes
@@ -230,17 +227,15 @@ describe("recipe router", () => {
     );
 
     // Create test ingredients
-    const flour = await findOrCreateIngredient(
+    const flour = await withTransaction(
       db,
-      "flour",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "flour", undefined, projectId),
     );
-    const butter = await findOrCreateIngredient(
+    const butter = await withTransaction(
       db,
-      "butter",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "butter", undefined, projectId),
     );
 
     // Create a test recipe
@@ -322,11 +317,10 @@ describe("recipe router", () => {
     );
 
     // Create a test ingredient
-    const flour = await findOrCreateIngredient(
+    const flour = await withTransaction(
       db,
-      "flour",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "flour", undefined, projectId),
     );
 
     // Create a test recipe
@@ -404,11 +398,10 @@ describe("recipe router", () => {
     );
 
     // Create an ingredient for the base recipe
-    const flour = await findOrCreateIngredient(
+    const flour = await withTransaction(
       db,
-      "flour",
-      undefined,
-      projectId,
+      async (tx) =>
+        await findOrCreateIngredient(tx, "flour", undefined, projectId),
     );
 
     // Create a base recipe to be used as ingredient
