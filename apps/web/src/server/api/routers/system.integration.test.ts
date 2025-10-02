@@ -1,28 +1,28 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { insertDataConfig } from "./system";
 import { testConfig } from "~/testdata/test-config.data";
 import { transformConfig } from "~/schemas/config";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { appRouter } from "../root";
-import { unsafeProjectId } from "~/schemas/identifiers";
+import { type ProjectId } from "~/schemas/identifiers";
 
 describe("system test", () => {
-  let prisma: PrismaClient;
-  let projectId: ReturnType<typeof unsafeProjectId>;
+  let db: Database;
+  let projectId: ProjectId;
   beforeEach(async () => {
-    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
-    prisma = db;
-    projectId = unsafeProjectId(pId);
+    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
+    db = dbInstance;
+    projectId = pId;
     return teardown;
   });
   it("load data config", async () => {
-    await insertDataConfig(prisma, transformConfig(testConfig), projectId);
+    await insertDataConfig(db, transformConfig(testConfig), projectId);
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId,
       }),

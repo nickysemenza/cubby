@@ -1,4 +1,4 @@
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { USDAClient } from "../clients/usda";
 import {
   getProductByID as getProductByIDRepo,
@@ -24,7 +24,7 @@ export type ProductWithFoodOut = z.infer<typeof productWithFoodOut>;
 
 export class ProductService {
   constructor(
-    private db: PrismaClient,
+    private db: Database,
     private usdaClient: USDAClient,
   ) {}
 

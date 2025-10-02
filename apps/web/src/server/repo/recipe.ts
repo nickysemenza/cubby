@@ -1,4 +1,5 @@
-import { type Prisma, type PrismaClient, RecipeSource } from "@prisma/client";
+import { type Prisma, RecipeSource } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { type z } from "zod";
 import { type CompactRecipe, amount } from "~/codec/codec";
 import { parseCompactRecipe } from "~/codec/parser";
@@ -24,10 +25,10 @@ import { type RecipeId, type ProjectId } from "~/schemas/identifiers";
 
 export const getRecipeByID = async (
   id: RecipeId,
-  prismaClient: PrismaClient | Prisma.TransactionClient,
+  db: Database | Prisma.TransactionClient,
   projectId: ProjectId,
 ): Promise<RecipeOut | null> => {
-  const res: RecipeDeepDB | null = await prismaClient.recipe.findFirst({
+  const res: RecipeDeepDB | null = await db.recipe.findFirst({
     where: { id: id, projectId }, // Ensure recipe belongs to project
     include: {
       sections: {
@@ -131,15 +132,15 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipe) => {
 
 export const insertCompactRecipe = async (
   recipe: CompactRecipe,
-  prismaClient: PrismaClient,
+  db: Database,
   projectId: ProjectId,
 ) => {
   const parsed = await parseCompactRecipe(recipe);
-  return await upsertRecipeFromCompact(parsed, prismaClient, projectId);
+  return await upsertRecipeFromCompact(parsed, db, projectId);
 };
 
 export const recipeList = async (
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
   name: string | undefined,
   sort: SortParams,
@@ -187,7 +188,7 @@ export const recipeList = async (
 
 export const createRecipe = async (
   recipe: RecipeCreateInput,
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
 ): Promise<RecipeOut> => {
   const sourceType = recipe.meta?.url
@@ -331,7 +332,7 @@ const processIngredients = async (
 
 export const upsertRecipe = async (
   input: RecipeCreateInput,
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
 ): Promise<{ id: string }> => {
   // Check if recipe already exists
@@ -416,7 +417,7 @@ export const upsertRecipe = async (
 export const updateRecipe = async (
   id: RecipeId,
   updates: RecipeUpdateInput["data"],
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
 ): Promise<RecipeOut> => {
   // Check if recipe exists and belongs to project

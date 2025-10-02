@@ -2,7 +2,7 @@ import { configSchema, transformConfig } from "~/schemas/config";
 import { systemProcedure, createTRPCRouter } from "../trpc";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { type ProjectId } from "~/schemas/identifiers";
 
 const loadConfig = systemProcedure
@@ -13,7 +13,7 @@ const loadConfig = systemProcedure
   });
 
 export const insertDataConfig = async (
-  db: PrismaClient,
+  db: Database,
   input: ReturnType<typeof transformConfig>,
   projectId: ProjectId,
 ) => {

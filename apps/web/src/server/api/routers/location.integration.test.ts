@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { unsafeProjectId } from "~/schemas/identifiers";
+import { type ProjectId } from "~/schemas/identifiers";
 
 describe("location router", () => {
-  let prisma: PrismaClient;
-  let projectId: ReturnType<typeof unsafeProjectId>;
+  let db: Database;
+  let projectId: ProjectId;
   beforeEach(async () => {
-    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
-    prisma = db;
-    projectId = unsafeProjectId(pId);
+    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
+    db = dbInstance;
+    projectId = pId;
 
     return teardown;
   });
@@ -20,7 +20,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -56,7 +56,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -95,7 +95,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -175,7 +175,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -215,7 +215,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -254,7 +254,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -312,7 +312,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -368,7 +368,7 @@ describe("location router", () => {
     // Create a test caller for the location router
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),

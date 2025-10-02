@@ -1,26 +1,26 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { insertCompactRecipe } from "~/server/repo/recipe";
-import { unsafeProjectId, unsafeIngredientId } from "~/schemas/identifiers";
+import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
 
 describe("ingredient", () => {
-  let prisma: PrismaClient;
-  let projectId: string;
+  let db: Database;
+  let projectId: ProjectId;
 
   beforeEach(async () => {
-    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
-    prisma = db;
+    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
+    db = dbInstance;
     projectId = pId;
 
     return teardown;
   });
 
   it("ingredient upsert with aliases", async () => {
-    await findOrCreateIngredient(prisma, "alias_1", undefined, projectId);
-    await findOrCreateIngredient(prisma, "test", ["alias_1"], projectId);
-    const countAfterUpsert = await prisma.ingredient.count();
+    await findOrCreateIngredient(db, "alias_1", undefined, projectId);
+    await findOrCreateIngredient(db, "test", ["alias_1"], projectId);
+    const countAfterUpsert = await db.ingredient.count();
     expect(countAfterUpsert).toEqual(1);
   });
   it("ingredient merging works", async () => {
@@ -34,33 +34,28 @@ describe("ingredient", () => {
           },
         ],
       },
-      prisma,
-      unsafeProjectId(projectId),
-    );
-    const a = await findOrCreateIngredient(prisma, "egg", undefined, projectId);
-    const b = await findOrCreateIngredient(
-      prisma,
-      "eggs",
-      undefined,
+      db,
       projectId,
     );
+    const a = await findOrCreateIngredient(db, "egg", undefined, projectId);
+    const b = await findOrCreateIngredient(db, "eggs", undefined, projectId);
     const c = await findOrCreateIngredient(
-      prisma,
+      db,
       "large brown eggs",
       ["large eggs"],
       projectId,
     );
-    const countAfterUpsert = await prisma.ingredient.count();
+    const countAfterUpsert = await db.ingredient.count();
     expect(countAfterUpsert).toEqual(3);
 
-    await mergeIngredients(prisma, unsafeIngredientId(a.id), [
+    await mergeIngredients(db, unsafeIngredientId(a.id), [
       unsafeIngredientId(b.id),
       unsafeIngredientId(c.id),
     ]);
-    const countAfterMerge = await prisma.ingredient.count();
+    const countAfterMerge = await db.ingredient.count();
     expect(countAfterMerge).toEqual(1);
 
-    const updatedIngredient = await prisma.ingredient.findFirstOrThrow({
+    const updatedIngredient = await db.ingredient.findFirstOrThrow({
       where: {
         id: a.id,
       },

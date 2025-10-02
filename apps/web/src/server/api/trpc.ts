@@ -20,7 +20,7 @@ import { ProductService } from "~/server/services/product.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { USDAService } from "~/server/services/usda.service";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { env } from "~/env";
 import { ProjectService } from "~/server/services/project.service";
 import {
@@ -32,18 +32,18 @@ import {
 /**
  * Helper function to build crud services for both production and test contexts
  */
-const buildCrudServices = (database: PrismaClient) => {
+const buildCrudServices = (db: Database) => {
   const usdaClient = new USDAClient(env.USDA_API_URL);
   const usdaService = new USDAService(usdaClient, (lookup) =>
-    findProductsByFoodIdentifier(database, lookup),
+    findProductsByFoodIdentifier(db, lookup),
   );
   const services = {
-    product: new ProductService(database, usdaClient),
-    ingredient: new IngredientService(database, usdaClient),
+    product: new ProductService(db, usdaClient),
+    ingredient: new IngredientService(db, usdaClient),
   };
 
   return {
-    db: database,
+    db,
     usdaClient,
     usdaService,
     services,
@@ -306,7 +306,7 @@ const createTestAuth = (userId: string): Awaited<ReturnType<typeof auth>> => {
  * Test helper to create a TRPC context for testing purposes
  */
 export const createTestTRPCContext = (
-  db: PrismaClient,
+  db: Database,
   opts: {
     headers?: Headers;
     auth?: { userId: string };

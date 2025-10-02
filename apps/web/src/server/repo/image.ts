@@ -9,14 +9,15 @@ import {
   type InitiateUploadWithoutEntityInput,
   type ImageWithEntity,
 } from "~/schemas/image";
-import { type Prisma, type PrismaClient } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+import { type Database } from "~/server/db";
 
 /**
  * Initiate an image upload without associating it with an entity yet
  * This is used for uploading images during entity creation
  */
 export const initiateImageUploadWithoutEntity = async (
-  db: PrismaClient,
+  db: Database,
   { filename, contentType, size }: InitiateUploadWithoutEntityInput,
   projectId: string,
 ) => {
@@ -58,7 +59,7 @@ type ImageDB = Prisma.ImageGetPayload<object>;
  * Get image with entity information (DB to API helper function)
  */
 const dbImageToAPI = async (
-  db: PrismaClient,
+  db: Database,
   image: ImageDB,
 ): Promise<ImageWithEntity> => {
   // Check product associations
@@ -120,7 +121,7 @@ const dbImageToAPI = async (
  * This follows the consistent pattern used in other list functions
  */
 export const imageList = async (
-  db: PrismaClient,
+  db: Database,
   filterText: string | undefined,
   sort: { orderBy: string; direction: "asc" | "desc" },
   pagination: { pageIndex: number; pageSize: number },
@@ -185,7 +186,7 @@ export const imageList = async (
  * Get image by ID with entity association information
  */
 export const getImageById = async (
-  db: PrismaClient,
+  db: Database,
   imageId: string,
 ): Promise<ImageWithEntity> => {
   // Find the image by ID
@@ -211,7 +212,7 @@ export const getImageById = async (
  * @returns Object with count of deleted images and related information
  */
 export const cullPendingImages = async (
-  db: PrismaClient,
+  db: Database,
   olderThanHours: number,
 ) => {
   // Calculate the cutoff date

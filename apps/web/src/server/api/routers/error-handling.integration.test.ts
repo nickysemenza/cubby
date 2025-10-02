@@ -1,20 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { productRouter } from "./product";
 import { recipeRouter } from "./recipe";
 import { ingredientRouter } from "./ingredient";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { unsafeProjectId } from "~/schemas/identifiers";
+import { type ProjectId } from "~/schemas/identifiers";
 
 describe("API Error Handling", () => {
-  let prisma: PrismaClient;
-  let projectId: ReturnType<typeof unsafeProjectId>;
+  let db: Database;
+  let projectId: ProjectId;
   beforeEach(async () => {
-    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
-    prisma = db;
-    projectId = unsafeProjectId(pId);
+    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
+    db = dbInstance;
+    projectId = pId;
 
     return teardown;
   });
@@ -23,7 +23,7 @@ describe("API Error Handling", () => {
     it("should allow creating product with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -49,7 +49,7 @@ describe("API Error Handling", () => {
     it("should throw error when updating non-existent product", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -68,7 +68,7 @@ describe("API Error Handling", () => {
     it("should handle duplicate product constraint violations", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -95,7 +95,7 @@ describe("API Error Handling", () => {
     it("should handle invalid foreign key relationships", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -121,7 +121,7 @@ describe("API Error Handling", () => {
     it("should allow creating recipe with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(recipeRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -142,7 +142,7 @@ describe("API Error Handling", () => {
     it("should throw error when updating non-existent recipe", async () => {
       const createCaller = createCallerFactory(recipeRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -161,7 +161,7 @@ describe("API Error Handling", () => {
     it("should handle recipe with invalid ingredient references", async () => {
       const createCaller = createCallerFactory(recipeRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -194,7 +194,7 @@ describe("API Error Handling", () => {
     it("should handle recipe with invalid recipe references", async () => {
       const createCaller = createCallerFactory(recipeRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -229,7 +229,7 @@ describe("API Error Handling", () => {
     it("should allow creating ingredient with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(ingredientRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -248,7 +248,7 @@ describe("API Error Handling", () => {
     it("should handle duplicate ingredient names", async () => {
       const createCaller = createCallerFactory(ingredientRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -269,7 +269,7 @@ describe("API Error Handling", () => {
     it("should throw error when updating non-existent ingredient", async () => {
       const createCaller = createCallerFactory(ingredientRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -290,7 +290,7 @@ describe("API Error Handling", () => {
     it("should allow creating location with empty name (schema permits it)", async () => {
       const createCaller = createCallerFactory(locationRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -311,7 +311,7 @@ describe("API Error Handling", () => {
     it("should throw error when creating location with invalid parent", async () => {
       const createCaller = createCallerFactory(locationRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -331,7 +331,7 @@ describe("API Error Handling", () => {
     it("should throw error when creating circular parent-child relationship", async () => {
       const createCaller = createCallerFactory(locationRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -367,7 +367,7 @@ describe("API Error Handling", () => {
     it("should validate pagination parameters at database level", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -396,7 +396,7 @@ describe("API Error Handling", () => {
     it("should handle sort parameters gracefully", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -422,7 +422,7 @@ describe("API Error Handling", () => {
     it("should validate UPC format", async () => {
       const createCaller = createCallerFactory(productRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),
@@ -448,7 +448,7 @@ describe("API Error Handling", () => {
     it("should handle database transaction failures gracefully", async () => {
       const createCaller = createCallerFactory(recipeRouter);
       const caller = createCaller(
-        createTestTRPCContext(prisma, {
+        createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
           projectId,
         }),

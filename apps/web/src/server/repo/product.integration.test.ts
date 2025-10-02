@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import {
   createProduct,
@@ -10,16 +10,16 @@ import {
 } from "./product";
 import {
   unsafeIngredientId,
-  unsafeProjectId,
   unsafeProductId,
+  type ProjectId,
 } from "~/schemas/identifiers";
 
 describe("product repository", () => {
-  let prisma: PrismaClient;
-  let projectId: string;
+  let db: Database;
+  let projectId: ProjectId;
   beforeEach(async () => {
-    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
-    prisma = db;
+    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
+    db = dbInstance;
     projectId = pId;
 
     return teardown;
@@ -38,11 +38,7 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(
-      prisma,
-      productData,
-      unsafeProjectId(projectId),
-    );
+    const createdProduct = await createProduct(db, productData, projectId);
 
     // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
@@ -53,9 +49,9 @@ describe("product repository", () => {
 
     // Retrieve the product by ID
     const retrievedProduct = await getProductByID(
-      prisma,
+      db,
       unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
+      projectId,
     );
 
     // Verify the retrieved product matches the created product
@@ -70,7 +66,7 @@ describe("product repository", () => {
     // Create test products in a transaction to use findProductByName
     const productName = "Unique Product Name";
 
-    await prisma.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       await tx.product.create({
         data: {
           project: { connect: { id: projectId } },
@@ -92,7 +88,7 @@ describe("product repository", () => {
 
   it("should throw error when finding a non-existent product by name", async () => {
     await expect(
-      prisma.$transaction(async (tx) => {
+      db.$transaction(async (tx) => {
         await findProductByName(tx, "Non-existent Product");
       }),
     ).rejects.toThrow("Product Non-existent Product not found");
@@ -102,7 +98,7 @@ describe("product repository", () => {
     const ambiguousName = "Ambiguous Product";
 
     // Create two products with the same name
-    await prisma.product.createMany({
+    await db.product.createMany({
       data: [
         {
           projectId: projectId,
@@ -122,7 +118,7 @@ describe("product repository", () => {
     });
 
     await expect(
-      prisma.$transaction(async (tx) => {
+      db.$transaction(async (tx) => {
         await findProductByName(tx, ambiguousName);
       }),
     ).rejects.toThrow(
@@ -158,20 +154,20 @@ describe("product repository", () => {
 
     for (const product of products) {
       await createProduct(
-        prisma,
+        db,
         {
           ...product,
           ingredientId: null,
           expectedQuantity: null,
         },
-        unsafeProjectId(projectId),
+        projectId,
       );
     }
 
     // Test listing with pagination - first page
     const firstPage = await productList(
-      prisma,
-      unsafeProjectId(projectId),
+      db,
+      projectId,
       undefined,
       undefined,
       undefined,
@@ -187,8 +183,8 @@ describe("product repository", () => {
 
     // Test listing with pagination - second page
     const secondPage = await productList(
-      prisma,
-      unsafeProjectId(projectId),
+      db,
+      projectId,
       undefined,
       undefined,
       undefined,
@@ -203,8 +199,8 @@ describe("product repository", () => {
 
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
-      prisma,
-      unsafeProjectId(projectId),
+      db,
+      projectId,
       undefined,
       "Manufacturer X",
       undefined,
@@ -232,17 +228,13 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(
-      prisma,
-      productData,
-      unsafeProjectId(projectId),
-    );
+    const createdProduct = await createProduct(db, productData, projectId);
 
     // Update the product
     const updatedProduct = await updateProduct(
-      prisma,
+      db,
       unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
+      projectId,
       {
         name: "Updated Product",
         manufacturer: "Updated Manufacturer",
@@ -265,9 +257,9 @@ describe("product repository", () => {
 
     // Retrieve the product to verify unit mappings
     const retrievedProduct = await getProductByID(
-      prisma,
+      db,
       unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
+      projectId,
     );
 
     // Verify unit mappings were created
@@ -285,7 +277,7 @@ describe("product repository", () => {
 
   it("should link a product to an ingredient", async () => {
     // First create an ingredient
-    const ingredient = await prisma.ingredient.create({
+    const ingredient = await db.ingredient.create({
       data: {
         project: { connect: { id: projectId } },
         name: "Test Ingredient",
@@ -305,17 +297,13 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(
-      prisma,
-      productData,
-      unsafeProjectId(projectId),
-    );
+    const createdProduct = await createProduct(db, productData, projectId);
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
-      prisma,
+      db,
       unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
+      projectId,
     );
 
     // Verify the ingredient association
@@ -326,7 +314,7 @@ describe("product repository", () => {
 
   it("should update ingredient association", async () => {
     // Create two ingredients
-    const ingredient1 = await prisma.ingredient.create({
+    const ingredient1 = await db.ingredient.create({
       data: {
         project: { connect: { id: projectId } },
         name: "Ingredient 1",
@@ -334,7 +322,7 @@ describe("product repository", () => {
       },
     });
 
-    const ingredient2 = await prisma.ingredient.create({
+    const ingredient2 = await db.ingredient.create({
       data: {
         project: { connect: { id: projectId } },
         name: "Ingredient 2",
@@ -354,27 +342,18 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(
-      prisma,
-      productData,
-      unsafeProjectId(projectId),
-    );
+    const createdProduct = await createProduct(db, productData, projectId);
 
     // Update the product to link to the second ingredient
-    await updateProduct(
-      prisma,
-      unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
-      {
-        ingredientId: unsafeIngredientId(ingredient2.id),
-      },
-    );
+    await updateProduct(db, unsafeProductId(createdProduct.id), projectId, {
+      ingredientId: unsafeIngredientId(ingredient2.id),
+    });
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
-      prisma,
+      db,
       unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
+      projectId,
     );
 
     // Verify the ingredient association was updated
@@ -383,20 +362,15 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient!.name).toEqual("Ingredient 2");
 
     // Update the product to remove ingredient association
-    await updateProduct(
-      prisma,
-      unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
-      {
-        ingredientId: null,
-      },
-    );
+    await updateProduct(db, unsafeProductId(createdProduct.id), projectId, {
+      ingredientId: null,
+    });
 
     // Retrieve the product again
     const updatedProduct = await getProductByID(
-      prisma,
+      db,
       unsafeProductId(createdProduct.id),
-      unsafeProjectId(projectId),
+      projectId,
     );
 
     // Verify the ingredient association was removed

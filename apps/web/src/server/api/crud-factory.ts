@@ -1,5 +1,5 @@
 import { z, type ZodSchema } from "zod";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { protectedProcedure } from "./trpc";
 import { type ProductService } from "~/server/services/product.service";
 import { type IngredientService } from "~/server/services/ingredient.service";
@@ -23,7 +23,7 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
 
 // Interface for services needed by CRUD operations
 export interface CrudServices {
-  db: PrismaClient;
+  db: Database;
   projectId: ProjectId;
   services: {
     product: ProductService;

@@ -1,4 +1,5 @@
-import { type Prisma, type PrismaClient } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { dedupe } from "~/misc/array-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
 import {
@@ -21,7 +22,7 @@ import {
 } from "~/schemas/identifiers";
 
 export const mergeIngredients = async (
-  db: PrismaClient,
+  db: Database,
   target: IngredientId,
   aliases: IngredientId[],
 ) => {
@@ -105,7 +106,7 @@ const ingredientInclude = {
 };
 
 const dbIngredientToAPI: (
-  db: PrismaClient,
+  db: Database,
   ingredient: IngredientDeepDB,
 ) => Promise<IngredientWithRecipesAndProductOut> = async (db, ingredient) => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
@@ -137,7 +138,7 @@ const dbIngredientToAPI: (
 };
 
 export const getIngredientByID = async (
-  db: PrismaClient,
+  db: Database,
   id: IngredientId,
   projectId: ProjectId,
 ) => {
@@ -147,7 +148,7 @@ export const getIngredientByID = async (
   });
   return await dbIngredientToAPI(db, ingredient);
 };
-export const getIngredientByName = async (db: PrismaClient, name: string) => {
+export const getIngredientByName = async (db: Database, name: string) => {
   const res = await db.ingredient.findFirst({
     where: buildIngredientWhere(true, name),
     include: ingredientInclude,
@@ -156,7 +157,7 @@ export const getIngredientByName = async (db: PrismaClient, name: string) => {
 };
 
 export const createIngredient = async (
-  db: PrismaClient,
+  db: Database,
   data: z.infer<typeof ingredientBase>,
   projectId: ProjectId,
 ): Promise<IngredientWithRecipesAndProductOut> => {
@@ -173,7 +174,7 @@ export const createIngredient = async (
 };
 
 export const updateIngredient = async (
-  db: PrismaClient,
+  db: Database,
   id: IngredientId,
   projectId: ProjectId,
   data: Partial<z.infer<typeof ingredientBase>>,
@@ -268,7 +269,7 @@ const buildIngredientWhere = (
   return where;
 };
 export const ingredientList = async (
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
   name: string | undefined,
   sort: SortParams,

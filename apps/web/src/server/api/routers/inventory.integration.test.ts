@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { inventoryentryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { unsafeProjectId } from "~/schemas/identifiers";
+import { type ProjectId } from "~/schemas/identifiers";
 
 describe("inventory router", () => {
-  let prisma: PrismaClient;
-  let projectId: ReturnType<typeof unsafeProjectId>;
+  let db: Database;
+  let projectId: ProjectId;
   beforeEach(async () => {
-    const { prisma: db, projectId: pId, teardown } = await buildTestDB();
-    prisma = db;
-    projectId = unsafeProjectId(pId);
+    const { db: dbInstance, projectId: pId, teardown } = await buildTestDB();
+    db = dbInstance;
+    projectId = pId;
 
     return teardown;
   });
@@ -20,14 +20,14 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
     );
 
     // Create test location
-    const location = await prisma.location.create({
+    const location = await db.location.create({
       data: {
         projectId: projectId,
         name: "Test Kitchen",
@@ -36,7 +36,7 @@ describe("inventory router", () => {
     });
 
     // Create test product
-    const product = await prisma.product.create({
+    const product = await db.product.create({
       data: {
         projectId: projectId,
         name: "Test Flour",
@@ -81,14 +81,14 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
     );
 
     // Create test locations
-    const kitchen = await prisma.location.create({
+    const kitchen = await db.location.create({
       data: {
         projectId: projectId,
         name: "Kitchen",
@@ -96,7 +96,7 @@ describe("inventory router", () => {
       },
     });
 
-    const pantry = await prisma.location.create({
+    const pantry = await db.location.create({
       data: {
         projectId: projectId,
         name: "Pantry",
@@ -105,7 +105,7 @@ describe("inventory router", () => {
     });
 
     // Create test products
-    const flour = await prisma.product.create({
+    const flour = await db.product.create({
       data: {
         projectId: projectId,
         name: "Flour",
@@ -115,7 +115,7 @@ describe("inventory router", () => {
       },
     });
 
-    const sugar = await prisma.product.create({
+    const sugar = await db.product.create({
       data: {
         projectId: projectId,
         name: "Sugar",
@@ -125,7 +125,7 @@ describe("inventory router", () => {
       },
     });
 
-    const rice = await prisma.product.create({
+    const rice = await db.product.create({
       data: {
         projectId: projectId,
         name: "Rice",
@@ -214,14 +214,14 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
     );
 
     // Create test location and product
-    const location = await prisma.location.create({
+    const location = await db.location.create({
       data: {
         projectId: projectId,
         name: "Test Location",
@@ -229,7 +229,7 @@ describe("inventory router", () => {
       },
     });
 
-    const product = await prisma.product.create({
+    const product = await db.product.create({
       data: {
         projectId: projectId,
         name: "Test Product",
@@ -277,14 +277,14 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
     );
 
     // Create test location and products
-    const location1 = await prisma.location.create({
+    const location1 = await db.location.create({
       data: {
         projectId: projectId,
         name: "Location 1",
@@ -292,7 +292,7 @@ describe("inventory router", () => {
       },
     });
 
-    const location2 = await prisma.location.create({
+    const location2 = await db.location.create({
       data: {
         projectId: projectId,
         name: "Location 2",
@@ -300,7 +300,7 @@ describe("inventory router", () => {
       },
     });
 
-    const product1 = await prisma.product.create({
+    const product1 = await db.product.create({
       data: {
         projectId: projectId,
         name: "Product 1",
@@ -310,7 +310,7 @@ describe("inventory router", () => {
       },
     });
 
-    const product2 = await prisma.product.create({
+    const product2 = await db.product.create({
       data: {
         projectId: projectId,
         name: "Product 2",
@@ -359,14 +359,14 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
     );
 
     // Create test location
-    const location = await prisma.location.create({
+    const location = await db.location.create({
       data: {
         projectId: projectId,
         name: "Bulk Location",
@@ -375,7 +375,7 @@ describe("inventory router", () => {
     });
 
     // Create test products
-    const product1 = await prisma.product.create({
+    const product1 = await db.product.create({
       data: {
         projectId: projectId,
         name: "Bulk Product 1",
@@ -385,7 +385,7 @@ describe("inventory router", () => {
       },
     });
 
-    const product2 = await prisma.product.create({
+    const product2 = await db.product.create({
       data: {
         projectId: projectId,
         name: "Bulk Product 2",
@@ -395,7 +395,7 @@ describe("inventory router", () => {
       },
     });
 
-    const product3 = await prisma.product.create({
+    const product3 = await db.product.create({
       data: {
         projectId: projectId,
         name: "Bulk Product 3",
@@ -473,7 +473,7 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -491,7 +491,7 @@ describe("inventory router", () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryentryRouter);
     const caller = createCaller(
-      createTestTRPCContext(prisma, {
+      createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
         projectId: projectId,
       }),
@@ -509,7 +509,7 @@ describe("inventory router", () => {
     ).rejects.toThrow("Foreign key constraint violated");
 
     // Create a valid entry first
-    const location = await prisma.location.create({
+    const location = await db.location.create({
       data: {
         projectId: projectId,
         name: "Test Location",
@@ -517,7 +517,7 @@ describe("inventory router", () => {
       },
     });
 
-    const product = await prisma.product.create({
+    const product = await db.product.create({
       data: {
         projectId: projectId,
         name: "Test Product",

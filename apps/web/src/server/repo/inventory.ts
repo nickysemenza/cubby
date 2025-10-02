@@ -1,4 +1,5 @@
-import { type Prisma, type PrismaClient } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { type z } from "zod";
 import {
   type SortParams,
@@ -105,7 +106,7 @@ const dbInventoryEntryToAPI: (
 };
 
 export const getInventoryEntryByID = async (
-  db: PrismaClient,
+  db: Database,
   id: InventoryId,
   projectId: ProjectId,
 ) => {
@@ -121,7 +122,7 @@ export const getInventoryEntryByID = async (
 };
 
 export const inventoryentryList = async (
-  db: PrismaClient,
+  db: Database,
   sort: SortParams,
   pagination: PaginationParams,
   productNameFilter?: string,
@@ -189,7 +190,7 @@ interface UpdateInventoryEntryData {
 }
 
 export const updateInventoryEntry = async (
-  db: PrismaClient,
+  db: Database,
   id: InventoryId,
   projectId: ProjectId,
   data: UpdateInventoryEntryData,
@@ -217,7 +218,7 @@ interface CreateInventoryEntryData {
 }
 
 export const createInventoryEntry = async (
-  db: PrismaClient,
+  db: Database,
   data: CreateInventoryEntryData,
   projectId: ProjectId,
 ) => {
@@ -235,7 +236,7 @@ export const createInventoryEntry = async (
 };
 
 export const bulkProcessInventoryEntries = async (
-  db: PrismaClient,
+  db: Database,
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
   projectId: ProjectId,

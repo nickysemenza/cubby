@@ -1,5 +1,5 @@
 import { currentUser } from "@clerk/nextjs/server";
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { type z } from "zod";
 import {
   type projectCreateInput,
@@ -9,7 +9,7 @@ import {
 import { TraceNames, withTrace } from "~/server/tracing";
 
 export class ProjectService {
-  constructor(private db: PrismaClient) {}
+  constructor(private db: Database) {}
 
   /**
    * Sync Clerk user to local database if needed

@@ -1,4 +1,5 @@
-import { type PrismaClient, type Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+import { type Database } from "~/server/db";
 import {
   type LocationOutWithParentChildren,
   type LocationOut,
@@ -29,7 +30,7 @@ import {
 
 // Create a new location
 export const createLocation = async (
-  db: PrismaClient,
+  db: Database,
   data: LocationCreateInput,
   projectId: ProjectId,
 ) => {
@@ -74,7 +75,7 @@ export const createLocation = async (
 
 // Update an existing location
 export const updateLocation = async (
-  db: PrismaClient,
+  db: Database,
   id: LocationId,
   projectId: ProjectId,
   data: LocationUpdateInput["data"],
@@ -387,7 +388,7 @@ const buildLocationWithChildren = (
   };
 };
 export const buildLocationTypeCount = async (
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
 ) => {
   const types = await db.location.groupBy({
@@ -414,10 +415,7 @@ export const buildLocationTypeCount = async (
   );
   return full as Record<(typeof allKeys)[number], number>;
 };
-export const buildLocationTree = async (
-  db: PrismaClient,
-  projectId: ProjectId,
-) => {
+export const buildLocationTree = async (db: Database, projectId: ProjectId) => {
   const res = await db.location.findMany({
     include: {
       children: recursiveLocationInclude(10, "children"),
@@ -441,7 +439,7 @@ export const buildLocationTree = async (
 };
 
 export const locationList = async (
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
   name: string | undefined,
   itemType: string | undefined,
@@ -488,7 +486,7 @@ export const locationList = async (
 };
 
 export const getLocationById = async (
-  db: PrismaClient | Prisma.TransactionClient,
+  db: Database | Prisma.TransactionClient,
   id: LocationId,
   projectId: ProjectId,
 ) => {

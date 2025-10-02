@@ -1,4 +1,4 @@
-import { type PrismaClient } from "@prisma/client";
+import { type Database } from "~/server/db";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -66,7 +66,7 @@ export interface EmptyLocation {
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<DuplicateUniqueProduct[]> => {
   const duplicates = await db.product.findMany({
@@ -99,7 +99,7 @@ export const findDuplicateUniqueProducts = async (
 
 // Find products that have no inventory entries
 export const findOrphanedProducts = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<OrphanedProduct[]> => {
   const orphaned = await db.product.findMany({
@@ -122,7 +122,7 @@ export const findOrphanedProducts = async (
 
 // Find products with invalid or duplicate UPC codes
 export const findInvalidUPCs = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<InvalidUPC[]> => {
   const problems: InvalidUPC[] = [];
@@ -184,7 +184,7 @@ export const findInvalidUPCs = async (
 
 // Find products without any unit mappings (no pricing information)
 export const findProductsWithoutMappings = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<ProductWithoutMappings[]> => {
   const productsWithoutMappings = await db.product.findMany({
@@ -207,7 +207,7 @@ export const findProductsWithoutMappings = async (
 
 // Find inventory entries with zero or negative amounts
 export const findInvalidInventoryAmounts = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<InvalidInventoryAmount[]> => {
   const inventoryEntries = await db.inventoryEntry.findMany({
@@ -241,7 +241,7 @@ export const findInvalidInventoryAmounts = async (
 
 // Find locations with no inventory entries
 export const findEmptyLocations = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<EmptyLocation[]> => {
   const emptyLocations = await db.location.findMany({
@@ -265,7 +265,7 @@ export const findEmptyLocations = async (
 
 // Main function to get all problems
 export const findAllProblems = async (
-  db: PrismaClient,
+  db: Database,
   projectId: string,
 ): Promise<AllProblems> => {
   // Run all checks in parallel for better performance

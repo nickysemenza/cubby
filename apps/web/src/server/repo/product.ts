@@ -1,4 +1,5 @@
-import { Product, type Prisma, type PrismaClient } from "@prisma/client";
+import { Product, type Prisma } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
 import { type z } from "zod";
@@ -201,7 +202,7 @@ export const foodLookupParamFromProduct = (product: {
 
 // Function to find products by UPC or NDB number - used for food items in usda.ts
 export const findProductsByFoodIdentifier = async (
-  db: PrismaClient,
+  db: Database,
   rawLookup?: FoodLookupParam,
 ) => {
   if (!rawLookup) {
@@ -225,7 +226,7 @@ export const findProductsByFoodIdentifier = async (
 };
 
 const dbProductToAPI: (
-  db: PrismaClient,
+  db: Database,
   product: ProductDeepDB,
 ) => Promise<
   z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>
@@ -270,7 +271,7 @@ const dbProductToAPI: (
 };
 
 export const getProductByID = async (
-  db: PrismaClient,
+  db: Database,
   id: ProductId,
   projectId: ProjectId,
 ) => {
@@ -285,7 +286,7 @@ export const getProductByID = async (
 };
 
 export const productList = async (
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
   name: string | undefined,
   manufacturer: string | undefined,
@@ -329,7 +330,7 @@ export const productList = async (
 
 // Create a new product
 export const createProduct = async (
-  db: PrismaClient,
+  db: Database,
   data: ProductInputPayload,
   projectId: ProjectId,
 ): Promise<ProductTopLevelOut> => {
@@ -383,7 +384,7 @@ export const createProduct = async (
 
 // Update an existing product
 export const updateProduct = async (
-  db: PrismaClient,
+  db: Database,
   id: ProductId,
   projectId: ProjectId,
   data: Partial<ProductInputPayload>,
@@ -510,7 +511,7 @@ export const updateProduct = async (
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
-  db: PrismaClient,
+  db: Database,
   projectId: ProjectId,
 ) => {
   const duplicates = await db.product.findMany({

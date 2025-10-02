@@ -5,7 +5,8 @@ import {
   findProductsByFoodIdentifier,
   findOrCreateProduct,
 } from "./product";
-import { Product, PrismaClient } from "@prisma/client";
+import { Product } from "@prisma/client";
+import { type Database } from "~/server/db";
 import { type ProductConfigItem } from "~/schemas/config";
 import { unsafeProjectId } from "~/schemas/identifiers";
 
@@ -56,7 +57,7 @@ describe("product repository helpers", () => {
         product: {
           findMany: vi.fn().mockResolvedValue([mockProduct]),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const result = await findProductByName(mockDb, "Test Product");
 
@@ -76,7 +77,7 @@ describe("product repository helpers", () => {
         product: {
           findMany: vi.fn().mockResolvedValue([]),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       await expect(findProductByName(mockDb, "Nonexistent")).rejects.toThrow(
         "Product Nonexistent not found",
@@ -93,7 +94,7 @@ describe("product repository helpers", () => {
         product: {
           findMany: vi.fn().mockResolvedValue(mockProducts),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       await expect(findProductByName(mockDb, "Test Product")).rejects.toThrow(
         "findProductByName: Product Test Product is ambiguous",
@@ -103,7 +104,7 @@ describe("product repository helpers", () => {
 
   describe("findProductsByFoodIdentifier", () => {
     test("returns empty array when lookup is undefined", async () => {
-      const mockDb = {} as unknown as PrismaClient;
+      const mockDb = {} as unknown as Database;
       const result = await findProductsByFoodIdentifier(mockDb, undefined);
       expect(result).toEqual([]);
     });
@@ -116,7 +117,7 @@ describe("product repository helpers", () => {
         product: {
           findMany: vi.fn().mockResolvedValue(mockProducts),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const lookup = { kind: "upc" as const, gtin_upc: "123456789012" };
       const result = await findProductsByFoodIdentifier(mockDb, lookup);
@@ -135,7 +136,7 @@ describe("product repository helpers", () => {
         product: {
           findMany: vi.fn().mockResolvedValue(mockProducts),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const lookup = { kind: "ndb" as const, ndb_number: 12345 };
       const result = await findProductsByFoodIdentifier(mockDb, lookup);
@@ -151,7 +152,7 @@ describe("product repository helpers", () => {
         product: {
           findMany: vi.fn(),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const invalidLookup = {
         kind: "invalid",
@@ -177,7 +178,7 @@ describe("product repository helpers", () => {
           deleteMany: vi.fn().mockResolvedValue({}),
           createMany: vi.fn().mockResolvedValue({}),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const productConfig: ProductConfigItem = {
         name: "Test Product",
@@ -245,7 +246,7 @@ describe("product repository helpers", () => {
           deleteMany: vi.fn().mockResolvedValue({}),
           createMany: vi.fn().mockResolvedValue({}),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const productConfig: ProductConfigItem = {
         name: "Test Product",
@@ -283,7 +284,7 @@ describe("product repository helpers", () => {
           deleteMany: vi.fn().mockResolvedValue({}),
           createMany: vi.fn().mockResolvedValue({}),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const productConfig: ProductConfigItem = {
         name: "Test Product",
@@ -327,7 +328,7 @@ describe("product repository helpers", () => {
           deleteMany: vi.fn().mockResolvedValue({}),
           createMany: vi.fn().mockResolvedValue({}),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const productConfig: ProductConfigItem = {
         name: "Test Product",
@@ -378,7 +379,7 @@ describe("product repository helpers", () => {
           deleteMany: vi.fn().mockResolvedValue({ count: 3 }),
           createMany: vi.fn().mockResolvedValue({}),
         },
-      } as unknown as PrismaClient;
+      } as unknown as Database;
 
       const productConfig: ProductConfigItem = {
         name: "Test Product",
