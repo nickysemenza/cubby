@@ -560,7 +560,7 @@ describe("inventory router", () => {
         locationId: nonExistentId,
         amount: { value: 1, unit: "piece" },
       }),
-    ).rejects.toThrow("Foreign key constraint violated");
+    ).rejects.toThrow(/Failed query/);
 
     // Create a valid entry first
     const location = await createLocation(
@@ -601,6 +601,6 @@ describe("inventory router", () => {
           productId: nonExistentId,
         },
       }),
-    ).rejects.toThrow("Foreign key constraint violated");
+    ).rejects.toThrow(/Failed query/);
   });
 });

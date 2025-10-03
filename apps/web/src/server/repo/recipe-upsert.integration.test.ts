@@ -6,6 +6,8 @@ import { createIngredient } from "./ingredient";
 import { type RecipeCreateInput } from "~/schemas/recipe";
 import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
 import { getDb } from "./database-helpers";
+import { recipe } from "~/server/db/schema";
+import { eq, and } from "drizzle-orm";
 
 describe("upsertRecipe", () => {
   let db: Database;
@@ -116,28 +118,26 @@ describe("upsertRecipe", () => {
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
-    const recipe = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe Direct",
-        },
-      },
-      include: {
+    const foundRecipe = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe Direct"),
+      ),
+      with: {
         sections: {
-          include: {
+          with: {
             ingredients: true,
           },
         },
       },
     });
 
-    expect(recipe).toBeTruthy();
-    expect(recipe!.name).toBe("Test Recipe Direct");
-    expect(recipe!.SourceType).toBe("Website");
-    expect(recipe!.SourceData).toBe("https://example.com/recipe");
-    expect(recipe!.sections).toHaveLength(1);
-    expect(recipe!.sections[0]!.ingredients).toHaveLength(2);
+    expect(foundRecipe).toBeTruthy();
+    expect(foundRecipe!.name).toBe("Test Recipe Direct");
+    expect(foundRecipe!.SourceType).toBe("Website");
+    expect(foundRecipe!.SourceData).toBe("https://example.com/recipe");
+    expect(foundRecipe!.sections).toHaveLength(1);
+    expect(foundRecipe!.sections[0]!.ingredients).toHaveLength(2);
   });
 
   it("updates an existing recipe when it already exists", async () => {
@@ -155,16 +155,14 @@ describe("upsertRecipe", () => {
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
-    const updatedRecipe = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe Direct",
-        },
-      },
-      include: {
+    const updatedRecipe = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe Direct"),
+      ),
+      with: {
         sections: {
-          include: {
+          with: {
             ingredients: true,
           },
         },
@@ -198,11 +196,11 @@ describe("upsertRecipe", () => {
     expect(thirdRun.id).toBe(firstRun.id);
 
     // Should only be one recipe in the database
-    const allRecipes = await getDb(db).recipe.findMany({
-      where: {
-        projectId: projectId,
-        name: "Test Recipe Direct",
-      },
+    const allRecipes = await getDb(db).query.recipe.findMany({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe Direct"),
+      ),
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -224,16 +222,14 @@ describe("upsertRecipe", () => {
 
     await upsertRecipe(recipeNoUrl, db, projectId);
 
-    const recipe = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Manual Recipe",
-        },
-      },
+    const foundRecipe = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Manual Recipe"),
+      ),
     });
 
-    expect(recipe!.SourceType).toBe("Other");
-    expect(recipe!.SourceData).toBeNull();
+    expect(foundRecipe!.SourceType).toBe("Other");
+    expect(foundRecipe!.SourceData).toBeNull();
   });
 });

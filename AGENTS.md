@@ -37,11 +37,13 @@
 ### Database Access Control
 
 - **Opaque Database Type**: The `Database` type is opaque (branded) and prevents direct method calls outside of repo files
-- **Repo Layer Only**: All direct database operations (`.findMany()`, `.create()`, etc.) must be in `/server/repo/` files
+- **Repo Layer Only**: All direct database operations (`.query.table.findMany()`, `.insert()`, `.update()`, etc.) must be in `/server/repo/` files
 - **Services as Plumbing**: Services accept `Database` but cannot call methods on it - they only pass it to repo functions
-- **Using getDb()**: In repo functions that accept `db: Database`, call `const prisma = getDb(db)` to access PrismaClient methods
-- **Transactions**: Use `withTransaction(db, async (tx) => {...})` for atomic operations - `tx` is already a `PrismaClient`
-- **Pattern**: Functions that accept `Prisma.TransactionClient` (usually named `tx`) can call methods directly without `getDb()`
+- **Using getDb()**: In repo functions that accept `db: Database`, call `getDb(db)` to access the DrizzleClient
+- **Using unwrapDb()**: For functions accepting `Database | Transaction`, use `unwrapDb(db)` to safely handle both types
+- **Transactions**: Use `withTransaction(db, async (tx) => {...})` for atomic operations - `tx` is a `DrizzleTransaction`
+- **Pattern**: Functions that accept `DrizzleTransaction` (usually named `tx`) can call methods directly without `getDb()`
+- **Helper Functions**: Use `insertAndReturn()`, `updateAndReturn()`, `buildOrderBy()`, and relation helpers from `database-helpers.ts` to reduce boilerplate
 
 ### Other Patterns
 
@@ -149,4 +151,4 @@
   - `usda_food_nutrient.amount`: Rows with null/empty values are skipped.
   - `usda_food_portion.amount`: Rows with null/empty values are skipped.
   - `usda_food_portion.gram_weight`: Rows with null/empty values are skipped.
-  This is enforced in both the Drizzle schema and migrations; importer substitutes for description and skips other invalid rows.
+    This is enforced in both the Drizzle schema and migrations; importer substitutes for description and skips other invalid rows.

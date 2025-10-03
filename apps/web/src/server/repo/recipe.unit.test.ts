@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { dbRecipeToAPIShallow } from "./recipe";
-import { RecipeSource } from "@prisma/client";
 
 describe("recipe repository helpers", () => {
   describe("dbRecipeToAPIShallow", () => {
@@ -12,7 +11,7 @@ describe("recipe repository helpers", () => {
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
         projectId: "00000000-0000-0000-0000-000000000000",
-        SourceType: RecipeSource.Website,
+        SourceType: "Website" as const,
         SourceData: "https://example.com/recipe",
       };
 
@@ -39,7 +38,7 @@ describe("recipe repository helpers", () => {
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
         projectId: "00000000-0000-0000-0000-000000000000",
-        SourceType: RecipeSource.Other,
+        SourceType: "Other" as const,
         SourceData: "some data",
       };
 

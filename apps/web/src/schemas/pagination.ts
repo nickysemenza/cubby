@@ -6,8 +6,8 @@ const sortParams = z.object({
 });
 
 const paginationParams = z.object({
-  pageIndex: z.number().default(0),
-  pageSize: z.number().default(10),
+  pageIndex: z.number().min(0).default(0),
+  pageSize: z.number().min(1).default(10),
 });
 
 export const sortPaginationCombo = z.object({

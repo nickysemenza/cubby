@@ -2,8 +2,6 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -109,6 +107,7 @@ jobs:
         image: ${{ matrix.package.needs-db && 'postgres' || '' }}
         env:
           POSTGRES_USER: postgres
+          POSTGRES_DB: recipehub
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
@@ -186,6 +185,7 @@ jobs:
         image: postgres
         env:
           POSTGRES_USER: postgres
+          POSTGRES_DB: recipehub
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready

@@ -2,13 +2,12 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
-import { execSync } from "child_process";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { Pool } from "pg";
 import { unsafeProjectId } from "../src/schemas/identifiers";
-import {
-  createDBClient,
-  toBrandedDatabase,
-  type Database,
-} from "../src/server/db";
+import { type Database } from "../src/server/db/database";
+import * as schema from "../src/server/db/schema";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
@@ -16,7 +15,7 @@ let hash = "";
 
 export async function setup() {
   console.log("TEST GLOBAL SETUP");
-  hash = await integreSQL.hashFiles(["./prisma/schema.prisma"]);
+  hash = await integreSQL.hashFiles(["./src/server/db/schema.ts"]);
 
   // Initialize the template database
   await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
@@ -25,50 +24,44 @@ export async function setup() {
     );
 
     console.log("Migrating template database");
-    // const prismaBin = path.join(process.cwd(), "./node_modules/.bin/prisma");
-    const env = {
-      DATABASE_URL: connectionUrl,
-      PATH: process.env.PATH,
-      NODE_ENV: process.env.NODE_ENV,
-    };
-    const output = execSync(
-      `npx prisma db push --force-reset --skip-generate`,
-      {
-        env,
-      },
-    ).toString();
+    const pool = new Pool({ connectionString: connectionUrl });
+    const db = drizzle(pool);
 
-    console.log(output);
-    console.log("Seeding template database");
-    const db = createDBClient(connectionUrl);
-    //   await seed(db);
+    await migrate(db, { migrationsFolder: "./drizzle" });
 
-    // Close the database connection, without this the tests can hang
-    await db.$disconnect();
+    console.log("Template database migrated");
+    await pool.end();
   });
 }
 export async function buildTestDB() {
   const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
-  const hash = await integreSQL.hashFiles(["./prisma/schema.prisma"]);
+  const hash = await integreSQL.hashFiles(["./src/server/db/schema.ts"]);
   const databaseConfig = await integreSQL.getTestDatabase(hash);
   console.log("testdb:", databaseConfig.database);
   const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
     remapDBConfig(databaseConfig),
   );
-  const db = createDBClient(connectionUrl);
+
+  // Create drizzle client directly without importing from db.ts
+  const pool = new Pool({ connectionString: connectionUrl });
+  const rawDb = drizzle({ client: pool, schema });
+
   // Automatically create a test project
-  const testProject = await db.project.create({
-    data: {
+  const testProject = await rawDb
+    .insert(schema.project)
+    .values({
       name: "Test Project",
       description: "Auto-created project for testing",
-    },
-  });
+    })
+    .returning()
+    .then((rows) => rows[0]!);
 
   const teardown = async () => {
-    await db.$disconnect();
+    await pool.end();
   };
+
   return {
-    db: toBrandedDatabase(db),
+    db: rawDb as unknown as Database,
     projectId: unsafeProjectId(testProject.id),
     teardown,
   };

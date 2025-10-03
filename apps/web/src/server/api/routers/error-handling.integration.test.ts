@@ -372,14 +372,14 @@ describe("API Error Handling", () => {
         }),
       );
 
-      // Test that negative page size causes database error (Prisma validates skip must be positive)
+      // Test that negative pageIndex is caught by validation
       await expect(
         caller.list({
           filters: {},
-          pagination: { pageSize: 10, pageIndex: -1 }, // -1 * 10 = -10 skip
+          pagination: { pageSize: 10, pageIndex: -1 }, // Validation should reject negative pageIndex
           sort: { orderBy: "name", direction: "asc" },
         }),
-      ).rejects.toThrow(/Invalid value for skip argument/);
+      ).rejects.toThrow(/too_small/);
 
       // Test normal pagination works
       const result = await caller.list({

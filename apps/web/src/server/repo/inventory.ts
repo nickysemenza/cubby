@@ -1,5 +1,4 @@
-import { type Prisma } from "@prisma/client";
-import { type Database } from "~/server/db";
+import { type Database, type Transaction } from "~/server/db";
 import { type z } from "zod";
 import {
   type SortParams,
@@ -9,9 +8,15 @@ import {
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 import {
-  getSortDirection,
   withTransaction,
   getDb,
+  unwrapDb,
+  buildOrderBy,
+  insertAndReturnDb,
+  insertAndReturn,
+  relations,
+  updateAndReturnDb,
+  updateAndReturn,
 } from "~/server/repo/database-helpers";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import {
@@ -23,52 +28,30 @@ import {
   unsafeProductId,
   unsafeLocationId,
 } from "~/schemas/identifiers";
+import {
+  inventoryEntry,
+  product,
+  location,
+  productUnitMappings,
+  productImage,
+  locationImage,
+  image,
+} from "~/server/db/schema";
+import { eq, and, count, not, ilike } from "drizzle-orm";
 
-const inventoryentryInclude = {
-  Product: {
-    include: {
-      unitMappings: true,
-      images: {
-        include: {
-          image: true,
-        },
-      },
-    },
-  },
-  location: {
-    include: {
-      images: {
-        include: {
-          image: true,
-        },
-      },
-    },
-  },
-};
-
-type InventoryEntryDeepDB = Prisma.InventoryEntryGetPayload<{
-  include: {
-    Product: {
-      include: {
-        unitMappings: true;
-        images: {
-          include: {
-            image: true;
-          };
-        };
-      };
-    };
-    location: {
-      include: {
-        images: {
-          include: {
-            image: true;
-          };
-        };
-      };
-    };
+type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
+  Product: typeof product.$inferSelect & {
+    unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+    images: Array<{
+      image: typeof image.$inferSelect;
+    }>;
   };
-}>;
+  location: typeof location.$inferSelect & {
+    images: Array<{
+      image: typeof image.$inferSelect;
+    }>;
+  };
+};
 
 const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
@@ -119,26 +102,28 @@ export const checkUniqueProductDuplicate = async (
   locationId: LocationId,
 ): Promise<{ productName: string; locationName: string } | null> => {
   // Check if this is a product with expectedQuantity=1 (unique item)
-  const product = await getDb(db).product.findUnique({
-    where: { id: productId },
-    select: { expectedQuantity: true, name: true },
+  const productData = await getDb(db).query.product.findFirst({
+    where: eq(product.id, productId),
+    columns: { expectedQuantity: true, name: true },
   });
 
   // If it's a unique item, check for duplicates
-  if (product?.expectedQuantity === 1) {
-    const existingEntry = await getDb(db).inventoryEntry.findFirst({
-      where: {
-        productId,
-        locationId: { not: locationId },
-      },
-      include: {
-        location: { select: { name: true } },
+  if (productData?.expectedQuantity === 1) {
+    const existingEntry = await getDb(db).query.inventoryEntry.findFirst({
+      where: and(
+        eq(inventoryEntry.productId, productId),
+        not(eq(inventoryEntry.locationId, locationId)),
+      ),
+      with: {
+        location: {
+          columns: { name: true },
+        },
       },
     });
 
     if (existingEntry) {
       return {
-        productName: product.name,
+        productName: productData.name,
         locationName: existingEntry.location.name,
       };
     }
@@ -152,15 +137,15 @@ export const getInventoryEntryByID = async (
   id: InventoryId,
   projectId: ProjectId,
 ) => {
-  const res = await getDb(db).inventoryEntry.findFirst({
-    where: {
-      id,
-      projectId, // Ensure inventory entry belongs to project
-    },
-    include: inventoryentryInclude,
+  const res = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.id, id),
+      eq(inventoryEntry.projectId, projectId),
+    ),
+    ...relations.inventory.full,
   });
 
-  return res ? dbInventoryEntryToAPI(res) : null;
+  return res ? dbInventoryEntryToAPI(res as InventoryEntryDeepDB) : null;
 };
 
 export const inventoryentryList = async (
@@ -171,59 +156,98 @@ export const inventoryentryList = async (
   locationNameFilter?: string,
   locationIdFilter?: string,
 ) => {
-  const orderBy: Prisma.InventoryEntryOrderByWithAggregationInput = {
-    createdAt: getSortDirection(sort, "createdAt"),
-    amount: getSortDirection(sort, "amount"),
-  };
-
-  // Build where clause based on filters
-  const where: Prisma.InventoryEntryWhereInput = {
-    ...(productNameFilter
-      ? {
-          Product: {
-            name: {
-              contains: productNameFilter,
-              mode: "insensitive",
-            },
-          },
-        }
-      : {}),
-    ...(locationNameFilter
-      ? {
-          location: {
-            name: {
-              contains: locationNameFilter,
-              mode: "insensitive",
-            },
-          },
-        }
-      : {}),
-    ...(locationIdFilter
-      ? {
-          location: {
-            id: locationIdFilter,
-          },
-        }
-      : {}),
-  };
-
-  // Define query parameters once to avoid duplication
-  const findManyParams = {
-    orderBy,
-    where,
-    ...buildTakeSkip(pagination),
-    include: inventoryentryInclude,
-  };
-
-  // Execute both queries in a single transaction for better performance
-  const prisma = getDb(db);
-  const [results, totalCount] = await prisma.$transaction([
-    prisma.inventoryEntry.findMany(findManyParams),
-    prisma.inventoryEntry.count({ where }),
+  // Build order by array using helper
+  const orderByArray = buildOrderBy(inventoryEntry, sort, [
+    "createdAt",
+    "amount",
   ]);
 
-  const inventoryentrys = results.map(dbInventoryEntryToAPI);
-  return { data: inventoryentrys, count: totalCount };
+  const { take, skip } = buildTakeSkip(pagination);
+
+  // Build where conditions - note Drizzle doesn't support nested filters in relational queries
+  // We'll need to do joins for filtering on related tables
+  let whereClause = undefined;
+
+  // For location ID filter, we can use a simple where clause
+  if (locationIdFilter && !productNameFilter && !locationNameFilter) {
+    whereClause = eq(inventoryEntry.locationId, locationIdFilter);
+  }
+
+  // If we have product or location name filters, we need to use query builder with joins
+  if (productNameFilter || locationNameFilter) {
+    const conditions = [];
+
+    if (productNameFilter) {
+      conditions.push(ilike(product.name, `%${productNameFilter}%`));
+    }
+    if (locationNameFilter) {
+      conditions.push(ilike(location.name, `%${locationNameFilter}%`));
+    }
+    if (locationIdFilter) {
+      conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
+    }
+
+    const whereCondition =
+      conditions.length > 1 ? and(...conditions) : conditions[0];
+
+    // Use query builder for complex filtering
+    const [results, [countResult]] = await Promise.all([
+      getDb(db)
+        .select({
+          inventoryEntry: inventoryEntry,
+          Product: product,
+          location: location,
+        })
+        .from(inventoryEntry)
+        .innerJoin(product, eq(inventoryEntry.productId, product.id))
+        .innerJoin(location, eq(inventoryEntry.locationId, location.id))
+        .where(whereCondition)
+        .orderBy(...orderByArray)
+        .limit(take)
+        .offset(skip),
+      getDb(db)
+        .select({ count: count() })
+        .from(inventoryEntry)
+        .innerJoin(product, eq(inventoryEntry.productId, product.id))
+        .innerJoin(location, eq(inventoryEntry.locationId, location.id))
+        .where(whereCondition),
+    ]);
+
+    // Fetch full data with relations for each result
+    const fullResults = await Promise.all(
+      results.map(async (row) => {
+        return await getDb(db).query.inventoryEntry.findFirst({
+          where: eq(inventoryEntry.id, row.inventoryEntry.id),
+          ...relations.inventory.full,
+        });
+      }),
+    );
+
+    const inventoryentrys = fullResults
+      .filter((r) => r !== undefined)
+      .map((r) => dbInventoryEntryToAPI(r as InventoryEntryDeepDB));
+    return { data: inventoryentrys, count: countResult?.count ?? 0 };
+  }
+
+  // Simple case: no complex filters
+  const [results, [countResult]] = await Promise.all([
+    getDb(db).query.inventoryEntry.findMany({
+      where: whereClause,
+      ...relations.inventory.full,
+      orderBy: orderByArray,
+      limit: take,
+      offset: skip,
+    }),
+    getDb(db)
+      .select({ count: count() })
+      .from(inventoryEntry)
+      .where(whereClause),
+  ]);
+
+  const inventoryentrys = results.map((r) =>
+    dbInventoryEntryToAPI(r as InventoryEntryDeepDB),
+  );
+  return { data: inventoryentrys, count: countResult?.count ?? 0 };
 };
 
 interface UpdateInventoryEntryData {
@@ -238,20 +262,40 @@ export const updateInventoryEntry = async (
   projectId: ProjectId,
   data: UpdateInventoryEntryData,
 ) => {
-  const updated = await getDb(db).inventoryEntry.update({
-    where: {
-      id,
-      projectId, // Ensure inventory entry belongs to project
-    },
-    data: {
-      ...(data.amount ? { amount: data.amount } : {}),
-      ...(data.productId ? { productId: data.productId } : {}),
-      ...(data.locationId ? { locationId: data.locationId } : {}),
-    },
-    include: inventoryentryInclude,
+  const updateValues: {
+    amount?: z.infer<typeof import("~/codec/codec").amount>;
+    productId?: ProductId;
+    locationId?: LocationId;
+  } = {};
+
+  if (data.amount) {
+    updateValues.amount = data.amount;
+  }
+  if (data.productId) {
+    updateValues.productId = data.productId;
+  }
+  if (data.locationId) {
+    updateValues.locationId = data.locationId;
+  }
+
+  const updated = await updateAndReturnDb(
+    db,
+    inventoryEntry,
+    updateValues,
+    and(eq(inventoryEntry.id, id), eq(inventoryEntry.projectId, projectId)),
+  );
+
+  // Fetch with relations
+  const result = await getDb(db).query.inventoryEntry.findFirst({
+    where: eq(inventoryEntry.id, updated.id),
+    ...relations.inventory.full,
   });
 
-  return dbInventoryEntryToAPI(updated);
+  if (!result) {
+    throw new Error(`Inventory entry ${id} not found after update`);
+  }
+
+  return dbInventoryEntryToAPI(result as InventoryEntryDeepDB);
 };
 
 interface CreateInventoryEntryData {
@@ -265,17 +309,24 @@ export const createInventoryEntry = async (
   data: CreateInventoryEntryData,
   projectId: ProjectId,
 ) => {
-  const created = await getDb(db).inventoryEntry.create({
-    data: {
-      projectId: projectId,
-      productId: data.productId,
-      locationId: data.locationId,
-      amount: data.amount,
-    },
-    include: inventoryentryInclude,
+  const created = await insertAndReturnDb(db, inventoryEntry, {
+    projectId: projectId,
+    productId: data.productId,
+    locationId: data.locationId,
+    amount: data.amount,
   });
 
-  return dbInventoryEntryToAPI(created);
+  // Fetch with relations
+  const result = await getDb(db).query.inventoryEntry.findFirst({
+    where: eq(inventoryEntry.id, created.id),
+    ...relations.inventory.full,
+  });
+
+  if (!result) {
+    throw new Error("Failed to fetch created inventory entry");
+  }
+
+  return dbInventoryEntryToAPI(result as InventoryEntryDeepDB);
 };
 
 export const bulkProcessInventoryEntries = async (
@@ -285,15 +336,13 @@ export const bulkProcessInventoryEntries = async (
   projectId: ProjectId,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
-  const processedItems = await withTransaction(db, async (tx) => {
-    const results = [];
+  const processedItems = await withTransaction(db, async (tx: Transaction) => {
+    const results: InventoryEntryDeepDB[] = [];
 
     // First, get all existing inventory entries for this location
-    const existingItems = await tx.inventoryEntry.findMany({
-      where: {
-        locationId: locationId,
-      },
-      include: inventoryentryInclude,
+    const existingItems = await tx.query.inventoryEntry.findMany({
+      where: eq(inventoryEntry.locationId, locationId),
+      ...relations.inventory.full,
     });
 
     // Get IDs of items in the submitted array
@@ -306,9 +355,7 @@ export const bulkProcessInventoryEntries = async (
 
     // Delete items that are not in the submitted array
     for (const item of itemsToDelete) {
-      await tx.inventoryEntry.delete({
-        where: { id: item.id },
-      });
+      await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, item.id));
     }
 
     // Process submitted items - create new or update existing
@@ -318,47 +365,73 @@ export const bulkProcessInventoryEntries = async (
         if (!item.productId || !item.amount) {
           throw new Error("productId and amount are required for new items");
         }
-        const created = await tx.inventoryEntry.create({
-          data: {
-            projectId: projectId,
-            productId: item.productId,
-            locationId: locationId,
-            amount: item.amount,
-          },
-          include: inventoryentryInclude,
+        const created = await insertAndReturn(tx, inventoryEntry, {
+          projectId: projectId,
+          productId: item.productId,
+          locationId: locationId,
+          amount: item.amount,
         });
-        results.push(created);
+
+        // Fetch with relations
+        const fullCreated = await tx.query.inventoryEntry.findFirst({
+          where: eq(inventoryEntry.id, created.id),
+          ...relations.inventory.full,
+        });
+
+        if (fullCreated) {
+          results.push(fullCreated as InventoryEntryDeepDB);
+        }
       } else {
         // Update existing inventory entry
-        const updateData: Prisma.InventoryEntryUpdateInput = {};
-        if (item.amount) updateData.amount = item.amount;
-        if (item.productId)
-          updateData.Product = { connect: { id: item.productId } };
+        const updateValues: {
+          amount?: z.infer<typeof import("~/codec/codec").amount>;
+          productId?: ProductId;
+        } = {};
+
+        if (item.amount) {
+          updateValues.amount = item.amount;
+        }
+        if (item.productId) {
+          updateValues.productId = item.productId;
+        }
 
         // Only process if there are actual updates
-        if (Object.keys(updateData).length > 0) {
-          const updated = await tx.inventoryEntry.update({
-            where: { id: item.id },
-            data: updateData,
-            include: inventoryentryInclude,
+        if (Object.keys(updateValues).length > 0) {
+          const updated = await updateAndReturn(
+            tx,
+            inventoryEntry,
+            updateValues,
+            eq(inventoryEntry.id, item.id),
+          );
+
+          // Fetch with relations
+          const fullUpdated = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, updated.id),
+            ...relations.inventory.full,
           });
-          results.push(updated);
+
+          if (fullUpdated) {
+            results.push(fullUpdated as InventoryEntryDeepDB);
+          }
         } else {
           // If no updates, just fetch the current item
-          const current = await tx.inventoryEntry.findUnique({
-            where: { id: item.id },
-            include: inventoryentryInclude,
+          const current = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, item.id),
+            ...relations.inventory.full,
           });
-          if (current) results.push(current);
+
+          if (current) {
+            results.push(current as InventoryEntryDeepDB);
+          }
         }
       }
     }
 
     // Update the location's lastBulkInventory timestamp
-    await tx.location.update({
-      where: { id: locationId },
-      data: { lastBulkInventory: new Date() },
-    });
+    await tx
+      .update(location)
+      .set({ lastBulkInventory: new Date() })
+      .where(eq(location.id, locationId));
 
     return results;
   });

@@ -5,6 +5,8 @@ import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
 import { type ProjectId } from "~/schemas/identifiers";
 import { getDb } from "./database-helpers";
+import { recipe, recipeSection } from "~/server/db/schema";
+import { eq, and, ne } from "drizzle-orm";
 
 describe("upsertRecipeFromCompact", () => {
   let db: Database;
@@ -74,28 +76,26 @@ describe("upsertRecipeFromCompact", () => {
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
-    const recipe = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe",
-        },
-      },
-      include: {
+    const foundRecipe = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe"),
+      ),
+      with: {
         sections: {
-          include: {
+          with: {
             ingredients: true,
           },
         },
       },
     });
 
-    expect(recipe).toBeTruthy();
-    expect(recipe!.name).toBe("Test Recipe");
-    expect(recipe!.SourceType).toBe("Website");
-    expect(recipe!.SourceData).toBe("https://example.com/recipe");
-    expect(recipe!.sections).toHaveLength(1);
-    expect(recipe!.sections[0]!.ingredients).toHaveLength(2);
+    expect(foundRecipe).toBeTruthy();
+    expect(foundRecipe!.name).toBe("Test Recipe");
+    expect(foundRecipe!.SourceType).toBe("Website");
+    expect(foundRecipe!.SourceData).toBe("https://example.com/recipe");
+    expect(foundRecipe!.sections).toHaveLength(1);
+    expect(foundRecipe!.sections[0]!.ingredients).toHaveLength(2);
   });
 
   it("updates an existing recipe when it already exists", async () => {
@@ -107,16 +107,14 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Verify initial state
-    const initialRecipe = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe",
-        },
-      },
-      include: {
+    const initialRecipe = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe"),
+      ),
+      with: {
         sections: {
-          include: {
+          with: {
             ingredients: true,
           },
         },
@@ -137,16 +135,14 @@ describe("upsertRecipeFromCompact", () => {
     expect(secondResult.id).toBe(firstResult.id);
 
     // Verify the recipe was updated
-    const updatedRecipe = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe",
-        },
-      },
-      include: {
+    const updatedRecipe = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe"),
+      ),
+      with: {
         sections: {
-          include: {
+          with: {
             ingredients: true,
           },
         },
@@ -180,11 +176,11 @@ describe("upsertRecipeFromCompact", () => {
     expect(thirdRun.id).toBe(firstRun.id);
 
     // Should only be one recipe in the database
-    const allRecipes = await getDb(db).recipe.findMany({
-      where: {
-        projectId: projectId,
-        name: "Test Recipe",
-      },
+    const allRecipes = await getDb(db).query.recipe.findMany({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe"),
+      ),
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -194,38 +190,36 @@ describe("upsertRecipeFromCompact", () => {
     // Create recipe with 2 sections
     await upsertRecipeFromCompact(mockRecipeUpdated, db, projectId);
 
-    const beforeUpdate = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe",
-        },
-      },
-      include: { sections: { include: { ingredients: true } } },
+    const beforeUpdate = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe"),
+      ),
+      with: { sections: { with: { ingredients: true } } },
     });
 
     const sectionCountBefore = beforeUpdate!.sections.length;
     const ingredientCountBefore = beforeUpdate!.sections.reduce(
-      (total, section) => total + section.ingredients.length,
+      (total: number, section: { ingredients: unknown[] }) =>
+        total + section.ingredients.length,
       0,
     );
 
     // Update to recipe with 1 section
     await upsertRecipeFromCompact(mockRecipe, db, projectId);
 
-    const afterUpdate = await getDb(db).recipe.findUnique({
-      where: {
-        projectId_name: {
-          projectId: projectId,
-          name: "Test Recipe",
-        },
-      },
-      include: { sections: { include: { ingredients: true } } },
+    const afterUpdate = await getDb(db).query.recipe.findFirst({
+      where: and(
+        eq(recipe.projectId, projectId),
+        eq(recipe.name, "Test Recipe"),
+      ),
+      with: { sections: { with: { ingredients: true } } },
     });
 
     const sectionCountAfter = afterUpdate!.sections.length;
     const ingredientCountAfter = afterUpdate!.sections.reduce(
-      (total, section) => total + section.ingredients.length,
+      (total: number, section: { ingredients: unknown[] }) =>
+        total + section.ingredients.length,
       0,
     );
 
@@ -236,8 +230,8 @@ describe("upsertRecipeFromCompact", () => {
     expect(ingredientCountAfter).toBeLessThan(ingredientCountBefore);
 
     // Verify no orphaned records exist
-    const orphanedSections = await getDb(db).recipeSection.findMany({
-      where: { recipeId: { not: afterUpdate!.id } },
+    const orphanedSections = await getDb(db).query.recipeSection.findMany({
+      where: ne(recipeSection.recipeId, afterUpdate!.id),
     });
     expect(orphanedSections).toHaveLength(0);
   });

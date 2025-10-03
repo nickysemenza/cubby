@@ -1,5 +1,4 @@
-import { Product, type Prisma, PrismaClient } from "@prisma/client";
-import { type Database } from "~/server/db";
+import { type Database, type Transaction } from "~/server/db";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
 import { type z } from "zod";
@@ -18,24 +17,35 @@ import {
 } from "~/schemas/product";
 import {
   formatSearchTerm,
-  getSortDirection,
-  withTransaction,
   getDb,
   unwrapDb,
+  relations,
+  buildOrderBy,
+  insertAndReturn,
+  updateAndReturn,
 } from "~/server/repo/database-helpers";
-import { type ProductId, type ProjectId } from "~/schemas/identifiers";
+import {
+  type ProductId,
+  type ProjectId,
+  unsafeLocationId,
+} from "~/schemas/identifiers";
+import {
+  product,
+  productUnitMappings,
+  ingredient,
+  inventoryEntry,
+  location,
+  image,
+  productImage,
+} from "~/server/db/schema";
+import { eq, and, sql, count, ilike, ne, inArray } from "drizzle-orm";
 
 export const findProductByName = async (
-  db: Database | Prisma.TransactionClient,
+  db: Database | Transaction,
   name: string,
-): Promise<Product> => {
-  const p = await unwrapDb(db).product.findMany({
-    where: {
-      name: {
-        equals: name,
-        mode: "insensitive",
-      },
-    },
+): Promise<typeof product.$inferSelect> => {
+  const p = await unwrapDb(db).query.product.findMany({
+    where: ilike(product.name, name),
   });
 
   switch (p.length) {
@@ -47,29 +57,31 @@ export const findProductByName = async (
       throw new Error(`findProductByName: Product ${name} is ambiguous`);
   }
 };
+
 export const findOrCreateProduct = async (
-  db: Prisma.TransactionClient,
+  db: Transaction,
   now: Date,
-  product: ProductConfigItem,
+  productConfig: ProductConfigItem,
   projectId: ProjectId,
-): Promise<Product> => {
+): Promise<typeof product.$inferSelect> => {
   const {
     name,
     manufacturer,
     upc,
     model,
     ndb_number,
-    ingredient,
+    ingredient: ingredientConfig,
     aliases,
     price_per,
     unit_mappings,
-  } = product;
-  let ingredeintRef = undefined;
-  if (ingredient) {
-    //  only link item if its an ingredient
+  } = productConfig;
 
-    ingredeintRef = await findOrCreateIngredient(db, name, aliases, projectId);
+  let ingredientRef = undefined;
+  if (ingredientConfig) {
+    // only link item if its an ingredient
+    ingredientRef = await findOrCreateIngredient(db, name, aliases, projectId);
   }
+
   const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
     price_per !== undefined
       ? {
@@ -78,118 +90,106 @@ export const findOrCreateProduct = async (
           source: "config",
         }
       : undefined;
-  const upsertFields: Prisma.ProductCreateInput = {
-    project: { connect: { id: projectId } },
-    name,
-    manufacturer,
-    upc,
-    ndb_number,
-    model,
-    updatedAt: now,
-    Ingredient: ingredeintRef
-      ? { connect: { id: ingredeintRef.id } }
-      : undefined,
-  };
-  const productRow = await db.product.upsert({
-    where: {
-      projectId_name_manufacturer: {
-        projectId: projectId,
-        name: name,
-        manufacturer: manufacturer,
-      },
-    },
-    create: {
-      ...upsertFields,
-    },
-    update: {
-      ...upsertFields,
-    },
+
+  // Check if product exists
+  const existing = await db.query.product.findFirst({
+    where: and(
+      eq(product.projectId, projectId),
+      eq(product.name, name),
+      eq(product.manufacturer, manufacturer),
+    ),
   });
 
-  // todo: don't delete mappings managed outside of yaml
-  await db.productUnitMappings.deleteMany({
-    where: { productId: productRow.id },
-  });
+  let productRow: typeof product.$inferSelect;
+
+  if (existing) {
+    // Update existing product
+    productRow = await updateAndReturn(
+      db,
+      product,
+      {
+        name,
+        manufacturer,
+        upc,
+        ndb_number,
+        model,
+        updatedAt: now,
+        ingredientId: ingredientRef?.id ?? null,
+      },
+      eq(product.id, existing.id),
+    );
+  } else {
+    // Create new product
+    productRow = await insertAndReturn(db, product, {
+      projectId: projectId,
+      name,
+      manufacturer,
+      upc,
+      ndb_number,
+      model,
+      updatedAt: now,
+      ingredientId: ingredientRef?.id ?? null,
+    });
+  }
+
+  // Delete existing mappings and recreate
+  await db
+    .delete(productUnitMappings)
+    .where(eq(productUnitMappings.productId, productRow.id));
+
   const mappings = [
     ...(unit_mappings ?? []),
     ...(pricePerMapping ? [pricePerMapping] : []),
   ];
 
-  await db.productUnitMappings.createMany({
-    data: mappings.map(
-      (unitMapping): Prisma.ProductUnitMappingsCreateManyInput => ({
+  if (mappings.length > 0) {
+    await db.insert(productUnitMappings).values(
+      mappings.map((unitMapping) => ({
         productId: productRow.id,
         a: unitMapping.a,
         b: unitMapping.b,
         source: unitMapping.source,
-      }),
-    ),
-  });
+      })),
+    );
+  }
 
   return productRow;
 };
 
 export const loadProducts = async (
-  db: Prisma.TransactionClient,
+  db: Transaction,
   data: ProductConfigItem[],
   projectId: ProjectId,
 ) => {
   const now = new Date();
 
-  for (const product of data) {
-    await findOrCreateProduct(db, now, product, projectId);
+  for (const productConfig of data) {
+    await findOrCreateProduct(db, now, productConfig, projectId);
   }
 
-  const stale = await db.product.findMany({
-    where: {
-      projectId, // Filter by project
-      updatedAt: {
-        not: now,
-      },
-    },
+  const stale = await db.query.product.findMany({
+    where: and(eq(product.projectId, projectId), ne(product.updatedAt, now)),
   });
   console.log({ stale: stale.map((s) => s.id) });
 };
 
-const productInclude = {
-  Ingredient: true,
-  unitMappings: true,
-  InventoryEntry: {
-    include: {
-      location: {
-        include: {
-          images: {
-            include: {
-              image: true,
-            },
-          },
-        },
-      },
-    },
-  },
-  images: { include: { image: true } },
-};
-
-type ProductDeepDB = Prisma.ProductGetPayload<{
-  include: {
-    Ingredient: true;
-    unitMappings: true;
-    InventoryEntry: {
-      include: {
-        location: {
-          include: {
-            images: {
-              include: {
-                image: true;
-              };
-            };
-          };
-        };
+// Type for deeply nested product query
+type ProductDeepDB = typeof product.$inferSelect & {
+  Ingredient: typeof ingredient.$inferSelect | null;
+  unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+  InventoryEntry: Array<
+    typeof inventoryEntry.$inferSelect & {
+      location: typeof location.$inferSelect & {
+        images: Array<{
+          image: typeof image.$inferSelect;
+        }>;
       };
-    };
-    images: { include: { image: true } };
-  };
-}>;
+    }
+  >;
+  images: Array<{
+    image: typeof image.$inferSelect;
+  }>;
+};
 
 // Convert product to food lookup parameter
 export const foodLookupParamFromProduct = (product: {
@@ -213,31 +213,27 @@ export const findProductsByFoodIdentifier = async (
   if (!rawLookup) {
     return [];
   }
-  // validate that lookup zod schema is good
 
+  // validate that lookup zod schema is good
   const lookup = foodLookupParam.parse(rawLookup);
 
-  // Create where clause based on lookup type
-  const where: Prisma.ProductWhereInput =
-    lookup.kind === "upc"
-      ? { upc: lookup.gtin_upc }
-      : { ndb_number: lookup.ndb_number };
-
   // Find all matching products
-  const res = await getDb(db).product.findMany({
-    where,
+  const res = await getDb(db).query.product.findMany({
+    where:
+      lookup.kind === "upc"
+        ? eq(product.upc, lookup.gtin_upc)
+        : eq(product.ndb_number, lookup.ndb_number),
   });
+
   return res;
 };
 
-const dbProductToAPI: (
+const dbProductToAPI = async (
   db: Database,
-  product: ProductDeepDB,
-) => Promise<
-  z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>
-> = async (db, product) => {
+  productData: ProductDeepDB,
+): Promise<z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>> => {
   const { Ingredient, unitMappings, InventoryEntry, images, ...restOfProduct } =
-    product;
+    productData;
 
   // Extract images from the join table records
   const productImages = images.map((pi) => pi.image);
@@ -247,7 +243,7 @@ const dbProductToAPI: (
     ingredient: Ingredient,
     unitMappings: unitMappings.map((mapping) => ({
       ...mapping,
-      sourceMetadata: { type: "product" as const, productId: product.id },
+      sourceMetadata: { type: "product" as const, productId: productData.id },
     })),
     images: productImages,
     inventoryEntry: InventoryEntry.map((entry) => {
@@ -263,8 +259,10 @@ const dbProductToAPI: (
 
       return {
         ...entry,
+        amount: entry.amount as { value: number; unit: string },
         location: {
           ...restOfLocation,
+          id: unsafeLocationId(restOfLocation.id),
           type: locationType.parse(type),
           images: extractedLocationImages,
         },
@@ -280,13 +278,15 @@ export const getProductByID = async (
   id: ProductId,
   projectId: ProjectId,
 ) => {
-  const res = await getDb(db).product.findFirstOrThrow({
-    where: {
-      id,
-      projectId, // Ensure product belongs to project
-    },
-    include: productInclude,
+  const res = await getDb(db).query.product.findFirst({
+    where: and(eq(product.id, id), eq(product.projectId, projectId)),
+    ...relations.product.full,
   });
+
+  if (!res) {
+    throw new Error(`Product ${id} not found`);
+  }
+
   return dbProductToAPI(db, res);
 };
 
@@ -299,88 +299,120 @@ export const productList = async (
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  const orderBy: Prisma.ProductOrderByWithAggregationInput = {
-    createdAt: getSortDirection(sort, "createdAt"),
-    name: getSortDirection(sort, "name"),
-    manufacturer: getSortDirection(sort, "manufacturer"),
-    model: getSortDirection(sort, "model"),
-    upc: getSortDirection(sort, "upc"),
-  };
-  const where: Prisma.ProductWhereInput = {
-    projectId, // Filter by project
-    name: formatSearchTerm(name),
-    manufacturer: formatSearchTerm(manufacturer),
-    upc: formatSearchTerm(upc),
-  };
+  // Build where conditions
+  const conditions = [eq(product.projectId, projectId)];
 
-  // Define query parameters once to avoid duplication
-  const findManyParams = {
-    orderBy,
-    where,
-    ...buildTakeSkip(pagination),
-    include: productInclude,
-  };
+  if (name !== undefined) {
+    const nameCondition = formatSearchTerm(product.name, name);
+    if (nameCondition) {
+      conditions.push(nameCondition);
+    }
+  }
 
-  // Execute both queries in a single transaction for better performance
-  const prisma = getDb(db);
-  const [results, totalCount] = await prisma.$transaction([
-    prisma.product.findMany(findManyParams),
-    prisma.product.count({ where }),
+  if (manufacturer !== undefined) {
+    const manufacturerCondition = formatSearchTerm(
+      product.manufacturer,
+      manufacturer,
+    );
+    if (manufacturerCondition) {
+      conditions.push(manufacturerCondition);
+    }
+  }
+
+  if (upc !== undefined) {
+    const upcCondition = formatSearchTerm(product.upc, upc);
+    if (upcCondition) {
+      conditions.push(upcCondition);
+    }
+  }
+
+  const whereClause = and(...conditions);
+
+  // Build order by
+  const orderByArray = buildOrderBy(product, sort, [
+    "createdAt",
+    "name",
+    "manufacturer",
+    "model",
+    "upc",
+  ]);
+
+  const { take, skip } = buildTakeSkip(pagination);
+
+  // Execute queries
+  const [results, [totalCountResult]] = await Promise.all([
+    getDb(db).query.product.findMany({
+      where: whereClause,
+      orderBy: orderByArray,
+      limit: take,
+      offset: skip,
+      ...relations.product.full,
+    }),
+    getDb(db).select({ count: count() }).from(product).where(whereClause),
   ]);
 
   const products = await Promise.all(
-    results.map(async (product) => await dbProductToAPI(db, product)),
+    results.map(async (prod: ProductDeepDB) => await dbProductToAPI(db, prod)),
   );
-  return { data: products, count: totalCount };
+
+  return { data: products, count: totalCountResult?.count ?? 0 };
 };
 
 // Create a new product
 export const createProduct = async (
-  db: Database | Prisma.TransactionClient,
+  db: Database,
   data: ProductInputPayload,
   projectId: ProjectId,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
-  // Create the product first
-  const product = await unwrapDb(db).product.create({
-    data: {
-      project: { connect: { id: projectId } },
-      ...productData,
-      Ingredient: ingredientId ? { connect: { id: ingredientId } } : undefined,
-    },
+  // Use a transaction to ensure atomicity
+  return await getDb(db).transaction(async (tx: Transaction) => {
+    // Create the product first
+    const [newProduct] = await tx
+      .insert(product)
+      .values({
+        projectId: projectId,
+        ...productData,
+        ingredientId: ingredientId ?? null,
+      })
+      .returning();
+
+    if (!newProduct) {
+      throw new Error("Failed to create product");
+    }
+
+    // If there are unit mappings, create them
+    if (unitMappings && unitMappings.length > 0) {
+      await tx.insert(productUnitMappings).values(
+        unitMappings.map((mapping) => ({
+          productId: newProduct.id,
+          a: mapping.a,
+          b: mapping.b,
+          source: mapping.source,
+        })),
+      );
+    }
+
+    // Associate images if provided
+    if (pendingImageIds && pendingImageIds.length > 0) {
+      // Create ProductImage records in batch
+      await tx.insert(productImage).values(
+        pendingImageIds.map((imageId) => ({
+          productId: newProduct.id,
+          imageId,
+        })),
+      );
+
+      // Update all image statuses to UPLOADED in batch
+      await tx
+        .update(image)
+        .set({ status: "UPLOADED" })
+        .where(inArray(image.id, pendingImageIds));
+    }
+
+    return newProduct as unknown as ProductTopLevelOut;
   });
-
-  // If there are unit mappings, create them
-  if (unitMappings) {
-    await unwrapDb(db).productUnitMappings.createMany({
-      data: unitMappings.map((mapping) => ({
-        productId: product.id,
-        a: mapping.a,
-        b: mapping.b,
-        source: mapping.source,
-      })),
-    });
-  }
-
-  // Associate images if provided
-  if (pendingImageIds && pendingImageIds.length > 0) {
-    // Create ProductImage records in batch
-    await unwrapDb(db).productImage.createMany({
-      data: pendingImageIds.map((imageId) => ({
-        productId: product.id,
-        imageId,
-      })),
-    });
-
-    // Update all image statuses to UPLOADED in batch
-    await unwrapDb(db).image.updateMany({
-      where: { id: { in: pendingImageIds } },
-      data: { status: "UPLOADED" },
-    });
-  }
-
-  return product as unknown as ProductTopLevelOut;
 };
 
 // Update an existing product
@@ -399,44 +431,50 @@ export const updateProduct = async (
   } = data;
 
   // Use a transaction to ensure atomicity
-  return await withTransaction(db, async (tx) => {
-    // Create the update data with relation handling
-    const updateData: Prisma.ProductUpdateInput = {
-      ...productData,
-    };
+  return await getDb(db).transaction(async (tx: Transaction) => {
+    // Build update data
+    const updateData: {
+      name?: string;
+      manufacturer?: string;
+      upc?: string | null;
+      ndb_number?: number | null;
+      model?: string | null;
+      expectedQuantity?: number | null;
+      ingredientId?: string | null;
+    } = { ...productData };
 
     // Handle ingredient relationship
     if (ingredientId !== undefined) {
-      if (ingredientId === null) {
-        // Disconnect the ingredient if set to null
-        updateData.Ingredient = { disconnect: true };
-      } else {
-        // Connect to the ingredient if ID is provided
-        updateData.Ingredient = { connect: { id: ingredientId } };
-      }
+      updateData.ingredientId = ingredientId;
     }
 
     // Update the product
-    const product = await tx.product.update({
-      where: { id, projectId }, // Ensure product belongs to project
-      data: updateData,
-    });
+    const updated = await updateAndReturn(
+      tx,
+      product,
+      updateData,
+      and(eq(product.id, id), eq(product.projectId, projectId)),
+    );
 
     const productId = id;
+
     // If unitMappings is provided, handle the updates efficiently
     if (unitMappings !== undefined) {
       // Get existing mappings
-      const existingMappings = await tx.productUnitMappings.findMany({
-        where: { productId },
+      const existingMappings = await tx.query.productUnitMappings.findMany({
+        where: eq(productUnitMappings.productId, productId),
       });
 
       // Find mappings to delete (exist in DB but not in new data)
       const toDelete = existingMappings.filter(
-        (m) => !unitMappings.some((um) => um.id === m.id),
+        (m: typeof productUnitMappings.$inferSelect) =>
+          !unitMappings.some((um) => um.id === m.id),
       );
 
       // Find mappings to create (exist in new data but not in DB)
-      const toCreate = unitMappings.filter((m) => m.id === undefined);
+      const toCreate = unitMappings.filter(
+        (m: (typeof unitMappings)[number]) => m.id === undefined,
+      );
 
       // Find mappings to update (exist in both)
       const toUpdate = unitMappings.filter(
@@ -445,68 +483,69 @@ export const updateProduct = async (
 
       // Delete removed mappings
       if (toDelete.length > 0) {
-        await tx.productUnitMappings.deleteMany({
-          where: {
-            id: { in: toDelete.map((m) => m.id) },
-          },
-        });
+        await tx.delete(productUnitMappings).where(
+          inArray(
+            productUnitMappings.id,
+            toDelete.map((m) => m.id),
+          ),
+        );
       }
 
       // Create new mappings
       if (toCreate.length > 0) {
-        await tx.productUnitMappings.createMany({
-          data: toCreate.map((mapping) => ({
+        await tx.insert(productUnitMappings).values(
+          toCreate.map((mapping) => ({
             productId,
             a: mapping.a,
             b: mapping.b,
             source: mapping.source,
           })),
-        });
+        );
       }
 
       // Update existing mappings
       for (const mapping of toUpdate) {
-        await tx.productUnitMappings.update({
-          where: { id: mapping.id },
-          data: {
+        await tx
+          .update(productUnitMappings)
+          .set({
             a: mapping.a,
             b: mapping.b,
             source: mapping.source,
-          },
-        });
+          })
+          .where(eq(productUnitMappings.id, mapping.id));
       }
     }
 
     // Add new images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
       // Create ProductImage records in batch
-      await tx.productImage.createMany({
-        data: pendingImageIds.map((imageId) => ({
-          productId: product.id,
+      await tx.insert(productImage).values(
+        pendingImageIds.map((imageId) => ({
+          productId: updated.id,
           imageId,
         })),
-      });
+      );
 
       // Update all image statuses to UPLOADED in batch
-      await tx.image.updateMany({
-        where: { id: { in: pendingImageIds } },
-        data: { status: "UPLOADED" },
-      });
+      await tx
+        .update(image)
+        .set({ status: "UPLOADED" })
+        .where(inArray(image.id, pendingImageIds));
     }
 
     // Remove images if requested
     if (removeImageIds && removeImageIds.length > 0) {
-      await tx.productImage.deleteMany({
-        where: {
-          productId: product.id,
-          imageId: {
-            in: removeImageIds,
-          },
-        },
-      });
+      await tx
+        .delete(productImage)
+        .where(
+          and(
+            eq(productImage.productId, updated.id),
+            inArray(productImage.imageId, removeImageIds),
+          ),
+        );
     }
 
-    return product as unknown as ProductTopLevelOut;
+    return updated as unknown as ProductTopLevelOut;
   });
 };
 
@@ -515,18 +554,19 @@ export const findDuplicateUniqueProducts = async (
   db: Database,
   projectId: ProjectId,
 ) => {
-  const duplicates = await getDb(db).product.findMany({
-    where: {
-      projectId,
-      expectedQuantity: 1,
-    },
-    include: {
+  const duplicates = await getDb(db).query.product.findMany({
+    where: and(
+      eq(product.projectId, projectId),
+      eq(product.expectedQuantity, 1),
+    ),
+    with: {
       InventoryEntry: {
-        include: {
+        with: {
           location: true,
         },
       },
     },
   });
-  return duplicates.filter((product) => product.InventoryEntry.length > 1);
+
+  return duplicates.filter((prod) => prod.InventoryEntry.length > 1);
 };

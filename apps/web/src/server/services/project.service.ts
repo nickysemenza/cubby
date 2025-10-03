@@ -8,6 +8,15 @@ import {
 } from "~/schemas/project";
 import { TraceNames, withTrace } from "~/server/tracing";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  user,
+  project,
+  projectMember,
+  recipe,
+  product,
+  location,
+} from "~/server/db/schema";
+import { eq, and, count } from "drizzle-orm";
 
 export class ProjectService {
   constructor(private db: Database) {}
@@ -17,8 +26,8 @@ export class ProjectService {
    */
   async syncUser(userId: string): Promise<void> {
     // Check if user exists locally
-    const existingUser = await getDb(this.db).user.findUnique({
-      where: { id: userId },
+    const existingUser = await getDb(this.db).query.user.findFirst({
+      where: eq(user.id, userId),
     });
 
     if (!existingUser) {
@@ -37,15 +46,15 @@ export class ProjectService {
         throw new Error("User has no primary email");
       }
 
-      await getDb(this.db).user.create({
-        data: {
+      await getDb(this.db)
+        .insert(user)
+        .values({
           id: userId,
           email: primaryEmail,
-          firstName: clerkUser.firstName,
-          lastName: clerkUser.lastName,
+          firstName: clerkUser.firstName ?? null,
+          lastName: clerkUser.lastName ?? null,
           imageUrl: clerkUser.imageUrl,
-        },
-      });
+        });
     }
   }
 
@@ -64,9 +73,9 @@ export class ProjectService {
         await this.syncUser(userId);
 
         // Check if user has any projects
-        const membership = await getDb(this.db).projectMember.findFirst({
-          where: { userId },
-          include: { project: true },
+        const membership = await getDb(this.db).query.projectMember.findFirst({
+          where: eq(projectMember.userId, userId),
+          with: { project: true },
         });
 
         if (membership) {
@@ -78,27 +87,31 @@ export class ProjectService {
         }
 
         // Create default project
-        const user = await getDb(this.db).user.findUnique({
-          where: { id: userId },
+        const userRecord = await getDb(this.db).query.user.findFirst({
+          where: eq(user.id, userId),
         });
 
-        const project = await getDb(this.db).project.create({
-          data: {
-            name: `${user?.firstName || "My"} Household`,
+        const [newProject] = await getDb(this.db)
+          .insert(project)
+          .values({
+            name: `${userRecord?.firstName || "My"} Household`,
             description: "Default project",
-            members: {
-              create: { userId },
-            },
-          },
+          })
+          .returning();
+
+        // Add user as member
+        await getDb(this.db).insert(projectMember).values({
+          projectId: newProject!.id,
+          userId,
         });
 
         span.setAttributes({
-          "project.id": project.id,
+          "project.id": newProject!.id,
           "project.isExisting": false,
-          "project.name": project.name,
+          "project.name": newProject!.name,
         });
 
-        return project.id;
+        return newProject!.id;
       },
     );
   }
@@ -118,10 +131,11 @@ export class ProjectService {
           "user.id": userId,
         });
 
-        const membership = await getDb(this.db).projectMember.findUnique({
-          where: {
-            projectId_userId: { projectId, userId },
-          },
+        const membership = await getDb(this.db).query.projectMember.findFirst({
+          where: and(
+            eq(projectMember.projectId, projectId),
+            eq(projectMember.userId, userId),
+          ),
         });
 
         const hasAccess = !!membership;
@@ -140,24 +154,53 @@ export class ProjectService {
   async getUserProjects(userId: string) {
     await this.syncUser(userId);
 
-    return await getDb(this.db).project.findMany({
-      where: {
-        members: {
-          some: { userId },
-        },
-      },
-      include: {
-        _count: {
-          select: {
-            members: true,
-            recipes: true,
-            products: true,
-            locations: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
+    // Get projects where user is a member
+    const memberships = await getDb(this.db).query.projectMember.findMany({
+      where: eq(projectMember.userId, userId),
+      with: { project: true },
     });
+
+    const projects = memberships.map((m) => m.project);
+
+    // Get counts for each project
+    const projectsWithCounts = await Promise.all(
+      projects.map(async (proj) => {
+        const [memberCount] = await getDb(this.db)
+          .select({ count: count() })
+          .from(projectMember)
+          .where(eq(projectMember.projectId, proj.id));
+
+        const [recipeCount] = await getDb(this.db)
+          .select({ count: count() })
+          .from(recipe)
+          .where(eq(recipe.projectId, proj.id));
+
+        const [productCount] = await getDb(this.db)
+          .select({ count: count() })
+          .from(product)
+          .where(eq(product.projectId, proj.id));
+
+        const [locationCount] = await getDb(this.db)
+          .select({ count: count() })
+          .from(location)
+          .where(eq(location.projectId, proj.id));
+
+        return {
+          ...proj,
+          _count: {
+            members: memberCount!.count,
+            recipes: recipeCount!.count,
+            products: productCount!.count,
+            locations: locationCount!.count,
+          },
+        };
+      }),
+    );
+
+    // Sort by createdAt desc
+    return projectsWithCounts.sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+    );
   }
 
   /**
@@ -170,19 +213,44 @@ export class ProjectService {
       throw new Error("Not a member of this project");
     }
 
-    return await getDb(this.db).project.findUnique({
-      where: { id: projectId },
-      include: {
-        _count: {
-          select: {
-            members: true,
-            recipes: true,
-            products: true,
-            locations: true,
-          },
-        },
-      },
+    const proj = await getDb(this.db).query.project.findFirst({
+      where: eq(project.id, projectId),
     });
+
+    if (!proj) {
+      return null;
+    }
+
+    // Get counts
+    const [memberCount] = await getDb(this.db)
+      .select({ count: count() })
+      .from(projectMember)
+      .where(eq(projectMember.projectId, proj.id));
+
+    const [recipeCount] = await getDb(this.db)
+      .select({ count: count() })
+      .from(recipe)
+      .where(eq(recipe.projectId, proj.id));
+
+    const [productCount] = await getDb(this.db)
+      .select({ count: count() })
+      .from(product)
+      .where(eq(product.projectId, proj.id));
+
+    const [locationCount] = await getDb(this.db)
+      .select({ count: count() })
+      .from(location)
+      .where(eq(location.projectId, proj.id));
+
+    return {
+      ...proj,
+      _count: {
+        members: memberCount!.count,
+        recipes: recipeCount!.count,
+        products: productCount!.count,
+        locations: locationCount!.count,
+      },
+    };
   }
 
   /**
@@ -194,21 +262,26 @@ export class ProjectService {
   ) {
     await this.syncUser(userId);
 
-    return await getDb(this.db).project.create({
-      data: {
-        ...data,
-        members: {
-          create: {
-            userId,
-          },
-        },
-      },
-      include: {
-        _count: {
-          select: { members: true },
-        },
-      },
+    const [newProject] = await getDb(this.db)
+      .insert(project)
+      .values({
+        name: data.name,
+        description: data.description ?? null,
+      })
+      .returning();
+
+    // Add user as member
+    await getDb(this.db).insert(projectMember).values({
+      projectId: newProject!.id,
+      userId,
     });
+
+    return {
+      ...newProject!,
+      _count: {
+        members: 1,
+      },
+    };
   }
 
   /**
@@ -225,15 +298,27 @@ export class ProjectService {
       throw new Error("Not a member of this project");
     }
 
-    return await getDb(this.db).project.update({
-      where: { id: projectId },
-      data,
-      include: {
-        _count: {
-          select: { members: true },
-        },
+    const [updated] = await getDb(this.db)
+      .update(project)
+      .set({
+        name: data.name,
+        description: data.description ?? null,
+      })
+      .where(eq(project.id, projectId))
+      .returning();
+
+    // Get member count
+    const [memberCount] = await getDb(this.db)
+      .select({ count: count() })
+      .from(projectMember)
+      .where(eq(projectMember.projectId, projectId));
+
+    return {
+      ...updated!,
+      _count: {
+        members: memberCount!.count,
       },
-    });
+    };
   }
 
   /**
@@ -248,22 +333,22 @@ export class ProjectService {
     }
 
     // Find user by email
-    const user = await getDb(this.db).user.findUnique({
-      where: { email: data.email },
+    const userRecord = await getDb(this.db).query.user.findFirst({
+      where: eq(user.email, data.email),
     });
 
-    if (!user) {
+    if (!userRecord) {
       throw new Error("User not found. They must sign up first.");
     }
 
     // Check if already a member
-    const existingMembership = await getDb(this.db).projectMember.findUnique({
-      where: {
-        projectId_userId: {
-          projectId: data.projectId,
-          userId: user.id,
-        },
-      },
+    const existingMembership = await getDb(
+      this.db,
+    ).query.projectMember.findFirst({
+      where: and(
+        eq(projectMember.projectId, data.projectId),
+        eq(projectMember.userId, userRecord.id),
+      ),
     });
 
     if (existingMembership) {
@@ -271,12 +356,15 @@ export class ProjectService {
     }
 
     // Add as member
-    return await getDb(this.db).projectMember.create({
-      data: {
+    const [newMember] = await getDb(this.db)
+      .insert(projectMember)
+      .values({
         projectId: data.projectId,
-        userId: user.id,
-      },
-    });
+        userId: userRecord.id,
+      })
+      .returning();
+
+    return newMember!;
   }
 
   /**
@@ -289,9 +377,9 @@ export class ProjectService {
       throw new Error("Not a member of this project");
     }
 
-    return await getDb(this.db).projectMember.findMany({
-      where: { projectId },
-      include: {
+    return await getDb(this.db).query.projectMember.findMany({
+      where: eq(projectMember.projectId, projectId),
+      with: {
         user: true,
       },
     });
@@ -308,21 +396,25 @@ export class ProjectService {
     }
 
     // Don't allow removing yourself if you're the last member
-    const memberCount = await getDb(this.db).projectMember.count({
-      where: { projectId },
-    });
+    const [memberCountResult] = await getDb(this.db)
+      .select({ count: count() })
+      .from(projectMember)
+      .where(eq(projectMember.projectId, projectId));
 
-    if (memberCount === 1 && userId === memberUserId) {
+    if (memberCountResult!.count === 1 && userId === memberUserId) {
       throw new Error("Cannot remove the last member from the project");
     }
 
-    return await getDb(this.db).projectMember.delete({
-      where: {
-        projectId_userId: {
-          projectId,
-          userId: memberUserId,
-        },
-      },
-    });
+    const [deleted] = await getDb(this.db)
+      .delete(projectMember)
+      .where(
+        and(
+          eq(projectMember.projectId, projectId),
+          eq(projectMember.userId, memberUserId),
+        ),
+      )
+      .returning();
+
+    return deleted!;
   }
 }

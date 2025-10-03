@@ -1,5 +1,4 @@
-import { type Prisma, PrismaClient } from "@prisma/client";
-import { type Database } from "~/server/db";
+import { type Database, type DrizzleTransaction } from "~/server/db";
 import { dedupe } from "~/misc/array-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
 import {
@@ -10,10 +9,11 @@ import {
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import {
   formatSearchTerm,
-  getSortDirection,
-  withTransaction,
   getDb,
   unwrapDb,
+  relations,
+  buildOrderBy,
+  updateAndReturnDb,
 } from "~/server/repo/database-helpers";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -23,107 +23,100 @@ import {
   unsafeProductId,
   unsafeIngredientId,
 } from "~/schemas/identifiers";
+import {
+  ingredient,
+  recipeSectionIngredient,
+  product,
+  productUnitMappings,
+  recipe,
+  recipeSection,
+} from "~/server/db/schema";
+import {
+  eq,
+  and,
+  or,
+  inArray,
+  isNull,
+  sql,
+  count,
+  arrayOverlaps,
+} from "drizzle-orm";
 
 export const mergeIngredients = async (
   db: Database,
   target: IngredientId,
   aliases: IngredientId[],
 ) => {
-  return await withTransaction(db, async (tx) => {
-    const targetRec = await tx.ingredient.findFirstOrThrow({
-      where: { id: target },
+  return await getDb(db).transaction(async (tx) => {
+    const targetRec = await tx.query.ingredient.findFirst({
+      where: eq(ingredient.id, target),
     });
-    const aliasRecs = await tx.ingredient.findMany({
-      where: { id: { in: aliases } },
+
+    if (!targetRec) {
+      throw new Error(`Target ingredient ${target} not found`);
+    }
+
+    const aliasRecs = await tx.query.ingredient.findMany({
+      where: inArray(ingredient.id, aliases),
     });
 
     // update target ingredient to have new aliases
-    await tx.ingredient.update({
-      where: { id: target },
-      data: {
-        aliases: {
-          set: dedupe([
-            ...targetRec.aliases,
-            ...aliasRecs.map((a) => a.name),
-            ...aliasRecs.flatMap((a) => a.aliases ?? []),
-          ]),
-        },
-      },
-    });
+    await tx
+      .update(ingredient)
+      .set({
+        aliases: dedupe([
+          ...targetRec.aliases,
+          ...aliasRecs.map((a) => a.name),
+          ...aliasRecs.flatMap((a) => a.aliases ?? []),
+        ]),
+      })
+      .where(eq(ingredient.id, target));
 
     // update all recipeSectionIngredients to point to the target
-    await tx.recipeSectionIngredient.updateMany({
-      where: {
-        ingredientId: { in: aliases },
-      },
-      data: {
+    await tx
+      .update(recipeSectionIngredient)
+      .set({
         ingredientId: target,
-      },
-    });
+      })
+      .where(inArray(recipeSectionIngredient.ingredientId, aliases));
 
     // delete stale
-    await tx.ingredient.deleteMany({
-      where: {
-        id: { in: aliases },
-      },
-    });
+    await tx.delete(ingredient).where(inArray(ingredient.id, aliases));
   });
 };
 
-type IngredientDeepDB = Prisma.IngredientGetPayload<{
-  include: {
-    Product: {
-      include: {
-        unitMappings: true;
+type IngredientDeepDB = typeof ingredient.$inferSelect & {
+  Product: Array<
+    typeof product.$inferSelect & {
+      unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+    }
+  >;
+  Recipe: typeof recipe.$inferSelect | null;
+  RecipeSectionIngredient: Array<
+    typeof recipeSectionIngredient.$inferSelect & {
+      recipeSection: typeof recipeSection.$inferSelect & {
+        recipe: typeof recipe.$inferSelect;
       };
-    };
-    Recipe: true;
-    RecipeSectionIngredient: {
-      include: {
-        recipeSection: {
-          include: {
-            recipe: true;
-          };
-        };
-      };
-    };
-  };
-}>;
-
-const ingredientInclude = {
-  Product: {
-    include: {
-      unitMappings: true,
-    },
-  },
-  Recipe: true,
-  RecipeSectionIngredient: {
-    include: {
-      recipeSection: {
-        include: {
-          recipe: true,
-        },
-      },
-    },
-  },
+    }
+  >;
 };
 
-const dbIngredientToAPI: (
-  db: Database | Prisma.TransactionClient,
-  ingredient: IngredientDeepDB,
-) => Promise<IngredientWithRecipesAndProductOut> = async (db, ingredient) => {
+const dbIngredientToAPI = async (
+  db: Database | DrizzleTransaction,
+  ingredientData: IngredientDeepDB,
+): Promise<IngredientWithRecipesAndProductOut> => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
-    ingredient;
+    ingredientData;
 
-  const productWithMappings = Product.map((product) => {
+  const productWithMappings = Product.map((prod) => {
     return {
-      ...product,
-      id: unsafeProductId(product.id),
-      unitMappings: product.unitMappings.map((mapping) => ({
+      ...prod,
+      id: unsafeProductId(prod.id),
+      unitMappings: prod.unitMappings.map((mapping) => ({
         ...mapping,
         sourceMetadata: {
           type: "product" as const,
-          productId: unsafeProductId(product.id),
+          productId: unsafeProductId(prod.id),
         },
       })),
     };
@@ -145,35 +138,54 @@ export const getIngredientByID = async (
   id: IngredientId,
   projectId: ProjectId,
 ) => {
-  const ingredient = await getDb(db).ingredient.findFirstOrThrow({
-    where: { id: id, projectId }, // Ensure ingredient belongs to project
-    include: ingredientInclude,
+  const ingredientData = await getDb(db).query.ingredient.findFirst({
+    where: and(eq(ingredient.id, id), eq(ingredient.projectId, projectId)),
+    ...relations.ingredient.full,
   });
-  return await dbIngredientToAPI(db, ingredient);
+
+  if (!ingredientData) {
+    throw new Error(`Ingredient ${id} not found`);
+  }
+
+  return await dbIngredientToAPI(db, ingredientData as IngredientDeepDB);
 };
+
 export const getIngredientByName = async (db: Database, name: string) => {
-  const res = await getDb(db).ingredient.findFirst({
+  const res = await getDb(db).query.ingredient.findFirst({
     where: buildIngredientWhere(true, name),
-    include: ingredientInclude,
+    ...relations.ingredient.full,
   });
-  return res ? await dbIngredientToAPI(db, res) : null;
+  return res ? await dbIngredientToAPI(db, res as IngredientDeepDB) : null;
 };
 
 export const createIngredient = async (
-  db: Database | Prisma.TransactionClient,
+  db: Database | DrizzleTransaction,
   data: z.infer<typeof ingredientBase>,
   projectId: ProjectId,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const ingredient = await unwrapDb(db).ingredient.create({
-    data: {
+  const [newIngredient] = await unwrapDb(db)
+    .insert(ingredient)
+    .values({
       projectId: projectId,
       name: data.name,
       aliases: data.aliases || [],
-    },
-    include: ingredientInclude,
+    })
+    .returning();
+
+  if (!newIngredient) {
+    throw new Error("Failed to create ingredient");
+  }
+
+  const ingredientData = await unwrapDb(db).query.ingredient.findFirst({
+    where: eq(ingredient.id, newIngredient.id),
+    ...relations.ingredient.full,
   });
 
-  return await dbIngredientToAPI(db, ingredient);
+  if (!ingredientData) {
+    throw new Error("Failed to fetch created ingredient");
+  }
+
+  return await dbIngredientToAPI(db, ingredientData as IngredientDeepDB);
 };
 
 export const updateIngredient = async (
@@ -182,36 +194,53 @@ export const updateIngredient = async (
   projectId: ProjectId,
   data: Partial<z.infer<typeof ingredientBase>>,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const ingredient = await getDb(db).ingredient.update({
-    where: { id, projectId }, // Ensure ingredient belongs to project
-    data: data,
-    include: ingredientInclude,
+  const updated = await updateAndReturnDb(
+    db,
+    ingredient,
+    data,
+    and(eq(ingredient.id, id), eq(ingredient.projectId, projectId)),
+  );
+
+  const ingredientData = await getDb(db).query.ingredient.findFirst({
+    where: eq(ingredient.id, updated.id),
+    ...relations.ingredient.full,
   });
 
-  return await dbIngredientToAPI(db, ingredient);
+  if (!ingredientData) {
+    throw new Error("Failed to fetch updated ingredient");
+  }
+
+  return await dbIngredientToAPI(db, ingredientData as IngredientDeepDB);
 };
 
 export const findOrCreateIngredient = async (
-  db: Database | Prisma.TransactionClient,
+  db: Database | DrizzleTransaction,
   name: string,
   aliases?: string[],
   projectId?: string,
 ) => {
-  const findOrCreate = async () => {
-    const existing = await unwrapDb(db).ingredient.findFirst({
+  const findOrCreate = async (): Promise<typeof ingredient.$inferSelect> => {
+    const existing = await unwrapDb(db).query.ingredient.findFirst({
       where: buildIngredientWhere(true, name, aliases, projectId),
     });
-    if (existing !== null) {
+    if (existing) {
       return existing;
     }
 
-    return await unwrapDb(db).ingredient.create({
-      data: {
+    const [newIngredient] = await unwrapDb(db)
+      .insert(ingredient)
+      .values({
         projectId: projectId || "default-project",
         name: name,
         aliases: aliases || [],
-      },
-    });
+      })
+      .returning();
+
+    if (!newIngredient) {
+      throw new Error("Failed to create ingredient");
+    }
+
+    return newIngredient;
   };
 
   const entry = await findOrCreate();
@@ -225,15 +254,20 @@ export const findOrCreateIngredient = async (
     return entry;
   }
 
-  return await unwrapDb(db).ingredient.update({
-    where: { id: entry.id },
-    data: {
+  const [updated] = await unwrapDb(db)
+    .update(ingredient)
+    .set({
       name: name,
-      aliases: {
-        set: [...entry.aliases, ...aliasesToAdd],
-      },
-    },
-  });
+      aliases: [...entry.aliases, ...aliasesToAdd],
+    })
+    .where(eq(ingredient.id, entry.id))
+    .returning();
+
+  if (!updated) {
+    throw new Error("Failed to update ingredient aliases");
+  }
+
+  return updated;
 };
 
 // exact:
@@ -246,31 +280,42 @@ const buildIngredientWhere = (
   projectId?: string,
 ) => {
   const list = [name, ...(otherSearchNames ?? [])];
-  const where: Prisma.IngredientWhereInput = {
-    AND: [
-      {
-        OR: [
-          {
-            name: exact
-              ? { in: list, mode: "insensitive" }
-              : formatSearchTerm(name),
-          },
-          {
-            aliases: {
-              hasSome: list,
-            },
-          },
-        ],
-      },
-      {
-        // Filter for standalone ingredients only, not recipe ingredients
-        recipeId: { equals: null },
-      },
-      ...(projectId ? [{ projectId: { equals: projectId } }] : []),
-    ],
-  };
-  return where;
+
+  const conditions = [];
+
+  // Name or aliases condition
+  if (exact) {
+    // Exact match: name IN list OR aliases has any of list
+    conditions.push(
+      or(
+        inArray(
+          sql`lower(${ingredient.name})`,
+          list.map((n) => n.toLowerCase()),
+        ),
+        arrayOverlaps(ingredient.aliases, list),
+      ),
+    );
+  } else {
+    // Search on name (ilike), exact match on aliases
+    conditions.push(
+      or(
+        formatSearchTerm(ingredient.name, name),
+        arrayOverlaps(ingredient.aliases, list),
+      ),
+    );
+  }
+
+  // Filter for standalone ingredients only, not recipe ingredients
+  conditions.push(isNull(ingredient.recipeId));
+
+  // Add project filter if provided
+  if (projectId) {
+    conditions.push(eq(ingredient.projectId, projectId));
+  }
+
+  return and(...conditions);
 };
+
 export const ingredientList = async (
   db: Database,
   projectId: ProjectId,
@@ -279,55 +324,87 @@ export const ingredientList = async (
   pagination: PaginationParams,
   missingProductsOnly: boolean = false,
 ) => {
-  const orderBy: Prisma.IngredientOrderByWithAggregationInput = {
-    createdAt: getSortDirection(sort, "createdAt"),
-    name: getSortDirection(sort, "name"),
-    aliases: getSortDirection(sort, "aliases"),
-  };
-
-  let where: Prisma.IngredientWhereInput = {
-    projectId, // Filter by project
-    recipeId: { equals: null }, // Should only include standalone ingredients (not recipe ingredients)
-  };
+  const conditions = [
+    eq(ingredient.projectId, projectId),
+    isNull(ingredient.recipeId),
+  ];
 
   // Add name filter if provided
   if (name) {
-    const nameWhere = buildIngredientWhere(false, name);
-    where = {
-      ...where,
-      ...nameWhere,
-    };
+    const nameCondition = buildIngredientWhere(false, name);
+    if (nameCondition) {
+      conditions.push(nameCondition);
+    }
   }
 
-  // Add missing products filter if requested
-  if (missingProductsOnly) {
-    where = {
-      ...where,
-      Product: {
-        none: {}, // This means no products are associated
-      },
-    };
-  }
+  // For missing products filter, we need to use a left join and check for null
+  const whereClause = and(...conditions);
 
-  // Define query parameters once to avoid duplication
-  const findManyParams = {
-    orderBy,
-    where,
-    ...buildTakeSkip(pagination),
-    include: ingredientInclude,
-  };
-
-  // Execute both queries in a single transaction for better performance
-  const prisma = getDb(db);
-  const [results, totalCount] = await prisma.$transaction([
-    prisma.ingredient.findMany(findManyParams),
-    prisma.ingredient.count({ where }),
+  // Build order by
+  const orderByClause = buildOrderBy(ingredient, sort, [
+    "createdAt",
+    "name",
+    "aliases",
   ]);
 
-  // Process results after receiving both queries
-  const ingredients = await Promise.all(
-    results.map((ingredient) => dbIngredientToAPI(db, ingredient)),
-  );
+  const { take, skip } = buildTakeSkip(pagination);
 
-  return { data: ingredients, count: totalCount };
+  if (missingProductsOnly) {
+    // Use a subquery to find ingredients with no products
+    const ingredientsWithNoProducts = getDb(db)
+      .select({ id: ingredient.id })
+      .from(ingredient)
+      .leftJoin(product, eq(product.ingredientId, ingredient.id))
+      .where(and(whereClause, isNull(product.id)))
+      .groupBy(ingredient.id)
+      .as("filtered");
+
+    const [results, [countResult]] = await Promise.all([
+      getDb(db).query.ingredient.findMany({
+        where: inArray(
+          ingredient.id,
+          getDb(db)
+            .select({ id: ingredientsWithNoProducts.id })
+            .from(ingredientsWithNoProducts),
+        ),
+        ...relations.ingredient.full,
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+      }),
+      getDb(db)
+        .select({ count: count() })
+        .from(ingredient)
+        .leftJoin(product, eq(product.ingredientId, ingredient.id))
+        .where(and(whereClause, isNull(product.id))),
+    ]);
+
+    const totalCount = countResult?.count ?? 0;
+
+    const ingredients = await Promise.all(
+      results.map((ing) => dbIngredientToAPI(db, ing as IngredientDeepDB)),
+    );
+
+    return { data: ingredients, count: totalCount };
+  } else {
+    // Normal query without missing products filter
+    const [results, [countResult]] = await Promise.all([
+      getDb(db).query.ingredient.findMany({
+        where: whereClause,
+        ...relations.ingredient.full,
+        orderBy: orderByClause,
+        limit: take,
+        offset: skip,
+      }),
+      getDb(db).select({ count: count() }).from(ingredient).where(whereClause),
+    ]);
+
+    const totalCount = countResult?.count ?? 0;
+
+    const ingredients = await Promise.all(
+      results.map((ing) => dbIngredientToAPI(db, ing as IngredientDeepDB)),
+    );
+
+    return { data: ingredients, count: totalCount };
+  }
 };

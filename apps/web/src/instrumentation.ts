@@ -1,5 +1,4 @@
 import { FetchInstrumentation, registerOTel } from "@vercel/otel";
-import { PrismaInstrumentation } from "@prisma/instrumentation";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import { W3CBaggagePropagator } from "@opentelemetry/core";
 import { CompositePropagator } from "@opentelemetry/core";
@@ -16,7 +15,7 @@ export function register() {
 
   registerOTel({
     serviceName: "recipehub",
-    instrumentations: [new PrismaInstrumentation(), new FetchInstrumentation()],
+    instrumentations: [new FetchInstrumentation()],
     propagators: [
       new CompositePropagator({
         propagators: [

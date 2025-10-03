@@ -9,9 +9,19 @@ import {
   type InitiateUploadWithoutEntityInput,
   type ImageWithEntity,
 } from "~/schemas/image";
-import { type Prisma } from "@prisma/client";
 import { type Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  buildOrderBy,
+  insertAndReturnDb,
+} from "~/server/repo/database-helpers";
+import {
+  image,
+  productImage,
+  locationImage,
+  recipeImage,
+} from "~/server/db/schema";
+import { eq, and, inArray, sql, lt, ilike } from "drizzle-orm";
 
 /**
  * Initiate an image upload without associating it with an entity yet
@@ -27,16 +37,14 @@ export const initiateImageUploadWithoutEntity = async (
   const url = getS3ObjectUrl(key);
 
   // Create image record in pending state
-  const image = await getDb(db).image.create({
-    data: {
-      projectId,
-      key,
-      filename,
-      size,
-      contentType,
-      url,
-      status: "PENDING",
-    },
+  const createdImage = await insertAndReturnDb(db, image, {
+    projectId,
+    key,
+    filename,
+    size,
+    contentType,
+    url,
+    status: "PENDING",
   });
 
   // Generate presigned URL for upload
@@ -47,70 +55,70 @@ export const initiateImageUploadWithoutEntity = async (
 
   return {
     uploadUrl,
-    imageId: image.id,
+    imageId: createdImage.id,
     key,
     url,
   };
 };
 
 // Define the type for database image
-type ImageDB = Prisma.ImageGetPayload<object>;
+type ImageDB = typeof image.$inferSelect;
 
 /**
  * Get image with entity information (DB to API helper function)
  */
 const dbImageToAPI = async (
   db: Database,
-  image: ImageDB,
+  imageData: ImageDB,
 ): Promise<ImageWithEntity> => {
   // Check product associations
-  const productImage = await getDb(db).productImage.findFirst({
-    where: { imageId: image.id },
-    include: { product: true },
+  const productImageRec = await getDb(db).query.productImage.findFirst({
+    where: eq(productImage.imageId, imageData.id),
+    with: { product: true },
   });
 
-  if (productImage) {
+  if (productImageRec) {
     return {
-      ...image,
+      ...imageData,
       entityType: "PRODUCT",
-      entityId: productImage.productId,
-      entityName: productImage.product.name,
+      entityId: productImageRec.productId,
+      entityName: productImageRec.product.name,
     };
   }
 
   // Check location associations
-  const locationImage = await getDb(db).locationImage.findFirst({
-    where: { imageId: image.id },
-    include: { location: true },
+  const locationImageRec = await getDb(db).query.locationImage.findFirst({
+    where: eq(locationImage.imageId, imageData.id),
+    with: { location: true },
   });
 
-  if (locationImage) {
+  if (locationImageRec) {
     return {
-      ...image,
+      ...imageData,
       entityType: "LOCATION",
-      entityId: locationImage.locationId,
-      entityName: locationImage.location.name,
+      entityId: locationImageRec.locationId,
+      entityName: locationImageRec.location.name,
     };
   }
 
   // Check recipe associations
-  const recipeImage = await getDb(db).recipeImage.findFirst({
-    where: { imageId: image.id },
-    include: { recipe: true },
+  const recipeImageRec = await getDb(db).query.recipeImage.findFirst({
+    where: eq(recipeImage.imageId, imageData.id),
+    with: { recipe: true },
   });
 
-  if (recipeImage) {
+  if (recipeImageRec) {
     return {
-      ...image,
+      ...imageData,
       entityType: "RECIPE",
-      entityId: recipeImage.recipeId,
-      entityName: recipeImage.recipe.name,
+      entityId: recipeImageRec.recipeId,
+      entityName: recipeImageRec.recipe.name,
     };
   }
 
   // No entity association found
   return {
-    ...image,
+    ...imageData,
     entityType: null,
     entityId: null,
     entityName: null,
@@ -127,59 +135,52 @@ export const imageList = async (
   sort: { orderBy: string; direction: "asc" | "desc" },
   pagination: { pageIndex: number; pageSize: number },
 ) => {
-  // Set up where clause for filtering
-  const where: Prisma.ImageWhereInput = {};
+  const dbClient = getDb(db);
 
-  // Add search filter if provided
+  // Build where conditions
+  const whereConditions = [];
   if (filterText && filterText.trim() !== "") {
-    where.filename = {
-      contains: filterText,
-      mode: "insensitive",
-    };
+    whereConditions.push(ilike(image.filename, `%${filterText}%`));
   }
 
-  // Define sort order based on provided field or default to createdAt
-  const orderBy: Prisma.ImageOrderByWithRelationInput = {};
-  const sortField = sort.orderBy || "createdAt";
-  const direction = sort.direction || "desc";
+  const whereClause =
+    whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-  // Only set ordering on valid fields to avoid runtime errors
-  if (
-    sortField === "createdAt" ||
-    sortField === "updatedAt" ||
-    sortField === "filename" ||
-    sortField === "size" ||
-    sortField === "status"
-  ) {
-    orderBy[sortField] = direction;
-  } else {
-    // Default to createdAt if the sort field is not valid
-    orderBy.createdAt = direction;
-  }
+  // Build orderBy using helper
+  const orderByClause = buildOrderBy(image, sort, [
+    "createdAt",
+    "updatedAt",
+    "filename",
+    "size",
+    "status",
+  ]);
 
   // Calculate skip/take values from pagination parameters
   const take = pagination.pageSize;
   const skip = pagination.pageIndex * pagination.pageSize;
 
-  // Execute queries in a transaction for consistency
-  const [images, count] = await getDb(db).$transaction([
-    getDb(db).image.findMany({
-      orderBy,
-      where,
-      take,
-      skip,
+  // Execute queries in parallel
+  const [images, countResult] = await Promise.all([
+    dbClient.query.image.findMany({
+      where: whereClause,
+      orderBy: orderByClause,
+      limit: take,
+      offset: skip,
     }),
-    getDb(db).image.count({ where }),
+    dbClient
+      .select({ count: sql<number>`count(*)::int` })
+      .from(image)
+      .where(whereClause),
   ]);
 
   // Process images to include entity information
   const processedImages = await Promise.all(
-    images.map(async (image) => await dbImageToAPI(db, image)),
+    images.map(async (img) => await dbImageToAPI(db, img)),
   );
 
   return {
     data: processedImages,
-    count,
+    count: countResult[0]?.count ?? 0,
   };
 };
 
@@ -191,11 +192,11 @@ export const getImageById = async (
   imageId: string,
 ): Promise<ImageWithEntity> => {
   // Find the image by ID
-  const image = await getDb(db).image.findUnique({
-    where: { id: imageId },
+  const imageRecord = await getDb(db).query.image.findFirst({
+    where: eq(image.id, imageId),
   });
 
-  if (!image) {
+  if (!imageRecord) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: "Image not found",
@@ -203,12 +204,12 @@ export const getImageById = async (
   }
 
   // Use the dbImageToAPI helper to transform the image
-  return dbImageToAPI(db, image);
+  return dbImageToAPI(db, imageRecord);
 };
 
 /**
  * Cull (delete) pending images that are older than the specified threshold
- * @param db Prisma client
+ * @param db Database client
  * @param olderThanHours Delete images older than this many hours
  * @returns Object with count of deleted images and related information
  */
@@ -216,27 +217,51 @@ export const cullPendingImages = async (
   db: Database,
   olderThanHours: number,
 ) => {
+  const dbClient = getDb(db);
+
   // Calculate the cutoff date
   const cutoffDate = new Date();
   cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
 
+  // Find all images that have associations
+  const imagesWithProductAssociations = dbClient
+    .select({ imageId: productImage.imageId })
+    .from(productImage);
+
+  const imagesWithLocationAssociations = dbClient
+    .select({ imageId: locationImage.imageId })
+    .from(locationImage);
+
+  const imagesWithRecipeAssociations = dbClient
+    .select({ imageId: recipeImage.imageId })
+    .from(recipeImage);
+
+  // Get all image IDs that have any association
+  const [productAssocs, locationAssocs, recipeAssocs] = await Promise.all([
+    imagesWithProductAssociations,
+    imagesWithLocationAssociations,
+    imagesWithRecipeAssociations,
+  ]);
+
+  const associatedImageIds = new Set([
+    ...productAssocs.map((a) => a.imageId),
+    ...locationAssocs.map((a) => a.imageId),
+    ...recipeAssocs.map((a) => a.imageId),
+  ]);
+
   // Find pending images older than the cutoff date
-  const pendingImages = await getDb(db).image.findMany({
-    where: {
-      status: "PENDING",
-      createdAt: {
-        lt: cutoffDate,
-      },
-      // Ensure the image is not associated with any entity
-      productImages: { none: {} },
-      locationImages: { none: {} },
-      recipeImages: { none: {} },
-    },
-    select: {
+  const allPendingImages = await dbClient.query.image.findMany({
+    where: and(eq(image.status, "PENDING"), lt(image.createdAt, cutoffDate)),
+    columns: {
       id: true,
       key: true,
     },
   });
+
+  // Filter out images that have associations
+  const pendingImages = allPendingImages.filter(
+    (img) => !associatedImageIds.has(img.id),
+  );
 
   if (pendingImages.length === 0) {
     return { count: 0, deletedIds: [], deletedKeys: [] };
@@ -247,11 +272,7 @@ export const cullPendingImages = async (
   const imageKeys = pendingImages.map((img) => img.key);
 
   // Delete the images from the database
-  await getDb(db).image.deleteMany({
-    where: {
-      id: { in: imageIds },
-    },
-  });
+  await dbClient.delete(image).where(inArray(image.id, imageIds));
 
   // Delete from S3 (this would be better in a transaction or with error handling)
   // We're ignoring S3 deletion errors to ensure the database cleanup completes

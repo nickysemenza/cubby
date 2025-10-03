@@ -1,52 +1,53 @@
-import { Prisma, PrismaClient } from "@prisma/client";
-import { PrismaNeon } from "@prisma/adapter-neon";
-
+import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
+import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
+import { neon } from "@neondatabase/serverless";
+import { Pool } from "pg";
 import { env } from "~/env";
+import * as schema from "./db/schema";
+import { type Database } from "./db/database";
+import { instrumentDrizzle } from "@kubiks/otel-drizzle";
 
-export const createDBClient = (databaseUrl?: string) => {
-  const connectionString = databaseUrl ?? env.DATABASE_URL;
-  const isNeon = connectionString.includes("neon.tech");
+// Re-export Database type for use throughout the application
+export type { Database };
 
-  const args: Partial<Prisma.PrismaClientOptions> = isNeon
-    ? { adapter: new PrismaNeon({ connectionString }) }
-    : {
-        datasources: {
-          db: {
-            url: connectionString,
-          },
-        },
-      };
-  return new PrismaClient({
-    log: ["development", "test"].includes(env.NODE_ENV)
-      ? ["query", "error", "warn"]
-      : ["error"],
-    ...args,
-  });
-};
-const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createDBClient> | undefined;
+const createDBClient = (connectionString: string) => {
+  if (connectionString.includes("neon.tech")) {
+    // Use Neon HTTP for serverless environments
+    const sql = neon(connectionString);
+    return drizzleHttp(sql, { schema });
+  } else {
+    // Use standard node-postgres for traditional PostgreSQL connections
+    const pool = new Pool({ connectionString });
+    const instrumentedPool = instrumentDrizzle(pool);
+    return drizzleNodePostgres({ client: instrumentedPool, schema });
+  }
 };
 
-const dbInstance = globalForPrisma.prisma ?? createDBClient();
+const globalForDb = globalThis as unknown as {
+  db: ReturnType<typeof createDBClient> | undefined;
+};
 
-if (env.NODE_ENV !== "production") globalForPrisma.prisma = dbInstance;
+const dbInstance = globalForDb.db ?? createDBClient(env.DATABASE_URL);
 
-// Opaque type that prevents ALL method calls outside of repo layer
-// This enforces that database access only happens in repo files
-// Database has NO methods - it can only be passed around
-declare const DatabaseBrand: unique symbol;
-export interface Database {
-  readonly [DatabaseBrand]: true;
-}
+if (env.NODE_ENV !== "production") globalForDb.db = dbInstance;
 
 /**
- * Convert a PrismaClient instance to the opaque Database type.
+ * Convert a Drizzle client instance to the opaque Database type.
  * This brands the client to enforce that direct database access only happens in repo files.
  * Use this when creating Database instances (e.g., in test setup).
  */
-export const toBrandedDatabase = (client: PrismaClient): Database => {
+export const toBrandedDatabase = (
+  client: ReturnType<typeof createDBClient>,
+): Database => {
   return client as unknown as Database;
 };
 
 // Export the branded instance - NO methods can be called on this outside repo/
 export const db = toBrandedDatabase(dbInstance);
+
+// Type for Drizzle transaction client
+export type DrizzleClient = ReturnType<typeof createDBClient>;
+export type DrizzleTransaction = Parameters<
+  Parameters<DrizzleClient["transaction"]>[0]
+>[0];
+export type Transaction = DrizzleTransaction; // Alias for backwards compatibility

@@ -5,6 +5,8 @@ import { buildTestDB } from "tooling/test-setup";
 import { insertCompactRecipe } from "~/server/repo/recipe";
 import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
 import { getDb, withTransaction } from "./database-helpers";
+import { ingredient } from "~/server/db/schema";
+import { eq, count } from "drizzle-orm";
 
 describe("ingredient", () => {
   let db: Database;
@@ -21,8 +23,10 @@ describe("ingredient", () => {
       await findOrCreateIngredient(tx, "alias_1", undefined, projectId);
       await findOrCreateIngredient(tx, "test", ["alias_1"], projectId);
     });
-    const countAfterUpsert = await getDb(db).ingredient.count();
-    expect(countAfterUpsert).toEqual(1);
+    const [result] = await getDb(db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(result!.count).toEqual(1);
   });
   it("ingredient merging works", async () => {
     await insertCompactRecipe(
@@ -46,23 +50,26 @@ describe("ingredient", () => {
       ["large eggs"],
       projectId,
     );
-    const countAfterUpsert = await getDb(db).ingredient.count();
-    expect(countAfterUpsert).toEqual(3);
+    const [resultAfterUpsert] = await getDb(db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(resultAfterUpsert!.count).toEqual(3);
 
     await mergeIngredients(db, unsafeIngredientId(a.id), [
       unsafeIngredientId(b.id),
       unsafeIngredientId(c.id),
     ]);
-    const countAfterMerge = await getDb(db).ingredient.count();
-    expect(countAfterMerge).toEqual(1);
+    const [resultAfterMerge] = await getDb(db)
+      .select({ count: count() })
+      .from(ingredient);
+    expect(resultAfterMerge!.count).toEqual(1);
 
-    const updatedIngredient = await getDb(db).ingredient.findFirstOrThrow({
-      where: {
-        id: a.id,
-      },
+    const updatedIngredient = await getDb(db).query.ingredient.findFirst({
+      where: eq(ingredient.id, a.id),
     });
-    expect(updatedIngredient.aliases).toContain(b.name);
-    expect(updatedIngredient.aliases).toContain(c.name);
-    expect(updatedIngredient.aliases).toContain("large eggs");
+    expect(updatedIngredient).toBeDefined();
+    expect(updatedIngredient!.aliases).toContain(b.name);
+    expect(updatedIngredient!.aliases).toContain(c.name);
+    expect(updatedIngredient!.aliases).toContain("large eggs");
   });
 });

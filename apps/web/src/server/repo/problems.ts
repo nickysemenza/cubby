@@ -1,5 +1,12 @@
 import { type Database } from "~/server/db";
 import { getDb } from "~/server/repo/database-helpers";
+import {
+  product,
+  inventoryEntry,
+  location,
+  productUnitMappings,
+} from "~/server/db/schema";
+import { eq, isNull, isNotNull, sql, notExists, and } from "drizzle-orm";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -70,28 +77,42 @@ export const findDuplicateUniqueProducts = async (
   db: Database,
   projectId: string,
 ): Promise<DuplicateUniqueProduct[]> => {
-  const duplicates = await getDb(db).product.findMany({
-    where: {
-      projectId,
-      expectedQuantity: 1,
+  const duplicates = await getDb(db).query.product.findMany({
+    where: eq(product.projectId, projectId),
+    columns: {
+      id: true,
+      name: true,
+      manufacturer: true,
+      expectedQuantity: true,
     },
-    include: {
+    with: {
       InventoryEntry: {
-        include: {
-          location: true,
+        columns: {
+          id: true,
+          locationId: true,
+        },
+        with: {
+          location: {
+            columns: {
+              id: true,
+              name: true,
+            },
+          },
         },
       },
     },
   });
 
   return duplicates
-    .filter((product) => product.InventoryEntry.length > 1)
-    .map((product) => ({
-      id: product.id,
-      name: product.name,
-      manufacturer: product.manufacturer,
-      expectedQuantity: product.expectedQuantity,
-      locations: product.InventoryEntry.map((entry) => ({
+    .filter(
+      (prod) => prod.expectedQuantity === 1 && prod.InventoryEntry.length > 1,
+    )
+    .map((prod) => ({
+      id: prod.id,
+      name: prod.name,
+      manufacturer: prod.manufacturer,
+      expectedQuantity: prod.expectedQuantity,
+      locations: prod.InventoryEntry.map((entry) => ({
         id: entry.location.id,
         name: entry.location.name,
       })),
@@ -103,20 +124,27 @@ export const findOrphanedProducts = async (
   db: Database,
   projectId: string,
 ): Promise<OrphanedProduct[]> => {
-  const orphaned = await getDb(db).product.findMany({
-    where: {
-      projectId,
-      InventoryEntry: {
-        none: {},
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      createdAt: true,
-    },
-  });
+  const dbClient = getDb(db);
+
+  const orphaned = await dbClient
+    .select({
+      id: product.id,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      createdAt: product.createdAt,
+    })
+    .from(product)
+    .where(
+      and(
+        eq(product.projectId, projectId),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(inventoryEntry)
+            .where(eq(inventoryEntry.productId, product.id)),
+        ),
+      ),
+    );
 
   return orphaned;
 };
@@ -129,14 +157,9 @@ export const findInvalidUPCs = async (
   const problems: InvalidUPC[] = [];
 
   // Find products with UPCs
-  const productsWithUPCs = await getDb(db).product.findMany({
-    where: {
-      projectId,
-      upc: {
-        not: null,
-      },
-    },
-    select: {
+  const productsWithUPCs = await getDb(db).query.product.findMany({
+    where: sql`${product.projectId} = ${projectId} AND ${product.upc} IS NOT NULL`,
+    columns: {
       id: true,
       name: true,
       manufacturer: true,
@@ -145,15 +168,15 @@ export const findInvalidUPCs = async (
   });
 
   // Check for invalid UPC formats (should be 8 or 12 digits)
-  for (const product of productsWithUPCs) {
-    if (product.upc) {
-      const cleanUpc = product.upc.replace(/[\s-]/g, "");
+  for (const prod of productsWithUPCs) {
+    if (prod.upc) {
+      const cleanUpc = prod.upc.replace(/[\s-]/g, "");
       if (!/^\d{8}$/.test(cleanUpc) && !/^\d{12}$/.test(cleanUpc)) {
         problems.push({
-          id: product.id,
-          name: product.name,
-          manufacturer: product.manufacturer,
-          upc: product.upc,
+          id: prod.id,
+          name: prod.name,
+          manufacturer: prod.manufacturer,
+          upc: prod.upc,
           issue: "invalid_format",
         });
       }
@@ -162,20 +185,20 @@ export const findInvalidUPCs = async (
 
   // Find duplicate UPCs (database should prevent this, but check anyway)
   const upcCounts = new Map<string, typeof productsWithUPCs>();
-  for (const product of productsWithUPCs) {
-    if (product.upc) {
-      const existing = upcCounts.get(product.upc);
+  for (const prod of productsWithUPCs) {
+    if (prod.upc) {
+      const existing = upcCounts.get(prod.upc);
       if (existing) {
         // Found duplicate
         problems.push({
-          id: product.id,
-          name: product.name,
-          manufacturer: product.manufacturer,
-          upc: product.upc,
+          id: prod.id,
+          name: prod.name,
+          manufacturer: prod.manufacturer,
+          upc: prod.upc,
           issue: "duplicate",
         });
       } else {
-        upcCounts.set(product.upc, [product]);
+        upcCounts.set(prod.upc, [prod]);
       }
     }
   }
@@ -188,20 +211,27 @@ export const findProductsWithoutMappings = async (
   db: Database,
   projectId: string,
 ): Promise<ProductWithoutMappings[]> => {
-  const productsWithoutMappings = await getDb(db).product.findMany({
-    where: {
-      projectId,
-      unitMappings: {
-        none: {},
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      createdAt: true,
-    },
-  });
+  const dbClient = getDb(db);
+
+  const productsWithoutMappings = await dbClient
+    .select({
+      id: product.id,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      createdAt: product.createdAt,
+    })
+    .from(product)
+    .where(
+      and(
+        eq(product.projectId, projectId),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(productUnitMappings)
+            .where(eq(productUnitMappings.productId, product.id)),
+        ),
+      ),
+    );
 
   return productsWithoutMappings;
 };
@@ -211,13 +241,23 @@ export const findInvalidInventoryAmounts = async (
   db: Database,
   projectId: string,
 ): Promise<InvalidInventoryAmount[]> => {
-  const inventoryEntries = await getDb(db).inventoryEntry.findMany({
-    where: {
-      projectId,
+  const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
+    where: eq(inventoryEntry.projectId, projectId),
+    columns: {
+      id: true,
+      amount: true,
     },
-    include: {
-      Product: true,
-      location: true,
+    with: {
+      Product: {
+        columns: {
+          name: true,
+        },
+      },
+      location: {
+        columns: {
+          name: true,
+        },
+      },
     },
   });
 
@@ -245,21 +285,28 @@ export const findEmptyLocations = async (
   db: Database,
   projectId: string,
 ): Promise<EmptyLocation[]> => {
-  const emptyLocations = await getDb(db).location.findMany({
-    where: {
-      projectId,
-      InventoryEntries: {
-        none: {},
-      },
-    },
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      createdAt: true,
-      lastBulkInventory: true,
-    },
-  });
+  const dbClient = getDb(db);
+
+  const emptyLocations = await dbClient
+    .select({
+      id: location.id,
+      name: location.name,
+      type: location.type,
+      createdAt: location.createdAt,
+      lastBulkInventory: location.lastBulkInventory,
+    })
+    .from(location)
+    .where(
+      and(
+        eq(location.projectId, projectId),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(inventoryEntry)
+            .where(eq(inventoryEntry.locationId, location.id)),
+        ),
+      ),
+    );
 
   return emptyLocations;
 };

@@ -63,31 +63,29 @@ describe("product repository", () => {
   });
 
   it("should find a product by name", async () => {
-    // Create test products in a transaction to use findProductByName
     const productName = "Unique Product Name";
 
-    await withTransaction(db, async (tx) => {
-      await createProduct(
-        tx,
-        {
-          name: productName,
-          manufacturer: "Test Manufacturer",
-          model: "MODEL-123",
-          upc: "123456789012",
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-        },
-        projectId,
-      );
+    // Create a test product
+    await createProduct(
+      db,
+      {
+        name: productName,
+        manufacturer: "Test Manufacturer",
+        model: "MODEL-123",
+        upc: "123456789012",
+        ndb_number: null,
+        expectedQuantity: null,
+        ingredientId: null,
+      },
+      projectId,
+    );
 
-      // Test finding the product by name
-      const foundProduct = await findProductByName(tx, productName);
+    // Test finding the product by name
+    const foundProduct = await findProductByName(db, productName);
 
-      // Verify the product was found correctly
-      expect(foundProduct).toBeDefined();
-      expect(foundProduct.name).toEqual(productName);
-    });
+    // Verify the product was found correctly
+    expect(foundProduct).toBeDefined();
+    expect(foundProduct.name).toEqual(productName);
   });
 
   it("should throw error when finding a non-existent product by name", async () => {

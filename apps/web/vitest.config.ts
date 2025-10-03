@@ -56,6 +56,14 @@ export default defineConfig({
 
     env: {
       NODE_ENV: "test",
+      SKIP_ENV_VALIDATION: "1",
+      DATABASE_URL: "postgresql://recipehub:example@localhost:5555/test",
+      USDA_API_URL: "http://localhost:8080",
+      R2_ACCESS_KEY_ID: "test",
+      R2_SECRET_ACCESS_KEY: "test",
+      R2_ENDPOINT: "http://localhost:9000",
+      R2_BUCKET_NAME: "test",
+      R2_PUBLIC_URL: "http://localhost:9000",
     },
   },
 });
