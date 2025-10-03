@@ -1,4 +1,5 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { program } from "commander";
 import fs from "fs";
 import SuperJSON from "superjson";
 import YAML from "yaml";
@@ -11,34 +12,43 @@ const readConfig = (fileName: string) => {
   return configSchema.parse(parsed);
 };
 
+// Configure CLI options with env var fallbacks
+program
+  .name("load-data")
+  .description("Load configuration data into the database")
+  .requiredOption(
+    "--project-id <id>",
+    "Project ID (UUID)",
+    process.env.PROJECT_ID,
+  )
+  .requiredOption(
+    "--system-key <key>",
+    "System API key for authentication",
+    process.env.SYSTEM_API_KEY,
+  );
+
+program.parse();
+
+const options = program.opts<{
+  projectId: string;
+  systemKey: string;
+}>();
+
 const client = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: "http://localhost:3000/api/trpc",
       transformer: SuperJSON,
       headers: () => {
-        const systemKey = process.env.SYSTEM_API_KEY;
-        const projectId = process.env.PROJECT_ID;
-
-        if (!systemKey) {
-          throw new Error(
-            "SYSTEM_API_KEY environment variable is required for load-data script",
-          );
-        }
-        if (!projectId) {
-          throw new Error(
-            'PROJECT_ID environment variable is required for load-data script. Example: PROJECT_ID="88446b48-5885-4fbd-b378-2446af89a170"',
-          );
-        }
-
         return {
-          "x-system-key": systemKey,
-          "x-project-id": projectId,
+          "x-system-key": options.systemKey,
+          "x-project-id": options.projectId,
         };
       },
     }),
   ],
 });
+
 const config = readConfig("config.yaml");
 await client.system.loadConfig.mutate(config);
 await client.recipe.seed.mutate();
