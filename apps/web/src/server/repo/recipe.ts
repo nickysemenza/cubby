@@ -22,16 +22,9 @@ import {
   getSortDirection,
   withTransaction,
   getDb,
+  unwrapDb,
 } from "~/server/repo/database-helpers";
 import { type RecipeId, type ProjectId } from "~/schemas/identifiers";
-
-// Helper to safely unwrap Database or use TransactionClient directly
-const unwrapDb = (
-  db: Database | Prisma.TransactionClient,
-): PrismaClient | Prisma.TransactionClient => {
-  // If it already has Prisma methods (TransactionClient), use it directly
-  return "product" in db ? db : getDb(db);
-};
 
 export const getRecipeByID = async (
   id: RecipeId,

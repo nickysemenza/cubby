@@ -3,8 +3,8 @@ import { PrismaNeon } from "@prisma/adapter-neon";
 
 import { env } from "~/env";
 
-const createPrismaClient = () => {
-  const connectionString = env.DATABASE_URL;
+export const createDBClient = (databaseUrl?: string) => {
+  const connectionString = databaseUrl ?? env.DATABASE_URL;
   const isNeon = connectionString.includes("neon.tech");
 
   const args: Partial<Prisma.PrismaClientOptions> = isNeon
@@ -24,10 +24,10 @@ const createPrismaClient = () => {
   });
 };
 const globalForPrisma = globalThis as unknown as {
-  prisma: ReturnType<typeof createPrismaClient> | undefined;
+  prisma: ReturnType<typeof createDBClient> | undefined;
 };
 
-const dbInstance = globalForPrisma.prisma ?? createPrismaClient();
+const dbInstance = globalForPrisma.prisma ?? createDBClient();
 
 if (env.NODE_ENV !== "production") globalForPrisma.prisma = dbInstance;
 
@@ -39,5 +39,14 @@ export interface Database {
   readonly [DatabaseBrand]: true;
 }
 
+/**
+ * Convert a PrismaClient instance to the opaque Database type.
+ * This brands the client to enforce that direct database access only happens in repo files.
+ * Use this when creating Database instances (e.g., in test setup).
+ */
+export const toBrandedDatabase = (client: PrismaClient): Database => {
+  return client as unknown as Database;
+};
+
 // Export the branded instance - NO methods can be called on this outside repo/
-export const db = dbInstance as unknown as Database;
+export const db = toBrandedDatabase(dbInstance);

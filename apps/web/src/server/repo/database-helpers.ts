@@ -29,6 +29,17 @@ export const getDb = (db: Database): PrismaClient => {
 };
 
 /**
+ * Safely unwrap Database or use TransactionClient directly.
+ * Detects if the input is already a TransactionClient and returns it,
+ * otherwise unwraps the branded Database type.
+ */
+export const unwrapDb = (
+  db: Database | Prisma.TransactionClient,
+): PrismaClient | Prisma.TransactionClient => {
+  return "product" in db ? db : getDb(db);
+};
+
+/**
  * Transaction wrapper for interactive transactions (sequential operations).
  * Use this in repo functions when you need multiple operations to be atomic.
  */

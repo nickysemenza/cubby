@@ -2,10 +2,13 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
-import { PrismaClient } from "@prisma/client";
 import { execSync } from "child_process";
 import { unsafeProjectId } from "../src/schemas/identifiers";
-import { type Database } from "../src/server/db";
+import {
+  createDBClient,
+  toBrandedDatabase,
+  type Database,
+} from "../src/server/db";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
@@ -37,9 +40,7 @@ export async function setup() {
 
     console.log(output);
     console.log("Seeding template database");
-    const db = new PrismaClient({
-      datasourceUrl: connectionUrl,
-    });
+    const db = createDBClient(connectionUrl);
     //   await seed(db);
 
     // Close the database connection, without this the tests can hang
@@ -54,9 +55,7 @@ export async function buildTestDB() {
   const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
     remapDBConfig(databaseConfig),
   );
-  const db = new PrismaClient({
-    datasourceUrl: connectionUrl,
-  });
+  const db = createDBClient(connectionUrl);
   // Automatically create a test project
   const testProject = await db.project.create({
     data: {
@@ -69,7 +68,7 @@ export async function buildTestDB() {
     await db.$disconnect();
   };
   return {
-    db: db as unknown as Database,
+    db: toBrandedDatabase(db),
     projectId: unsafeProjectId(testProject.id),
     teardown,
   };
