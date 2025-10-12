@@ -54,6 +54,7 @@ const NewCompactRecipe: React.FC = () => {
   });
 
   const { watch } = form;
+  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form API limitation
   const ingredientsText = watch("ingredientsText");
   const instructionsText = watch("instructionsText");
 

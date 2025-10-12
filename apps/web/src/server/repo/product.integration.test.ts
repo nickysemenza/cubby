@@ -14,7 +14,6 @@ import {
   unsafeProductId,
   type ProjectId,
 } from "~/schemas/identifiers";
-import { withTransaction } from "./database-helpers";
 
 describe("product repository", () => {
   let db: Database;

@@ -38,7 +38,7 @@ import {
   image,
   productImage,
 } from "~/server/db/schema";
-import { eq, and, sql, count, ilike, ne, inArray } from "drizzle-orm";
+import { eq, and, count, ilike, ne, inArray } from "drizzle-orm";
 
 export const findProductByName = async (
   db: Database | Transaction,

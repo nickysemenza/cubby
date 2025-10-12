@@ -90,6 +90,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
 
   // Update conversions whenever form values change
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form API limitation
     const subscription = form.watch((values) => {
       // Only update if we have both a value and a unit
       if (values.amount?.value && values.amount?.unit) {

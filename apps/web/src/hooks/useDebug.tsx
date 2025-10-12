@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, type ReactNode } from "react";
+import { useLocalStorage } from "./useLocalStorage";
 
 interface DebugContextType {
   isDebugEnabled: boolean;
@@ -20,23 +15,13 @@ interface DebugContextProviderProps {
 }
 
 export function DebugContextProvider({ children }: DebugContextProviderProps) {
-  const [isDebugEnabled, setIsDebugEnabled] = useState(false);
-
-  // Load debug state from localStorage on mount
-  useEffect(() => {
-    const savedDebugState = localStorage.getItem("debugTablesEnabled");
-    if (savedDebugState) {
-      setIsDebugEnabled(JSON.parse(savedDebugState));
-    }
-  }, []);
-
-  // Save debug state to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem("debugTablesEnabled", JSON.stringify(isDebugEnabled));
-  }, [isDebugEnabled]);
+  const [isDebugEnabled, setIsDebugEnabled] = useLocalStorage(
+    "debugTablesEnabled",
+    false,
+  );
 
   const toggleDebug = () => {
-    setIsDebugEnabled((prev) => !prev);
+    setIsDebugEnabled((prev: boolean) => !prev);
   };
 
   return (

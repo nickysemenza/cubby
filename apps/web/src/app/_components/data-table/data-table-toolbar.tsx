@@ -140,21 +140,21 @@ export function DataTableToolbar<TData>({
   filterableColumns,
 }: DataTableToolbarProps<TData>) {
   // Track the input values locally for immediate UI feedback
-  const [filterInputs, setFilterInputs] = useState<Record<string, string>>({});
-
-  // Initialize the filter inputs with the current filter values
-  useEffect(() => {
-    const initialFilters: Record<string, string> = {};
-    filterableColumns?.forEach((column) => {
-      const columnValue = table
-        .getColumn(column.id)
-        ?.getFilterValue() as string;
-      if (columnValue) {
-        initialFilters[column.id] = columnValue;
-      }
-    });
-    setFilterInputs(initialFilters);
-  }, [filterableColumns, table]);
+  // Use lazy initialization to avoid setting state in effect
+  const [filterInputs, setFilterInputs] = useState<Record<string, string>>(
+    () => {
+      const initialFilters: Record<string, string> = {};
+      filterableColumns?.forEach((column) => {
+        const columnValue = table
+          .getColumn(column.id)
+          ?.getFilterValue() as string;
+        if (columnValue) {
+          initialFilters[column.id] = columnValue;
+        }
+      });
+      return initialFilters;
+    },
+  );
 
   const isFiltered =
     table.getState().columnFilters.length > 0 || table.getState().globalFilter;

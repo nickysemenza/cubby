@@ -6,7 +6,7 @@ import {
   location,
   productUnitMappings,
 } from "~/server/db/schema";
-import { eq, isNull, isNotNull, sql, notExists, and } from "drizzle-orm";
+import { eq, sql, notExists, and } from "drizzle-orm";
 
 // Interface for the complete problems result
 export interface AllProblems {

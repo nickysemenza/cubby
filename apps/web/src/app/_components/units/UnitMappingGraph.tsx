@@ -16,28 +16,37 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
       </div>
     );
   }
+
+  // Generate graph outside of JSX to avoid try/catch around JSX
+  let graph: string;
+  let error: unknown = null;
+
   try {
-    const graph = w
+    graph = w
       .graph_unit_mappings(unitMapping)
       .replace(
         "digraph {",
         `digraph { rankdir=LR; nodesep=0.5;bgcolor="transparent";`,
       );
-
-    return (
-      <Graphviz
-        dot={graph}
-        options={{
-          width: 300,
-          height: 150,
-          background: "transparent",
-          useWorker: false,
-        }}
-        className="w-full"
-      />
-    );
   } catch (e) {
+    error = e;
     console.log({ e });
-    return <div className="text-destructive">{JSON.stringify(e)}</div>;
   }
+
+  if (error) {
+    return <div className="text-destructive">{JSON.stringify(error)}</div>;
+  }
+
+  return (
+    <Graphviz
+      dot={graph!}
+      options={{
+        width: 300,
+        height: 150,
+        background: "transparent",
+        useWorker: false,
+      }}
+      className="w-full"
+    />
+  );
 };

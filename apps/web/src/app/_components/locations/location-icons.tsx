@@ -48,8 +48,10 @@ export function LocationIcon({
   className,
   size = 16,
 }: LocationIconProps) {
+  /* eslint-disable react-hooks/static-components */
   const IconComponent = getLocationIcon(type);
   return <IconComponent className={className} size={size} />;
+  /* eslint-enable react-hooks/static-components */
 }
 
 interface LocationIconWithLabelProps extends LocationIconProps {

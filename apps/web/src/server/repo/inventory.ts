@@ -10,7 +10,6 @@ import { locationType } from "~/schemas/location";
 import {
   withTransaction,
   getDb,
-  unwrapDb,
   buildOrderBy,
   insertAndReturnDb,
   insertAndReturn,
@@ -33,8 +32,6 @@ import {
   product,
   location,
   productUnitMappings,
-  productImage,
-  locationImage,
   image,
 } from "~/server/db/schema";
 import { eq, and, count, not, ilike } from "drizzle-orm";

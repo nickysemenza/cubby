@@ -2,7 +2,7 @@
 import { useWasm } from "~/hooks/useWasm";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { z } from "zod";
-import { type FC, useState } from "react";
+import { type FC, useState, useMemo, useCallback } from "react";
 import { showAmountAndPrice } from "./format-amount";
 import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { UnitMappingGraph } from "../units/UnitMappingGraph";
@@ -41,13 +41,16 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     }),
   );
 
-  const handleEdit = (data: InventoryUpdateInput) => {
-    updateMutation.mutate(data);
-  };
+  const handleEdit = useCallback(
+    (data: InventoryUpdateInput) => {
+      updateMutation.mutate(data);
+    },
+    [updateMutation],
+  );
 
   // w is always defined with our updated useWasm hook
 
-  const InventoryContent = () => {
+  const inventoryContent = useMemo(() => {
     if (isEditing) {
       return (
         <InventoryForm
@@ -80,12 +83,19 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         </Button>
       </div>
     );
-  };
+  }, [
+    isEditing,
+    inventoryitem,
+    w,
+    updateMutation.isPending,
+    error,
+    handleEdit,
+  ]);
 
   const sections: DetailSection[] = [
     {
       title: "Inventory Item Details",
-      content: <InventoryContent />,
+      content: inventoryContent,
     },
   ];
 

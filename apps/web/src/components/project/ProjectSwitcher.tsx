@@ -1,7 +1,6 @@
 "use client";
 
 import { useTRPC } from "~/trpc/react";
-import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -12,19 +11,16 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Plus } from "lucide-react";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 
 // Hook to manage active project in localStorage
 function useActiveProject() {
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get from localStorage on mount
-    const stored = localStorage.getItem("activeProjectId");
-    setActiveProjectId(stored);
-  }, []);
+  const [activeProjectId, setActiveProjectId] = useLocalStorage<string | null>(
+    "activeProjectId",
+    null,
+  );
 
   const setActiveProject = (projectId: string) => {
-    localStorage.setItem("activeProjectId", projectId);
     setActiveProjectId(projectId);
   };
 

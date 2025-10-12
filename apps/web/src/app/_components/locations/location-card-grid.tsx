@@ -1,7 +1,7 @@
 "use client";
 import { Badge } from "~/components/ui/badge";
 import { type InfLocation } from "~/schemas/location";
-import { getLocationIcon } from "./location-icons";
+import { getLocationIcon, LocationIcon } from "./location-icons";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
@@ -77,10 +77,13 @@ function LocationCard({ location, showParentPath }: LocationCardProps) {
 
   // Add stats badges
   if (hasChildren) {
-    const ChildrenIcon = getLocationIcon(location.type);
     badges.push(
       <div key="children" className="flex items-center gap-1 text-xs">
-        <ChildrenIcon size={10} className="text-muted-foreground" />
+        <LocationIcon
+          type={location.type}
+          size={10}
+          className="text-muted-foreground"
+        />
         <span className="text-muted-foreground">{childrenCount}</span>
       </div>,
     );
@@ -143,10 +146,9 @@ function LocationCard({ location, showParentPath }: LocationCardProps) {
         </div>
         <div className="flex flex-wrap gap-1">
           {location.children.slice(0, 3).map((child) => {
-            const ChildIcon = getLocationIcon(child.type);
             return (
               <Badge key={child.id} variant="secondary" className="text-xs">
-                <ChildIcon size={10} className="mr-1" />
+                <LocationIcon type={child.type} size={10} className="mr-1" />
                 {child.name}
               </Badge>
             );
