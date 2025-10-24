@@ -43,7 +43,7 @@ jobs:
         env:
           RUSTFLAGS: '--cfg getrandom_backend="wasm_js"'
       - name: Upload WASM pkg artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: wasm-pkg
           path: apps/web/wasm
@@ -229,7 +229,7 @@ jobs:
           path: apps/web/test-results/junit.xml
           reporter: java-junit
           fail-on-error: false
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: ${{ !cancelled() }}
         with:
           name: playwright-report
