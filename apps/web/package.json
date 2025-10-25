@@ -74,7 +74,7 @@
     "flat": "^6.0.1",
     "graphviz-react": "^1.2.5",
     "json-edit-react": "^1.29.0",
-    "lucide-react": "^0.546.0",
+    "lucide-react": "^0.548.0",
     "next": "15.5.3",
     "next-themes": "^0.4.6",
     "pg": "^8.16.3",
