@@ -1,5 +1,5 @@
 import { USDAClient } from "../clients/usda";
-import { product } from "~/server/db/schema";
+import { type ProductTopLevelOut } from "~/schemas/product";
 import {
   type FoodSummary,
   type FoodLookupParam,
@@ -16,7 +16,7 @@ export class USDAService {
     private usdaClient: USDAClient,
     private getLinkedProducts: (
       lookup?: FoodLookupParam,
-    ) => Promise<Array<typeof product.$inferSelect>>,
+    ) => Promise<ProductTopLevelOut[]>,
   ) {}
 
   async findFood(
@@ -101,14 +101,13 @@ export class USDAService {
     const { brandedFoodInfo, legacyFoodInfo } = foodSummary;
     const upc = brandedFoodInfo?.gtin_upc;
 
-    const linkedProducts: Array<typeof product.$inferSelect> =
-      await this.getLinkedProducts(
-        upc !== undefined
-          ? { kind: "upc", gtin_upc: upc }
-          : legacyFoodInfo !== null
-            ? { kind: "ndb", ndb_number: legacyFoodInfo.ndb_number }
-            : undefined,
-      );
+    const linkedProducts: ProductTopLevelOut[] = await this.getLinkedProducts(
+      upc !== undefined
+        ? { kind: "upc", gtin_upc: upc }
+        : legacyFoodInfo !== null
+          ? { kind: "ndb", ndb_number: legacyFoodInfo.ndb_number }
+          : undefined,
+    );
 
     // Get all inferred unit mappings from the food
     const w = await import("wasm");

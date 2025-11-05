@@ -27,16 +27,34 @@ import {
   projectId as projectIdSchema,
   type ProjectId,
   unsafeProjectId,
+  unsafeProductId,
 } from "~/schemas/identifiers";
+
+/**
+ * Map database product record to ProductTopLevelOut format
+ * Excludes DB-only fields (deletedAt, projectId, ingredientId)
+ */
+const mapProductToTopLevelOut = (
+  dbProduct: Awaited<ReturnType<typeof findProductsByFoodIdentifier>>[number],
+) => {
+  // Exclude DB-only fields from the result
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { deletedAt, projectId, ingredientId, ...p } = dbProduct;
+  return {
+    ...p,
+    id: unsafeProductId(p.id),
+  };
+};
 
 /**
  * Helper function to build crud services for both production and test contexts
  */
 const buildCrudServices = (db: Database) => {
   const usdaClient = new USDAClient(env.USDA_API_URL);
-  const usdaService = new USDAService(usdaClient, (lookup) =>
-    findProductsByFoodIdentifier(db, lookup),
-  );
+  const usdaService = new USDAService(usdaClient, async (lookup) => {
+    const products = await findProductsByFoodIdentifier(db, lookup);
+    return products.map(mapProductToTopLevelOut);
+  });
   const services = {
     product: new ProductService(db, usdaClient),
     ingredient: new IngredientService(db, usdaClient),

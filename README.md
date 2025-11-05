@@ -1,7 +1,7 @@
 # Recipehub
 
 Recipehub is both a recipe database and a home inventory database tied together.
-Main technologies: Next.js, React w/ TailwindCSS, tRPC w/ React Query, and Prisma (PostgresSQL)
+Main technologies: Next.js, React w/ TailwindCSS, tRPC w/ React Query, and Drizzle ORM (PostgreSQL)
 
 # Entities
 
@@ -39,7 +39,7 @@ erDiagram
 - `src/components/ui` contains components from [shadcn/ui](https://ui.shadcn.com/)
 - `/src/schemas` - Zod schema definitions
 - `/src/server/api` - tRPC API routes and handlers
-- `/src/server/repo` - Database repository layer
+- `/src/server/repo` - Database repository layer (Drizzle ORM)
 - `/recipebridge` contains a Web Assembly shim for calling out to Rust code in [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
 
 # Testing Strategy

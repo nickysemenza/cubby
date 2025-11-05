@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { insertDataConfig } from "./system";
+import { insertDataConfig } from "~/server/repo/system";
 import { testConfig } from "~/testdata/test-config.data";
 import { transformConfig } from "~/schemas/config";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
