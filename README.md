@@ -3,6 +3,20 @@
 Recipehub is both a recipe database and a home inventory database tied together.
 Main technologies: Next.js, React w/ TailwindCSS, tRPC w/ React Query, and Drizzle ORM (PostgreSQL)
 
+## Authentication
+
+- Better‑Auth powers authentication and organizations.
+- Server config: `apps/web/src/lib/auth.ts`
+- Client hooks: `apps/web/src/lib/auth-client.ts`
+- API route: `apps/web/src/app/api/auth/[...all]/route.ts`
+- UI: `@daveyplate/better-auth-ui` with dynamic routes
+  - Auth pages: `apps/web/src/app/auth/[path]/page.tsx`
+  - Account pages: `apps/web/src/app/account/[path]/page.tsx`
+  - Organization pages: `apps/web/src/app/organization/[path]/page.tsx`
+  - CSS import in layout: `apps/web/src/app/layout.tsx`
+
+Visit `http://localhost:3000/api/auth/session` while running the app to inspect the current session.
+
 # Entities
 
 **Recipes** have multiple sections, each of which has **Ingredients** and an amount. Ingredients can also be other recipes.

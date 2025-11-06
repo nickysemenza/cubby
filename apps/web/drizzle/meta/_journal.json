@@ -8,6 +8,13 @@
       "when": 1759506141903,
       "tag": "0000_sloppy_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762394730856,
+      "tag": "0001_lazy_firelord",
+      "breakpoints": true
     }
   ]
 }

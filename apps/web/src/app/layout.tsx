@@ -1,7 +1,7 @@
 import "~/styles/globals.css";
+import "@daveyplate/better-auth-ui/css";
 
 import { type Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { TRPCReactProvider } from "~/trpc/react";
 import { MainNav } from "./_components/MainNav";
 import { GlobalCommandMenu } from "./_components/command-menu";
@@ -10,6 +10,7 @@ import { Toaster } from "~/components/ui/sonner";
 import { WasmContextProvider } from "~/hooks/useWasm";
 import { DebugContextProvider } from "~/hooks/useDebug";
 import { ThemeProvider } from "~/components/theme-provider";
+import { AuthUIProvider } from "./_components/AuthUIProvider";
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -23,15 +24,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <AuthUIProvider>
             <DebugContextProvider>
               <TRPCReactProvider>
                 <div className="flex flex-col">
@@ -48,9 +49,9 @@ export default function RootLayout({
                 <WasmContextProvider>{children}</WasmContextProvider>
               </TRPCReactProvider>
             </DebugContextProvider>
-          </ThemeProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+          </AuthUIProvider>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

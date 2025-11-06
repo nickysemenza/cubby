@@ -30,7 +30,7 @@ import { eq, and, inArray, sql, lt, ilike } from "drizzle-orm";
 export const initiateImageUploadWithoutEntity = async (
   db: Database,
   { filename, contentType, size }: InitiateUploadWithoutEntityInput,
-  projectId: string,
+  organizationId: string,
 ) => {
   // Generate S3 key for the image
   const key = generateImageKey(filename);
@@ -38,7 +38,7 @@ export const initiateImageUploadWithoutEntity = async (
 
   // Create image record in pending state
   const createdImage = await insertAndReturnDb(db, image, {
-    projectId,
+    organizationId,
     key,
     filename,
     size,

@@ -6,7 +6,7 @@ const loadConfig = systemProcedure
   .input(configSchema)
   .mutation(async ({ ctx, input }) => {
     const transformedInput = transformConfig(input);
-    return await insertDataConfig(ctx.db, transformedInput, ctx.projectId);
+    return await insertDataConfig(ctx.db, transformedInput, ctx.organizationId);
   });
 
 export const systemRouter = createTRPCRouter({

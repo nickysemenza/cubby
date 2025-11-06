@@ -36,44 +36,45 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: RecipeId) => {
-      const res = await getRecipeByID(id, services.db, services.projectId);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      const res = await getRecipeByID(
+        id,
+        services.db,
+        services.organizationId!,
+      );
       if (res === null) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Recipe not found" });
       }
       return res;
     },
     list: async (services, filters, sort, pagination) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await recipeList(
         services.db,
-        services.projectId,
+        services.organizationId!,
         filters.nameFilter,
         sort,
         pagination,
       );
     },
     create: async (services, data) => {
-      if (!services.projectId) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Project ID required",
-        });
-      }
-      return await createRecipe(data, services.db, services.projectId);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      return await createRecipe(data, services.db, services.organizationId!);
     },
     update: async (services, id: RecipeId, data) => {
-      if (!services.projectId) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Project ID required",
-        });
-      }
-      return await updateRecipe(id, data, services.db, services.projectId);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      return await updateRecipe(
+        id,
+        data,
+        services.db,
+        services.organizationId!,
+      );
     },
   },
 });
 
 const seed = systemProcedure.mutation(
-  async ({ ctx }) => await seedRealRecipes(ctx.db, ctx.projectId),
+  async ({ ctx }) => await seedRealRecipes(ctx.db, ctx.organizationId),
 );
 const scrape = protectedProcedure
   .input(z.url())
@@ -83,7 +84,7 @@ const insertCompact = protectedProcedure
   .input(compactRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    return await insertCompactRecipe(input, ctx.db, ctx.projectId);
+    return await insertCompactRecipe(input, ctx.db, ctx.organizationId);
   });
 
 export const recipeRouter = createTRPCRouter({

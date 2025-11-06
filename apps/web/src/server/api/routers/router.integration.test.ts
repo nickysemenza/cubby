@@ -5,24 +5,24 @@ import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { exampleRecipesCompact } from "~/testdata/fakeRecipes";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 
 describe("recipe router", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
     return teardown;
   });
   it("recipe insert and retrieve", async () => {
-    await seedRealRecipes(db, projectId);
+    await seedRealRecipes(db, organizationId);
 
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
     const recipeList = await caller.list({ filters: {} });

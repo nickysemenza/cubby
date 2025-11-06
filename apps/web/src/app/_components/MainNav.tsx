@@ -4,13 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
+import { authClient } from "~/lib/auth-client";
 import { Menu, PackageOpen, X, Bug, BugOff } from "lucide-react";
 import { useState } from "react";
 import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
-import { ProjectSwitcher } from "~/components/project/ProjectSwitcher";
+import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 
 type NavItem = {
   href: string;
@@ -51,6 +51,7 @@ export function MainNav({
   const pathName = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { isDebugEnabled, toggleDebug } = useDebug();
+  const session = authClient.useSession();
 
   return (
     <div className="flex w-full items-center justify-between">
@@ -74,19 +75,19 @@ export function MainNav({
 
           // Only show Dashboard link if it's not the Dashboard link or user is signed in
           if (item.href === "/dashboard") {
+            if (!session.data?.user) return null;
             return (
-              <SignedIn key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    "hover:text-primary text-sm font-medium transition-colors",
-                    !active && "text-muted-foreground",
-                  )}
-                  aria-current={active ? "page" : undefined}
-                >
-                  {item.label}
-                </Link>
-              </SignedIn>
+              <Link
+                href={item.href}
+                key={item.href}
+                className={cn(
+                  "hover:text-primary text-sm font-medium transition-colors",
+                  !active && "text-muted-foreground",
+                )}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
             );
           }
 
@@ -130,13 +131,22 @@ export function MainNav({
           <span className="sr-only">Toggle debug mode</span>
         </Button>
 
-        <SignedOut>
-          <SignInButton />
-        </SignedOut>
-        <SignedIn>
-          <ProjectSwitcher />
-          <UserButton />
-        </SignedIn>
+        {!session.data?.user ? (
+          <Link href="/auth/sign-in" className="text-sm font-medium">
+            Sign In
+          </Link>
+        ) : (
+          <>
+            <OrganizationSwitcher />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => authClient.signOut()}
+            >
+              Sign Out
+            </Button>
+          </>
+        )}
 
         {/* Mobile menu button */}
         <button
@@ -183,21 +193,21 @@ export function MainNav({
 
               // Only show Dashboard link if it's not the Dashboard link or user is signed in
               if (item.href === "/dashboard") {
+                if (!session.data?.user) return null;
                 return (
-                  <SignedIn key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "hover:text-primary p-2 text-base font-medium transition-colors",
-                        !active && "text-muted-foreground",
-                        active && "bg-muted rounded",
-                      )}
-                      aria-current={active ? "page" : undefined}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  </SignedIn>
+                  <Link
+                    href={item.href}
+                    key={item.href}
+                    className={cn(
+                      "hover:text-primary p-2 text-base font-medium transition-colors",
+                      !active && "text-muted-foreground",
+                      active && "bg-muted rounded",
+                    )}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.label}
+                  </Link>
                 );
               }
 

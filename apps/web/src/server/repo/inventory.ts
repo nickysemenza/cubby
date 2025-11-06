@@ -20,7 +20,7 @@ import {
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import {
   type InventoryId,
-  type ProjectId,
+  type OrganizationId,
   type ProductId,
   type LocationId,
   unsafeInventoryId,
@@ -132,12 +132,12 @@ export const checkUniqueProductDuplicate = async (
 export const getInventoryEntryByID = async (
   db: Database,
   id: InventoryId,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const res = await getDb(db).query.inventoryEntry.findFirst({
     where: and(
       eq(inventoryEntry.id, id),
-      eq(inventoryEntry.projectId, projectId),
+      eq(inventoryEntry.organizationId, organizationId),
     ),
     ...relations.inventory.full,
   });
@@ -256,7 +256,7 @@ interface UpdateInventoryEntryData {
 export const updateInventoryEntry = async (
   db: Database,
   id: InventoryId,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
   data: UpdateInventoryEntryData,
 ) => {
   const updateValues: {
@@ -279,7 +279,10 @@ export const updateInventoryEntry = async (
     db,
     inventoryEntry,
     updateValues,
-    and(eq(inventoryEntry.id, id), eq(inventoryEntry.projectId, projectId)),
+    and(
+      eq(inventoryEntry.id, id),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
   );
 
   // Fetch with relations
@@ -304,10 +307,10 @@ interface CreateInventoryEntryData {
 export const createInventoryEntry = async (
   db: Database,
   data: CreateInventoryEntryData,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const created = await insertAndReturnDb(db, inventoryEntry, {
-    projectId: projectId,
+    organizationId: organizationId,
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
@@ -330,7 +333,7 @@ export const bulkProcessInventoryEntries = async (
   db: Database,
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await withTransaction(db, async (tx: Transaction) => {
@@ -363,7 +366,7 @@ export const bulkProcessInventoryEntries = async (
           throw new Error("productId and amount are required for new items");
         }
         const created = await insertAndReturn(tx, inventoryEntry, {
-          projectId: projectId,
+          organizationId: organizationId,
           productId: item.productId,
           locationId: locationId,
           amount: item.amount,

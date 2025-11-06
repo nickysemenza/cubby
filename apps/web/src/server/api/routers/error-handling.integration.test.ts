@@ -6,14 +6,14 @@ import { recipeRouter } from "./recipe";
 import { ingredientRouter } from "./ingredient";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 
 describe("API Error Handling", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
 
     return teardown;
   });
@@ -24,7 +24,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -50,7 +50,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -69,7 +69,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -96,7 +96,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -122,7 +122,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -143,7 +143,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -162,7 +162,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -195,7 +195,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -230,7 +230,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -249,7 +249,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -270,7 +270,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -291,7 +291,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -312,7 +312,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -332,7 +332,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -368,7 +368,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -397,7 +397,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -423,7 +423,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 
@@ -449,7 +449,7 @@ describe("API Error Handling", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: "test-user-id" },
-          projectId,
+          organizationId,
         }),
       );
 

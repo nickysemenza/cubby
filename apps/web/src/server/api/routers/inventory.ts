@@ -16,6 +16,7 @@ import {
   inventoryUpdateInput,
 } from "~/schemas/inventory";
 import { createEntityCrudProcedures } from "../crud-factory";
+import { AppErrorReason } from "~/lib/app-error-codes";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import { inventoryId, type InventoryId } from "~/schemas/identifiers";
 
@@ -37,10 +38,11 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: InventoryId) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       const res = await getInventoryEntryByID(
         services.db,
         id,
-        services.projectId,
+        services.organizationId!,
       );
       if (res === null) {
         throw new TRPCError({
@@ -72,22 +74,23 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         throw new TRPCError({
           code: "CONFLICT",
           message: `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
+          cause: { reason: AppErrorReason.PRODUCT_ALREADY_EXISTS },
         });
       }
 
-      if (!services.projectId) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Project ID required",
-        });
-      }
-      return await createInventoryEntry(services.db, data, services.projectId);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      return await createInventoryEntry(
+        services.db,
+        data,
+        services.organizationId!,
+      );
     },
     update: async (services, id: InventoryId, data) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await updateInventoryEntry(
         services.db,
         id,
-        services.projectId,
+        services.organizationId!,
         data,
       );
     },
@@ -109,7 +112,7 @@ const bulkProcess = protectedProcedure
         locationId: item.locationId ?? input.locationId,
         amount: item.amount,
       })),
-      ctx.projectId,
+      ctx.organizationId,
     );
     return result;
   });
@@ -138,7 +141,10 @@ const findDuplicates = protectedProcedure
     ),
   )
   .query(async ({ ctx }) => {
-    const duplicates = await findDuplicateUniqueProducts(ctx.db, ctx.projectId);
+    const duplicates = await findDuplicateUniqueProducts(
+      ctx.db,
+      ctx.organizationId,
+    );
 
     return duplicates.map((product) => ({
       id: product.id,

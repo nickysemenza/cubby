@@ -14,7 +14,7 @@ import { db } from "~/server/db";
 import { flatten } from "flat";
 import { type Span, context, propagation } from "@opentelemetry/api";
 import { getTracer, TraceNames } from "~/server/tracing";
-import { auth } from "@clerk/nextjs/server";
+import { auth as betterAuth } from "~/lib/auth";
 import { USDAClient } from "~/server/clients/usda";
 import { ProductService } from "~/server/services/product.service";
 import { IngredientService } from "~/server/services/ingredient.service";
@@ -22,27 +22,22 @@ import { USDAService } from "~/server/services/usda.service";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { type Database } from "~/server/db";
 import { env } from "~/env";
-import { ProjectService } from "~/server/services/project.service";
 import {
-  projectId as projectIdSchema,
-  type ProjectId,
-  unsafeProjectId,
   unsafeProductId,
+  unsafeOrganizationId,
+  type OrganizationId,
 } from "~/schemas/identifiers";
 
 /**
  * Map database product record to ProductTopLevelOut format
- * Excludes DB-only fields (deletedAt, projectId, ingredientId)
+ * Excludes DB-only fields (deletedAt, organizationId, ingredientId)
  */
 const mapProductToTopLevelOut = (
   dbProduct: Awaited<ReturnType<typeof findProductsByFoodIdentifier>>[number],
 ) => {
-  // Exclude DB-only fields from the result
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { deletedAt, projectId, ingredientId, ...p } = dbProduct;
   return {
-    ...p,
-    id: unsafeProductId(p.id),
+    ...dbProduct,
+    id: unsafeProductId((dbProduct as { id: string }).id),
   };
 };
 
@@ -80,6 +75,7 @@ const buildCrudServices = (db: Database) => {
  *
  * @see https://trpc.io/docs/server/context
  */
+
 export const createTRPCContext = async (opts: { headers: Headers }) => {
   // Extract trace context from headers and set it as active context
   const headersObj: Record<string, string> = {};
@@ -90,57 +86,26 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
 
   return await context.with(parentContext, async () => {
     const crudServices = buildCrudServices(db);
-    const authResult = opts.headers.has("skip-auth") ? undefined : await auth();
+    const betterSession = await betterAuth.api.getSession({
+      headers: opts.headers,
+    });
 
-    let projectId: ProjectId;
-    let isSystemRequest = false;
-
-    // Check for system API key
-    const systemKey = opts.headers.get("x-system-key");
-    const expectedSystemKey = process.env.SYSTEM_API_KEY;
-    if (systemKey && expectedSystemKey && systemKey === expectedSystemKey) {
-      isSystemRequest = true;
-      // For system requests, projectId is required
-      const requestedProjectId = opts.headers.get("x-project-id");
-      if (!requestedProjectId) {
-        throw new Error("x-project-id header is required for system requests");
-      }
-      projectId = projectIdSchema.parse(requestedProjectId);
-    } else if (authResult?.userId) {
-      const projectService = new ProjectService(db);
-
-      // Get projectId from header (sent by client from localStorage)
-      let requestedProjectId = opts.headers.get("x-project-id") || undefined;
-
-      // Verify access if projectId provided
-      if (requestedProjectId) {
-        const hasAccess = await projectService.verifyProjectAccess(
-          authResult.userId,
-          requestedProjectId,
-        );
-        if (!hasAccess) {
-          requestedProjectId = undefined;
-        }
-      }
-
-      // If no valid project, get default (this always returns a branded ProjectId)
-      if (!requestedProjectId) {
-        projectId = projectIdSchema.parse(
-          await projectService.ensureDefaultProject(authResult.userId),
-        );
-      } else {
-        projectId = projectIdSchema.parse(requestedProjectId);
-      }
-    } else {
-      // For unauthenticated users, we'll provide a placeholder
-      // but protected procedures will catch this and require auth
-      projectId = "unauthenticated" as ProjectId;
-    }
+    // System requests are allowed via header key, organization scoping from Better-Auth
+    const isSystemRequest = (() => {
+      const key = opts.headers.get("x-system-key");
+      const expected = process.env.SYSTEM_API_KEY;
+      return Boolean(key && expected && key === expected);
+    })();
 
     return {
       ...crudServices,
-      auth: authResult,
-      projectId,
+      auth: {
+        userId: betterSession?.user?.id ?? null,
+        sessionId: betterSession?.session?.id ?? null,
+      },
+      organizationId: betterSession?.session?.activeOrganizationId
+        ? unsafeOrganizationId(betterSession.session.activeOrganizationId)
+        : null,
       isSystemRequest,
       ...opts,
     };
@@ -181,11 +146,20 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
       };
     }
 
+    // Pull a structured reason out of error.cause if present
+    let reason: string | undefined = undefined;
+    const cause = (error as { cause?: unknown }).cause;
+    if (cause && typeof cause === "object") {
+      const r = (cause as Record<string, unknown>)["reason"];
+      if (typeof r === "string") reason = r;
+    }
+
     return {
       ...shape,
       data: {
         ...shape.data,
         zodError: null,
+        reason,
       },
     };
   },
@@ -254,7 +228,6 @@ const tracingMiddleWare = t.middleware(async (opts) => {
 
 // Check if the user is signed in
 // Otherwise, throw an UNAUTHORIZED code
-// cf https://clerk.com/docs/references/nextjs/trpc#create-a-protected-procedure
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.auth?.userId) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -262,6 +235,27 @@ const isAuthed = t.middleware(({ next, ctx }) => {
   return next({
     ctx: {
       auth: ctx.auth,
+    },
+  });
+});
+
+// Check if an organization is selected
+// Otherwise, throw an UNAUTHORIZED code
+import { AppErrorReason } from "~/lib/app-error-codes";
+
+const requireOrganization = t.middleware(({ next, ctx }) => {
+  if (!ctx.organizationId) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Please select an organization to continue",
+      cause: { reason: AppErrorReason.NO_ORGANIZATION_SELECTED },
+    });
+  }
+  // Type assertion is safe because we've checked ctx.organizationId is not null
+  return next({
+    ctx: {
+      ...ctx,
+      organizationId: ctx.organizationId as OrganizationId,
     },
   });
 });
@@ -277,7 +271,9 @@ export const publicProcedure = t.procedure
   .use(timingMiddleware)
   .use(tracingMiddleWare);
 
-export const protectedProcedure = publicProcedure.use(isAuthed);
+export const protectedProcedure = publicProcedure
+  .use(isAuthed)
+  .use(requireOrganization);
 
 /**
  * System procedure for operations that can be authenticated with system API key
@@ -292,33 +288,17 @@ const isSystemOrAuth = t.middleware(({ next, ctx }) => {
   });
 });
 
-export const systemProcedure = publicProcedure.use(isSystemOrAuth);
+export const systemProcedure = publicProcedure
+  .use(isSystemOrAuth)
+  .use(requireOrganization);
 
 /**
  * Helper to create a minimal auth object for testing
  */
-const createTestAuth = (userId: string): Awaited<ReturnType<typeof auth>> => {
-  return {
-    userId,
-    sessionClaims: {},
-    sessionId: "test-session-id",
-    sessionStatus: "active" as const,
-    actor: null,
-    orgId: null,
-    orgRole: null,
-    orgSlug: null,
-    orgPermissions: null,
-    getToken: async () => null,
-    has: () => false,
-    debug: () => null,
-    redirectToSignIn: () => {
-      throw new Error("redirectToSignIn not implemented in test");
-    },
-    redirectToSignUp: () => {
-      throw new Error("redirectToSignUp not implemented in test");
-    },
-  } as unknown as Awaited<ReturnType<typeof auth>>;
-};
+const createTestAuth = (userId: string) => ({
+  userId,
+  sessionId: "test-session-id",
+});
 
 /**
  * Test helper to create a TRPC context for testing purposes
@@ -328,17 +308,18 @@ export const createTestTRPCContext = (
   opts: {
     headers?: Headers;
     auth?: { userId: string };
-    projectId?: ProjectId;
+    organizationId?: OrganizationId;
   } = {},
 ) => {
   const crudServices = buildCrudServices(db);
 
   return {
     ...crudServices,
-    auth: opts.auth ? createTestAuth(opts.auth.userId) : undefined,
-    projectId:
-      opts.projectId ?? unsafeProjectId("00000000-0000-0000-0000-000000000000"),
+    auth: opts.auth
+      ? createTestAuth(opts.auth.userId)
+      : { userId: null, sessionId: null },
     isSystemRequest: false, // Test contexts are not system requests by default
+    organizationId: opts.organizationId ?? null,
     headers: opts.headers ?? new Headers(),
   };
 };

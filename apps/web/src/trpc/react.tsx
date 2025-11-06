@@ -9,6 +9,7 @@ import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import SuperJSON from "superjson";
 import { createTRPCClient } from "@trpc/client";
+import { shouldRetryQuery } from "~/lib/error-utils";
 
 import { type AppRouter } from "~/server/api/root";
 
@@ -19,6 +20,8 @@ function makeQueryClient() {
         // With SSR, we usually want to set some default staleTime
         // above 0 to avoid refetching immediately on the client
         staleTime: 60 * 1000,
+        // Delegate retry decision to shared helper
+        retry: shouldRetryQuery,
       },
     },
   });
@@ -72,15 +75,6 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
           headers: () => {
             const headers = new Headers();
             headers.set("x-trpc-source", "nextjs-react");
-
-            // Add project ID from localStorage if available
-            if (typeof window !== "undefined") {
-              const projectId = localStorage.getItem("activeProjectId");
-              if (projectId) {
-                headers.set("x-project-id", projectId);
-              }
-            }
-
             return headers;
           },
         }),

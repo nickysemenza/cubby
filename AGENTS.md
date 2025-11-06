@@ -23,6 +23,19 @@
 - since many of the forms / routers / repos / etc are the same between entities (recipes, locations, products, etc), try to use common helper functions as much as possible
 - use common helper functions across similar entities instead of duplicating logic
 
+### Authentication (Better‑Auth)
+
+- Better‑Auth is the auth system for the web app.
+- Server config: `apps/web/src/lib/auth.ts` (Next.js integration via `better-auth/next-js`).
+- Client: `apps/web/src/lib/auth-client.ts` (React hooks such as `useSession`, `useListOrganizations`, `useActiveOrganization`).
+- API route: `apps/web/src/app/api/auth/[...all]/route.ts` exports `{ GET, POST }` from `toNextJsHandler(auth)`.
+- Organization plugin is enabled and fully adopted. Custom Project/Member codepaths are deprecated and removed from the UI and routers. Use organizations for scoping.
+ - UI: `@daveyplate/better-auth-ui` dynamic routes are used for all auth/account/org views
+   - Auth: `apps/web/src/app/auth/[path]/page.tsx` → `<AuthView path={path}/>`
+   - Account: `apps/web/src/app/account/[path]/page.tsx` → `<AccountView path={path}/>`
+   - Organization: `apps/web/src/app/organization/[path]/page.tsx` → `<OrganizationView path={path}/>`
+   - CSS: import `@daveyplate/better-auth-ui/css` in `apps/web/src/app/layout.tsx`
+
 ## Form Patterns
 
 - use FormWrapper component for consistent form layout with submit/cancel buttons

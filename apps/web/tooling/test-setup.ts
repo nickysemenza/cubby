@@ -5,7 +5,7 @@ import {
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
-import { unsafeProjectId } from "../src/schemas/identifiers";
+import { unsafeOrganizationId } from "../src/schemas/identifiers";
 import { type Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
 
@@ -46,12 +46,14 @@ export async function buildTestDB() {
   const pool = new Pool({ connectionString: connectionUrl });
   const rawDb = drizzle({ client: pool, schema });
 
-  // Automatically create a test project
-  const testProject = await rawDb
-    .insert(schema.project)
+  // Automatically create a test organization
+  const testOrg = await rawDb
+    .insert(schema.organization)
     .values({
-      name: "Test Project",
-      description: "Auto-created project for testing",
+      id: "test-org-id",
+      name: "Test Organization",
+      slug: "test-organization",
+      createdAt: new Date(),
     })
     .returning()
     .then((rows) => rows[0]!);
@@ -62,7 +64,7 @@ export async function buildTestDB() {
 
   return {
     db: rawDb as unknown as Database,
-    projectId: unsafeProjectId(testProject.id),
+    organizationId: unsafeOrganizationId(testOrg.id),
     teardown,
   };
 }
@@ -71,8 +73,7 @@ const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
   databaseConfig.host = "localhost";
-  if (process.env.DATABASE_URL?.includes("5555")) {
-    databaseConfig.port = 5555;
-  }
+  // Always use port 5555 (mapped from container's 5432)
+  databaseConfig.port = 5555;
   return databaseConfig;
 };

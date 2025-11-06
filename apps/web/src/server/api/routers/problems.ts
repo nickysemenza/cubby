@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+// Using legacy Project scoping for problems until repo migration completes
 import { findAllProblems } from "~/server/repo/problems";
 
 // Output schemas for each problem type
@@ -72,7 +73,7 @@ const allProblemsSchema = z.object({
 const getAllProblems = protectedProcedure
   .output(allProblemsSchema)
   .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db, ctx.projectId);
+    return await findAllProblems(ctx.db, ctx.organizationId);
   });
 
 export const problemsRouter = createTRPCRouter({

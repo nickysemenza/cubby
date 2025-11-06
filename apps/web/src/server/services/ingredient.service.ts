@@ -17,7 +17,7 @@ import {
 } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import { type IngredientId, type ProjectId } from "~/schemas/identifiers";
+import { type IngredientId, type OrganizationId } from "~/schemas/identifiers";
 
 // Extended schemas that include food data
 import { productTopLevelOut } from "~/schemas/product";
@@ -77,9 +77,9 @@ export class IngredientService {
 
   async getIngredientByID(
     id: IngredientId,
-    projectId: ProjectId,
+    organizationId: OrganizationId,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await getIngredientByIDRepo(this.db, id, projectId);
+    const ingredient = await getIngredientByIDRepo(this.db, id, organizationId);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -107,7 +107,7 @@ export class IngredientService {
   }
 
   async ingredientList(
-    projectId: ProjectId,
+    organizationId: OrganizationId,
     nameFilter: string | undefined,
     sort: SortParams,
     pagination: PaginationParams,
@@ -115,7 +115,7 @@ export class IngredientService {
   ) {
     const { data: ingredients, count } = await ingredientListRepo(
       this.db,
-      projectId,
+      organizationId,
       nameFilter,
       sort,
       pagination,
@@ -157,9 +157,13 @@ export class IngredientService {
 
   async createIngredient(
     data: z.infer<typeof ingredientBase>,
-    projectId: ProjectId,
+    organizationId: OrganizationId,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await createIngredientRepo(this.db, data, projectId);
+    const ingredient = await createIngredientRepo(
+      this.db,
+      data,
+      organizationId,
+    );
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -172,10 +176,15 @@ export class IngredientService {
 
   async updateIngredient(
     id: IngredientId,
-    projectId: ProjectId,
+    organizationId: OrganizationId,
     data: Partial<z.infer<typeof ingredientBase>>,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await updateIngredientRepo(this.db, id, projectId, data);
+    const ingredient = await updateIngredientRepo(
+      this.db,
+      id,
+      organizationId,
+      data,
+    );
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );

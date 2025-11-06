@@ -6,24 +6,24 @@ import { testConfig } from "~/testdata/test-config.data";
 import { transformConfig } from "~/schemas/config";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { appRouter } from "../root";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 
 describe("system test", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
     return teardown;
   });
   it("load data config", async () => {
-    await insertDataConfig(db, transformConfig(testConfig), projectId);
+    await insertDataConfig(db, transformConfig(testConfig), organizationId);
 
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId,
+        organizationId,
       }),
     );
     const list = await caller.ingredient.list({

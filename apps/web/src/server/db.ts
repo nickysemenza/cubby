@@ -45,6 +45,10 @@ export const toBrandedDatabase = (
 // Export the branded instance - NO methods can be called on this outside repo/
 export const db = toBrandedDatabase(dbInstance);
 
+// Export the raw Drizzle client for integrations that require direct access
+// (e.g., Better‑Auth drizzle adapter). Do not use this for app queries.
+export const drizzle = dbInstance;
+
 // Type for Drizzle transaction client
 export type DrizzleClient = ReturnType<typeof createDBClient>;
 export type DrizzleTransaction = Parameters<

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
 import { protectedProcedure, createTRPCRouter } from "../trpc";
 import {
   infLocation,
@@ -36,9 +35,10 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await locationList(
         services.db,
-        services.projectId,
+        services.organizationId!,
         filters.nameFilter,
         filters.itemTypeFilter,
         sort,
@@ -58,19 +58,21 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: LocationId) => {
-      return await getLocationById(services.db, id, services.projectId);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      return await getLocationById(services.db, id, services.organizationId!);
     },
     create: async (services, data) => {
-      if (!services.projectId) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Project ID required",
-        });
-      }
-      return await createLocation(services.db, data, services.projectId);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      return await createLocation(services.db, data, services.organizationId!);
     },
     update: async (services, id: LocationId, data) => {
-      return await updateLocation(services.db, id, services.projectId, data);
+      // organizationId guaranteed non-null by requireOrganization middleware
+      return await updateLocation(
+        services.db,
+        id,
+        services.organizationId!,
+        data,
+      );
     },
   },
 });
@@ -78,12 +80,14 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
 const getLocationTypesCount = protectedProcedure
   .output(z.record(locationType, z.number()))
   .query(async ({ ctx }) => {
-    return await buildLocationTypeCount(ctx.db, ctx.projectId);
+    return await buildLocationTypeCount(ctx.db, ctx.organizationId);
   });
 
 const makeTree = protectedProcedure
   .output(z.array(infLocation))
-  .query(async ({ ctx }) => await buildLocationTree(ctx.db, ctx.projectId));
+  .query(
+    async ({ ctx }) => await buildLocationTree(ctx.db, ctx.organizationId),
+  );
 
 export const locationRouter = createTRPCRouter({
   list,

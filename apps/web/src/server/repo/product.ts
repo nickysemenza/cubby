@@ -26,7 +26,7 @@ import {
 } from "~/server/repo/database-helpers";
 import {
   type ProductId,
-  type ProjectId,
+  type OrganizationId,
   unsafeLocationId,
 } from "~/schemas/identifiers";
 import {
@@ -62,7 +62,7 @@ export const findOrCreateProduct = async (
   db: Transaction,
   now: Date,
   productConfig: ProductConfigItem,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<typeof product.$inferSelect> => {
   const {
     name,
@@ -79,7 +79,12 @@ export const findOrCreateProduct = async (
   let ingredientRef = undefined;
   if (ingredientConfig) {
     // only link item if its an ingredient
-    ingredientRef = await findOrCreateIngredient(db, name, aliases, projectId);
+    ingredientRef = await findOrCreateIngredient(
+      db,
+      name,
+      aliases,
+      organizationId,
+    );
   }
 
   const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
@@ -94,7 +99,7 @@ export const findOrCreateProduct = async (
   // Check if product exists
   const existing = await db.query.product.findFirst({
     where: and(
-      eq(product.projectId, projectId),
+      eq(product.organizationId, organizationId),
       eq(product.name, name),
       eq(product.manufacturer, manufacturer),
     ),
@@ -121,7 +126,7 @@ export const findOrCreateProduct = async (
   } else {
     // Create new product
     productRow = await insertAndReturn(db, product, {
-      projectId: projectId,
+      organizationId: organizationId,
       name,
       manufacturer,
       upc,
@@ -159,16 +164,19 @@ export const findOrCreateProduct = async (
 export const loadProducts = async (
   db: Transaction,
   data: ProductConfigItem[],
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const now = new Date();
 
   for (const productConfig of data) {
-    await findOrCreateProduct(db, now, productConfig, projectId);
+    await findOrCreateProduct(db, now, productConfig, organizationId);
   }
 
   const stale = await db.query.product.findMany({
-    where: and(eq(product.projectId, projectId), ne(product.updatedAt, now)),
+    where: and(
+      eq(product.organizationId, organizationId),
+      ne(product.updatedAt, now),
+    ),
   });
   console.log({ stale: stale.map((s) => s.id) });
 };
@@ -276,10 +284,10 @@ const dbProductToAPI = async (
 export const getProductByID = async (
   db: Database,
   id: ProductId,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const res = await getDb(db).query.product.findFirst({
-    where: and(eq(product.id, id), eq(product.projectId, projectId)),
+    where: and(eq(product.id, id), eq(product.organizationId, organizationId)),
     ...relations.product.full,
   });
 
@@ -292,7 +300,7 @@ export const getProductByID = async (
 
 export const productList = async (
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
@@ -300,7 +308,7 @@ export const productList = async (
   pagination: PaginationParams,
 ) => {
   // Build where conditions
-  const conditions = [eq(product.projectId, projectId)];
+  const conditions = [eq(product.organizationId, organizationId)];
 
   if (name !== undefined) {
     const nameCondition = formatSearchTerm(product.name, name);
@@ -362,7 +370,7 @@ export const productList = async (
 export const createProduct = async (
   db: Database,
   data: ProductInputPayload,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
@@ -372,7 +380,7 @@ export const createProduct = async (
     const [newProduct] = await tx
       .insert(product)
       .values({
-        projectId: projectId,
+        organizationId: organizationId,
         ...productData,
         ingredientId: ingredientId ?? null,
       })
@@ -419,7 +427,7 @@ export const createProduct = async (
 export const updateProduct = async (
   db: Database,
   id: ProductId,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
   data: Partial<ProductInputPayload>,
 ): Promise<ProductTopLevelOut> => {
   const {
@@ -453,7 +461,7 @@ export const updateProduct = async (
       tx,
       product,
       updateData,
-      and(eq(product.id, id), eq(product.projectId, projectId)),
+      and(eq(product.id, id), eq(product.organizationId, organizationId)),
     );
 
     const productId = id;
@@ -552,11 +560,11 @@ export const updateProduct = async (
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const duplicates = await getDb(db).query.product.findMany({
     where: and(
-      eq(product.projectId, projectId),
+      eq(product.organizationId, organizationId),
       eq(product.expectedQuantity, 1),
     ),
     with: {

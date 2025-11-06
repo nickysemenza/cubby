@@ -1,0 +1,27 @@
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { nextCookies } from "better-auth/next-js";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { drizzle } from "~/server/db";
+import * as schema from "~/server/db/auth.schema";
+
+export const auth = betterAuth({
+  database: drizzleAdapter(drizzle, {
+    provider: "pg",
+    schema,
+  }),
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: false,
+  },
+  plugins: [
+    organization({
+      // Wire up real email delivery later
+      sendInvitationEmail: async (data) => {
+        console.log("[better-auth] send invitation:", data.email);
+      },
+    }),
+    nextCookies(),
+  ],
+  socialProviders: {},
+});

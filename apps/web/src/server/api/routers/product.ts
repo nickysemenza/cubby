@@ -4,11 +4,7 @@ import { productWithFoodOut } from "~/server/services/product.service";
 import { productInputPayload } from "~/schemas/product";
 import { createEntityCrudProcedures } from "../crud-factory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
-import {
-  productId,
-  unsafeProjectId,
-  type ProductId,
-} from "~/schemas/identifiers";
+import { productId, type ProductId } from "~/schemas/identifiers";
 
 // Define filters schema for products
 const productFiltersSchema = z.object({
@@ -28,14 +24,16 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: ProductId) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await services.services.product.getProductByID(
         id,
-        services.projectId,
+        services.organizationId!,
       );
     },
     list: async (services, filters, sort, pagination) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await services.services.product.productList(
-        services.projectId,
+        services.organizationId!,
         filters.nameFilter,
         filters.manufacturerFilter,
         filters.upcFilter,
@@ -44,15 +42,17 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await services.services.product.createProduct(
         data,
-        services.projectId || unsafeProjectId("default-project"),
+        services.organizationId!,
       );
     },
     update: async (services, id: ProductId, data) => {
+      // organizationId guaranteed non-null by requireOrganization middleware
       return await services.services.product.updateProduct(
         id,
-        services.projectId,
+        services.organizationId!,
         data,
       );
     },
@@ -111,7 +111,10 @@ const findDuplicates = protectedProcedure
     ),
   )
   .query(async ({ ctx }) => {
-    const duplicates = await findDuplicateUniqueProducts(ctx.db, ctx.projectId);
+    const duplicates = await findDuplicateUniqueProducts(
+      ctx.db,
+      ctx.organizationId,
+    );
 
     return duplicates.map((product) => ({
       id: product.id,

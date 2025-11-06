@@ -75,10 +75,10 @@ export interface EmptyLocation {
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<DuplicateUniqueProduct[]> => {
   const duplicates = await getDb(db).query.product.findMany({
-    where: eq(product.projectId, projectId),
+    where: eq(product.organizationId, organizationId),
     columns: {
       id: true,
       name: true,
@@ -122,7 +122,7 @@ export const findDuplicateUniqueProducts = async (
 // Find products that have no inventory entries
 export const findOrphanedProducts = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<OrphanedProduct[]> => {
   const dbClient = getDb(db);
 
@@ -136,7 +136,7 @@ export const findOrphanedProducts = async (
     .from(product)
     .where(
       and(
-        eq(product.projectId, projectId),
+        eq(product.organizationId, organizationId),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -152,13 +152,13 @@ export const findOrphanedProducts = async (
 // Find products with invalid or duplicate UPC codes
 export const findInvalidUPCs = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<InvalidUPC[]> => {
   const problems: InvalidUPC[] = [];
 
   // Find products with UPCs
   const productsWithUPCs = await getDb(db).query.product.findMany({
-    where: sql`${product.projectId} = ${projectId} AND ${product.upc} IS NOT NULL`,
+    where: sql`${product.organizationId} = ${organizationId} AND ${product.upc} IS NOT NULL`,
     columns: {
       id: true,
       name: true,
@@ -209,7 +209,7 @@ export const findInvalidUPCs = async (
 // Find products without any unit mappings (no pricing information)
 export const findProductsWithoutMappings = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<ProductWithoutMappings[]> => {
   const dbClient = getDb(db);
 
@@ -223,7 +223,7 @@ export const findProductsWithoutMappings = async (
     .from(product)
     .where(
       and(
-        eq(product.projectId, projectId),
+        eq(product.organizationId, organizationId),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -239,10 +239,10 @@ export const findProductsWithoutMappings = async (
 // Find inventory entries with zero or negative amounts
 export const findInvalidInventoryAmounts = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<InvalidInventoryAmount[]> => {
   const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: eq(inventoryEntry.projectId, projectId),
+    where: eq(inventoryEntry.organizationId, organizationId),
     columns: {
       id: true,
       amount: true,
@@ -283,7 +283,7 @@ export const findInvalidInventoryAmounts = async (
 // Find locations with no inventory entries
 export const findEmptyLocations = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<EmptyLocation[]> => {
   const dbClient = getDb(db);
 
@@ -298,7 +298,7 @@ export const findEmptyLocations = async (
     .from(location)
     .where(
       and(
-        eq(location.projectId, projectId),
+        eq(location.organizationId, organizationId),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -314,7 +314,7 @@ export const findEmptyLocations = async (
 // Main function to get all problems
 export const findAllProblems = async (
   db: Database,
-  projectId: string,
+  organizationId: string,
 ): Promise<AllProblems> => {
   // Run all checks in parallel for better performance
   const [
@@ -325,12 +325,12 @@ export const findAllProblems = async (
     invalidInventoryAmounts,
     emptyLocations,
   ] = await Promise.all([
-    findDuplicateUniqueProducts(db, projectId),
-    findOrphanedProducts(db, projectId),
-    findInvalidUPCs(db, projectId),
-    findProductsWithoutMappings(db, projectId),
-    findInvalidInventoryAmounts(db, projectId),
-    findEmptyLocations(db, projectId),
+    findDuplicateUniqueProducts(db, organizationId),
+    findOrphanedProducts(db, organizationId),
+    findInvalidUPCs(db, organizationId),
+    findProductsWithoutMappings(db, organizationId),
+    findInvalidInventoryAmounts(db, organizationId),
+    findEmptyLocations(db, organizationId),
   ]);
 
   const totalProblems =

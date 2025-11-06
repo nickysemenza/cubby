@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { headers, cookies } from "next/headers";
+import { headers } from "next/headers";
 import { context, propagation } from "@opentelemetry/api";
 
 import { createCaller } from "~/server/api/root";
@@ -16,14 +16,7 @@ const createContext = cache(async () => {
   const heads = new Headers(await headers());
   heads.set("x-trpc-source", "rsc");
 
-  // Propagate active project from cookies into tRPC headers for RSC calls
-  try {
-    const jar = await cookies();
-    const projectId = jar.get("activeProjectId")?.value;
-    if (projectId) heads.set("x-project-id", projectId);
-  } catch {
-    // no-op: cookies() may throw in some edge cases; ignore and proceed
-  }
+  // No longer propagate legacy x-project-id; org context comes from Better‑Auth cookies
 
   // Inject current trace context into headers for propagation
   const activeContext = context.active();

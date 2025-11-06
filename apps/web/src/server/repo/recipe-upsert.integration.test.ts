@@ -4,19 +4,19 @@ import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipe } from "./recipe";
 import { createIngredient } from "./ingredient";
 import { type RecipeCreateInput } from "~/schemas/recipe";
-import { unsafeIngredientId, type ProjectId } from "~/schemas/identifiers";
+import { unsafeIngredientId, type OrganizationId } from "~/schemas/identifiers";
 import { getDb } from "./database-helpers";
 import { recipe } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 
 describe("upsertRecipe", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
 
   let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
 
     // Create the required ingredients for the tests and store their IDs
     const ingredient1 = await createIngredient(
@@ -25,7 +25,7 @@ describe("upsertRecipe", () => {
         name: "Test Ingredient 1",
         aliases: [],
       },
-      projectId,
+      organizationId,
     );
     const ingredient2 = await createIngredient(
       db,
@@ -33,7 +33,7 @@ describe("upsertRecipe", () => {
         name: "Test Ingredient 2",
         aliases: [],
       },
-      projectId,
+      organizationId,
     );
     const ingredient3 = await createIngredient(
       db,
@@ -41,7 +41,7 @@ describe("upsertRecipe", () => {
         name: "Test Ingredient 3",
         aliases: [],
       },
-      projectId,
+      organizationId,
     );
 
     testIngredients = [ingredient1, ingredient2, ingredient3];
@@ -113,14 +113,14 @@ describe("upsertRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), db, projectId);
+    const result = await upsertRecipe(getMockRecipeInput(), db, organizationId);
 
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
     const foundRecipe = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe Direct"),
       ),
       with: {
@@ -142,13 +142,17 @@ describe("upsertRecipe", () => {
 
   it("updates an existing recipe when it already exists", async () => {
     // First, create the recipe
-    const firstResult = await upsertRecipe(getMockRecipeInput(), db, projectId);
+    const firstResult = await upsertRecipe(
+      getMockRecipeInput(),
+      db,
+      organizationId,
+    );
 
     // Now update with different data
     const secondResult = await upsertRecipe(
       getMockRecipeUpdated(),
       db,
-      projectId,
+      organizationId,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -157,7 +161,7 @@ describe("upsertRecipe", () => {
     // Verify the recipe was updated
     const updatedRecipe = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe Direct"),
       ),
       with: {
@@ -187,9 +191,21 @@ describe("upsertRecipe", () => {
 
   it("can be called multiple times without conflicts", async () => {
     // This tests that the function is idempotent
-    const firstRun = await upsertRecipe(getMockRecipeInput(), db, projectId);
-    const secondRun = await upsertRecipe(getMockRecipeInput(), db, projectId); // Same input
-    const thirdRun = await upsertRecipe(getMockRecipeInput(), db, projectId); // Same input again
+    const firstRun = await upsertRecipe(
+      getMockRecipeInput(),
+      db,
+      organizationId,
+    );
+    const secondRun = await upsertRecipe(
+      getMockRecipeInput(),
+      db,
+      organizationId,
+    ); // Same input
+    const thirdRun = await upsertRecipe(
+      getMockRecipeInput(),
+      db,
+      organizationId,
+    ); // Same input again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -198,7 +214,7 @@ describe("upsertRecipe", () => {
     // Should only be one recipe in the database
     const allRecipes = await getDb(db).query.recipe.findMany({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe Direct"),
       ),
     });
@@ -220,11 +236,11 @@ describe("upsertRecipe", () => {
       ],
     };
 
-    await upsertRecipe(recipeNoUrl, db, projectId);
+    await upsertRecipe(recipeNoUrl, db, organizationId);
 
     const foundRecipe = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Manual Recipe"),
       ),
     });

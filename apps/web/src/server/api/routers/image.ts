@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+// Using legacy Project scoping for images until repo migration completes
 import {
   initiateUploadWithoutEntitySchema,
   initiateUploadWithoutEntityResponseSchema,
@@ -51,7 +52,7 @@ export const imageRouter = createTRPCRouter({
     .output(initiateUploadWithoutEntityResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        if (!ctx.projectId) {
+        if (!ctx.organizationId) {
           throw new TRPCError({
             code: "UNAUTHORIZED",
             message: "Project ID required",
@@ -60,7 +61,7 @@ export const imageRouter = createTRPCRouter({
         const uploadData = await initiateImageUploadWithoutEntity(
           ctx.db,
           input,
-          ctx.projectId,
+          ctx.organizationId,
         );
 
         return {

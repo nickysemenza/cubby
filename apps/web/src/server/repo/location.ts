@@ -9,7 +9,7 @@ import {
 } from "~/schemas/location";
 import {
   type LocationId,
-  type ProjectId,
+  type OrganizationId,
   unsafeLocationId,
   unsafeProductId,
   unsafeInventoryId,
@@ -44,13 +44,13 @@ import { eq, and, sql, count, not, desc } from "drizzle-orm";
 export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   // Create the location
   const [newLocation] = await getDb(db)
     .insert(location)
     .values({
-      projectId: projectId,
+      organizationId: organizationId,
       name: data.name,
       type: data.type,
       parentId: data.parentId ?? null,
@@ -85,14 +85,14 @@ export const createLocation = async (
       );
   }
 
-  return getLocationById(db, unsafeLocationId(newLocation.id), projectId);
+  return getLocationById(db, unsafeLocationId(newLocation.id), organizationId);
 };
 
 // Update an existing location
 export const updateLocation = async (
   db: Database,
   id: LocationId,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
   data: LocationUpdateInput["data"],
 ) => {
   // Make sure we're not setting a location as its own parent
@@ -145,7 +145,7 @@ export const updateLocation = async (
       tx,
       location,
       updateValues,
-      and(eq(location.id, id), eq(location.projectId, projectId)),
+      and(eq(location.id, id), eq(location.organizationId, organizationId)),
     );
 
     // Add new images
@@ -183,7 +183,7 @@ export const updateLocation = async (
       );
     }
 
-    return getLocationById(tx, unsafeLocationId(updated.id), projectId);
+    return getLocationById(tx, unsafeLocationId(updated.id), organizationId);
   });
 };
 
@@ -192,12 +192,12 @@ const upsertChild = async (
   now: Date,
   parent: { id: string } | null,
   child: InfLocationConfig,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   // Try to find existing location
   const existing = await db.query.location.findFirst({
     where: and(
-      eq(location.projectId, projectId),
+      eq(location.organizationId, organizationId),
       eq(location.name, child.name),
     ),
   });
@@ -218,7 +218,7 @@ const upsertChild = async (
   } else {
     // Create new
     return await insertAndReturn(db, location, {
-      projectId: projectId,
+      organizationId: organizationId,
       name: child.name,
       type: child.type,
       updatedAt: now,
@@ -230,7 +230,7 @@ const upsertChild = async (
 export const loadLocations = async (
   db: Transaction,
   data: InfLocationConfig[],
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const now = new Date();
   const loadRecursive = async (
@@ -238,14 +238,14 @@ export const loadLocations = async (
     children: InfLocationConfig[],
   ): Promise<void> => {
     for (const child of children) {
-      const res = await upsertChild(db, now, parent, child, projectId);
+      const res = await upsertChild(db, now, parent, child, organizationId);
       const productsAtLocation = [];
       for (const productConfig of child.products ?? []) {
         const productRow = await findOrCreateProduct(
           db,
           now,
           productConfig,
-          projectId,
+          organizationId,
         );
         productsAtLocation.push(productRow);
       }
@@ -261,7 +261,7 @@ export const loadLocations = async (
       if (productsAtLocation.length > 0) {
         await db.insert(inventoryEntry).values(
           productsAtLocation.map((prod) => ({
-            projectId: projectId,
+            organizationId: organizationId,
             locationId: res.id,
             productId: prod.id,
             amount: { value: 1, unit: "each" },
@@ -277,7 +277,7 @@ export const loadLocations = async (
 
   const stale = await db.query.location.findMany({
     where: and(
-      eq(location.projectId, projectId),
+      eq(location.organizationId, organizationId),
       not(eq(location.updatedAt, now)),
     ),
   });
@@ -391,7 +391,7 @@ const buildLocationWithChildren = (
 
 export const buildLocationTypeCount = async (
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const types = await getDb(db)
     .select({
@@ -399,7 +399,7 @@ export const buildLocationTypeCount = async (
       count: count(),
     })
     .from(location)
-    .where(eq(location.projectId, projectId))
+    .where(eq(location.organizationId, organizationId))
     .groupBy(location.type)
     .orderBy(desc(count()));
 
@@ -415,7 +415,10 @@ export const buildLocationTypeCount = async (
   return full as Record<(typeof allKeys)[number], number>;
 };
 
-export const buildLocationTree = async (db: Database, projectId: ProjectId) => {
+export const buildLocationTree = async (
+  db: Database,
+  organizationId: OrganizationId,
+) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
   const res = await getDb(db).execute<LocationWithParentChild>(sql`
@@ -425,7 +428,7 @@ export const buildLocationTree = async (db: Database, projectId: ProjectId) => {
         l.*,
         0 as depth
       FROM ${location} l
-      WHERE l."projectId" = ${projectId}
+      WHERE l."organizationId" = ${organizationId}
         AND l."parentId" IS NULL
 
       UNION ALL
@@ -511,13 +514,13 @@ export const buildLocationTree = async (db: Database, projectId: ProjectId) => {
 
 export const locationList = async (
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
   name: string | undefined,
   itemType: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  const conditions = [eq(location.projectId, projectId)];
+  const conditions = [eq(location.organizationId, organizationId)];
 
   if (name) {
     const nameCondition = formatSearchTerm(location.name, name);
@@ -565,11 +568,14 @@ export const locationList = async (
 export const getLocationById = async (
   db: Database | Transaction,
   id: LocationId,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   // Fetch the location with parent chain and immediate children
   const res = await unwrapDb(db).query.location.findFirst({
-    where: and(eq(location.id, id), eq(location.projectId, projectId)),
+    where: and(
+      eq(location.id, id),
+      eq(location.organizationId, organizationId),
+    ),
     ...relations.location.full,
   });
 

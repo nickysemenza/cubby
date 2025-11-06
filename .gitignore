@@ -53,12 +53,13 @@ node_modules/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+/playwright/.auth/
 
 **/.claude/settings.local.json
 
 certificates
-# clerk configuration (can include secrets)
-/.clerk/
+# better-auth configuration (can include secrets)
+/.auth/
 
 # ESLint cache files
 **/.eslintcache

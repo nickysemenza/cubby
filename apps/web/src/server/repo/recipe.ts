@@ -26,7 +26,7 @@ import {
   insertAndReturn,
   batchInsert,
 } from "~/server/repo/database-helpers";
-import { type RecipeId, type ProjectId } from "~/schemas/identifiers";
+import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
 import {
   recipe,
   recipeSection,
@@ -40,10 +40,10 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 export const getRecipeByID = async (
   id: RecipeId,
   db: Database | Transaction,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<RecipeOut | null> => {
   const res = await unwrapDb(db).query.recipe.findFirst({
-    where: and(eq(recipe.id, id), eq(recipe.projectId, projectId)),
+    where: and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
     ...relations.recipe.full,
   });
   return res === null || res === undefined ? null : dbRecipeToAPI(res);
@@ -141,15 +141,15 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipeData) => {
 export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   const parsed = await parseCompactRecipe(recipe);
-  return await upsertRecipeFromCompact(parsed, db, projectId);
+  return await upsertRecipeFromCompact(parsed, db, organizationId);
 };
 
 export const recipeList = async (
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
   name: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
@@ -158,7 +158,7 @@ export const recipeList = async (
 
   // Build where conditions
   const whereConditions = [
-    eq(recipe.projectId, projectId),
+    eq(recipe.organizationId, organizationId),
     name ? formatSearchTerm(recipe.name, name) : undefined,
   ].filter((c): c is NonNullable<typeof c> => c !== undefined);
 
@@ -193,7 +193,7 @@ export const recipeList = async (
 export const createRecipe = async (
   recipeInput: RecipeCreateInput,
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<RecipeOut> => {
   const sourceType = recipeInput.meta?.url ? "Website" : "Other";
   const sourceData = recipeInput.meta?.url || null;
@@ -205,7 +205,7 @@ export const createRecipe = async (
     const processedSections = await Promise.all(
       recipeInput.sections.map(async (section) => {
         const processedIngredients = section.ingredients
-          ? await processIngredients(tx, section.ingredients, projectId)
+          ? await processIngredients(tx, section.ingredients, organizationId)
           : [];
 
         return {
@@ -218,7 +218,7 @@ export const createRecipe = async (
 
     // Create the main recipe
     const createdRecipe = await insertAndReturn(tx, recipe, {
-      projectId: projectId,
+      organizationId: organizationId,
       name: recipeInput.name,
       SourceType: sourceType,
       SourceData: sourceData,
@@ -271,7 +271,7 @@ export const createRecipe = async (
     const fullRecipe = await getRecipeByID(
       createdRecipe.id as RecipeId,
       tx,
-      projectId,
+      organizationId,
     );
     if (!fullRecipe) {
       throw new Error("Failed to retrieve created recipe");
@@ -284,7 +284,7 @@ export const createRecipe = async (
 const processIngredient = async (
   tx: Transaction,
   ingredientInput: z.infer<typeof recipeIngredientInput>,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<{
   ingredientId: string;
   amounts: z.infer<typeof amount>[];
@@ -326,7 +326,7 @@ const processIngredient = async (
   const [newIngredient] = await tx
     .insert(ingredient)
     .values({
-      projectId: projectId,
+      organizationId: organizationId,
       name: `Recipe: ${recipeRecord.name}`,
       aliases: [],
       recipeId: ingredientInput.recipeId,
@@ -347,23 +347,26 @@ const processIngredient = async (
 const processIngredients = async (
   tx: Transaction,
   ingredients: z.infer<typeof recipeIngredientInput>[],
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
   return await Promise.all(
-    ingredients.map((ing) => processIngredient(tx, ing, projectId)),
+    ingredients.map((ing) => processIngredient(tx, ing, organizationId)),
   );
 };
 
 export const upsertRecipe = async (
   input: RecipeCreateInput,
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<{ id: string }> => {
   const dbClient = getDb(db);
 
   // Check if recipe already exists
   const existingRecipe = await dbClient.query.recipe.findFirst({
-    where: and(eq(recipe.projectId, projectId), eq(recipe.name, input.name)),
+    where: and(
+      eq(recipe.organizationId, organizationId),
+      eq(recipe.name, input.name),
+    ),
   });
 
   if (existingRecipe) {
@@ -452,7 +455,7 @@ export const upsertRecipe = async (
     return { id: updatedRecipe.id };
   } else {
     // Recipe doesn't exist - create new one
-    const created = await createRecipe(input, db, projectId);
+    const created = await createRecipe(input, db, organizationId);
     return { id: created.id };
   }
 };
@@ -461,11 +464,11 @@ export const updateRecipe = async (
   id: RecipeId,
   updates: RecipeUpdateInput["data"],
   db: Database,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ): Promise<RecipeOut> => {
   // Check if recipe exists and belongs to project
   const existingRecipe = await getDb(db).query.recipe.findFirst({
-    where: and(eq(recipe.id, id), eq(recipe.projectId, projectId)),
+    where: and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
     with: {
       sections: {
         with: {
@@ -508,7 +511,9 @@ export const updateRecipe = async (
       await tx
         .update(recipe)
         .set(updateData)
-        .where(and(eq(recipe.id, id), eq(recipe.projectId, projectId)));
+        .where(
+          and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
+        );
     }
 
     // Add new images if provided
@@ -566,7 +571,11 @@ export const updateRecipe = async (
         // If this is a new section (no ID), create it
         if (!sectionUpdate.id) {
           const processedIngredients = sectionUpdate.ingredients
-            ? await processIngredients(tx, sectionUpdate.ingredients, projectId)
+            ? await processIngredients(
+                tx,
+                sectionUpdate.ingredients,
+                organizationId,
+              )
             : [];
 
           const [createdSection] = await tx
@@ -628,7 +637,7 @@ export const updateRecipe = async (
                 const processedIngredient = await processIngredient(
                   tx,
                   ingredientUpdate,
-                  projectId,
+                  organizationId,
                 );
                 await tx.insert(recipeSectionIngredient).values({
                   recipeSectionId: sectionUpdate.id,
@@ -640,7 +649,7 @@ export const updateRecipe = async (
                 const processedIngredient = await processIngredient(
                   tx,
                   ingredientUpdate,
-                  projectId,
+                  organizationId,
                 );
                 await tx
                   .update(recipeSectionIngredient)
@@ -705,7 +714,7 @@ export const updateRecipe = async (
       }
     }
 
-    const fullRecipe = await getRecipeByID(id, tx, projectId);
+    const fullRecipe = await getRecipeByID(id, tx, organizationId);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve updated recipe");
     }

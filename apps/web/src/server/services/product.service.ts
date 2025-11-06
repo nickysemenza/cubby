@@ -12,7 +12,7 @@ import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import { type ProductId, type ProjectId } from "~/schemas/identifiers";
+import { type ProductId, type OrganizationId } from "~/schemas/identifiers";
 
 // Extended schema that includes food data
 export const productWithFoodOut =
@@ -30,9 +30,9 @@ export class ProductService {
 
   async getProductByID(
     id: ProductId,
-    projectId: ProjectId,
+    organizationId: OrganizationId,
   ): Promise<ProductWithFoodOut> {
-    const product = await getProductByIDRepo(this.db, id, projectId);
+    const product = await getProductByIDRepo(this.db, id, organizationId);
     const lookupParam = foodLookupParamFromProduct(product);
     const food = lookupParam
       ? await this.usdaClient.findFood(lookupParam)
@@ -45,7 +45,7 @@ export class ProductService {
   }
 
   async productList(
-    projectId: ProjectId,
+    organizationId: OrganizationId,
     nameFilter: string | undefined,
     manufacturerFilter: string | undefined,
     upcFilter: string | undefined,
@@ -54,7 +54,7 @@ export class ProductService {
   ) {
     const { data: products, count } = await productListRepo(
       this.db,
-      projectId,
+      organizationId,
       nameFilter,
       manufacturerFilter,
       upcFilter,
@@ -92,18 +92,18 @@ export class ProductService {
 
   async createProduct(
     data: ProductInputPayload,
-    projectId: ProjectId,
+    organizationId: OrganizationId,
   ): Promise<ProductWithFoodOut> {
-    const product = await createProductRepo(this.db, data, projectId);
-    return this.getProductByID(product.id, projectId);
+    const product = await createProductRepo(this.db, data, organizationId);
+    return this.getProductByID(product.id, organizationId);
   }
 
   async updateProduct(
     id: ProductId,
-    projectId: ProjectId,
+    organizationId: OrganizationId,
     data: Partial<ProductInputPayload>,
   ): Promise<ProductWithFoodOut> {
-    await updateProductRepo(this.db, id, projectId, data);
-    return this.getProductByID(id, projectId);
+    await updateProductRepo(this.db, id, organizationId, data);
+    return this.getProductByID(id, organizationId);
   }
 }

@@ -12,7 +12,7 @@ import {
   type SortParams,
   type PaginationParams,
 } from "~/schemas/pagination";
-import { ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -24,7 +24,7 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
 // Interface for services needed by CRUD operations
 export interface CrudServices {
   db: Database;
-  projectId: ProjectId;
+  organizationId: OrganizationId | null;
   services: {
     product: ProductService;
     ingredient: IngredientService;

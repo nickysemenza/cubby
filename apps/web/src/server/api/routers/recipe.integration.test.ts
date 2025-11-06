@@ -4,15 +4,15 @@ import { buildTestDB } from "tooling/test-setup";
 import { recipeRouter } from "./recipe";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 import { withTransaction } from "~/server/repo/database-helpers";
 
 describe("recipe router", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -22,7 +22,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -30,7 +30,7 @@ describe("recipe router", () => {
     const ingredient = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "flour", undefined, projectId),
+        await findOrCreateIngredient(tx, "flour", undefined, organizationId),
     );
 
     // Create a test recipe
@@ -103,7 +103,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -111,12 +111,12 @@ describe("recipe router", () => {
     const flour = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "flour", undefined, projectId),
+        await findOrCreateIngredient(tx, "flour", undefined, organizationId),
     );
     const sugar = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "sugar", undefined, projectId),
+        await findOrCreateIngredient(tx, "sugar", undefined, organizationId),
     );
 
     // Create multiple test recipes
@@ -222,7 +222,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -230,12 +230,12 @@ describe("recipe router", () => {
     const flour = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "flour", undefined, projectId),
+        await findOrCreateIngredient(tx, "flour", undefined, organizationId),
     );
     const butter = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "butter", undefined, projectId),
+        await findOrCreateIngredient(tx, "butter", undefined, organizationId),
     );
 
     // Create a test recipe
@@ -312,7 +312,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -320,7 +320,7 @@ describe("recipe router", () => {
     const flour = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "flour", undefined, projectId),
+        await findOrCreateIngredient(tx, "flour", undefined, organizationId),
     );
 
     // Create a test recipe
@@ -375,7 +375,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -393,7 +393,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -401,7 +401,7 @@ describe("recipe router", () => {
     const flour = await withTransaction(
       db,
       async (tx) =>
-        await findOrCreateIngredient(tx, "flour", undefined, projectId),
+        await findOrCreateIngredient(tx, "flour", undefined, organizationId),
     );
 
     // Create a base recipe to be used as ingredient
@@ -472,7 +472,7 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 

@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
  * User repository functions
  */
 
-export const findUserByClerkId = async (
+export const findUserById = async (
   db: Database | Transaction,
   userId: string,
 ) => {
@@ -30,14 +30,20 @@ export const insertUser = async (
   userData: {
     id: string;
     email: string;
-    firstName: string | null;
-    lastName: string | null;
-    imageUrl: string;
+    name: string;
+    image?: string;
+    emailVerified?: boolean;
   },
 ) => {
   const [created] = await unwrapDb(db)
     .insert(user)
-    .values(userData)
+    .values({
+      id: userData.id,
+      email: userData.email,
+      name: userData.name,
+      image: userData.image,
+      emailVerified: userData.emailVerified ?? false,
+    })
     .returning();
   if (!created) {
     throw new Error("Failed to insert user");

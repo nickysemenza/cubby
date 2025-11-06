@@ -3,14 +3,14 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { productRouter } from "./product";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 
 describe("product router", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
 
     return teardown;
   });
@@ -21,7 +21,7 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -66,7 +66,7 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -161,7 +161,7 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -225,7 +225,7 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -266,7 +266,7 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 

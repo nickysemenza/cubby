@@ -3,17 +3,17 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 import { getDb } from "./database-helpers";
 import { recipe, recipeSection } from "~/server/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 
 describe("upsertRecipeFromCompact", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -71,14 +71,18 @@ describe("upsertRecipeFromCompact", () => {
   };
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipeFromCompact(mockRecipe, db, projectId);
+    const result = await upsertRecipeFromCompact(
+      mockRecipe,
+      db,
+      organizationId,
+    );
 
     expect(result.id).toBeDefined();
 
     // Verify recipe was created
     const foundRecipe = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe"),
       ),
       with: {
@@ -103,13 +107,13 @@ describe("upsertRecipeFromCompact", () => {
     const firstResult = await upsertRecipeFromCompact(
       mockRecipe,
       db,
-      projectId,
+      organizationId,
     );
 
     // Verify initial state
     const initialRecipe = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe"),
       ),
       with: {
@@ -128,7 +132,7 @@ describe("upsertRecipeFromCompact", () => {
     const secondResult = await upsertRecipeFromCompact(
       mockRecipeUpdated,
       db,
-      projectId,
+      organizationId,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -137,7 +141,7 @@ describe("upsertRecipeFromCompact", () => {
     // Verify the recipe was updated
     const updatedRecipe = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe"),
       ),
       with: {
@@ -167,9 +171,21 @@ describe("upsertRecipeFromCompact", () => {
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
-    const firstRun = await upsertRecipeFromCompact(mockRecipe, db, projectId);
-    const secondRun = await upsertRecipeFromCompact(mockRecipe, db, projectId); // Same recipe
-    const thirdRun = await upsertRecipeFromCompact(mockRecipe, db, projectId); // Same recipe again
+    const firstRun = await upsertRecipeFromCompact(
+      mockRecipe,
+      db,
+      organizationId,
+    );
+    const secondRun = await upsertRecipeFromCompact(
+      mockRecipe,
+      db,
+      organizationId,
+    ); // Same recipe
+    const thirdRun = await upsertRecipeFromCompact(
+      mockRecipe,
+      db,
+      organizationId,
+    ); // Same recipe again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -178,7 +194,7 @@ describe("upsertRecipeFromCompact", () => {
     // Should only be one recipe in the database
     const allRecipes = await getDb(db).query.recipe.findMany({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe"),
       ),
     });
@@ -188,11 +204,11 @@ describe("upsertRecipeFromCompact", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertRecipeFromCompact(mockRecipeUpdated, db, projectId);
+    await upsertRecipeFromCompact(mockRecipeUpdated, db, organizationId);
 
     const beforeUpdate = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe"),
       ),
       with: { sections: { with: { ingredients: true } } },
@@ -206,11 +222,11 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertRecipeFromCompact(mockRecipe, db, projectId);
+    await upsertRecipeFromCompact(mockRecipe, db, organizationId);
 
     const afterUpdate = await getDb(db).query.recipe.findFirst({
       where: and(
-        eq(recipe.projectId, projectId),
+        eq(recipe.organizationId, organizationId),
         eq(recipe.name, "Test Recipe"),
       ),
       with: { sections: { with: { ingredients: true } } },

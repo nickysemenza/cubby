@@ -56,7 +56,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: 'true'
+          download-wasm: "true"
       - name: Cache ESLint results
         uses: actions/cache@v4
         with:
@@ -67,11 +67,11 @@ jobs:
           restore-keys: |
             eslint-${{ runner.os }}-
       - run: pnpm run format:check
-        name: 'check prettier formatting'
+        name: "check prettier formatting"
       - run: pnpm run check
-        name: 'lint and type check'
+        name: "lint and type check"
       - run: cd apps/web && npx knip --no-exit-code
-        name: 'check for unused code with knip'
+        name: "check for unused code with knip"
 
   test-unit:
     name: Unit Tests - ${{ matrix.package.name }}
@@ -99,9 +99,6 @@ jobs:
             needs-wasm: false
     outputs:
       test-passed: ${{ steps.test.outcome == 'success' }}
-    env:
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y29uY2lzZS1zaGVwaGVyZC00MS5jbGVyay5hY2NvdW50cy5kZXYk
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
     services:
       postgres:
         image: ${{ matrix.package.needs-db && 'postgres' || '' }}
@@ -175,10 +172,9 @@ jobs:
     outputs:
       test-passed: ${{ steps.e2e-test.outcome == 'success' }}
     env:
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y29uY2lzZS1zaGVwaGVyZC00MS5jbGVyay5hY2NvdW50cy5kZXYk
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      E2E_CLERK_USER_USERNAME: ${{ secrets.E2E_CLERK_USER_USERNAME }}
-      E2E_CLERK_USER_PASSWORD: ${{ secrets.E2E_CLERK_USER_PASSWORD }}
+      E2E_TEST_USER_EMAIL: nicky@test.com
+      E2E_TEST_USER_PASSWORD: password1234
+      BETTER_AUTH_SECRET: ci-secret
       PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
     services:
       postgres:
@@ -207,7 +203,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: 'true'
+          download-wasm: "true"
       - name: Setup environment variables
         run: |
           cp apps/web/.env.example apps/web/.env
@@ -275,7 +271,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: 'true'
+          download-wasm: "true"
       - name: Deploy to Vercel
         id: deploy
         run: |

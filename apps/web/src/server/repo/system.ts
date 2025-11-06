@@ -2,7 +2,7 @@ import { type Database, type Transaction } from "~/server/db";
 import { withTransaction } from "~/server/repo/database-helpers";
 import { loadLocations } from "~/server/repo/location";
 import { loadProducts } from "~/server/repo/product";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 import { type transformConfig } from "~/schemas/config";
 
 /**
@@ -11,10 +11,10 @@ import { type transformConfig } from "~/schemas/config";
 export const insertDataConfig = async (
   db: Database,
   input: ReturnType<typeof transformConfig>,
-  projectId: ProjectId,
+  organizationId: OrganizationId,
 ) => {
   return await withTransaction(db, async (tx: Transaction) => {
-    await loadProducts(tx, input.products, projectId);
-    await loadLocations(tx, input.locations, projectId);
+    await loadProducts(tx, input.products, organizationId);
+    await loadLocations(tx, input.locations, organizationId);
   });
 };

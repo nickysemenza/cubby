@@ -3,16 +3,16 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { inventoryentryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { type ProjectId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 
 describe("inventory router", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -22,7 +22,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -34,7 +34,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create test product
@@ -49,7 +49,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create inventory entry data
@@ -89,7 +89,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -101,7 +101,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const pantry = await createLocation(
@@ -111,7 +111,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create test products
@@ -126,7 +126,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const sugar = await createProduct(
@@ -140,7 +140,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const rice = await createProduct(
@@ -154,7 +154,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create multiple inventory entries
@@ -238,7 +238,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -250,7 +250,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const product = await createProduct(
@@ -264,7 +264,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create an inventory entry
@@ -307,7 +307,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -319,7 +319,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const location2 = await createLocation(
@@ -329,7 +329,7 @@ describe("inventory router", () => {
         type: "shelf",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const product1 = await createProduct(
@@ -343,7 +343,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const product2 = await createProduct(
@@ -357,7 +357,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create an inventory entry
@@ -401,7 +401,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -413,7 +413,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create test products
@@ -428,7 +428,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const product2 = await createProduct(
@@ -442,7 +442,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const product3 = await createProduct(
@@ -456,7 +456,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Create an existing entry to be updated
@@ -529,7 +529,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -547,7 +547,7 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
-        projectId: projectId,
+        organizationId: organizationId,
       }),
     );
 
@@ -570,7 +570,7 @@ describe("inventory router", () => {
         type: "room",
         parentId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const product = await createProduct(
@@ -584,7 +584,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     const entry = await caller.create({

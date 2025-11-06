@@ -1,13 +1,11 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "~/lib/auth";
 import { redirect } from "next/navigation";
 import { PageWrapper } from "~/components/ui/page-wrapper";
+import { headers } from "next/headers";
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
-  // If the user is not authenticated, redirect to sign-in
-  if (!userId) {
-    redirect("/sign-in");
-  }
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) redirect("/sign-in");
 
   return (
     <PageWrapper>
@@ -17,8 +15,10 @@ export default async function DashboardPage() {
         authenticated users.
       </p>
       <div className="bg-muted mt-8 rounded-lg p-6">
-        <h2 className="mb-3 text-xl font-semibold">User ID</h2>
-        <p className="bg-accent rounded p-2 font-mono">{userId}</p>
+        <h2 className="mb-3 text-xl font-semibold">User</h2>
+        <p className="bg-accent rounded p-2 font-mono">
+          {session.user.id} — {session.user.name ?? session.user.email}
+        </p>
       </div>
     </PageWrapper>
   );

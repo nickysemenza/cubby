@@ -29,23 +29,10 @@ Object.defineProperty(window, "localStorage", {
   value: localStorageMock,
 });
 
-// Mock Clerk components
-vi.mock("@clerk/nextjs", () => {
+// Mock OrganizationSwitcher to keep test isolated from auth client
+vi.mock("~/components/project/OrganizationSwitcher", () => {
   return {
-    ClerkProvider: ({ children }: { children: React.ReactNode }) => (
-      <>{children}</>
-    ),
-    SignInButton: () => <div>Sign In</div>,
-    SignedIn: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    SignedOut: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-    UserButton: () => <div>User</div>,
-  };
-});
-
-// Mock ProjectSwitcher component that uses tRPC
-vi.mock("~/components/project/ProjectSwitcher", () => {
-  return {
-    ProjectSwitcher: () => <div>Project Switcher</div>,
+    OrganizationSwitcher: () => <div />,
   };
 });
 

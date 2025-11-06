@@ -12,15 +12,15 @@ import { createIngredient } from "./ingredient";
 import {
   unsafeIngredientId,
   unsafeProductId,
-  type ProjectId,
+  type OrganizationId,
 } from "~/schemas/identifiers";
 
 describe("product repository", () => {
   let db: Database;
-  let projectId: ProjectId;
+  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, projectId, teardown } = await buildTestDB());
+    ({ db, organizationId, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -37,7 +37,7 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, projectId);
+    const createdProduct = await createProduct(db, productData, organizationId);
 
     // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
@@ -50,7 +50,7 @@ describe("product repository", () => {
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      projectId,
+      organizationId,
     );
 
     // Verify the retrieved product matches the created product
@@ -76,7 +76,7 @@ describe("product repository", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     // Test finding the product by name
@@ -108,7 +108,7 @@ describe("product repository", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
     await createProduct(
       db,
@@ -121,7 +121,7 @@ describe("product repository", () => {
         expectedQuantity: null,
         ingredientId: null,
       },
-      projectId,
+      organizationId,
     );
 
     await expect(findProductByName(db, ambiguousName)).rejects.toThrow(
@@ -163,14 +163,14 @@ describe("product repository", () => {
           ingredientId: null,
           expectedQuantity: null,
         },
-        projectId,
+        organizationId,
       );
     }
 
     // Test listing with pagination - first page
     const firstPage = await productList(
       db,
-      projectId,
+      organizationId,
       undefined,
       undefined,
       undefined,
@@ -187,7 +187,7 @@ describe("product repository", () => {
     // Test listing with pagination - second page
     const secondPage = await productList(
       db,
-      projectId,
+      organizationId,
       undefined,
       undefined,
       undefined,
@@ -203,7 +203,7 @@ describe("product repository", () => {
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
       db,
-      projectId,
+      organizationId,
       undefined,
       "Manufacturer X",
       undefined,
@@ -231,13 +231,13 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, projectId);
+    const createdProduct = await createProduct(db, productData, organizationId);
 
     // Update the product
     const updatedProduct = await updateProduct(
       db,
       unsafeProductId(createdProduct.id),
-      projectId,
+      organizationId,
       {
         name: "Updated Product",
         manufacturer: "Updated Manufacturer",
@@ -262,7 +262,7 @@ describe("product repository", () => {
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      projectId,
+      organizationId,
     );
 
     // Verify unit mappings were created
@@ -286,7 +286,7 @@ describe("product repository", () => {
         name: "Test Ingredient",
         aliases: ["test", "ingredient"],
       },
-      projectId,
+      organizationId,
     );
 
     // Create a product linked to the ingredient
@@ -301,13 +301,13 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, projectId);
+    const createdProduct = await createProduct(db, productData, organizationId);
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      projectId,
+      organizationId,
     );
 
     // Verify the ingredient association
@@ -324,7 +324,7 @@ describe("product repository", () => {
         name: "Ingredient 1",
         aliases: ["ing1"],
       },
-      projectId,
+      organizationId,
     );
 
     const ingredient2 = await createIngredient(
@@ -333,7 +333,7 @@ describe("product repository", () => {
         name: "Ingredient 2",
         aliases: ["ing2"],
       },
-      projectId,
+      organizationId,
     );
 
     // Create a product linked to the first ingredient
@@ -348,18 +348,23 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, projectId);
+    const createdProduct = await createProduct(db, productData, organizationId);
 
     // Update the product to link to the second ingredient
-    await updateProduct(db, unsafeProductId(createdProduct.id), projectId, {
-      ingredientId: unsafeIngredientId(ingredient2.id),
-    });
+    await updateProduct(
+      db,
+      unsafeProductId(createdProduct.id),
+      organizationId,
+      {
+        ingredientId: unsafeIngredientId(ingredient2.id),
+      },
+    );
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      projectId,
+      organizationId,
     );
 
     // Verify the ingredient association was updated
@@ -368,15 +373,20 @@ describe("product repository", () => {
     expect(retrievedProduct.ingredient!.name).toEqual("Ingredient 2");
 
     // Update the product to remove ingredient association
-    await updateProduct(db, unsafeProductId(createdProduct.id), projectId, {
-      ingredientId: null,
-    });
+    await updateProduct(
+      db,
+      unsafeProductId(createdProduct.id),
+      organizationId,
+      {
+        ingredientId: null,
+      },
+    );
 
     // Retrieve the product again
     const updatedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      projectId,
+      organizationId,
     );
 
     // Verify the ingredient association was removed

@@ -11,10 +11,30 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { type Amount } from "~/codec/codec";
+import {
+  user,
+  organization,
+  member as organizationMember,
+  session,
+  account,
+  verification,
+  invitation,
+} from "./auth.schema";
 
 // JSON types for JSONB columns
 export type { Amount };
 export type Instruction = { text: string };
+
+// Re-export Better-Auth tables for use throughout the app
+export {
+  user,
+  organization,
+  organizationMember,
+  session,
+  account,
+  verification,
+  invitation,
+};
 
 // Enums
 export const recipeSourceEnum = pgEnum("RecipeSource", [
@@ -28,73 +48,6 @@ export const imageStatusEnum = pgEnum("ImageStatus", [
   "FAILED",
 ]);
 
-// Project table
-export const project = pgTable(
-  "Project",
-  {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    name: text("name").notNull(),
-    description: text("description"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-    deletedAt: timestamp("deletedAt", { mode: "date" }),
-  },
-  (table) => ({
-    createdAtIdx: index("Project_createdAt_idx").on(table.createdAt),
-    nameIdx: index("Project_name_idx").on(table.name),
-  }),
-);
-
-// User table
-export const user = pgTable(
-  "User",
-  {
-    id: text("id").primaryKey(), // Clerk user ID
-    email: text("email").notNull().unique(),
-    firstName: text("firstName"),
-    lastName: text("lastName"),
-    imageUrl: text("imageUrl"),
-    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt", { mode: "date" })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-  },
-  (table) => ({
-    emailIdx: index("User_email_idx").on(table.email),
-  }),
-);
-
-// ProjectMember table
-export const projectMember = pgTable(
-  "ProjectMember",
-  {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
-      .notNull()
-      .references(() => project.id),
-    userId: text("userId")
-      .notNull()
-      .references(() => user.id), // Clerk user ID
-    joinedAt: timestamp("joinedAt", { mode: "date" }).notNull().defaultNow(),
-  },
-  (table) => ({
-    projectUserUnique: uniqueIndex("ProjectMember_projectId_userId_key").on(
-      table.projectId,
-      table.userId,
-    ),
-    projectIdIdx: index("ProjectMember_projectId_idx").on(table.projectId),
-    userIdIdx: index("ProjectMember_userId_idx").on(table.userId),
-  }),
-);
-
 // Recipe table
 export const recipe = pgTable(
   "Recipe",
@@ -102,9 +55,9 @@ export const recipe = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
+    organizationId: text("organizationId")
       .notNull()
-      .references(() => project.id),
+      .references(() => organization.id),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -116,11 +69,11 @@ export const recipe = pgTable(
     SourceData: text("SourceData"),
   },
   (table) => ({
-    projectNameUnique: uniqueIndex("Recipe_projectId_name_key").on(
-      table.projectId,
+    projectNameUnique: uniqueIndex("Recipe_organizationId_name_key").on(
+      table.organizationId,
       table.name,
     ),
-    projectIdIdx: index("Recipe_projectId_idx").on(table.projectId),
+    projectIdIdx: index("Recipe_organizationId_idx").on(table.organizationId),
     createdAtIdx: index("Recipe_createdAt_idx").on(table.createdAt),
     sourceTypeIdx: index("Recipe_SourceType_idx").on(table.SourceType),
     // GIN index for full-text search on name
@@ -169,9 +122,9 @@ export const ingredient = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
+    organizationId: text("organizationId")
       .notNull()
-      .references(() => project.id),
+      .references(() => organization.id),
     name: text("name").notNull(),
     aliases: text("aliases")
       .array()
@@ -186,12 +139,14 @@ export const ingredient = pgTable(
     recipeId: uuid("recipeId").references(() => recipe.id),
   },
   (table) => ({
-    projectNameUnique: uniqueIndex("Ingredient_projectId_name_key").on(
-      table.projectId,
+    projectNameUnique: uniqueIndex("Ingredient_organizationId_name_key").on(
+      table.organizationId,
       table.name,
     ),
     recipeIdUnique: uniqueIndex("Ingredient_recipeId_key").on(table.recipeId),
-    projectIdIdx: index("Ingredient_projectId_idx").on(table.projectId),
+    projectIdIdx: index("Ingredient_organizationId_idx").on(
+      table.organizationId,
+    ),
     recipeIdIdx: index("Ingredient_recipeId_idx").on(table.recipeId),
     createdAtIdx: index("Ingredient_createdAt_idx").on(table.createdAt),
     // GIN indexes for full-text search
@@ -247,9 +202,9 @@ export const product = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
+    organizationId: text("organizationId")
       .notNull()
-      .references(() => project.id),
+      .references(() => organization.id),
     name: text("name").notNull(),
     manufacturer: text("manufacturer").notNull(),
     upc: text("upc"),
@@ -266,11 +221,11 @@ export const product = pgTable(
   },
   (table) => ({
     projectNameMfgUnique: uniqueIndex(
-      "Product_projectId_name_manufacturer_key",
-    ).on(table.projectId, table.name, table.manufacturer),
+      "Product_organizationId_name_manufacturer_key",
+    ).on(table.organizationId, table.name, table.manufacturer),
     upcUnique: uniqueIndex("Product_upc_key").on(table.upc),
     ndbUnique: uniqueIndex("Product_ndb_number_key").on(table.ndb_number),
-    projectIdIdx: index("Product_projectId_idx").on(table.projectId),
+    projectIdIdx: index("Product_organizationId_idx").on(table.organizationId),
     ingredientIdIdx: index("Product_ingredientId_idx").on(table.ingredientId),
     createdAtIdx: index("Product_createdAt_idx").on(table.createdAt),
     nameIdx: index("Product_name_idx").on(table.name),
@@ -324,9 +279,9 @@ export const location = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
+    organizationId: text("organizationId")
       .notNull()
-      .references(() => project.id),
+      .references(() => organization.id),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -339,11 +294,11 @@ export const location = pgTable(
     type: text("type").notNull(),
   },
   (table) => ({
-    projectNameUnique: uniqueIndex("Location_projectId_name_key").on(
-      table.projectId,
+    projectNameUnique: uniqueIndex("Location_organizationId_name_key").on(
+      table.organizationId,
       table.name,
     ),
-    projectIdIdx: index("Location_projectId_idx").on(table.projectId),
+    projectIdIdx: index("Location_organizationId_idx").on(table.organizationId),
     nameIdx: index("Location_name_idx").on(table.name),
     typeIdx: index("Location_type_idx").on(table.type),
     parentIdIdx: index("Location_parentId_idx").on(table.parentId),
@@ -367,9 +322,9 @@ export const inventoryEntry = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
+    organizationId: text("organizationId")
       .notNull()
-      .references(() => project.id),
+      .references(() => organization.id),
     productId: uuid("productId")
       .notNull()
       .references(() => product.id),
@@ -388,7 +343,9 @@ export const inventoryEntry = pgTable(
     productLocationUnique: uniqueIndex(
       "InventoryEntry_productId_locationId_key",
     ).on(table.productId, table.locationId),
-    projectIdIdx: index("InventoryEntry_projectId_idx").on(table.projectId),
+    projectIdIdx: index("InventoryEntry_organizationId_idx").on(
+      table.organizationId,
+    ),
     productIdIdx: index("InventoryEntry_productId_idx").on(table.productId),
     locationIdIdx: index("InventoryEntry_locationId_idx").on(table.locationId),
     createdAtIdx: index("InventoryEntry_createdAt_idx").on(table.createdAt),
@@ -402,9 +359,9 @@ export const image = pgTable(
     id: uuid("id")
       .primaryKey()
       .default(sql`gen_random_uuid()`),
-    projectId: uuid("projectId")
+    organizationId: text("organizationId")
       .notNull()
-      .references(() => project.id),
+      .references(() => organization.id),
     url: text("url").notNull(),
     key: text("key").notNull().unique(),
     filename: text("filename").notNull(),
@@ -419,7 +376,7 @@ export const image = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
   (table) => ({
-    projectIdIdx: index("Image_projectId_idx").on(table.projectId),
+    projectIdIdx: index("Image_organizationId_idx").on(table.organizationId),
     createdAtIdx: index("Image_createdAt_idx").on(table.createdAt),
     statusIdx: index("Image_status_idx").on(table.status),
   }),
@@ -516,8 +473,8 @@ export const recipeImage = pgTable(
 );
 
 // Relations
-export const projectRelations = relations(project, ({ many }) => ({
-  members: many(projectMember),
+export const organizationRelations = relations(organization, ({ many }) => ({
+  members: many(organizationMember),
   recipes: many(recipe),
   products: many(product),
   ingredients: many(ingredient),
@@ -526,25 +483,10 @@ export const projectRelations = relations(project, ({ many }) => ({
   images: many(image),
 }));
 
-export const userRelations = relations(user, ({ many }) => ({
-  projects: many(projectMember),
-}));
-
-export const projectMemberRelations = relations(projectMember, ({ one }) => ({
-  project: one(project, {
-    fields: [projectMember.projectId],
-    references: [project.id],
-  }),
-  user: one(user, {
-    fields: [projectMember.userId],
-    references: [user.id],
-  }),
-}));
-
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
-  project: one(project, {
-    fields: [recipe.projectId],
-    references: [project.id],
+  organization: one(organization, {
+    fields: [recipe.organizationId],
+    references: [organization.id],
   }),
   sections: many(recipeSection),
   pointerIngredient: one(ingredient, {
@@ -566,9 +508,9 @@ export const recipeSectionRelations = relations(
 );
 
 export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
-  project: one(project, {
-    fields: [ingredient.projectId],
-    references: [project.id],
+  organization: one(organization, {
+    fields: [ingredient.organizationId],
+    references: [organization.id],
   }),
   Recipe: one(recipe, {
     fields: [ingredient.recipeId],
@@ -593,9 +535,9 @@ export const recipeSectionIngredientRelations = relations(
 );
 
 export const productRelations = relations(product, ({ one, many }) => ({
-  project: one(project, {
-    fields: [product.projectId],
-    references: [project.id],
+  organization: one(organization, {
+    fields: [product.organizationId],
+    references: [organization.id],
   }),
   Ingredient: one(ingredient, {
     fields: [product.ingredientId],
@@ -617,9 +559,9 @@ export const productUnitMappingsRelations = relations(
 );
 
 export const locationRelations = relations(location, ({ one, many }) => ({
-  project: one(project, {
-    fields: [location.projectId],
-    references: [project.id],
+  organization: one(organization, {
+    fields: [location.organizationId],
+    references: [organization.id],
   }),
   parent: one(location, {
     fields: [location.parentId],
@@ -634,9 +576,9 @@ export const locationRelations = relations(location, ({ one, many }) => ({
 }));
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
-  project: one(project, {
-    fields: [inventoryEntry.projectId],
-    references: [project.id],
+  organization: one(organization, {
+    fields: [inventoryEntry.organizationId],
+    references: [organization.id],
   }),
   Product: one(product, {
     fields: [inventoryEntry.productId],
@@ -649,9 +591,9 @@ export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
 }));
 
 export const imageRelations = relations(image, ({ one, many }) => ({
-  project: one(project, {
-    fields: [image.projectId],
-    references: [project.id],
+  organization: one(organization, {
+    fields: [image.organizationId],
+    references: [organization.id],
   }),
   productImages: many(productImage),
   locationImages: many(locationImage),
