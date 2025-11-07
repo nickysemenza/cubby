@@ -75,12 +75,6 @@ CREATE TABLE "verification" (
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "Project" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "ProjectMember" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "User" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
-DROP TABLE "Project" CASCADE;--> statement-breakpoint
-DROP TABLE "ProjectMember" CASCADE;--> statement-breakpoint
-DROP TABLE "User" CASCADE;--> statement-breakpoint
 ALTER TABLE "Image" DROP CONSTRAINT "Image_projectId_Project_id_fk";
 --> statement-breakpoint
 ALTER TABLE "Ingredient" DROP CONSTRAINT "Ingredient_projectId_Project_id_fk";
@@ -95,6 +89,12 @@ ALTER TABLE "Product" DROP CONSTRAINT "Product_projectId_Project_id_fk";
 --> statement-breakpoint
 ALTER TABLE "Recipe" DROP CONSTRAINT "Recipe_projectId_Project_id_fk";
 --> statement-breakpoint
+ALTER TABLE "Project" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "ProjectMember" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "User" DISABLE ROW LEVEL SECURITY;--> statement-breakpoint
+DROP TABLE "Project" CASCADE;--> statement-breakpoint
+DROP TABLE "ProjectMember" CASCADE;--> statement-breakpoint
+DROP TABLE "User" CASCADE;--> statement-breakpoint
 DROP INDEX "Image_projectId_idx";--> statement-breakpoint
 DROP INDEX "Ingredient_projectId_name_key";--> statement-breakpoint
 DROP INDEX "Ingredient_projectId_idx";--> statement-breakpoint

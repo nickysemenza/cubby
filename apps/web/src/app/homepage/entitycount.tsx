@@ -3,9 +3,12 @@ import { useTRPC } from "~/trpc/react";
 
 import { useQueries } from "@tanstack/react-query";
 import { SortParams } from "~/schemas/pagination";
+import { authClient } from "~/lib/auth-client";
 
 export default function EntityCount() {
   const api = useTRPC();
+  const { data: activeOrg } = authClient.useActiveOrganization();
+
   const sort: SortParams = { orderBy: "name", direction: "asc" };
   const opts = {
     filters: {},
@@ -16,15 +19,28 @@ export default function EntityCount() {
   const [location, product, ingredient, recipe, inventoryItem, usda, image] =
     useQueries({
       queries: [
-        api.location.list.queryOptions(opts),
-        api.product.list.queryOptions(opts),
-        api.ingredient.list.queryOptions(opts),
-        api.recipe.list.queryOptions(opts),
-        api.inventoryItem.list.queryOptions(opts),
-        api.usda.list.queryOptions(opts),
-        api.image.list.queryOptions(opts),
+        { ...api.location.list.queryOptions(opts), enabled: !!activeOrg },
+        { ...api.product.list.queryOptions(opts), enabled: !!activeOrg },
+        { ...api.ingredient.list.queryOptions(opts), enabled: !!activeOrg },
+        { ...api.recipe.list.queryOptions(opts), enabled: !!activeOrg },
+        {
+          ...api.inventoryItem.list.queryOptions(opts),
+          enabled: !!activeOrg,
+        },
+        { ...api.usda.list.queryOptions(opts), enabled: !!activeOrg },
+        { ...api.image.list.queryOptions(opts), enabled: !!activeOrg },
       ],
     });
+
+  // Only render counts if there's an active organization
+  if (!activeOrg) {
+    return (
+      <p className="text-muted-foreground text-sm">
+        Select an organization to view entity counts
+      </p>
+    );
+  }
+
   return (
     <ul>
       <li>location count: {location.data?.meta.totalCount}</li>
