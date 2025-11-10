@@ -13,7 +13,7 @@
     "test": "pnpm -r test",
     "test-ui": "vitest --ui",
     "test:e2e": "pnpm -r test:e2e",
-    "wasm": "wasm-pack build --out-dir ../apps/web/wasm recipebridge",
+    "wasm": "wasm-pack build --scope recipehub --out-dir ../packages/wasm recipebridge",
     "prepare": "husky"
   },
   "devDependencies": {

@@ -5,7 +5,7 @@ import {
   measure_kind,
   parse_ingredient,
   is_valid_unit,
-} from "wasm/recipebridge";
+} from "@recipehub/recipebridge";
 
 test("parsing works", async () => {
   const out = await parseCompactRecipe({

@@ -9,7 +9,7 @@ import {
   Ruler,
   Shapes,
 } from "lucide-react";
-import { type MeasureKind } from "wasm/recipebridge";
+import { type MeasureKind } from "@recipehub/recipebridge";
 
 export const kindIconMap: Record<
   MeasureKind,

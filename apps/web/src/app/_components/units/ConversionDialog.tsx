@@ -5,7 +5,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { MeasureKind, WMeasure } from "wasm/recipebridge";
+import { MeasureKind, WMeasure } from "@recipehub/recipebridge";
 import { amount, Amount } from "~/codec/codec";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { useWasm } from "~/hooks/useWasm";

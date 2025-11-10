@@ -1,6 +1,6 @@
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
-import { WUnitMapping } from "wasm/recipebridge";
+import { WUnitMapping } from "@recipehub/recipebridge";
 import { useWasm } from "~/hooks/useWasm";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 

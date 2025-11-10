@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type wasm = typeof import("wasm/recipebridge");
+export type wasm = typeof import("@recipehub/recipebridge");
 
 type wasmState = {
   wasm: wasm | undefined;
@@ -26,7 +26,7 @@ export const WasmContextProvider: React.FC<{
       }
       setLoading(true);
       console.time("wasm-load");
-      const wasm = await import("wasm/recipebridge");
+      const wasm = await import("@recipehub/recipebridge");
       setState(wasm);
       console.timeEnd("wasm-load");
       setLoading(false);

@@ -23,7 +23,7 @@ jobs:
         id: wasm-cache
         name: Restore cached WASM pkg
         with:
-          path: apps/web/wasm
+          path: packages/wasm
           key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml') }}-${{ hashFiles('recipebridge/Cargo.lock') }}-${{ hashFiles('recipebridge/src/**') }}-${{ hashFiles('rust-toolchain.toml') }}
           restore-keys: |
             wasm-pkg-${{ runner.os }}-
@@ -46,7 +46,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: wasm-pkg
-          path: apps/web/wasm
+          path: packages/wasm
 
   lint-format:
     name: Lint and Format

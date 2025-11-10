@@ -7,6 +7,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2.9"
+
 # https://doc.rust-lang.org/cargo/reference/config.html
 # override: 
 # [patch."https://github.com/nickysemenza/ingredient-parser"]

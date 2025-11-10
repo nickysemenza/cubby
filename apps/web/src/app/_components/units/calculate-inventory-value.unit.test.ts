@@ -10,7 +10,7 @@ import {
 } from "~/schemas/identifiers";
 
 // Use real WASM for consistency with other conversion tests
-const loadWasm = async () => await import("wasm/recipebridge");
+const loadWasm = async () => await import("@recipehub/recipebridge");
 
 function makeInventoryItem(params: {
   id: string;

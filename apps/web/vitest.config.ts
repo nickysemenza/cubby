@@ -11,6 +11,7 @@ export default defineConfig({
     alias: {
       // https://github.com/juliusmarminge/t3-complete/blob/main/vitest.config.ts
       "~/": join(__dirname, "./src/"),
+      "tooling/": join(__dirname, "./tooling/"),
     },
   },
   test: {

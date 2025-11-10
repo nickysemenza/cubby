@@ -5,7 +5,7 @@ import { renderValueOrError } from "~/misc/result";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { wasm } from "~/hooks/useWasm";
 import { convertAmountToPrice } from "../units/univ-conversion";
-import { WMeasure } from "wasm/recipebridge";
+import { WMeasure } from "@recipehub/recipebridge";
 import {
   Tooltip,
   TooltipContent,

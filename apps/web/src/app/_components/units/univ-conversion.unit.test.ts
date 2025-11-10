@@ -20,7 +20,7 @@ import { unsafeProductId, unsafeIngredientId } from "~/schemas/identifiers";
 
 // Import real wasm
 const loadWasm = async () => {
-  const wasm = await import("wasm/recipebridge");
+  const wasm = await import("@recipehub/recipebridge");
   return wasm;
 };
 

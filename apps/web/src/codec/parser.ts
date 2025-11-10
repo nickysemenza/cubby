@@ -10,7 +10,9 @@ export const parseCompactRecipe = async (
       raw.sections.map(async (section) => ({
         ingredients: await Promise.all(
           section.ingredients.map(async (ingredient) => {
-            const { parse_ingredient } = await import("wasm");
+            const { parse_ingredient } = await import(
+              "@recipehub/recipebridge"
+            );
             const parsed = parse_ingredient(ingredient);
             return {
               name: parsed.name,

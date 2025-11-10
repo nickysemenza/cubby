@@ -1,32 +1,32 @@
-name: 'Setup Node.js with Dependencies'
-description: 'Sets up Node.js with caching and installs dependencies'
+name: "Setup Node.js with Dependencies"
+description: "Sets up Node.js with caching and installs dependencies"
 inputs:
   download-wasm:
-    description: 'Whether to download WASM artifact'
+    description: "Whether to download WASM artifact"
     required: false
-    default: 'false'
+    default: "false"
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Setup pnpm
       uses: pnpm/action-setup@v4
       with:
         version: 10.21.0
-    
+
     - name: Setup Node.js
       uses: actions/setup-node@v6
       with:
-        node-version: '24'
-        cache: 'pnpm'
-    
+        node-version: "24"
+        cache: "pnpm"
+
     - name: Install dependencies
       run: pnpm install --frozen-lockfile --prefer-offline
       shell: bash
-    
+
     - name: Download WASM pkg artifact
       if: inputs.download-wasm == 'true'
       uses: actions/download-artifact@v6
       with:
         name: wasm-pkg
-        path: apps/web/wasm
+        path: packages/wasm
