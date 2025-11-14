@@ -7,6 +7,7 @@ import {
   productUnitMappings,
 } from "~/server/db/schema";
 import { eq, sql, notExists, and } from "drizzle-orm";
+import { amount } from "~/codec/codec";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -264,15 +265,16 @@ export const findInvalidInventoryAmounts = async (
   const problems: InvalidInventoryAmount[] = [];
 
   for (const entry of inventoryEntries) {
-    const amount = entry.amount as { value: number; unit: string };
+    // Validate and parse the JSONB amount column
+    const parsedAmount = amount.parse(entry.amount);
 
-    if (amount.value <= 0) {
+    if (parsedAmount.value <= 0) {
       problems.push({
         id: entry.id,
         productName: entry.Product.name,
         locationName: entry.location.name,
-        amount,
-        issue: amount.value === 0 ? "zero" : "negative",
+        amount: parsedAmount,
+        issue: parsedAmount.value === 0 ? "zero" : "negative",
       });
     }
   }

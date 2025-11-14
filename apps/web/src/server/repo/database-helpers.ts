@@ -1,5 +1,10 @@
 import { ilike, type SQL, asc, desc } from "drizzle-orm";
-import { type AnyColumn } from "drizzle-orm";
+import {
+  type AnyColumn,
+  type InferInsertModel,
+  type InferSelectModel,
+} from "drizzle-orm";
+import { type PgTable } from "drizzle-orm/pg-core";
 import { type SortParams } from "~/schemas/pagination";
 import {
   type Database,
@@ -202,16 +207,15 @@ export const relations = {
  * @param allowedFields - Array of field names that can be sorted on
  * @returns Array of order by clauses (empty if field not allowed)
  */
-export const buildOrderBy = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
+export const buildOrderBy = <T extends PgTable>(
+  table: T,
   sort: SortParams,
   allowedFields: string[],
 ): SQL[] => {
   if (!allowedFields.includes(sort.orderBy)) {
     return [];
   }
-  const column = table[sort.orderBy] as AnyColumn | undefined;
+  const column = table[sort.orderBy as keyof T] as AnyColumn | undefined;
   if (!column) return [];
   return [sort.direction === "asc" ? asc(column) : desc(column)];
 };
@@ -225,16 +229,13 @@ export const buildOrderBy = (
  * @param values - Values to insert
  * @returns The created record
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const insertAndReturn = async <T = any>(
+export const insertAndReturn = async <T extends PgTable>(
   tx: DrizzleTransaction,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  values: any,
-): Promise<T> => {
+  table: T,
+  values: InferInsertModel<T>,
+): Promise<InferSelectModel<T>> => {
   const result = await tx.insert(table).values(values).returning();
-  const [created] = result as T[];
+  const [created] = result as InferSelectModel<T>[];
   if (!created) {
     throw new Error("Failed to insert record");
   }
@@ -250,17 +251,14 @@ export const insertAndReturn = async <T = any>(
  * @param values - Array of values to insert
  * @returns Array of created records
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const batchInsert = async <T = any>(
+export const batchInsert = async <T extends PgTable>(
   tx: DrizzleTransaction,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  values: any[],
-): Promise<T[]> => {
+  table: T,
+  values: InferInsertModel<T>[],
+): Promise<InferSelectModel<T>[]> => {
   if (values.length === 0) return [];
   const result = await tx.insert(table).values(values).returning();
-  return result as T[];
+  return result as InferSelectModel<T>[];
 };
 
 /**
@@ -272,16 +270,13 @@ export const batchInsert = async <T = any>(
  * @param values - Values to insert
  * @returns The created record
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const insertAndReturnDb = async <T = any>(
+export const insertAndReturnDb = async <T extends PgTable>(
   db: Database,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  values: any,
-): Promise<T> => {
+  table: T,
+  values: InferInsertModel<T>,
+): Promise<InferSelectModel<T>> => {
   const result = await getDb(db).insert(table).values(values).returning();
-  const [created] = result as T[];
+  const [created] = result as InferSelectModel<T>[];
   if (!created) {
     throw new Error("Failed to insert record");
   }
@@ -298,18 +293,14 @@ export const insertAndReturnDb = async <T = any>(
  * @param where - Where clause (SQL condition)
  * @returns The updated record
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const updateAndReturn = async <T = any>(
+export const updateAndReturn = async <T extends PgTable>(
   tx: DrizzleTransaction,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  values: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  where: any,
-): Promise<T> => {
+  table: T,
+  values: Partial<InferInsertModel<T>>,
+  where: SQL | undefined,
+): Promise<InferSelectModel<T>> => {
   const result = await tx.update(table).set(values).where(where).returning();
-  const [updated] = result as T[];
+  const [updated] = result as InferSelectModel<T>[];
   if (!updated) {
     throw new Error("Failed to update record");
   }
@@ -326,22 +317,18 @@ export const updateAndReturn = async <T = any>(
  * @param where - Where clause (SQL condition)
  * @returns The updated record
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const updateAndReturnDb = async <T = any>(
+export const updateAndReturnDb = async <T extends PgTable>(
   db: Database,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  table: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  values: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  where: any,
-): Promise<T> => {
+  table: T,
+  values: Partial<InferInsertModel<T>>,
+  where: SQL | undefined,
+): Promise<InferSelectModel<T>> => {
   const result = await getDb(db)
     .update(table)
     .set(values)
     .where(where)
     .returning();
-  const [updated] = result as T[];
+  const [updated] = result as InferSelectModel<T>[];
   if (!updated) {
     throw new Error("Failed to update record");
   }

@@ -7,13 +7,14 @@ import {
   type PaginationParams,
   buildTakeSkip,
 } from "~/schemas/pagination";
-import { type productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
+import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
 import { foodLookupParam, FoodLookupParam } from "@recipehub/usda-schemas";
 import {
   type ProductTopLevelOut,
   type ProductInputPayload,
+  productTopLevelOut,
 } from "~/schemas/product";
 import {
   formatSearchTerm,
@@ -250,7 +251,7 @@ const dbProductToAPI = async (
   // Extract images from the join table records
   const productImages = images.map((pi) => pi.image);
 
-  return {
+  const result = {
     ...restOfProduct,
     ingredient: Ingredient,
     unitMappings: unitMappings.map((mapping) => ({
@@ -280,9 +281,10 @@ const dbProductToAPI = async (
         },
       };
     }),
-  } as unknown as z.infer<
-    typeof productWithIngredientAndInventoryAndMappingsOut
-  >;
+  };
+
+  // Use Zod parse to validate the transformation
+  return productWithIngredientAndInventoryAndMappingsOut.parse(result);
 };
 
 export const getProductByID = async (
@@ -407,6 +409,7 @@ export const createProduct = async (
     }
 
     // Associate images if provided
+    let images: Array<typeof image.$inferSelect> = [];
     if (pendingImageIds && pendingImageIds.length > 0) {
       // Create ProductImage records in batch
       await tx.insert(productImage).values(
@@ -421,9 +424,21 @@ export const createProduct = async (
         .update(image)
         .set({ status: "UPLOADED" })
         .where(inArray(image.id, pendingImageIds));
+
+      // Fetch the associated images
+      images = await tx
+        .select()
+        .from(image)
+        .where(inArray(image.id, pendingImageIds));
     }
 
-    return newProduct as unknown as ProductTopLevelOut;
+    // Construct and validate the response object
+    const result = {
+      ...newProduct,
+      images,
+    };
+
+    return productTopLevelOut.parse(result);
   });
 };
 
@@ -557,7 +572,21 @@ export const updateProduct = async (
         );
     }
 
-    return updated as unknown as ProductTopLevelOut;
+    // Fetch all associated images
+    const productImages = await tx.query.productImage.findMany({
+      where: eq(productImage.productId, updated.id),
+      with: {
+        image: true,
+      },
+    });
+
+    // Construct and validate the response object
+    const result = {
+      ...updated,
+      images: productImages.map((pi) => pi.image),
+    };
+
+    return productTopLevelOut.parse(result);
   });
 };
 

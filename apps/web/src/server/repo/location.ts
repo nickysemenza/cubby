@@ -303,17 +303,13 @@ type LocationDeepDB = typeof location.$inferSelect & {
 const dbLocationToAPIWithChildren = (
   locationData: LocationDeepDB,
 ): LocationOutWithParentChildren => {
-  const { parent, children, InventoryEntries, images, ...restOfLocation } =
+  const { parent, children, InventoryEntries, ...restOfLocation } =
     locationData;
-
-  // Extract images from the join table records if they exist
-  const locationImages = images ? images.map((li) => li.image) : [];
 
   return {
     ...dbLocationToAPI(restOfLocation),
     parent: parent ? dbLocationToAPI(parent) : null,
     children: children.map(dbLocationToAPI),
-    images: locationImages,
     inventoryEntries: InventoryEntries.map((x) => {
       const { Product, ...rest } = x;
       return {
@@ -329,7 +325,9 @@ const dbLocationToAPIWithChildren = (
           ndb_number: Product.ndb_number,
           model: Product.model,
           expectedQuantity: Product.expectedQuantity,
-          images: [], // todo: fill in eventually
+          // Product images are not fetched in this query for performance reasons
+          // If product images are needed, use a separate query or join
+          images: [],
           createdAt: Product.createdAt,
           updatedAt: Product.updatedAt,
         },
@@ -338,15 +336,22 @@ const dbLocationToAPIWithChildren = (
   };
 };
 
-const dbLocationToAPI: (
-  locationData: typeof location.$inferSelect,
-) => LocationOut = (locationData) => {
+const dbLocationToAPI = (
+  locationData: typeof location.$inferSelect & {
+    images?: Array<{ image: typeof image.$inferSelect }>;
+  },
+): LocationOut => {
+  // Extract images from the join table if they exist, otherwise empty array
+  const locationImages = locationData.images
+    ? locationData.images.map((li) => li.image)
+    : [];
+
   return {
     id: unsafeLocationId(locationData.id),
     lastBulkInventory: locationData.lastBulkInventory,
     name: locationData.name,
     type: locationType.parse(locationData.type),
-    images: [], //todo: fix
+    images: locationImages,
     ...extractDbTimestampsFromDBRec(locationData),
   };
 };
@@ -370,7 +375,7 @@ const buildLocationWithChildren = (
 
   return {
     name: x.name,
-    id: x.id as unknown as LocationId,
+    id: unsafeLocationId(x.id),
     lastBulkInventory: x.lastBulkInventory,
     type: locationType.parse(x.type),
     images: locationImages,
@@ -450,8 +455,11 @@ export const buildLocationTree = async (
   const locationsMap = new Map<string, LocationWithParentChild>();
   const rootLocations: LocationWithParentChild[] = [];
 
+  // Cast raw SQL results to location type (safe because query selects from location table)
+  const locationRows = res.rows as unknown as (typeof location.$inferSelect)[];
+
   // First pass: create all location objects
-  for (const loc of res.rows as unknown as (typeof location.$inferSelect)[]) {
+  for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
       ...loc,
       // Convert string timestamps to Date objects
@@ -483,7 +491,7 @@ export const buildLocationTree = async (
   }
 
   // Second pass: build parent-child relationships and fetch images
-  for (const loc of res.rows as unknown as (typeof location.$inferSelect)[]) {
+  for (const loc of locationRows) {
     const current = locationsMap.get(loc.id)!;
 
     // Fetch images for this location

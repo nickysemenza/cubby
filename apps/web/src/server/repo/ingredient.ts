@@ -105,6 +105,20 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
   >;
 };
 
+/**
+ * Type assertion helper for ingredient query results.
+ * Safe to use when the query includes relations.ingredient.full,
+ * as the runtime shape will match IngredientDeepDB.
+ *
+ * Accepts a partial ingredient record with at least the id field,
+ * which provides some type safety at the call site.
+ */
+const asIngredientDeepDB = (
+  data: typeof ingredient.$inferSelect & Record<string, unknown>,
+): IngredientDeepDB => {
+  return data as IngredientDeepDB;
+};
+
 const dbIngredientToAPI = async (
   db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
@@ -155,7 +169,7 @@ export const getIngredientByID = async (
     throw new Error(`Ingredient ${id} not found`);
   }
 
-  return await dbIngredientToAPI(db, ingredientData as IngredientDeepDB);
+  return await dbIngredientToAPI(db, asIngredientDeepDB(ingredientData));
 };
 
 export const getIngredientByName = async (db: Database, name: string) => {
@@ -163,7 +177,7 @@ export const getIngredientByName = async (db: Database, name: string) => {
     where: buildIngredientWhere(true, name),
     ...relations.ingredient.full,
   });
-  return res ? await dbIngredientToAPI(db, res as IngredientDeepDB) : null;
+  return res ? await dbIngredientToAPI(db, asIngredientDeepDB(res)) : null;
 };
 
 export const createIngredient = async (
@@ -193,7 +207,7 @@ export const createIngredient = async (
     throw new Error("Failed to fetch created ingredient");
   }
 
-  return await dbIngredientToAPI(db, ingredientData as IngredientDeepDB);
+  return await dbIngredientToAPI(db, asIngredientDeepDB(ingredientData));
 };
 
 export const updateIngredient = async (
@@ -218,7 +232,7 @@ export const updateIngredient = async (
     throw new Error("Failed to fetch updated ingredient");
   }
 
-  return await dbIngredientToAPI(db, ingredientData as IngredientDeepDB);
+  return await dbIngredientToAPI(db, asIngredientDeepDB(ingredientData));
 };
 
 export const findOrCreateIngredient = async (
@@ -390,7 +404,7 @@ export const ingredientList = async (
     const totalCount = countResult?.count ?? 0;
 
     const ingredients = await Promise.all(
-      results.map((ing) => dbIngredientToAPI(db, ing as IngredientDeepDB)),
+      results.map((ing) => dbIngredientToAPI(db, asIngredientDeepDB(ing))),
     );
 
     return { data: ingredients, count: totalCount };
@@ -410,7 +424,7 @@ export const ingredientList = async (
     const totalCount = countResult?.count ?? 0;
 
     const ingredients = await Promise.all(
-      results.map((ing) => dbIngredientToAPI(db, ing as IngredientDeepDB)),
+      results.map((ing) => dbIngredientToAPI(db, asIngredientDeepDB(ing))),
     );
 
     return { data: ingredients, count: totalCount };

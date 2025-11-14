@@ -10,8 +10,8 @@ import { initClient } from "@ts-rest/core";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 
 export class USDAClient {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private client: any;
+  private client;
+
   constructor(private baseUrl: string) {
     this.client = initClient(usdaContract, {
       baseUrl: this.baseUrl,
