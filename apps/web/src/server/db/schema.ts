@@ -19,6 +19,7 @@ import {
   account,
   verification,
   invitation,
+  apikey,
 } from "./auth.schema";
 
 // JSON types for JSONB columns
@@ -34,6 +35,7 @@ export {
   account,
   verification,
   invitation,
+  apikey,
 };
 
 // Enums

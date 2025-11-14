@@ -90,12 +90,43 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       headers: opts.headers,
     });
 
-    // System requests are allowed via header key, organization scoping from Better-Auth
-    const isSystemRequest = (() => {
-      const key = opts.headers.get("x-system-key");
-      const expected = process.env.SYSTEM_API_KEY;
-      return Boolean(key && expected && key === expected);
-    })();
+    // Determine organization ID from header or session
+    let organizationId: OrganizationId | null = null;
+
+    // Check for organization ID or slug in header (for API key usage)
+    const orgIdOrSlug = opts.headers.get("x-organization-id");
+    if (orgIdOrSlug && betterSession?.user?.id) {
+      // Fetch user's organizations to validate membership
+      const userOrganizations = await betterAuth.api.listOrganizations({
+        headers: opts.headers,
+      });
+
+      if (!userOrganizations) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Unable to fetch organization membership",
+        });
+      }
+
+      // Try to find organization by ID or slug
+      const matchedOrg = userOrganizations.find(
+        (org) => org.id === orgIdOrSlug || org.slug === orgIdOrSlug,
+      );
+
+      if (!matchedOrg) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `You are not a member of organization '${orgIdOrSlug}'`,
+        });
+      }
+
+      organizationId = unsafeOrganizationId(matchedOrg.id);
+    } else {
+      // Fall back to active organization from session
+      organizationId = betterSession?.session?.activeOrganizationId
+        ? unsafeOrganizationId(betterSession.session.activeOrganizationId)
+        : null;
+    }
 
     return {
       ...crudServices,
@@ -103,10 +134,7 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
         userId: betterSession?.user?.id ?? null,
         sessionId: betterSession?.session?.id ?? null,
       },
-      organizationId: betterSession?.session?.activeOrganizationId
-        ? unsafeOrganizationId(betterSession.session.activeOrganizationId)
-        : null,
-      isSystemRequest,
+      organizationId,
       ...opts,
     };
   });
@@ -276,11 +304,12 @@ export const protectedProcedure = publicProcedure
   .use(requireOrganization);
 
 /**
- * System procedure for operations that can be authenticated with system API key
+ * System procedure for operations that can be authenticated with API key
  * Used for scripts and system-level operations
+ * API keys automatically create sessions via better-auth plugin
  */
 const isSystemOrAuth = t.middleware(({ next, ctx }) => {
-  if (!ctx.auth?.userId && !ctx.isSystemRequest) {
+  if (!ctx.auth?.userId) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({

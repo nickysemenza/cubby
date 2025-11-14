@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { organization } from "better-auth/plugins";
+import { organization, apiKey } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle } from "~/server/db";
@@ -20,6 +20,9 @@ export const auth = betterAuth({
       sendInvitationEmail: async (data) => {
         console.log("[better-auth] send invitation:", data.email);
       },
+    }),
+    apiKey({
+      enableSessionForAPIKeys: true,
     }),
     nextCookies(),
   ],

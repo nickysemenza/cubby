@@ -17,21 +17,21 @@ program
   .name("load-data")
   .description("Load configuration data into the database")
   .requiredOption(
-    "--project-id <id>",
-    "Project ID (UUID)",
-    process.env.PROJECT_ID,
+    "--organization-id <id>",
+    "Organization ID (UUID) or slug (e.g., 'acme-corp')",
+    process.env.ORGANIZATION_ID || process.env.PROJECT_ID,
   )
   .requiredOption(
-    "--system-key <key>",
-    "System API key for authentication",
-    process.env.SYSTEM_API_KEY,
+    "--api-key <key>",
+    "Better-Auth API key for authentication",
+    process.env.API_KEY,
   );
 
 program.parse();
 
 const options = program.opts<{
-  projectId: string;
-  systemKey: string;
+  organizationId: string;
+  apiKey: string;
 }>();
 
 const client = createTRPCClient<AppRouter>({
@@ -41,8 +41,8 @@ const client = createTRPCClient<AppRouter>({
       transformer: SuperJSON,
       headers: () => {
         return {
-          "x-system-key": options.systemKey,
-          "x-project-id": options.projectId,
+          "x-api-key": options.apiKey,
+          "x-organization-id": options.organizationId,
         };
       },
     }),

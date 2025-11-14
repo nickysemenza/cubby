@@ -9,6 +9,8 @@ export function AuthUIProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   return (
     <Provider
+      apiKey={true}
+      organization={true}
       authClient={authClient}
       navigate={router.push}
       replace={router.replace}
