@@ -24,6 +24,9 @@ import {
   buildOrderBy,
   insertAndReturn,
   updateAndReturn,
+  extractImagesFromJoinTable,
+  mapRelation,
+  addProductSourceMetadata,
 } from "~/server/repo/database-helpers";
 import {
   type ProductId,
@@ -248,27 +251,17 @@ const dbProductToAPI = async (
   const { Ingredient, unitMappings, InventoryEntry, images, ...restOfProduct } =
     productData;
 
-  // Extract images from the join table records
-  const productImages = images.map((pi) => pi.image);
-
   const result = {
     ...restOfProduct,
     ingredient: Ingredient,
-    unitMappings: unitMappings.map((mapping) => ({
-      ...mapping,
-      sourceMetadata: { type: "product" as const, productId: productData.id },
-    })),
-    images: productImages,
-    inventoryEntry: InventoryEntry.map((entry) => {
+    unitMappings: addProductSourceMetadata(productData.id, unitMappings),
+    images: extractImagesFromJoinTable(images),
+    inventoryEntry: mapRelation(InventoryEntry, (entry) => {
       const {
         type,
         images: locationImages,
         ...restOfLocation
       } = entry.location;
-      // Extract images from the join table
-      const extractedLocationImages = locationImages
-        ? locationImages.map((li) => li.image)
-        : [];
 
       return {
         ...entry,
@@ -277,7 +270,7 @@ const dbProductToAPI = async (
           ...restOfLocation,
           id: unsafeLocationId(restOfLocation.id),
           type: locationType.parse(type),
-          images: extractedLocationImages,
+          images: extractImagesFromJoinTable(locationImages),
         },
       };
     }),

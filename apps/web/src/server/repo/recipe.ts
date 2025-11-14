@@ -25,6 +25,7 @@ import {
   buildOrderBy,
   insertAndReturn,
   batchInsert,
+  extractImagesFromJoinTable,
 } from "~/server/repo/database-helpers";
 import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
 import {
@@ -113,15 +114,12 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipeData) => {
   const { sections, SourceData, SourceType, images, ...restOfRecipe } =
     recipeData;
 
-  // Extract images from the join table records
-  const recipeImages = images.map((ri) => ri.image);
-
   return {
     ...restOfRecipe,
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
-    images: recipeImages,
+    images: extractImagesFromJoinTable(images),
     sections: sections.map((section) => {
       const { ingredients, instructions, ...restOfSection } = section;
       return {

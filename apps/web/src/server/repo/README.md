@@ -154,6 +154,33 @@ const users = await batchInsert(tx, user, [
 ]);
 ```
 
+### Transformation Helpers
+
+DB-to-API transformations often require repetitive patterns. These helpers reduce duplication:
+
+```typescript
+import {
+  extractImagesFromJoinTable,
+  mapRelation,
+  addProductSourceMetadata,
+} from "~/server/repo/database-helpers";
+
+// Extract images from join table results
+// Before: const images = product.images?.map((pi) => pi.image) ?? [];
+// After:
+const images = extractImagesFromJoinTable(product.images);
+
+// Map relations with null safety
+// Before: const products = Product?.map((p) => transform(p)) ?? [];
+// After:
+const products = mapRelation(Product, (p) => transform(p));
+
+// Add product source metadata to unit mappings
+// Before: manual map with sourceMetadata injection
+// After:
+const unitMappings = addProductSourceMetadata(productId, mappings);
+```
+
 ### Relation Loaders
 
 Pre-configured relation loaders reduce verbosity:

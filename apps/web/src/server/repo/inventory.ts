@@ -7,6 +7,7 @@ import {
 } from "~/schemas/pagination";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
+import { amount } from "~/codec/codec";
 import {
   withTransaction,
   getDb,
@@ -16,6 +17,8 @@ import {
   relations,
   updateAndReturnDb,
   updateAndReturn,
+  extractImagesFromJoinTable,
+  addProductSourceMetadata,
 } from "~/server/repo/database-helpers";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import {
@@ -54,37 +57,26 @@ const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (inventoryentry) => {
   const { Product, location, ...restOfInventoryEntry } = inventoryentry;
-
   const { type, images: locationImages, ...restOfLocation } = location;
 
-  // Extract images from join tables
-  const productImages = Product.images
-    ? Product.images.map((pi) => pi.image)
-    : [];
-  const extractedLocationImages = locationImages
-    ? locationImages.map((li) => li.image)
-    : [];
+  // Validate amount from JSON column
+  const parsedAmount = amount.parse(restOfInventoryEntry.amount);
 
   return {
     ...restOfInventoryEntry,
     id: unsafeInventoryId(restOfInventoryEntry.id),
+    amount: parsedAmount,
     location: {
       ...restOfLocation,
       id: unsafeLocationId(restOfLocation.id),
       type: locationType.parse(type),
-      images: extractedLocationImages,
+      images: extractImagesFromJoinTable(locationImages),
     },
     product: {
       ...Product,
       id: unsafeProductId(Product.id),
-      unitMappings: Product.unitMappings.map((mapping) => ({
-        ...mapping,
-        sourceMetadata: {
-          type: "product" as const,
-          productId: unsafeProductId(Product.id),
-        },
-      })),
-      images: productImages,
+      unitMappings: addProductSourceMetadata(Product.id, Product.unitMappings),
+      images: extractImagesFromJoinTable(Product.images),
     },
   };
 };
@@ -142,7 +134,7 @@ export const getInventoryEntryByID = async (
     ...relations.inventory.full,
   });
 
-  return res ? dbInventoryEntryToAPI(res as InventoryEntryDeepDB) : null;
+  return res ? dbInventoryEntryToAPI(res) : null;
 };
 
 export const inventoryentryList = async (
@@ -222,7 +214,7 @@ export const inventoryentryList = async (
 
     const inventoryentrys = fullResults
       .filter((r) => r !== undefined)
-      .map((r) => dbInventoryEntryToAPI(r as InventoryEntryDeepDB));
+      .map((r) => dbInventoryEntryToAPI(r));
     return { data: inventoryentrys, count: countResult?.count ?? 0 };
   }
 
@@ -241,9 +233,7 @@ export const inventoryentryList = async (
       .where(whereClause),
   ]);
 
-  const inventoryentrys = results.map((r) =>
-    dbInventoryEntryToAPI(r as InventoryEntryDeepDB),
-  );
+  const inventoryentrys = results.map((r) => dbInventoryEntryToAPI(r));
   return { data: inventoryentrys, count: countResult?.count ?? 0 };
 };
 
@@ -295,7 +285,7 @@ export const updateInventoryEntry = async (
     throw new Error(`Inventory entry ${id} not found after update`);
   }
 
-  return dbInventoryEntryToAPI(result as InventoryEntryDeepDB);
+  return dbInventoryEntryToAPI(result);
 };
 
 interface CreateInventoryEntryData {
@@ -326,7 +316,7 @@ export const createInventoryEntry = async (
     throw new Error("Failed to fetch created inventory entry");
   }
 
-  return dbInventoryEntryToAPI(result as InventoryEntryDeepDB);
+  return dbInventoryEntryToAPI(result);
 };
 
 export const bulkProcessInventoryEntries = async (
@@ -379,7 +369,7 @@ export const bulkProcessInventoryEntries = async (
         });
 
         if (fullCreated) {
-          results.push(fullCreated as InventoryEntryDeepDB);
+          results.push(fullCreated);
         }
       } else {
         // Update existing inventory entry
@@ -411,7 +401,7 @@ export const bulkProcessInventoryEntries = async (
           });
 
           if (fullUpdated) {
-            results.push(fullUpdated as InventoryEntryDeepDB);
+            results.push(fullUpdated);
           }
         } else {
           // If no updates, just fetch the current item
@@ -421,7 +411,7 @@ export const bulkProcessInventoryEntries = async (
           });
 
           if (current) {
-            results.push(current as InventoryEntryDeepDB);
+            results.push(current);
           }
         }
       }

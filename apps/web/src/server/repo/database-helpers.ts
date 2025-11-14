@@ -11,6 +11,8 @@ import {
   type DrizzleClient,
   type DrizzleTransaction,
 } from "~/server/db";
+import { productUnitMappings } from "~/server/db/schema";
+import { unsafeProductId } from "~/schemas/identifiers";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (
@@ -333,4 +335,86 @@ export const updateAndReturnDb = async <T extends PgTable>(
     throw new Error("Failed to update record");
   }
   return updated;
+};
+
+/**
+ * Extract image records from join table results.
+ * Common pattern: join tables have { image: typeof image.$inferSelect }
+ *
+ * @param joinTableRecords - Array of join table records with image field
+ * @returns Array of image records, or empty array if input is null/undefined
+ *
+ * @example
+ * ```typescript
+ * // Before
+ * const productImages = images?.map((pi) => pi.image) ?? [];
+ *
+ * // After
+ * const productImages = extractImagesFromJoinTable(images);
+ * ```
+ */
+export const extractImagesFromJoinTable = <T extends { image: { id: string } }>(
+  joinTableRecords: T[] | undefined | null,
+): T["image"][] => {
+  return joinTableRecords?.map((record) => record.image) ?? [];
+};
+
+/**
+ * Map an array of DB records through a transformation function.
+ * Handles null/undefined and returns empty array by default.
+ *
+ * @param records - Array of database records to transform
+ * @param mapper - Transformation function for each record
+ * @returns Transformed array, or empty array if input is null/undefined
+ *
+ * @example
+ * ```typescript
+ * // Before
+ * const products = Product?.map((prod) => ({ ...transform })) ?? [];
+ *
+ * // After
+ * const products = mapRelation(Product, (prod) => ({ ...transform }));
+ * ```
+ */
+export const mapRelation = <TIn, TOut>(
+  records: TIn[] | undefined | null,
+  mapper: (record: TIn) => TOut,
+): TOut[] => {
+  return records?.map(mapper) ?? [];
+};
+
+/**
+ * Add sourceMetadata to unit mappings for a product.
+ * Injects { type: "product", productId } into each mapping's sourceMetadata field.
+ *
+ * @param productId - The product ID (raw string from database)
+ * @param unitMappings - Array of product unit mappings
+ * @returns Unit mappings with sourceMetadata injected
+ *
+ * @example
+ * ```typescript
+ * // Before
+ * unitMappings: prod.unitMappings.map((mapping) => ({
+ *   ...mapping,
+ *   sourceMetadata: {
+ *     type: "product" as const,
+ *     productId: unsafeProductId(prod.id),
+ *   },
+ * }))
+ *
+ * // After
+ * unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings)
+ * ```
+ */
+export const addProductSourceMetadata = (
+  productId: string,
+  unitMappings: Array<typeof productUnitMappings.$inferSelect>,
+) => {
+  return unitMappings.map((mapping) => ({
+    ...mapping,
+    sourceMetadata: {
+      type: "product" as const,
+      productId: unsafeProductId(productId),
+    },
+  }));
 };

@@ -14,6 +14,9 @@ import {
   relations,
   buildOrderBy,
   updateAndReturnDb,
+  extractImagesFromJoinTable,
+  mapRelation,
+  addProductSourceMetadata,
 } from "~/server/repo/database-helpers";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -105,20 +108,6 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
   >;
 };
 
-/**
- * Type assertion helper for ingredient query results.
- * Safe to use when the query includes relations.ingredient.full,
- * as the runtime shape will match IngredientDeepDB.
- *
- * Accepts a partial ingredient record with at least the id field,
- * which provides some type safety at the call site.
- */
-const asIngredientDeepDB = (
-  data: typeof ingredient.$inferSelect & Record<string, unknown>,
-): IngredientDeepDB => {
-  return data as IngredientDeepDB;
-};
-
 const dbIngredientToAPI = async (
   db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
@@ -126,27 +115,19 @@ const dbIngredientToAPI = async (
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
     ingredientData;
 
-  const productWithMappings = Product.map((prod) => {
-    return {
-      ...prod,
-      id: unsafeProductId(prod.id),
-      images: prod.images?.map((pi) => pi.image) ?? [],
-      unitMappings: prod.unitMappings.map((mapping) => ({
-        ...mapping,
-        sourceMetadata: {
-          type: "product" as const,
-          productId: unsafeProductId(prod.id),
-        },
-      })),
-    };
-  });
+  const productWithMappings = mapRelation(Product, (prod) => ({
+    ...prod,
+    id: unsafeProductId(prod.id),
+    images: extractImagesFromJoinTable(prod.images),
+    unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
+  }));
 
   return {
     ...restOfIngredient,
     id: unsafeIngredientId(restOfIngredient.id),
     recipe: Recipe ? dbRecipeToAPIShallow(Recipe) : null,
     product: productWithMappings,
-    appearsInRecipes: RecipeSectionIngredient.map((section) =>
+    appearsInRecipes: mapRelation(RecipeSectionIngredient, (section) =>
       dbRecipeToAPIShallow(section.recipeSection.recipe),
     ),
   };
@@ -169,7 +150,7 @@ export const getIngredientByID = async (
     throw new Error(`Ingredient ${id} not found`);
   }
 
-  return await dbIngredientToAPI(db, asIngredientDeepDB(ingredientData));
+  return await dbIngredientToAPI(db, ingredientData);
 };
 
 export const getIngredientByName = async (db: Database, name: string) => {
@@ -177,7 +158,7 @@ export const getIngredientByName = async (db: Database, name: string) => {
     where: buildIngredientWhere(true, name),
     ...relations.ingredient.full,
   });
-  return res ? await dbIngredientToAPI(db, asIngredientDeepDB(res)) : null;
+  return res ? await dbIngredientToAPI(db, res) : null;
 };
 
 export const createIngredient = async (
@@ -207,7 +188,7 @@ export const createIngredient = async (
     throw new Error("Failed to fetch created ingredient");
   }
 
-  return await dbIngredientToAPI(db, asIngredientDeepDB(ingredientData));
+  return await dbIngredientToAPI(db, ingredientData);
 };
 
 export const updateIngredient = async (
@@ -232,7 +213,7 @@ export const updateIngredient = async (
     throw new Error("Failed to fetch updated ingredient");
   }
 
-  return await dbIngredientToAPI(db, asIngredientDeepDB(ingredientData));
+  return await dbIngredientToAPI(db, ingredientData);
 };
 
 export const findOrCreateIngredient = async (
@@ -404,7 +385,7 @@ export const ingredientList = async (
     const totalCount = countResult?.count ?? 0;
 
     const ingredients = await Promise.all(
-      results.map((ing) => dbIngredientToAPI(db, asIngredientDeepDB(ing))),
+      results.map((ing) => dbIngredientToAPI(db, ing)),
     );
 
     return { data: ingredients, count: totalCount };
@@ -424,7 +405,7 @@ export const ingredientList = async (
     const totalCount = countResult?.count ?? 0;
 
     const ingredients = await Promise.all(
-      results.map((ing) => dbIngredientToAPI(db, asIngredientDeepDB(ing))),
+      results.map((ing) => dbIngredientToAPI(db, ing)),
     );
 
     return { data: ingredients, count: totalCount };

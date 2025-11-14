@@ -30,6 +30,8 @@ import {
   buildOrderBy,
   insertAndReturn,
   updateAndReturn,
+  extractImagesFromJoinTable,
+  mapRelation,
 } from "~/server/repo/database-helpers";
 import {
   location,
@@ -309,8 +311,8 @@ const dbLocationToAPIWithChildren = (
   return {
     ...dbLocationToAPI(restOfLocation),
     parent: parent ? dbLocationToAPI(parent) : null,
-    children: children.map(dbLocationToAPI),
-    inventoryEntries: InventoryEntries.map((x) => {
+    children: mapRelation(children, dbLocationToAPI),
+    inventoryEntries: mapRelation(InventoryEntries, (x) => {
       const { Product, ...rest } = x;
       return {
         id: unsafeInventoryId(rest.id),
@@ -341,17 +343,12 @@ const dbLocationToAPI = (
     images?: Array<{ image: typeof image.$inferSelect }>;
   },
 ): LocationOut => {
-  // Extract images from the join table if they exist, otherwise empty array
-  const locationImages = locationData.images
-    ? locationData.images.map((li) => li.image)
-    : [];
-
   return {
     id: unsafeLocationId(locationData.id),
     lastBulkInventory: locationData.lastBulkInventory,
     name: locationData.name,
     type: locationType.parse(locationData.type),
-    images: locationImages,
+    images: extractImagesFromJoinTable(locationData.images),
     ...extractDbTimestampsFromDBRec(locationData),
   };
 };
@@ -370,15 +367,12 @@ const buildLocationWithChildren = (
   excludeId?: string,
   includeParent = true,
 ): InfLocation => {
-  // Extract images if they exist
-  const locationImages = x.images ? x.images.map((li) => li.image) : [];
-
   return {
     name: x.name,
     id: unsafeLocationId(x.id),
     lastBulkInventory: x.lastBulkInventory,
     type: locationType.parse(x.type),
-    images: locationImages,
+    images: extractImagesFromJoinTable(x.images),
     children:
       x.children && x.children.length > 0
         ? x.children
