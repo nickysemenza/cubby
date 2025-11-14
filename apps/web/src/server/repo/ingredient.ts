@@ -30,6 +30,7 @@ import {
   productUnitMappings,
   recipe,
   recipeSection,
+  image,
 } from "~/server/db/schema";
 import {
   eq,
@@ -89,6 +90,9 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
   Product: Array<
     typeof product.$inferSelect & {
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+      images: Array<{
+        image: typeof image.$inferSelect;
+      }>;
     }
   >;
   Recipe: typeof recipe.$inferSelect | null;
@@ -112,6 +116,7 @@ const dbIngredientToAPI = async (
     return {
       ...prod,
       id: unsafeProductId(prod.id),
+      images: prod.images?.map((pi) => pi.image) ?? [],
       unitMappings: prod.unitMappings.map((mapping) => ({
         ...mapping,
         sourceMetadata: {

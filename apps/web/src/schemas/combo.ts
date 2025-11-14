@@ -62,7 +62,7 @@ export const locationOutWithParentChildrenAndInventoryOut = z
     children: z.array(locationOut),
     parent: locationOut.nullable(),
     inventoryEntries: z.array(inventoryWithProductOut),
-    images: z.array(imageOut).optional(),
+    images: z.array(imageOut).default([]),
   })
   .extend(locationOut.shape);
 

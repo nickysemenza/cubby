@@ -52,7 +52,7 @@ export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
 export const recipeOut = z
   .object({
     sections: z.array(recipeSectionOut),
-    images: z.array(imageOut).optional(),
+    images: z.array(imageOut).default([]),
   })
   .extend(recipeTopLevel.shape);
 

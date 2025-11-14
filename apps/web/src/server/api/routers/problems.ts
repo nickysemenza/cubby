@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-// Using legacy Project scoping for problems until repo migration completes
 import { findAllProblems } from "~/server/repo/problems";
 
 // Output schemas for each problem type

@@ -329,6 +329,7 @@ const dbLocationToAPIWithChildren = (
           ndb_number: Product.ndb_number,
           model: Product.model,
           expectedQuantity: Product.expectedQuantity,
+          images: [], // todo: fill in eventually
           createdAt: Product.createdAt,
           updatedAt: Product.updatedAt,
         },

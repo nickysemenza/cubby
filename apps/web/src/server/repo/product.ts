@@ -231,9 +231,13 @@ export const findProductsByFoodIdentifier = async (
       lookup.kind === "upc"
         ? eq(product.upc, lookup.gtin_upc)
         : eq(product.ndb_number, lookup.ndb_number),
+    ...relations.product.full,
   });
 
-  return res;
+  return res.map((p) => ({
+    ...p,
+    images: p.images?.map((pi) => pi.image) ?? [],
+  }));
 };
 
 const dbProductToAPI = async (

@@ -68,6 +68,11 @@ export const relations = {
         Product: {
           with: {
             unitMappings: true,
+            images: {
+              with: {
+                image: true,
+              },
+            },
           },
         },
         Recipe: true,

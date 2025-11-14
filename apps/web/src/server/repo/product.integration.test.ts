@@ -34,6 +34,7 @@ describe("product repository", () => {
       ndb_number: null,
       expectedQuantity: null,
       ingredientId: null,
+      unitMappings: [],
     };
 
     // Create the product
@@ -75,6 +76,7 @@ describe("product repository", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -107,6 +109,7 @@ describe("product repository", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -120,6 +123,7 @@ describe("product repository", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -162,6 +166,7 @@ describe("product repository", () => {
           ...product,
           ingredientId: null,
           expectedQuantity: null,
+          unitMappings: [],
         },
         organizationId,
       );
@@ -228,6 +233,7 @@ describe("product repository", () => {
       ndb_number: null,
       expectedQuantity: null,
       ingredientId: null,
+      unitMappings: [],
     };
 
     // Create the product
@@ -298,6 +304,7 @@ describe("product repository", () => {
       ndb_number: null,
       expectedQuantity: null,
       ingredientId: unsafeIngredientId(ingredient.id),
+      unitMappings: [],
     };
 
     // Create the product
@@ -345,6 +352,7 @@ describe("product repository", () => {
       ndb_number: null,
       expectedQuantity: null,
       ingredientId: unsafeIngredientId(ingredient1.id),
+      unitMappings: [],
     };
 
     // Create the product

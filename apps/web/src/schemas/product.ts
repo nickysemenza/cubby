@@ -24,7 +24,7 @@ const productBase = z.object({
 export const productInputPayload = productBase
   .extend({
     ingredientId: ingredientId.nullable(),
-    unitMappings: z.array(unitMappingInput).optional(),
+    unitMappings: z.array(unitMappingInput).default([]),
   })
   .merge(updateInputImages);
 
@@ -32,7 +32,7 @@ export const productInputPayload = productBase
 export const productTopLevelOut = z
   .object({
     id: productId,
-    images: z.array(imageOut).optional(),
+    images: z.array(imageOut).default([]),
   })
   .extend(productBase.shape)
   .extend(dbTimestampsOut.shape);

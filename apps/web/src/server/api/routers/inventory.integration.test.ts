@@ -48,6 +48,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -125,6 +126,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -139,6 +141,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -153,6 +156,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -263,6 +267,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -342,6 +347,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -356,6 +362,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -427,6 +434,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -441,6 +449,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -455,6 +464,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );
@@ -583,6 +593,7 @@ describe("inventory router", () => {
         ndb_number: null,
         expectedQuantity: null,
         ingredientId: null,
+        unitMappings: [],
       },
       organizationId,
     );

@@ -55,6 +55,7 @@ test("recipe utils", () => {
     id: "",
     name: "",
     meta: null,
+    images: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };

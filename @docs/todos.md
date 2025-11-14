@@ -47,17 +47,18 @@
 
 ## Schema Consistency Issues
 
-### Make Optional Fields Required with Empty Defaults
-Several fields are marked as `.optional()` but are always present (just sometimes empty). These should be made required with empty array defaults:
+### ~~Make Optional Fields Required with Empty Defaults~~ ✅ COMPLETED
+~~Several fields are marked as `.optional()` but are always present (just sometimes empty). These should be made required with empty array defaults:~~
 
-- [ ] Change `images: z.array(imageOut).optional()` to `images: z.array(imageOut)` in:
-  - productTopLevelOut (`/apps/web/src/schemas/product.ts`)
-  - recipeOut (`/apps/web/src/schemas/recipe.ts`)
-  - combo schemas (`/apps/web/src/schemas/combo.ts`)
+- [x] ~~Change `images: z.array(imageOut).optional()` to `images: z.array(imageOut).default([])` in:~~
+  - ~~productTopLevelOut (`/apps/web/src/schemas/product.ts`)~~
+  - ~~recipeOut (`/apps/web/src/schemas/recipe.ts`)~~
+  - ~~combo schemas (`/apps/web/src/schemas/combo.ts`)~~
 
-- [ ] Change `unitMappings: z.array(unitMappingInput).optional()` to have a default empty array in productInputPayload
+- [x] ~~Change `unitMappings: z.array(unitMappingInput).optional()` to `unitMappings: z.array(unitMappingInput).default([])` in productInputPayload~~
 
-- [ ] Update all code that checks for these fields' existence to assume they're always present
+- [ ] Update all code that checks for these fields' existence to assume they're always present (optional - can be done incrementally)
 
 ### Rationale
-This will make the API more predictable and eliminate unnecessary null checks in the frontend code.  
+~~This will make the API more predictable and eliminate unnecessary null checks in the frontend code.~~
+**Status**: Schema changes completed. Frontend code can now assume these fields always exist (may still have optional checks that can be cleaned up incrementally).  

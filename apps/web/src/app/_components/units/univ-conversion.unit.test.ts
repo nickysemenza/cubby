@@ -50,6 +50,7 @@ describe("getProductNutrients", () => {
       expectedQuantity: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      images: [],
       unitMappings: [],
     };
 
@@ -73,6 +74,7 @@ describe("getProductNutrients", () => {
       expectedQuantity: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      images: [],
       unitMappings: [],
     };
 
@@ -103,6 +105,7 @@ describe("getProductNutrients", () => {
       expectedQuantity: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      images: [],
       unitMappings: [],
     };
 
@@ -184,6 +187,7 @@ describe("calculateNutrients", () => {
       expectedQuantity: null,
       createdAt: new Date(),
       updatedAt: new Date(),
+      images: [],
       unitMappings: [],
     },
   ];
@@ -220,6 +224,7 @@ describe("calculateNutrients", () => {
         expectedQuantity: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        images: [],
         unitMappings: [],
       },
     ];
@@ -243,6 +248,7 @@ describe("calculateNutrients", () => {
         expectedQuantity: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        images: [],
         unitMappings: [],
       },
       {
@@ -266,6 +272,7 @@ describe("calculateNutrients", () => {
         expectedQuantity: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        images: [],
         unitMappings: [],
       },
     ];
@@ -324,6 +331,7 @@ describe("getGramAndNutrient", () => {
         expectedQuantity: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        images: [],
         unitMappings: [],
       },
     ];
@@ -378,6 +386,7 @@ describe("getGramAndNutrient", () => {
         id: unsafeProductId("123"),
         name: "Test Product",
         food: null, // No nutritionInfo
+        images: [],
         unitMappings: [],
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -752,6 +761,7 @@ describe("calculateTotals", () => {
             expectedQuantity: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            images: [],
             unitMappings: [
               {
                 id: "map1",
@@ -805,6 +815,7 @@ describe("calculateTotals", () => {
             expectedQuantity: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            images: [],
             unitMappings: [
               {
                 id: "map3",
@@ -960,6 +971,7 @@ describe("calculateTotals", () => {
             expectedQuantity: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            images: [],
             unitMappings: [
               {
                 id: "map1",
@@ -1051,6 +1063,7 @@ describe("calculateTotals", () => {
             expectedQuantity: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            images: [],
             unitMappings: [
               {
                 id: "map5",
