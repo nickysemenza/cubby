@@ -13,6 +13,7 @@ import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
 import { type ProductId, type OrganizationId } from "~/schemas/identifiers";
+import { batchEnrichWithFood } from "./usda-helpers";
 
 // Extended schema that includes food data
 export const productWithFoodOut =
@@ -62,30 +63,11 @@ export class ProductService {
       pagination,
     );
 
-    // Collect all lookup parameters
-    const lookupParams = products.map((product) =>
-      foodLookupParamFromProduct(product),
+    const productsWithFood = await batchEnrichWithFood(
+      products,
+      foodLookupParamFromProduct,
+      this.usdaClient,
     );
-    const validLookups = lookupParams.filter(
-      (param): param is NonNullable<typeof param> => param !== null,
-    );
-
-    // Batch fetch food data
-    const foodResults =
-      validLookups.length > 0
-        ? await this.usdaClient.findFoodsBatch(validLookups)
-        : [];
-
-    // Map foods back to products
-    let foodIndex = 0;
-    const productsWithFood = products.map((product) => {
-      const lookupParam = foodLookupParamFromProduct(product);
-      const food = lookupParam ? foodResults[foodIndex++] : null;
-      return {
-        ...product,
-        food,
-      };
-    });
 
     return { data: productsWithFood, count };
   }

@@ -18,6 +18,7 @@ import {
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
 import { type IngredientId, type OrganizationId } from "~/schemas/identifiers";
+import { batchEnrichWithFood } from "./usda-helpers";
 
 // Extended schemas that include food data
 import { productTopLevelOut } from "~/schemas/product";
@@ -47,32 +48,11 @@ export class IngredientService {
   async enrichProductsWithFood(
     products: ProductWithMappingsOut[],
   ): Promise<ProductWithMappingsAndFoodOut[]> {
-    if (products.length === 0) return [];
-
-    // Collect all lookup parameters
-    const lookupParams = products.map((product) =>
-      foodLookupParamFromProduct(product),
+    return batchEnrichWithFood(
+      products,
+      foodLookupParamFromProduct,
+      this.usdaClient,
     );
-    const validLookups = lookupParams.filter(
-      (param): param is NonNullable<typeof param> => param !== null,
-    );
-
-    // Batch fetch food data
-    const foodResults =
-      validLookups.length > 0
-        ? await this.usdaClient.findFoodsBatch(validLookups)
-        : [];
-
-    // Map foods back to products
-    let foodIndex = 0;
-    return products.map((product) => {
-      const lookupParam = foodLookupParamFromProduct(product);
-      const food = lookupParam ? foodResults[foodIndex++] : null;
-      return {
-        ...product,
-        food,
-      };
-    });
   }
 
   async getIngredientByID(
