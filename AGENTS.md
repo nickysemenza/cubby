@@ -30,11 +30,11 @@
 - Client: `apps/web/src/lib/auth-client.ts` (React hooks such as `useSession`, `useListOrganizations`, `useActiveOrganization`).
 - API route: `apps/web/src/app/api/auth/[...all]/route.ts` exports `{ GET, POST }` from `toNextJsHandler(auth)`.
 - Organization plugin is enabled and fully adopted. Custom Project/Member codepaths are deprecated and removed from the UI and routers. Use organizations for scoping.
- - UI: `@daveyplate/better-auth-ui` dynamic routes are used for all auth/account/org views
-   - Auth: `apps/web/src/app/auth/[path]/page.tsx` → `<AuthView path={path}/>`
-   - Account: `apps/web/src/app/account/[path]/page.tsx` → `<AccountView path={path}/>`
-   - Organization: `apps/web/src/app/organization/[path]/page.tsx` → `<OrganizationView path={path}/>`
-   - CSS: import `@daveyplate/better-auth-ui/css` in `apps/web/src/app/layout.tsx`
+- UI: `@daveyplate/better-auth-ui` dynamic routes are used for all auth/account/org views
+  - Auth: `apps/web/src/app/auth/[path]/page.tsx` → `<AuthView path={path}/>`
+  - Account: `apps/web/src/app/account/[path]/page.tsx` → `<AccountView path={path}/>`
+  - Organization: `apps/web/src/app/organization/[path]/page.tsx` → `<OrganizationView path={path}/>`
+  - CSS: import `@daveyplate/better-auth-ui/css` in `apps/web/src/app/layout.tsx`
 
 ## Form Patterns
 
@@ -92,11 +92,12 @@
 
 ## Unit Conversion & WASM Architecture
 
-**Critical**: The unit conversion system is powered by a separate WASM-compiled Rust crate from `../ingredient-parser/ingredient-parser/`.
+**Critical**: The unit conversion system is powered by a WASM-compiled Rust crate located in the monorepo at `/recipebridge/`.
 
 ### Key Architecture Points:
 
-- **Separate Repository**: `ingredient-parser` is a separate Git repository containing the Rust unit conversion engine
+- **Monorepo Package**: `recipebridge` is in the monorepo and provides the WASM integration wrapper
+- **External Dependency**: Depends on `ingredient-parser` (separate Git repository at https://github.com/nickysemenza/ingredient-parser) containing the Rust unit conversion engine
 - **WASM Integration**: The Rust code is compiled to WebAssembly and loaded via `useWasm()` hook
 - **Chained Conversions**: The WASM engine supports powerful chained conversions (e.g., "2 cups → $5.00 → 333g" through intermediate units)
 - **Graph-Based**: Uses graph algorithms to find conversion paths through multiple unit mappings
