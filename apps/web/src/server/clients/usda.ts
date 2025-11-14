@@ -8,13 +8,27 @@ import {
 import { usdaContract } from "@recipehub/usda-contract";
 import { initClient } from "@ts-rest/core";
 import { type SortParams, type PaginationParams } from "~/schemas/pagination";
+import { context, propagation } from "@opentelemetry/api";
 
 export class USDAClient {
   private client;
 
   constructor(private baseUrl: string) {
+    // Helper to get trace context headers for each request
+    const getTraceHeaders = () => {
+      const headers: Record<string, string> = {};
+      propagation.inject(context.active(), headers);
+      return headers;
+    };
+
     this.client = initClient(usdaContract, {
       baseUrl: this.baseUrl,
+      baseHeaders: {
+        "user-agent": "recipehub",
+        // Inject OpenTelemetry trace context for distributed tracing
+        traceparent: () => getTraceHeaders()["traceparent"] ?? "",
+        tracestate: () => getTraceHeaders()["tracestate"] ?? "",
+      },
     });
   }
 
@@ -32,6 +46,8 @@ export class USDAClient {
           const err = e instanceof Error ? e : new Error(String(e));
           span.setStatus({ code: 2, message: err.message });
           throw e;
+        } finally {
+          span.end();
         }
       },
     );

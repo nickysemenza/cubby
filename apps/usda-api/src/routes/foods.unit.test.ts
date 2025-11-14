@@ -46,7 +46,7 @@ describe('Foods API routes', () => {
     });
 
     it('should return 404 when food not found', async () => {
-      getCompleteFoodInfo.mockReturnValueOnce(null);
+      getCompleteFoodInfo.mockResolvedValueOnce(null);
 
       const res = await app.request('/api/foods/12345');
       expect(res.status).toBe(404);
@@ -77,7 +77,7 @@ describe('Foods API routes', () => {
         portionInfoRaw: [],
       };
 
-      getCompleteFoodInfo.mockReturnValueOnce(mockFood);
+      getCompleteFoodInfo.mockResolvedValueOnce(mockFood);
 
       const res = await app.request('/api/foods/12345');
       expect(res.status).toBe(200);
@@ -137,7 +137,7 @@ describe('Foods API routes', () => {
         portionInfoRaw: [],
       };
 
-      findFoodByUpc.mockReturnValueOnce(mockFood);
+      findFoodByUpc.mockResolvedValueOnce(mockFood);
 
       const res = await app.request('/api/foods/search', {
         method: 'POST',
@@ -182,7 +182,7 @@ describe('Foods API routes', () => {
         portionInfoRaw: [],
       };
 
-      findFoodByNdb.mockReturnValueOnce(mockFood);
+      findFoodByNdb.mockResolvedValueOnce(mockFood);
 
       const res = await app.request('/api/foods/search', {
         method: 'POST',
@@ -206,7 +206,7 @@ describe('Foods API routes', () => {
     });
 
     it('should return null when food not found', async () => {
-      findFoodByUpc.mockReturnValueOnce(null);
+      findFoodByUpc.mockResolvedValueOnce(null);
 
       const res = await app.request('/api/foods/search', {
         method: 'POST',

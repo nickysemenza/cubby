@@ -2,6 +2,7 @@ import BetterSqlite3 from 'better-sqlite3';
 import type { Database as BetterSqlite3Database } from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { count } from 'drizzle-orm';
+import { instrumentDrizzleClient } from '@kubiks/otel-drizzle';
 import fs from 'node:fs';
 import path from 'node:path';
 import * as schema from './schema';
@@ -95,25 +96,78 @@ export const closeAllConnections = () => {
 
 // Disable logger in production for better performance
 // const isDevelopment = process.env.NODE_ENV !== "production";
-export const db = drizzle(sqlite, { logger: false });
 
-export const countUsdaFood = (): number =>
-  db.select({ count: count() }).from(schema.usdaFood).get()?.count ?? 0;
+export const db = instrumentDrizzleClient(drizzle(sqlite, { logger: false }), {
+  dbSystem: 'sqlite',
+  dbName: 'usda',
+});
 
-export const countUsdaBrandedFood = (): number =>
-  db.select({ count: count() }).from(schema.usdaBrandedFood).get()?.count ?? 0;
+export const countUsdaFood = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaFood)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};
 
-export const countUsdaNutrient = (): number =>
-  db.select({ count: count() }).from(schema.usdaNutrient).get()?.count ?? 0;
+export const countUsdaBrandedFood = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaBrandedFood)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};
 
-export const countUsdaFoodNutrient = (): number =>
-  db.select({ count: count() }).from(schema.usdaFoodNutrient).get()?.count ?? 0;
+export const countUsdaNutrient = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaNutrient)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};
 
-export const countUsdaMeasureUnit = (): number =>
-  db.select({ count: count() }).from(schema.usdaMeasureUnit).get()?.count ?? 0;
+export const countUsdaFoodNutrient = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaFoodNutrient)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};
 
-export const countUsdaFoodPortion = (): number =>
-  db.select({ count: count() }).from(schema.usdaFoodPortion).get()?.count ?? 0;
+export const countUsdaMeasureUnit = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaMeasureUnit)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};
 
-export const countUsdaSrLegacyFood = (): number =>
-  db.select({ count: count() }).from(schema.usdaSrLegacyFood).get()?.count ?? 0;
+export const countUsdaFoodPortion = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaFoodPortion)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};
+
+export const countUsdaSrLegacyFood = async () => {
+  const rows = await db
+    .select({ count: count() })
+    .from(schema.usdaSrLegacyFood)
+    .limit(1)
+    .prepare()
+    .execute();
+  return rows[0]?.count ?? 0;
+};

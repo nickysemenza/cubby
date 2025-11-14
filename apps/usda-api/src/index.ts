@@ -1,6 +1,11 @@
+// Initialize OpenTelemetry BEFORE any other imports
+import { initializeTracing } from './instrumentation';
+initializeTracing();
+
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import type { Context, Next } from 'hono';
+import { httpInstrumentationMiddleware } from '@hono/otel';
 import { apiReference } from '@scalar/hono-api-reference';
 import {
   countUsdaFood,
@@ -15,10 +20,11 @@ import {
 import foodRoutes from './routes/foods';
 import { countsSchema, errorSchema } from '@recipehub/usda-contract';
 import { openApiDocument } from './openapi';
+import { trace, context } from '@opentelemetry/api';
 
 const app = new Hono();
 
-// Custom HTTP request logging middleware
+// Custom HTTP request logging middleware with trace ID
 const httpLogger = async (c: Context, next: Next) => {
   const start = Date.now();
   const timestamp = new Date().toISOString();
@@ -31,6 +37,13 @@ const httpLogger = async (c: Context, next: Next) => {
   const status = c.res.status;
   const userAgent = c.req.header('User-Agent') || 'Unknown';
 
+  // Get trace ID from current span or extracted context
+  const activeContext = context.active();
+  const activeSpan = trace.getSpan(activeContext);
+  const spanContext =
+    activeSpan?.spanContext() ?? trace.getSpanContext(activeContext);
+  const traceId = spanContext?.traceId ?? 'no-trace';
+
   // Color code status for better visibility
   let statusColor = '';
   if (status >= 200 && status < 300) {
@@ -42,23 +55,30 @@ const httpLogger = async (c: Context, next: Next) => {
   }
 
   console.log(
-    `${timestamp} [${method}] ${url} - Status: ${statusColor}${status}\x1b[0m - Duration: ${duration}ms - UA: ${userAgent}`
+    `${timestamp} [${method}] ${url} - Status: ${statusColor}${status}\x1b[0m - Duration: ${duration}ms - TraceID: ${traceId} - UA: ${userAgent}`
   );
 };
 
-// Apply logging middleware globally
+// Apply Hono OpenTelemetry middleware, then logging
+app.use(
+  '*',
+  httpInstrumentationMiddleware({
+    serviceName: 'usda-api',
+    captureRequestHeaders: ['user-agent'],
+  })
+);
 app.use('*', httpLogger);
 
-app.get('/', (c) => {
+app.get('/', async (c) => {
   try {
     const counts = countsSchema.parse({
-      usda_food: countUsdaFood(),
-      usda_branded_food: countUsdaBrandedFood(),
-      usda_nutrient: countUsdaNutrient(),
-      usda_food_nutrient: countUsdaFoodNutrient(),
-      usda_measure_unit: countUsdaMeasureUnit(),
-      usda_food_portion: countUsdaFoodPortion(),
-      usda_sr_legacy_food: countUsdaSrLegacyFood(),
+      usda_food: await countUsdaFood(),
+      usda_branded_food: await countUsdaBrandedFood(),
+      usda_nutrient: await countUsdaNutrient(),
+      usda_food_nutrient: await countUsdaFoodNutrient(),
+      usda_measure_unit: await countUsdaMeasureUnit(),
+      usda_food_portion: await countUsdaFoodPortion(),
+      usda_sr_legacy_food: await countUsdaSrLegacyFood(),
     });
     return c.json(counts, 200);
   } catch (e) {

@@ -161,7 +161,7 @@ const preparedStatements = {
 };
 
 // 6. Find Food by UPC - returns complete food info
-export const findFoodByUpc = (gtinUpc: string) => {
+export const findFoodByUpc = async (gtinUpc: string) => {
   const result = db
     .select({
       fdc_id: schema.usdaBrandedFood.fdc_id,
@@ -177,7 +177,7 @@ export const findFoodByUpc = (gtinUpc: string) => {
 };
 
 // 7. Find Food by NDB Number - returns complete food info
-export const findFoodByNdb = (ndbNumber: number) => {
+export const findFoodByNdb = async (ndbNumber: number) => {
   const result = db
     .select({
       fdc_id: schema.usdaSrLegacyFood.fdc_id,
@@ -193,7 +193,7 @@ export const findFoodByNdb = (ndbNumber: number) => {
 };
 
 // 8. List Foods with Pagination and Filtering
-export const listFoods = ({
+export const listFoods = async ({
   nameFilter,
   dataTypeFilter,
   orderBy = 'description',
@@ -219,25 +219,29 @@ export const listFoods = ({
           ? preparedStatements.ftsWithDataTypeDesc
           : preparedStatements.ftsWithDataType;
 
-      const rows = stmt.all({
+      const rows = await stmt.execute({
         query: ftsQuery,
         dataType: dataTypeFilter,
         limit: pageSize,
         offset: pageIndex * pageSize,
       });
 
-      const totalCountResult = preparedStatements.ftsCountWithDataType.get({
-        query: ftsQuery,
-        dataType: dataTypeFilter,
-      });
+      const totalCountRows =
+        await preparedStatements.ftsCountWithDataType.execute({
+          query: ftsQuery,
+          dataType: dataTypeFilter,
+        });
+      const totalCount = totalCountRows[0]?.count ?? 0;
 
-      // Get complete food data for each item
-      const completeData = rows
-        .filter((row) => row.fdc_id !== null)
-        .map((row) => getCompleteFoodInfo(row.fdc_id!))
-        .filter((item): item is NonNullable<typeof item> => item !== null);
+      const completeData = (
+        await Promise.all(
+          rows
+            .filter((row) => row.fdc_id !== null)
+            .map((row) => getCompleteFoodInfo(row.fdc_id!))
+        )
+      ).filter((item): item is NonNullable<typeof item> => item !== null);
 
-      return { data: completeData, count: totalCountResult?.count ?? 0 };
+      return { data: completeData, count: totalCount };
     } else {
       // Without data_type filter: can use FTS table directly (faster)
       const stmt =
@@ -245,23 +249,26 @@ export const listFoods = ({
           ? preparedStatements.ftsNoFilterDesc
           : preparedStatements.ftsNoFilter;
 
-      const rows = stmt.all({
+      const rows = await stmt.execute({
         query: ftsQuery,
         limit: pageSize,
         offset: pageIndex * pageSize,
       });
 
-      const totalCountResult = preparedStatements.ftsCount.get({
+      const totalCountRows = await preparedStatements.ftsCount.execute({
         query: ftsQuery,
       });
+      const totalCount = totalCountRows[0]?.count ?? 0;
 
-      // Get complete food data for each item
-      const completeData = rows
-        .filter((row) => row.fdc_id !== null)
-        .map((row) => getCompleteFoodInfo(row.fdc_id!))
-        .filter((item): item is NonNullable<typeof item> => item !== null);
+      const completeData = (
+        await Promise.all(
+          rows
+            .filter((row) => row.fdc_id !== null)
+            .map((row) => getCompleteFoodInfo(row.fdc_id!))
+        )
+      ).filter((item): item is NonNullable<typeof item> => item !== null);
 
-      return { data: completeData, count: totalCountResult?.count ?? 0 };
+      return { data: completeData, count: totalCount };
     }
   }
 
@@ -294,39 +301,46 @@ export const listFoods = ({
     direction === 'desc' ? desc(orderColumn) : asc(orderColumn)
   ) as typeof baseQuery;
 
-  const data = finalQuery
+  const data = await finalQuery
     .limit(pageSize)
     .offset(pageIndex * pageSize)
-    .all();
+    .prepare()
+    .execute();
 
-  // Get complete food data for each item
-  const completeData = data
-    .map((row) => getCompleteFoodInfo(row.fdc_id))
-    .filter((item): item is NonNullable<typeof item> => item !== null);
+  const completeData = (
+    await Promise.all(data.map((row) => getCompleteFoodInfo(row.fdc_id)))
+  ).filter((item): item is NonNullable<typeof item> => item !== null);
 
   const baseCountQuery = db.select({ count: count() }).from(schema.usdaFood);
   let countQuery = baseCountQuery;
   if (conditions.length > 0) {
     countQuery = countQuery.where(and(...conditions)) as typeof baseCountQuery;
   }
-  const totalCount = countQuery.get()?.count ?? 0;
+  const countRows = await countQuery.prepare().execute();
+  const totalCount = countRows[0]?.count ?? 0;
 
   return { data: completeData, count: totalCount };
 };
 
 // Optimized composite query for complete food info - uses Drizzle prepared statements
-export const getCompleteFoodInfo = (fdcId: number) => {
-  // Get basic food info first
-  const foodInfo = preparedStatements.getFoodByIdStmt.get({ fdcId });
+export const getCompleteFoodInfo = async (fdcId: number) => {
+  const foodRows = await preparedStatements.getFoodByIdStmt.execute({ fdcId });
+  const foodInfo = foodRows[0];
   if (!foodInfo) return null;
 
-  // Execute all other queries using prepared statements (much faster than individual function calls)
-  const brandedInfo = preparedStatements.getBrandedFoodByIdStmt.get({ fdcId });
-  const legacyInfo = preparedStatements.getLegacyFoodByIdStmt.get({ fdcId });
-  const portions = preparedStatements.getFoodPortionsStmt.all({ fdcId });
-  const nutrients = preparedStatements.getNutrientsStmt.all({ fdcId });
+  const [brandedInfo] = await preparedStatements.getBrandedFoodByIdStmt.execute(
+    { fdcId }
+  );
+  const [legacyInfo] = await preparedStatements.getLegacyFoodByIdStmt.execute({
+    fdcId,
+  });
+  const portions = await preparedStatements.getFoodPortionsStmt.execute({
+    fdcId,
+  });
+  const nutrients = await preparedStatements.getNutrientsStmt.execute({
+    fdcId,
+  });
 
-  // Process nutrients for per100 calculations
   const proteinNutrient = nutrients.find((n) => n.nutrient_nbr === '203');
   const energyNutrient = nutrients.find((n) => n.nutrient_nbr === '208');
 
