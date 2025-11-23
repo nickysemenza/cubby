@@ -26,6 +26,7 @@ import {
   insertAndReturn,
   batchInsert,
   extractImagesFromJoinTable,
+  associatePendingImages,
 } from "~/server/repo/database-helpers";
 import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
 import {
@@ -249,21 +250,13 @@ export const createRecipe = async (
 
     // Associate images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
-      // Create RecipeImage records in batch
-      await batchInsert(
+      await associatePendingImages(
         tx,
         recipeImage,
-        pendingImageIds.map((imageId) => ({
-          recipeId: createdRecipe.id,
-          imageId,
-        })),
+        "recipeId",
+        createdRecipe.id,
+        pendingImageIds,
       );
-
-      // Update all image statuses to UPLOADED in batch
-      await tx
-        .update(image)
-        .set({ status: "UPLOADED" })
-        .where(inArray(image.id, pendingImageIds));
     }
 
     const fullRecipe = await getRecipeByID(

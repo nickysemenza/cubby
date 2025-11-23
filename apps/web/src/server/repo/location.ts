@@ -32,6 +32,7 @@ import {
   updateAndReturn,
   extractImagesFromJoinTable,
   mapRelation,
+  associatePendingImages,
 } from "~/server/repo/database-helpers";
 import {
   location,
@@ -65,26 +66,13 @@ export const createLocation = async (
 
   // Associate images if provided
   if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-    // Create LocationImage records in batch
-    await getDb(db)
-      .insert(locationImage)
-      .values(
-        data.pendingImageIds.map((imageId) => ({
-          locationId: newLocation.id,
-          imageId,
-        })),
-      );
-
-    // Update all image statuses to UPLOADED in batch
-    await getDb(db)
-      .update(image)
-      .set({ status: "UPLOADED" })
-      .where(
-        sql`${image.id} = ANY(ARRAY[${sql.join(
-          data.pendingImageIds.map((id) => sql`${id}`),
-          sql`, `,
-        )}])`,
-      );
+    await associatePendingImages(
+      getDb(db),
+      locationImage,
+      "locationId",
+      newLocation.id,
+      data.pendingImageIds,
+    );
   }
 
   return getLocationById(db, unsafeLocationId(newLocation.id), organizationId);

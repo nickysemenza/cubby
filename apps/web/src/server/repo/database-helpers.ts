@@ -1,4 +1,4 @@
-import { ilike, type SQL, asc, desc } from "drizzle-orm";
+import { ilike, type SQL, asc, desc, inArray } from "drizzle-orm";
 import {
   type AnyColumn,
   type InferInsertModel,
@@ -11,7 +11,7 @@ import {
   type DrizzleClient,
   type DrizzleTransaction,
 } from "~/server/db";
-import { productUnitMappings } from "~/server/db/schema";
+import { productUnitMappings, image } from "~/server/db/schema";
 import { unsafeProductId } from "~/schemas/identifiers";
 
 // Helper function to format search terms for PostgreSQL full-text search
@@ -418,3 +418,54 @@ export const addProductSourceMetadata = (
     },
   }));
 };
+
+/**
+ * Associates pending images with an entity by creating join table records
+ * and updating image statuses to UPLOADED.
+ *
+ * This helper consolidates the pattern of:
+ * 1. Creating records in a join table (productImage, recipeImage, locationImage)
+ * 2. Updating image statuses from PENDING to UPLOADED
+ *
+ * @param dbOrTx - Database client or transaction
+ * @param joinTable - The join table to insert records into
+ * @param parentIdField - Name of the parent ID field (e.g., "productId", "recipeId")
+ * @param parentId - ID of the parent entity
+ * @param pendingImageIds - Array of image IDs to associate
+ *
+ * @example
+ * ```typescript
+ * await associatePendingImages(
+ *   tx,
+ *   productImage,
+ *   "productId",
+ *   newProduct.id,
+ *   pendingImageIds
+ * );
+ * ```
+ */
+export async function associatePendingImages<T extends PgTable>(
+  dbOrTx: DrizzleClient | DrizzleTransaction,
+  joinTable: T,
+  parentIdField: string,
+  parentId: string,
+  pendingImageIds: string[],
+): Promise<void> {
+  if (!pendingImageIds || pendingImageIds.length === 0) {
+    return;
+  }
+
+  // Create join table records in batch
+  await dbOrTx.insert(joinTable).values(
+    pendingImageIds.map((imageId) => ({
+      [parentIdField]: parentId,
+      imageId,
+    })) as InferInsertModel<T>[],
+  );
+
+  // Update all image statuses to UPLOADED in batch
+  await dbOrTx
+    .update(image)
+    .set({ status: "UPLOADED" })
+    .where(inArray(image.id, pendingImageIds));
+}

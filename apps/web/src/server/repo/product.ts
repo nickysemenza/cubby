@@ -27,6 +27,7 @@ import {
   extractImagesFromJoinTable,
   mapRelation,
   addProductSourceMetadata,
+  associatePendingImages,
 } from "~/server/repo/database-helpers";
 import {
   type ProductId,
@@ -404,19 +405,13 @@ export const createProduct = async (
     // Associate images if provided
     let images: Array<typeof image.$inferSelect> = [];
     if (pendingImageIds && pendingImageIds.length > 0) {
-      // Create ProductImage records in batch
-      await tx.insert(productImage).values(
-        pendingImageIds.map((imageId) => ({
-          productId: newProduct.id,
-          imageId,
-        })),
+      await associatePendingImages(
+        tx,
+        productImage,
+        "productId",
+        newProduct.id,
+        pendingImageIds,
       );
-
-      // Update all image statuses to UPLOADED in batch
-      await tx
-        .update(image)
-        .set({ status: "UPLOADED" })
-        .where(inArray(image.id, pendingImageIds));
 
       // Fetch the associated images
       images = await tx
@@ -538,19 +533,13 @@ export const updateProduct = async (
 
     // Add new images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
-      // Create ProductImage records in batch
-      await tx.insert(productImage).values(
-        pendingImageIds.map((imageId) => ({
-          productId: updated.id,
-          imageId,
-        })),
+      await associatePendingImages(
+        tx,
+        productImage,
+        "productId",
+        updated.id,
+        pendingImageIds,
       );
-
-      // Update all image statuses to UPLOADED in batch
-      await tx
-        .update(image)
-        .set({ status: "UPLOADED" })
-        .where(inArray(image.id, pendingImageIds));
     }
 
     // Remove images if requested
