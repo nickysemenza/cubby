@@ -469,3 +469,42 @@ export async function associatePendingImages<T extends PgTable>(
     .set({ status: "UPLOADED" })
     .where(inArray(image.id, pendingImageIds));
 }
+
+/**
+ * Executes a data query and count query in parallel and wraps results in the standard
+ * paginated list response format.
+ *
+ * This helper consolidates the common pattern of running two queries in parallel:
+ * 1. The main data query (with pagination, filtering, sorting)
+ * 2. The count query (total matching records without pagination)
+ *
+ * Note: If you need to transform results before returning, pass the transformation
+ * as part of the data query promise chain, or manually destructure and transform.
+ *
+ * @param dataQuery - Promise that resolves to the array of data records
+ * @param countQuery - Promise that resolves to array with count result
+ * @returns Object with data array and total count
+ *
+ * @example
+ * ```typescript
+ * // Simple case - no transformation needed
+ * return await executeListQueryWithCount(
+ *   getDb(db).query.recipe.findMany({ where, orderBy, limit, offset }),
+ *   getDb(db).select({ count: count() }).from(recipe).where(where)
+ * );
+ *
+ * // With transformation - transform in the promise chain
+ * const { data, count } = await executeListQueryWithCount(
+ *   getDb(db).query.product.findMany({ where, orderBy, limit, offset })
+ *     .then(results => Promise.all(results.map(r => transformToAPI(r)))),
+ *   getDb(db).select({ count: count() }).from(product).where(where)
+ * );
+ * ```
+ */
+export async function executeListQueryWithCount<T>(
+  dataQuery: Promise<T[]>,
+  countQuery: Promise<{ count: number }[]>,
+): Promise<{ data: T[]; count: number }> {
+  const [data, [countResult]] = await Promise.all([dataQuery, countQuery]);
+  return { data, count: countResult?.count ?? 0 };
+}

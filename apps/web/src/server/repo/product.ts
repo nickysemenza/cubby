@@ -28,6 +28,7 @@ import {
   mapRelation,
   addProductSourceMetadata,
   associatePendingImages,
+  executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
 import {
   type ProductId,
@@ -347,8 +348,8 @@ export const productList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute queries
-  const [results, [totalCountResult]] = await Promise.all([
+  // Execute queries in parallel and transform results
+  const { data: results, count: totalCount } = await executeListQueryWithCount(
     getDb(db).query.product.findMany({
       where: whereClause,
       orderBy: orderByArray,
@@ -357,13 +358,13 @@ export const productList = async (
       ...relations.product.full,
     }),
     getDb(db).select({ count: count() }).from(product).where(whereClause),
-  ]);
+  );
 
   const products = await Promise.all(
     results.map(async (prod: ProductDeepDB) => await dbProductToAPI(db, prod)),
   );
 
-  return { data: products, count: totalCountResult?.count ?? 0 };
+  return { data: products, count: totalCount };
 };
 
 // Create a new product

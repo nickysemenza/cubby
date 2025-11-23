@@ -17,6 +17,7 @@ import {
   extractImagesFromJoinTable,
   mapRelation,
   addProductSourceMetadata,
+  executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -362,27 +363,26 @@ export const ingredientList = async (
       .groupBy(ingredient.id)
       .as("filtered");
 
-    const [results, [countResult]] = await Promise.all([
-      getDb(db).query.ingredient.findMany({
-        where: inArray(
-          ingredient.id,
-          getDb(db)
-            .select({ id: ingredientsWithNoProducts.id })
-            .from(ingredientsWithNoProducts),
-        ),
-        ...relations.ingredient.full,
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-      }),
-      getDb(db)
-        .select({ count: count() })
-        .from(ingredient)
-        .leftJoin(product, eq(product.ingredientId, ingredient.id))
-        .where(and(whereClause, isNull(product.id))),
-    ]);
-
-    const totalCount = countResult?.count ?? 0;
+    const { data: results, count: totalCount } =
+      await executeListQueryWithCount(
+        getDb(db).query.ingredient.findMany({
+          where: inArray(
+            ingredient.id,
+            getDb(db)
+              .select({ id: ingredientsWithNoProducts.id })
+              .from(ingredientsWithNoProducts),
+          ),
+          ...relations.ingredient.full,
+          orderBy: orderByClause,
+          limit: take,
+          offset: skip,
+        }),
+        getDb(db)
+          .select({ count: count() })
+          .from(ingredient)
+          .leftJoin(product, eq(product.ingredientId, ingredient.id))
+          .where(and(whereClause, isNull(product.id))),
+      );
 
     const ingredients = await Promise.all(
       results.map((ing) => dbIngredientToAPI(db, ing)),
@@ -391,18 +391,20 @@ export const ingredientList = async (
     return { data: ingredients, count: totalCount };
   } else {
     // Normal query without missing products filter
-    const [results, [countResult]] = await Promise.all([
-      getDb(db).query.ingredient.findMany({
-        where: whereClause,
-        ...relations.ingredient.full,
-        orderBy: orderByClause,
-        limit: take,
-        offset: skip,
-      }),
-      getDb(db).select({ count: count() }).from(ingredient).where(whereClause),
-    ]);
-
-    const totalCount = countResult?.count ?? 0;
+    const { data: results, count: totalCount } =
+      await executeListQueryWithCount(
+        getDb(db).query.ingredient.findMany({
+          where: whereClause,
+          ...relations.ingredient.full,
+          orderBy: orderByClause,
+          limit: take,
+          offset: skip,
+        }),
+        getDb(db)
+          .select({ count: count() })
+          .from(ingredient)
+          .where(whereClause),
+      );
 
     const ingredients = await Promise.all(
       results.map((ing) => dbIngredientToAPI(db, ing)),

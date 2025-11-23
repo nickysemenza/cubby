@@ -27,6 +27,7 @@ import {
   batchInsert,
   extractImagesFromJoinTable,
   associatePendingImages,
+  executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
 import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
 import {
@@ -169,8 +170,8 @@ export const recipeList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute both queries
-  const [results, countResult] = await Promise.all([
+  // Execute both queries and transform results
+  const { data: results, count: totalCount } = await executeListQueryWithCount(
     dbClient.query.recipe.findMany({
       where: whereClause,
       orderBy: orderByClause,
@@ -182,9 +183,8 @@ export const recipeList = async (
       .select({ count: sql<number>`count(*)::int` })
       .from(recipe)
       .where(whereClause),
-  ]);
+  );
 
-  const totalCount = countResult[0]?.count ?? 0;
   const items = results.map(dbRecipeToAPI);
   return { data: items, count: totalCount };
 };
