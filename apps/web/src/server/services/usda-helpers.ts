@@ -56,3 +56,72 @@ export async function batchEnrichWithFood<T>(
     };
   });
 }
+
+/**
+ * Batch enriches nested items across a collection of parent items.
+ *
+ * This helper consolidates the pattern of:
+ * 1. Flattening nested items from all parents
+ * 2. Batch enriching all nested items at once
+ * 3. Mapping enriched items back to their respective parents
+ *
+ * Useful for enriching nested collections (e.g., products within ingredients)
+ * while maintaining batch efficiency and proper parent-child relationships.
+ *
+ * @param parents - Array of parent items containing nested items
+ * @param getNestedItems - Function to extract nested items array from a parent
+ * @param enrichFn - Async function to batch enrich all nested items
+ * @param mapBack - Function to create new parent with enriched nested items
+ * @returns Array of parents with their nested items enriched
+ *
+ * @example
+ * ```typescript
+ * // Enrich products within ingredients
+ * const enrichedIngredients = await batchEnrichNestedItems(
+ *   ingredients,
+ *   (ing) => ing.product,
+ *   (products) => enrichProductsWithFood(products),
+ *   (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts })
+ * );
+ * ```
+ */
+export async function batchEnrichNestedItems<
+  TParent,
+  TNested,
+  TEnriched,
+  TResult = TParent,
+>(
+  parents: TParent[],
+  getNestedItems: (parent: TParent) => TNested[],
+  enrichFn: (items: TNested[]) => Promise<TEnriched[]>,
+  mapBack: (parent: TParent, enriched: TEnriched[]) => TResult,
+): Promise<TResult[]> {
+  if (parents.length === 0) {
+    return [];
+  }
+
+  // Flatten all nested items and track counts per parent
+  const allNested: TNested[] = [];
+  const countsPerParent: number[] = [];
+
+  parents.forEach((parent) => {
+    const nested = getNestedItems(parent);
+    countsPerParent.push(nested.length);
+    allNested.push(...nested);
+  });
+
+  // Batch enrich all nested items at once
+  const allEnriched = await enrichFn(allNested);
+
+  // Map enriched items back to their parents
+  let currentIndex = 0;
+  return parents.map((parent, parentIndex) => {
+    const count = countsPerParent[parentIndex] || 0;
+    const enrichedForParent = allEnriched.slice(
+      currentIndex,
+      currentIndex + count,
+    );
+    currentIndex += count;
+    return mapBack(parent, enrichedForParent);
+  });
+}

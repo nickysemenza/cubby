@@ -18,7 +18,7 @@ import {
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
 import { type IngredientId, type OrganizationId } from "~/schemas/identifiers";
-import { batchEnrichWithFood } from "./usda-helpers";
+import { batchEnrichWithFood, batchEnrichNestedItems } from "./usda-helpers";
 
 // Extended schemas that include food data
 import { productTopLevelOut } from "~/schemas/product";
@@ -102,34 +102,12 @@ export class IngredientService {
       missingProductsOnly,
     );
 
-    // Collect all products from all ingredients for batch processing
-    const allProducts: ProductWithMappingsOut[] = [];
-    const ingredientProductCounts: number[] = [];
-
-    ingredients.forEach((ingredient) => {
-      ingredientProductCounts.push(ingredient.product.length);
-      allProducts.push(...ingredient.product);
-    });
-
-    // Batch enrich all products at once
-    const allEnrichedProducts = await this.enrichProductsWithFood(allProducts);
-
-    // Map enriched products back to their ingredients
-    let productIndex = 0;
-    const ingredientsWithFood = ingredients.map(
-      (ingredient, ingredientIndex) => {
-        const productCount = ingredientProductCounts[ingredientIndex] || 0;
-        const enrichedProducts = allEnrichedProducts.slice(
-          productIndex,
-          productIndex + productCount,
-        );
-        productIndex += productCount;
-
-        return {
-          ...ingredient,
-          product: enrichedProducts,
-        };
-      },
+    // Batch enrich products within all ingredients
+    const ingredientsWithFood = await batchEnrichNestedItems(
+      ingredients,
+      (ing) => ing.product,
+      (products) => this.enrichProductsWithFood(products),
+      (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
     );
 
     return { data: ingredientsWithFood, count };
