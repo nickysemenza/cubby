@@ -166,3 +166,4 @@
   - `usda_food_portion.amount`: Rows with null/empty values are skipped.
   - `usda_food_portion.gram_weight`: Rows with null/empty values are skipped.
     This is enforced in both the Drizzle schema and migrations; importer substitutes for description and skips other invalid rows.
+- always run `pnpm run lint` to ensure there are no type errors
