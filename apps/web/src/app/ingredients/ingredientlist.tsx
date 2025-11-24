@@ -12,7 +12,6 @@ import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { useWasm } from "~/hooks/useWasm";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
-import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
@@ -21,38 +20,26 @@ import {
 } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
 import { entities } from "~/entities/entities";
-
-import { useQuery } from "@tanstack/react-query";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
+import { useTableList } from "../_components/hooks/useTableList";
 
 export function IngredientList() {
   const api = useTRPC();
   const w = useWasm();
-  // Set up table state
-  const tableState = useTableState({ initialSort: "createdAt" });
 
   // Set up global filter for missing products
   const [globalFilter, setGlobalFilter] = useState({
     missingProductsOnly: false,
   });
 
-  // Query data with params from table state
-  const {
-    data: ingredientsResp,
-    isLoading,
-    error,
-  } = useQuery(
-    api.ingredient.list.queryOptions({
-      sort: tableState.getSortParams(),
-      pagination: tableState.pagination,
-      filters: {
-        nameFilter: tableState.getColumnFilter("name"),
-        missingProductsOnly: globalFilter.missingProductsOnly,
-      },
+  const { data, totalCount, isLoading, error, tableState } = useTableList({
+    queryOptions: api.ingredient.list.queryOptions,
+    buildFilters: (tableState) => ({
+      nameFilter: tableState.getColumnFilter("name"),
+      missingProductsOnly: globalFilter.missingProductsOnly,
     }),
-  );
-
-  const data = ingredientsResp?.items || [];
+    tableStateOptions: { initialSort: "createdAt" },
+  });
   type IngredientData = Flatten<typeof data>;
   const columnHelper = createColumnHelper<IngredientData>();
   // Set up columns using helpers where possible
@@ -63,7 +50,7 @@ export function IngredientList() {
     columnHelper.accessor("aliases", {
       cell: (info) => (
         <div className="space-y-0.5 text-xs">
-          {info.getValue().map((alias) => (
+          {info.getValue().map((alias: string) => (
             <div key={alias} className="truncate">
               {alias}
             </div>
@@ -77,12 +64,12 @@ export function IngredientList() {
       meta: { className: "w-48 max-w-48" },
       cell: (info) => (
         <EntityPillLinkList
-          items={info
-            .getValue()
-            .filter(
-              (obj1, i, arr) =>
-                arr.findIndex((obj2) => obj2.id === obj1.id) === i,
-            )}
+          items={info.getValue().filter(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (obj1: any, i: number, arr: any[]) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              arr.findIndex((obj2: any) => obj2.id === obj1.id) === i,
+          )}
           Pill={RecipePillLink}
           pillPropName="recipe"
         />
@@ -105,7 +92,8 @@ export function IngredientList() {
       meta: { className: "w-72 max-w-72" },
       cell: (info) => {
         const products = info.getValue();
-        const mappings = products.flatMap((product) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mappings = products.flatMap((product: any) =>
           getAllUnitMappingsFromProduct(product, w),
         );
         return <UnitMappingDisplay mappings={mappings} title="" />;
@@ -118,7 +106,7 @@ export function IngredientList() {
     data,
     columns,
     tableState,
-    totalCount: ingredientsResp?.meta?.totalCount || 0,
+    totalCount,
     globalFilter,
     onGlobalFilterChange: setGlobalFilter,
   });

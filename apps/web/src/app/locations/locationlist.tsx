@@ -4,7 +4,6 @@ import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/array-helpers";
 import RTable, { FilterableColumn } from "../_components/data-table/Table";
-import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
@@ -20,37 +19,26 @@ import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
 import { type InfLocation } from "~/schemas/location";
-
-import { useQuery } from "@tanstack/react-query";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { NoneState } from "../_components/NoneState";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { useTableList } from "../_components/hooks/useTableList";
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const api = useTRPC();
-  // Set up table state
-  const tableState = useTableState({ initialSort: "createdAt" });
-
-  // Query data with params from table state
-  const {
-    data: itemsResp,
-    isLoading,
-    error,
-  } = useQuery(
-    api.location.list.queryOptions({
-      sort: tableState.getSortParams(),
-      pagination: tableState.pagination,
-      filters: {
-        nameFilter: tableState.getColumnFilter("name"),
-        itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
-      },
-    }),
-  );
   const w = useWasm();
 
+  const { data, totalCount, isLoading, error, tableState } = useTableList({
+    queryOptions: api.location.list.queryOptions,
+    buildFilters: (tableState) => ({
+      nameFilter: tableState.getColumnFilter("name"),
+      itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
+    }),
+    tableStateOptions: { initialSort: "createdAt" },
+  });
+
   // Set up columns using helpers
-  const data = itemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     // Image column
@@ -107,7 +95,8 @@ export function LocationList() {
         }
         return (
           <div className="space-y-0.5 text-xs">
-            {entries.map((entry) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {entries.map((entry: any) => (
               <div key={entry.id} className="flex items-center gap-1">
                 <span className="text-muted-foreground">
                   {tryFormatMeasure(w, entry.amount)}
@@ -126,7 +115,7 @@ export function LocationList() {
     data,
     columns,
     tableState,
-    totalCount: itemsResp?.meta?.totalCount || 0,
+    totalCount,
   });
 
   // Get the location types from zod schema

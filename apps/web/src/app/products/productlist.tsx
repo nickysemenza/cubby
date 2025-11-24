@@ -16,7 +16,6 @@ import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
 import { NoneState } from "../_components/NoneState";
-import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
@@ -25,33 +24,21 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { TableLink } from "../_components/table";
-
-import { useQuery } from "@tanstack/react-query";
+import { useTableList } from "../_components/hooks/useTableList";
 
 export function ProductList() {
   const api = useTRPC();
   const w = useWasm();
-  // Set up table state
-  const tableState = useTableState({ initialSort: "createdAt" });
 
-  // Query data with params from table state
-  const {
-    data: productsResp,
-    isLoading,
-    error,
-  } = useQuery(
-    api.product.list.queryOptions({
-      sort: tableState.getSortParams(),
-      pagination: tableState.pagination,
-      filters: {
-        nameFilter: tableState.getColumnFilter("name"),
-        manufacturerFilter: tableState.getColumnFilter("manufacturer"),
-        upcFilter: tableState.getColumnFilter("upc"),
-      },
+  const { data, totalCount, isLoading, error, tableState } = useTableList({
+    queryOptions: api.product.list.queryOptions,
+    buildFilters: (tableState) => ({
+      nameFilter: tableState.getColumnFilter("name"),
+      manufacturerFilter: tableState.getColumnFilter("manufacturer"),
+      upcFilter: tableState.getColumnFilter("upc"),
     }),
-  );
-
-  const data = productsResp?.items || [];
+    tableStateOptions: { initialSort: "createdAt" },
+  });
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
   // Set up columns using helpers where possible
@@ -138,12 +125,14 @@ export function ProductList() {
       cell: (info) => (
         <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
-            {info.getValue().map((e) => (
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {info.getValue().map((e: any) => (
               <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
             ))}
           </div>
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
           <EntityPillLinkList
-            items={info.getValue().map((e) => e.location)}
+            items={info.getValue().map((e: any) => e.location)}
             Pill={LocationPillLink}
             pillPropName="location"
           />
@@ -158,7 +147,7 @@ export function ProductList() {
     data,
     columns,
     tableState,
-    totalCount: productsResp?.meta?.totalCount || 0,
+    totalCount,
   });
 
   const filterableColumns = [

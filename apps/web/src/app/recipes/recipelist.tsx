@@ -3,38 +3,26 @@ import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
-import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createNameColumn,
   createCreatedAtColumn,
   createImageColumn,
 } from "../_components/data-table/columnHelpers";
-
-import { useQuery } from "@tanstack/react-query";
+import { useTableList } from "../_components/hooks/useTableList";
 
 export function RecipeList() {
   const api = useTRPC();
-  // Set up table state
-  const tableState = useTableState({ initialSort: "createdAt" });
 
-  // Query data with params from table state
-  const {
-    data: recipesResp,
-    isLoading,
-    error,
-  } = useQuery(
-    api.recipe.list.queryOptions({
-      sort: tableState.getSortParams(),
-      pagination: tableState.pagination,
-      filters: {
-        nameFilter: tableState.getColumnFilter("name"),
-      },
+  const { data, totalCount, isLoading, error, tableState } = useTableList({
+    queryOptions: api.recipe.list.queryOptions,
+    buildFilters: (tableState) => ({
+      nameFilter: tableState.getColumnFilter("name"),
     }),
-  );
+    tableStateOptions: { initialSort: "createdAt" },
+  });
 
   // Set up columns using helpers
-  const data = recipesResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
   const columns = [
     createImageColumn(columnHelper),
@@ -51,7 +39,7 @@ export function RecipeList() {
     data,
     columns,
     tableState,
-    totalCount: recipesResp?.meta?.totalCount || 0,
+    totalCount,
   });
 
   const filterableColumns = [
