@@ -1,5 +1,5 @@
 "use client";
-import { type FC, useState } from "react";
+import { type FC } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { InfLocation } from "~/schemas/location";
@@ -9,14 +9,14 @@ import { Button } from "~/components/ui/button";
 import { LocationForm } from "./location-form";
 import { type LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import EntityImageList from "../EntityImageList";
 import { LocationCardGrid } from "./location-card-grid";
 import { LocationIconWithLabel } from "./location-icons";
 import { InventoryValueSummary } from "./inventory-value-summary";
+import { useEditMode } from "../hooks/useEditMode";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 
 interface LocationDetailProps {
@@ -25,30 +25,11 @@ interface LocationDetailProps {
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
-  const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<string | undefined>();
 
-  const updateLocation = useMutation(
-    api.location.update.mutationOptions({
-      onSuccess: () => {
-        setIsEditing(false);
-        router.refresh();
-      },
-      onError: (error) => {
-        setError(error.message);
-      },
-    }),
-  );
-
-  const handleEdit = (data: LocationUpdateInput) => {
-    updateLocation.mutate(data);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setError(undefined);
-  };
+  const editMode = useEditMode<LocationUpdateInput>({
+    mutationOptions: api.location.update.mutationOptions(),
+    useRouterRefresh: true,
+  });
 
   const { data: inventoryItemsData } = useQuery(
     api.inventoryItem.list.queryOptions({
@@ -64,16 +45,16 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
-      content: isEditing ? (
+      content: editMode.isEditing ? (
         <div className="container mx-auto py-10">
           <h1 className="mb-6 text-2xl font-bold">Edit Location</h1>
           <LocationForm
             mode="edit"
             entity={location}
-            onEdit={handleEdit}
-            isPending={updateLocation.isPending}
-            error={error}
-            onCancel={handleCancel}
+            onEdit={editMode.handleEdit}
+            isPending={editMode.isPending}
+            error={editMode.error}
+            onCancel={editMode.handleCancel}
           />
         </div>
       ) : (
@@ -97,7 +78,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
             )}
           </div>
           <div className="mt-4 space-x-2">
-            <Button onClick={() => setIsEditing(true)}>Edit</Button>
+            <Button onClick={editMode.startEditing}>Edit</Button>
             <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
               <Button variant="outline">Bulk Edit Inventory</Button>
             </Link>

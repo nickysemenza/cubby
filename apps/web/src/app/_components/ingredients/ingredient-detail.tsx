@@ -12,11 +12,11 @@ import { Button } from "~/components/ui/button";
 import { IngredientForm } from "./ingredient-form";
 import { type IngredientUpdateInput } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
-import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { useWasm } from "~/hooks/useWasm";
+import { useEditMode } from "../hooks/useEditMode";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
@@ -29,43 +29,30 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
   const w = useWasm();
   const [ingredient, setIngredient] =
     useState<IngredientWithFoodOut>(initialIngredient);
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<string | undefined>();
 
-  const updateIngredient = useMutation(
-    api.ingredient.update.mutationOptions({
-      onSuccess: (updatedIngredient) => {
+  const editMode = useEditMode<IngredientUpdateInput, IngredientWithFoodOut>({
+    mutationOptions: api.ingredient.update.mutationOptions(),
+    onSuccess: (updatedIngredient) => {
+      if (updatedIngredient) {
         setIngredient(updatedIngredient);
-        setIsEditing(false);
-      },
-      onError: (error) => {
-        setError(error.message);
-      },
-    }),
-  );
-
-  const handleEdit = (data: IngredientUpdateInput) => {
-    updateIngredient.mutate(data);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setError(undefined);
-  };
+      }
+    },
+    useRouterRefresh: false,
+  });
 
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
-      content: isEditing ? (
+      content: editMode.isEditing ? (
         <Card>
           <CardContent className="pt-6">
             <IngredientForm
               mode="edit"
               entity={ingredient}
-              isPending={updateIngredient.isPending}
-              error={error}
-              onEdit={handleEdit}
-              onCancel={handleCancel}
+              isPending={editMode.isPending}
+              error={editMode.error}
+              onEdit={editMode.handleEdit}
+              onCancel={editMode.handleCancel}
             />
           </CardContent>
         </Card>
@@ -83,11 +70,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({
             )}
           </div>
           <div className="pt-2">
-            <Button
-              onClick={() => setIsEditing(true)}
-              variant="outline"
-              size="sm"
-            >
+            <Button onClick={editMode.startEditing} variant="outline" size="sm">
               Edit Ingredient
             </Button>
           </div>

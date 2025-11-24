@@ -1,5 +1,5 @@
 "use client";
-import { type FC, useState } from "react";
+import { type FC } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
@@ -11,7 +11,6 @@ import { ProductForm } from "./product-form";
 import { type ProductInputPayload } from "~/schemas/product";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
-import { useRouter } from "next/navigation";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import Link from "next/link";
 import {
@@ -21,8 +20,7 @@ import {
 } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import EntityImageList from "../EntityImageList";
-
-import { useMutation } from "@tanstack/react-query";
+import { useEditMode } from "../hooks/useEditMode";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -30,34 +28,15 @@ interface ProductDetailProps {
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
-  const router = useRouter();
   const w = useWasm();
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<string | undefined>();
 
-  const updateProduct = useMutation(
-    api.product.update.mutationOptions({
-      onSuccess: () => {
-        setIsEditing(false);
-        router.refresh();
-      },
-      onError: (error) => {
-        setError(error.message);
-      },
-    }),
-  );
-
-  const handleEdit = (data: {
+  const editMode = useEditMode<{
     id: string;
     data: Partial<ProductInputPayload>;
-  }) => {
-    updateProduct.mutate(data);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    setError(undefined);
-  };
+  }>({
+    mutationOptions: api.product.update.mutationOptions(),
+    useRouterRefresh: true,
+  });
 
   // Get product images from the product object
   const productImages = product.images || [];
@@ -66,16 +45,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
-      content: isEditing ? (
+      content: editMode.isEditing ? (
         <div className="container mx-auto py-10">
           <h1 className="mb-6 text-2xl font-bold">Edit Product</h1>
           <ProductForm
             mode="edit"
             entity={product}
-            onEdit={handleEdit}
-            isPending={updateProduct.isPending}
-            error={error}
-            onCancel={handleCancel}
+            onEdit={editMode.handleEdit}
+            isPending={editMode.isPending}
+            error={editMode.error}
+            onCancel={editMode.handleCancel}
           />
         </div>
       ) : (
@@ -151,7 +130,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             )}
           </div>
           <div className="mt-4">
-            <Button onClick={() => setIsEditing(true)}>Edit</Button>
+            <Button onClick={editMode.startEditing}>Edit</Button>
           </div>
         </div>
       ),
