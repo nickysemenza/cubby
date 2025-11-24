@@ -130,8 +130,9 @@ export function ProductList() {
               <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
             ))}
           </div>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {}
           <EntityPillLinkList
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             items={info.getValue().map((e: any) => e.location)}
             Pill={LocationPillLink}
             pillPropName="location"

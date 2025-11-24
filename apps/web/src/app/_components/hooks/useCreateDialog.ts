@@ -4,11 +4,10 @@ import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-export interface UseCreateDialogOptions<TEntity, TInput> {
+export interface UseCreateDialogOptions<TEntity> {
   entityName: string; // e.g., "ingredient", "product"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mutationOptions: any; // tRPC mutation options
-  buildComboboxItem?: (entity: TEntity) => { label: string; value: string };
   queryKey?: string[]; // Query key to invalidate on success
   onSuccess?: (entity: TEntity) => void;
 }
@@ -39,7 +38,6 @@ export interface UseCreateDialogReturn<TEntity, TInput> {
  * const createDialog = useCreateDialog({
  *   entityName: "ingredient",
  *   mutationOptions: api.ingredient.create.mutationOptions(),
- *   buildComboboxItem: buildIngredientComboboxItem,
  *   queryKey: ["ingredient", "list"],
  * });
  *
@@ -67,13 +65,9 @@ export interface UseCreateDialogReturn<TEntity, TInput> {
 export function useCreateDialog<TEntity, TInput>({
   entityName,
   mutationOptions,
-  buildComboboxItem,
   queryKey,
   onSuccess,
-}: UseCreateDialogOptions<TEntity, TInput>): UseCreateDialogReturn<
-  TEntity,
-  TInput
-> {
+}: UseCreateDialogOptions<TEntity>): UseCreateDialogReturn<TEntity, TInput> {
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [initialData, setInitialData] = useState<Partial<TInput> | undefined>();

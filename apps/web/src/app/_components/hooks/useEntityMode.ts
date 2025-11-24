@@ -6,7 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
 import { type Entity } from "~/entities/types";
 
-type EntityMutationCallbacks<TData, TResult> = {
+type EntityMutationCallbacks<TResult> = {
   onSuccess?: (result: TResult) => void;
   onError?: () => void;
 };
@@ -23,7 +23,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
   entityKey: Entity,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mutationOptions: any,
-  callbacks?: EntityMutationCallbacks<TData, TResult>,
+  callbacks?: EntityMutationCallbacks<TResult>,
 ) {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();
@@ -72,7 +72,7 @@ export function useEntityEditMode<TData, TResult>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mutationOptions: any,
   onCancel: () => void,
-  callbacks?: EntityMutationCallbacks<TData, TResult>,
+  callbacks?: EntityMutationCallbacks<TResult>,
 ) {
   const router = useRouter();
   const [error, setError] = useState<string | undefined>();

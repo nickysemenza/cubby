@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 
-export interface UseEditModeOptions<TData, TResult = unknown> {
+export interface UseEditModeOptions<TResult = unknown> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mutationOptions: any; // tRPC mutation options
   onSuccess?: (result?: TResult) => void;
@@ -62,7 +62,7 @@ export function useEditMode<TData, TResult = unknown>({
   mutationOptions,
   onSuccess,
   useRouterRefresh = true,
-}: UseEditModeOptions<TData, TResult>): UseEditModeReturn<TData> {
+}: UseEditModeOptions<TResult>): UseEditModeReturn<TData> {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();

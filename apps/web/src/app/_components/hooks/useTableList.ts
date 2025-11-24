@@ -13,14 +13,15 @@ interface TableStateOptions {
 
 export interface UseTableListOptions<TFilters> {
   // Note: queryOptions should be a tRPC queryOptions function
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   queryOptions: (
     params: {
       sort: { orderBy: string; direction: "asc" | "desc" };
       pagination: { pageIndex: number; pageSize: number };
       filters: TFilters;
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     opts?: any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ) => any;
   buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
   tableStateOptions?: TableStateOptions;
@@ -94,10 +95,9 @@ export function useTableList<TFilters>({
   );
 
   // Type assertion: tRPC list query response structure
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const typedResponse = response as
-    | { items: any[]; count: number; meta?: { totalCount?: number } }
-    | undefined;
+  const typedResponse =
+    response as // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { items: any[]; count: number; meta?: { totalCount?: number } } | undefined;
 
   return {
     data: typedResponse?.items || [],
