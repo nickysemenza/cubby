@@ -18,7 +18,7 @@ import {
   FormWrapper,
   UnifiedTextField,
   getSubmitButtonText,
-  ComboboxField,
+  ComboboxFieldWithSearch,
   detectComboboxIdChange,
   SideBySideFields,
   SelectField,
@@ -26,8 +26,6 @@ import {
 import { PendingImageUpload } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
-
-import { WithLocationSearch } from "../combobox/with-search-hook";
 
 // Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({
@@ -187,19 +185,12 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
         />
       </SideBySideFields>
 
-      <WithLocationSearch>
-        {({ items, onSearchChange, isLoading, onCreateNew }) => (
-          <ComboboxField
-            form={form}
-            name="parent"
-            label="Parent Location (Optional)"
-            items={items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            onCreateNew={onCreateNew}
-          />
-        )}
-      </WithLocationSearch>
+      <ComboboxFieldWithSearch
+        form={form}
+        name="parent"
+        label="Parent Location (Optional)"
+        searchType="location"
+      />
 
       {/* Show image upload in both create and edit modes */}
       <PendingImageUpload

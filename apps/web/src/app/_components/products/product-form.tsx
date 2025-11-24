@@ -21,14 +21,13 @@ import {
   getSubmitButtonText,
   buildUpdateObject,
   SideBySideFields,
-  ComboboxField,
+  ComboboxFieldWithSearch,
   detectComboboxIdChange,
   NullableNumericField,
 } from "../form-utils";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { ArrayFieldManager } from "~/components/ui/array-field-manager";
-import { WithIngredientSearch } from "../combobox/with-search-hook";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
@@ -250,19 +249,12 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           placeholder="NDB number (1000-99999)"
         />
       </SideBySideFields>
-      <WithIngredientSearch>
-        {({ items, onSearchChange, isLoading, onCreateNew }) => (
-          <ComboboxField
-            form={form}
-            name="ingredient"
-            label="Ingredient"
-            items={items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            onCreateNew={onCreateNew}
-          />
-        )}
-      </WithIngredientSearch>
+      <ComboboxFieldWithSearch
+        form={form}
+        name="ingredient"
+        label="Ingredient"
+        searchType="ingredient"
+      />
 
       {/* Show image upload in both create and edit modes */}
       <PendingImageUpload

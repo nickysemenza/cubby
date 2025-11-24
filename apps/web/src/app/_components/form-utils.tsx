@@ -377,6 +377,9 @@ export function UnifiedTextField<
   );
 }
 
+// Re-export ComboboxFieldWithSearch from its dedicated file
+export { ComboboxFieldWithSearch } from "./form-utils/combobox-field-with-search";
+
 // Helper for handling select fields
 export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form,

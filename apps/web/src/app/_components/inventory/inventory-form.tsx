@@ -18,17 +18,12 @@ import {
   type CreateModeProps,
   type EditModeProps,
   FormWrapper,
-  ComboboxField,
+  ComboboxFieldWithSearch,
   getSubmitButtonText,
   detectComboboxIdChange,
 } from "../form-utils";
 import { AmountFieldGroup } from "./amount-field-group";
 import { ComboboxItem } from "../combobox/combobox-types";
-
-import {
-  WithLocationSearch,
-  WithProductSearch,
-} from "../combobox/with-search-hook";
 import { amount } from "~/codec/codec";
 
 // Form schema for inventory form
@@ -139,33 +134,19 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      <WithProductSearch>
-        {({ items, onSearchChange, isLoading, onCreateNew }) => (
-          <ComboboxField
-            form={form}
-            name="product"
-            label="Product"
-            items={items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            onCreateNew={onCreateNew}
-          />
-        )}
-      </WithProductSearch>
+      <ComboboxFieldWithSearch
+        form={form}
+        name="product"
+        label="Product"
+        searchType="product"
+      />
 
-      <WithLocationSearch>
-        {({ items, onSearchChange, isLoading, onCreateNew }) => (
-          <ComboboxField
-            form={form}
-            name="location"
-            label="Location"
-            items={items}
-            onSearchChange={onSearchChange}
-            isLoading={isLoading}
-            onCreateNew={onCreateNew}
-          />
-        )}
-      </WithLocationSearch>
+      <ComboboxFieldWithSearch
+        form={form}
+        name="location"
+        label="Location"
+        searchType="location"
+      />
 
       <AmountFieldGroup
         form={form}

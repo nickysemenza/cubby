@@ -22,11 +22,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import {
-  WithLocationSearch,
-  WithProductSearch,
-} from "~/app/_components/combobox/with-search-hook";
-import { ComboboxField } from "~/app/_components/form-utils";
-import { FormWrapper, getSubmitButtonText } from "~/app/_components/form-utils";
+  ComboboxFieldWithSearch,
+  FormWrapper,
+  getSubmitButtonText,
+} from "~/app/_components/form-utils";
 import { amount } from "~/codec/codec";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 
@@ -202,19 +201,12 @@ export default function BulkInventoryForm() {
       submitButtonText={getSubmitButtonText("edit", isSubmitting)}
     >
       <div className="mb-6 max-w-md">
-        <WithLocationSearch>
-          {({ items, onSearchChange, isLoading, onCreateNew }) => (
-            <ComboboxField
-              form={form}
-              name="location"
-              label="Location"
-              items={items}
-              onSearchChange={onSearchChange}
-              isLoading={isLoading}
-              onCreateNew={onCreateNew}
-            />
-          )}
-        </WithLocationSearch>
+        <ComboboxFieldWithSearch
+          form={form}
+          name="location"
+          label="Location"
+          searchType="location"
+        />
       </div>
 
       {selectedLocation && (
@@ -237,19 +229,12 @@ export default function BulkInventoryForm() {
                   className="flex items-center gap-2 rounded border p-1"
                 >
                   <div className="flex-1">
-                    <WithProductSearch>
-                      {({ items, onSearchChange, isLoading, onCreateNew }) => (
-                        <ComboboxField
-                          form={form}
-                          name={`items.${index}.product`}
-                          label="Product"
-                          items={items}
-                          onSearchChange={onSearchChange}
-                          isLoading={isLoading}
-                          onCreateNew={onCreateNew}
-                        />
-                      )}
-                    </WithProductSearch>
+                    <ComboboxFieldWithSearch
+                      form={form}
+                      name={`items.${index}.product`}
+                      label="Product"
+                      searchType="product"
+                    />
                   </div>
 
                   <div className="w-64">
