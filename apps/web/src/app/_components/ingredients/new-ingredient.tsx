@@ -1,38 +1,18 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { IngredientForm } from "./ingredient-form";
 import { z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { entities } from "~/entities/entities";
-
-import { useMutation } from "@tanstack/react-query";
+import { useEntityCreateMode } from "../hooks/useEntityMode";
 
 export function NewIngredient() {
   const api = useTRPC();
-  const router = useRouter();
-  const [error, setError] = useState<string | undefined>();
 
-  const createIngredient = useMutation(
-    api.ingredient.create.mutationOptions({
-      onSuccess: (ingredient) => {
-        router.push(`/${entities.ingredient.basePath}/${ingredient.id}`);
-      },
-      onError: (error) => {
-        setError(error.message);
-      },
-    }),
-  );
-
-  const handleCreate = (data: z.infer<typeof ingredientBase>) => {
-    createIngredient.mutate(data);
-  };
-
-  const handleCancel = () => {
-    router.push(`/${entities.ingredient.basePath}`);
-  };
+  const { error, isPending, handleCreate, handleCancel } = useEntityCreateMode<
+    z.infer<typeof ingredientBase>,
+    { id: string }
+  >("ingredient", api.ingredient.create.mutationOptions());
 
   return (
     <Card>
@@ -42,7 +22,7 @@ export function NewIngredient() {
       <CardContent>
         <IngredientForm
           mode="create"
-          isPending={createIngredient.isPending}
+          isPending={isPending}
           error={error}
           onCreate={handleCreate}
           onCancel={handleCancel}

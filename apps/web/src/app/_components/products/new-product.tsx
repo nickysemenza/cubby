@@ -1,37 +1,17 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { ProductForm } from "./product-form";
 import { type ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { entities } from "~/entities/entities";
-
-import { useMutation } from "@tanstack/react-query";
+import { useEntityCreateMode } from "../hooks/useEntityMode";
 
 export function NewProduct() {
   const api = useTRPC();
-  const router = useRouter();
-  const [error, setError] = useState<string | undefined>();
 
-  const createProduct = useMutation(
-    api.product.create.mutationOptions({
-      onSuccess: (product) => {
-        router.push(`/${entities.product.basePath}/${product.id}`);
-      },
-      onError: (error) => {
-        setError(error.message);
-      },
-    }),
-  );
-
-  const handleCreate = (data: ProductInputPayload) => {
-    createProduct.mutate(data);
-  };
-
-  const handleCancel = () => {
-    router.push(`/${entities.product.basePath}`);
-  };
+  const { error, isPending, handleCreate, handleCancel } = useEntityCreateMode<
+    ProductInputPayload,
+    { id: string }
+  >("product", api.product.create.mutationOptions());
 
   return (
     <Card>
@@ -41,7 +21,7 @@ export function NewProduct() {
       <CardContent>
         <ProductForm
           mode="create"
-          isPending={createProduct.isPending}
+          isPending={isPending}
           error={error}
           onCreate={handleCreate}
           onCancel={handleCancel}

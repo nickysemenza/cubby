@@ -1,42 +1,33 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { RecipeForm } from "./recipe-form";
 import { useTRPC } from "~/trpc/react";
-import { useMutation } from "@tanstack/react-query";
 import { type RecipeCreateInput } from "~/schemas/recipe";
 import { toast } from "sonner";
-import { entities } from "~/entities/entities";
+import { useEntityCreateMode } from "../hooks/useEntityMode";
 
 export default function NewRecipeForm() {
   const router = useRouter();
   const api = useTRPC();
-  const [error, setError] = useState<string | undefined>(undefined);
 
-  // Set up mutation for creating a recipe
-  const createMutation = useMutation(
-    api.recipe.create.mutationOptions({
-      onSuccess: (data) => {
-        toast.success("Recipe created successfully!");
-        router.push(`/${entities.recipe.basePath}/${data.id}`);
-      },
-      onError: (error) => {
-        setError(error.message);
-        toast.error("Failed to create recipe");
-      },
-    }),
-  );
-
-  const handleCreate = (data: RecipeCreateInput) => {
-    createMutation.mutate(data);
-  };
+  const { error, isPending, handleCreate } = useEntityCreateMode<
+    RecipeCreateInput,
+    { id: string }
+  >("recipe", api.recipe.create.mutationOptions(), {
+    onSuccess: () => {
+      toast.success("Recipe created successfully!");
+    },
+    onError: () => {
+      toast.error("Failed to create recipe");
+    },
+  });
 
   return (
     <RecipeForm
       mode="create"
       onCreate={handleCreate}
-      isPending={createMutation.isPending}
+      isPending={isPending}
       error={error}
       onCancel={() => router.back()}
     />
