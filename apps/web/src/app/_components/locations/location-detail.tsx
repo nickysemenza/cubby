@@ -40,7 +40,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   );
 
   // Get location images from the location object
-  const locationImages = location.images || [];
+  const locationImages = location.images;
 
   const sections: DetailSection[] = [
     {

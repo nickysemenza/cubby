@@ -10,7 +10,7 @@ import { FlexContainer } from "~/components/ui/flex-container";
 import { InteractiveImage } from "~/components/ui/interactive-image";
 
 interface EntityImageListProps {
-  images: ImageOut[] | undefined;
+  images: ImageOut[];
   title?: string;
   showViewAllButton?: boolean;
 }
@@ -24,7 +24,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
     <div>
       {title && <h2 className="mb-3 text-xl font-semibold">{title}</h2>}
 
-      {!images || images.length === 0 ? (
+      {images.length === 0 ? (
         <NoneState />
       ) : (
         <div>

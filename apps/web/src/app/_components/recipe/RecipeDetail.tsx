@@ -24,7 +24,7 @@ const RecipeDetail: React.FC<{
   >(undefined);
 
   // Get recipe images from the recipe object
-  const recipeImages = recipe.images || [];
+  const recipeImages = recipe.images;
 
   useEffect(() => {
     const getBulkIngredients = async (ids: string[]) => {

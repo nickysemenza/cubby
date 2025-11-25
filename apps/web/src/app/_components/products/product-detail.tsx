@@ -39,7 +39,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   });
 
   // Get product images from the product object
-  const productImages = product.images || [];
+  const productImages = product.images;
 
   const mappings = getAllUnitMappingsFromProduct(product, w);
   const sections: DetailSection[] = [

@@ -88,7 +88,7 @@ export function createImageColumn<T extends ImageRow>(
     header: headerText,
     enableSorting: false,
     cell: (info) => (
-      <ImageThumbnail images={info.getValue()} alt={headerText} />
+      <ImageThumbnail images={info.getValue() ?? []} alt={headerText} />
     ),
   });
 }

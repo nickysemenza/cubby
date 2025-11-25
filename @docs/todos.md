@@ -57,8 +57,8 @@
 
 - [x] ~~Change `unitMappings: z.array(unitMappingInput).optional()` to `unitMappings: z.array(unitMappingInput).default([])` in productInputPayload~~
 
-- [ ] Update all code that checks for these fields' existence to assume they're always present (optional - can be done incrementally)
+- [x] Update all code that checks for these fields' existence to assume they're always present
 
 ### Rationale
 ~~This will make the API more predictable and eliminate unnecessary null checks in the frontend code.~~
-**Status**: Schema changes completed. Frontend code can now assume these fields always exist (may still have optional checks that can be cleaned up incrementally).  
+**Status**: Fully completed. Schema changes done and frontend optional checks removed.  

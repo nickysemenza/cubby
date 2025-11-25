@@ -21,7 +21,7 @@ const containerVariants = cva("relative overflow-hidden rounded-md border", {
 });
 
 interface ImageThumbnailProps extends VariantProps<typeof containerVariants> {
-  images?: ImageData[];
+  images: ImageData[];
   alt?: string;
 }
 
@@ -36,7 +36,7 @@ export const ImageThumbnail = ({
   alt = "Image",
   size = "sm",
 }: ImageThumbnailProps) => {
-  if (!images || images.length === 0) {
+  if (images.length === 0) {
     return <NoneState />;
   }
 
