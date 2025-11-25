@@ -52,9 +52,9 @@ export const fdcIdParam = z.object({ fdc_id: z.coerce.number() });
 const c = initContract();
 
 export const usdaContract = c.router({
-  health: {
+  counts: {
     method: 'GET',
-    path: '/',
+    path: '/counts',
     responses: {
       200: countsSchema,
       500: errorSchema,

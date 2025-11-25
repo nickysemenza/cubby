@@ -69,7 +69,7 @@ app.use(
 );
 app.use('*', httpLogger);
 
-app.get('/', async (c) => {
+app.get('/counts', async (c) => {
   try {
     const counts = countsSchema.parse({
       usda_food: await countUsdaFood(),
@@ -97,7 +97,7 @@ app.get('/openapi.json', (c) => {
 
 // Scalar API documentation
 app.get(
-  '/docs',
+  '/',
   apiReference({
     content: openApiDocument,
     theme: 'default',

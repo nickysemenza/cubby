@@ -39,25 +39,11 @@ This API provides access to detailed nutrition data, food portions, and branded 
 All data is sourced from the USDA Food Data Central database, providing authoritative
 nutrition information for thousands of foods.
       `.trim(),
-      contact: {
-        name: 'RecipeHub API Team',
-        email: 'api@recipehub.com',
-      },
     },
     servers: [
       {
         url: process.env.API_BASE_URL || 'http://localhost:8080',
         description: 'USDA API Server',
-      },
-    ],
-    tags: [
-      {
-        name: 'Health',
-        description: 'Health check and system status endpoints',
-      },
-      {
-        name: 'Foods',
-        description: 'Food data retrieval and search operations',
       },
     ],
   },
@@ -66,7 +52,6 @@ nutrition information for thousands of foods.
     schemaTransformer: ZOD_4_TRANSFORMER,
     operationMapper: (operation, appRoute) => ({
       ...operation,
-      tags: appRoute.path.startsWith('/api/foods') ? ['Foods'] : ['Health'],
     }),
   }
 );

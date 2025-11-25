@@ -11,7 +11,7 @@ import {
 describe('USDA Contract', () => {
   describe('Contract structure', () => {
     it('should have all expected endpoints', () => {
-      expect(usdaContract.health).toBeDefined();
+      expect(usdaContract.counts).toBeDefined();
       expect(usdaContract.getFood).toBeDefined();
       expect(usdaContract.findByLookup).toBeDefined();
       expect(usdaContract.findByLookupBatch).toBeDefined();
@@ -19,7 +19,7 @@ describe('USDA Contract', () => {
     });
 
     it('should have correct HTTP methods for endpoints', () => {
-      expect(usdaContract.health.method).toBe('GET');
+      expect(usdaContract.counts.method).toBe('GET');
       expect(usdaContract.getFood.method).toBe('GET');
       expect(usdaContract.findByLookup.method).toBe('POST');
       expect(usdaContract.findByLookupBatch.method).toBe('POST');
@@ -27,7 +27,7 @@ describe('USDA Contract', () => {
     });
 
     it('should have correct paths for endpoints', () => {
-      expect(usdaContract.health.path).toBe('/');
+      expect(usdaContract.counts.path).toBe('/counts');
       expect(usdaContract.getFood.path).toBe('/api/foods/:fdc_id');
       expect(usdaContract.findByLookup.path).toBe('/api/foods/search');
       expect(usdaContract.findByLookupBatch.path).toBe(
