@@ -21,6 +21,7 @@ import {
   addProductSourceMetadata,
   buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
+import { notFoundError } from "~/lib/error-messages";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import {
   type InventoryId,
@@ -281,7 +282,7 @@ export const updateInventoryEntry = async (
   });
 
   if (!result) {
-    throw new Error(`Inventory entry ${id} not found after update`);
+    throw new Error(notFoundError("Inventory entry", id) + " after update");
   }
 
   return dbInventoryEntryToAPI(result);

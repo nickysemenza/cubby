@@ -1,7 +1,6 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
 import React from "react";
 import {
@@ -34,7 +33,14 @@ export function ProductList() {
   const api = useTRPC();
   const w = useWasm();
 
-  const { data, totalCount, isLoading, error, tableState } = useTableList({
+  const { data, totalCount, isLoading, error, tableState } = useTableList<
+    {
+      nameFilter: string | undefined;
+      manufacturerFilter: string | undefined;
+      upcFilter: string | undefined;
+    },
+    ProductWithFoodOut
+  >({
     queryOptions: api.product.list.queryOptions,
     buildFilters: (tableState) => ({
       nameFilter: tableState.getColumnFilter("name"),
@@ -43,7 +49,7 @@ export function ProductList() {
     }),
     tableStateOptions: { initialSort: "createdAt" },
   });
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  const columnHelper = createColumnHelper<ProductWithFoodOut>();
 
   // Set up columns using helpers where possible
   const columns = [

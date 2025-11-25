@@ -50,7 +50,7 @@ nutrition information for thousands of foods.
   {
     setOperationId: true,
     schemaTransformer: ZOD_4_TRANSFORMER,
-    operationMapper: (operation, appRoute) => ({
+    operationMapper: (operation, _appRoute) => ({
       ...operation,
     }),
   }

@@ -31,6 +31,11 @@ import {
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
 import {
+  notFoundByNameError,
+  ambiguousNameError,
+  notFoundError,
+} from "~/lib/error-messages";
+import {
   type ProductId,
   type OrganizationId,
   unsafeLocationId,
@@ -56,11 +61,11 @@ export const findProductByName = async (
 
   switch (p.length) {
     case 0:
-      throw new Error(`Product ${name} not found`);
+      throw new Error(notFoundByNameError("Product", name));
     case 1:
       return p[0];
     default:
-      throw new Error(`findProductByName: Product ${name} is ambiguous`);
+      throw new Error(ambiguousNameError("product", name));
   }
 };
 
@@ -293,7 +298,7 @@ export const getProductByID = async (
   });
 
   if (!res) {
-    throw new Error(`Product ${id} not found`);
+    throw new Error(notFoundError("Product", id));
   }
 
   return dbProductToAPI(db, res);

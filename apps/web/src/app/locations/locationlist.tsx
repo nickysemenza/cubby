@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
 import RTable, { FilterableColumn } from "../_components/data-table/Table";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
@@ -37,7 +36,13 @@ export function LocationList() {
   const api = useTRPC();
   const w = useWasm();
 
-  const { data, totalCount, isLoading, error, tableState } = useTableList({
+  const { data, totalCount, isLoading, error, tableState } = useTableList<
+    {
+      nameFilter: string | undefined;
+      itemTypeFilter: LocationType | undefined;
+    },
+    LocationOutWithParentChildren
+  >({
     queryOptions: api.location.list.queryOptions,
     buildFilters: (tableState) => ({
       nameFilter: tableState.getColumnFilter("name"),
@@ -47,7 +52,7 @@ export function LocationList() {
   });
 
   // Set up columns using helpers
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  const columnHelper = createColumnHelper<LocationOutWithParentChildren>();
   const columns = [
     // Image column
     createImageColumn(columnHelper),

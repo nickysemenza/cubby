@@ -1,7 +1,6 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
 import { useState } from "react";
 import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
@@ -37,7 +36,13 @@ export function IngredientList() {
     missingProductsOnly: false,
   });
 
-  const { data, totalCount, isLoading, error, tableState } = useTableList({
+  const { data, totalCount, isLoading, error, tableState } = useTableList<
+    {
+      nameFilter: string | undefined;
+      missingProductsOnly: boolean;
+    },
+    IngredientWithFoodOut
+  >({
     queryOptions: api.ingredient.list.queryOptions,
     buildFilters: (tableState) => ({
       nameFilter: tableState.getColumnFilter("name"),
@@ -45,11 +50,10 @@ export function IngredientList() {
     }),
     tableStateOptions: { initialSort: "createdAt" },
   });
-  type IngredientData = Flatten<typeof data>;
-  const columnHelper = createColumnHelper<IngredientData>();
+  const columnHelper = createColumnHelper<IngredientWithFoodOut>();
   // Set up columns using helpers where possible
   const columns = [
-    buildSelectColumn<IngredientData>(),
+    buildSelectColumn<IngredientWithFoodOut>(),
     createImageColumn(columnHelper),
     createNameColumn(columnHelper, "ingredient"),
     columnHelper.accessor("aliases", {

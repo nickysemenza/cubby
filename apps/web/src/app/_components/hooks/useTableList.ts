@@ -27,9 +27,8 @@ export interface UseTableListOptions<TFilters> {
   tableStateOptions?: TableStateOptions;
 }
 
-export interface UseTableListReturn {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any[];
+export interface UseTableListReturn<TData = unknown> {
+  data: TData[];
   totalCount: number;
   isLoading: boolean;
   error: Error | null;
@@ -73,11 +72,11 @@ export interface UseTableListReturn {
  * );
  * ```
  */
-export function useTableList<TFilters>({
+export function useTableList<TFilters, TData = unknown>({
   queryOptions,
   buildFilters,
   tableStateOptions,
-}: UseTableListOptions<TFilters>): UseTableListReturn {
+}: UseTableListOptions<TFilters>): UseTableListReturn<TData> {
   const tableState = useTableState(tableStateOptions);
 
   const filters = buildFilters(tableState);
@@ -95,8 +94,8 @@ export function useTableList<TFilters>({
   );
 
   // Type assertion: tRPC list query response structure
-  const typedResponse = response as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    | { items: any[]; count: number; meta?: { totalCount?: number } }
+  const typedResponse = response as
+    | { items: TData[]; count: number; meta?: { totalCount?: number } }
     | undefined;
 
   // useQuery returns error as Error | null when throwOnError is false (default)

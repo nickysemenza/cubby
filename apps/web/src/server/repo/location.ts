@@ -35,6 +35,7 @@ import {
   associatePendingImages,
   buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
+import { notFoundError } from "~/lib/error-messages";
 import {
   location,
   locationImage,
@@ -564,7 +565,7 @@ export const getLocationById = async (
   });
 
   if (!res) {
-    throw new Error(`Location ${id} not found`);
+    throw new Error(notFoundError("Location", id));
   }
 
   // Fetch parent chain recursively (up to 10 levels)

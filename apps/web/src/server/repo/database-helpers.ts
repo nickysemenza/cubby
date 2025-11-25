@@ -13,6 +13,7 @@ import {
 } from "~/server/db";
 import { productUnitMappings, image } from "~/server/db/schema";
 import { unsafeProductId } from "~/schemas/identifiers";
+import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (
@@ -239,7 +240,7 @@ export const insertAndReturn = async <T extends PgTable>(
   const result = await tx.insert(table).values(values).returning();
   const [created] = result as InferSelectModel<T>[];
   if (!created) {
-    throw new Error("Failed to insert record");
+    throw new Error(FAILED_TO_INSERT);
   }
   return created;
 };
@@ -280,7 +281,7 @@ export const insertAndReturnDb = async <T extends PgTable>(
   const result = await getDb(db).insert(table).values(values).returning();
   const [created] = result as InferSelectModel<T>[];
   if (!created) {
-    throw new Error("Failed to insert record");
+    throw new Error(FAILED_TO_INSERT);
   }
   return created;
 };
@@ -304,7 +305,7 @@ export const updateAndReturn = async <T extends PgTable>(
   const result = await tx.update(table).set(values).where(where).returning();
   const [updated] = result as InferSelectModel<T>[];
   if (!updated) {
-    throw new Error("Failed to update record");
+    throw new Error(FAILED_TO_UPDATE);
   }
   return updated;
 };
@@ -332,7 +333,7 @@ export const updateAndReturnDb = async <T extends PgTable>(
     .returning();
   const [updated] = result as InferSelectModel<T>[];
   if (!updated) {
-    throw new Error("Failed to update record");
+    throw new Error(FAILED_TO_UPDATE);
   }
   return updated;
 };

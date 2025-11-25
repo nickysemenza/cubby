@@ -19,6 +19,7 @@ import {
   addProductSourceMetadata,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
+import { notFoundError } from "~/lib/error-messages";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
 import {
@@ -58,7 +59,7 @@ export const mergeIngredients = async (
     });
 
     if (!targetRec) {
-      throw new Error(`Target ingredient ${target} not found`);
+      throw new Error(notFoundError("Target ingredient", target));
     }
 
     const aliasRecs = await tx.query.ingredient.findMany({
@@ -148,7 +149,7 @@ export const getIngredientByID = async (
   });
 
   if (!ingredientData) {
-    throw new Error(`Ingredient ${id} not found`);
+    throw new Error(notFoundError("Ingredient", id));
   }
 
   return await dbIngredientToAPI(db, ingredientData);

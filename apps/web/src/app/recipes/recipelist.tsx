@@ -1,7 +1,6 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
@@ -10,11 +9,15 @@ import {
   createImageColumn,
 } from "../_components/data-table/columnHelpers";
 import { useTableList } from "../_components/hooks/useTableList";
+import { type RecipeOut } from "~/schemas/recipe";
 
 export function RecipeList() {
   const api = useTRPC();
 
-  const { data, totalCount, isLoading, error, tableState } = useTableList({
+  const { data, totalCount, isLoading, error, tableState } = useTableList<
+    { nameFilter: string | undefined },
+    RecipeOut
+  >({
     queryOptions: api.recipe.list.queryOptions,
     buildFilters: (tableState) => ({
       nameFilter: tableState.getColumnFilter("name"),
@@ -23,7 +26,7 @@ export function RecipeList() {
   });
 
   // Set up columns using helpers
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  const columnHelper = createColumnHelper<RecipeOut>();
   const columns = [
     createImageColumn(columnHelper),
     createNameColumn(columnHelper, "recipe"),
