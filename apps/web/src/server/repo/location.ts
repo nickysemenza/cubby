@@ -530,24 +530,20 @@ export const locationList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute both queries
-  const results = await getDb(db).query.location.findMany({
-    where: whereClause,
-    ...relations.location.full,
-    orderBy: orderByClause,
-    limit: take,
-    offset: skip,
-  });
-
-  const [countResult] = await getDb(db)
-    .select({ count: count() })
-    .from(location)
-    .where(whereClause);
-
-  const totalCount = countResult?.count ?? 0;
+  // Execute both queries in parallel
+  const [results, [countResult]] = await Promise.all([
+    getDb(db).query.location.findMany({
+      where: whereClause,
+      ...relations.location.full,
+      orderBy: orderByClause,
+      limit: take,
+      offset: skip,
+    }),
+    getDb(db).select({ count: count() }).from(location).where(whereClause),
+  ]);
 
   const items = results.map(dbLocationToAPIWithChildren);
-  return { data: items, count: totalCount };
+  return { data: items, count: countResult?.count ?? 0 };
 };
 
 export const getLocationById = async (
