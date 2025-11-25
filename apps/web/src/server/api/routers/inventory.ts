@@ -6,6 +6,7 @@ import {
   updateInventoryEntry,
   createInventoryEntry,
   bulkProcessInventoryEntries,
+  bulkMoveInventoryEntries,
   checkUniqueProductDuplicate,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
@@ -13,6 +14,7 @@ import {
   inventoryCreatePayloadData,
   inventoryBulkOperationPayload,
   inventoryUpdateInput,
+  bulkMovePayload,
 } from "~/schemas/inventory";
 import { createEntityCrudProcedures } from "../crud-factory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
@@ -114,6 +116,14 @@ const bulkProcess = protectedProcedure
     return result;
   });
 
+// Bulk move inventory entries between locations
+const bulkMove = protectedProcedure
+  .input(bulkMovePayload)
+  .output(z.array(inventoryWithLocationAndProductOut))
+  .mutation(async ({ ctx, input }) => {
+    return await bulkMoveInventoryEntries(ctx.db, ctx.organizationId, input);
+  });
+
 // Find products with expectedQuantity=1 in multiple locations
 const findDuplicates = protectedProcedure
   .input(
@@ -161,5 +171,6 @@ export const inventoryRouter = createTRPCRouter({
   update,
   create,
   bulkProcess,
+  bulkMove,
   findDuplicates,
 });

@@ -48,3 +48,19 @@ export const inventoryBulkOperationPayload = z.object({
   locationId: locationId,
   items: z.array(inventoryBulkOperationItem),
 });
+
+// Schema for bulk move operations (moving items between locations)
+export const bulkMoveItem = z.object({
+  inventoryEntryId: inventoryId,
+  quantity: amount, // How much to move (can be less than total for partial moves)
+});
+
+export type BulkMoveItem = z.infer<typeof bulkMoveItem>;
+
+export const bulkMovePayload = z.object({
+  sourceLocationId: locationId,
+  targetLocationId: locationId,
+  items: z.array(bulkMoveItem).min(1),
+});
+
+export type BulkMovePayload = z.infer<typeof bulkMovePayload>;

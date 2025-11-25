@@ -22,7 +22,10 @@ import {
   buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
 import { notFoundError } from "~/lib/error-messages";
-import { InventoryBulkOperationItem } from "~/schemas/inventory";
+import {
+  InventoryBulkOperationItem,
+  type BulkMovePayload,
+} from "~/schemas/inventory";
 import {
   type InventoryId,
   type OrganizationId,
@@ -415,6 +418,184 @@ export const bulkProcessInventoryEntries = async (
       .update(location)
       .set({ lastBulkInventory: new Date() })
       .where(eq(location.id, locationId));
+
+    return results;
+  });
+
+  return processedItems.map(dbInventoryEntryToAPI);
+};
+
+/**
+ * Find inventory entry by product and location
+ */
+export const findInventoryByProductAndLocation = async (
+  db: Database | Transaction,
+  organizationId: OrganizationId,
+  productId: ProductId,
+  targetLocationId: LocationId,
+) => {
+  const dbClient = "query" in db ? db : getDb(db as Database);
+  return await dbClient.query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.productId, productId),
+      eq(inventoryEntry.locationId, targetLocationId),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
+    ...relations.inventory.full,
+  });
+};
+
+/**
+ * Bulk move inventory entries from one location to another.
+ * Supports partial moves (moving less than the full quantity).
+ */
+export const bulkMoveInventoryEntries = async (
+  db: Database,
+  organizationId: OrganizationId,
+  payload: BulkMovePayload,
+) => {
+  // Validate source and target are different
+  if (payload.sourceLocationId === payload.targetLocationId) {
+    throw new Error("Source and target locations must be different");
+  }
+
+  const processedItems = await withTransaction(db, async (tx: Transaction) => {
+    const results: InventoryEntryDeepDB[] = [];
+
+    for (const item of payload.items) {
+      // 1. Get source entry
+      const sourceEntry = await tx.query.inventoryEntry.findFirst({
+        where: and(
+          eq(inventoryEntry.id, item.inventoryEntryId),
+          eq(inventoryEntry.organizationId, organizationId),
+        ),
+        ...relations.inventory.full,
+      });
+
+      if (!sourceEntry) {
+        throw new Error(
+          notFoundError("Inventory entry", item.inventoryEntryId),
+        );
+      }
+
+      // 2. Parse quantities (amount.value is already a number)
+      const parsedSourceAmount = amount.parse(sourceEntry.amount);
+      const sourceQuantity = parsedSourceAmount.value;
+      const moveQuantity = item.quantity.value;
+
+      if (moveQuantity > sourceQuantity) {
+        throw new Error(
+          `Cannot move ${moveQuantity} ${item.quantity.unit} - only ${sourceQuantity} available`,
+        );
+      }
+
+      // 3. Check if product already exists at target location
+      const existingAtTarget = await tx.query.inventoryEntry.findFirst({
+        where: and(
+          eq(inventoryEntry.productId, sourceEntry.productId),
+          eq(inventoryEntry.locationId, payload.targetLocationId),
+          eq(inventoryEntry.organizationId, organizationId),
+        ),
+        ...relations.inventory.full,
+      });
+
+      if (moveQuantity >= sourceQuantity) {
+        // Full move
+        if (existingAtTarget) {
+          // Merge with existing entry at target
+          const existingAmount = amount.parse(existingAtTarget.amount);
+          const existingQuantity = existingAmount.value;
+          const newQuantity = existingQuantity + moveQuantity;
+
+          // Update target entry with combined quantity
+          await updateAndReturn(
+            tx,
+            inventoryEntry,
+            { amount: { value: newQuantity, unit: item.quantity.unit } },
+            eq(inventoryEntry.id, existingAtTarget.id),
+          );
+
+          // Delete source entry since we moved everything
+          await tx
+            .delete(inventoryEntry)
+            .where(eq(inventoryEntry.id, item.inventoryEntryId));
+
+          // Fetch updated target entry
+          const updatedTarget = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, existingAtTarget.id),
+            ...relations.inventory.full,
+          });
+          if (updatedTarget) results.push(updatedTarget);
+        } else {
+          // Just update location of existing entry
+          await updateAndReturn(
+            tx,
+            inventoryEntry,
+            { locationId: payload.targetLocationId },
+            eq(inventoryEntry.id, item.inventoryEntryId),
+          );
+
+          // Fetch updated entry
+          const updated = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, item.inventoryEntryId),
+            ...relations.inventory.full,
+          });
+          if (updated) results.push(updated);
+        }
+      } else {
+        // Partial move - reduce source and create/update target
+        const remainingQuantity = sourceQuantity - moveQuantity;
+
+        // Reduce source quantity
+        await updateAndReturn(
+          tx,
+          inventoryEntry,
+          {
+            amount: {
+              value: remainingQuantity,
+              unit: parsedSourceAmount.unit,
+            },
+          },
+          eq(inventoryEntry.id, item.inventoryEntryId),
+        );
+
+        if (existingAtTarget) {
+          // Add to existing entry at target
+          const existingAmount = amount.parse(existingAtTarget.amount);
+          const existingQuantity = existingAmount.value;
+          const newQuantity = existingQuantity + moveQuantity;
+
+          await updateAndReturn(
+            tx,
+            inventoryEntry,
+            { amount: { value: newQuantity, unit: item.quantity.unit } },
+            eq(inventoryEntry.id, existingAtTarget.id),
+          );
+
+          // Fetch updated target entry
+          const updatedTarget = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, existingAtTarget.id),
+            ...relations.inventory.full,
+          });
+          if (updatedTarget) results.push(updatedTarget);
+        } else {
+          // Create new entry at target
+          const created = await insertAndReturn(tx, inventoryEntry, {
+            organizationId: organizationId,
+            productId: sourceEntry.productId,
+            locationId: payload.targetLocationId,
+            amount: item.quantity,
+          });
+
+          // Fetch with relations
+          const fullCreated = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, created.id),
+            ...relations.inventory.full,
+          });
+          if (fullCreated) results.push(fullCreated);
+        }
+      }
+    }
 
     return results;
   });

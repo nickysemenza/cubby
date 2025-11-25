@@ -551,6 +551,308 @@ describe("inventory router", () => {
     );
   });
 
+  describe("bulkMove", () => {
+    it("should move full quantity to a new location", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: "test-user-id" },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create source and target locations
+      const sourceLocation = await createLocation(
+        db,
+        { name: "Source Location", type: "room", parentId: null },
+        organizationId,
+      );
+      const targetLocation = await createLocation(
+        db,
+        { name: "Target Location", type: "room", parentId: null },
+        organizationId,
+      );
+
+      // Create product
+      const product = await createProduct(
+        db,
+        {
+          name: "Move Product",
+          manufacturer: "Brand",
+          model: "Model",
+          upc: "123456789012",
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        organizationId,
+      );
+
+      // Create inventory at source
+      const entry = await caller.create({
+        productId: product.id,
+        locationId: sourceLocation.id,
+        amount: { value: 10, unit: "pieces" },
+      });
+
+      // Move full quantity
+      const result = await caller.bulkMove({
+        sourceLocationId: sourceLocation.id,
+        targetLocationId: targetLocation.id,
+        items: [
+          {
+            inventoryEntryId: entry.id,
+            quantity: { value: 10, unit: "pieces" },
+          },
+        ],
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].location.id).toEqual(targetLocation.id);
+      expect(result[0].amount.value).toEqual(10);
+
+      // Verify source location is empty
+      const sourceEntries = await caller.list({
+        filters: { locationIdFilter: sourceLocation.id },
+        pagination: { pageSize: 10, pageIndex: 0 },
+      });
+      expect(sourceEntries.items.length).toEqual(0);
+    });
+
+    it("should move partial quantity", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: "test-user-id" },
+          organizationId: organizationId,
+        }),
+      );
+
+      const sourceLocation = await createLocation(
+        db,
+        { name: "Source", type: "room", parentId: null },
+        organizationId,
+      );
+      const targetLocation = await createLocation(
+        db,
+        { name: "Target", type: "room", parentId: null },
+        organizationId,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Split Product",
+          manufacturer: "Brand",
+          model: "Model",
+          upc: "111111111111",
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        organizationId,
+      );
+
+      const entry = await caller.create({
+        productId: product.id,
+        locationId: sourceLocation.id,
+        amount: { value: 10, unit: "kg" },
+      });
+
+      // Move only 3 of 10
+      const result = await caller.bulkMove({
+        sourceLocationId: sourceLocation.id,
+        targetLocationId: targetLocation.id,
+        items: [
+          {
+            inventoryEntryId: entry.id,
+            quantity: { value: 3, unit: "kg" },
+          },
+        ],
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].amount.value).toEqual(3);
+      expect(result[0].location.id).toEqual(targetLocation.id);
+
+      // Verify source still has 7
+      const sourceEntry = await caller.getByID({ id: entry.id });
+      expect(sourceEntry.amount.value).toEqual(7);
+    });
+
+    it("should merge with existing inventory at target", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: "test-user-id" },
+          organizationId: organizationId,
+        }),
+      );
+
+      const sourceLocation = await createLocation(
+        db,
+        { name: "Source", type: "room", parentId: null },
+        organizationId,
+      );
+      const targetLocation = await createLocation(
+        db,
+        { name: "Target", type: "room", parentId: null },
+        organizationId,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Merge Product",
+          manufacturer: "Brand",
+          model: "Model",
+          upc: "222222222222",
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        organizationId,
+      );
+
+      // Create inventory at both locations
+      const sourceEntry = await caller.create({
+        productId: product.id,
+        locationId: sourceLocation.id,
+        amount: { value: 5, unit: "lbs" },
+      });
+
+      const targetEntry = await caller.create({
+        productId: product.id,
+        locationId: targetLocation.id,
+        amount: { value: 3, unit: "lbs" },
+      });
+
+      // Move full quantity from source - should merge
+      const result = await caller.bulkMove({
+        sourceLocationId: sourceLocation.id,
+        targetLocationId: targetLocation.id,
+        items: [
+          {
+            inventoryEntryId: sourceEntry.id,
+            quantity: { value: 5, unit: "lbs" },
+          },
+        ],
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toEqual(targetEntry.id); // Same entry updated
+      expect(result[0].amount.value).toEqual(8); // 3 + 5 = 8
+    });
+
+    it("should throw error when source and target are the same", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: "test-user-id" },
+          organizationId: organizationId,
+        }),
+      );
+
+      const location = await createLocation(
+        db,
+        { name: "Same Location", type: "room", parentId: null },
+        organizationId,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Error Product",
+          manufacturer: "Brand",
+          model: "Model",
+          upc: "333333333333",
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        organizationId,
+      );
+
+      const entry = await caller.create({
+        productId: product.id,
+        locationId: location.id,
+        amount: { value: 5, unit: "units" },
+      });
+
+      await expect(
+        caller.bulkMove({
+          sourceLocationId: location.id,
+          targetLocationId: location.id,
+          items: [
+            {
+              inventoryEntryId: entry.id,
+              quantity: { value: 5, unit: "units" },
+            },
+          ],
+        }),
+      ).rejects.toThrow("Source and target locations must be different");
+    });
+
+    it("should throw error when move quantity exceeds available", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: "test-user-id" },
+          organizationId: organizationId,
+        }),
+      );
+
+      const sourceLocation = await createLocation(
+        db,
+        { name: "Source", type: "room", parentId: null },
+        organizationId,
+      );
+      const targetLocation = await createLocation(
+        db,
+        { name: "Target", type: "room", parentId: null },
+        organizationId,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Limited Product",
+          manufacturer: "Brand",
+          model: "Model",
+          upc: "444444444444",
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        organizationId,
+      );
+
+      const entry = await caller.create({
+        productId: product.id,
+        locationId: sourceLocation.id,
+        amount: { value: 5, unit: "items" },
+      });
+
+      await expect(
+        caller.bulkMove({
+          sourceLocationId: sourceLocation.id,
+          targetLocationId: targetLocation.id,
+          items: [
+            {
+              inventoryEntryId: entry.id,
+              quantity: { value: 10, unit: "items" }, // More than available
+            },
+          ],
+        }),
+      ).rejects.toThrow("Cannot move 10 items - only 5 available");
+    });
+  });
+
   it("should handle create and update failures gracefully", async () => {
     // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryRouter);
