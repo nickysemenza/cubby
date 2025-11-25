@@ -12,7 +12,13 @@ import { ZodError } from "zod";
 
 import { db } from "~/server/db";
 import { flatten } from "flat";
-import { type Span, context, propagation } from "@opentelemetry/api";
+import {
+  type Span,
+  SpanStatusCode,
+  context,
+  propagation,
+  trace,
+} from "@opentelemetry/api";
 import { getTracer, TraceNames } from "~/server/tracing";
 import { auth as betterAuth } from "~/lib/auth";
 import { USDAClient } from "~/server/clients/usda";
@@ -27,6 +33,48 @@ import {
   unsafeOrganizationId,
   type OrganizationId,
 } from "~/schemas/identifiers";
+import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
+
+/**
+ * Create a TRPCError with consistent error handling:
+ * - Derives tRPC error code from AppErrorReason
+ * - Logs to console with [REASON] prefix
+ * - Annotates the active tracing span with error details
+ * - Records the original exception if provided
+ */
+export function createAppError(
+  reason: AppErrorReason,
+  message: string,
+  originalError?: unknown,
+): TRPCError {
+  const code = AppErrors[reason];
+
+  // Log to console
+  if (originalError) {
+    console.error(`[${reason}] ${message}`, originalError);
+  } else {
+    console.error(`[${reason}] ${message}`);
+  }
+
+  // Annotate tracing span
+  const span = trace.getActiveSpan();
+  if (span) {
+    span.setAttributes({
+      "error.reason": reason,
+      "error.message": message,
+    });
+    span.setStatus({ code: SpanStatusCode.ERROR, message });
+    if (originalError instanceof Error || typeof originalError === "string") {
+      span.recordException(originalError);
+    }
+  }
+
+  return new TRPCError({
+    code,
+    message,
+    cause: { reason, originalError },
+  });
+}
 
 /**
  * Map database product record to ProductTopLevelOut format
@@ -102,10 +150,10 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       });
 
       if (!userOrganizations) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Unable to fetch organization membership",
-        });
+        throw createAppError(
+          "ORGANIZATION_FETCH_FAILED",
+          "Unable to fetch organization membership",
+        );
       }
 
       // Try to find organization by ID or slug
@@ -114,10 +162,10 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       );
 
       if (!matchedOrg) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: `You are not a member of organization '${orgIdOrSlug}'`,
-        });
+        throw createAppError(
+          "NOT_ORGANIZATION_MEMBER",
+          `You are not a member of organization '${orgIdOrSlug}'`,
+        );
       }
 
       organizationId = unsafeOrganizationId(matchedOrg.id);
@@ -258,7 +306,7 @@ const tracingMiddleWare = t.middleware(async (opts) => {
 // Otherwise, throw an UNAUTHORIZED code
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.auth?.userId) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
+    throw createAppError("UNAUTHORIZED", "Unauthorized");
   }
   return next({
     ctx: {
@@ -268,16 +316,13 @@ const isAuthed = t.middleware(({ next, ctx }) => {
 });
 
 // Check if an organization is selected
-// Otherwise, throw an UNAUTHORIZED code
-import { AppErrorReason } from "~/lib/app-error-codes";
-
+// Otherwise, throw a PRECONDITION_FAILED code
 const requireOrganization = t.middleware(({ next, ctx }) => {
   if (!ctx.organizationId) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Please select an organization to continue",
-      cause: { reason: AppErrorReason.NO_ORGANIZATION_SELECTED },
-    });
+    throw createAppError(
+      "NO_ORGANIZATION_SELECTED",
+      "Please select an organization to continue",
+    );
   }
   // Type assertion is safe because we've checked ctx.organizationId is not null
   return next({
@@ -310,7 +355,7 @@ export const protectedProcedure = publicProcedure
  */
 const isSystemOrAuth = t.middleware(({ next, ctx }) => {
   if (!ctx.auth?.userId) {
-    throw new TRPCError({ code: "UNAUTHORIZED" });
+    throw createAppError("UNAUTHORIZED", "Unauthorized");
   }
   return next({
     ctx,

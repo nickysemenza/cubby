@@ -1,4 +1,4 @@
-import { TRPCError } from "@trpc/server";
+import { createAppError } from "~/server/api/trpc";
 import {
   generateImageKey,
   generatePresignedUploadUrl,
@@ -198,10 +198,7 @@ export const getImageById = async (
   });
 
   if (!imageRecord) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Image not found",
-    });
+    throw createAppError("IMAGE_NOT_FOUND", "Image not found");
   }
 
   // Use the dbImageToAPI helper to transform the image

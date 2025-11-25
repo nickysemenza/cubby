@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, createAppError } from "../trpc";
 import {
   getInventoryEntryByID,
   inventoryentryList,
@@ -9,14 +9,12 @@ import {
   checkUniqueProductDuplicate,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { TRPCError } from "@trpc/server";
 import {
   inventoryCreatePayloadData,
   inventoryBulkOperationPayload,
   inventoryUpdateInput,
 } from "~/schemas/inventory";
 import { createEntityCrudProcedures } from "../crud-factory";
-import { AppErrorReason } from "~/lib/app-error-codes";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import { inventoryId, type InventoryId } from "~/schemas/identifiers";
 
@@ -45,10 +43,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         services.organizationId!,
       );
       if (res === null) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Inventory entry not found",
-        });
+        throw createAppError(
+          "INVENTORY_NOT_FOUND",
+          "Inventory entry not found",
+        );
       }
       return res;
     },
@@ -72,11 +70,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
 
       if (duplicate) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
-          cause: { reason: AppErrorReason.PRODUCT_ALREADY_EXISTS },
-        });
+        throw createAppError(
+          "PRODUCT_ALREADY_EXISTS",
+          `This unique item "${duplicate.productName}" is already inventoried at "${duplicate.locationName}". Please update the existing entry instead of creating a duplicate.`,
+        );
       }
 
       // organizationId guaranteed non-null by requireOrganization middleware

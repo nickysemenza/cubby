@@ -1,9 +1,6 @@
 import type { TRPCClientErrorLike } from "@trpc/client";
 import type { AppRouter } from "~/server/api/root";
-import {
-  AppErrorReason,
-  type AppErrorReason as TAppErrorReason,
-} from "./app-error-codes";
+import { type AppErrorReason } from "./app-error-codes";
 
 export function isTRPCClientError(
   err: unknown,
@@ -18,7 +15,7 @@ export function isTRPCClientError(
 export type AppErrorDetails = {
   message: string;
   code?: string;
-  reason?: TAppErrorReason;
+  reason?: AppErrorReason;
 };
 
 export function getAppErrorDetails(error: unknown): AppErrorDetails {
@@ -27,7 +24,7 @@ export function getAppErrorDetails(error: unknown): AppErrorDetails {
     const reason = (() => {
       const d = error.data as Record<string, unknown> | undefined;
       const r = d?.["reason"];
-      return typeof r === "string" ? (r as TAppErrorReason) : undefined;
+      return typeof r === "string" ? (r as AppErrorReason) : undefined;
     })();
     return {
       message: error.message,
@@ -67,7 +64,7 @@ export function shouldRetryQuery(
   return failureCount < 3;
 }
 
-export { AppErrorReason };
+export type { AppErrorReason };
 
 /**
  * Safely extract error message from unknown error type.

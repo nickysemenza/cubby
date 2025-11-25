@@ -1,5 +1,8 @@
-import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  createAppError,
+} from "~/server/api/trpc";
 import {
   initiateUploadWithoutEntitySchema,
   initiateUploadWithoutEntityResponseSchema,
@@ -36,11 +39,11 @@ export const imageRouter = createTRPCRouter({
         );
         return buildPaginatedResponse(input.pagination, data, count);
       } catch (error) {
-        console.error("Error listing images:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to list images",
-        });
+        throw createAppError(
+          "IMAGE_LIST_FAILED",
+          "Failed to list images",
+          error,
+        );
       }
     }),
 
@@ -66,11 +69,11 @@ export const imageRouter = createTRPCRouter({
           url: uploadData.url,
         };
       } catch (error) {
-        console.error("Error initiating upload:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to initiate upload",
-        });
+        throw createAppError(
+          "IMAGE_UPLOAD_FAILED",
+          "Failed to initiate upload",
+          error,
+        );
       }
     }),
 
@@ -84,11 +87,7 @@ export const imageRouter = createTRPCRouter({
       try {
         return await getImageById(ctx.db, ctx.organizationId, input.id);
       } catch (error) {
-        console.error("Error getting image by ID:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to get image",
-        });
+        throw createAppError("IMAGE_GET_FAILED", "Failed to get image", error);
       }
     }),
 
@@ -108,11 +107,11 @@ export const imageRouter = createTRPCRouter({
 
         return result;
       } catch (error) {
-        console.error("Error culling pending images:", error);
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Failed to cull pending images",
-        });
+        throw createAppError(
+          "IMAGE_CULL_FAILED",
+          "Failed to cull pending images",
+          error,
+        );
       }
     }),
 });

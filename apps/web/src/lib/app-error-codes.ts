@@ -1,7 +1,29 @@
-export const AppErrorReason = {
-  NO_ORGANIZATION_SELECTED: "NO_ORGANIZATION_SELECTED",
-  PRODUCT_ALREADY_EXISTS: "PRODUCT_ALREADY_EXISTS",
-} as const;
+import { type TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 
-export type AppErrorReason =
-  (typeof AppErrorReason)[keyof typeof AppErrorReason];
+/**
+ * App error definitions: key = reason, value = tRPC code.
+ * Adding a new error requires only one entry here.
+ */
+export const AppErrors = {
+  // Auth/Organization
+  UNAUTHORIZED: "UNAUTHORIZED",
+  NO_ORGANIZATION_SELECTED: "PRECONDITION_FAILED",
+  NOT_ORGANIZATION_MEMBER: "FORBIDDEN",
+  ORGANIZATION_FETCH_FAILED: "FORBIDDEN",
+
+  // Entity not found
+  RECIPE_NOT_FOUND: "NOT_FOUND",
+  INVENTORY_NOT_FOUND: "NOT_FOUND",
+  IMAGE_NOT_FOUND: "NOT_FOUND",
+
+  // Conflict/duplicate
+  PRODUCT_ALREADY_EXISTS: "CONFLICT",
+
+  // Image operations
+  IMAGE_LIST_FAILED: "INTERNAL_SERVER_ERROR",
+  IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",
+  IMAGE_GET_FAILED: "INTERNAL_SERVER_ERROR",
+  IMAGE_CULL_FAILED: "INTERNAL_SERVER_ERROR",
+} as const satisfies Record<string, TRPC_ERROR_CODE_KEY>;
+
+export type AppErrorReason = keyof typeof AppErrors;

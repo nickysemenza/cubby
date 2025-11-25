@@ -1,5 +1,9 @@
-import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure, systemProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  systemProcedure,
+  createAppError,
+} from "../trpc";
 
 import { z } from "zod";
 import { compactRecipeSchema } from "~/codec/codec";
@@ -43,7 +47,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         services.organizationId!,
       );
       if (res === null) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Recipe not found" });
+        throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
       }
       return res;
     },

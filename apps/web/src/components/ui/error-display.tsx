@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import { getAppErrorDetails } from "~/lib/error-utils";
-import { AppErrorReason } from "~/lib/app-error-codes";
 
 interface ErrorDisplayProps {
   error: unknown;
@@ -29,13 +28,16 @@ export function ErrorDisplay({ error, className }: ErrorDisplayProps) {
           </Button>
         </div>
       ) : code === "PRECONDITION_FAILED" ||
-        reason === AppErrorReason.NO_ORGANIZATION_SELECTED ? (
+        reason === "NO_ORGANIZATION_SELECTED" ? (
         <div className="flex items-center gap-3">
           <span>Please select an organization to continue</span>
           <OrganizationSwitcher />
         </div>
       ) : (
-        <span>{message}</span>
+        <span>
+          {reason && <span className="font-mono text-sm">[{reason}]</span>}{" "}
+          {message}
+        </span>
       )}
     </div>
   );
