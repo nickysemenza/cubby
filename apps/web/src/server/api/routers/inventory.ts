@@ -55,6 +55,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     list: async (services, filters, sort, pagination) => {
       return await inventoryentryList(
         services.db,
+        services.organizationId!,
         sort,
         pagination,
         filters.productNameFilter,

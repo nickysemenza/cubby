@@ -131,20 +131,20 @@ const dbImageToAPI = async (
  */
 export const imageList = async (
   db: Database,
+  organizationId: string,
   filterText: string | undefined,
   sort: { orderBy: string; direction: "asc" | "desc" },
   pagination: { pageIndex: number; pageSize: number },
 ) => {
   const dbClient = getDb(db);
 
-  // Build where conditions
-  const whereConditions = [];
+  // Build where conditions - always include organization filter for security
+  const whereConditions = [eq(image.organizationId, organizationId)];
   if (filterText && filterText.trim() !== "") {
     whereConditions.push(ilike(image.filename, `%${filterText}%`));
   }
 
-  const whereClause =
-    whereConditions.length > 0 ? and(...whereConditions) : undefined;
+  const whereClause = and(...whereConditions);
 
   // Build orderBy using helper
   const orderByClause = buildOrderBy(image, sort, [
@@ -189,11 +189,12 @@ export const imageList = async (
  */
 export const getImageById = async (
   db: Database,
+  organizationId: string,
   imageId: string,
 ): Promise<ImageWithEntity> => {
-  // Find the image by ID
+  // Find the image by ID with organization filter for security
   const imageRecord = await getDb(db).query.image.findFirst({
-    where: eq(image.id, imageId),
+    where: and(eq(image.id, imageId), eq(image.organizationId, organizationId)),
   });
 
   if (!imageRecord) {
@@ -210,11 +211,13 @@ export const getImageById = async (
 /**
  * Cull (delete) pending images that are older than the specified threshold
  * @param db Database client
+ * @param organizationId Organization ID to scope the cull to
  * @param olderThanHours Delete images older than this many hours
  * @returns Object with count of deleted images and related information
  */
 export const cullPendingImages = async (
   db: Database,
+  organizationId: string,
   olderThanHours: number,
 ) => {
   const dbClient = getDb(db);
@@ -249,9 +252,13 @@ export const cullPendingImages = async (
     ...recipeAssocs.map((a) => a.imageId),
   ]);
 
-  // Find pending images older than the cutoff date
+  // Find pending images older than the cutoff date, scoped to organization
   const allPendingImages = await dbClient.query.image.findMany({
-    where: and(eq(image.status, "PENDING"), lt(image.createdAt, cutoffDate)),
+    where: and(
+      eq(image.organizationId, organizationId),
+      eq(image.status, "PENDING"),
+      lt(image.createdAt, cutoffDate),
+    ),
     columns: {
       id: true,
       key: true,

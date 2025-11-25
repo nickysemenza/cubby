@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { getErrorMessage } from "~/lib/error-utils";
 
 export interface UseCreateDialogOptions<TEntity> {
   entityName: string; // e.g., "ingredient", "product"
@@ -100,9 +101,7 @@ export function useCreateDialog<TEntity, TInput>({
       }
     },
     onError: (error: unknown) => {
-      toast.error(
-        `Failed to create ${entityName}: ${(error as Error).message}`,
-      );
+      toast.error(`Failed to create ${entityName}: ${getErrorMessage(error)}`);
     },
   });
 
@@ -138,7 +137,7 @@ export function useCreateDialog<TEntity, TInput>({
     handleCreate,
     handleCancel,
     isPending: mutation.isPending,
-    error: mutation.error ? (mutation.error as Error).message : undefined,
+    error: mutation.error ? getErrorMessage(mutation.error) : undefined,
     initialData,
   };
 }

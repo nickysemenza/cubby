@@ -1,6 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-// Using legacy Project scoping for images until repo migration completes
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   initiateUploadWithoutEntitySchema,
   initiateUploadWithoutEntityResponseSchema,
@@ -23,13 +22,14 @@ export const imageRouter = createTRPCRouter({
   /**
    * List all images with standard pagination, sorting, and filtering
    */
-  list: publicProcedure
+  list: protectedProcedure
     .input(imageListFiltersSchema)
     .output(imageListResponseSchema)
     .query(async ({ ctx, input }) => {
       try {
         const { data, count } = await imageList(
           ctx.db,
+          ctx.organizationId,
           input.filters.searchFilter,
           input.sort,
           input.pagination,
@@ -47,17 +47,12 @@ export const imageRouter = createTRPCRouter({
   /**
    * Initiate an image upload
    */
-  uploadImage: publicProcedure
+  uploadImage: protectedProcedure
     .input(initiateUploadWithoutEntitySchema)
     .output(initiateUploadWithoutEntityResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        if (!ctx.organizationId) {
-          throw new TRPCError({
-            code: "UNAUTHORIZED",
-            message: "Project ID required",
-          });
-        }
+        // organizationId is guaranteed by protectedProcedure
         const uploadData = await initiateImageUploadWithoutEntity(
           ctx.db,
           input,
@@ -82,12 +77,12 @@ export const imageRouter = createTRPCRouter({
   /**
    * Get an image by ID with entity association information
    */
-  getImageById: publicProcedure
+  getImageById: protectedProcedure
     .input(getImageByIdSchema)
     .output(imageWithEntitySchema)
     .query(async ({ ctx, input }) => {
       try {
-        return await getImageById(ctx.db, input.id);
+        return await getImageById(ctx.db, ctx.organizationId, input.id);
       } catch (error) {
         console.error("Error getting image by ID:", error);
         throw new TRPCError({
@@ -100,12 +95,16 @@ export const imageRouter = createTRPCRouter({
   /**
    * Cull (delete) pending images that are older than the specified threshold
    */
-  cullPendingImages: publicProcedure
+  cullPendingImages: protectedProcedure
     .input(cullPendingImagesSchema)
     .output(cullPendingImagesResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const result = await cullPendingImages(ctx.db, input.olderThanHours);
+        const result = await cullPendingImages(
+          ctx.db,
+          ctx.organizationId,
+          input.olderThanHours,
+        );
 
         return result;
       } catch (error) {

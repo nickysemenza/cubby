@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
+import { getErrorMessage } from "~/lib/error-utils";
 
 export interface UseEditModeOptions<TResult = unknown> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -78,7 +79,7 @@ export function useEditMode<TData, TResult = unknown>({
       }
     },
     onError: (error: unknown) => {
-      setError((error as Error).message);
+      setError(getErrorMessage(error));
     },
   });
 

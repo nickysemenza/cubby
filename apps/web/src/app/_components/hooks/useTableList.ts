@@ -95,15 +95,16 @@ export function useTableList<TFilters>({
   );
 
   // Type assertion: tRPC list query response structure
-  const typedResponse =
-    response as // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    { items: any[]; count: number; meta?: { totalCount?: number } } | undefined;
+  const typedResponse = response as  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    | { items: any[]; count: number; meta?: { totalCount?: number } }
+    | undefined;
 
+  // useQuery returns error as Error | null when throwOnError is false (default)
   return {
     data: typedResponse?.items || [],
     totalCount: typedResponse?.meta?.totalCount || typedResponse?.count || 0,
     isLoading,
-    error: error as Error | null,
+    error: error instanceof Error ? error : null,
     tableState,
   };
 }

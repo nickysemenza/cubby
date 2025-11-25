@@ -44,16 +44,20 @@ const RecipeDetail: React.FC<{
     };
 
     async function fetchMyAPI() {
-      // Only get IDs from SectionIngredients that are actually ingredients (not recipes)
-      const ingMap = await getBulkIngredients(
-        ingredients
-          .filter((i) => i.type === "ingredient")
-          .map((i) => i.ingredient.id),
-      );
-      dataSet(ingMap);
+      try {
+        // Only get IDs from SectionIngredients that are actually ingredients (not recipes)
+        const ingMap = await getBulkIngredients(
+          ingredients
+            .filter((i) => i.type === "ingredient")
+            .map((i) => i.ingredient.id),
+        );
+        dataSet(ingMap);
+      } catch (error) {
+        console.error("Failed to fetch ingredients:", error);
+      }
     }
 
-    fetchMyAPI();
+    void fetchMyAPI();
   }, [ingredients, trpcClient.ingredient.getByID]);
 
   return (

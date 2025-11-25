@@ -139,6 +139,7 @@ export const getInventoryEntryByID = async (
 
 export const inventoryentryList = async (
   db: Database,
+  organizationId: OrganizationId,
   sort: SortParams,
   pagination: PaginationParams,
   productNameFilter?: string,
@@ -155,16 +156,23 @@ export const inventoryentryList = async (
 
   // Build where conditions - note Drizzle doesn't support nested filters in relational queries
   // We'll need to do joins for filtering on related tables
-  let whereClause = undefined;
+  // Always include organization filter for security
+  const baseCondition = eq(inventoryEntry.organizationId, organizationId);
 
   // For location ID filter, we can use a simple where clause
+  let whereClause: ReturnType<typeof and> | ReturnType<typeof eq> =
+    baseCondition;
   if (locationIdFilter && !productNameFilter && !locationNameFilter) {
-    whereClause = eq(inventoryEntry.locationId, locationIdFilter);
+    whereClause = and(
+      baseCondition,
+      eq(inventoryEntry.locationId, locationIdFilter),
+    );
   }
 
   // If we have product or location name filters, we need to use query builder with joins
   if (productNameFilter || locationNameFilter) {
-    const conditions = [];
+    // Always include organization filter for security
+    const conditions = [eq(inventoryEntry.organizationId, organizationId)];
 
     if (productNameFilter) {
       conditions.push(ilike(product.name, `%${productNameFilter}%`));
@@ -176,8 +184,7 @@ export const inventoryentryList = async (
       conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
     }
 
-    const whereCondition =
-      conditions.length > 1 ? and(...conditions) : conditions[0];
+    const whereCondition = and(...conditions);
 
     // Use query builder for complex filtering
     const [results, [countResult]] = await Promise.all([

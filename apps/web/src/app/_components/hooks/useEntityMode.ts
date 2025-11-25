@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
 import { type Entity } from "~/entities/types";
+import { getErrorMessage } from "~/lib/error-utils";
 
 type EntityMutationCallbacks<TResult> = {
   onSuccess?: (result: TResult) => void;
@@ -35,7 +36,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
       router.push(`/${entities[entityKey].basePath}/${result.id}`);
     },
     onError: (error: unknown) => {
-      setError((error as Error).message);
+      setError(getErrorMessage(error));
       callbacks?.onError?.();
     },
   });
@@ -85,7 +86,7 @@ export function useEntityEditMode<TData, TResult>(
       onCancel();
     },
     onError: (error: unknown) => {
-      setError((error as Error).message);
+      setError(getErrorMessage(error));
       callbacks?.onError?.();
     },
   });
