@@ -121,10 +121,19 @@ export class USDAClient {
     sort: SortParams,
     pagination: PaginationParams,
   ) {
+    // Map generic sort fields to USDA-specific fields
+    const orderByMap: Record<string, "description" | "data_type" | "fdc_id"> = {
+      name: "description",
+      description: "description",
+      data_type: "data_type",
+      fdc_id: "fdc_id",
+    };
+    const orderBy = orderByMap[sort.orderBy] ?? "description";
+
     const data = await this.fetchListFoods({
       nameFilter,
       dataTypeFilter,
-      orderBy: sort.orderBy as "description" | "data_type" | "fdc_id",
+      orderBy,
       direction: sort.direction,
       pageIndex: pagination.pageIndex,
       pageSize: pagination.pageSize,
