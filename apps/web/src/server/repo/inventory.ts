@@ -19,6 +19,7 @@ import {
   updateAndReturn,
   extractImagesFromJoinTable,
   addProductSourceMetadata,
+  buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
 import {
@@ -219,10 +220,10 @@ export const inventoryentryList = async (
       }),
     );
 
-    const inventoryentrys = fullResults
+    const inventoryEntries = fullResults
       .filter((r) => r !== undefined)
       .map((r) => dbInventoryEntryToAPI(r));
-    return { data: inventoryentrys, count: countResult?.count ?? 0 };
+    return { data: inventoryEntries, count: countResult?.count ?? 0 };
   }
 
   // Simple case: no complex filters
@@ -240,8 +241,8 @@ export const inventoryentryList = async (
       .where(whereClause),
   ]);
 
-  const inventoryentrys = results.map((r) => dbInventoryEntryToAPI(r));
-  return { data: inventoryentrys, count: countResult?.count ?? 0 };
+  const inventoryEntries = results.map((r) => dbInventoryEntryToAPI(r));
+  return { data: inventoryEntries, count: countResult?.count ?? 0 };
 };
 
 interface UpdateInventoryEntryData {
@@ -256,21 +257,12 @@ export const updateInventoryEntry = async (
   organizationId: OrganizationId,
   data: UpdateInventoryEntryData,
 ) => {
-  const updateValues: {
-    amount?: z.infer<typeof import("~/codec/codec").amount>;
-    productId?: ProductId;
-    locationId?: LocationId;
-  } = {};
-
-  if (data.amount) {
-    updateValues.amount = data.amount;
-  }
-  if (data.productId) {
-    updateValues.productId = data.productId;
-  }
-  if (data.locationId) {
-    updateValues.locationId = data.locationId;
-  }
+  // Build update values using helper to filter undefined
+  const updateValues = buildPartialUpdateValues({
+    amount: data.amount,
+    productId: data.productId,
+    locationId: data.locationId,
+  });
 
   const updated = await updateAndReturnDb(
     db,
@@ -379,18 +371,11 @@ export const bulkProcessInventoryEntries = async (
           results.push(fullCreated);
         }
       } else {
-        // Update existing inventory entry
-        const updateValues: {
-          amount?: z.infer<typeof import("~/codec/codec").amount>;
-          productId?: ProductId;
-        } = {};
-
-        if (item.amount) {
-          updateValues.amount = item.amount;
-        }
-        if (item.productId) {
-          updateValues.productId = item.productId;
-        }
+        // Update existing inventory entry using helper to filter undefined
+        const updateValues = buildPartialUpdateValues({
+          amount: item.amount,
+          productId: item.productId,
+        });
 
         // Only process if there are actual updates
         if (Object.keys(updateValues).length > 0) {

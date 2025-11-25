@@ -56,7 +56,15 @@
 - **Using unwrapDb()**: For functions accepting `Database | Transaction`, use `unwrapDb(db)` to safely handle both types
 - **Transactions**: Use `withTransaction(db, async (tx) => {...})` for atomic operations - `tx` is a `DrizzleTransaction`
 - **Pattern**: Functions that accept `DrizzleTransaction` (usually named `tx`) can call methods directly without `getDb()`
-- **Helper Functions**: Use `insertAndReturn()`, `updateAndReturn()`, `buildOrderBy()`, and relation helpers from `database-helpers.ts` to reduce boilerplate
+- **Helper Functions**: Use `insertAndReturn()`, `updateAndReturn()`, `buildOrderBy()`, `buildPartialUpdateValues()`, and relation helpers from `database-helpers.ts` to reduce boilerplate
+
+### Service Layer Architecture
+
+The service layer (`/server/services/`) is used selectively for entities that require external API enrichment or complex business logic:
+
+- **When to use services**: Product and Ingredient have services because they integrate with USDA external API for nutrition data enrichment
+- **When to skip services**: Location, Inventory, and Recipe call repos directly from routers since they don't require external enrichment
+- **Pattern**: Services accept `Database` but only pass it to repo functions - they handle orchestration and external API calls
 
 ### Other Patterns
 

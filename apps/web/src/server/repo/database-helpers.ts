@@ -508,3 +508,43 @@ export async function executeListQueryWithCount<T>(
   const [data, [countResult]] = await Promise.all([dataQuery, countQuery]);
   return { data, count: countResult?.count ?? 0 };
 }
+
+/**
+ * Build a partial update values object by filtering out undefined values.
+ * This helper consolidates the pattern of conditionally building update objects
+ * for database updates where only provided fields should be updated.
+ *
+ * @param data - Object containing potentially undefined values
+ * @returns Object with only defined (non-undefined) key-value pairs
+ *
+ * @example
+ * ```typescript
+ * // Before
+ * const updateValues: { name?: string; type?: string } = {};
+ * if (data.name !== undefined) {
+ *   updateValues.name = data.name;
+ * }
+ * if (data.type !== undefined) {
+ *   updateValues.type = data.type;
+ * }
+ *
+ * // After
+ * const updateValues = buildPartialUpdateValues({
+ *   name: data.name,
+ *   type: data.type,
+ * });
+ * ```
+ */
+export function buildPartialUpdateValues<T extends Record<string, unknown>>(
+  data: T,
+): Partial<{ [K in keyof T]: NonNullable<T[K]> }> {
+  const result: Partial<{ [K in keyof T]: NonNullable<T[K]> }> = {};
+
+  for (const key of Object.keys(data) as Array<keyof T>) {
+    if (data[key] !== undefined) {
+      result[key] = data[key] as NonNullable<T[typeof key]>;
+    }
+  }
+
+  return result;
+}

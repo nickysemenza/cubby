@@ -103,7 +103,6 @@ const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
-    console.log({ input });
     const result = await bulkProcessInventoryEntries(
       ctx.db,
       input.locationId,
@@ -159,7 +158,7 @@ const findDuplicates = protectedProcedure
     }));
   });
 
-export const inventoryentryRouter = createTRPCRouter({
+export const inventoryRouter = createTRPCRouter({
   getByID,
   list,
   update,

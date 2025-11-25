@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { inventoryentryRouter } from "./inventory";
+import { inventoryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { type OrganizationId } from "~/schemas/identifiers";
 import { createLocation } from "~/server/repo/location";
@@ -18,7 +18,7 @@ describe("inventory router", () => {
 
   it("should create and retrieve an inventory entry", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
@@ -86,7 +86,7 @@ describe("inventory router", () => {
 
   it("should list inventory entries with filtering", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
@@ -238,7 +238,7 @@ describe("inventory router", () => {
 
   it("should update an inventory entry", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
@@ -308,7 +308,7 @@ describe("inventory router", () => {
 
   it("should handle partial updates correctly", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
@@ -404,7 +404,7 @@ describe("inventory router", () => {
 
   it("should perform bulk operations correctly", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
@@ -535,7 +535,7 @@ describe("inventory router", () => {
 
   it("should throw error when retrieving inventory entry with invalid ID", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },
@@ -553,7 +553,7 @@ describe("inventory router", () => {
 
   it("should handle create and update failures gracefully", async () => {
     // Create a test caller for the inventory router
-    const createCaller = createCallerFactory(inventoryentryRouter);
+    const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: "test-user-id" },

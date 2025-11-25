@@ -26,6 +26,7 @@ import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { NoneState } from "../_components/NoneState";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 import { useTableList } from "../_components/hooks/useTableList";
+import { flattenLocations } from "~/lib/location-utils";
 
 // Type for inventory entries in location list
 type InventoryEntryWithProduct =
@@ -141,18 +142,6 @@ export function LocationList() {
       })),
     },
   ];
-
-  // Get flat list of all locations for card view
-  const flattenLocations = (locations: InfLocation[]): InfLocation[] => {
-    const result: InfLocation[] = [];
-    for (const loc of locations) {
-      result.push(loc);
-      if (loc.children) {
-        result.push(...flattenLocations(loc.children));
-      }
-    }
-    return result;
-  };
 
   return (
     <div className="space-y-4">

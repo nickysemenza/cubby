@@ -33,6 +33,7 @@ import {
   extractImagesFromJoinTable,
   mapRelation,
   associatePendingImages,
+  buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
 import {
   location,
@@ -41,7 +42,7 @@ import {
   inventoryEntry,
   product,
 } from "~/server/db/schema";
-import { eq, and, sql, count, not, desc } from "drizzle-orm";
+import { eq, and, sql, count, not, desc, inArray } from "drizzle-orm";
 
 // Create a new location
 export const createLocation = async (
@@ -113,22 +114,12 @@ export const updateLocation = async (
   }
 
   return await getDb(db).transaction(async (tx: Transaction) => {
-    // Build update values
-    const updateValues: {
-      name?: string;
-      type?: string;
-      parentId?: string | null;
-    } = {};
-
-    if (data.name !== undefined) {
-      updateValues.name = data.name;
-    }
-    if (data.type !== undefined) {
-      updateValues.type = data.type;
-    }
-    if (data.parentId !== undefined) {
-      updateValues.parentId = data.parentId;
-    }
+    // Build update values using helper to filter undefined
+    const updateValues = buildPartialUpdateValues({
+      name: data.name,
+      type: data.type,
+      parentId: data.parentId,
+    });
 
     // Update the location
     const updated = await updateAndReturn(
@@ -138,39 +129,27 @@ export const updateLocation = async (
       and(eq(location.id, id), eq(location.organizationId, organizationId)),
     );
 
-    // Add new images
+    // Add new images using shared helper
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
-      // Create LocationImage records in batch
-      await tx.insert(locationImage).values(
-        data.pendingImageIds.map((imageId) => ({
-          locationId: updated.id,
-          imageId,
-        })),
+      await associatePendingImages(
+        tx,
+        locationImage,
+        "locationId",
+        updated.id,
+        data.pendingImageIds,
       );
-
-      // Update all image statuses to UPLOADED in batch
-      await tx
-        .update(image)
-        .set({ status: "UPLOADED" })
-        .where(
-          sql`${image.id} = ANY(ARRAY[${sql.join(
-            data.pendingImageIds.map((imgId) => sql`${imgId}`),
-            sql`, `,
-          )}])`,
-        );
     }
 
     // Remove existing images
     if (data.removeImageIds && data.removeImageIds.length > 0) {
-      await tx.delete(locationImage).where(
-        and(
-          eq(locationImage.locationId, updated.id),
-          sql`${locationImage.imageId} = ANY(ARRAY[${sql.join(
-            data.removeImageIds.map((imgId) => sql`${imgId}`),
-            sql`, `,
-          )}])`,
-        ),
-      );
+      await tx
+        .delete(locationImage)
+        .where(
+          and(
+            eq(locationImage.locationId, updated.id),
+            inArray(locationImage.imageId, data.removeImageIds),
+          ),
+        );
     }
 
     return getLocationById(tx, unsafeLocationId(updated.id), organizationId);
@@ -440,7 +419,28 @@ export const buildLocationTree = async (
   // Cast raw SQL results to location type (safe because query selects from location table)
   const locationRows = res.rows as unknown as (typeof location.$inferSelect)[];
 
-  // First pass: create all location objects
+  // Batch fetch all images for all locations in one query to avoid N+1
+  const locationIds = locationRows.map((loc) => loc.id);
+  const allLocationImages =
+    locationIds.length > 0
+      ? await getDb(db).query.locationImage.findMany({
+          where: inArray(locationImage.locationId, locationIds),
+          ...relations.location.withImages.with.images,
+        })
+      : [];
+
+  // Group images by locationId for efficient lookup
+  const imagesByLocationId = new Map<
+    string,
+    Array<{ image: typeof image.$inferSelect }>
+  >();
+  for (const locImg of allLocationImages) {
+    const existing = imagesByLocationId.get(locImg.locationId) ?? [];
+    existing.push(locImg);
+    imagesByLocationId.set(locImg.locationId, existing);
+  }
+
+  // First pass: create all location objects with their images
   for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
       ...loc,
@@ -467,21 +467,14 @@ export const buildLocationTree = async (
             : null,
       children: [],
       parent: null,
-      images: [],
+      images: imagesByLocationId.get(loc.id) ?? [],
     };
     locationsMap.set(loc.id, locationWithRelations);
   }
 
-  // Second pass: build parent-child relationships and fetch images
+  // Second pass: build parent-child relationships
   for (const loc of locationRows) {
     const current = locationsMap.get(loc.id)!;
-
-    // Fetch images for this location
-    const locationImages = await getDb(db).query.locationImage.findMany({
-      where: eq(locationImage.locationId, loc.id),
-      ...relations.location.withImages.with.images,
-    });
-    current.images = locationImages;
 
     if (loc.parentId) {
       const parent = locationsMap.get(loc.parentId);
