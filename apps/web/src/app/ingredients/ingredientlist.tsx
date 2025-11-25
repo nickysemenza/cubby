@@ -22,6 +22,11 @@ import Link from "next/link";
 import { entities } from "~/entities/entities";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { useTableList } from "../_components/hooks/useTableList";
+import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+
+// Types for ingredient list data
+type RecipeItem = IngredientWithFoodOut["appearsInRecipes"][number];
+type ProductItem = IngredientWithFoodOut["product"][number];
 
 export function IngredientList() {
   const api = useTRPC();
@@ -64,12 +69,12 @@ export function IngredientList() {
       meta: { className: "w-48 max-w-48" },
       cell: (info) => (
         <EntityPillLinkList
-          items={info.getValue().filter(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (obj1: any, i: number, arr: any[]) =>
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              arr.findIndex((obj2: any) => obj2.id === obj1.id) === i,
-          )}
+          items={info
+            .getValue()
+            .filter(
+              (obj1: RecipeItem, i: number, arr: RecipeItem[]) =>
+                arr.findIndex((obj2: RecipeItem) => obj2.id === obj1.id) === i,
+            )}
           Pill={RecipePillLink}
           pillPropName="recipe"
         />
@@ -92,8 +97,7 @@ export function IngredientList() {
       meta: { className: "w-72 max-w-72" },
       cell: (info) => {
         const products = info.getValue();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mappings = products.flatMap((product: any) =>
+        const mappings = products.flatMap((product: ProductItem) =>
           getAllUnitMappingsFromProduct(product, w),
         );
         return <UnitMappingDisplay mappings={mappings} title="" />;

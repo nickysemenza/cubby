@@ -15,8 +15,7 @@ import Link from "next/link";
 
 import { useQuery } from "@tanstack/react-query";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
-import { type z } from "zod";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { type InventoryItem } from "../_components/locations/calculate-inventory-value";
 
 export function InventoryItemList() {
   const api = useTRPC();
@@ -148,11 +147,7 @@ export function InventoryItemList() {
         table={table}
         additionalFilters={
           <InventoryValueSummary
-            items={
-              data as unknown as z.infer<
-                typeof inventoryWithLocationAndProductOut
-              >[]
-            }
+            items={data as InventoryItem[]}
             variant="compact"
           />
         }

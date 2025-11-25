@@ -25,6 +25,10 @@ import {
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { TableLink } from "../_components/table";
 import { useTableList } from "../_components/hooks/useTableList";
+import { type ProductWithFoodOut } from "~/server/services/product.service";
+
+// Type for inventory entries with location from product list
+type InventoryEntryWithLocation = ProductWithFoodOut["inventoryEntry"][number];
 
 export function ProductList() {
   const api = useTRPC();
@@ -125,15 +129,15 @@ export function ProductList() {
       cell: (info) => (
         <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {info.getValue().map((e: any) => (
+            {info.getValue().map((e: InventoryEntryWithLocation) => (
               <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
             ))}
           </div>
           {}
           <EntityPillLinkList
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            items={info.getValue().map((e: any) => e.location)}
+            items={info
+              .getValue()
+              .map((e: InventoryEntryWithLocation) => e.location)}
             Pill={LocationPillLink}
             pillPropName="location"
           />

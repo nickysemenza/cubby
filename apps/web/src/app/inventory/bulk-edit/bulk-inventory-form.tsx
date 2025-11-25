@@ -4,10 +4,7 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
-import {
-  type ComboboxItem,
-  ComboboxItem as ComboboxItemSchema,
-} from "~/app/_components/combobox/combobox-types";
+import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -31,7 +28,7 @@ import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group
 
 // Schema for a single inventory item
 const inventoryItemSchema = z.object({
-  product: ComboboxItemSchema.refine((item) => item !== null, {
+  product: ComboboxItemSchema.nullable().refine((item) => item !== null, {
     message: "Please select a product",
   }),
   amount: amount,
@@ -40,7 +37,7 @@ const inventoryItemSchema = z.object({
 
 // Schema for the entire form
 const formSchema = z.object({
-  location: ComboboxItemSchema.refine((item) => item !== null, {
+  location: ComboboxItemSchema.nullable().refine((item) => item !== null, {
     message: "Please select a location",
   }),
   items: z.array(inventoryItemSchema),
@@ -138,7 +135,7 @@ export default function BulkInventoryForm() {
   // Add a new empty inventory item
   const addInventoryItem = () => {
     append({
-      product: null as unknown as ComboboxItem,
+      product: null,
       amount: { value: 1, unit: "" },
     });
   };
@@ -154,7 +151,8 @@ export default function BulkInventoryForm() {
 
   // Submit handler
   const onSubmit = async (values: BulkInventoryFormValues) => {
-    if (!values.location) {
+    const location = values.location;
+    if (!location) {
       setError("Please select a location");
       return;
     }
@@ -162,12 +160,19 @@ export default function BulkInventoryForm() {
     setError(null);
     try {
       const validItems = values.items.filter(
-        (item) => item.product && item.amount.value && item.amount.unit,
+        (
+          item,
+        ): item is typeof item & {
+          product: NonNullable<typeof item.product>;
+        } =>
+          item.product !== null &&
+          item.amount.value !== null &&
+          item.amount.unit !== "",
       );
       const processItems: InventoryBulkOperationItem[] = validItems.map(
         (item) => {
           const res: InventoryBulkOperationItem = {
-            locationId: values.location.id as LocationId,
+            locationId: location.id as LocationId,
             ...(item.id && { id: item.id }),
             productId: item.product.id as ProductId,
             amount: item.amount,
@@ -176,12 +181,10 @@ export default function BulkInventoryForm() {
         },
       );
       await bulkProcessMutation.mutateAsync({
-        locationId: values.location.id as LocationId,
+        locationId: location.id as LocationId,
         items: processItems,
       });
-      toast.success(
-        `Successfully updated inventory for ${values.location.name}`,
-      );
+      toast.success(`Successfully updated inventory for ${location.name}`);
       setIsSubmitting(false);
     } catch (err) {
       console.error("Error submitting inventory items:", err);

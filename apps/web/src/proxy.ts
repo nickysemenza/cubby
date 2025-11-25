@@ -4,7 +4,7 @@ import { auth } from "~/lib/auth";
 
 export async function proxy(request: NextRequest) {
   const session = await auth.api.getSession({
-    headers: request.headers as unknown as Headers,
+    headers: request.headers,
   });
 
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard");

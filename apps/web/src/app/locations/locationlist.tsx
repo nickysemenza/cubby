@@ -18,11 +18,18 @@ import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
-import { type InfLocation } from "~/schemas/location";
+import {
+  type InfLocation,
+  type LocationOutWithParentChildren,
+} from "~/schemas/location";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { NoneState } from "../_components/NoneState";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 import { useTableList } from "../_components/hooks/useTableList";
+
+// Type for inventory entries in location list
+type InventoryEntryWithProduct =
+  LocationOutWithParentChildren["inventoryEntries"][number];
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
@@ -95,8 +102,7 @@ export function LocationList() {
         }
         return (
           <div className="space-y-0.5 text-xs">
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {entries.map((entry: any) => (
+            {entries.map((entry: InventoryEntryWithProduct) => (
               <div key={entry.id} className="flex items-center gap-1">
                 <span className="text-muted-foreground">
                   {tryFormatMeasure(w, entry.amount)}
