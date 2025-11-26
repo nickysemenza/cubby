@@ -1,0 +1,17 @@
+{
+  "name": "@recipehub/recipebridge",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "recipebridge_bg.wasm",
+    "recipebridge.js",
+    "recipebridge_bg.js",
+    "recipebridge.d.ts"
+  ],
+  "main": "recipebridge.js",
+  "types": "recipebridge.d.ts",
+  "sideEffects": [
+    "./recipebridge.js",
+    "./snippets/*"
+  ]
+}
