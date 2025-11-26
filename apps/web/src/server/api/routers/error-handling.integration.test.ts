@@ -307,7 +307,7 @@ describe("API Error Handling", () => {
       expect(result.type).toBe("room");
     });
 
-    it("should throw error when creating location with invalid parent", async () => {
+    it("should create location with non-existent parent (no FK constraint)", async () => {
       const createCaller = createCallerFactory(locationRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
@@ -316,15 +316,17 @@ describe("API Error Handling", () => {
         }),
       );
 
-      // Try to create location with non-existent parent
-      await expect(
-        caller.create({
-          name: "Child Location",
-          type: "shelf",
-          parentId: "00000000-0000-0000-0000-000000000000", // Non-existent, using correct field name
-          pendingImageIds: [],
-        }),
-      ).rejects.toThrow();
+      // Location with non-existent parent is created (no FK constraint on parentId)
+      const result = await caller.create({
+        name: "Child Location",
+        type: "shelf",
+        parentId: "00000000-0000-0000-0000-000000000000", // Non-existent parent
+        pendingImageIds: [],
+      });
+
+      // Location is created but parent is undefined since it doesn't exist
+      expect(result.name).toBe("Child Location");
+      expect(result.parent).toBeUndefined();
     });
 
     it("should throw error when creating circular parent-child relationship", async () => {

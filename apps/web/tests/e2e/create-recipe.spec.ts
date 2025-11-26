@@ -16,7 +16,9 @@ test.describe("Create Recipe", () => {
 
     // Step 1: Create an ingredient first
     await page.goto("/ingredients");
-    await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("link", { name: "Create New Ingredient" }),
+    ).toBeVisible({ timeout: 10000 });
     await page.getByRole("link", { name: "Create New Ingredient" }).click();
     await page.waitForURL(/\/ingredients\/new/, { timeout: 10000 });
 
@@ -34,7 +36,10 @@ test.describe("Create Recipe", () => {
 
     // Step 2: Create a product and link it to the ingredient
     await page.goto("/products");
-    await page.waitForLoadState("networkidle");
+    // Wait for page content instead of networkidle (more reliable)
+    await expect(
+      page.getByRole("link", { name: "Create New Product" }),
+    ).toBeVisible({ timeout: 10000 });
     await page.getByRole("link", { name: "Create New Product" }).click();
     await page.waitForURL(/\/products\/new/, { timeout: 10000 });
 
@@ -127,7 +132,9 @@ test.describe("Create Recipe", () => {
 
     // Step 3: Create a recipe using the linked ingredient
     await page.goto("/recipes");
-    await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("link", { name: "Create New Recipe", exact: true }),
+    ).toBeVisible({ timeout: 10000 });
     await page
       .getByRole("link", { name: "Create New Recipe", exact: true })
       .click();

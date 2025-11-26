@@ -91,7 +91,7 @@ describe("product repository", () => {
 
   it("should throw error when finding a non-existent product by name", async () => {
     await expect(findProductByName(db, "Non-existent Product")).rejects.toThrow(
-      "Product Non-existent Product not found",
+      'Product with name "Non-existent Product" not found',
     );
   });
 
@@ -129,7 +129,7 @@ describe("product repository", () => {
     );
 
     await expect(findProductByName(db, ambiguousName)).rejects.toThrow(
-      `findProductByName: Product ${ambiguousName} is ambiguous`,
+      `Multiple products found with name "${ambiguousName}", please use ID`,
     );
   });
 

@@ -50,11 +50,16 @@ test.describe("Main navigation", () => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     // Open mobile menu
-    await page.getByRole("button", { name: /toggle menu/i }).click();
+    const menuButton = page.getByRole("button", { name: /toggle menu/i });
+    await menuButton.click();
 
-    // Click a link from the mobile menu
-    await page.getByRole("link", { name: "Inventory" }).click();
-    await expect(page).toHaveURL(/\/inventory/);
+    // Wait for menu to be visible
+    const inventoryLink = page.getByRole("link", { name: "Inventory" });
+    await expect(inventoryLink).toBeVisible({ timeout: 5000 });
+
+    // Click the link and wait for navigation
+    await inventoryLink.click();
+    await page.waitForURL(/\/inventory/, { timeout: 10000 });
     await expect(
       page.getByRole("heading", { name: /Inventory Items/i }),
     ).toBeVisible();
