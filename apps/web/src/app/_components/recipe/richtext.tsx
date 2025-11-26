@@ -11,12 +11,12 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
         return t.value;
       case "Ing":
         return (
-          <div
-            className="text-foreground m-0 inline underline decoration-solid"
+          <span
+            className="inline-flex items-center rounded bg-orange-50 px-1.5 py-0.5 text-sm font-medium text-orange-600 dark:bg-orange-950 dark:text-orange-400"
             key={x + "a"}
           >
             {t.value}
-          </div>
+          </span>
         );
       case "Measure":
         const val = t.value.pop();
@@ -27,12 +27,12 @@ export const formatRichText = (w: wasm, text: RichItem[]) => {
           val.unit = "";
         }
         return (
-          <div
-            className="text-accent-foreground m-0 inline underline decoration-solid"
+          <span
+            className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 text-sm font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400"
             key={x}
           >
             {tryFormatMeasure(w, val)}
-          </div>
+          </span>
         );
       default:
         return assertNever(kind);

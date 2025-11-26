@@ -1,0 +1,169 @@
+"use client";
+
+import dynamic from "next/dynamic";
+import { z } from "zod";
+import { Prose } from "./_components/Prose";
+import { EditableComponentDemo } from "./_components/EditableComponentDemo";
+import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
+import { NYTView } from "~/app/_components/recipe/NYTView";
+import {
+  EntitySummaryCard,
+  entitySummaryDataSchema,
+} from "~/components/ui/entity-summary-card";
+import { formatRichText } from "~/app/_components/recipe/richtext";
+import { LocationTree } from "~/app/_components/inventory/location-tree-view";
+import { useWasm } from "~/hooks/useWasm";
+import { unitMappingWithMetadata } from "~/schemas/unitmapping";
+import { recipeOut } from "~/schemas/recipe";
+import { infLocation } from "~/schemas/location";
+import type { RichItem } from "@recipehub/recipebridge";
+import {
+  richItemSchema,
+  entityRelationshipsDot,
+  sampleUnitMappings,
+  sampleRecipe,
+  sampleSummaryData,
+  sampleRichItems,
+  sampleLocations,
+} from "./_data/samples";
+
+const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
+
+function RichTextDemoInner({ data }: { data: RichItem[] }) {
+  const wasm = useWasm();
+  if (!wasm)
+    return <div className="text-muted-foreground">Loading WASM...</div>;
+  // Deep clone to avoid mutation by formatRichText (it uses .pop() on Measure values)
+  const clonedData = JSON.parse(JSON.stringify(data)) as RichItem[];
+  return <div className="text-lg">{formatRichText(wasm, clonedData)}</div>;
+}
+
+export default function DocsPage() {
+  return (
+    <>
+      <Prose>
+        <h1>RecipeHub Documentation</h1>
+        <p>
+          RecipeHub helps you organize recipes, track ingredients, manage
+          inventory, and keep everything in its place.
+        </p>
+
+        <h2>Core Concepts</h2>
+        <p>
+          RecipeHub is built around five key entity types that work together:
+        </p>
+
+        <h3>Ingredients</h3>
+        <p>
+          The building blocks of recipes. Generic items like &ldquo;flour&rdquo;
+          or &ldquo;butter&rdquo; that appear across multiple recipes.
+        </p>
+
+        <h3>Products</h3>
+        <p>
+          Specific purchasable items linked to ingredients. For example,
+          &ldquo;King Arthur All-Purpose Flour 5lb&rdquo; links to the
+          &ldquo;flour&rdquo; ingredient. Products can have unit mappings
+          (conversions between volume, weight, and price) and optional USDA
+          nutrition data.
+        </p>
+
+        <h3>Locations</h3>
+        <p>
+          Hierarchical storage areas like Kitchen → Pantry → Top Shelf. Used to
+          organize where inventory is stored.
+        </p>
+
+        <h3>Recipes</h3>
+        <p>
+          Collections of ingredients with amounts, organized into sections with
+          step-by-step instructions.
+        </p>
+
+        <h3>Inventory</h3>
+        <p>
+          Tracks what products you have and where. Links products to locations
+          with quantities.
+        </p>
+      </Prose>
+
+      <div className="my-8">
+        <div className="mb-3 font-medium">Entity Relationships</div>
+        <div className="bg-card overflow-hidden rounded-lg border p-4">
+          <Graphviz
+            dot={entityRelationshipsDot}
+            options={{
+              width: "100%",
+              height: 300,
+              fit: true,
+              useWorker: false,
+            }}
+          />
+        </div>
+      </div>
+
+      <Prose>
+        <h2>Component Demos</h2>
+        <p>
+          Below are key view-only UI components used throughout RecipeHub,
+          rendered with static sample data.
+        </p>
+      </Prose>
+
+      <EditableComponentDemo
+        title="ConversionCapabilities"
+        description="Displays unit conversion mappings for a product. Click 'Convert' to open the full converter with graph visualization."
+        schema={z.array(unitMappingWithMetadata)}
+        defaultData={sampleUnitMappings}
+      >
+        {(data) => <ConversionCapabilities mappings={data} />}
+      </EditableComponentDemo>
+
+      <EditableComponentDemo
+        title="NYTView"
+        description="NYT Cooking-style recipe display with ingredients and instructions side by side."
+        schema={recipeOut}
+        defaultData={sampleRecipe}
+      >
+        {(data) => <NYTView recipe={data} />}
+      </EditableComponentDemo>
+
+      <EditableComponentDemo
+        title="EntitySummaryCard"
+        description="Summary card showing aggregated data for an entity like a recipe's nutritional info and cost."
+        schema={entitySummaryDataSchema}
+        defaultData={sampleSummaryData}
+      >
+        {(data) => (
+          <EntitySummaryCard
+            title="Recipe Summary"
+            description="Chocolate Chip Cookies"
+            summaryData={data}
+          />
+        )}
+      </EditableComponentDemo>
+
+      <EditableComponentDemo
+        title="formatRichText"
+        description="Rich text formatting with highlighted ingredients and measurements, powered by WASM."
+        schema={z.array(richItemSchema)}
+        defaultData={sampleRichItems}
+      >
+        {(data) => <RichTextDemoInner data={data} />}
+      </EditableComponentDemo>
+
+      <EditableComponentDemo
+        title="LocationTree"
+        description="Hierarchical tree view of storage locations using react-arborist."
+        schema={z.array(infLocation)}
+        defaultData={sampleLocations}
+      >
+        {(data) => (
+          <div className="h-64">
+            <LocationTree data={data} />
+          </div>
+        )}
+      </EditableComponentDemo>
+    </>
+  );
+}

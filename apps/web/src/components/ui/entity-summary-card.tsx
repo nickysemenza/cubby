@@ -1,47 +1,68 @@
 import * as React from "react";
+import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { SummaryGrid } from "~/components/ui/summary-grid";
 import { type SummaryItem } from "~/app/_components/SummaryCard";
 
-// Recipe summary data
-export interface RecipeSummaryData {
-  price: number;
-  weight: number;
-  kcal: number;
-  protein: number;
-  // New fields for better missing data tracking
-  totalIngredients: number;
-  missingByType: {
-    price: string[];
-    weight: string[];
-    nutrients: string[];
-  };
-}
+// Zod schemas for summary data types
+export const recipeSummaryDataSchema = z.object({
+  price: z.number(),
+  weight: z.number(),
+  kcal: z.number(),
+  protein: z.number(),
+  totalIngredients: z.number(),
+  missingByType: z.object({
+    price: z.array(z.string()),
+    weight: z.array(z.string()),
+    nutrients: z.array(z.string()),
+  }),
+});
 
-// Nutrition summary data
-export interface NutritionSummaryData {
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber?: number;
-  sugar?: number;
-}
+export const nutritionSummaryDataSchema = z.object({
+  calories: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fat: z.number(),
+  fiber: z.number().optional(),
+  sugar: z.number().optional(),
+});
 
-// Inventory summary data
-export interface InventorySummaryData {
-  totalValue: number;
-  itemCount: number;
-  locationCount: number;
-  lastUpdated?: Date;
-}
+export const inventorySummaryDataSchema = z.object({
+  totalValue: z.number(),
+  itemCount: z.number(),
+  locationCount: z.number(),
+  lastUpdated: z.date().optional(),
+});
 
-// Custom summary data (flexible)
+// Schema for serializable summary items (without formatter function)
+export const summaryItemSchema = z.object({
+  label: z.string(),
+  value: z.union([z.string(), z.number()]),
+});
+
+export const customSummaryDataSchema = z.object({
+  items: z.array(summaryItemSchema),
+});
+
+export const entitySummaryDataSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("recipe"), data: recipeSummaryDataSchema }),
+  z.object({ type: z.literal("nutrition"), data: nutritionSummaryDataSchema }),
+  z.object({ type: z.literal("inventory"), data: inventorySummaryDataSchema }),
+  z.object({ type: z.literal("custom"), data: customSummaryDataSchema }),
+]);
+
+// Derived types from Zod schemas
+export type RecipeSummaryData = z.infer<typeof recipeSummaryDataSchema>;
+export type NutritionSummaryData = z.infer<typeof nutritionSummaryDataSchema>;
+export type InventorySummaryData = z.infer<typeof inventorySummaryDataSchema>;
+
+// CustomSummaryData uses SummaryItem which includes optional formatter function
+// (formatter is not in Zod schema since functions aren't serializable)
 export interface CustomSummaryData {
   items: SummaryItem[];
 }
 
-// Discriminated union for different summary types
+// EntitySummaryData type - extends Zod schema with formatter support for custom type
 export type EntitySummaryData =
   | { type: "recipe"; data: RecipeSummaryData }
   | { type: "nutrition"; data: NutritionSummaryData }

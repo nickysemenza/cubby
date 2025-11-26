@@ -6,22 +6,30 @@ import { LocationIcon } from "../locations/location-icons";
 
 import { useQuery } from "@tanstack/react-query";
 
-const LocationTreeView = () => {
-  const api = useTRPC();
-  const locations = useQuery(api.location.makeTree.queryOptions());
-  const data = locations.data;
+interface LocationTreeProps {
+  data: InfLocation[];
+}
 
+/** Presentational component - renders location tree from provided data */
+export const LocationTree = ({ data }: LocationTreeProps) => {
   return (
-    data && (
-      <Tree initialData={data} disableDrag>
-        {Node}
-      </Tree>
-    )
+    <Tree initialData={data} disableDrag>
+      {Node}
+    </Tree>
   );
 };
 
+/** Data-fetching wrapper - fetches locations via tRPC and renders LocationTree */
+const LocationTreeView = () => {
+  const api = useTRPC();
+  const locations = useQuery(api.location.makeTree.queryOptions());
+
+  if (!locations.data) return null;
+
+  return <LocationTree data={locations.data} />;
+};
+
 function Node({ node, style, dragHandle }: NodeRendererProps<InfLocation>) {
-  /* This node instance can do many things. See the API reference. */
   return (
     <div style={style} ref={dragHandle} className="flex items-center gap-2">
       <LocationIcon type={node.data.type} size={14} />
