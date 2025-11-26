@@ -120,7 +120,9 @@ test.describe("Bulk Move Inventory", () => {
     await sourceCombobox.click();
 
     // Search for location (placeholder has capital L)
-    const locationSearch = page.getByRole("textbox", { name: "Search Location..." });
+    const locationSearch = page.getByRole("textbox", {
+      name: "Search Location...",
+    });
     await locationSearch.fill(sourceName);
 
     // Wait for and click the option
@@ -158,7 +160,9 @@ test.describe("Bulk Move Inventory", () => {
       .getByRole("combobox");
     await sourceCombobox.click();
 
-    const sourceSearch = page.getByRole("textbox", { name: "Search Location..." });
+    const sourceSearch = page.getByRole("textbox", {
+      name: "Search Location...",
+    });
     await sourceSearch.fill(sourceName);
     await expect(
       page.getByRole("button", { name: sourceName, exact: true }),
@@ -179,7 +183,9 @@ test.describe("Bulk Move Inventory", () => {
       .getByRole("combobox");
     await targetCombobox.click();
 
-    const targetSearch = page.getByRole("textbox", { name: "Search Location..." });
+    const targetSearch = page.getByRole("textbox", {
+      name: "Search Location...",
+    });
     await targetSearch.fill(targetName);
     await expect(
       page.getByRole("button", { name: targetName, exact: true }),
@@ -194,7 +200,9 @@ test.describe("Bulk Move Inventory", () => {
   });
 
   // TODO: Fix combobox search interaction in addInventory helper
-  test.skip("shows error when source and target are the same", async ({ page }) => {
+  test.skip("shows error when source and target are the same", async ({
+    page,
+  }) => {
     const timestamp = Date.now();
     const locationName = `E2E Same Location ${timestamp}`;
     const productName = `E2E Same Product ${timestamp}`;
@@ -215,7 +223,9 @@ test.describe("Bulk Move Inventory", () => {
       .getByRole("combobox");
     await sourceCombobox.click();
 
-    const sourceSearch = page.getByRole("textbox", { name: "Search Location..." });
+    const sourceSearch = page.getByRole("textbox", {
+      name: "Search Location...",
+    });
     await sourceSearch.fill(locationName);
     await expect(
       page.getByRole("button", { name: locationName, exact: true }),
@@ -234,7 +244,9 @@ test.describe("Bulk Move Inventory", () => {
       .getByRole("combobox");
     await targetCombobox.click();
 
-    const targetSearch = page.getByRole("textbox", { name: "Search Location..." });
+    const targetSearch = page.getByRole("textbox", {
+      name: "Search Location...",
+    });
     await targetSearch.fill(locationName);
     await expect(
       page.getByRole("button", { name: locationName, exact: true }),
@@ -275,7 +287,9 @@ test.describe("Bulk Move Inventory", () => {
       .getByRole("combobox");
     await sourceCombobox.click();
 
-    const sourceSearch = page.getByRole("textbox", { name: "Search Location..." });
+    const sourceSearch = page.getByRole("textbox", {
+      name: "Search Location...",
+    });
     await sourceSearch.fill(sourceName);
     await expect(
       page.getByRole("button", { name: sourceName, exact: true }),
