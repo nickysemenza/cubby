@@ -64,3 +64,48 @@ export const bulkMovePayload = z.object({
 });
 
 export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
+
+// CSV Import/Export schemas
+export const inventoryCSVRow = z.object({
+  product_name: z.string().min(1),
+  manufacturer: z.string().optional(), // defaults to "(unspecified)"
+  upc: z.string().optional(),
+  location_path: z.string().min(1), // "Room > Shelf > Bin" format
+  quantity: z.coerce.number().positive().default(1),
+  unit: z.string().default("each"),
+  expected_qty: z.coerce.number().int().positive().nullable().optional(), // product's expectedQuantity
+  price: z.coerce.number().positive().nullable().optional(), // creates unit mapping "1 each → $X"
+  unit_mappings: z.string().nullable().optional(), // "1 stick = 113.4g; 1 cup = 240ml" (non-price mappings)
+  ingredient_name: z.string().nullable().optional(), // linked ingredient name
+});
+
+export type InventoryCSVRow = z.infer<typeof inventoryCSVRow>;
+
+export const inventoryCSVImportPayload = z.object({
+  rows: z.array(inventoryCSVRow),
+});
+
+export type InventoryCSVImportPayload = z.infer<
+  typeof inventoryCSVImportPayload
+>;
+
+// Result types for CSV import
+export const csvImportResultItem = z.object({
+  rowIndex: z.number(),
+  action: z.enum(["created", "moved", "skipped", "error"]),
+  productName: z.string(),
+  locationPath: z.string(),
+  message: z.string().optional(),
+});
+
+export type CSVImportResultItem = z.infer<typeof csvImportResultItem>;
+
+export const csvImportResult = z.object({
+  created: z.number(),
+  moved: z.number(),
+  skipped: z.number(),
+  errors: z.number(),
+  items: z.array(csvImportResultItem),
+});
+
+export type CSVImportResult = z.infer<typeof csvImportResult>;

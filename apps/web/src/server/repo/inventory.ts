@@ -7,7 +7,7 @@ import {
 } from "~/schemas/pagination";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
-import { amount } from "~/codec/codec";
+import { amount, type Amount } from "~/codec/codec";
 import {
   withTransaction,
   getDb,
@@ -25,15 +25,20 @@ import { notFoundError } from "~/lib/error-messages";
 import {
   InventoryBulkOperationItem,
   type BulkMovePayload,
+  type InventoryCSVRow,
+  type CSVImportResultItem,
 } from "~/schemas/inventory";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import {
   type InventoryId,
   type OrganizationId,
   type ProductId,
   type LocationId,
+  type IngredientId,
   unsafeInventoryId,
   unsafeProductId,
   unsafeLocationId,
+  unsafeIngredientId,
 } from "~/schemas/identifiers";
 import {
   inventoryEntry,
@@ -43,6 +48,18 @@ import {
   image,
 } from "~/server/db/schema";
 import { eq, and, count, not, ilike } from "drizzle-orm";
+import {
+  buildLocationPath,
+  findOrCreateLocationByPath,
+} from "~/server/repo/location";
+import {
+  findProductByNameAndManufacturer,
+  quickCreateProduct,
+} from "~/server/repo/product";
+import { type ProductTopLevelOut } from "~/schemas/product";
+import { parseConversionString } from "~/schemas/config-parsers";
+import { findOrCreateIngredient } from "~/server/repo/ingredient";
+import { measure_kind } from "@recipehub/recipebridge";
 
 type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   Product: typeof product.$inferSelect & {
@@ -78,7 +95,10 @@ const dbInventoryEntryToAPI: (
       images: extractImagesFromJoinTable(locationImages),
     },
     product: {
-      ...Product,
+      ...(() => {
+        const { ingredientId: _ingredientId, ...rest } = Product;
+        return rest;
+      })(),
       id: unsafeProductId(Product.id),
       unitMappings: addProductSourceMetadata(Product.id, Product.unitMappings),
       images: extractImagesFromJoinTable(Product.images),
@@ -601,4 +621,489 @@ export const bulkMoveInventoryEntries = async (
   });
 
   return processedItems.map(dbInventoryEntryToAPI);
+};
+
+// Export inventory to CSV format
+export interface InventoryCSVExportRow {
+  product_name: string;
+  manufacturer: string;
+  upc: string;
+  location_path: string;
+  quantity: number;
+  unit: string;
+  expected_qty: number | null;
+  price: number | null;
+  unit_mappings: string | null;
+  ingredient_name: string | null;
+}
+
+// Helper to check if a unit is a money/currency unit
+const isMoneyUnit = (unit: string): boolean => {
+  try {
+    return measure_kind({ value: 1, unit }) === "money";
+  } catch {
+    return false;
+  }
+};
+
+// Helper to extract price from unit mappings (finds "1 each → $X" mapping)
+const extractPriceFromMappings = (
+  mappings: Array<{ a: Amount; b: Amount }>,
+): number | null => {
+  const priceMapping = mappings.find(
+    (m) => m.a.value === 1 && m.a.unit === "each" && isMoneyUnit(m.b.unit),
+  );
+  return priceMapping ? priceMapping.b.value : null;
+};
+
+// Helper to serialize unit mappings to string (excluding price/money mappings)
+const serializeUnitMappings = (
+  mappings: Array<{ a: Amount; b: Amount; source: string | null }>,
+): string | null => {
+  // Filter out price mappings (where either a or b is a money unit)
+  const nonPriceMappings = mappings.filter(
+    (m) => !isMoneyUnit(m.a.unit) && !isMoneyUnit(m.b.unit),
+  );
+  if (nonPriceMappings.length === 0) return null;
+  return nonPriceMappings
+    .map((m) => {
+      const sourceStr = m.source ? ` @ ${m.source}` : "";
+      return `${m.a.value} ${m.a.unit} = ${m.b.value} ${m.b.unit}${sourceStr}`;
+    })
+    .join("; ");
+};
+
+export const exportInventoryToCSV = async (
+  db: Database,
+  organizationId: OrganizationId,
+  locationIdFilter?: LocationId,
+): Promise<InventoryCSVExportRow[]> => {
+  // Build where conditions
+  const conditions = [eq(inventoryEntry.organizationId, organizationId)];
+
+  if (locationIdFilter) {
+    conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
+  }
+
+  // Fetch all inventory entries with their product (including unit mappings and ingredient) and location
+  const entries = await getDb(db).query.inventoryEntry.findMany({
+    where: and(...conditions),
+    with: {
+      Product: {
+        with: {
+          unitMappings: true,
+          Ingredient: true,
+        },
+      },
+      location: {
+        with: {
+          parent: {
+            with: {
+              parent: {
+                with: {
+                  parent: true, // Support up to 4 levels deep
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return entries.map((entry) => {
+    const parsedAmount = amount.parse(entry.amount);
+    return {
+      product_name: entry.Product.name,
+      manufacturer: entry.Product.manufacturer,
+      upc: entry.Product.upc ?? "",
+      location_path: buildLocationPath(entry.location),
+      quantity: parsedAmount.value,
+      unit: parsedAmount.unit,
+      expected_qty: entry.Product.expectedQuantity,
+      price: extractPriceFromMappings(entry.Product.unitMappings),
+      unit_mappings: serializeUnitMappings(entry.Product.unitMappings),
+      ingredient_name: entry.Product.Ingredient?.name ?? null,
+    };
+  });
+};
+
+// Get total quantity of a product across all locations
+export const getTotalProductQuantity = async (
+  db: Database,
+  productId: ProductId,
+  organizationId: OrganizationId,
+): Promise<number> => {
+  const entries = await getDb(db).query.inventoryEntry.findMany({
+    where: and(
+      eq(inventoryEntry.productId, productId),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
+  });
+
+  return entries.reduce((total, entry) => {
+    const parsedAmount = amount.parse(entry.amount);
+    return total + parsedAmount.value;
+  }, 0);
+};
+
+// Helper: Find or create product for CSV import
+const findOrCreateProductForImport = async (
+  db: Database,
+  organizationId: OrganizationId,
+  productName: string,
+  manufacturer: string,
+  upc: string | undefined,
+  expectedQty: number | null | undefined,
+  ingredientName: string | null | undefined,
+): Promise<ProductTopLevelOut> => {
+  // If ingredient_name provided, find or create the ingredient
+  let ingredientId: IngredientId | null = null;
+  if (ingredientName) {
+    const ingredientData = await findOrCreateIngredient(
+      db,
+      ingredientName,
+      undefined,
+      organizationId,
+    );
+    ingredientId = unsafeIngredientId(ingredientData.id);
+  }
+
+  let productData = await findProductByNameAndManufacturer(
+    db,
+    productName,
+    manufacturer,
+    organizationId,
+  );
+
+  if (!productData) {
+    // Create new product with expected_qty from CSV or default to 1
+    productData = await quickCreateProduct(
+      db,
+      {
+        name: productName,
+        manufacturer,
+        upc: upc ?? null,
+        expectedQuantity: expectedQty ?? 1,
+        ingredientId,
+      },
+      organizationId,
+    );
+  } else {
+    // Update existing product if CSV provides values
+    const updates: {
+      expectedQuantity?: number;
+      ingredientId?: IngredientId | null;
+    } = {};
+    if (expectedQty != null) {
+      updates.expectedQuantity = expectedQty;
+    }
+    if (ingredientId != null) {
+      // Check if product already has an ingredient linked (need to query DB)
+      const existingProduct = await getDb(db).query.product.findFirst({
+        where: eq(product.id, productData.id),
+        columns: { ingredientId: true },
+      });
+      if (existingProduct?.ingredientId == null) {
+        updates.ingredientId = ingredientId;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await getDb(db)
+        .update(product)
+        .set(updates)
+        .where(eq(product.id, productData.id));
+      // Update local copy for expectedQuantity (ingredientId not in output schema)
+      if (updates.expectedQuantity != null) {
+        productData = {
+          ...productData,
+          expectedQuantity: updates.expectedQuantity,
+        };
+      }
+    }
+  }
+
+  return productData;
+};
+
+// Helper: Create or update price unit mapping for a product
+const createOrUpdatePriceMapping = async (
+  db: Database,
+  productId: ProductId,
+  price: number,
+): Promise<void> => {
+  // Check if a price mapping already exists (1 each → $X)
+  const existingMappings = await getDb(db).query.productUnitMappings.findMany({
+    where: eq(productUnitMappings.productId, productId),
+  });
+
+  const existingPriceMapping = existingMappings.find(
+    (m) => m.a.value === 1 && m.a.unit === "each" && m.b.unit === "dollar",
+  );
+
+  if (existingPriceMapping) {
+    // Update existing price mapping
+    await getDb(db)
+      .update(productUnitMappings)
+      .set({ b: { value: price, unit: "dollar" } })
+      .where(eq(productUnitMappings.id, existingPriceMapping.id));
+  } else {
+    // Create new price mapping
+    await getDb(db)
+      .insert(productUnitMappings)
+      .values({
+        productId,
+        a: { value: 1, unit: "each" },
+        b: { value: price, unit: "dollar" },
+        source: "csv-import",
+      });
+  }
+};
+
+// Helper: Create unit mappings from a semicolon-separated string
+const createUnitMappingsFromString = async (
+  db: Database,
+  productId: ProductId,
+  mappingsStr: string,
+): Promise<void> => {
+  // Parse "4 lb = $5; 1 cup = 120g" format
+  const mappingParts = mappingsStr
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const part of mappingParts) {
+    try {
+      const { from, to, source } = parseConversionString(part);
+      await getDb(db)
+        .insert(productUnitMappings)
+        .values({
+          productId,
+          a: from,
+          b: to,
+          source: source ?? "csv-import",
+        });
+    } catch (e) {
+      // Log warning but continue with other mappings
+      console.warn(`Failed to parse unit mapping: ${part}`, e);
+    }
+  }
+};
+
+// Helper: Move inventory entries to new location
+const moveInventoryEntries = async (
+  db: Database,
+  organizationId: OrganizationId,
+  productId: ProductId,
+  targetLocationId: LocationId,
+  newAmount: { value: number; unit: string },
+): Promise<string[]> => {
+  const existingEntries = await getDb(db).query.inventoryEntry.findMany({
+    where: and(
+      eq(inventoryEntry.productId, productId),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
+    with: {
+      location: true,
+    },
+  });
+
+  if (existingEntries.length === 0) {
+    return [];
+  }
+
+  // Delete existing entries
+  for (const entry of existingEntries) {
+    await getDb(db)
+      .delete(inventoryEntry)
+      .where(eq(inventoryEntry.id, entry.id));
+  }
+
+  // Check if already exists at target location
+  const existingAtTarget = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.productId, productId),
+      eq(inventoryEntry.locationId, targetLocationId),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
+  });
+
+  if (!existingAtTarget) {
+    await getDb(db).insert(inventoryEntry).values({
+      organizationId,
+      productId,
+      locationId: targetLocationId,
+      amount: newAmount,
+    });
+  }
+
+  return existingEntries.map((e) => e.location.name);
+};
+
+// Helper: Create or update inventory at target location
+const createOrUpdateInventoryAtLocation = async (
+  db: Database,
+  organizationId: OrganizationId,
+  productId: ProductId,
+  targetLocationId: LocationId,
+  newAmount: { value: number; unit: string },
+): Promise<"created" | "updated"> => {
+  const existingAtTarget = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.productId, productId),
+      eq(inventoryEntry.locationId, targetLocationId),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
+  });
+
+  if (existingAtTarget) {
+    const existingAmount = amount.parse(existingAtTarget.amount);
+    await getDb(db)
+      .update(inventoryEntry)
+      .set({
+        amount: {
+          value: existingAmount.value + newAmount.value,
+          unit: newAmount.unit,
+        },
+      })
+      .where(eq(inventoryEntry.id, existingAtTarget.id));
+    return "updated";
+  }
+
+  await getDb(db).insert(inventoryEntry).values({
+    organizationId,
+    productId,
+    locationId: targetLocationId,
+    amount: newAmount,
+  });
+  return "created";
+};
+
+// Import CSV data with smart move logic
+export const importInventoryFromCSV = async (
+  db: Database,
+  organizationId: OrganizationId,
+  rows: InventoryCSVRow[],
+): Promise<{
+  created: number;
+  moved: number;
+  skipped: number;
+  errors: number;
+  items: CSVImportResultItem[];
+}> => {
+  const results: CSVImportResultItem[] = [];
+  let created = 0;
+  let moved = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    try {
+      const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
+      const productData = await findOrCreateProductForImport(
+        db,
+        organizationId,
+        row.product_name,
+        manufacturer,
+        row.upc,
+        row.expected_qty,
+        row.ingredient_name,
+      );
+
+      // Handle price mapping if provided
+      if (row.price != null) {
+        await createOrUpdatePriceMapping(db, productData.id, row.price);
+      }
+
+      // Handle unit mappings if provided
+      if (row.unit_mappings) {
+        await createUnitMappingsFromString(
+          db,
+          productData.id,
+          row.unit_mappings,
+        );
+      }
+
+      const targetLocationId = await findOrCreateLocationByPath(
+        db,
+        organizationId,
+        row.location_path,
+      );
+
+      const totalExistingQty = await getTotalProductQuantity(
+        db,
+        productData.id,
+        organizationId,
+      );
+
+      // Smart move logic: if at expected capacity, move instead of adding
+      const shouldMove =
+        productData.expectedQuantity !== null &&
+        totalExistingQty >= productData.expectedQuantity;
+
+      const newAmount = { value: row.quantity, unit: row.unit };
+
+      if (shouldMove) {
+        const fromLocations = await moveInventoryEntries(
+          db,
+          organizationId,
+          productData.id,
+          targetLocationId,
+          newAmount,
+        );
+
+        if (fromLocations.length > 0) {
+          results.push({
+            rowIndex: i,
+            action: "moved",
+            productName: row.product_name,
+            locationPath: row.location_path,
+            message: `Moved from ${fromLocations.join(", ")}`,
+          });
+          moved++;
+          continue;
+        }
+      }
+
+      const action = await createOrUpdateInventoryAtLocation(
+        db,
+        organizationId,
+        productData.id,
+        targetLocationId,
+        newAmount,
+      );
+
+      if (action === "updated") {
+        results.push({
+          rowIndex: i,
+          action: "skipped",
+          productName: row.product_name,
+          locationPath: row.location_path,
+          message: "Updated existing entry quantity",
+        });
+        skipped++;
+      } else {
+        results.push({
+          rowIndex: i,
+          action: "created",
+          productName: row.product_name,
+          locationPath: row.location_path,
+        });
+        created++;
+      }
+    } catch (error) {
+      results.push({
+        rowIndex: i,
+        action: "error",
+        productName: row.product_name,
+        locationPath: row.location_path,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+      errors++;
+    }
+  }
+
+  return { created, moved, skipped, errors, items: results };
 };

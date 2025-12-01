@@ -4,6 +4,10 @@ import { upc, ndb } from "@recipehub/usda-schemas";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 import { productId, ingredientId } from "./identifiers";
+import {
+  UNSPECIFIED_MANUFACTURER,
+  DEFAULT_EXPECTED_QUANTITY,
+} from "~/lib/constants";
 
 // Base schema for product data (without relationships)
 const productBase = z.object({
@@ -39,3 +43,22 @@ export const productTopLevelOut = z
 
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductInputPayload = z.infer<typeof productInputPayload>;
+
+// Quick create schema - minimal required fields for rapid entry
+// Used for quick inventory capture workflow
+export const productQuickCreatePayload = z.object({
+  name: z.string().min(1),
+  manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
+  upc: upc.nullable().optional(),
+  expectedQuantity: z
+    .number()
+    .int()
+    .positive()
+    .nullable()
+    .default(DEFAULT_EXPECTED_QUANTITY),
+  model: z.string().nullable().optional(),
+});
+
+export type ProductQuickCreatePayload = z.infer<
+  typeof productQuickCreatePayload
+>;

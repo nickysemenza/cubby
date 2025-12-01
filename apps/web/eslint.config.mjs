@@ -8,6 +8,14 @@ const eslintConfig = defineConfig([
   ...nextTs,
   prettier,
   {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
+  {
     files: ["src/server/services/**/*.ts", "src/server/services/**/*.tsx"],
     rules: {
       "no-restricted-imports": [

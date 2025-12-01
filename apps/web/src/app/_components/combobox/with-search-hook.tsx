@@ -14,6 +14,7 @@ import { type LocationOut } from "~/schemas/location";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "~/lib/query-keys";
 import {
   Dialog,
   DialogContent,
@@ -32,10 +33,66 @@ interface WithEntitySearchProps {
     onCreateNew?: (name: string) => Promise<ComboboxItem>;
   }) => ReactNode;
 }
+
 const pagination = {
   pageIndex: 0,
   pageSize: 20,
 };
+
+/**
+ * Custom hook for entity search with dialog-based creation.
+ * Extracts common state management for search hooks that need:
+ * - Search query state
+ * - Dialog open/close state
+ * - Promise-based dialog resolution for combobox integration
+ */
+function useEntitySearchWithDialog() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [pendingName, setPendingName] = useState("");
+  const [pendingResolve, setPendingResolve] = useState<
+    ((item: ComboboxItem) => void) | null
+  >(null);
+
+  const onSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  const openDialog = useCallback((name: string): Promise<ComboboxItem> => {
+    setPendingName(name);
+    setIsDialogOpen(true);
+    return new Promise<ComboboxItem>((resolve) => {
+      setPendingResolve(() => resolve);
+    });
+  }, []);
+
+  const closeDialog = useCallback(() => {
+    setIsDialogOpen(false);
+    setPendingResolve(null);
+  }, []);
+
+  const resolveWithEntity = useCallback(
+    (item: ComboboxItem) => {
+      setIsDialogOpen(false);
+      if (pendingResolve) {
+        pendingResolve(item);
+        setPendingResolve(null);
+      }
+    },
+    [pendingResolve],
+  );
+
+  return {
+    searchQuery,
+    onSearchChange,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    openDialog,
+    closeDialog,
+    resolveWithEntity,
+  };
+}
 
 export function CreateIngredientDialog({
   isOpen,
@@ -134,38 +191,31 @@ function CreateProductDialog({
 
 export function WithIngredientSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [pendingName, setPendingName] = useState("");
-  const [pendingResolve, setPendingResolve] = useState<
-    ((item: ComboboxItem) => void) | null
-  >(null);
   const queryClient = useQueryClient();
+  const {
+    searchQuery,
+    onSearchChange,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    openDialog,
+    closeDialog,
+    resolveWithEntity,
+  } = useEntitySearchWithDialog();
+
   const { data, isLoading } = useQuery(
     api.ingredient.list.queryOptions({
-      filters: {
-        nameFilter: searchQuery,
-      },
+      filters: { nameFilter: searchQuery },
       pagination,
     }),
   );
-
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
 
   const createMutation = useMutation(
     api.ingredient.create.mutationOptions({
       onSuccess: (newIngredient: IngredientWithRecipesAndProductOut) => {
         toast.success(`Created new ingredient: ${newIngredient.name}`);
-        queryClient.invalidateQueries({
-          queryKey: ["ingredient", "list"],
-        });
-        setIsDialogOpen(false);
-        if (pendingResolve) {
-          pendingResolve(buildIngredientComboboxItem(newIngredient));
-          setPendingResolve(null);
-        }
+        queryClient.invalidateQueries({ queryKey: queryKeys.ingredient.list });
+        resolveWithEntity(buildIngredientComboboxItem(newIngredient));
       },
       onError: (error) => {
         toast.error(`Failed to create ingredient: ${error.message}`);
@@ -173,26 +223,13 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const onCreateNew = async (name: string) => {
-    setPendingName(name);
-    setIsDialogOpen(true);
-    return new Promise<ComboboxItem>((resolve) => {
-      setPendingResolve(() => resolve);
-    });
-  };
-
   return (
     <>
       <CreateIngredientDialog
         isOpen={isDialogOpen}
         onOpenChange={setIsDialogOpen}
-        onCancel={() => {
-          setIsDialogOpen(false);
-          setPendingResolve(null);
-        }}
-        onCreate={(data) => {
-          createMutation.mutate(data);
-        }}
+        onCancel={closeDialog}
+        onCreate={(data) => createMutation.mutate(data)}
         isPending={createMutation.isPending}
         error={createMutation.error?.message}
         initialName={pendingName}
@@ -201,7 +238,7 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
         items: data?.items.map(buildIngredientComboboxItem) ?? [],
         onSearchChange,
         isLoading,
-        onCreateNew,
+        onCreateNew: openDialog,
       })}
     </>
   );
@@ -209,38 +246,31 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
 
 export function WithLocationSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [pendingName, setPendingName] = useState("");
-  const [pendingResolve, setPendingResolve] = useState<
-    ((item: ComboboxItem) => void) | null
-  >(null);
   const queryClient = useQueryClient();
+  const {
+    searchQuery,
+    onSearchChange,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    openDialog,
+    closeDialog,
+    resolveWithEntity,
+  } = useEntitySearchWithDialog();
+
   const { data, isLoading } = useQuery(
     api.location.list.queryOptions({
-      filters: {
-        nameFilter: searchQuery,
-      },
+      filters: { nameFilter: searchQuery },
       pagination,
     }),
   );
-
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
 
   const createMutation = useMutation(
     api.location.create.mutationOptions({
       onSuccess: (newLocation: LocationOut) => {
         toast.success(`Created new location: ${newLocation.name}`);
-        queryClient.invalidateQueries({
-          queryKey: ["location", "list"],
-        });
-        setIsDialogOpen(false);
-        if (pendingResolve) {
-          pendingResolve(buildLocationComboboxItem(newLocation));
-          setPendingResolve(null);
-        }
+        queryClient.invalidateQueries({ queryKey: queryKeys.location.list });
+        resolveWithEntity(buildLocationComboboxItem(newLocation));
       },
       onError: (error) => {
         toast.error(`Failed to create location: ${error.message}`);
@@ -248,20 +278,11 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const onCreateNew = async (name: string) => {
-    setPendingName(name);
-    setIsDialogOpen(true);
-    return new Promise<ComboboxItem>((resolve) => {
-      setPendingResolve(() => resolve);
-    });
-  };
-
   return (
     <>
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent
           onPointerDownOutside={(e) => {
-            // Prevent closing when clicking on Popover contents
             const target = e.target as HTMLElement;
             if (target.closest("[data-radix-popper-content-wrapper]")) {
               e.preventDefault();
@@ -275,13 +296,8 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
             mode="create"
             isPending={createMutation.isPending}
             error={createMutation.error?.message}
-            onCancel={() => {
-              setIsDialogOpen(false);
-              setPendingResolve(null);
-            }}
-            onCreate={async (data) => {
-              return await createMutation.mutateAsync(data);
-            }}
+            onCancel={closeDialog}
+            onCreate={async (data) => createMutation.mutateAsync(data)}
             initialName={pendingName}
           />
         </DialogContent>
@@ -290,7 +306,7 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
         items: data?.items.map(buildLocationComboboxItem) ?? [],
         onSearchChange,
         isLoading,
-        onCreateNew,
+        onCreateNew: openDialog,
       })}
     </>
   );
@@ -298,12 +314,68 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
 
 export function WithProductSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
+  const {
+    searchQuery,
+    onSearchChange,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    openDialog,
+    closeDialog,
+    resolveWithEntity,
+  } = useEntitySearchWithDialog();
+
+  const { data, isLoading } = useQuery(
+    api.product.list.queryOptions({
+      filters: { nameFilter: searchQuery },
+      pagination,
+    }),
+  );
+
+  const createMutation = useMutation(
+    api.product.create.mutationOptions({
+      onSuccess: (newProduct: ProductTopLevelOut) => {
+        toast.success(`Created new product: ${newProduct.name}`);
+        queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+        resolveWithEntity(buildProductComboboxItem(newProduct));
+      },
+      onError: (error) => {
+        toast.error(`Failed to create product: ${error.message}`);
+      },
+    }),
+  );
+
+  return (
+    <>
+      <CreateProductDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={closeDialog}
+        onCreate={(data) => createMutation.mutate(data)}
+        isPending={createMutation.isPending}
+        error={createMutation.error?.message}
+        initialName={pendingName}
+      />
+      {children({
+        items: data?.items.map(buildProductComboboxItem) ?? [],
+        onSearchChange,
+        isLoading,
+        onCreateNew: openDialog,
+      })}
+    </>
+  );
+}
+
+/**
+ * A variant of WithProductSearch that uses the quickCreate endpoint
+ * for rapid inventory capture - creates products with minimal data (just name)
+ */
+export function WithProductSearchQuickCreate({
+  children,
+}: WithEntitySearchProps) {
+  const api = useTRPC();
   const [searchQuery, setSearchQuery] = useState("");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [pendingName, setPendingName] = useState("");
-  const [pendingResolve, setPendingResolve] = useState<
-    ((item: ComboboxItem) => void) | null
-  >(null);
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery(
     api.product.list.queryOptions({
@@ -318,18 +390,13 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     setSearchQuery(query);
   }, []);
 
-  const createMutation = useMutation(
-    api.product.create.mutationOptions({
+  const quickCreateMutation = useMutation(
+    api.product.quickCreate.mutationOptions({
       onSuccess: (newProduct: ProductTopLevelOut) => {
         toast.success(`Created new product: ${newProduct.name}`);
         queryClient.invalidateQueries({
-          queryKey: ["product", "list"],
+          queryKey: queryKeys.product.list,
         });
-        setIsDialogOpen(false);
-        if (pendingResolve) {
-          pendingResolve(buildProductComboboxItem(newProduct));
-          setPendingResolve(null);
-        }
       },
       onError: (error) => {
         toast.error(`Failed to create product: ${error.message}`);
@@ -337,30 +404,14 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
     }),
   );
 
-  const onCreateNew = async (name: string) => {
-    setPendingName(name);
-    setIsDialogOpen(true);
-    return new Promise<ComboboxItem>((resolve) => {
-      setPendingResolve(() => resolve);
-    });
+  // Quick create: instantly creates the product without a dialog
+  const onCreateNew = async (name: string): Promise<ComboboxItem> => {
+    const newProduct = await quickCreateMutation.mutateAsync({ name });
+    return buildProductComboboxItem(newProduct);
   };
 
   return (
     <>
-      <CreateProductDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        onCancel={() => {
-          setIsDialogOpen(false);
-          setPendingResolve(null);
-        }}
-        onCreate={(data) => {
-          createMutation.mutate(data);
-        }}
-        isPending={createMutation.isPending}
-        error={createMutation.error?.message}
-        initialName={pendingName}
-      />
       {children({
         items: data?.items.map(buildProductComboboxItem) ?? [],
         onSearchChange,

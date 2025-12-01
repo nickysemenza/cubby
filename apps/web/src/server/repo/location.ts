@@ -43,7 +43,7 @@ import {
   inventoryEntry,
   product,
 } from "~/server/db/schema";
-import { eq, and, sql, count, not, desc, inArray } from "drizzle-orm";
+import { eq, and, sql, count, not, desc, inArray, ilike } from "drizzle-orm";
 
 // Create a new location
 export const createLocation = async (
@@ -544,6 +544,143 @@ export const locationList = async (
 
   const items = results.map(dbLocationToAPIWithChildren);
   return { data: items, count: countResult?.count ?? 0 };
+};
+
+// Build a location path string from a location with its parent chain
+// Format: "Room > Shelf > Bin"
+export const buildLocationPath = (
+  locationData: {
+    name: string;
+    parent?: {
+      name: string;
+      parent?: { name: string; parent?: unknown } | null;
+    } | null;
+  },
+  separator = " > ",
+): string => {
+  const parts: string[] = [];
+
+  // Walk up the parent chain
+  let current: typeof locationData | null | undefined = locationData;
+  while (current) {
+    parts.unshift(current.name);
+    current = current.parent as typeof locationData | null | undefined;
+  }
+
+  return parts.join(separator);
+};
+
+// Find a location by its path string (e.g., "Room > Shelf > Bin")
+// Returns null if not found
+export const findLocationByPath = async (
+  db: Database,
+  organizationId: OrganizationId,
+  path: string,
+  separator = " > ",
+): Promise<LocationId | null> => {
+  const parts = path.split(separator).map((p) => p.trim());
+
+  if (parts.length === 0) {
+    return null;
+  }
+
+  // Find each part in sequence, walking down the tree
+  let currentParentId: string | null = null;
+
+  for (const part of parts) {
+    const conditions = [
+      eq(location.organizationId, organizationId),
+      ilike(location.name, part),
+    ];
+
+    if (currentParentId === null) {
+      // Looking for root location (no parent)
+      const rootLoc = await getDb(db).query.location.findFirst({
+        where: and(...conditions, sql`${location.parentId} IS NULL`),
+      });
+      if (!rootLoc) {
+        return null;
+      }
+      currentParentId = rootLoc.id;
+    } else {
+      // Looking for child of current parent
+      const childLoc: typeof location.$inferSelect | undefined = await getDb(
+        db,
+      ).query.location.findFirst({
+        where: and(...conditions, eq(location.parentId, currentParentId)),
+      });
+      if (!childLoc) {
+        return null;
+      }
+      currentParentId = childLoc.id;
+    }
+  }
+
+  return currentParentId ? unsafeLocationId(currentParentId) : null;
+};
+
+// Find or create a location by its path string
+// Creates intermediate locations as needed with type "room" for root and "shelf" for children
+export const findOrCreateLocationByPath = async (
+  db: Database,
+  organizationId: OrganizationId,
+  path: string,
+  separator = " > ",
+): Promise<LocationId> => {
+  const parts = path.split(separator).map((p) => p.trim());
+
+  if (parts.length === 0) {
+    throw new Error("Invalid location path: empty path");
+  }
+
+  let currentParentId: string | null = null;
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const isRoot = i === 0;
+
+    const conditions = [
+      eq(location.organizationId, organizationId),
+      ilike(location.name, part),
+    ];
+
+    let existingLoc: typeof location.$inferSelect | undefined;
+
+    if (currentParentId === null) {
+      // Looking for root location (no parent)
+      existingLoc = await getDb(db).query.location.findFirst({
+        where: and(...conditions, sql`${location.parentId} IS NULL`),
+      });
+    } else {
+      // Looking for child of current parent
+      existingLoc = await getDb(db).query.location.findFirst({
+        where: and(...conditions, eq(location.parentId, currentParentId)),
+      });
+    }
+
+    if (existingLoc) {
+      currentParentId = existingLoc.id;
+    } else {
+      // Create the location
+      const result: Array<typeof location.$inferSelect> = await getDb(db)
+        .insert(location)
+        .values({
+          organizationId: organizationId,
+          name: part,
+          type: isRoot ? "room" : "shelf",
+          parentId: currentParentId,
+        })
+        .returning();
+
+      const newLoc = result[0];
+      if (!newLoc) {
+        throw new Error(`Failed to create location: ${part}`);
+      }
+      currentParentId = newLoc.id;
+    }
+  }
+
+  return unsafeLocationId(currentParentId!);
 };
 
 export const getLocationById = async (

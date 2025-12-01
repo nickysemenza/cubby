@@ -117,12 +117,15 @@ const dbIngredientToAPI = async (
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =
     ingredientData;
 
-  const productWithMappings = mapRelation(Product, (prod) => ({
-    ...prod,
-    id: unsafeProductId(prod.id),
-    images: extractImagesFromJoinTable(prod.images),
-    unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
-  }));
+  const productWithMappings = mapRelation(Product, (prod) => {
+    const { ingredientId: _ingredientId, ...prodRest } = prod;
+    return {
+      ...prodRest,
+      id: unsafeProductId(prod.id),
+      images: extractImagesFromJoinTable(prod.images),
+      unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
+    };
+  });
 
   return {
     ...restOfIngredient,

@@ -23,12 +23,13 @@ export type InventoryId = z.infer<typeof inventoryId>;
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid)
 // These are useful in tests and when working with external data that you know is valid
-export const unsafeOrganizationId = (id: string): OrganizationId =>
-  id as OrganizationId;
-export const unsafeUserId = (id: string): UserId => id as UserId;
-export const unsafeRecipeId = (id: string): RecipeId => id as RecipeId;
-export const unsafeIngredientId = (id: string): IngredientId =>
-  id as IngredientId;
-export const unsafeProductId = (id: string): ProductId => id as ProductId;
-export const unsafeLocationId = (id: string): LocationId => id as LocationId;
-export const unsafeInventoryId = (id: string): InventoryId => id as InventoryId;
+const unsafeId = <T>(id: string): T => id as unknown as T;
+
+export const unsafeOrganizationId = (id: string) =>
+  unsafeId<OrganizationId>(id);
+export const unsafeUserId = (id: string) => unsafeId<UserId>(id);
+export const unsafeRecipeId = (id: string) => unsafeId<RecipeId>(id);
+export const unsafeIngredientId = (id: string) => unsafeId<IngredientId>(id);
+export const unsafeProductId = (id: string) => unsafeId<ProductId>(id);
+export const unsafeLocationId = (id: string) => unsafeId<LocationId>(id);
+export const unsafeInventoryId = (id: string) => unsafeId<InventoryId>(id);

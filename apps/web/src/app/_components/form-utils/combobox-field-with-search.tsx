@@ -39,7 +39,7 @@ const searchWrapperMap: Record<
 interface ComboboxFieldWithSearchProps<TFieldValues extends FieldValues> {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
-  label: string;
+  label?: string;
   searchType: SearchType;
 }
 

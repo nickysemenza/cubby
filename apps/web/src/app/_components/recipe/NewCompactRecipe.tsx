@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useWasm } from "~/hooks/useWasm";
 import { useMutation } from "@tanstack/react-query";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "~/lib/query-keys";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -289,7 +290,7 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
         // Invalidate ingredient queries to refetch and update the missing ingredients list
         // This will refetch all ingredient.getByName queries which will update our missing ingredients list
         queryClient.invalidateQueries({
-          queryKey: ["ingredient", "getByName"],
+          queryKey: queryKeys.ingredient.getByName,
         });
         toast.success("Ingredient created successfully!");
         setIsDialogOpen(false);

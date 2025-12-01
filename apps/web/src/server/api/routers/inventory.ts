@@ -8,6 +8,8 @@ import {
   bulkProcessInventoryEntries,
   bulkMoveInventoryEntries,
   checkUniqueProductDuplicate,
+  exportInventoryToCSV,
+  importInventoryFromCSV,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
@@ -15,10 +17,16 @@ import {
   inventoryBulkOperationPayload,
   inventoryUpdateInput,
   bulkMovePayload,
+  inventoryCSVImportPayload,
+  csvImportResult,
 } from "~/schemas/inventory";
 import { createEntityCrudProcedures } from "../crud-factory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
-import { inventoryId, type InventoryId } from "~/schemas/identifiers";
+import {
+  inventoryId,
+  locationId,
+  type InventoryId,
+} from "~/schemas/identifiers";
 
 // Define filters schema for inventory entries
 const inventoryFiltersSchema = z.object({
@@ -165,6 +173,45 @@ const findDuplicates = protectedProcedure
     }));
   });
 
+// Export inventory to CSV format
+const exportCSV = protectedProcedure
+  .input(
+    z.object({
+      locationId: locationId.optional(),
+    }),
+  )
+  .output(
+    z.array(
+      z.object({
+        product_name: z.string(),
+        manufacturer: z.string(),
+        upc: z.string(),
+        location_path: z.string(),
+        quantity: z.number(),
+        unit: z.string(),
+        expected_qty: z.number().nullable(),
+        price: z.number().nullable(),
+        unit_mappings: z.string().nullable(),
+        ingredient_name: z.string().nullable(),
+      }),
+    ),
+  )
+  .query(async ({ ctx, input }) => {
+    return await exportInventoryToCSV(
+      ctx.db,
+      ctx.organizationId,
+      input.locationId,
+    );
+  });
+
+// Import inventory from CSV data
+const importCSV = protectedProcedure
+  .input(inventoryCSVImportPayload)
+  .output(csvImportResult)
+  .mutation(async ({ ctx, input }) => {
+    return await importInventoryFromCSV(ctx.db, ctx.organizationId, input.rows);
+  });
+
 export const inventoryRouter = createTRPCRouter({
   getByID,
   list,
@@ -173,4 +220,6 @@ export const inventoryRouter = createTRPCRouter({
   bulkProcess,
   bulkMove,
   findDuplicates,
+  exportCSV,
+  importCSV,
 });

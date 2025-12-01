@@ -83,9 +83,10 @@ export function createAppError(
 const mapProductToTopLevelOut = (
   dbProduct: Awaited<ReturnType<typeof findProductsByFoodIdentifier>>[number],
 ) => {
+  const { ingredientId: _ingredientId, id, ...rest } = dbProduct;
   return {
-    ...dbProduct,
-    id: unsafeProductId((dbProduct as { id: string }).id),
+    ...rest,
+    id: unsafeProductId(id),
   };
 };
 

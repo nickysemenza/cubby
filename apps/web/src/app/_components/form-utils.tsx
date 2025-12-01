@@ -221,7 +221,7 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
-  label: string;
+  label?: string;
   items: ComboboxItem[];
   onSearchChange: (query: string) => void;
   isLoading?: boolean;
@@ -233,10 +233,10 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
       name={name}
       render={({ field }) => (
         <FormItem>
-          <FormLabel>{label}</FormLabel>
+          {label && <FormLabel>{label}</FormLabel>}
           <FormControl>
             <DialogCompatibleCombobox
-              label={label.toLowerCase()}
+              label={label?.toLowerCase() ?? "item"}
               items={items}
               onSearchChange={onSearchChange}
               isLoading={isLoading}

@@ -17,6 +17,10 @@ import {
   productTopLevelOut,
 } from "~/schemas/product";
 import {
+  UNSPECIFIED_MANUFACTURER,
+  DEFAULT_EXPECTED_QUANTITY,
+} from "~/lib/constants";
+import {
   formatSearchTerm,
   getDb,
   unwrapDb,
@@ -575,6 +579,105 @@ export const updateProduct = async (
     };
 
     return productTopLevelOut.parse(result);
+  });
+};
+
+// Find a product by UPC code within an organization
+export const findProductByUPC = async (
+  db: Database,
+  upcCode: string,
+  organizationId: OrganizationId,
+): Promise<ProductTopLevelOut | null> => {
+  const res = await getDb(db).query.product.findFirst({
+    where: and(
+      eq(product.upc, upcCode),
+      eq(product.organizationId, organizationId),
+    ),
+    with: {
+      images: {
+        with: {
+          image: true,
+        },
+      },
+    },
+  });
+
+  if (!res) {
+    return null;
+  }
+
+  return productTopLevelOut.parse({
+    ...res,
+    images: res.images?.map((pi) => pi.image) ?? [],
+  });
+};
+
+// Find a product by name and manufacturer within an organization
+export const findProductByNameAndManufacturer = async (
+  db: Database,
+  name: string,
+  manufacturer: string,
+  organizationId: OrganizationId,
+): Promise<ProductTopLevelOut | null> => {
+  const res = await getDb(db).query.product.findFirst({
+    where: and(
+      ilike(product.name, name),
+      ilike(product.manufacturer, manufacturer),
+      eq(product.organizationId, organizationId),
+    ),
+    with: {
+      images: {
+        with: {
+          image: true,
+        },
+      },
+    },
+  });
+
+  if (!res) {
+    return null;
+  }
+
+  return productTopLevelOut.parse({
+    ...res,
+    images: res.images?.map((pi) => pi.image) ?? [],
+  });
+};
+
+// Quick create a product with minimal data
+export const quickCreateProduct = async (
+  db: Database,
+  data: {
+    name: string;
+    manufacturer?: string;
+    upc?: string | null;
+    expectedQuantity?: number | null;
+    model?: string | null;
+    ingredientId?: string | null;
+  },
+  organizationId: OrganizationId,
+): Promise<ProductTopLevelOut> => {
+  const [newProduct] = await getDb(db)
+    .insert(product)
+    .values({
+      organizationId: organizationId,
+      name: data.name,
+      manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
+      upc: data.upc ?? null,
+      ndb_number: null,
+      model: data.model ?? null,
+      expectedQuantity: data.expectedQuantity ?? DEFAULT_EXPECTED_QUANTITY,
+      ingredientId: data.ingredientId ?? null,
+    })
+    .returning();
+
+  if (!newProduct) {
+    throw new Error("Failed to create product");
+  }
+
+  return productTopLevelOut.parse({
+    ...newProduct,
+    images: [],
   });
 };
 

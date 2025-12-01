@@ -139,7 +139,10 @@ export default function DocsPage() {
         <h3>Unit Conversions</h3>
         <ul>
           <li>WASM-powered conversion engine</li>
-          <li>Chain conversions through multiple units (cups &rarr; grams &rarr; dollars)</li>
+          <li>
+            Chain conversions through multiple units (cups &rarr; grams &rarr;
+            dollars)
+          </li>
           <li>Conversion graphs built automatically from product mappings</li>
         </ul>
 
