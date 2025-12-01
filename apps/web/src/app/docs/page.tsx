@@ -103,6 +103,57 @@ export default function DocsPage() {
       </div>
 
       <Prose>
+        <h2>Features</h2>
+
+        <h3>Recipes</h3>
+        <ul>
+          <li>Create recipes with multiple sections (e.g., Dough, Filling)</li>
+          <li>Each section has its own ingredients and instructions</li>
+          <li>Import recipes directly from URLs</li>
+          <li>Nest recipes within other recipes as sub-components</li>
+        </ul>
+
+        <h3>Products</h3>
+        <ul>
+          <li>Link products to ingredients for inventory tracking</li>
+          <li>Add unit mappings for volume, weight, and price conversions</li>
+          <li>Connect to USDA database via UPC barcode or NDB number</li>
+          <li>Pull in nutrition data from linked USDA entries</li>
+        </ul>
+
+        <h3>Inventory Management</h3>
+        <ul>
+          <li>Track product quantities at specific locations</li>
+          <li>Bulk edit multiple items at once</li>
+          <li>Bulk move items between locations</li>
+          <li>Automatic detection of duplicate unique products</li>
+        </ul>
+
+        <h3>USDA Integration</h3>
+        <ul>
+          <li>Search FoodData Central by name, UPC, or NDB number</li>
+          <li>View detailed nutrition information</li>
+          <li>Link products to USDA entries for enriched data</li>
+        </ul>
+
+        <h3>Unit Conversions</h3>
+        <ul>
+          <li>WASM-powered conversion engine</li>
+          <li>Chain conversions through multiple units (cups &rarr; grams &rarr; dollars)</li>
+          <li>Conversion graphs built automatically from product mappings</li>
+        </ul>
+
+        <h3>Problems Dashboard</h3>
+        <ul>
+          <li>Duplicate unique products across locations</li>
+          <li>Products missing inventory entries</li>
+          <li>Invalid UPC codes</li>
+          <li>Products without unit mappings</li>
+          <li>Empty locations</li>
+        </ul>
+      </Prose>
+
+      <Prose>
         <h2>Component Demos</h2>
         <p>
           Below are key view-only UI components used throughout RecipeHub,
