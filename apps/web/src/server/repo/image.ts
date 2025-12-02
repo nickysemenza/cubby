@@ -180,7 +180,7 @@ export const imageList = async (
 
   return {
     data: processedImages,
-    count: countResult[0]?.count ?? 0,
+    count: countResult[0].count,
   };
 };
 

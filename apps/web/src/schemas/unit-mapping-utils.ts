@@ -43,11 +43,10 @@ const createServingMapping = (
     household_serving_fulltext: string | null;
   },
 ): UnitMapping | undefined => {
-  // Validate all required fields are present
   if (
-    !serving.serving_size ||
-    !serving.serving_size_unit ||
-    !serving.household_serving_fulltext
+    serving.serving_size === null ||
+    serving.serving_size_unit === null ||
+    serving.household_serving_fulltext === null
   ) {
     return undefined;
   }
@@ -149,7 +148,6 @@ export const unitMappingsFromFood = (
     // Parse raw portions to unit mappings
     ...portionInfoRaw.map((p) => unitMappingFromPortionInfo(p, fdc_id)),
     ...(servingMapping ? [servingMapping] : []),
-    // Get nutrition mappings
     ...unitMappingsFromNutrition(food),
   ];
 };

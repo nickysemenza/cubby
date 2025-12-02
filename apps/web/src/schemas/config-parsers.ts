@@ -11,12 +11,10 @@ export function parseConversionString(input: string): {
   to: Amount;
   source?: string;
 } {
-  // Extract source if present (e.g., "4 lb = $5 @ whole foods")
   const sourceMatch = input.match(/^(.+?)\s*@\s*(.+)$/);
   const conversionPart = sourceMatch ? sourceMatch[1]!.trim() : input.trim();
   const source = sourceMatch ? sourceMatch[2]!.trim() : undefined;
 
-  // Parse the main conversion (e.g., "4 lb = $5")
   const match = conversionPart.match(/^(.+?)\s*=\s*(.+)$/);
   if (!match) {
     throw new Error(
@@ -41,7 +39,6 @@ export function parseConversionString(input: string): {
  * - "1 cup"
  */
 function parseAmount(input: string): Amount {
-  // Handle currency ($5, $12.50)
   const currencyMatch = input.match(/^\$(\d+(?:\.\d{1,2})?)$/);
   if (currencyMatch) {
     return {
@@ -50,7 +47,6 @@ function parseAmount(input: string): Amount {
     };
   }
 
-  // Handle regular amount (number + unit)
   const amountMatch = input.match(/^(\d+(?:\.\d+)?)\s*(.+)$/);
   if (!amountMatch) {
     throw new Error(
@@ -83,7 +79,6 @@ export function parseProductShorthand(input: string): {
   const name = input.substring(0, colonIndex).trim();
   const conversionPart = input.substring(colonIndex + 1).trim();
 
-  // Convert shorthand like "$5/4lb @ store" to "4 lb = $5 @ store"
   const conversion = convertPriceShorthand(conversionPart);
 
   return {
@@ -96,12 +91,10 @@ export function parseProductShorthand(input: string): {
  * Converts price shorthand like "$5/4lb @ store" to "4 lb = $5 @ store"
  */
 function convertPriceShorthand(input: string): string {
-  // Extract source if present
   const sourceMatch = input.match(/^(.+?)\s*@\s*(.+)$/);
   const pricePart = sourceMatch ? sourceMatch[1]!.trim() : input.trim();
   const source = sourceMatch ? ` @ ${sourceMatch[2]!.trim()}` : "";
 
-  // Parse price/amount format
   const match = pricePart.match(/^\$(\d+(?:\.\d{1,2})?)\s*\/\s*(.+)$/);
   if (!match) {
     throw new Error(
@@ -112,7 +105,6 @@ function convertPriceShorthand(input: string): string {
   const price = match[1]!;
   const amount = match[2]!.trim();
 
-  // Add space between number and unit if not present
   const formattedAmount = amount.replace(
     /^(\d+(?:\.\d+)?)([a-zA-Z]+)$/,
     "$1 $2",

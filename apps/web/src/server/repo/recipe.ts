@@ -78,9 +78,7 @@ type SectionIngredientDB = typeof recipeSectionIngredient.$inferSelect & {
 const sectionIngredientToAPI: (
   sectionIngredient: SectionIngredientDB,
 ) => SectionIngredient = (sectionIngredient) => {
-  // Check if this ingredient refers to a recipe
   if (sectionIngredient.ingredient?.Recipe) {
-    // This is a recipe reference
     return {
       ...sectionIngredient,
       type: "recipe",
@@ -89,7 +87,6 @@ const sectionIngredientToAPI: (
       amounts: sectionIngredient.amounts,
     };
   } else {
-    // This is a regular ingredient
     return {
       ...sectionIngredient,
       type: "ingredient",

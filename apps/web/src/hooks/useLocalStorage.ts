@@ -11,7 +11,6 @@ export function useLocalStorage<T>(
   key: string,
   initialValue: T,
 ): [T, (value: T | ((prev: T) => T)) => void] {
-  // Subscribe to localStorage changes
   const subscribe = useCallback(
     (callback: () => void) => {
       const handleStorageChange = (e: StorageEvent) => {
@@ -26,7 +25,6 @@ export function useLocalStorage<T>(
     [key],
   );
 
-  // Get the current value from localStorage
   const getSnapshot = useCallback(() => {
     try {
       const item = window.localStorage.getItem(key);
@@ -37,29 +35,22 @@ export function useLocalStorage<T>(
     }
   }, [key, initialValue]);
 
-  // Return initialValue for server-side rendering
   const getServerSnapshot = useCallback(() => initialValue, [initialValue]);
 
-  // Sync with external store (localStorage)
   const storedValue = useSyncExternalStore(
     subscribe,
     getSnapshot,
     getServerSnapshot,
   );
 
-  // Return a wrapped setter function that persists the new value to localStorage
   const setValue = useCallback(
     (value: T | ((prev: T) => T)) => {
       try {
-        // Allow value to be a function so we have same API as useState
         const currentValue = getSnapshot();
         const valueToStore =
           value instanceof Function ? value(currentValue) : value;
 
-        // Save to local storage (this will trigger the storage event in other tabs)
         window.localStorage.setItem(key, JSON.stringify(valueToStore));
-
-        // Manually dispatch storage event for current tab
         window.dispatchEvent(
           new StorageEvent("storage", {
             key,
