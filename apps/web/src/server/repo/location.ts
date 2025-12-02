@@ -6,6 +6,7 @@ import {
   locationType,
   LocationCreateInput,
   LocationUpdateInput,
+  type LocationType,
 } from "~/schemas/location";
 import {
   type LocationId,
@@ -20,15 +21,12 @@ import {
   buildTakeSkip,
 } from "~/schemas/pagination";
 import { extractDbTimestampsFromDBRec } from "~/schemas/common";
-import { type InfLocationConfig } from "../../schemas/config";
-import { findOrCreateProduct, findProductByName } from "./product";
 import {
   formatSearchTerm,
   getDb,
   unwrapDb,
   relations,
   buildOrderBy,
-  insertAndReturn,
   updateAndReturn,
   extractImagesFromJoinTable,
   mapRelation,
@@ -43,7 +41,7 @@ import {
   inventoryEntry,
   product,
 } from "~/server/db/schema";
-import { eq, and, sql, count, not, desc, inArray, ilike } from "drizzle-orm";
+import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
 
 // Create a new location
 export const createLocation = async (
@@ -155,106 +153,6 @@ export const updateLocation = async (
 
     return getLocationById(tx, unsafeLocationId(updated.id), organizationId);
   });
-};
-
-const upsertChild = async (
-  db: Transaction,
-  now: Date,
-  parent: { id: string } | null,
-  child: InfLocationConfig,
-  organizationId: OrganizationId,
-) => {
-  // Try to find existing location
-  const existing = await db.query.location.findFirst({
-    where: and(
-      eq(location.organizationId, organizationId),
-      eq(location.name, child.name),
-    ),
-  });
-
-  if (existing) {
-    // Update existing
-    return await updateAndReturn(
-      db,
-      location,
-      {
-        name: child.name,
-        type: child.type,
-        updatedAt: now,
-        parentId: parent?.id ?? null,
-      },
-      eq(location.id, existing.id),
-    );
-  } else {
-    // Create new
-    return await insertAndReturn(db, location, {
-      organizationId: organizationId,
-      name: child.name,
-      type: child.type,
-      updatedAt: now,
-      parentId: parent?.id ?? null,
-    });
-  }
-};
-
-export const loadLocations = async (
-  db: Transaction,
-  data: InfLocationConfig[],
-  organizationId: OrganizationId,
-) => {
-  const now = new Date();
-  const loadRecursive = async (
-    parent: { id: string } | null,
-    children: InfLocationConfig[],
-  ): Promise<void> => {
-    for (const child of children) {
-      const res = await upsertChild(db, now, parent, child, organizationId);
-      const productsAtLocation = [];
-      for (const productConfig of child.products ?? []) {
-        const productRow = await findOrCreateProduct(
-          db,
-          now,
-          productConfig,
-          organizationId,
-        );
-        productsAtLocation.push(productRow);
-      }
-      for (const productRef of child.productReferences ?? []) {
-        const productRow = await findProductByName(db, productRef.name);
-        productsAtLocation.push(productRow);
-      }
-
-      await db
-        .delete(inventoryEntry)
-        .where(eq(inventoryEntry.locationId, res.id));
-
-      if (productsAtLocation.length > 0) {
-        await db.insert(inventoryEntry).values(
-          productsAtLocation.map((prod) => ({
-            organizationId: organizationId,
-            locationId: res.id,
-            productId: prod.id,
-            amount: { value: 1, unit: "each" },
-          })),
-        );
-      }
-
-      await loadRecursive(res, child.children ?? []);
-    }
-  };
-
-  await loadRecursive(null, data);
-
-  const stale = await db.query.location.findMany({
-    where: and(
-      eq(location.organizationId, organizationId),
-      not(eq(location.updatedAt, now)),
-    ),
-  });
-
-  for (const s of stale) {
-    await db.delete(location).where(eq(location.id, s.id));
-  }
 };
 
 type LocationDeepDB = typeof location.$inferSelect & {
@@ -570,6 +468,39 @@ export const buildLocationPath = (
   return parts.join(separator);
 };
 
+/**
+ * Parse a location path with optional embedded types
+ * Supports both plain format ("garage > shelf") and typed format ("garage[room] > shelf[shelf]")
+ *
+ * @param path - Path string like "garage[room] > shelf[shelf]" or "garage > shelf"
+ * @param separator - Path separator, defaults to " > "
+ * @returns Array of {name, type} objects
+ */
+export const parseLocationPathWithTypes = (
+  path: string,
+  separator = " > ",
+): Array<{ name: string; type: LocationType }> => {
+  const parts = path.split(separator).map((p) => p.trim());
+
+  return parts.map((part, index) => {
+    // Match "name[type]" format
+    const match = part.match(/^(.+?)\[([^\]]+)\]$/);
+    if (match) {
+      const name = match[1].trim();
+      const typeStr = match[2].trim();
+      // Validate the type
+      const parsedType = locationType.safeParse(typeStr);
+      if (parsedType.success) {
+        return { name, type: parsedType.data };
+      }
+      // Invalid type - fall back to default
+      console.warn(`Invalid location type "${typeStr}" in path, using default`);
+    }
+    // No bracket notation or invalid - use defaults: root = room, children = shelf
+    return { name: part, type: index === 0 ? "room" : "shelf" };
+  });
+};
+
 // Find a location by its path string (e.g., "Room > Shelf > Bin")
 // Returns null if not found
 export const findLocationByPath = async (
@@ -620,28 +551,26 @@ export const findLocationByPath = async (
 };
 
 // Find or create a location by its path string
-// Creates intermediate locations as needed with type "room" for root and "shelf" for children
+// Supports bracket notation for types: "garage[room] > shelf[shelf]"
+// Creates intermediate locations as needed with parsed types or defaults (root=room, children=shelf)
 export const findOrCreateLocationByPath = async (
   db: Database,
   organizationId: OrganizationId,
   path: string,
   separator = " > ",
 ): Promise<LocationId> => {
-  const parts = path.split(separator).map((p) => p.trim());
+  const parsedParts = parseLocationPathWithTypes(path, separator);
 
-  if (parts.length === 0) {
+  if (parsedParts.length === 0) {
     throw new Error("Invalid location path: empty path");
   }
 
   let currentParentId: string | null = null;
 
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    const isRoot = i === 0;
-
+  for (const { name, type } of parsedParts) {
     const conditions = [
       eq(location.organizationId, organizationId),
-      ilike(location.name, part),
+      ilike(location.name, name),
     ];
 
     let existingLoc: typeof location.$inferSelect | undefined;
@@ -661,20 +590,20 @@ export const findOrCreateLocationByPath = async (
     if (existingLoc) {
       currentParentId = existingLoc.id;
     } else {
-      // Create the location
+      // Create the location with the parsed type
       const result: Array<typeof location.$inferSelect> = await getDb(db)
         .insert(location)
         .values({
           organizationId: organizationId,
-          name: part,
-          type: isRoot ? "room" : "shelf",
+          name: name,
+          type: type,
           parentId: currentParentId,
         })
         .returning();
 
       const newLoc = result[0];
       if (!newLoc) {
-        throw new Error(`Failed to create location: ${part}`);
+        throw new Error(`Failed to create location: ${name}`);
       }
       currentParentId = newLoc.id;
     }

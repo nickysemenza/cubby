@@ -35,8 +35,7 @@ import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 
 // Common money/currency units
 const MONEY_UNITS = ["dollar", "dollars", "usd", "$"];
-const isMoneyUnit = (unit: string) =>
-  MONEY_UNITS.includes(unit.toLowerCase());
+const isMoneyUnit = (unit: string) => MONEY_UNITS.includes(unit.toLowerCase());
 
 // Helper: Extract price from unit mappings (1 each → $X)
 function extractPriceFromMappings(

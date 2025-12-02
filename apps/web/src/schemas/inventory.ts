@@ -70,13 +70,19 @@ export const inventoryCSVRow = z.object({
   product_name: z.string().min(1),
   manufacturer: z.string().optional(), // defaults to "(unspecified)"
   upc: z.string().optional(),
-  location_path: z.string().min(1), // "Room > Shelf > Bin" format
+  model: z.string().optional(), // product model number
+  ndb_number: z.coerce.number().optional(), // USDA NDB number for nutrition data linking
+  location_path: z.string().optional(), // "Room > Shelf > Bin" format, or "Room[type] > Shelf[type]" with types. Empty = product-only row
   quantity: z.coerce.number().positive().default(1),
   unit: z.string().default("each"),
   expected_qty: z.coerce.number().int().positive().nullable().optional(), // product's expectedQuantity
   price: z.coerce.number().positive().nullable().optional(), // creates unit mapping "1 each → $X"
   unit_mappings: z.string().nullable().optional(), // "1 stick = 113.4g; 1 cup = 240ml" (non-price mappings)
-  ingredient_name: z.string().nullable().optional(), // linked ingredient name
+  ingredient_name: z.string().nullable().optional(), // linked ingredient name (explicit name)
+  ingredient: z
+    .preprocess((val) => val === "true" || val === true, z.boolean())
+    .optional(), // true = create ingredient with same name as product
+  aliases: z.string().nullable().optional(), // semicolon-separated: "sugar;granulated sugar"
 });
 
 export type InventoryCSVRow = z.infer<typeof inventoryCSVRow>;
@@ -104,6 +110,9 @@ export const productChangesPreview = z.object({
   unitMappingsWillBeAdded: z.number().optional(), // count of new mappings
   unitMappingsDetail: z.array(unitMappingDetail).optional(), // detailed mappings for display
   ingredientWillBeLinked: z.string().optional(), // ingredient name
+  modelWillBeSet: z.string().optional(), // model number
+  ndbNumberWillBeSet: z.number().optional(), // USDA NDB number
+  aliasesWillBeAdded: z.array(z.string()).optional(), // list of aliases to add
 });
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
@@ -111,9 +120,16 @@ export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
 // Result types for CSV import
 export const csvImportResultItem = z.object({
   rowIndex: z.number(),
-  action: z.enum(["created", "moved", "updated", "skipped", "error"]),
+  action: z.enum([
+    "created",
+    "moved",
+    "updated",
+    "skipped",
+    "error",
+    "product_only",
+  ]),
   productName: z.string(),
-  locationPath: z.string(),
+  locationPath: z.string().optional(), // Optional for product-only rows
   message: z.string().optional(),
   // Preview fields
   productWillBeCreated: z.boolean().optional(),
@@ -130,6 +146,7 @@ export const csvImportResult = z.object({
   updated: z.number(),
   skipped: z.number(),
   errors: z.number(),
+  productOnly: z.number(), // Products created/updated without inventory placement
   items: z.array(csvImportResultItem),
 });
 

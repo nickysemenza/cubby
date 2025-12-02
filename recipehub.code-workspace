@@ -9,9 +9,6 @@
     },
   ],
   "settings": {
-    "yaml.schemas": {
-      "tooling/mapping_schema.json": "config.yaml",
-    },
     "workbench.colorCustomizations": {
       "titleBar.activeBackground": "#7236ff",
       "titleBar.activeForeground": "#e2e8f0",

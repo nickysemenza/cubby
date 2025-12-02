@@ -63,6 +63,12 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
         icon: <AlertCircle className="h-3 w-3" />,
         label: "Error",
       };
+    case "product_only":
+      return {
+        bg: "bg-purple-100 text-purple-700",
+        icon: <Package className="h-3 w-3" />,
+        label: "Product",
+      };
   }
 };
 
@@ -87,6 +93,20 @@ const ProductChangesPreview = ({ item }: { item: CSVImportResultItem }) => {
   // Unit mappings now shown in dedicated column, not here
   if (item.productChanges?.ingredientWillBeLinked) {
     changes.push(`Link: ${item.productChanges.ingredientWillBeLinked}`);
+  }
+  if (item.productChanges?.modelWillBeSet) {
+    changes.push(`Model: ${item.productChanges.modelWillBeSet}`);
+  }
+  if (item.productChanges?.ndbNumberWillBeSet) {
+    changes.push(`NDB: ${item.productChanges.ndbNumberWillBeSet}`);
+  }
+  if (
+    item.productChanges?.aliasesWillBeAdded &&
+    item.productChanges.aliasesWillBeAdded.length > 0
+  ) {
+    changes.push(
+      `Aliases: ${item.productChanges.aliasesWillBeAdded.join(", ")}`,
+    );
   }
   if (item.movedFrom && item.movedFrom.length > 0) {
     changes.push(`From: ${item.movedFrom.join(", ")}`);
@@ -200,11 +220,16 @@ export default function CSVImportForm() {
 
     result.data.forEach((row, index) => {
       const productName = row.product_name || row.product || row.name;
-      const locationPath = row.location_path || row.location;
+      const locationPath = row.location_path || row.location || undefined; // Now optional
       const quantity = parseFloat(row.quantity || row.qty || "1");
       const unit = row.unit || "each";
       const manufacturer = row.manufacturer || UNSPECIFIED_MANUFACTURER;
       const upc = row.upc || row.barcode || undefined;
+      const model = row.model || undefined;
+
+      // Parse optional ndb_number (integer)
+      const ndbNumberRaw = row.ndb_number || row.ndbnumber;
+      const ndb_number = ndbNumberRaw ? parseInt(ndbNumberRaw, 10) : undefined;
 
       // Parse optional expected_qty (integer)
       const expectedQtyRaw = row.expected_qty || row.expectedqty;
@@ -219,18 +244,27 @@ export default function CSVImportForm() {
       // Parse optional unit_mappings (string)
       const unit_mappings = row.unit_mappings || row.unitmappings || null;
 
-      // Parse optional ingredient_name (string)
-      const ingredient_name = row.ingredient_name || row.ingredient || null;
+      // Parse optional ingredient_name (string) - explicit ingredient name
+      const ingredient_name = row.ingredient_name || null;
+
+      // Parse optional ingredient flag (boolean) - use product name as ingredient
+      const ingredientRaw = row.ingredient;
+      const ingredient =
+        ingredientRaw === "true" ||
+        ingredientRaw === "TRUE" ||
+        ingredientRaw === "1"
+          ? true
+          : undefined;
+
+      // Parse optional aliases (semicolon-separated string)
+      const aliases = row.aliases || null;
 
       if (!productName) {
         errors.push(`Row ${index + 1}: Missing product name`);
         return;
       }
-      if (!locationPath) {
-        errors.push(`Row ${index + 1}: Missing location path`);
-        return;
-      }
-      if (isNaN(quantity) || quantity <= 0) {
+      // location_path is now optional - empty means product-only row
+      if (locationPath && (isNaN(quantity) || quantity <= 0)) {
         errors.push(`Row ${index + 1}: Invalid quantity`);
         return;
       }
@@ -241,6 +275,10 @@ export default function CSVImportForm() {
         errors.push(
           `Row ${index + 1}: Invalid expected_qty (must be positive integer)`,
         );
+        return;
+      }
+      if (ndb_number !== undefined && isNaN(ndb_number)) {
+        errors.push(`Row ${index + 1}: Invalid ndb_number (must be a number)`);
         return;
       }
       if (price !== undefined && (isNaN(price) || price <= 0)) {
@@ -254,6 +292,8 @@ export default function CSVImportForm() {
         product_name: productName,
         manufacturer,
         upc,
+        model,
+        ndb_number,
         location_path: locationPath,
         quantity,
         unit,
@@ -261,6 +301,8 @@ export default function CSVImportForm() {
         price: price ?? null,
         unit_mappings,
         ingredient_name,
+        ingredient,
+        aliases,
       });
     });
 
@@ -333,7 +375,7 @@ export default function CSVImportForm() {
             <CheckCircle2 className="h-5 w-5" />
             <span className="font-medium">Import Complete</span>
           </div>
-          <div className="mt-2 grid grid-cols-5 gap-4 text-sm">
+          <div className="mt-2 grid grid-cols-6 gap-4 text-sm">
             <div>
               <span className="font-medium text-green-600">
                 {importResult.created}
@@ -351,6 +393,12 @@ export default function CSVImportForm() {
                 {importResult.updated}
               </span>
               <span className="text-muted-foreground ml-1">updated</span>
+            </div>
+            <div>
+              <span className="font-medium text-purple-600">
+                {importResult.productOnly}
+              </span>
+              <span className="text-muted-foreground ml-1">product only</span>
             </div>
             <div>
               <span className="font-medium text-gray-600">
@@ -392,7 +440,13 @@ export default function CSVImportForm() {
                       </td>
                       <td className="p-2">{item.productName}</td>
                       <td className="p-2">
-                        <div>{item.locationPath}</div>
+                        {item.locationPath ? (
+                          <div>{item.locationPath}</div>
+                        ) : (
+                          <span className="text-muted-foreground italic">
+                            No location
+                          </span>
+                        )}
                         {item.message && (
                           <div className="text-muted-foreground text-xs">
                             {item.message}
@@ -475,7 +529,7 @@ export default function CSVImportForm() {
       {previewResult && previewResult.items.length > 0 && (
         <div className="space-y-2">
           {/* Summary counts */}
-          <div className="grid grid-cols-5 gap-2 text-sm">
+          <div className="grid grid-cols-6 gap-2 text-sm">
             <div className="rounded border bg-green-50 p-2 text-center">
               <div className="text-lg font-bold text-green-600">
                 {previewResult.created}
@@ -493,6 +547,12 @@ export default function CSVImportForm() {
                 {previewResult.updated}
               </div>
               <div className="text-muted-foreground text-xs">Update</div>
+            </div>
+            <div className="rounded border bg-purple-50 p-2 text-center">
+              <div className="text-lg font-bold text-purple-600">
+                {previewResult.productOnly}
+              </div>
+              <div className="text-muted-foreground text-xs">Product</div>
             </div>
             <div className="rounded border bg-gray-50 p-2 text-center">
               <div className="text-lg font-bold text-gray-600">
@@ -538,7 +598,13 @@ export default function CSVImportForm() {
                         <ProductChangesPreview item={item} />
                       </td>
                       <td className="p-2">
-                        <div>{item.locationPath}</div>
+                        {item.locationPath ? (
+                          <div>{item.locationPath}</div>
+                        ) : (
+                          <span className="text-muted-foreground italic">
+                            No location
+                          </span>
+                        )}
                         {item.message && (
                           <div className="text-muted-foreground text-xs">
                             {item.message}

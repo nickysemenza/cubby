@@ -753,6 +753,17 @@ export const getTotalProductQuantity = async (
   }, 0);
 };
 
+// Helper: Parse semicolon-separated aliases string
+const parseAliasesString = (
+  aliasesStr: string | null | undefined,
+): string[] => {
+  if (!aliasesStr) return [];
+  return aliasesStr
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
 // Helper: Find or create product for CSV import
 const findOrCreateProductForImport = async (
   db: Database,
@@ -762,14 +773,25 @@ const findOrCreateProductForImport = async (
   upc: string | undefined,
   expectedQty: number | null | undefined,
   ingredientName: string | null | undefined,
+  ingredientFlag: boolean | undefined,
+  model: string | undefined,
+  ndbNumber: number | undefined,
+  aliasesStr: string | null | undefined,
 ): Promise<ProductTopLevelOut> => {
-  // If ingredient_name provided, find or create the ingredient
+  // Parse aliases from semicolon-separated string
+  const aliases = parseAliasesString(aliasesStr);
+
+  // Determine ingredient name: explicit name takes precedence, then ingredient flag uses product name
+  const effectiveIngredientName =
+    ingredientName ?? (ingredientFlag ? productName : null);
+
+  // If ingredient should be linked, find or create it with aliases
   let ingredientId: IngredientId | null = null;
-  if (ingredientName) {
+  if (effectiveIngredientName) {
     const ingredientData = await findOrCreateIngredient(
       db,
-      ingredientName,
-      undefined,
+      effectiveIngredientName,
+      aliases.length > 0 ? aliases : undefined,
       organizationId,
     );
     ingredientId = unsafeIngredientId(ingredientData.id);
@@ -783,7 +805,7 @@ const findOrCreateProductForImport = async (
   );
 
   if (!productData) {
-    // Create new product with expected_qty from CSV or default to 1
+    // Create new product with all fields from CSV
     productData = await quickCreateProduct(
       db,
       {
@@ -791,6 +813,8 @@ const findOrCreateProductForImport = async (
         manufacturer,
         upc: upc ?? null,
         expectedQuantity: expectedQty ?? 1,
+        model: model ?? null,
+        ndb_number: ndbNumber ?? null,
         ingredientId,
       },
       organizationId,
@@ -800,9 +824,17 @@ const findOrCreateProductForImport = async (
     const updates: {
       expectedQuantity?: number;
       ingredientId?: IngredientId | null;
+      model?: string | null;
+      ndb_number?: number | null;
     } = {};
     if (expectedQty != null) {
       updates.expectedQuantity = expectedQty;
+    }
+    if (model != null) {
+      updates.model = model;
+    }
+    if (ndbNumber != null) {
+      updates.ndb_number = ndbNumber;
     }
     if (ingredientId != null) {
       // Check if product already has an ingredient linked (need to query DB)
@@ -820,11 +852,23 @@ const findOrCreateProductForImport = async (
         .update(product)
         .set(updates)
         .where(eq(product.id, productData.id));
-      // Update local copy for expectedQuantity (ingredientId not in output schema)
+      // Update local copy for fields that might have changed
       if (updates.expectedQuantity != null) {
         productData = {
           ...productData,
           expectedQuantity: updates.expectedQuantity,
+        };
+      }
+      if (updates.model != null) {
+        productData = {
+          ...productData,
+          model: updates.model,
+        };
+      }
+      if (updates.ndb_number != null) {
+        productData = {
+          ...productData,
+          ndb_number: updates.ndb_number,
         };
       }
     }
@@ -1034,12 +1078,19 @@ const previewProductForImport = async (
   manufacturer: string,
   expectedQty: number | null | undefined,
   ingredientName: string | null | undefined,
+  ingredientFlag: boolean | undefined,
+  model: string | undefined,
+  ndbNumber: number | undefined,
+  aliasesStr: string | null | undefined,
 ): Promise<{
   existingProduct: ProductTopLevelOut | null;
   productWillBeCreated: boolean;
   productChanges: ProductChangesPreview;
 }> => {
   const productChanges: ProductChangesPreview = {};
+  const aliases = parseAliasesString(aliasesStr);
+  const effectiveIngredientName =
+    ingredientName ?? (ingredientFlag ? productName : null);
 
   const existingProduct = await findProductByNameAndManufacturer(
     db,
@@ -1053,8 +1104,17 @@ const previewProductForImport = async (
     if (expectedQty != null) {
       productChanges.expectedQuantityWillBeSet = expectedQty;
     }
-    if (ingredientName) {
-      productChanges.ingredientWillBeLinked = ingredientName;
+    if (effectiveIngredientName) {
+      productChanges.ingredientWillBeLinked = effectiveIngredientName;
+    }
+    if (model) {
+      productChanges.modelWillBeSet = model;
+    }
+    if (ndbNumber != null) {
+      productChanges.ndbNumberWillBeSet = ndbNumber;
+    }
+    if (aliases.length > 0) {
+      productChanges.aliasesWillBeAdded = aliases;
     }
     return {
       existingProduct: null,
@@ -1068,15 +1128,28 @@ const previewProductForImport = async (
     productChanges.expectedQuantityWillBeSet = expectedQty;
   }
 
+  if (model && existingProduct.model !== model) {
+    productChanges.modelWillBeSet = model;
+  }
+
+  if (ndbNumber != null && existingProduct.ndb_number !== ndbNumber) {
+    productChanges.ndbNumberWillBeSet = ndbNumber;
+  }
+
   // Check ingredient linking
-  if (ingredientName) {
+  if (effectiveIngredientName) {
     const productWithIngredient = await getDb(db).query.product.findFirst({
       where: eq(product.id, existingProduct.id),
       columns: { ingredientId: true },
     });
     if (productWithIngredient?.ingredientId == null) {
-      productChanges.ingredientWillBeLinked = ingredientName;
+      productChanges.ingredientWillBeLinked = effectiveIngredientName;
     }
+  }
+
+  // Aliases will be added to ingredient if it's being linked
+  if (aliases.length > 0 && effectiveIngredientName) {
+    productChanges.aliasesWillBeAdded = aliases;
   }
 
   return {
@@ -1142,11 +1215,16 @@ export const importInventoryFromCSV = async (
   let updated = 0;
   let skipped = 0;
   let errors = 0;
+  let productOnly = 0;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
       const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
+
+      // Check if this is a product-only row (no location_path)
+      const isProductOnly =
+        !row.location_path || row.location_path.trim() === "";
 
       let productData: ProductTopLevelOut | null = null;
       let productWillBeCreated = false;
@@ -1161,6 +1239,10 @@ export const importInventoryFromCSV = async (
           manufacturer,
           row.expected_qty,
           row.ingredient_name,
+          row.ingredient,
+          row.model,
+          row.ndb_number,
+          row.aliases,
         );
         productData = preview.existingProduct;
         productWillBeCreated = preview.productWillBeCreated;
@@ -1197,6 +1279,10 @@ export const importInventoryFromCSV = async (
           row.upc,
           row.expected_qty,
           row.ingredient_name,
+          row.ingredient,
+          row.model,
+          row.ndb_number,
+          row.aliases,
         );
 
         // Handle price mapping if provided
@@ -1214,8 +1300,25 @@ export const importInventoryFromCSV = async (
         }
       }
 
-      // For dryRun without existing product, we can't determine inventory action precisely
-      // But we can still show what would happen
+      // Handle product-only rows (no inventory placement)
+      if (isProductOnly) {
+        results.push({
+          rowIndex: i,
+          action: "product_only",
+          productName: row.product_name,
+          locationPath: undefined,
+          message: productWillBeCreated
+            ? "Product will be created"
+            : "Product already exists",
+          productWillBeCreated,
+          productChanges:
+            Object.keys(productChanges).length > 0 ? productChanges : undefined,
+        });
+        productOnly++;
+        continue;
+      }
+
+      // For rows with location_path, continue with inventory processing
       let targetLocationId: LocationId | null = null;
       let locationWillBeCreated = false;
 
@@ -1224,7 +1327,7 @@ export const importInventoryFromCSV = async (
         targetLocationId = await findLocationByPath(
           db,
           organizationId,
-          row.location_path,
+          row.location_path!,
         );
         if (!targetLocationId) {
           locationWillBeCreated = true;
@@ -1233,7 +1336,7 @@ export const importInventoryFromCSV = async (
         targetLocationId = await findOrCreateLocationByPath(
           db,
           organizationId,
-          row.location_path,
+          row.location_path!,
         );
       }
 
@@ -1493,5 +1596,13 @@ export const importInventoryFromCSV = async (
     }
   }
 
-  return { created, moved, updated, skipped, errors, items: results };
+  return {
+    created,
+    moved,
+    updated,
+    skipped,
+    errors,
+    productOnly,
+    items: results,
+  };
 };

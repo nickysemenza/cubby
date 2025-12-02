@@ -1,6 +1,4 @@
 import { type Database, type Transaction } from "~/server/db";
-import { type ProductConfigItem } from "../../schemas/config";
-import { findOrCreateIngredient } from "./ingredient";
 import { createOrUpdatePriceMapping } from "./inventory";
 import { type z } from "zod";
 import {
@@ -9,7 +7,6 @@ import {
   buildTakeSkip,
 } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
-import { type unitMappingBase } from "~/schemas/unitmapping";
 import { locationType } from "~/schemas/location";
 import { foodLookupParam, FoodLookupParam } from "@recipehub/usda-schemas";
 import {
@@ -27,7 +24,6 @@ import {
   unwrapDb,
   relations,
   buildOrderBy,
-  insertAndReturn,
   updateAndReturn,
   extractImagesFromJoinTable,
   mapRelation,
@@ -55,7 +51,7 @@ import {
   image,
   productImage,
 } from "~/server/db/schema";
-import { eq, and, count, ilike, ne, inArray } from "drizzle-orm";
+import { eq, and, count, ilike, inArray } from "drizzle-orm";
 
 export const findProductByName = async (
   db: Database | Transaction,
@@ -73,129 +69,6 @@ export const findProductByName = async (
     default:
       throw new Error(ambiguousNameError("product", name));
   }
-};
-
-export const findOrCreateProduct = async (
-  db: Transaction,
-  now: Date,
-  productConfig: ProductConfigItem,
-  organizationId: OrganizationId,
-): Promise<typeof product.$inferSelect> => {
-  const {
-    name,
-    manufacturer,
-    upc,
-    model,
-    ndb_number,
-    ingredient: ingredientConfig,
-    aliases,
-    price_per,
-    unit_mappings,
-  } = productConfig;
-
-  let ingredientRef = undefined;
-  if (ingredientConfig) {
-    // only link item if its an ingredient
-    ingredientRef = await findOrCreateIngredient(
-      db,
-      name,
-      aliases,
-      organizationId,
-    );
-  }
-
-  const pricePerMapping: z.infer<typeof unitMappingBase> | undefined =
-    price_per !== undefined
-      ? {
-          a: { value: 1, unit: "each" },
-          b: { value: price_per, unit: "dollar" },
-          source: "config",
-        }
-      : undefined;
-
-  // Check if product exists
-  const existing = await db.query.product.findFirst({
-    where: and(
-      eq(product.organizationId, organizationId),
-      eq(product.name, name),
-      eq(product.manufacturer, manufacturer),
-    ),
-  });
-
-  let productRow: typeof product.$inferSelect;
-
-  if (existing) {
-    // Update existing product
-    productRow = await updateAndReturn(
-      db,
-      product,
-      {
-        name,
-        manufacturer,
-        upc,
-        ndb_number,
-        model,
-        updatedAt: now,
-        ingredientId: ingredientRef?.id ?? null,
-      },
-      eq(product.id, existing.id),
-    );
-  } else {
-    // Create new product
-    productRow = await insertAndReturn(db, product, {
-      organizationId: organizationId,
-      name,
-      manufacturer,
-      upc,
-      ndb_number,
-      model,
-      updatedAt: now,
-      ingredientId: ingredientRef?.id ?? null,
-    });
-  }
-
-  // Delete existing mappings and recreate
-  await db
-    .delete(productUnitMappings)
-    .where(eq(productUnitMappings.productId, productRow.id));
-
-  const mappings = [
-    ...(unit_mappings ?? []),
-    ...(pricePerMapping ? [pricePerMapping] : []),
-  ];
-
-  if (mappings.length > 0) {
-    await db.insert(productUnitMappings).values(
-      mappings.map((unitMapping) => ({
-        productId: productRow.id,
-        a: unitMapping.a,
-        b: unitMapping.b,
-        source: unitMapping.source,
-      })),
-    );
-  }
-
-  return productRow;
-};
-
-export const loadProducts = async (
-  db: Transaction,
-  data: ProductConfigItem[],
-  organizationId: OrganizationId,
-) => {
-  const now = new Date();
-
-  for (const productConfig of data) {
-    await findOrCreateProduct(db, now, productConfig, organizationId);
-  }
-
-  const stale = await db.query.product.findMany({
-    where: and(
-      eq(product.organizationId, organizationId),
-      ne(product.updatedAt, now),
-    ),
-  });
-  console.log({ stale: stale.map((s) => s.id) });
 };
 
 // Type for deeply nested product query
@@ -655,6 +528,7 @@ export const quickCreateProduct = async (
     upc?: string | null;
     expectedQuantity?: number | null;
     model?: string | null;
+    ndb_number?: number | null;
     ingredientId?: string | null;
     price?: number | null;
   },
@@ -667,7 +541,7 @@ export const quickCreateProduct = async (
       name: data.name,
       manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
       upc: data.upc ?? null,
-      ndb_number: null,
+      ndb_number: data.ndb_number ?? null,
       model: data.model ?? null,
       expectedQuantity: data.expectedQuantity ?? DEFAULT_EXPECTED_QUANTITY,
       ingredientId: data.ingredientId ?? null,
