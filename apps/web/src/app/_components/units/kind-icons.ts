@@ -8,7 +8,6 @@ import {
   Timer,
   Ruler,
   Shapes,
-  Beef,
 } from "lucide-react";
 import { type MeasureKind } from "@recipehub/recipebridge";
 
@@ -20,7 +19,6 @@ export const kindIconMap: Record<
   volume: { Icon: FlaskConical, label: "Volume" },
   money: { Icon: DollarSign, label: "Money" },
   calories: { Icon: Flame, label: "Calories" },
-  protein: { Icon: Beef, label: "Protein" },
   time: { Icon: Timer, label: "Time" },
   temperature: { Icon: Thermometer, label: "Temperature" },
   length: { Icon: Ruler, label: "Length" },
