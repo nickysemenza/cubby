@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
 import { Zap, Upload, Download, Loader2 } from "lucide-react";
-import { CSVImportDialog } from "~/app/_components/inventory/csv-import-dialog";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -16,7 +15,6 @@ import {
 } from "~/lib/csv-utils";
 
 export function InventoryActions() {
-  const [isImportOpen, setIsImportOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const api = useTRPC();
 
@@ -77,10 +75,12 @@ export function InventoryActions() {
           Quick Capture
         </Button>
       </Link>
-      <Button variant="outline" onClick={() => setIsImportOpen(true)}>
-        <Upload className="mr-1 h-4 w-4" />
-        Import CSV
-      </Button>
+      <Link href={`/${entities["inventory-item"].basePath}/import`}>
+        <Button variant="outline">
+          <Upload className="mr-1 h-4 w-4" />
+          Import CSV
+        </Button>
+      </Link>
       <Button variant="outline" onClick={handleExport} disabled={isExporting}>
         {isExporting ? (
           <Loader2 className="mr-1 h-4 w-4 animate-spin" />
@@ -95,8 +95,6 @@ export function InventoryActions() {
       <Link href={`/${entities["inventory-item"].basePath}/new`}>
         <Button variant="outline">Create New</Button>
       </Link>
-
-      <CSVImportDialog isOpen={isImportOpen} onOpenChange={setIsImportOpen} />
     </>
   );
 }

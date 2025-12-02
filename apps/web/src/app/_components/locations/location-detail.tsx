@@ -77,11 +77,18 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               <NoneState />
             )}
           </div>
-          <div className="mt-4 space-x-2">
+          <div className="mt-4 flex gap-2">
             <Button onClick={editMode.startEditing}>Edit</Button>
-            <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
-              <Button variant="outline">Bulk Edit Inventory</Button>
-            </Link>
+            <Button variant="outline" asChild>
+              <Link href={`/inventory/quick-capture?locationId=${location.id}`}>
+                Quick Capture Here
+              </Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
+                Bulk Edit Inventory
+              </Link>
+            </Button>
           </div>
         </div>
       ),

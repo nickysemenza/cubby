@@ -6,12 +6,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
 import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
-import { buildProductComboboxItem } from "~/app/_components/combobox/combobox-builders";
+import {
+  buildProductComboboxItem,
+  buildLocationComboboxItem,
+} from "~/app/_components/combobox/combobox-builders";
 import { Button } from "~/components/ui/button";
-import { X, Plus } from "lucide-react";
+import { X, Plus, ChevronDown, ChevronUp, Package } from "lucide-react";
 import { toast } from "sonner";
 import { type LocationId, type ProductId } from "~/schemas/identifiers";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   ComboboxFieldWithSearch,
   FormWrapper,
@@ -23,8 +26,13 @@ import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group
 import { WithProductSearchQuickCreate } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { ProductPillLink } from "~/app/_components/EntityPill";
+import { type InfLocation } from "~/schemas/location";
 
-// Schema for a single inventory item (now includes location per item)
+// Schema for a single inventory item
 const quickCaptureItemSchema = z.object({
   location: ComboboxItemSchema.nullable().refine((item) => item !== null, {
     message: "Please select a location",
@@ -42,10 +50,18 @@ const quickCaptureFormSchema = z.object({
 
 type QuickCaptureFormValues = z.infer<typeof quickCaptureFormSchema>;
 
-export default function QuickCaptureForm() {
+interface QuickCaptureFormProps {
+  initialLocationId?: string;
+}
+
+export default function QuickCaptureForm({
+  initialLocationId,
+}: QuickCaptureFormProps) {
   const api = useTRPC();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [focusedRowIndex, setFocusedRowIndex] = useState(0);
+  const [showInventory, setShowInventory] = useState(true);
   const queryClient = useQueryClient();
 
   // Initialize the form
@@ -53,7 +69,11 @@ export default function QuickCaptureForm() {
     resolver: zodResolver(quickCaptureFormSchema),
     defaultValues: {
       items: [
-        { location: null, product: null, amount: { value: 1, unit: "each" } },
+        {
+          location: null,
+          product: null,
+          amount: { value: 1, unit: "each" },
+        },
       ],
     },
   });
@@ -64,8 +84,44 @@ export default function QuickCaptureForm() {
     name: "items",
   });
 
-  // Watch items to get the last location for copying
+  // Watch items to get the last location for copying and focused location
   const items = form.watch("items");
+  const focusedItem = items[focusedRowIndex];
+  const focusedLocationId = focusedItem?.location?.id as LocationId | undefined;
+
+  // Fetch initial location if provided
+  const { data: initialLocation } = useQuery({
+    ...api.location.getByID.queryOptions({
+      id: initialLocationId as LocationId,
+    }),
+    enabled: !!initialLocationId,
+  });
+
+  // Set initial location when loaded
+  useEffect(() => {
+    if (initialLocation && items[0]?.location === null) {
+      form.setValue(
+        "items.0.location",
+        buildLocationComboboxItem(initialLocation),
+      );
+    }
+  }, [initialLocation, form, items]);
+
+  // Fetch focused location with hierarchy for breadcrumbs
+  const { data: focusedLocation } = useQuery({
+    ...api.location.getByID.queryOptions({ id: focusedLocationId! }),
+    enabled: !!focusedLocationId,
+  });
+
+  // Fetch inventory at focused location
+  const { data: inventoryAtLocation } = useQuery({
+    ...api.inventoryItem.list.queryOptions({
+      sort: { orderBy: "createdAt", direction: "desc" },
+      pagination: { pageIndex: 0, pageSize: 20 },
+      filters: { locationIdFilter: focusedLocationId },
+    }),
+    enabled: !!focusedLocationId,
+  });
 
   // Add a new empty inventory item, copying location from previous row
   const addInventoryItem = useCallback(() => {
@@ -76,7 +132,20 @@ export default function QuickCaptureForm() {
       product: null,
       amount: { value: 1, unit: "each" },
     });
+    // Focus the new row
+    setFocusedRowIndex(items.length);
   }, [append, items]);
+
+  // Handle clicking a child location to set it on the focused row
+  const handleChildLocationClick = useCallback(
+    (childLocation: InfLocation) => {
+      form.setValue(
+        `items.${focusedRowIndex}.location`,
+        buildLocationComboboxItem(childLocation),
+      );
+    },
+    [form, focusedRowIndex],
+  );
 
   // Bulk process mutation
   const bulkProcessMutation = useMutation(
@@ -198,6 +267,7 @@ export default function QuickCaptureForm() {
             amount: { value: 1, unit: "each" },
           },
         ]);
+        setFocusedRowIndex(0);
       } catch (err) {
         console.error("Error submitting inventory items:", err);
         setError("Failed to update inventory. Please try again.");
@@ -235,6 +305,50 @@ export default function QuickCaptureForm() {
       isPending={isSubmitting}
       submitButtonText={getSubmitButtonText("create", isSubmitting)}
     >
+      {/* Location Context Section */}
+      {focusedLocation && (
+        <Card className="mb-4">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">
+              Current Location Context
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Breadcrumb navigation */}
+            <EnhancedBreadcrumbs location={focusedLocation} />
+
+            {/* Children quick navigation */}
+            {focusedLocation.children &&
+              focusedLocation.children.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-muted-foreground text-xs">
+                    Drill into child location:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {focusedLocation.children.map((child) => (
+                      <Button
+                        key={child.id}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => handleChildLocationClick(child)}
+                      >
+                        <LocationIcon
+                          type={child.type}
+                          size={12}
+                          className="mr-1"
+                        />
+                        {child.name}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              )}
+          </CardContent>
+        </Card>
+      )}
+
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-lg font-medium">Quick Inventory Capture</h3>
         <Button type="button" onClick={addInventoryItem} size="sm">
@@ -244,67 +358,129 @@ export default function QuickCaptureForm() {
       </div>
 
       <div className="space-y-2">
-        {fields.map((field, index) => (
-          <div
-            key={field.id}
-            className="flex items-start gap-2 rounded border p-2"
-          >
-            <div className="w-48 flex-shrink-0">
-              <ComboboxFieldWithSearch
-                form={form}
-                name={`items.${index}.location`}
-                label={index === 0 ? "Location" : undefined}
-                searchType="location"
-              />
-            </div>
+        {fields.map((field, index) => {
+          const isFocused = index === focusedRowIndex;
 
-            <div className="min-w-0 flex-1">
-              <WithProductSearchQuickCreate>
-                {({ items, onSearchChange, isLoading, onCreateNew }) => (
-                  <ComboboxField
-                    form={form}
-                    name={`items.${index}.product`}
-                    label={index === 0 ? "Product" : undefined}
-                    items={items}
-                    onSearchChange={onSearchChange}
-                    isLoading={isLoading}
-                    onCreateNew={onCreateNew}
-                  />
-                )}
-              </WithProductSearchQuickCreate>
-            </div>
+          return (
+            <div
+              key={field.id}
+              className={`flex flex-col gap-2 rounded border p-2 transition-colors md:flex-row md:items-start ${
+                isFocused ? "border-primary bg-primary/5" : ""
+              }`}
+              onFocus={() => setFocusedRowIndex(index)}
+              onClick={() => setFocusedRowIndex(index)}
+            >
+              {/* Location field */}
+              <div className="w-full flex-shrink-0 md:w-48">
+                <ComboboxFieldWithSearch
+                  form={form}
+                  name={`items.${index}.location`}
+                  label={index === 0 ? "Location" : undefined}
+                  searchType="location"
+                />
+              </div>
 
-            <div className="w-36 flex-shrink-0">
-              <AmountFieldGroup
-                form={form}
-                valuePath={`items.${index}.amount.value`}
-                unitPath={`items.${index}.amount.unit`}
-              />
-            </div>
+              {/* Product field with quick create */}
+              <div className="min-w-0 flex-1">
+                <WithProductSearchQuickCreate>
+                  {({ items, onSearchChange, isLoading, onCreateNew }) => (
+                    <ComboboxField
+                      form={form}
+                      name={`items.${index}.product`}
+                      label={index === 0 ? "Product" : undefined}
+                      items={items}
+                      onSearchChange={onSearchChange}
+                      isLoading={isLoading}
+                      onCreateNew={onCreateNew}
+                    />
+                  )}
+                </WithProductSearchQuickCreate>
+              </div>
 
-            <div className={`flex gap-1 ${index === 0 ? "mt-6" : ""}`}>
-              <BarcodeScannerButton
-                onScan={(barcode) => handleBarcodeScan(barcode, index)}
-                disabled={findOrCreateByUPCMutation.isPending}
-              />
+              {/* Amount field */}
+              <div className="w-full flex-shrink-0 md:w-36">
+                <AmountFieldGroup
+                  form={form}
+                  valuePath={`items.${index}.amount.value`}
+                  unitPath={`items.${index}.amount.unit`}
+                />
+              </div>
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  if (fields.length > 1) {
-                    remove(index);
-                  }
-                }}
-                disabled={fields.length <= 1}
+              {/* Action buttons */}
+              <div
+                className={`flex items-center gap-2 ${index === 0 ? "md:mt-6" : ""}`}
               >
-                <X className="h-4 w-4" />
-              </Button>
+                <BarcodeScannerButton
+                  onScan={(barcode) => handleBarcodeScan(barcode, index)}
+                  disabled={findOrCreateByUPCMutation.isPending}
+                />
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (fields.length > 1) {
+                      remove(index);
+                      if (focusedRowIndex >= fields.length - 1) {
+                        setFocusedRowIndex(Math.max(0, focusedRowIndex - 1));
+                      }
+                    }
+                  }}
+                  disabled={fields.length <= 1}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {/* Inventory at focused location */}
+      {focusedLocationId && (
+        <Card className="mt-4">
+          <CardHeader className="pb-2">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between text-left"
+              onClick={() => setShowInventory(!showInventory)}
+            >
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Package className="h-4 w-4" />
+                Items at {focusedItem?.location?.name ?? "this location"} (
+                {inventoryAtLocation?.meta?.totalCount ?? 0})
+              </CardTitle>
+              {showInventory ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+            </button>
+          </CardHeader>
+          {showInventory && (
+            <CardContent>
+              {inventoryAtLocation?.items &&
+              inventoryAtLocation.items.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {inventoryAtLocation.items.map((item) => (
+                    <div key={item.id} className="flex items-center gap-1">
+                      <ProductPillLink product={item.product} />
+                      <span className="text-muted-foreground text-xs">
+                        ({item.amount.value} {item.amount.unit})
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-sm">
+                  No items at this location yet.
+                </p>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       <div className="text-muted-foreground mt-4 text-sm">
         <p>Keyboard shortcuts:</p>

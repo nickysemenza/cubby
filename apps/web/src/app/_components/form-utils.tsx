@@ -168,12 +168,14 @@ export function NullableNumericField<
   label,
   placeholder,
   step = "1",
+  prefix,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
   placeholder: string;
   step?: string;
+  prefix?: string;
 }) {
   return (
     <FormField
@@ -183,24 +185,54 @@ export function NullableNumericField<
         <FormItem>
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input
-              type="number"
-              step={step}
-              placeholder={placeholder}
-              {...field}
-              value={
-                (field.value as number | null) !== null
-                  ? (field.value as number).toString()
-                  : ""
-              }
-              onChange={(e) => {
-                const value = e.target.value;
-                const numberValue = value ? parseFloat(value) : null;
-                field.onChange(
-                  numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
-                );
-              }}
-            />
+            {prefix ? (
+              <div className="relative">
+                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">
+                  {prefix}
+                </span>
+                <Input
+                  type="number"
+                  step={step}
+                  placeholder={placeholder}
+                  className="pl-7"
+                  {...field}
+                  value={
+                    (field.value as number | null) !== null
+                      ? (field.value as number).toString()
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const numberValue = value ? parseFloat(value) : null;
+                    field.onChange(
+                      numberValue as PathValue<
+                        TFieldValues,
+                        Path<TFieldValues>
+                      >,
+                    );
+                  }}
+                />
+              </div>
+            ) : (
+              <Input
+                type="number"
+                step={step}
+                placeholder={placeholder}
+                {...field}
+                value={
+                  (field.value as number | null) !== null
+                    ? (field.value as number).toString()
+                    : ""
+                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const numberValue = value ? parseFloat(value) : null;
+                  field.onChange(
+                    numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
+                  );
+                }}
+              />
+            )}
           </FormControl>
           <FormMessage />
         </FormItem>

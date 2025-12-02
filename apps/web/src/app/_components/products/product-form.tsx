@@ -31,6 +31,57 @@ import { ArrayFieldManager } from "~/components/ui/array-field-manager";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+
+// Common money/currency units
+const MONEY_UNITS = ["dollar", "dollars", "usd", "$"];
+const isMoneyUnit = (unit: string) =>
+  MONEY_UNITS.includes(unit.toLowerCase());
+
+// Helper: Extract price from unit mappings (1 each → $X)
+function extractPriceFromMappings(
+  mappings?: UnitMappingInput[],
+): number | null {
+  const priceMapping = mappings?.find(
+    (m) => m.a.value === 1 && m.a.unit === "each" && isMoneyUnit(m.b.unit),
+  );
+  return priceMapping?.b.value ?? null;
+}
+
+// Helper: Sync price field back to unit mappings array
+function syncPriceToMappings(
+  mappings: UnitMappingInput[],
+  price: number | null,
+): UnitMappingInput[] {
+  // Find existing price mapping index (any money unit)
+  const existingIndex = mappings.findIndex(
+    (m) => m.a.value === 1 && m.a.unit === "each" && isMoneyUnit(m.b.unit),
+  );
+
+  if (price === null) {
+    // Remove price mapping if it exists
+    if (existingIndex >= 0) {
+      return mappings.filter((_, i) => i !== existingIndex);
+    }
+    return mappings;
+  }
+
+  const priceMapping: UnitMappingInput = {
+    ...(existingIndex >= 0 ? mappings[existingIndex] : {}),
+    a: { value: 1, unit: "each" },
+    b: { value: price, unit: "dollar" },
+    source:
+      existingIndex >= 0 ? mappings[existingIndex]?.source : "product-form",
+  };
+
+  if (existingIndex >= 0) {
+    // Update existing mapping
+    return mappings.map((m, i) => (i === existingIndex ? priceMapping : m));
+  } else {
+    // Add new mapping
+    return [...mappings, priceMapping];
+  }
+}
 
 // Form schema for product form (simple Zod schema without z.custom)
 const formSchema = z
@@ -41,6 +92,7 @@ const formSchema = z
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
     expectedQuantity: z.number().int().positive().nullable(),
+    price: z.number().positive().nullable(), // Shortcut for 1 each → $X mapping
     ingredient: ComboboxItem.nullable(), // Ingredient association
     unitMappings: z.array(unitMappingInput),
   })
@@ -56,6 +108,7 @@ type ProductFormValues = z.infer<typeof formSchema>;
 interface CreateProductFormProps extends CreateModeProps<ProductInputPayload> {
   product?: never;
   initialName?: string;
+  initialExpectedQuantity?: number | null;
 }
 
 // Define a custom type for product with ingredient and unit mappings
@@ -95,23 +148,34 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
+  const initialExpectedQuantity =
+    mode === "create" ? props.initialExpectedQuantity : undefined;
 
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: product ? product.name : (initialName ?? ""),
-      manufacturer: product ? product.manufacturer : "",
+      manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
       model: product ? product.model : null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
-      expectedQuantity: product ? product.expectedQuantity : null,
+      expectedQuantity: product
+        ? product.expectedQuantity
+        : (initialExpectedQuantity ?? null),
+      price: extractPriceFromMappings(product?.unitMappings),
       ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
     },
   });
 
   const handleSubmit = (values: ProductFormValues) => {
+    // Sync price field to unitMappings before saving
+    const unitMappingsWithPrice = syncPriceToMappings(
+      values.unitMappings,
+      values.price,
+    );
+
     if (mode === "create") {
       // For creation, pass all fields
       const createData: ProductInputPayload = {
@@ -122,7 +186,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         ndb_number: values.ndb_number,
         expectedQuantity: values.expectedQuantity,
         ingredientId: (values.ingredient?.id as IngredientId) ?? null,
-        unitMappings: values.unitMappings,
+        unitMappings: unitMappingsWithPrice,
         ...getImageData(true), // Apply pending images for creation
       };
 
@@ -154,12 +218,12 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         updates.ingredientId = ingredientId as IngredientId | null;
       }
 
-      // Check for unit mapping changes
+      // Check for unit mapping changes (including price sync)
       if (
         JSON.stringify(product.unitMappings) !==
-        JSON.stringify(values.unitMappings)
+        JSON.stringify(unitMappingsWithPrice)
       ) {
-        updates.unitMappings = values.unitMappings;
+        updates.unitMappings = unitMappingsWithPrice;
       }
 
       // Check if we have any changes (field changes or image changes)
@@ -223,13 +287,23 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       />
 
       {/* Inventory-specific fields */}
-      <NullableNumericField
-        form={form}
-        step="1"
-        name="expectedQuantity"
-        label="Expected Quantity (1 for unique items)"
-        placeholder="Leave empty for unlimited"
-      />
+      <SideBySideFields>
+        <NullableNumericField
+          form={form}
+          step="1"
+          name="expectedQuantity"
+          label="Expected Quantity (1 for unique items)"
+          placeholder="Leave empty for unlimited"
+        />
+        <NullableNumericField
+          form={form}
+          step="0.01"
+          name="price"
+          label="Price per Item"
+          placeholder="e.g. 12.99"
+          prefix="$"
+        />
+      </SideBySideFields>
 
       {/* Secondary identifiers */}
       <SideBySideFields>

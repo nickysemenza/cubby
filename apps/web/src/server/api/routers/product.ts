@@ -81,6 +81,7 @@ const quickCreate = protectedProcedure
         upc: input.upc ?? null,
         expectedQuantity: input.expectedQuantity ?? DEFAULT_EXPECTED_QUANTITY,
         model: input.model ?? null,
+        price: input.price ?? null,
       },
       ctx.organizationId!,
     );

@@ -57,6 +57,7 @@ export const productQuickCreatePayload = z.object({
     .nullable()
     .default(DEFAULT_EXPECTED_QUANTITY),
   model: z.string().nullable().optional(),
+  price: z.number().positive().nullable().optional(),
 });
 
 export type ProductQuickCreatePayload = z.infer<

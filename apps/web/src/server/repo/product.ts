@@ -1,6 +1,7 @@
 import { type Database, type Transaction } from "~/server/db";
 import { type ProductConfigItem } from "../../schemas/config";
 import { findOrCreateIngredient } from "./ingredient";
+import { createOrUpdatePriceMapping } from "./inventory";
 import { type z } from "zod";
 import {
   type SortParams,
@@ -43,6 +44,7 @@ import {
   type ProductId,
   type OrganizationId,
   unsafeLocationId,
+  unsafeProductId,
 } from "~/schemas/identifiers";
 import {
   product,
@@ -654,6 +656,7 @@ export const quickCreateProduct = async (
     expectedQuantity?: number | null;
     model?: string | null;
     ingredientId?: string | null;
+    price?: number | null;
   },
   organizationId: OrganizationId,
 ): Promise<ProductTopLevelOut> => {
@@ -673,6 +676,16 @@ export const quickCreateProduct = async (
 
   if (!newProduct) {
     throw new Error("Failed to create product");
+  }
+
+  // Create price unit mapping if price is provided
+  if (data.price != null) {
+    await createOrUpdatePriceMapping(
+      db,
+      unsafeProductId(newProduct.id),
+      data.price,
+      "quick-create",
+    );
   }
 
   return productTopLevelOut.parse({

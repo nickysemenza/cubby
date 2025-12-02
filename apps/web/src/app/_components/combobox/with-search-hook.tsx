@@ -40,6 +40,23 @@ const pagination = {
 };
 
 /**
+ * Custom hook for basic entity search (no dialog).
+ * Use this for simple search-only scenarios or when creating entities without a dialog.
+ */
+function useEntitySearch() {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const onSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+  }, []);
+
+  return {
+    searchQuery,
+    onSearchChange,
+  };
+}
+
+/**
  * Custom hook for entity search with dialog-based creation.
  * Extracts common state management for search hooks that need:
  * - Search query state
@@ -146,6 +163,7 @@ function CreateProductDialog({
   isPending,
   error,
   initialName,
+  initialExpectedQuantity,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -161,6 +179,7 @@ function CreateProductDialog({
   isPending: boolean;
   error?: string;
   initialName?: string;
+  initialExpectedQuantity?: number | null;
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -183,6 +202,7 @@ function CreateProductDialog({
           onCancel={onCancel}
           onCreate={onCreate}
           initialName={initialName}
+          initialExpectedQuantity={initialExpectedQuantity}
         />
       </DialogContent>
     </Dialog>
@@ -368,35 +388,40 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
 }
 
 /**
- * A variant of WithProductSearch that uses the quickCreate endpoint
- * for rapid inventory capture - creates products with minimal data (just name)
+ * A variant of WithProductSearch for rapid inventory capture.
+ * Uses the same CreateProductDialog with quick create support.
  */
 export function WithProductSearchQuickCreate({
   children,
 }: WithEntitySearchProps) {
   const api = useTRPC();
-  const [searchQuery, setSearchQuery] = useState("");
   const queryClient = useQueryClient();
+  const {
+    searchQuery,
+    onSearchChange,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    openDialog,
+    closeDialog,
+    resolveWithEntity,
+  } = useEntitySearchWithDialog();
+
   const { data, isLoading } = useQuery(
     api.product.list.queryOptions({
-      filters: {
-        nameFilter: searchQuery,
-      },
+      filters: { nameFilter: searchQuery },
       pagination,
     }),
   );
 
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
-
-  const quickCreateMutation = useMutation(
-    api.product.quickCreate.mutationOptions({
+  const createMutation = useMutation(
+    api.product.create.mutationOptions({
       onSuccess: (newProduct: ProductTopLevelOut) => {
         toast.success(`Created new product: ${newProduct.name}`);
         queryClient.invalidateQueries({
           queryKey: queryKeys.product.list,
         });
+        resolveWithEntity(buildProductComboboxItem(newProduct));
       },
       onError: (error) => {
         toast.error(`Failed to create product: ${error.message}`);
@@ -404,19 +429,22 @@ export function WithProductSearchQuickCreate({
     }),
   );
 
-  // Quick create: instantly creates the product without a dialog
-  const onCreateNew = async (name: string): Promise<ComboboxItem> => {
-    const newProduct = await quickCreateMutation.mutateAsync({ name });
-    return buildProductComboboxItem(newProduct);
-  };
-
   return (
     <>
+      <CreateProductDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={closeDialog}
+        onCreate={(data) => createMutation.mutate(data)}
+        isPending={createMutation.isPending}
+        error={createMutation.error?.message}
+        initialName={pendingName}
+      />
       {children({
         items: data?.items.map(buildProductComboboxItem) ?? [],
         onSearchChange,
         isLoading,
-        onCreateNew,
+        onCreateNew: openDialog,
       })}
     </>
   );
@@ -424,19 +452,14 @@ export function WithProductSearchQuickCreate({
 
 export function WithRecipeSearch({ children }: WithEntitySearchProps) {
   const api = useTRPC();
-  const [searchQuery, setSearchQuery] = useState("");
+  const { searchQuery, onSearchChange } = useEntitySearch();
+
   const { data, isLoading } = useQuery(
     api.recipe.list.queryOptions({
-      filters: {
-        nameFilter: searchQuery,
-      },
+      filters: { nameFilter: searchQuery },
       pagination,
     }),
   );
-
-  const onSearchChange = useCallback((query: string) => {
-    setSearchQuery(query);
-  }, []);
 
   // For recipes, we don't provide the ability to create from this interface
   return (

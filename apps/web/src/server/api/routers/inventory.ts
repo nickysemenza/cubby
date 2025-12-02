@@ -197,7 +197,9 @@ const exportCSV = protectedProcedure
     ),
   )
   .query(async ({ ctx, input }) => {
+    const w = await import("@recipehub/recipebridge");
     return await exportInventoryToCSV(
+      w,
       ctx.db,
       ctx.organizationId,
       input.locationId,
@@ -209,7 +211,25 @@ const importCSV = protectedProcedure
   .input(inventoryCSVImportPayload)
   .output(csvImportResult)
   .mutation(async ({ ctx, input }) => {
-    return await importInventoryFromCSV(ctx.db, ctx.organizationId, input.rows);
+    return await importInventoryFromCSV(
+      ctx.db,
+      ctx.organizationId,
+      input.rows,
+      false,
+    );
+  });
+
+// Preview what CSV import would do (dry run)
+const previewCSVImport = protectedProcedure
+  .input(inventoryCSVImportPayload)
+  .output(csvImportResult)
+  .mutation(async ({ ctx, input }) => {
+    return await importInventoryFromCSV(
+      ctx.db,
+      ctx.organizationId,
+      input.rows,
+      true,
+    );
   });
 
 export const inventoryRouter = createTRPCRouter({
@@ -222,4 +242,5 @@ export const inventoryRouter = createTRPCRouter({
   findDuplicates,
   exportCSV,
   importCSV,
+  previewCSVImport,
 });

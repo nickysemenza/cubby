@@ -89,13 +89,37 @@ export type InventoryCSVImportPayload = z.infer<
   typeof inventoryCSVImportPayload
 >;
 
+// Unit mapping detail for preview display
+export const unitMappingDetail = z.object({
+  from: z.string(), // e.g., "1 stick"
+  to: z.string(), // e.g., "113.4g"
+});
+
+export type UnitMappingDetail = z.infer<typeof unitMappingDetail>;
+
+// Product metadata changes for preview
+export const productChangesPreview = z.object({
+  priceWillBeSet: z.number().optional(),
+  expectedQuantityWillBeSet: z.number().optional(),
+  unitMappingsWillBeAdded: z.number().optional(), // count of new mappings
+  unitMappingsDetail: z.array(unitMappingDetail).optional(), // detailed mappings for display
+  ingredientWillBeLinked: z.string().optional(), // ingredient name
+});
+
+export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
+
 // Result types for CSV import
 export const csvImportResultItem = z.object({
   rowIndex: z.number(),
-  action: z.enum(["created", "moved", "skipped", "error"]),
+  action: z.enum(["created", "moved", "updated", "skipped", "error"]),
   productName: z.string(),
   locationPath: z.string(),
   message: z.string().optional(),
+  // Preview fields
+  productWillBeCreated: z.boolean().optional(),
+  locationWillBeCreated: z.boolean().optional(),
+  movedFrom: z.array(z.string()).optional(), // Location names where item currently is
+  productChanges: productChangesPreview.optional(),
 });
 
 export type CSVImportResultItem = z.infer<typeof csvImportResultItem>;
@@ -103,6 +127,7 @@ export type CSVImportResultItem = z.infer<typeof csvImportResultItem>;
 export const csvImportResult = z.object({
   created: z.number(),
   moved: z.number(),
+  updated: z.number(),
   skipped: z.number(),
   errors: z.number(),
   items: z.array(csvImportResultItem),
