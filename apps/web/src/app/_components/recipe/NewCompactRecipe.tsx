@@ -8,7 +8,7 @@ import { formatRichText } from "./richtext";
 import useDebounce from "~/hooks/useDebounce";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { useWasm } from "~/hooks/useWasm";
+import { wasm } from "~/lib/wasm";
 import { useMutation } from "@tanstack/react-query";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "~/lib/query-keys";
@@ -40,7 +40,6 @@ type RecipeFormValues = z.infer<typeof formSchema>;
 
 const NewCompactRecipe: React.FC = () => {
   const api = useTRPC();
-  const w = useWasm();
   const router = useRouter();
 
   // Initialize form
@@ -71,8 +70,8 @@ const NewCompactRecipe: React.FC = () => {
 
   // Parse ingredients only when lines change
   const ingredientsParsed = useMemo(
-    () => ingredientLines.map((line) => w.parse_ingredient(line)),
-    [ingredientLines, w],
+    () => ingredientLines.map((line) => wasm.parse_ingredient(line)),
+    [ingredientLines],
   );
 
   // Extract names only when parsed ingredients change
@@ -229,15 +228,13 @@ const RichTextInstructions = React.memo(function RichTextInstructions({
   instructionLines: string[];
   ingredientNames: string[];
 }) {
-  const w = useWasm();
-
   // Memoize the rich text parsing results to prevent recalculation on each render
   const parsedInstructions = useMemo(() => {
     // Parse all instructions at once
     return instructionLines.map((line) =>
-      formatRichText(w, w.parse_rich_text(line, ingredientNames)),
+      formatRichText(wasm.parse_rich_text(line, ingredientNames)),
     );
-  }, [w, instructionLines, ingredientNames]);
+  }, [instructionLines, ingredientNames]);
 
   return (
     <>
@@ -355,12 +352,11 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
 
 const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   const amounts = amount.amounts;
-  const w = useWasm();
 
   // Memoize formatted measure values
   const formattedAmounts = useMemo(() => {
-    return amounts.map((a) => w.format_measure_value(a));
-  }, [w, amounts]);
+    return amounts.map((a) => wasm.format_measure_value(a));
+  }, [amounts]);
 
   return (
     <div className="inline">

@@ -3,7 +3,7 @@
 import { Amount } from "~/codec/codec";
 import { renderValueOrError } from "~/misc/result";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { wasm } from "~/hooks/useWasm";
+import { wasm } from "~/lib/wasm";
 import { convertAmountToPrice } from "../units/univ-conversion";
 import { WMeasure } from "@recipehub/recipebridge";
 import {
@@ -14,12 +14,10 @@ import {
 } from "~/components/ui/tooltip";
 import ValidInvalidIcon from "../icons/valid-invalid";
 
-// Helper function for backward compatibility
-export const showAmountAndPrice = (
-  w: wasm,
-  amount: Amount,
-  mappings: UnitMapping[],
-) => {
+/**
+ * Helper function for displaying amount and price
+ */
+export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
   if (amount.unit === "each") {
     // todo
     amount.unit = "Whole";
@@ -27,37 +25,37 @@ export const showAmountAndPrice = (
   if (mappings === undefined) {
     return "loading";
   }
-  const price = convertAmountToPrice(w, amount, mappings);
+  const price = convertAmountToPrice(amount, mappings);
   return (
     <div className="flex flex-col">
-      <div>{renderValueOrError(price, (p) => w.format_amount(p))}</div>
-      <div>{tryFormatMeasure(w, amount)}</div>
+      <div>{renderValueOrError(price, (p) => wasm.format_amount(p))}</div>
+      <div>{tryFormatMeasure(amount)}</div>
     </div>
   );
 };
 
-// Helper function for backward compatibility
-export const tryFormatMeasure = (w: wasm, measure: WMeasure) => {
+/**
+ * Safely formats a measure, returning error string on failure
+ */
+export const tryFormatMeasure = (measure: WMeasure): string => {
   try {
-    return w.format_amount(measure);
+    return wasm.format_amount(measure);
   } catch (error) {
-    return (
-      <div className="text-destructive">
-        {"Error formatting measure: " + error}
-      </div>
-    );
+    return `Error formatting measure: ${error}`;
   }
 };
 
-// Helper function for backward compatibility
-export const getHoverableMeasureUnitIcon = (w: wasm, x: string) => (
+/**
+ * Helper function for rendering a hoverable unit icon with tooltip
+ */
+export const getHoverableMeasureUnitIcon = (x: string) => (
   <TooltipProvider>
     <Tooltip>
       <TooltipTrigger>
-        <ValidInvalidIcon isValid={w.is_valid_unit(x, [])} />
+        <ValidInvalidIcon isValid={wasm.is_valid_unit(x, [])} />
       </TooltipTrigger>
       <TooltipContent>
-        <p>{w.measure_kind({ unit: x, value: 1 })}</p>
+        <p>{wasm.measure_kind({ unit: x, value: 1 })}</p>
       </TooltipContent>
     </Tooltip>
   </TooltipProvider>

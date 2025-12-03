@@ -7,7 +7,6 @@ import {
   NullableNumericField,
   UnifiedTextField,
 } from "../form-utils";
-import { useWasm } from "~/hooks/useWasm";
 import { getHoverableMeasureUnitIcon } from "./format-amount";
 
 interface AmountFieldGroupProps<
@@ -27,12 +26,10 @@ export function AmountFieldGroup<
   unitPath,
   step = "1",
 }: AmountFieldGroupProps<TFieldValues>): ReactNode {
-  const w = useWasm();
-
   // Function to get unit icon if enabled
   const getIcon = (x: string | null): ReactNode | undefined => {
     if (!x) return undefined;
-    return getHoverableMeasureUnitIcon(w, x);
+    return getHoverableMeasureUnitIcon(x);
   };
 
   return (

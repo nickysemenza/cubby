@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC } from "react";
+import { type FC, useState, useEffect } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -15,7 +15,7 @@ import { useTRPC } from "~/trpc/react";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { useWasm } from "~/hooks/useWasm";
+import { type UnitMapping } from "~/schemas/unitmapping";
 import { useEditMode } from "../hooks/useEditMode";
 
 interface IngredientDetailProps {
@@ -24,12 +24,23 @@ interface IngredientDetailProps {
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
-  const w = useWasm();
 
   const editMode = useEditMode<IngredientUpdateInput>({
     mutationOptions: api.ingredient.update.mutationOptions(),
     useRouterRefresh: true,
   });
+
+  // Load unit mappings asynchronously
+  const [unitMappings, setUnitMappings] = useState<UnitMapping[]>([]);
+  useEffect(() => {
+    const loadMappings = async () => {
+      const results = await Promise.all(
+        ingredient.product.map((product) => getAllUnitMappingsFromProduct(product)),
+      );
+      setUnitMappings(results.flat());
+    };
+    void loadMappings();
+  }, [ingredient.product]);
 
   const sections: DetailSection[] = [
     {
@@ -80,13 +91,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     },
     {
       title: "Unit Mappings",
-      content: (
-        <UnitMappingsTable
-          mappings={ingredient.product.flatMap((product) =>
-            getAllUnitMappingsFromProduct(product, w),
-          )}
-        />
-      ),
+      content: <UnitMappingsTable mappings={unitMappings} />,
     },
     {
       title: "Appears In Recipes",

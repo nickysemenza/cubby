@@ -5,7 +5,6 @@ import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
-import { useWasm } from "~/hooks/useWasm";
 import { showAmountAndPrice } from "../_components/inventory/format-amount";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
@@ -38,7 +37,6 @@ export function InventoryItemList() {
     }),
   );
 
-  const w = useWasm();
   const data = inventoryitemsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();
 
@@ -62,7 +60,6 @@ export function InventoryItemList() {
             href={`/inventory/${info.row.original.id}`}
           >
             {showAmountAndPrice(
-              w,
               info.getValue(),
               info.row.original.product.unitMappings,
             )}

@@ -2,13 +2,12 @@
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import RTable from "../_components/data-table/Table";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   FoodPillLink,
   IngredientPillLink,
   LocationPillLink,
 } from "../_components/EntityPill";
-import { useWasm } from "~/hooks/useWasm";
 import { SpacedContainer } from "~/components/ui/spaced-container";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
@@ -25,13 +24,13 @@ import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { TableLink } from "../_components/table";
 import { useTableList } from "../_components/hooks/useTableList";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
+import { type UnitMapping } from "~/schemas/unitmapping";
 
 // Type for inventory entries with location from product list
 type InventoryEntryWithLocation = ProductWithFoodOut["inventoryEntry"][number];
 
 export function ProductList() {
   const api = useTRPC();
-  const w = useWasm();
 
   const { data, totalCount, isLoading, error, tableState } = useTableList<
     {
@@ -49,6 +48,22 @@ export function ProductList() {
     }),
     tableStateOptions: { initialSort: "createdAt" },
   });
+
+  // Pre-load unit mappings for all products asynchronously
+  const [mappingsMap, setMappingsMap] = useState<
+    Record<string, UnitMapping[]>
+  >({});
+  useEffect(() => {
+    const load = async () => {
+      const result: Record<string, UnitMapping[]> = {};
+      for (const product of data) {
+        result[product.id] = await getAllUnitMappingsFromProduct(product);
+      }
+      setMappingsMap(result);
+    };
+    void load();
+  }, [data]);
+
   const columnHelper = createColumnHelper<ProductWithFoodOut>();
 
   // Set up columns using helpers where possible
@@ -122,7 +137,7 @@ export function ProductList() {
       meta: { className: "w-96 max-w-96" },
       cell: (info) => {
         const product = info.row.original;
-        const mappings = getAllUnitMappingsFromProduct(product, w);
+        const mappings = mappingsMap[product.id] ?? [];
         return (
           <div className="w-full">
             <UnitMappingDisplay mappings={mappings} title="" />
@@ -136,7 +151,7 @@ export function ProductList() {
         <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
             {info.getValue().map((e: InventoryEntryWithLocation) => (
-              <div key={e.id}>{tryFormatMeasure(w, e.amount)}</div>
+              <div key={e.id}>{tryFormatMeasure(e.amount)}</div>
             ))}
           </div>
           {}

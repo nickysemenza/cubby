@@ -1,9 +1,9 @@
 "use client";
-import { type FC } from "react";
+import { type FC, useState, useEffect } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { useWasm } from "~/hooks/useWasm";
+import { type UnitMapping } from "~/schemas/unitmapping";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
@@ -28,7 +28,6 @@ interface ProductDetailProps {
 
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
-  const w = useWasm();
 
   const editMode = useEditMode<{
     id: string;
@@ -41,7 +40,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   // Get product images from the product object
   const productImages = product.images;
 
-  const mappings = getAllUnitMappingsFromProduct(product, w);
+  // Load mappings asynchronously
+  const [mappings, setMappings] = useState<UnitMapping[]>([]);
+  useEffect(() => {
+    const loadMappings = async () => {
+      const result = await getAllUnitMappingsFromProduct(product);
+      setMappings(result);
+    };
+    void loadMappings();
+  }, [product]);
+
   const sections: DetailSection[] = [
     {
       title: "Basic Information",

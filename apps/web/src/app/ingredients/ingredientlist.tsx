@@ -1,14 +1,13 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
-import { useWasm } from "~/hooks/useWasm";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
@@ -22,14 +21,13 @@ import { entities } from "~/entities/entities";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { useTableList } from "../_components/hooks/useTableList";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { type UnitMapping } from "~/schemas/unitmapping";
 
 // Types for ingredient list data
 type RecipeItem = IngredientWithFoodOut["appearsInRecipes"][number];
-type ProductItem = IngredientWithFoodOut["product"][number];
 
 export function IngredientList() {
   const api = useTRPC();
-  const w = useWasm();
 
   // Set up global filter for missing products
   const [globalFilter, setGlobalFilter] = useState({
@@ -50,6 +48,26 @@ export function IngredientList() {
     }),
     tableStateOptions: { initialSort: "createdAt" },
   });
+
+  // Pre-load unit mappings for all ingredients asynchronously
+  const [mappingsMap, setMappingsMap] = useState<
+    Record<string, UnitMapping[]>
+  >({});
+  useEffect(() => {
+    const load = async () => {
+      const result: Record<string, UnitMapping[]> = {};
+      for (const ingredient of data) {
+        const mappings: UnitMapping[] = [];
+        for (const p of ingredient.product) {
+          mappings.push(...(await getAllUnitMappingsFromProduct(p)));
+        }
+        result[ingredient.id] = mappings;
+      }
+      setMappingsMap(result);
+    };
+    void load();
+  }, [data]);
+
   const columnHelper = createColumnHelper<IngredientWithFoodOut>();
   // Set up columns using helpers where possible
   const columns = [
@@ -100,10 +118,8 @@ export function IngredientList() {
       enableSorting: false,
       meta: { className: "w-72 max-w-72" },
       cell: (info) => {
-        const products = info.getValue();
-        const mappings = products.flatMap((product: ProductItem) =>
-          getAllUnitMappingsFromProduct(product, w),
-        );
+        const ingredient = info.row.original;
+        const mappings = mappingsMap[ingredient.id] ?? [];
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),

@@ -121,8 +121,6 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     }
   };
 
-  // We know w is always defined now with our updated useWasm hook
-
   const buttonText = getSubmitButtonText(mode, isPending);
 
   return (

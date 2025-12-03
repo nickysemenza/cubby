@@ -197,9 +197,7 @@ const exportCSV = protectedProcedure
     ),
   )
   .query(async ({ ctx, input }) => {
-    const w = await import("@recipehub/recipebridge");
     return await exportInventoryToCSV(
-      w,
       ctx.db,
       ctx.organizationId,
       input.locationId,

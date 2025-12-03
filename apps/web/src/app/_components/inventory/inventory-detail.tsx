@@ -1,5 +1,4 @@
 "use client";
-import { useWasm } from "~/hooks/useWasm";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { z } from "zod";
 import { type FC, useState, useMemo, useCallback } from "react";
@@ -24,7 +23,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
   const api = useTRPC();
-  const w = useWasm();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -48,8 +46,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     [updateMutation],
   );
 
-  // w is always defined with our updated useWasm hook
-
   const inventoryContent = useMemo(() => {
     if (isEditing) {
       return (
@@ -68,7 +64,6 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       <div className="space-y-4">
         <div className="text-lg">
           {showAmountAndPrice(
-            w,
             inventoryitem.amount,
             inventoryitem.product.unitMappings,
           )}
@@ -83,14 +78,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         </Button>
       </div>
     );
-  }, [
-    isEditing,
-    inventoryitem,
-    w,
-    updateMutation.isPending,
-    error,
-    handleEdit,
-  ]);
+  }, [isEditing, inventoryitem, updateMutation.isPending, error, handleEdit]);
 
   const sections: DetailSection[] = [
     {

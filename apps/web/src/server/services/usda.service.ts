@@ -62,11 +62,10 @@ export class USDAService {
     );
 
     // Load linked products and unit mappings for each food
-    const w = await import("@recipehub/recipebridge");
     const enhancedData: FoodSummaryWithLinkedProducts[] = await Promise.all(
       result.data.map(async (food) => {
         // Get all inferred unit mappings from the food
-        const inferredUnitMappings = unitMappingsFromFood(food, w);
+        const inferredUnitMappings = await unitMappingsFromFood(food);
 
         // Get linked products for this food
         const { brandedFoodInfo, legacyFoodInfo } = food;
@@ -109,8 +108,7 @@ export class USDAService {
     );
 
     // Get all inferred unit mappings from the food
-    const w = await import("@recipehub/recipebridge");
-    const inferredUnitMappings = unitMappingsFromFood(foodSummary, w);
+    const inferredUnitMappings = await unitMappingsFromFood(foodSummary);
 
     return {
       ...foodSummary,

@@ -8,7 +8,7 @@ import {
 } from "~/server/services/ingredient.service";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { NutrientsPer100 } from "@recipehub/usda-schemas";
-import { type wasm } from "~/hooks/useWasm";
+import { wasm } from "~/lib/wasm";
 import { SectionIngredientOut } from "~/schemas/recipe";
 
 /**
@@ -46,13 +46,12 @@ export const scaleNutrientsByWeight = (
  * Generic function to safely convert amounts using wasm
  */
 export const safeConvertAmount = (
-  w: wasm,
   amount: Amount,
   mappings: UnitMapping[],
   kind: MeasureKind,
 ): Result<WMeasure> => {
   try {
-    const result = w.conv_measure_to_kind(mappings, kind, amount);
+    const result = wasm.conv_measure_to_kind(mappings, kind, amount);
     return withSuccess(result);
   } catch (e) {
     return withFailure(`Error converting to ${kind}: ${e}`);
@@ -63,11 +62,10 @@ export const safeConvertAmount = (
  * Converts an amount to a price measure
  */
 export const convertAmountToPrice = (
-  w: wasm,
   amount: Amount,
   mappings: UnitMapping[],
 ): Result<WMeasure> => {
-  return safeConvertAmount(w, amount, mappings, "money");
+  return safeConvertAmount(amount, mappings, "money");
 };
 
 /**
@@ -98,13 +96,12 @@ export const calculateNutrients = (
  * (Previously known as getGramAndNutrient)
  */
 export const getGramAndNutrient = (
-  w: wasm,
   amount: Amount,
   mappings: UnitMapping[],
   product: ProductWithMappingsAndFoodOut[] | undefined,
 ): { gram: Result<WMeasure>; nutrient: Result<NutrientsPer100> } => {
   // Convert the amount to weight in grams - this should work independently
-  const gramResult = safeConvertAmount(w, amount, mappings, "weight");
+  const gramResult = safeConvertAmount(amount, mappings, "weight");
 
   // Calculate nutrients if we have a successful weight conversion
   const nutrientResult: Result<NutrientsPer100> = gramResult.success
@@ -135,23 +132,23 @@ const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
 /**
  * Gets price, weight, and nutrient information for an ingredient
  */
-const getIngredientMeasures = (
-  w: wasm,
+const getIngredientMeasures = async (
   ingredient: SectionIngredientOut,
   ingMap: Record<string, IngredientWithFoodOut>,
-): {
+): Promise<{
   price: Result<WMeasure>;
   gram: Result<WMeasure>;
   nutrient: Result<NutrientsPer100>;
-} => {
+}> => {
   // Handle based on ingredient type (discriminated union)
   const id =
     ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
-  const mappings =
-    product?.flatMap((product) => getAllUnitMappingsFromProduct(product, w)) ||
-    [];
+  const mappingArrays = await Promise.all(
+    (product ?? []).map((p) => getAllUnitMappingsFromProduct(p)),
+  );
+  const mappings = mappingArrays.flat();
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {
@@ -163,26 +160,33 @@ const getIngredientMeasures = (
     };
   }
 
-  const price = convertAmountToPrice(w, firstAmount, mappings);
-  const { gram, nutrient } = getGramAndNutrient(
-    w,
-    firstAmount,
-    mappings,
-    product,
-  );
+  const price = convertAmountToPrice(firstAmount, mappings);
+  const { gram, nutrient } = getGramAndNutrient(firstAmount, mappings, product);
 
   return { price, gram, nutrient };
+};
+
+export type CalculateTotalsResult = {
+  price: number;
+  protein: number;
+  kcal: number;
+  weight: number;
+  totalIngredients: number;
+  missingByType: {
+    price: string[];
+    weight: string[];
+    nutrients: string[];
+  };
 };
 
 /**
  * Calculates price, weight, and nutrient information for a list of ingredients
  */
-export const calculateTotals = (
-  w: wasm,
+export const calculateTotals = async (
   ingredients: SectionIngredientOut[],
   ingMap: Record<string, IngredientWithFoodOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
-) => {
+): Promise<CalculateTotalsResult> => {
   const prices: WMeasure[] = [];
   const grams: WMeasure[] = [];
   const nutrients: NutrientsPer100[] = [];
@@ -195,8 +199,7 @@ export const calculateTotals = (
   for (const ingredient of ingredients) {
     const ingName = getIngredientName(ingredient);
     try {
-      const { price, gram, nutrient } = getIngredientMeasures(
-        w,
+      const { price, gram, nutrient } = await getIngredientMeasures(
         ingredient,
         ingMap,
       );
@@ -243,16 +246,27 @@ export const calculateTotals = (
   };
 };
 
+export type IngredientPriceInfo = {
+  price: Result<WMeasure>;
+  gram: Result<WMeasure>;
+  nutrient: Result<NutrientsPer100>;
+};
+
+export type IngredientDataItem = SectionIngredientOut & {
+  priceInfo: IngredientPriceInfo | undefined;
+};
+
 /**
  * Creates a wrapper for tracking ingredient data with price/nutrient info
  */
-export const createIngredientData = (
-  w: wasm,
+export const createIngredientData = async (
   ingredients: SectionIngredientOut[],
   ingMap: Record<string, IngredientWithFoodOut> | undefined,
-) => {
-  return ingredients.map((i) => ({
-    ...i,
-    priceInfo: ingMap && getIngredientMeasures(w, i, ingMap),
-  }));
+): Promise<IngredientDataItem[]> => {
+  return Promise.all(
+    ingredients.map(async (i) => ({
+      ...i,
+      priceInfo: ingMap ? await getIngredientMeasures(i, ingMap) : undefined,
+    })),
+  );
 };

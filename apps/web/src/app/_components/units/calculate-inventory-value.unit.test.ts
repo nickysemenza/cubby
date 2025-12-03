@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import {
   calculateInventoryValue,
   type InventoryItem,
@@ -8,9 +8,12 @@ import {
   unsafeLocationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
+import { ensureWasm } from "~/lib/wasm";
 
-// Use real WASM for consistency with other conversion tests
-const loadWasm = async () => await import("@recipehub/recipebridge");
+// Initialize WASM before tests run
+beforeAll(async () => {
+  await ensureWasm();
+});
 
 function makeInventoryItem(params: {
   id: string;
@@ -66,7 +69,6 @@ function makeInventoryItem(params: {
 
 describe("calculateInventoryValue", () => {
   it("sums totals across products using price mappings", async () => {
-    const wasm = await loadWasm();
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i1",
@@ -94,7 +96,7 @@ describe("calculateInventoryValue", () => {
       }),
     ];
 
-    const res = calculateInventoryValue(wasm, items);
+    const res = await calculateInventoryValue(items);
     expect(res.totalValue).toBe(2 * 5 + 3 * 3); // 19
     expect(res.breakdown.find((b) => b.key === "BrandA")?.value).toBe(10);
     expect(res.breakdown.find((b) => b.key === "BrandB")?.value).toBe(9);
@@ -102,7 +104,6 @@ describe("calculateInventoryValue", () => {
   });
 
   it("handles missing price mappings gracefully", async () => {
-    const wasm = await loadWasm();
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i3",
@@ -119,13 +120,12 @@ describe("calculateInventoryValue", () => {
       }),
     ];
 
-    const res = calculateInventoryValue(wasm, items);
+    const res = await calculateInventoryValue(items);
     expect(res.totalValue).toBe(0);
     expect(res.missingPriceItemNames).toContain("Sugar");
   });
 
   it("handles chained conversions via intermediate units to money", async () => {
-    const wasm = await loadWasm();
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i4",
@@ -150,7 +150,7 @@ describe("calculateInventoryValue", () => {
       }),
     ];
 
-    const res = calculateInventoryValue(wasm, items);
+    const res = await calculateInventoryValue(items);
     const expected = 2 * 453.59 * (1.5 / 100); // 2 lb -> g -> $ per 100g
     expect(res.totalValue).toBeCloseTo(expected, 1);
     expect(

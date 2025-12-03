@@ -8,8 +8,8 @@ import { z } from "zod";
 import { MeasureKind, WMeasure } from "@recipehub/recipebridge";
 import { amount, Amount } from "~/codec/codec";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { useWasm } from "~/hooks/useWasm";
-import { safeConvertAmount } from "~/app/_components/units/univ-conversion";
+import { wasm } from "~/lib/wasm";
+import { safeConvertAmount } from "./univ-conversion";
 import {
   Dialog,
   DialogContent,
@@ -55,7 +55,6 @@ const measureKinds: MeasureKind[] = [
 ];
 
 export function ConversionDialog({ mappings }: ConversionDialogProps) {
-  const w = useWasm();
   const [open, setOpen] = useState(false);
   const [conversions, setConversions] = useState<
     Record<MeasureKind, Result<WMeasure>>
@@ -80,12 +79,12 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
       >;
 
       for (const kind of measureKinds) {
-        results[kind] = safeConvertAmount(w, currentAmount, mappings, kind);
+        results[kind] = safeConvertAmount(currentAmount, mappings, kind);
       }
 
       setConversions(results);
     },
-    [w, mappings],
+    [mappings],
   );
 
   // Update conversions whenever form values change
@@ -197,7 +196,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
                           </span>
                           <span>
                             {result?.success
-                              ? w.format_amount(result.value)
+                              ? wasm.format_amount(result.value)
                               : "Not convertible"}
                           </span>
                         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC } from "react";
+import { type FC, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,7 +32,6 @@ import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-import { useWasm } from "~/hooks/useWasm";
 import {
   extractPriceFromMappings,
   syncPriceToMappings,
@@ -93,7 +92,6 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
-  const w = useWasm();
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
@@ -119,16 +117,26 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       expectedQuantity: product
         ? product.expectedQuantity
         : (initialExpectedQuantity ?? null),
-      price: extractPriceFromMappings(w, product?.unitMappings ?? []),
+      price: null, // Will be set async in useEffect
       ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
     },
   });
 
-  const handleSubmit = (values: ProductFormValues) => {
+  // Extract price from mappings asynchronously
+  useEffect(() => {
+    const loadPrice = async () => {
+      const price = await extractPriceFromMappings(
+        product?.unitMappings ?? [],
+      );
+      form.setValue("price", price);
+    };
+    void loadPrice();
+  }, [product?.unitMappings, form]);
+
+  const handleSubmit = async (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
-    const unitMappingsWithPrice = syncPriceToMappings(
-      w,
+    const unitMappingsWithPrice = await syncPriceToMappings(
       values.unitMappings,
       values.price,
       "product-form",

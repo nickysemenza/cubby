@@ -12,7 +12,6 @@ import {
 } from "~/components/ui/entity-summary-card";
 import { formatRichText } from "~/app/_components/recipe/richtext";
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
-import { useWasm } from "~/hooks/useWasm";
 import { unitMappingWithMetadata } from "~/schemas/unitmapping";
 import { recipeOut } from "~/schemas/recipe";
 import { infLocation } from "~/schemas/location";
@@ -30,12 +29,9 @@ import {
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 function RichTextDemoInner({ data }: { data: RichItem[] }) {
-  const wasm = useWasm();
-  if (!wasm)
-    return <div className="text-muted-foreground">Loading WASM...</div>;
   // Deep clone to avoid mutation by formatRichText (it uses .pop() on Measure values)
   const clonedData = JSON.parse(JSON.stringify(data)) as RichItem[];
-  return <div className="text-lg">{formatRichText(wasm, clonedData)}</div>;
+  return <div className="text-lg">{formatRichText(clonedData)}</div>;
 }
 
 export default function DocsPage() {

@@ -30,8 +30,6 @@ const CreateInventoryItem: FC = () => {
     createMutation.mutate(data);
   };
 
-  // We know w is always defined now with our updated useWasm hook
-
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Create New Inventory Item</h1>

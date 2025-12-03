@@ -2,6 +2,7 @@ import { type WCompactRecipe } from "@recipehub/recipebridge";
 import { type Span } from "@opentelemetry/api";
 import { getTracer, TraceNames } from "~/server/tracing";
 import { type CompactRecipe } from "~/codec/codec";
+import { wasmServer } from "~/lib/wasm";
 
 const scrapeRecipe = async (url: string) => {
   if (url.includes("chefsteps.com")) {
@@ -22,8 +23,7 @@ const scrapeRecipe = async (url: string) => {
     TraceNames.wasm("parse_scraped_recipe"),
     async (span: Span) => {
       span.setAttributes({ url });
-      const { parse_scraped_recipe } = await import("@recipehub/recipebridge");
-      const res = parse_scraped_recipe(html, url);
+      const res = await wasmServer.parse_scraped_recipe(html, url);
       return res;
     },
   );

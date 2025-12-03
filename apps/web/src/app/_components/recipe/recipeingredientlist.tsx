@@ -6,18 +6,18 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useMemo } from "react";
-import { useWasm } from "~/hooks/useWasm";
+import { useState, useEffect } from "react";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { renderValueOrError } from "~/misc/result";
 import {
   calculateTotals,
   createIngredientData,
+  type CalculateTotalsResult,
+  type IngredientDataItem,
 } from "~/app/_components/units/univ-conversion";
 import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
 import { tryFormatMeasure } from "../inventory/format-amount";
@@ -27,17 +27,53 @@ import {
   type RecipeSummaryData,
 } from "~/components/ui/entity-summary-card";
 import { getIngredientName } from "./recipeutils";
+import { type UnitMapping } from "~/schemas/unitmapping";
+
+type RecipeIngredientState = {
+  data: IngredientDataItem[];
+  mappingsMap: Record<string, UnitMapping[]>;
+  totals: CalculateTotalsResult | undefined;
+};
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientWithFoodOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
-  const w = useWasm();
-  const data = useMemo(() => {
-    return ingMap ? createIngredientData(w, ingredients, ingMap) : [];
-  }, [ingredients, ingMap, w]);
+  // Load all async data in one effect
+  const [state, setState] = useState<RecipeIngredientState>({
+    data: [],
+    mappingsMap: {},
+    totals: undefined,
+  });
 
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  useEffect(() => {
+    if (!ingMap) {
+      setState({ data: [], mappingsMap: {}, totals: undefined });
+      return;
+    }
+
+    const load = async () => {
+      const data = await createIngredientData(ingredients, ingMap);
+      const totals = await calculateTotals(ingredients, ingMap, getIngredientName);
+
+      // Build mappings map
+      const mappingsMap: Record<string, UnitMapping[]> = {};
+      for (const [id, entry] of Object.entries(ingMap)) {
+        const mappings: UnitMapping[] = [];
+        for (const p of entry.product ?? []) {
+          mappings.push(...(await getAllUnitMappingsFromProduct(p)));
+        }
+        mappingsMap[id] = mappings;
+      }
+
+      setState({ data, mappingsMap, totals });
+    };
+    void load();
+  }, [ingredients, ingMap]);
+
+  const { data, mappingsMap, totals } = state;
+
+  const columnHelper = createColumnHelper<IngredientDataItem>();
 
   const columns = [
     columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
@@ -54,7 +90,7 @@ export const RecipeIngredientList: React.FC<{
         return (
           <div className="space-y-0.5 text-sm">
             {amounts.map((amount, index) => (
-              <div key={index}>{tryFormatMeasure(w, amount)}</div>
+              <div key={index}>{tryFormatMeasure(amount)}</div>
             ))}
           </div>
         );
@@ -66,7 +102,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
         return (
-          measure && renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
+          measure && renderValueOrError(measure, (m) => tryFormatMeasure(m))
         );
       },
     }),
@@ -76,7 +112,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
         return (
-          measure && renderValueOrError(measure, (m) => tryFormatMeasure(w, m))
+          measure && renderValueOrError(measure, (m) => tryFormatMeasure(m))
         );
       },
     }),
@@ -122,17 +158,13 @@ export const RecipeIngredientList: React.FC<{
         }
 
         const row = props.row.original;
-        let id = undefined;
+        let id: string | undefined = undefined;
 
         if (row.type === "ingredient") {
           id = row.ingredient.id;
         }
 
-        const entry = id ? ingMap[id] : undefined;
-        const mappings =
-          entry?.product?.flatMap((product) =>
-            getAllUnitMappingsFromProduct(product, w),
-          ) || [];
+        const mappings = id ? mappingsMap[id] ?? [] : [];
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),
@@ -155,30 +187,24 @@ export const RecipeIngredientList: React.FC<{
     },
   });
 
-  const totalPrice = useMemo(() => {
-    return ingMap && calculateTotals(w, ingredients, ingMap, getIngredientName);
-  }, [ingMap, ingredients, w]);
-
   // Convert totals to RecipeSummaryData format
-  const getRecipeSummaryData = (
-    totals: ReturnType<typeof calculateTotals>,
-  ): RecipeSummaryData => ({
-    price: totals.price,
-    weight: totals.weight,
-    kcal: totals.kcal,
-    protein: totals.protein,
-    totalIngredients: totals.totalIngredients,
-    missingByType: totals.missingByType,
+  const getRecipeSummaryData = (t: CalculateTotalsResult): RecipeSummaryData => ({
+    price: t.price,
+    weight: t.weight,
+    kcal: t.kcal,
+    protein: t.protein,
+    totalIngredients: t.totalIngredients,
+    missingByType: t.missingByType,
   });
 
   return (
     <div>
-      {totalPrice && (
+      {totals && (
         <EntitySummaryCard
           title="Recipe Summary"
           summaryData={{
             type: "recipe",
-            data: getRecipeSummaryData(totalPrice),
+            data: getRecipeSummaryData(totals),
           }}
         />
       )}

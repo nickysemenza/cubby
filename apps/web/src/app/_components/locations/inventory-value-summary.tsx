@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import { useWasm } from "~/hooks/useWasm";
 import {
   calculateInventoryValue,
   type InventoryItem,
+  type InventoryValueResult,
 } from "./calculate-inventory-value";
 
 type Variant = "compact" | "full";
@@ -24,6 +24,12 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+const emptyResult: InventoryValueResult = {
+  totalValue: 0,
+  breakdown: [],
+  missingPriceItemNames: [],
+};
+
 export function InventoryValueSummary({
   locationId,
   items,
@@ -31,7 +37,6 @@ export function InventoryValueSummary({
   className,
 }: InventoryValueSummaryProps) {
   const api = useTRPC();
-  const w = useWasm();
 
   const enabled = !items && !!locationId;
   const baseOptions = api.inventoryItem.list.queryOptions({
@@ -49,10 +54,15 @@ export function InventoryValueSummary({
     [items, fetched],
   );
 
-  const result = useMemo(
-    () => calculateInventoryValue(w, sourceItems),
-    [w, sourceItems],
-  );
+  // Load inventory value asynchronously
+  const [result, setResult] = useState<InventoryValueResult>(emptyResult);
+  useEffect(() => {
+    const load = async () => {
+      const value = await calculateInventoryValue(sourceItems);
+      setResult(value);
+    };
+    void load();
+  }, [sourceItems]);
 
   if (variant === "compact") {
     return (

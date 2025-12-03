@@ -12,7 +12,6 @@ import {
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
 import { tryFormatMeasure } from "../_components/inventory/format-amount";
-import { useWasm } from "~/hooks/useWasm";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
@@ -34,7 +33,6 @@ type InventoryEntryWithProduct =
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const api = useTRPC();
-  const w = useWasm();
 
   const { data, totalCount, isLoading, error, tableState } = useTableList<
     {
@@ -111,7 +109,7 @@ export function LocationList() {
             {entries.map((entry: InventoryEntryWithProduct) => (
               <div key={entry.id} className="flex items-center gap-1">
                 <span className="text-muted-foreground">
-                  {tryFormatMeasure(w, entry.amount)}
+                  {tryFormatMeasure(entry.amount)}
                 </span>
                 <ProductPillLink product={entry.product} />
               </div>

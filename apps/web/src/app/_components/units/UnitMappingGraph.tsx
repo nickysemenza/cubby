@@ -1,14 +1,12 @@
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import dynamic from "next/dynamic";
 import { WUnitMapping } from "@recipehub/recipebridge";
-import { useWasm } from "~/hooks/useWasm";
+import { wasm } from "~/lib/wasm";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
   unitMapping,
 }) => {
-  const w = useWasm();
-
   if (unitMapping.length === 0) {
     return (
       <div className="border-destructive text-destructive border-2">
@@ -22,7 +20,7 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
   let error: unknown = null;
 
   try {
-    graph = w
+    graph = wasm
       .graph_unit_mappings(unitMapping)
       .replace(
         "digraph {",

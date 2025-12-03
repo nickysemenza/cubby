@@ -1,4 +1,4 @@
-import { expect, test, describe } from "vitest";
+import { expect, test, describe, beforeAll } from "vitest";
 import {
   getGramAndNutrient,
   convertAmountToPrice,
@@ -17,12 +17,12 @@ import {
 import { NutrientsPer100 } from "@recipehub/usda-schemas";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import { unsafeProductId, unsafeIngredientId } from "~/schemas/identifiers";
+import { ensureWasm } from "~/lib/wasm";
 
-// Import real wasm
-const loadWasm = async () => {
-  const wasm = await import("@recipehub/recipebridge");
-  return wasm;
-};
+// Initialize WASM before all tests
+beforeAll(async () => {
+  await ensureWasm();
+});
 
 describe("getProductNutrients", () => {
   test("returns nutrients when product has food data", () => {
@@ -292,7 +292,6 @@ describe("calculateNutrients", () => {
 describe("getGramAndNutrient", () => {
   test("successfully converts to grams and calculates nutrients", async () => {
     // Arrange
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
       {
@@ -336,7 +335,7 @@ describe("getGramAndNutrient", () => {
       },
     ];
 
-    const result = getGramAndNutrient(wasm, amount, mappings, product);
+    const result = getGramAndNutrient(amount, mappings, product);
 
     // Assert
     expect(result.gram.success).toBe(true);
@@ -354,13 +353,12 @@ describe("getGramAndNutrient", () => {
 
   test("handles error when conversion to weight fails", async () => {
     // Arrange
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "InvalidUnit" };
     const mappings: UnitMapping[] = [];
     const product = undefined;
 
     // Act
-    const result = getGramAndNutrient(wasm, amount, mappings, product);
+    const result = getGramAndNutrient(amount, mappings, product);
 
     // Assert
     expect(result.gram.success).toBe(false);
@@ -371,7 +369,6 @@ describe("getGramAndNutrient", () => {
 
   test("handles missing nutrient data", async () => {
     // Arrange
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
       {
@@ -399,7 +396,7 @@ describe("getGramAndNutrient", () => {
     ];
 
     // Act
-    const result = getGramAndNutrient(wasm, amount, mappings, product);
+    const result = getGramAndNutrient(amount, mappings, product);
 
     // Assert - Weight conversion should succeed
     expect(result.gram.success).toBe(true);
@@ -415,7 +412,6 @@ describe("getGramAndNutrient", () => {
 
   test("handles undefined product", async () => {
     // Arrange
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
       {
@@ -428,7 +424,7 @@ describe("getGramAndNutrient", () => {
     const product = undefined;
 
     // Act
-    const result = getGramAndNutrient(wasm, amount, mappings, product);
+    const result = getGramAndNutrient(amount, mappings, product);
 
     // Assert - Weight conversion should succeed even with undefined product
     expect(result.gram.success).toBe(true);
@@ -446,7 +442,6 @@ describe("getGramAndNutrient", () => {
 describe("convertAmountToPrice", () => {
   test("successfully converts amount to price", async () => {
     // Arrange
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "Pound" };
     const mappings: UnitMapping[] = [
       {
@@ -458,7 +453,7 @@ describe("convertAmountToPrice", () => {
     ];
 
     // Act
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     // Assert
     expect(result.success).toBe(true);
@@ -470,12 +465,11 @@ describe("convertAmountToPrice", () => {
 
   test("handles error when conversion fails", async () => {
     // Arrange
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "InvalidUnit" };
     const mappings: UnitMapping[] = [];
 
     // Act
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     // Assert
     expect(result.success).toBe(false);
@@ -487,18 +481,16 @@ describe("convertAmountToPrice", () => {
 
 describe("WASM Error Scenarios", () => {
   test("handles empty mappings array", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = []; // Empty mappings
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("failed to convert");
   });
 
   test("handles incompatible unit mappings", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -509,14 +501,13 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("failed to convert");
   });
 
   test("handles zero values in mappings", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -527,7 +518,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     // This might succeed or fail depending on WASM implementation
     if (result.success) {
@@ -540,7 +531,6 @@ describe("WASM Error Scenarios", () => {
   });
 
   test("handles very large values", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1e10, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -551,7 +541,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -564,7 +554,6 @@ describe("WASM Error Scenarios", () => {
   });
 
   test("handles very small values", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1e-10, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -575,7 +564,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -586,7 +575,6 @@ describe("WASM Error Scenarios", () => {
   });
 
   test("handles case-insensitive unit names", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "CUP" }; // Uppercase
     const mappings: UnitMapping[] = [
       {
@@ -597,7 +585,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     // WASM actually handles case-insensitive unit matching
     expect(result.success).toBe(true);
@@ -608,7 +596,6 @@ describe("WASM Error Scenarios", () => {
   });
 
   test("handles chained conversions", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -631,7 +618,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -644,7 +631,6 @@ describe("WASM Error Scenarios", () => {
   });
 
   test("handles circular mapping references", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -661,7 +647,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     // Should fail to convert to money since there's no path to money
     expect(result.success).toBe(false);
@@ -669,7 +655,6 @@ describe("WASM Error Scenarios", () => {
   });
 
   test("handles custom unit names", async () => {
-    const wasm = await loadWasm();
     const amount: Amount = { value: 1, unit: "invalid_unit_xyz" };
     const mappings: UnitMapping[] = [
       {
@@ -680,7 +665,7 @@ describe("WASM Error Scenarios", () => {
       },
     ];
 
-    const result = convertAmountToPrice(wasm, amount, mappings);
+    const result = convertAmountToPrice(amount, mappings);
 
     // WASM handles custom unit names as "Other" type and can convert them
     expect(result.success).toBe(true);
@@ -699,8 +684,6 @@ describe("calculateTotals", () => {
   };
 
   test("calculates totals with all data available", async () => {
-    const wasm = await loadWasm();
-
     const ingredients: SectionIngredientOut[] = [
       {
         id: unsafeIngredientId("ing1"),
@@ -843,12 +826,7 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = calculateTotals(
-      wasm,
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
-    );
+    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(10.99, 2); // 5.99 + 5.00
@@ -859,8 +837,6 @@ describe("calculateTotals", () => {
   });
 
   test("handles completely missing data", async () => {
-    const wasm = await loadWasm();
-
     const ingredients: SectionIngredientOut[] = [
       {
         id: unsafeIngredientId("ing1"),
@@ -891,12 +867,7 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = calculateTotals(
-      wasm,
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
-    );
+    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
 
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
@@ -909,8 +880,6 @@ describe("calculateTotals", () => {
   });
 
   test("handles partially missing data", async () => {
-    const wasm = await loadWasm();
-
     const ingredients: SectionIngredientOut[] = [
       {
         id: unsafeIngredientId("ing1"),
@@ -1009,12 +978,7 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = calculateTotals(
-      wasm,
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
-    );
+    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(5.99, 2); // Only chicken has price
@@ -1025,8 +989,6 @@ describe("calculateTotals", () => {
   });
 
   test("handles missing only specific data types", async () => {
-    const wasm = await loadWasm();
-
     const ingredients: SectionIngredientOut[] = [
       {
         id: unsafeIngredientId("ing1"),
@@ -1083,12 +1045,7 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = calculateTotals(
-      wasm,
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
-    );
+    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
 
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
@@ -1103,8 +1060,6 @@ describe("calculateTotals", () => {
   });
 
   test("handles error in ingredient processing", async () => {
-    const wasm = await loadWasm();
-
     const ingredients: SectionIngredientOut[] = [
       {
         id: unsafeIngredientId("ing1"),
@@ -1135,12 +1090,7 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = calculateTotals(
-      wasm,
-      ingredients,
-      ingMap,
-      mockGetIngredientName,
-    );
+    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
 
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);

@@ -4,7 +4,7 @@ import {
   branded_food_serving_size_unit,
   type BrandedFoodServingSizeUnit,
 } from "@recipehub/usda-schemas";
-import { type wasm } from "~/hooks/useWasm";
+import { wasmServer } from "~/lib/wasm";
 
 /**
  * Normalizes USDA branded food serving size units to standard units
@@ -34,15 +34,14 @@ const normalizeBrandedFoodServingSizeUnit = (
 /**
  * Creates a unit mapping from branded food serving size info using WASM parsing
  */
-const createServingMapping = (
-  w: wasm,
+const createServingMapping = async (
   fdc_id: number,
   serving: {
     serving_size: number | null;
     serving_size_unit: string | null;
     household_serving_fulltext: string | null;
   },
-): UnitMapping | undefined => {
+): Promise<UnitMapping | undefined> => {
   if (
     serving.serving_size === null ||
     serving.serving_size_unit === null ||
@@ -52,7 +51,9 @@ const createServingMapping = (
   }
 
   try {
-    const p = w.parse_ingredient(serving.household_serving_fulltext);
+    const p = await wasmServer.parse_ingredient(
+      serving.household_serving_fulltext,
+    );
     const b = p.amounts.pop();
     if (b === undefined) {
       console.log(`branded food ${fdc_id} missing amounts`);
@@ -133,15 +134,14 @@ const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
   return mappings;
 };
 
-export const unitMappingsFromFood = (
+export const unitMappingsFromFood = async (
   food: FoodSummary,
-  w: wasm,
-): UnitMapping[] => {
+): Promise<UnitMapping[]> => {
   const { fdc_id, portionInfoRaw, brandedFoodInfo } = food;
 
   // Get serving size mapping from branded food info with WASM parsing
   const servingMapping = brandedFoodInfo?.serving
-    ? createServingMapping(w, fdc_id, brandedFoodInfo.serving)
+    ? await createServingMapping(fdc_id, brandedFoodInfo.serving)
     : undefined;
 
   return [
@@ -156,15 +156,12 @@ export const unitMappingsFromFood = (
  * Gets all unit mappings from a product, including both direct unit mappings
  * and mappings derived from food data
  */
-export const getAllUnitMappingsFromProduct = (
-  product: {
-    unitMappings: UnitMapping[];
-    food?: FoodSummary | null;
-  },
-  w: wasm,
-): UnitMapping[] => {
+export const getAllUnitMappingsFromProduct = async (product: {
+  unitMappings: UnitMapping[];
+  food?: FoodSummary | null;
+}): Promise<UnitMapping[]> => {
   const foodMappings = product.food
-    ? unitMappingsFromFood(product.food, w)
+    ? await unitMappingsFromFood(product.food)
     : [];
   return [...product.unitMappings, ...foodMappings];
 };

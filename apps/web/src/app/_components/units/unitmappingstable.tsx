@@ -8,7 +8,7 @@ import {
 } from "~/components/ui/table";
 import { UnitMapping } from "~/schemas/unitmapping";
 
-import { useWasm } from "~/hooks/useWasm";
+import { wasm } from "~/lib/wasm";
 import { NoneState } from "../NoneState";
 import { FoodPillLink, ProductPillLink } from "../EntityPill";
 import { useTRPC } from "~/trpc/react";
@@ -85,8 +85,6 @@ const renderSourceWithMetadata = (mapping: UnitMapping) => {
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
 }> = ({ mappings }) => {
-  const w = useWasm();
-
   return (
     <Table className="table-auto text-xs">
       <TableHeader>
@@ -108,10 +106,10 @@ export const UnitMappingsTable: React.FC<{
           return (
             <TableRow key={`${x}-${unitMapping.source}`}>
               <TableCell className="p-0.5">
-                {w.format_amount(unitMapping.a)}
+                {wasm.format_amount(unitMapping.a)}
               </TableCell>
               <TableCell className="p-0.5">
-                {w.format_amount(unitMapping.b)}
+                {wasm.format_amount(unitMapping.b)}
               </TableCell>
               <TableCell className="truncate p-0.5">
                 {renderSourceWithMetadata(unitMapping)}

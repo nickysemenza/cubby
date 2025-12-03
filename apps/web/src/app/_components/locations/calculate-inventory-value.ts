@@ -1,4 +1,3 @@
-import { type wasm } from "~/hooks/useWasm";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { convertAmountToPrice } from "~/app/_components/units/univ-conversion";
 import { type z } from "zod";
@@ -23,10 +22,9 @@ export type InventoryValueResult = {
  * Uses WASM unit mappings to convert each item's amount into a money value.
  * Groups a simple breakdown by product manufacturer (as a proxy for category).
  */
-export function calculateInventoryValue(
-  w: wasm,
+export async function calculateInventoryValue(
   items: InventoryItem[],
-): InventoryValueResult {
+): Promise<InventoryValueResult> {
   let totalValue = 0;
   const missingPriceItemNames: string[] = [];
 
@@ -34,9 +32,9 @@ export function calculateInventoryValue(
 
   for (const item of items) {
     const product = item.product;
-    const mappings = getAllUnitMappingsFromProduct(product, w);
+    const mappings = await getAllUnitMappingsFromProduct(product);
 
-    const priceRes = convertAmountToPrice(w, item.amount, mappings);
+    const priceRes = convertAmountToPrice(item.amount, mappings);
     if (priceRes.success) {
       const val = priceRes.value.value || 0;
       totalValue += val;

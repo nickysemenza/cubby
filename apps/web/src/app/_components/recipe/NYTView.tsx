@@ -2,11 +2,11 @@
 
 import { type RecipeOut } from "~/schemas/recipe";
 import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
-import { useWasm } from "~/hooks/useWasm";
+import { wasm } from "~/lib/wasm";
+
 export const NYTView: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {
-  const w = useWasm();
   return (
     <div className="container mx-auto">
       <div className="flex flex-col pt-2 md:flex-row">
@@ -21,9 +21,10 @@ export const NYTView: React.FC<{
                 <div className="text-muted-foreground flex w-1/2 justify-end pr-1 font-light">
                   {i.amounts
                     .filter(
-                      (a) => !["money", "calories"].includes(w.measure_kind(a)),
+                      (a) =>
+                        !["money", "calories"].includes(wasm.measure_kind(a)),
                     )
-                    .map((a) => w.format_amount(a))
+                    .map((a) => wasm.format_amount(a))
                     .join(" / ")}
                 </div>
                 <div className="w-1/2">{getIngredientName(i)}</div>

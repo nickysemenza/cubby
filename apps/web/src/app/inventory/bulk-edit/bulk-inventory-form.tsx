@@ -197,8 +197,6 @@ export default function BulkInventoryForm() {
     }
   };
 
-  // We know w is always defined now with our updated useWasm hook
-
   return (
     <FormWrapper
       form={form}

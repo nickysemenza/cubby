@@ -5,12 +5,13 @@ import { inventoryEntry } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { buildLocationPath } from "~/server/repo/location";
 import { amount } from "~/codec/codec";
-import { type wasm } from "~/hooks/useWasm";
-import { extractPriceFromMappings, serializeUnitMappings } from "./helpers";
+import {
+  extractPriceFromMappings,
+  serializeUnitMappings,
+} from "~/schemas/price-mapping-utils";
 import { type InventoryCSVExportRow } from "./types";
 
 export const exportInventoryToCSV = async (
-  w: wasm,
   db: Database,
   organizationId: OrganizationId,
   locationIdFilter?: LocationId,
@@ -48,19 +49,21 @@ export const exportInventoryToCSV = async (
     },
   });
 
-  return entries.map((entry) => {
-    const parsedAmount = amount.parse(entry.amount);
-    return {
-      product_name: entry.Product.name,
-      manufacturer: entry.Product.manufacturer,
-      upc: entry.Product.upc ?? "",
-      location_path: buildLocationPath(entry.location),
-      quantity: parsedAmount.value,
-      unit: parsedAmount.unit,
-      expected_qty: entry.Product.expectedQuantity,
-      price: extractPriceFromMappings(w, entry.Product.unitMappings),
-      unit_mappings: serializeUnitMappings(w, entry.Product.unitMappings),
-      ingredient_name: entry.Product.Ingredient?.name ?? null,
-    };
-  });
+  return Promise.all(
+    entries.map(async (entry) => {
+      const parsedAmount = amount.parse(entry.amount);
+      return {
+        product_name: entry.Product.name,
+        manufacturer: entry.Product.manufacturer,
+        upc: entry.Product.upc ?? "",
+        location_path: buildLocationPath(entry.location),
+        quantity: parsedAmount.value,
+        unit: parsedAmount.unit,
+        expected_qty: entry.Product.expectedQuantity,
+        price: await extractPriceFromMappings(entry.Product.unitMappings),
+        unit_mappings: await serializeUnitMappings(entry.Product.unitMappings),
+        ingredient_name: entry.Product.Ingredient?.name ?? null,
+      };
+    }),
+  );
 };

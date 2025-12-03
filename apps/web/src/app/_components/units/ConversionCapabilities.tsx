@@ -4,7 +4,6 @@ import * as React from "react";
 import { useMemo } from "react";
 import { MeasureKind } from "@recipehub/recipebridge";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { useWasm } from "~/hooks/useWasm";
 import { safeConvertAmount } from "./univ-conversion";
 import { ConversionDialog } from "./ConversionDialog";
 import {
@@ -66,12 +65,9 @@ export function ConversionCapabilities({
   mappings,
   hideConvertButton = false,
 }: ConversionCapabilitiesProps) {
-  const w = useWasm();
-
   const capabilities = useMemo(() => {
     return testConversions.map((test) => {
       const result = safeConvertAmount(
-        w,
         { unit: test.unit, value: 1 },
         mappings,
         test.to,
@@ -81,7 +77,7 @@ export function ConversionCapabilities({
         success: result.success,
       };
     });
-  }, [w, mappings]);
+  }, [mappings]);
 
   const successCount = capabilities.filter((c) => c.success).length;
   const totalCount = capabilities.length;
