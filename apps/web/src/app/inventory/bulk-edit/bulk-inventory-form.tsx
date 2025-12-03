@@ -85,9 +85,13 @@ export default function BulkInventoryForm() {
   // Update URL when location changes
   useEffect(() => {
     if (selectedLocation) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("locationId", selectedLocation.id);
-      router.push(`/inventory/bulk-edit?${params.toString()}`);
+      const currentLocationId = searchParams.get("locationId");
+      // Only update URL if it's different to avoid infinite loop
+      if (currentLocationId !== selectedLocation.id) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("locationId", selectedLocation.id);
+        router.replace(`/inventory/bulk-edit?${params.toString()}`);
+      }
     }
   }, [selectedLocation, router, searchParams]);
 
