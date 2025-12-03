@@ -32,55 +32,11 @@ import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-
-// Common money/currency units
-const MONEY_UNITS = ["dollar", "dollars", "usd", "$"];
-const isMoneyUnit = (unit: string) => MONEY_UNITS.includes(unit.toLowerCase());
-
-// Helper: Extract price from unit mappings (1 each → $X)
-function extractPriceFromMappings(
-  mappings?: UnitMappingInput[],
-): number | null {
-  const priceMapping = mappings?.find(
-    (m) => m.a.value === 1 && m.a.unit === "each" && isMoneyUnit(m.b.unit),
-  );
-  return priceMapping?.b.value ?? null;
-}
-
-// Helper: Sync price field back to unit mappings array
-function syncPriceToMappings(
-  mappings: UnitMappingInput[],
-  price: number | null,
-): UnitMappingInput[] {
-  // Find existing price mapping index (any money unit)
-  const existingIndex = mappings.findIndex(
-    (m) => m.a.value === 1 && m.a.unit === "each" && isMoneyUnit(m.b.unit),
-  );
-
-  if (price === null) {
-    // Remove price mapping if it exists
-    if (existingIndex >= 0) {
-      return mappings.filter((_, i) => i !== existingIndex);
-    }
-    return mappings;
-  }
-
-  const priceMapping: UnitMappingInput = {
-    ...(existingIndex >= 0 ? mappings[existingIndex] : {}),
-    a: { value: 1, unit: "each" },
-    b: { value: price, unit: "dollar" },
-    source:
-      existingIndex >= 0 ? mappings[existingIndex]?.source : "product-form",
-  };
-
-  if (existingIndex >= 0) {
-    // Update existing mapping
-    return mappings.map((m, i) => (i === existingIndex ? priceMapping : m));
-  } else {
-    // Add new mapping
-    return [...mappings, priceMapping];
-  }
-}
+import { useWasm } from "~/hooks/useWasm";
+import {
+  extractPriceFromMappings,
+  syncPriceToMappings,
+} from "~/schemas/price-mapping-utils";
 
 // Form schema for product form (simple Zod schema without z.custom)
 const formSchema = z
@@ -137,6 +93,7 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
+  const w = useWasm();
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
@@ -162,7 +119,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       expectedQuantity: product
         ? product.expectedQuantity
         : (initialExpectedQuantity ?? null),
-      price: extractPriceFromMappings(product?.unitMappings),
+      price: extractPriceFromMappings(w, product?.unitMappings ?? []),
       ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
     },
@@ -171,8 +128,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const handleSubmit = (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
     const unitMappingsWithPrice = syncPriceToMappings(
+      w,
       values.unitMappings,
       values.price,
+      "product-form",
     );
 
     if (mode === "create") {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC, useState } from "react";
+import { type FC } from "react";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -22,22 +22,13 @@ interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
 }
 
-export const IngredientDetail: FC<IngredientDetailProps> = ({
-  ingredient: initialIngredient,
-}) => {
+export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
   const w = useWasm();
-  const [ingredient, setIngredient] =
-    useState<IngredientWithFoodOut>(initialIngredient);
 
-  const editMode = useEditMode<IngredientUpdateInput, IngredientWithFoodOut>({
+  const editMode = useEditMode<IngredientUpdateInput>({
     mutationOptions: api.ingredient.update.mutationOptions(),
-    onSuccess: (updatedIngredient) => {
-      if (updatedIngredient) {
-        setIngredient(updatedIngredient);
-      }
-    },
-    useRouterRefresh: false,
+    useRouterRefresh: true,
   });
 
   const sections: DetailSection[] = [
