@@ -4,7 +4,6 @@ import { recipeOut } from "~/schemas/recipe";
 import { infLocation, type LocationType } from "~/schemas/location";
 import { entitySummaryDataSchema } from "~/components/ui/entity-summary-card";
 import { unsafeLocationId } from "~/schemas/identifiers";
-import type { RichItem } from "@recipehub/recipebridge";
 
 const uuid = () => crypto.randomUUID();
 const now = new Date();
@@ -40,15 +39,11 @@ const makeLocation = (
   ...(children ? { children } : {}),
 });
 
-// Zod schema for RichItem (matches the WASM type)
-export const richItemSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("Text"), value: z.string() }),
-  z.object({ kind: z.literal("Ing"), value: z.string() }),
-  z.object({
-    kind: z.literal("Measure"),
-    value: z.array(z.object({ value: z.number(), unit: z.string() })),
-  }),
-]);
+// Zod schema for rich text input (raw text + ingredient names for parsing)
+export const richTextInputSchema = z.object({
+  text: z.string(),
+  ingredientNames: z.array(z.string()),
+});
 
 // DOT diagram for entity relationships
 export const entityRelationshipsDot = `digraph {
@@ -154,18 +149,11 @@ export const sampleSummaryData: z.infer<typeof entitySummaryDataSchema> = {
   },
 };
 
-// Sample data for formatRichText
-export const sampleRichItems: RichItem[] = [
-  { kind: "Text", value: "Add " },
-  { kind: "Measure", value: [{ value: 2, unit: "Cup" }] },
-  { kind: "Text", value: " of " },
-  { kind: "Ing", value: "flour" },
-  { kind: "Text", value: " and " },
-  { kind: "Measure", value: [{ value: 1, unit: "tsp" }] },
-  { kind: "Text", value: " of " },
-  { kind: "Ing", value: "salt" },
-  { kind: "Text", value: " to the bowl." },
-];
+// Sample data for formatRichText - raw instruction text and ingredient names
+export const sampleRichTextInput = {
+  text: "Add 2 cups of flour and 1 tsp of salt to the bowl.",
+  ingredientNames: ["flour", "salt"],
+};
 
 // Sample data for LocationTreeView
 export const sampleLocations: z.infer<typeof infLocation>[] = [

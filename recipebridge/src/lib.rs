@@ -4,7 +4,6 @@ use ingredient::{
     from_str as parse_ingredient_str,
     rich_text::RichParser,
     unit::{is_valid, make_graph, print_graph, Measure, MeasureKind},
-    IngredientParser,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -135,13 +134,10 @@ pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, Str
 
 #[wasm_bindgen]
 pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<RichItems, String> {
-    RichParser {
-        ingredient_names,
-        ip: IngredientParser::new().with_rich_text(),
-    }
-    .parse(&text)
-    .map_err(|e| e.to_string())
-    .and_then(|r| to_js(&r, "rich text").map(Into::into))
+    RichParser::new(ingredient_names)
+        .parse(&text)
+        .map_err(|e| e.to_string())
+        .and_then(|r| to_js(&r, "rich text").map(Into::into))
 }
 
 #[wasm_bindgen]

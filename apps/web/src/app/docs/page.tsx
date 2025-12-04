@@ -15,23 +15,28 @@ import { LocationTree } from "~/app/_components/inventory/location-tree-view";
 import { unitMappingWithMetadata } from "~/schemas/unitmapping";
 import { recipeOut } from "~/schemas/recipe";
 import { infLocation } from "~/schemas/location";
-import type { RichItem } from "@recipehub/recipebridge";
 import {
-  richItemSchema,
+  richTextInputSchema,
   entityRelationshipsDot,
   sampleUnitMappings,
   sampleRecipe,
   sampleSummaryData,
-  sampleRichItems,
+  sampleRichTextInput,
   sampleLocations,
 } from "./_data/samples";
+import { wasm } from "~/lib/wasm";
 
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
-function RichTextDemoInner({ data }: { data: RichItem[] }) {
-  // Deep clone to avoid mutation by formatRichText (it uses .pop() on Measure values)
-  const clonedData = JSON.parse(JSON.stringify(data)) as RichItem[];
-  return <div className="text-lg">{formatRichText(clonedData)}</div>;
+interface RichTextInput {
+  text: string;
+  ingredientNames: string[];
+}
+
+function RichTextDemoInner({ data }: { data: RichTextInput }) {
+  // Parse the raw text into RichItems using WASM, then format for display
+  const richItems = wasm.parse_rich_text(data.text, data.ingredientNames);
+  return <div className="text-lg">{formatRichText(richItems)}</div>;
 }
 
 export default function DocsPage() {
@@ -195,9 +200,9 @@ export default function DocsPage() {
 
       <EditableComponentDemo
         title="formatRichText"
-        description="Rich text formatting with highlighted ingredients and measurements, powered by WASM."
-        schema={z.array(richItemSchema)}
-        defaultData={sampleRichItems}
+        description="Rich text formatting with highlighted ingredients and measurements, powered by WASM parsing."
+        schema={richTextInputSchema}
+        defaultData={sampleRichTextInput}
       >
         {(data) => <RichTextDemoInner data={data} />}
       </EditableComponentDemo>
