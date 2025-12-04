@@ -826,7 +826,11 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
+    const result = await calculateTotals(
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(10.99, 2); // 5.99 + 5.00
@@ -867,7 +871,11 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
+    const result = await calculateTotals(
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
 
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
@@ -978,7 +986,11 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
+    const result = await calculateTotals(
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
 
     expect(result.totalIngredients).toBe(2);
     expect(result.price).toBeCloseTo(5.99, 2); // Only chicken has price
@@ -1045,7 +1057,11 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
+    const result = await calculateTotals(
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
 
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
@@ -1090,7 +1106,11 @@ describe("calculateTotals", () => {
       },
     };
 
-    const result = await calculateTotals(ingredients, ingMap, mockGetIngredientName);
+    const result = await calculateTotals(
+      ingredients,
+      ingMap,
+      mockGetIngredientName,
+    );
 
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);

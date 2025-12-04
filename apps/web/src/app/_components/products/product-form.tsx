@@ -126,9 +126,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   // Extract price from mappings asynchronously
   useEffect(() => {
     const loadPrice = async () => {
-      const price = await extractPriceFromMappings(
-        product?.unitMappings ?? [],
-      );
+      const price = await extractPriceFromMappings(product?.unitMappings ?? []);
       form.setValue("price", price);
     };
     void loadPrice();
