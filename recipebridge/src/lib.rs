@@ -59,127 +59,103 @@ extern "C" {
     pub type WMeasureKind;
 }
 
-// Helper functions
-/// Converts a vector of UnitMapping to UnitMappingPairs
-fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappingPairs {
+// JS <-> Rust serde boundary
+fn from_js<T: for<'de> Deserialize<'de>>(v: impl Into<JsValue>, ctx: &str) -> Result<T, String> {
+    serde_wasm_bindgen::from_value(v.into()).map_err(|e| format!("Failed to parse {ctx}: {e}"))
+}
+
+fn to_js<T: Serialize>(v: &T, ctx: &str) -> Result<JsValue, String> {
+    serde_wasm_bindgen::to_value(v).map_err(|e| format!("Failed to serialize {ctx}: {e}"))
+}
+
+// Vec<WUnitMapping> -> Vec<(Measure, Measure)> for conversion graph
+fn parse_mappings(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, String> {
     mappings
-        .into_iter()
-        .map(|m| (m.a.to_measure(), m.b.to_measure()))
-        .collect()
-}
-
-/// Converts WebAssembly unit mappings to Rust unit mappings
-fn mappings_from_w(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, String> {
-    let parsed_mappings: Result<Vec<UnitMapping>, String> = mappings
         .iter()
-        .map(|m| {
-            serde_wasm_bindgen::from_value(m.into())
-                .map_err(|e| format!("Failed to parse unit mapping: {}", e))
+        .map(|m| from_js::<UnitMapping>(m, "unit mapping"))
+        .collect::<Result<Vec<_>, _>>()
+        .map(|v| {
+            v.into_iter()
+                .map(|m| (m.a.to_measure(), m.b.to_measure()))
+                .collect()
         })
-        .collect();
-
-    Ok(mappings_to_pairs(parsed_mappings?))
 }
 
-fn parse_w_measure(input: &WMeasure) -> Result<RawAmount, String> {
-    serde_wasm_bindgen::from_value(input.into())
-        .map_err(|e| format!("Failed to parse measure: {}", e))
-}
-
-// Public API functions
-/// Formats a measure value with specified precision
+// Public API
 #[wasm_bindgen]
 pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
-    let measure = parse_w_measure(input)?;
-    Ok(f64::trunc(measure.to_measure().values().0 * FLOAT_PRECISION) / FLOAT_PRECISION)
+    let v = from_js::<RawAmount>(input, "measure")?
+        .to_measure()
+        .values()
+        .0;
+    Ok(f64::trunc(v * FLOAT_PRECISION) / FLOAT_PRECISION)
 }
 
-/// Parses an ingredient string into a WIngredient
 #[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> Result<WIngredient, String> {
-    let i = parse_ingredient_str(input);
-    serde_wasm_bindgen::to_value(&i)
-        .map_err(|e| format!("Failed to serialize ingredient: {}", e))
-        .map(|v| v.into())
+    to_js(&parse_ingredient_str(input), "ingredient").map(Into::into)
 }
 
-/// Formats a raw amount into a string representation
 #[wasm_bindgen]
 pub fn format_amount(amount: &WMeasure) -> Result<String, String> {
-    let measure = parse_w_measure(amount)?;
-    Ok(format!("{}", measure.to_measure()))
+    Ok(from_js::<RawAmount>(amount, "measure")?
+        .to_measure()
+        .to_string())
 }
 
-/// Creates a graph representation of unit mappings
 #[wasm_bindgen]
 pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String> {
-    mappings_from_w(mappings).map(|pairs| print_graph(make_graph(pairs)))
+    parse_mappings(mappings).map(|p| print_graph(make_graph(p)))
 }
 
-/// Converts a measure to a different kind using provided mappings
 #[wasm_bindgen]
 pub fn conv_measure_to_kind(
     mappings: Vec<WUnitMapping>,
-    input_target_measure_kind: WMeasureKind,
-    input_measure_w: WMeasure,
+    target_kind_w: WMeasureKind,
+    measure_w: WMeasure,
 ) -> Result<WMeasure, String> {
-    let mapping_pairs = mappings_from_w(mappings)?;
-    let input_measure = parse_w_measure(&input_measure_w)?;
+    let pairs = parse_mappings(mappings)?;
+    let measure = from_js::<RawAmount>(&measure_w, "measure")?.to_measure();
+    let kind_str: String = from_js(target_kind_w, "measure kind")?;
+    let kind = MeasureKind::from_str(&kind_str)
+        .map_err(|_| format!("Invalid measure kind: {kind_str}"))?;
 
-    let measure_kind = serde_wasm_bindgen::from_value::<String>(input_target_measure_kind.into())
-        .map_err(|e| format!("Failed to parse measure kind: {}", e))?;
-    let target_measure_kind = MeasureKind::from_str(&measure_kind)
-        .map_err(|_| format!("Invalid measure kind: {}", measure_kind))?;
-
-    let input_measure = input_measure.to_measure();
-    input_measure
-        .convert_measure_via_mappings(target_measure_kind.clone(), mapping_pairs)
-        .map(|m| serde_wasm_bindgen::to_value(&m).unwrap().into())
-        .ok_or_else(|| {
-            format!(
-                "conv_measure_to_kind: failed to convert '{}' to target measure '{}'",
-                input_measure, target_measure_kind
-            )
-        })
+    measure
+        .convert_measure_via_mappings(kind.clone(), pairs)
+        .ok_or_else(|| format!("Failed to convert '{measure}' to '{kind}'"))
+        .and_then(|m| to_js(&m, "measure").map(Into::into))
 }
 
-/// Parses a scraped recipe from HTML content
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, String> {
     recipe_scraper::scrape(body, url)
-        .map_err(|e| format!("Failed to scrape recipe: {}", e))
-        .and_then(|r| {
-            serde_wasm_bindgen::to_value(&r)
-                .map(|v| v.into())
-                .map_err(|e| format!("Failed to serialize recipe: {}", e))
-        })
+        .map_err(|e| format!("Failed to scrape: {e}"))
+        .and_then(|r| to_js(&r, "recipe").map(Into::into))
 }
 
-/// Parses rich text with ingredient names
 #[wasm_bindgen]
-pub fn parse_rich_text(r: String, ingredient_names: Vec<String>) -> Result<RichItems, JsValue> {
-    let rtp = RichParser {
+pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<RichItems, String> {
+    RichParser {
         ingredient_names,
         ip: IngredientParser::new().with_rich_text(),
-    };
-    rtp.parse(r.as_str())
-        .map(|r| serde_wasm_bindgen::to_value(&r).unwrap().into())
-        .map_err(|e| JsValue::from_str(&e))
+    }
+    .parse(&text)
+    .map_err(|e| e.to_string())
+    .and_then(|r| to_js(&r, "rich text").map(Into::into))
 }
 
-/// Returns true if a unit is valid (including passed in extra units)
 #[wasm_bindgen]
 pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
     is_valid(&HashSet::from_iter(extra_units), unit)
 }
-/// Returns the kind of a amount's unit
+
 #[wasm_bindgen]
 pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
-    parse_w_measure(amount)?
+    from_js::<RawAmount>(amount, "measure")?
         .to_measure()
         .kind()
-        .map(|k| serde_wasm_bindgen::to_value(k.to_str()).unwrap().into())
-        .map_err(|_| "Failed to determine measure kind".to_string())
+        .map_err(|_| "Unknown unit kind".to_string())
+        .and_then(|k| to_js(&k.to_str(), "measure kind").map(Into::into))
 }
 
 // TypeScript type definitions
