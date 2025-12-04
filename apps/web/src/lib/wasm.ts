@@ -16,6 +16,7 @@
  * - Use `ensureWasm()` - safe to call multiple times, handles lazy loading
  */
 
+import { flatten } from "flat";
 import { getTracer, TraceNames } from "~/server/tracing";
 
 type WasmType = typeof import("@recipehub/recipebridge");
@@ -56,7 +57,11 @@ export const wasm = new Proxy({} as WasmType, {
             return (method as (...args: unknown[]) => unknown)(...args);
           } finally {
             const μs = ((performance.now() - start) * 1000).toFixed(0);
-            console.debug(`wasm.${name}: ${μs}μs`);
+            span.setAttributes({
+              "wasm.method": name,
+              "wasm.duration_us": Number(μs),
+              data: flatten(args),
+            });
             span.end();
           }
         });
