@@ -1,7 +1,7 @@
 use std::{collections::HashSet, str::FromStr};
 
 use ingredient::{
-    self,
+    from_str as parse_ingredient_str,
     rich_text::RichParser,
     unit::{is_valid, make_graph, print_graph, Measure, MeasureKind},
     IngredientParser,
@@ -9,10 +9,15 @@ use ingredient::{
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-extern crate wee_alloc;
-
 // Constants
 const FLOAT_PRECISION: f64 = 1000.0;
+
+// WASM initialization - called automatically when module loads
+#[wasm_bindgen(start)]
+pub fn init() {
+    console_error_panic_hook::set_once();
+    let _ = wasm_tracing::try_set_as_global_default();
+}
 
 // Type definitions
 /// A pair of measures that can be used for unit conversion
@@ -54,17 +59,7 @@ extern "C" {
     pub type WMeasureKind;
 }
 
-// Global allocator setup
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
 // Helper functions
-/// Initializes the WebAssembly environment
-fn setup() {
-    console_error_panic_hook::set_once();
-    let _ = wasm_tracing::try_set_as_global_default();
-}
-
 /// Converts a vector of UnitMapping to UnitMappingPairs
 fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappingPairs {
     mappings
@@ -75,7 +70,6 @@ fn mappings_to_pairs(mappings: Vec<UnitMapping>) -> UnitMappingPairs {
 
 /// Converts WebAssembly unit mappings to Rust unit mappings
 fn mappings_from_w(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, String> {
-    setup();
     let parsed_mappings: Result<Vec<UnitMapping>, String> = mappings
         .iter()
         .map(|m| {
@@ -88,7 +82,6 @@ fn mappings_from_w(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, Stri
 }
 
 fn parse_w_measure(input: &WMeasure) -> Result<RawAmount, String> {
-    setup();
     serde_wasm_bindgen::from_value(input.into())
         .map_err(|e| format!("Failed to parse measure: {}", e))
 }
@@ -97,7 +90,6 @@ fn parse_w_measure(input: &WMeasure) -> Result<RawAmount, String> {
 /// Formats a measure value with specified precision
 #[wasm_bindgen]
 pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
-    setup();
     let measure = parse_w_measure(input)?;
     Ok(f64::trunc(measure.to_measure().values().0 * FLOAT_PRECISION) / FLOAT_PRECISION)
 }
@@ -105,8 +97,7 @@ pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
 /// Parses an ingredient string into a WIngredient
 #[wasm_bindgen]
 pub fn parse_ingredient(input: &str) -> Result<WIngredient, String> {
-    setup();
-    let i = ingredient::from_str(input);
+    let i = parse_ingredient_str(input);
     serde_wasm_bindgen::to_value(&i)
         .map_err(|e| format!("Failed to serialize ingredient: {}", e))
         .map(|v| v.into())
@@ -115,7 +106,6 @@ pub fn parse_ingredient(input: &str) -> Result<WIngredient, String> {
 /// Formats a raw amount into a string representation
 #[wasm_bindgen]
 pub fn format_amount(amount: &WMeasure) -> Result<String, String> {
-    setup();
     let measure = parse_w_measure(amount)?;
     Ok(format!("{}", measure.to_measure()))
 }
@@ -123,7 +113,6 @@ pub fn format_amount(amount: &WMeasure) -> Result<String, String> {
 /// Creates a graph representation of unit mappings
 #[wasm_bindgen]
 pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String> {
-    setup();
     mappings_from_w(mappings).map(|pairs| print_graph(make_graph(pairs)))
 }
 
@@ -134,7 +123,6 @@ pub fn conv_measure_to_kind(
     input_target_measure_kind: WMeasureKind,
     input_measure_w: WMeasure,
 ) -> Result<WMeasure, String> {
-    setup();
     let mapping_pairs = mappings_from_w(mappings)?;
     let input_measure = parse_w_measure(&input_measure_w)?;
 
@@ -158,7 +146,6 @@ pub fn conv_measure_to_kind(
 /// Parses a scraped recipe from HTML content
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, String> {
-    setup();
     recipe_scraper::scrape(body, url)
         .map_err(|e| format!("Failed to scrape recipe: {}", e))
         .and_then(|r| {
@@ -171,10 +158,9 @@ pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, Str
 /// Parses rich text with ingredient names
 #[wasm_bindgen]
 pub fn parse_rich_text(r: String, ingredient_names: Vec<String>) -> Result<RichItems, JsValue> {
-    setup();
     let rtp = RichParser {
         ingredient_names,
-        ip: IngredientParser::new(true),
+        ip: IngredientParser::new().with_rich_text(),
     };
     rtp.parse(r.as_str())
         .map(|r| serde_wasm_bindgen::to_value(&r).unwrap().into())
@@ -184,13 +170,11 @@ pub fn parse_rich_text(r: String, ingredient_names: Vec<String>) -> Result<RichI
 /// Returns true if a unit is valid (including passed in extra units)
 #[wasm_bindgen]
 pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
-    setup();
-    is_valid(HashSet::from_iter(extra_units), unit)
+    is_valid(&HashSet::from_iter(extra_units), unit)
 }
 /// Returns the kind of a amount's unit
 #[wasm_bindgen]
 pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
-    setup();
     parse_w_measure(amount)?
         .to_measure()
         .kind()
@@ -200,7 +184,7 @@ pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
 
 // TypeScript type definitions
 #[wasm_bindgen(typescript_custom_section)]
-const ITEXT_STYLE: &'static str = r#"
+const ITEXT_STYLE: &str = r#"
 interface WIngredient {
     amounts: WMeasure[];
     modifier?: string;
