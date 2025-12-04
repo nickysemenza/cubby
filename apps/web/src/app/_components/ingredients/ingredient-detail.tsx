@@ -1,6 +1,7 @@
 "use client";
 
-import { type FC, useState, useEffect } from "react";
+import { type FC } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -31,16 +32,18 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   });
 
   // Load unit mappings asynchronously
-  const [unitMappings, setUnitMappings] = useState<UnitMapping[]>([]);
-  useEffect(() => {
-    const loadMappings = async () => {
-      const results = await Promise.all(
-        ingredient.product.map((product) => getAllUnitMappingsFromProduct(product)),
-      );
-      setUnitMappings(results.flat());
-    };
-    void loadMappings();
-  }, [ingredient.product]);
+  const unitMappings = useAsyncMemo(
+    async (signal) => {
+      const results: UnitMapping[][] = [];
+      for (const product of ingredient.product) {
+        if (signal.cancelled) return [];
+        results.push(await getAllUnitMappingsFromProduct(product));
+      }
+      return results.flat();
+    },
+    [ingredient.product],
+    [],
+  );
 
   const sections: DetailSection[] = [
     {

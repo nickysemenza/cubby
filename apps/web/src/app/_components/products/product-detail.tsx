@@ -1,9 +1,9 @@
 "use client";
-import { type FC, useState, useEffect } from "react";
+import { type FC } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { type UnitMapping } from "~/schemas/unitmapping";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { NoneState } from "../NoneState";
@@ -41,14 +41,11 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const productImages = product.images;
 
   // Load mappings asynchronously
-  const [mappings, setMappings] = useState<UnitMapping[]>([]);
-  useEffect(() => {
-    const loadMappings = async () => {
-      const result = await getAllUnitMappingsFromProduct(product);
-      setMappings(result);
-    };
-    void loadMappings();
-  }, [product]);
+  const mappings = useAsyncMemo(
+    async () => getAllUnitMappingsFromProduct(product),
+    [product],
+    [],
+  );
 
   const sections: DetailSection[] = [
     {

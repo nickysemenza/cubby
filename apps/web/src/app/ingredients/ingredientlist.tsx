@@ -1,7 +1,8 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
@@ -50,23 +51,23 @@ export function IngredientList() {
   });
 
   // Pre-load unit mappings for all ingredients asynchronously
-  const [mappingsMap, setMappingsMap] = useState<
-    Record<string, UnitMapping[]>
-  >({});
-  useEffect(() => {
-    const load = async () => {
+  const mappingsMap = useAsyncMemo(
+    async (signal) => {
       const result: Record<string, UnitMapping[]> = {};
       for (const ingredient of data) {
+        if (signal.cancelled) return result;
         const mappings: UnitMapping[] = [];
         for (const p of ingredient.product) {
+          if (signal.cancelled) return result;
           mappings.push(...(await getAllUnitMappingsFromProduct(p)));
         }
         result[ingredient.id] = mappings;
       }
-      setMappingsMap(result);
-    };
-    void load();
-  }, [data]);
+      return result;
+    },
+    [data],
+    {},
+  );
 
   const columnHelper = createColumnHelper<IngredientWithFoodOut>();
   // Set up columns using helpers where possible

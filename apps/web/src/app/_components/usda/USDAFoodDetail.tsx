@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
 import { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
@@ -8,7 +8,6 @@ import { ProductPillLink } from "../EntityPill";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { type UnitMapping } from "~/schemas/unitmapping";
 
 export const USDAFoodDetail: React.FC<{
   id: number;
@@ -25,14 +24,11 @@ export const USDAFoodDetail: React.FC<{
   } = food;
 
   // Load mappings asynchronously
-  const [mappings, setMappings] = useState<UnitMapping[]>([]);
-  useEffect(() => {
-    const loadMappings = async () => {
-      const result = await unitMappingsFromFood(food);
-      setMappings(result);
-    };
-    void loadMappings();
-  }, [food]);
+  const mappings = useAsyncMemo(
+    async () => unitMappingsFromFood(food),
+    [food],
+    [],
+  );
 
   const foodInfoSection = (
     <div>

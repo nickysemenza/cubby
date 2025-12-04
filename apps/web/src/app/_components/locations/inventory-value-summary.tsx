@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -55,14 +56,11 @@ export function InventoryValueSummary({
   );
 
   // Load inventory value asynchronously
-  const [result, setResult] = useState<InventoryValueResult>(emptyResult);
-  useEffect(() => {
-    const load = async () => {
-      const value = await calculateInventoryValue(sourceItems);
-      setResult(value);
-    };
-    void load();
-  }, [sourceItems]);
+  const result = useAsyncMemo(
+    async () => calculateInventoryValue(sourceItems),
+    [sourceItems],
+    emptyResult,
+  );
 
   if (variant === "compact") {
     return (

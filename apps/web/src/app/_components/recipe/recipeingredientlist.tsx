@@ -10,7 +10,7 @@ import { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useState, useEffect } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { renderValueOrError } from "~/misc/result";
 import {
@@ -29,49 +29,46 @@ import {
 import { getIngredientName } from "./recipeutils";
 import { type UnitMapping } from "~/schemas/unitmapping";
 
-type RecipeIngredientState = {
-  data: IngredientDataItem[];
-  mappingsMap: Record<string, UnitMapping[]>;
-  totals: CalculateTotalsResult | undefined;
-};
-
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientWithFoodOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
-  // Load all async data in one effect
-  const [state, setState] = useState<RecipeIngredientState>({
-    data: [],
-    mappingsMap: {},
-    totals: undefined,
-  });
+  // Load ingredient data asynchronously
+  const data = useAsyncMemo(
+    async () => (ingMap ? createIngredientData(ingredients, ingMap) : []),
+    [ingredients, ingMap],
+    [],
+  );
 
-  useEffect(() => {
-    if (!ingMap) {
-      setState({ data: [], mappingsMap: {}, totals: undefined });
-      return;
-    }
+  // Load totals asynchronously
+  const totals = useAsyncMemo(
+    async () =>
+      ingMap
+        ? calculateTotals(ingredients, ingMap, getIngredientName)
+        : undefined,
+    [ingredients, ingMap],
+    undefined,
+  );
 
-    const load = async () => {
-      const data = await createIngredientData(ingredients, ingMap);
-      const totals = await calculateTotals(ingredients, ingMap, getIngredientName);
-
-      // Build mappings map
-      const mappingsMap: Record<string, UnitMapping[]> = {};
+  // Load unit mappings asynchronously
+  const mappingsMap = useAsyncMemo(
+    async (signal) => {
+      if (!ingMap) return {};
+      const result: Record<string, UnitMapping[]> = {};
       for (const [id, entry] of Object.entries(ingMap)) {
+        if (signal.cancelled) return result;
         const mappings: UnitMapping[] = [];
         for (const p of entry.product ?? []) {
+          if (signal.cancelled) return result;
           mappings.push(...(await getAllUnitMappingsFromProduct(p)));
         }
-        mappingsMap[id] = mappings;
+        result[id] = mappings;
       }
-
-      setState({ data, mappingsMap, totals });
-    };
-    void load();
-  }, [ingredients, ingMap]);
-
-  const { data, mappingsMap, totals } = state;
+      return result;
+    },
+    [ingMap],
+    {},
+  );
 
   const columnHelper = createColumnHelper<IngredientDataItem>();
 
@@ -164,7 +161,7 @@ export const RecipeIngredientList: React.FC<{
           id = row.ingredient.id;
         }
 
-        const mappings = id ? mappingsMap[id] ?? [] : [];
+        const mappings = id ? (mappingsMap[id] ?? []) : [];
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
     }),
@@ -188,7 +185,9 @@ export const RecipeIngredientList: React.FC<{
   });
 
   // Convert totals to RecipeSummaryData format
-  const getRecipeSummaryData = (t: CalculateTotalsResult): RecipeSummaryData => ({
+  const getRecipeSummaryData = (
+    t: CalculateTotalsResult,
+  ): RecipeSummaryData => ({
     price: t.price,
     weight: t.weight,
     kcal: t.kcal,

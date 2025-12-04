@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { SectionIngredientOut, type RecipeOut } from "~/schemas/recipe";
 import { RecipeIngredientList } from "./recipeingredientlist";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -19,46 +20,31 @@ const RecipeDetail: React.FC<{
       ),
     [recipe.sections],
   );
-  const [data, dataSet] = useState<
-    Record<string, IngredientWithFoodOut> | undefined
-  >(undefined);
-
   // Get recipe images from the recipe object
   const recipeImages = recipe.images;
 
-  useEffect(() => {
-    const getBulkIngredients = async (ids: string[]) => {
+  // Load ingredient data asynchronously
+  const data = useAsyncMemo(
+    async () => {
+      const ids = ingredients
+        .filter((i) => i.type === "ingredient")
+        .map((i) => i.ingredient.id);
+
       const ingredientsArray: IngredientWithFoodOut[] = await Promise.all(
         ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
       );
-      const ingredientMap: Record<string, IngredientWithFoodOut> =
-        ingredientsArray.reduce(
-          (acc, ingredient) => {
-            acc[ingredient.id] = ingredient;
-            return acc;
-          },
-          {} as Record<string, IngredientWithFoodOut>,
-        );
-      console.log({ somePosts: ingredientMap });
-      return ingredientMap;
-    };
 
-    async function fetchMyAPI() {
-      try {
-        // Only get IDs from SectionIngredients that are actually ingredients (not recipes)
-        const ingMap = await getBulkIngredients(
-          ingredients
-            .filter((i) => i.type === "ingredient")
-            .map((i) => i.ingredient.id),
-        );
-        dataSet(ingMap);
-      } catch (error) {
-        console.error("Failed to fetch ingredients:", error);
-      }
-    }
-
-    void fetchMyAPI();
-  }, [ingredients, trpcClient.ingredient.getByID]);
+      return ingredientsArray.reduce(
+        (acc, ingredient) => {
+          acc[ingredient.id] = ingredient;
+          return acc;
+        },
+        {} as Record<string, IngredientWithFoodOut>,
+      );
+    },
+    [ingredients, trpcClient.ingredient.getByID],
+    undefined,
+  );
 
   return (
     <div>
