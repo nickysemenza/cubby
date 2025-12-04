@@ -1,44 +1,41 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
 import RTable from "../_components/data-table/Table";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
 import { showAmountAndPrice } from "../_components/inventory/format-amount";
-import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import { ImageThumbnail, TableLink } from "../_components/table";
 import Link from "next/link";
-
-import { useQuery } from "@tanstack/react-query";
+import { useTableList } from "../_components/hooks/useTableList";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 import { type InventoryItem } from "../_components/locations/calculate-inventory-value";
+import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { type z } from "zod";
+
+type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
 export function InventoryItemList() {
   const api = useTRPC();
-  // Set up table state
-  const tableState = useTableState({ initialSort: "createdAt" });
 
-  // Query data with params from table state
-  const {
-    data: inventoryitemsResp,
-    isLoading,
-    error,
-  } = useQuery(
-    api.inventoryItem.list.queryOptions({
-      sort: tableState.getSortParams(),
-      pagination: tableState.pagination,
-      filters: {
-        productNameFilter: tableState.getColumnFilter("product"),
-        locationNameFilter: tableState.getColumnFilter("location"),
-      },
+  const { data, totalCount, isLoading, error, tableState } = useTableList<
+    {
+      productNameFilter: string | undefined;
+      locationNameFilter: string | undefined;
+    },
+    InventoryListItem
+  >({
+    queryOptions: api.inventoryItem.list.queryOptions,
+    buildFilters: (tableState) => ({
+      productNameFilter: tableState.getColumnFilter("product"),
+      locationNameFilter: tableState.getColumnFilter("location"),
     }),
-  );
+    tableStateOptions: { initialSort: "createdAt" },
+  });
 
-  const data = inventoryitemsResp?.items || [];
-  const columnHelper = createColumnHelper<Flatten<typeof data>>();
+  const columnHelper = createColumnHelper<InventoryListItem>();
 
   // Set up columns using helpers where possible
   const columns = [
@@ -124,7 +121,7 @@ export function InventoryItemList() {
     data,
     columns,
     tableState,
-    totalCount: inventoryitemsResp?.meta?.totalCount || 0,
+    totalCount,
   });
 
   const filterableColumns = [

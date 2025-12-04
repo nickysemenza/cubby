@@ -1,7 +1,7 @@
 "use client";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { z } from "zod";
-import { type FC, useState, useMemo, useCallback } from "react";
+import { type FC, useMemo } from "react";
 import { showAmountAndPrice } from "./format-amount";
 import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { UnitMappingGraph } from "../units/UnitMappingGraph";
@@ -10,8 +10,7 @@ import { Button } from "~/components/ui/button";
 import { InventoryForm } from "./inventory-form";
 import { type InventoryUpdateInput } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
-
-import { useMutation } from "@tanstack/react-query";
+import { useEditMode } from "../hooks/useEditMode";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -23,39 +22,21 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
   const api = useTRPC();
-  const [isEditing, setIsEditing] = useState(false);
-  const [error, setError] = useState<string | undefined>();
-
-  const updateMutation = useMutation(
-    api.inventoryItem.update.mutationOptions({
-      onSuccess: () => {
-        setIsEditing(false);
-        // Refresh the page to get updated data
-        window.location.reload();
-      },
-      onError: (error) => {
-        setError(error.message);
-      },
-    }),
-  );
-
-  const handleEdit = useCallback(
-    (data: InventoryUpdateInput) => {
-      updateMutation.mutate(data);
-    },
-    [updateMutation],
-  );
+  const editMode = useEditMode<InventoryUpdateInput>({
+    mutationOptions: api.inventoryItem.update.mutationOptions(),
+    useRouterRefresh: true,
+  });
 
   const inventoryContent = useMemo(() => {
-    if (isEditing) {
+    if (editMode.isEditing) {
       return (
         <InventoryForm
           mode="edit"
           entity={inventoryitem}
-          onEdit={handleEdit}
-          onCancel={() => setIsEditing(false)}
-          isPending={updateMutation.isPending}
-          error={error}
+          onEdit={editMode.handleEdit}
+          onCancel={editMode.handleCancel}
+          isPending={editMode.isPending}
+          error={editMode.error}
         />
       );
     }
@@ -73,12 +54,12 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         <div className="bg-muted rounded-md p-4">
           <UnitMappingGraph unitMapping={inventoryitem.product.unitMappings} />
         </div>
-        <Button variant="outline" onClick={() => setIsEditing(true)}>
+        <Button variant="outline" onClick={editMode.startEditing}>
           Edit Inventory Item
         </Button>
       </div>
     );
-  }, [isEditing, inventoryitem, updateMutation.isPending, error, handleEdit]);
+  }, [editMode, inventoryitem]);
 
   const sections: DetailSection[] = [
     {
