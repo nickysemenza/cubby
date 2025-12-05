@@ -491,4 +491,253 @@ describe("CSV import preview logic", () => {
       expect(result.items[0].action).toBe("skipped");
     });
   });
+
+  describe("type inference from context", () => {
+    it("should infer type from later row with bracket notation", async () => {
+      // Row 1: bare path (no types)
+      // Row 2: same path with explicit types
+      // Both should use the types from row 2
+      const rows: InventoryCSVRow[] = [
+        {
+          product_name: "Widget A",
+          location_path: "garage > chrome wire shelf > bin",
+          quantity: 1,
+          unit: "each",
+        },
+        {
+          product_name: "Widget B",
+          location_path:
+            "garage[room] > chrome wire shelf[shelf] > bin[half-crate]",
+          quantity: 1,
+          unit: "each",
+        },
+      ];
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        rows,
+        false, // not dryRun - actually create
+      );
+
+      expect(result.created).toBe(2);
+      expect(result.errors).toBe(0);
+
+      // Verify location types were set correctly
+      // The bin should be "half-crate" not the default "shelf"
+      const { locationList } = await import("~/server/repo/location");
+
+      const locations = await locationList(
+        db,
+        organizationId,
+        undefined,
+        undefined,
+        { orderBy: "name", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
+
+      const bin = locations.data.find((l) => l.name === "bin");
+      const shelf = locations.data.find((l) => l.name === "chrome wire shelf");
+      const garage = locations.data.find((l) => l.name === "garage");
+
+      expect(garage?.type).toBe("room");
+      expect(shelf?.type).toBe("shelf");
+      expect(bin?.type).toBe("half-crate");
+    });
+
+    it("should infer type from earlier row with bracket notation", async () => {
+      // Row 1: explicit types
+      // Row 2: bare path (should inherit types from row 1)
+      const rows: InventoryCSVRow[] = [
+        {
+          product_name: "Widget A",
+          location_path: "warehouse[room] > rack1[shelf] > container[crate]",
+          quantity: 1,
+          unit: "each",
+        },
+        {
+          product_name: "Widget B",
+          location_path: "warehouse > rack1 > container",
+          quantity: 1,
+          unit: "each",
+        },
+      ];
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        rows,
+        false,
+      );
+
+      expect(result.created).toBe(2);
+      expect(result.errors).toBe(0);
+
+      const { locationList } = await import("~/server/repo/location");
+      const locations = await locationList(
+        db,
+        organizationId,
+        undefined,
+        undefined,
+        { orderBy: "name", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
+
+      const container = locations.data.find((l) => l.name === "container");
+      expect(container?.type).toBe("crate");
+    });
+
+    it("should use database type for existing locations", async () => {
+      // Pre-create a location with a specific type
+      await createLocation(
+        db,
+        { name: "Storage", type: "cabinet", parentId: null },
+        organizationId,
+      );
+
+      // Import with bare path - should use existing "cabinet" type
+      const rows: InventoryCSVRow[] = [
+        {
+          product_name: "Widget",
+          location_path: "Storage > new shelf",
+          quantity: 1,
+          unit: "each",
+        },
+      ];
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        rows,
+        false,
+      );
+
+      expect(result.created).toBe(1);
+
+      const { locationList } = await import("~/server/repo/location");
+      const locations = await locationList(
+        db,
+        organizationId,
+        undefined,
+        undefined,
+        { orderBy: "name", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
+
+      const storage = locations.data.find((l) => l.name === "Storage");
+      const newShelf = locations.data.find((l) => l.name === "new shelf");
+
+      // Storage should retain its original type
+      expect(storage?.type).toBe("cabinet");
+      // new shelf should default to "shelf" since it's a child
+      expect(newShelf?.type).toBe("shelf");
+    });
+
+    it("should detect conflicting type specifications within CSV as error", async () => {
+      // Two rows with same path but different types
+      const rows: InventoryCSVRow[] = [
+        {
+          product_name: "Widget A",
+          location_path: "room1[room]",
+          quantity: 1,
+          unit: "each",
+        },
+        {
+          product_name: "Widget B",
+          location_path: "room1[cabinet]",
+          quantity: 1,
+          unit: "each",
+        },
+      ];
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        rows,
+        true, // dryRun to catch conflict
+      );
+
+      // Should return error for conflict
+      expect(result.errors).toBeGreaterThan(0);
+      expect(result.items.some((r) => r.action === "error")).toBe(true);
+      expect(result.items.some((r) => r.message?.includes("conflict"))).toBe(
+        true,
+      );
+    });
+
+    it("should detect conflict when CSV type differs from existing database location", async () => {
+      // Pre-create a location with type "room"
+      await createLocation(
+        db,
+        { name: "ExistingRoom", type: "room", parentId: null },
+        organizationId,
+      );
+
+      // CSV tries to specify a different type for the same location
+      const rows: InventoryCSVRow[] = [
+        {
+          product_name: "Widget",
+          location_path: "ExistingRoom[cabinet]", // Different type than DB
+          quantity: 1,
+          unit: "each",
+        },
+      ];
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        rows,
+        true, // dryRun to catch conflict
+      );
+
+      // Should return error for conflict with database
+      expect(result.errors).toBeGreaterThan(0);
+      expect(result.items.some((r) => r.action === "error")).toBe(true);
+      expect(result.items.some((r) => r.message?.includes("conflict"))).toBe(
+        true,
+      );
+    });
+
+    it("should handle partial type specifications", async () => {
+      // Only some parts have explicit types
+      const rows: InventoryCSVRow[] = [
+        {
+          product_name: "Widget",
+          location_path: "office > drawer1[drawer] > section",
+          quantity: 1,
+          unit: "each",
+        },
+      ];
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        rows,
+        false,
+      );
+
+      expect(result.created).toBe(1);
+
+      const { locationList } = await import("~/server/repo/location");
+      const locations = await locationList(
+        db,
+        organizationId,
+        undefined,
+        undefined,
+        { orderBy: "name", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
+
+      const office = locations.data.find((l) => l.name === "office");
+      const drawer1 = locations.data.find((l) => l.name === "drawer1");
+      const section = locations.data.find((l) => l.name === "section");
+
+      // office -> default "room" (root)
+      expect(office?.type).toBe("room");
+      // drawer1 -> explicit "drawer"
+      expect(drawer1?.type).toBe("drawer");
+      // section -> default "shelf" (child without explicit type)
+      expect(section?.type).toBe("shelf");
+    });
+  });
 });

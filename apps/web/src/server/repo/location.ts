@@ -43,6 +43,16 @@ import {
 } from "~/server/db/schema";
 import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
 
+// Type context for batch CSV imports with type inference
+export interface LocationTypeContext {
+  // Map of "full_path" (lowercase) -> type from CSV bracket notation
+  pathTypes: Map<string, LocationType>;
+  // Map of "name" (lowercase) -> type from existing database locations
+  existingTypes: Map<string, LocationType>;
+  // Detected conflicts: same path with different types in CSV
+  conflicts: Array<{ path: string; types: LocationType[] }>;
+}
+
 // Create a new location
 export const createLocation = async (
   db: Database,
@@ -502,6 +512,7 @@ export const parseLocationPathWithTypes = (
 };
 
 // Find a location by its path string (e.g., "Room > Shelf > Bin")
+// Supports bracket notation: "Room[room] > Shelf[shelf]" - brackets are stripped for matching
 // Returns null if not found
 export const findLocationByPath = async (
   db: Database,
@@ -509,7 +520,12 @@ export const findLocationByPath = async (
   path: string,
   separator = " > ",
 ): Promise<LocationId | null> => {
-  const parts = path.split(separator).map((p) => p.trim());
+  const parts = path.split(separator).map((p) => {
+    const trimmed = p.trim();
+    // Strip bracket notation if present: "name[type]" -> "name"
+    const match = trimmed.match(/^(.+?)\[([^\]]+)\]$/);
+    return match ? match[1].trim() : trimmed;
+  });
 
   if (parts.length === 0) {
     return null;
@@ -678,4 +694,249 @@ export const getLocationById = async (
   };
 
   return buildLocationWithChildren(locationWithParent, id);
+};
+
+/**
+ * Build a type context from CSV rows and existing database locations.
+ * This enables type inference across the batch - types specified in any row
+ * can be applied to bare paths in other rows.
+ *
+ * @param db - Database connection
+ * @param organizationId - Organization to query
+ * @param rows - CSV rows with optional location_path field
+ * @param separator - Path separator, defaults to " > "
+ * @returns LocationTypeContext with pathTypes, existingTypes, and any conflicts
+ */
+export const buildLocationTypeContext = async (
+  db: Database,
+  organizationId: OrganizationId,
+  rows: Array<{ location_path?: string }>,
+  separator = " > ",
+): Promise<LocationTypeContext> => {
+  const pathTypes: Map<string, LocationType> = new Map();
+  const conflicts: Array<{ path: string; types: LocationType[] }> = [];
+
+  // Pass 1: Extract types from bracket notation in all rows
+  for (const row of rows) {
+    if (!row.location_path) continue;
+
+    const parts = row.location_path.split(separator).map((p) => p.trim());
+    const pathSegments: string[] = [];
+
+    for (const part of parts) {
+      const match = part.match(/^(.+?)\[([^\]]+)\]$/);
+      if (match) {
+        const name = match[1].trim();
+        const typeStr = match[2].trim();
+        const parsedType = locationType.safeParse(typeStr);
+        if (parsedType.success) {
+          pathSegments.push(name.toLowerCase());
+          const fullPath = pathSegments.join(separator);
+
+          // Check for conflicts
+          const existingType = pathTypes.get(fullPath);
+          if (existingType && existingType !== parsedType.data) {
+            // Find or add to conflicts array
+            const existingConflict = conflicts.find((c) => c.path === fullPath);
+            if (existingConflict) {
+              if (!existingConflict.types.includes(parsedType.data)) {
+                existingConflict.types.push(parsedType.data);
+              }
+            } else {
+              conflicts.push({
+                path: fullPath,
+                types: [existingType, parsedType.data],
+              });
+            }
+          } else {
+            pathTypes.set(fullPath, parsedType.data);
+          }
+        } else {
+          // Invalid type in bracket - just add name to path for tracking
+          pathSegments.push(part.toLowerCase());
+        }
+      } else {
+        // No bracket notation - just add to path segments
+        pathSegments.push(part.toLowerCase());
+      }
+    }
+  }
+
+  // Pass 2: Query existing locations from database
+  const existingLocations = await getDb(db).query.location.findMany({
+    where: eq(location.organizationId, organizationId),
+    columns: { name: true, type: true },
+  });
+
+  const existingTypes: Map<string, LocationType> = new Map();
+  for (const loc of existingLocations) {
+    const parsedType = locationType.safeParse(loc.type);
+    if (parsedType.success) {
+      existingTypes.set(loc.name.toLowerCase(), parsedType.data);
+    }
+  }
+
+  // Pass 3: Check for conflicts between CSV types and existing database types
+  // Since location names are unique per organization, we check by name
+  for (const [csvPath, csvType] of pathTypes) {
+    // Extract just the location name (last segment of the path)
+    const pathParts = csvPath.split(separator);
+    const locationName = pathParts[pathParts.length - 1];
+    const dbType = existingTypes.get(locationName);
+
+    if (dbType && dbType !== csvType) {
+      // CSV specifies a different type than what exists in DB
+      const existingConflict = conflicts.find(
+        (c) => c.path === csvPath || c.path === locationName,
+      );
+      if (existingConflict) {
+        if (!existingConflict.types.includes(dbType)) {
+          existingConflict.types.push(dbType);
+        }
+      } else {
+        conflicts.push({
+          path: locationName,
+          types: [dbType, csvType],
+        });
+      }
+    }
+  }
+
+  return { pathTypes, existingTypes, conflicts };
+};
+
+/**
+ * Parse a location path using type context for inference.
+ * Type resolution priority:
+ * 1. Explicit bracket notation in the current path
+ * 2. Type from another row in the CSV (batch context)
+ * 3. Type from existing database location
+ * 4. Default (root=room, children=shelf)
+ *
+ * @param path - Path string like "garage > shelf" or "garage[room] > shelf[shelf]"
+ * @param context - Type context from buildLocationTypeContext
+ * @param separator - Path separator, defaults to " > "
+ * @returns Array of {name, type} objects
+ */
+export const parseLocationPathWithContext = (
+  path: string,
+  context: LocationTypeContext,
+  separator = " > ",
+): Array<{ name: string; type: LocationType }> => {
+  const parts = path.split(separator).map((p) => p.trim());
+  const result: Array<{ name: string; type: LocationType }> = [];
+  const pathSegments: string[] = [];
+
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index];
+
+    // Check for explicit bracket notation first
+    const match = part.match(/^(.+?)\[([^\]]+)\]$/);
+    if (match) {
+      const name = match[1].trim();
+      const typeStr = match[2].trim();
+      const parsedType = locationType.safeParse(typeStr);
+      if (parsedType.success) {
+        result.push({ name, type: parsedType.data });
+        pathSegments.push(name.toLowerCase());
+        continue;
+      }
+      // Invalid type - fall through to inference
+    }
+
+    // Extract name (strip brackets if present but type was invalid)
+    const name = match ? match[1].trim() : part;
+    pathSegments.push(name.toLowerCase());
+    const fullPath = pathSegments.join(separator);
+
+    // Priority 1: Type from CSV context (another row with explicit type)
+    const csvType = context.pathTypes.get(fullPath);
+    if (csvType) {
+      result.push({ name, type: csvType });
+      continue;
+    }
+
+    // Priority 2: Type from existing database location
+    const dbType = context.existingTypes.get(name.toLowerCase());
+    if (dbType) {
+      result.push({ name, type: dbType });
+      continue;
+    }
+
+    // Priority 3: Default (root=room, children=shelf)
+    result.push({ name, type: index === 0 ? "room" : "shelf" });
+  }
+
+  return result;
+};
+
+/**
+ * Find or create a location by its path string using type context for inference.
+ * Creates intermediate locations as needed with inferred types.
+ *
+ * @param db - Database connection
+ * @param organizationId - Organization to create in
+ * @param path - Path string like "garage > shelf"
+ * @param context - Type context from buildLocationTypeContext
+ * @param separator - Path separator, defaults to " > "
+ * @returns LocationId of the final (leaf) location
+ */
+export const findOrCreateLocationByPathWithContext = async (
+  db: Database,
+  organizationId: OrganizationId,
+  path: string,
+  context: LocationTypeContext,
+  separator = " > ",
+): Promise<LocationId> => {
+  const parsedParts = parseLocationPathWithContext(path, context, separator);
+
+  if (parsedParts.length === 0) {
+    throw new Error("Invalid location path: empty path");
+  }
+
+  let currentParentId: string | null = null;
+
+  for (const { name, type } of parsedParts) {
+    const conditions = [
+      eq(location.organizationId, organizationId),
+      ilike(location.name, name),
+    ];
+
+    let existingLoc: typeof location.$inferSelect | undefined;
+
+    if (currentParentId === null) {
+      // Looking for root location (no parent)
+      existingLoc = await getDb(db).query.location.findFirst({
+        where: and(...conditions, sql`${location.parentId} IS NULL`),
+      });
+    } else {
+      // Looking for child of current parent
+      existingLoc = await getDb(db).query.location.findFirst({
+        where: and(...conditions, eq(location.parentId, currentParentId)),
+      });
+    }
+
+    if (existingLoc) {
+      currentParentId = existingLoc.id;
+    } else {
+      // Create the location with the inferred type
+      const result: Array<typeof location.$inferSelect> = await getDb(db)
+        .insert(location)
+        .values({
+          organizationId: organizationId,
+          name: name,
+          type: type,
+          parentId: currentParentId,
+        })
+        .returning();
+
+      const newLoc = result[0];
+      if (!newLoc) {
+        throw new Error(`Failed to create location: ${name}`);
+      }
+      currentParentId = newLoc.id;
+    }
+  }
+
+  return unsafeLocationId(currentParentId!);
 };

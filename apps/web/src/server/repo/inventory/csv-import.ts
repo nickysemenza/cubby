@@ -21,8 +21,9 @@ import {
 } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import {
-  findOrCreateLocationByPath,
   findLocationByPath,
+  buildLocationTypeContext,
+  findOrCreateLocationByPathWithContext,
 } from "~/server/repo/location";
 import {
   findProductByNameAndManufacturer,
@@ -498,6 +499,36 @@ export const importInventoryFromCSV = async (
   let errors = 0;
   let productOnly = 0;
 
+  // Build location type context for inference across the batch
+  const locationTypeContext = await buildLocationTypeContext(
+    db,
+    organizationId,
+    rows,
+  );
+
+  // Check for conflicting type specifications
+  if (locationTypeContext.conflicts.length > 0) {
+    // Return errors for all conflicting paths
+    for (const conflict of locationTypeContext.conflicts) {
+      results.push({
+        rowIndex: -1, // Not tied to a specific row
+        action: "error",
+        productName: "",
+        message: `Location type conflict for "${conflict.path}": specified as both ${conflict.types.join(" and ")}`,
+      });
+      errors++;
+    }
+    return {
+      created,
+      moved,
+      updated,
+      skipped,
+      errors,
+      productOnly,
+      items: results,
+    };
+  }
+
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
@@ -605,6 +636,7 @@ export const importInventoryFromCSV = async (
 
       if (dryRun) {
         // Try to find location without creating
+        // Note: findLocationByPath strips bracket notation automatically
         targetLocationId = await findLocationByPath(
           db,
           organizationId,
@@ -614,10 +646,12 @@ export const importInventoryFromCSV = async (
           locationWillBeCreated = true;
         }
       } else {
-        targetLocationId = await findOrCreateLocationByPath(
+        // Use context-aware creation for type inference across batch
+        targetLocationId = await findOrCreateLocationByPathWithContext(
           db,
           organizationId,
           row.location_path!,
+          locationTypeContext,
         );
       }
 

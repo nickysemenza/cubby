@@ -105,7 +105,7 @@ The service layer (`/server/services/`) is used selectively for entities that re
 ### Key Architecture Points:
 
 - **Monorepo Package**: `recipebridge` is in the monorepo and provides the WASM integration wrapper
-- **External Dependency**: Depends on `ingredient-parser` (separate Git repository at https://github.com/nickysemenza/ingredient-parser) containing the Rust unit conversion engine
+- **External Dependency**: Depends on `ingredient-parser` (separate Git repository at https://github.com/nickysemenza/ingredient-parser) containing the Rust unit conversion engine. Likely to be checked out in `../ingredient-parser`
 - **WASM Integration**: The Rust code is compiled to WebAssembly. Use `wasm` from `~/lib/wasm` for client-side code (sync), or `wasmServer` for server-side code (async, auto-initializing)
 - **Chained Conversions**: The WASM engine supports powerful chained conversions (e.g., "2 cups → $5.00 → 333g" through intermediate units)
 - **Graph-Based**: Uses graph algorithms to find conversion paths through multiple unit mappings
