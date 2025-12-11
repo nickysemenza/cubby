@@ -44,9 +44,9 @@ export function EditableComponentDemo<T>({
   }, [schema]);
 
   const handleUpdate = useCallback(
-    (props: { newData: unknown }) => {
+    (newData: unknown) => {
       // Validate with Zod before accepting
-      const result = schema.safeParse(props.newData);
+      const result = schema.safeParse(newData);
       if (result.success) {
         setData(result.data);
         setError(null);
@@ -107,7 +107,7 @@ export function EditableComponentDemo<T>({
           <div className="max-h-80 overflow-auto p-2">
             <JsonEditor
               data={data}
-              setData={handleUpdate as (data: unknown) => void}
+              setData={handleUpdate}
               rootFontSize={12}
               collapse={2}
               restrictEdit={false}
