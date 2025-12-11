@@ -2,53 +2,8 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { program } from "commander";
 import fs from "fs";
 import SuperJSON from "superjson";
-import Papa from "papaparse";
 import { type AppRouter } from "~/server/api/root";
-import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
-
-const readCSV = (fileName: string): InventoryCSVRow[] => {
-  const file = fs.readFileSync(fileName, "utf8");
-  const result = Papa.parse<Record<string, string>>(file, {
-    header: true,
-    skipEmptyLines: true,
-    transformHeader: (header) =>
-      header.toLowerCase().trim().replace(/\s+/g, "_"),
-  });
-
-  if (result.errors.length > 0) {
-    console.error("CSV parse errors:", result.errors);
-    throw new Error("Failed to parse CSV file");
-  }
-
-  // Transform and validate each row
-  const rows: InventoryCSVRow[] = [];
-  for (const row of result.data) {
-    const parsed = inventoryCSVRow.safeParse({
-      product_name: row.product_name || row.product || row.name,
-      manufacturer: row.manufacturer || undefined,
-      upc: row.upc || row.barcode || undefined,
-      model: row.model || undefined,
-      ndb_number: row.ndb_number || row.ndbnumber || undefined,
-      location_path: row.location_path || row.location || undefined,
-      quantity: row.quantity || row.qty || 1,
-      unit: row.unit || "each",
-      expected_qty: row.expected_qty || row.expectedqty || undefined,
-      price: row.price || undefined,
-      unit_mappings: row.unit_mappings || row.unitmappings || undefined,
-      ingredient_name: row.ingredient_name || undefined,
-      ingredient: row.ingredient,
-      aliases: row.aliases || undefined,
-    });
-
-    if (!parsed.success) {
-      console.error(`Row validation error:`, row, parsed.error);
-      throw new Error(`Failed to validate CSV row`);
-    }
-    rows.push(parsed.data);
-  }
-
-  return rows;
-};
+import { parseInventoryCSV } from "~/lib/csv-utils";
 
 // Configure CLI options with env var fallbacks
 program
@@ -92,7 +47,8 @@ const client = createTRPCClient<AppRouter>({
 });
 
 console.log(`Loading data from ${options.file}...`);
-const rows = readCSV(options.file);
+const csvContent = fs.readFileSync(options.file, "utf8");
+const rows = parseInventoryCSV(csvContent);
 console.log(`Parsed ${rows.length} rows from CSV`);
 
 const result = await client.inventoryItem.importCSV.mutate({ rows });
