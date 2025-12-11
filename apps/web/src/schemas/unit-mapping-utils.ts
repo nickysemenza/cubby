@@ -3,6 +3,8 @@ import {
   FoodSummary,
   branded_food_serving_size_unit,
   type BrandedFoodServingSizeUnit,
+  getNutrientUnit,
+  getNutrientKey,
 } from "@recipehub/usda-schemas";
 import { wasmServer } from "~/lib/wasm";
 
@@ -103,35 +105,26 @@ export const unitMappingFromPortionInfo = (
 };
 
 /**
- * Creates unit mappings from nutrition data (e.g., 100g → 374kcal)
+ * Creates unit mappings from nutrition data (e.g., 100g → 374kcal, 100g → 15g protein)
+ * Generates mappings for all tier 1 nutrients from the generic nutrientsPer100 record.
  */
 const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
-  const nutrition = food.nutritionInfo?.nutrientsPer100;
-  if (!nutrition) return [];
-  const mappings: UnitMapping[] = [];
+  const nutrients = food.nutritionInfo?.nutrientsPer100;
+  if (!nutrients) return [];
   const { fdc_id } = food;
 
-  // Create calorie mapping: 100g → X kcal
-  if (nutrition.kcal > 0) {
-    mappings.push({
+  return Object.entries(nutrients)
+    .filter(([_, amount]) => amount > 0)
+    .map(([code, amount]) => ({
       a: { value: 100, unit: "g" },
-      b: { value: nutrition.kcal, unit: "kcal" },
+      b: {
+        value: amount,
+        unit: `${getNutrientUnit(code).toLowerCase()} ${getNutrientKey(code)}`,
+      },
+      // e.g., "g protein", "kcal kcal", "mg sodium", "ug vitamin_b12"
       source: `USDA nutrition`,
       sourceMetadata: { type: "food" as const, fdcId: fdc_id },
-    });
-  }
-
-  // Create protein mapping: 100g → X g protein
-  if (nutrition.protein > 0) {
-    mappings.push({
-      a: { value: 100, unit: "g" },
-      b: { value: nutrition.protein, unit: "g protein" },
-      source: `USDA nutrition`,
-      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
-    });
-  }
-
-  return mappings;
+    }));
 };
 
 export const unitMappingsFromFood = async (

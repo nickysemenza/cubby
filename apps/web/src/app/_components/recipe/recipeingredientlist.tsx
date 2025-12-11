@@ -190,8 +190,7 @@ export const RecipeIngredientList: React.FC<{
   ): RecipeSummaryData => ({
     price: t.price,
     weight: t.weight,
-    kcal: t.kcal,
-    protein: t.protein,
+    nutrients: t.nutrients,
     totalIngredients: t.totalIngredients,
     missingByType: t.missingByType,
   });

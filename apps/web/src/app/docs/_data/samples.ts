@@ -138,8 +138,10 @@ export const sampleSummaryData: z.infer<typeof entitySummaryDataSchema> = {
   data: {
     price: 8.45,
     weight: 650,
-    kcal: 2800,
-    protein: 42,
+    nutrients: {
+      "208": 2800, // kcal
+      "203": 42, // protein
+    },
     totalIngredients: 6,
     missingByType: {
       price: [],

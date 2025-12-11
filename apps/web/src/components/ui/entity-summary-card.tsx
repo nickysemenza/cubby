@@ -3,13 +3,16 @@ import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { SummaryGrid } from "~/components/ui/summary-grid";
 import { type SummaryItem } from "~/app/_components/SummaryCard";
+import {
+  getNutrientDisplayName,
+  getNutrientUnit,
+} from "@recipehub/usda-schemas";
 
 // Zod schemas for summary data types
 export const recipeSummaryDataSchema = z.object({
   price: z.number(),
   weight: z.number(),
-  kcal: z.number(),
-  protein: z.number(),
+  nutrients: z.record(z.string(), z.number()),
   totalIngredients: z.number(),
   missingByType: z.object({
     price: z.array(z.string()),
@@ -76,6 +79,9 @@ export interface EntitySummaryCardProps {
   summaryData: EntitySummaryData;
 }
 
+// Priority nutrients to display in summary (kcal and protein)
+const SUMMARY_NUTRIENT_CODES = ["208", "203"] as const; // kcal, protein
+
 // Helper functions for each summary type
 const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
   const formatWithCoverage = (
@@ -94,6 +100,24 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     }
     return `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit} (${successCount}/${total} ingredients)`;
   };
+
+  // Generate nutrient items for priority nutrients
+  const nutrientItems = SUMMARY_NUTRIENT_CODES.map((code) => {
+    const value = data.nutrients[code] ?? 0;
+    const displayName = getNutrientDisplayName(code);
+    const unit = getNutrientUnit(code).toLowerCase();
+    return {
+      label: `Total ${displayName}`,
+      value,
+      formatter: () =>
+        formatWithCoverage(
+          value,
+          data.missingByType.nutrients.length,
+          data.totalIngredients,
+          code === "208" ? " kcal" : unit, // Special formatting for kcal
+        ),
+    };
+  });
 
   return [
     {
@@ -119,28 +143,7 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
           "g",
         ),
     },
-    {
-      label: "Total Calories",
-      value: data.kcal,
-      formatter: () =>
-        formatWithCoverage(
-          data.kcal,
-          data.missingByType.nutrients.length,
-          data.totalIngredients,
-          " kcal",
-        ),
-    },
-    {
-      label: "Total Protein",
-      value: data.protein,
-      formatter: () =>
-        formatWithCoverage(
-          data.protein,
-          data.missingByType.nutrients.length,
-          data.totalIngredients,
-          "g",
-        ),
-    },
+    ...nutrientItems,
     ...(data.missingByType.price.length > 0 ||
     data.missingByType.weight.length > 0 ||
     data.missingByType.nutrients.length > 0

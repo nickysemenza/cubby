@@ -7,9 +7,12 @@ import {
   type ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { NutrientsPer100 } from "@recipehub/usda-schemas";
+import { type NutrientsPer100 } from "@recipehub/usda-schemas";
 import { wasm } from "~/lib/wasm";
 import { SectionIngredientOut } from "~/schemas/recipe";
+
+// Re-export NutrientsPer100 type for consumers
+export type { NutrientsPer100 } from "@recipehub/usda-schemas";
 
 /**
  * Extracts nutrient information from a product
@@ -21,25 +24,26 @@ export const getProductNutrients = (product: {
 };
 
 /**
- * Creates a zero-value nutrient object
+ * Creates an empty nutrients record
  */
-export const createEmptyNutrients = (): NutrientsPer100 => ({
-  protein: 0,
-  kcal: 0,
-});
+export const createEmptyNutrients = (): NutrientsPer100 =>
+  ({}) as NutrientsPer100;
 
 /**
- * Scales nutrient values based on weight
+ * Scales nutrient values based on weight.
+ * Nutrients are per 100g, so we scale by weightInGrams / 100.
  */
 export const scaleNutrientsByWeight = (
   nutrients: NutrientsPer100,
   weightInGrams: number,
 ): NutrientsPer100 => {
   const scaleFactor = weightInGrams / 100;
-  return {
-    protein: nutrients.protein * scaleFactor,
-    kcal: nutrients.kcal * scaleFactor,
-  };
+  return Object.fromEntries(
+    Object.entries(nutrients).map(([code, amount]) => [
+      code,
+      amount * scaleFactor,
+    ]),
+  );
 };
 
 /**
@@ -77,8 +81,8 @@ export const calculateNutrients = (
 ): Result<NutrientsPer100> => {
   // Try to find nutrient information from products
   const firstNutrient = product
-    ?.flatMap((p) => getProductNutrients(p))
-    .filter((x) => x !== undefined)
+    ?.map((p) => getProductNutrients(p))
+    .filter((x): x is NutrientsPer100 => x !== undefined)
     .pop();
 
   if (!firstNutrient) {
@@ -117,16 +121,16 @@ export const getGramAndNutrient = (
 };
 
 /**
- * Sums multiple nutrient objects
+ * Sums multiple nutrient records, combining all nutrient codes
  */
 const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
-  return nutrients.reduce(
-    (acc, curr) => ({
-      protein: acc.protein + (curr.protein || 0),
-      kcal: acc.kcal + (curr.kcal || 0),
-    }),
-    createEmptyNutrients(),
-  );
+  const result: NutrientsPer100 = {};
+  for (const n of nutrients) {
+    for (const [code, amount] of Object.entries(n)) {
+      result[code] = (result[code] ?? 0) + (amount ?? 0);
+    }
+  }
+  return result;
 };
 
 /**
@@ -168,8 +172,7 @@ const getIngredientMeasures = async (
 
 export type CalculateTotalsResult = {
   price: number;
-  protein: number;
-  kcal: number;
+  nutrients: NutrientsPer100;
   weight: number;
   totalIngredients: number;
   missingByType: {
@@ -238,8 +241,7 @@ export const calculateTotals = async (
 
   return {
     price: totalPrice,
-    protein: totalNutrients.protein,
-    kcal: totalNutrients.kcal,
+    nutrients: totalNutrients,
     weight: totalWeight,
     totalIngredients: ingredients.length,
     missingByType,

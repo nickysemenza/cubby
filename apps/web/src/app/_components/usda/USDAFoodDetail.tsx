@@ -8,6 +8,7 @@ import { ProductPillLink } from "../EntityPill";
 import { DetailPage, DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import { NutrientsSummary } from "../units/NutrientsSummary";
 
 export const USDAFoodDetail: React.FC<{
   id: number;
@@ -118,15 +119,8 @@ export const USDAFoodDetail: React.FC<{
   const nutritionSection = (
     <div>
       <h3 className="mb-3">Nutrition per 100g</h3>
-      <div className="mb-4 flex">
-        <div className="mr-6">
-          <div className="font-semibold">Energy</div>
-          <div>{nutritionInfo.nutrientsPer100.kcal} kcal</div>
-        </div>
-        <div>
-          <div className="font-semibold">Protein</div>
-          <div>{nutritionInfo.nutrientsPer100.protein}g</div>
-        </div>
+      <div className="mb-4">
+        <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} />
       </div>
       <NutritionInfoTable n={nutritionInfo} />
     </div>

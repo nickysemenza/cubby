@@ -63,10 +63,10 @@ export const foodInfo = z
   })
   .describe('usda food table');
 
-const nutrientsPer100 = z.object({
-  protein: z.number(),
-  kcal: z.number(),
-});
+// Generic nutrients record - maps nutrient codes (e.g., "203" for protein) to amounts
+// Keys are USDA nutrient_nbr values (e.g., "203" for protein, "208" for kcal)
+const nutrientsPer100 = z.record(z.string(), z.number());
+export { nutrientsPer100 };
 export type NutrientsPer100 = z.infer<typeof nutrientsPer100>;
 export const brandedFoodInfo = z.object({
   brand_owner: z.string().nullable(),

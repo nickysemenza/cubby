@@ -33,8 +33,8 @@ describe("getProductNutrients", () => {
         legacyFoodInfo: null,
         nutritionInfo: {
           nutrientsPer100: {
-            protein: 15.5,
-            kcal: 250,
+            "203": 15.5,
+            "208": 250,
           },
           nutrientSummary: [],
         },
@@ -57,8 +57,8 @@ describe("getProductNutrients", () => {
     const result = getProductNutrients(product);
 
     expect(result).toEqual({
-      protein: 15.5,
-      kcal: 250,
+      "203": 15.5,
+      "208": 250,
     });
   });
 
@@ -91,7 +91,7 @@ describe("getProductNutrients", () => {
         legacyFoodInfo: null,
         nutritionInfo: {
           nutrientSummary: [],
-          nutrientsPer100: { protein: 0, kcal: 0 },
+          nutrientsPer100: { "203": 0, "208": 0 },
         },
         fdc_id: 0,
         brandedFoodInfo: null,
@@ -111,56 +111,53 @@ describe("getProductNutrients", () => {
 
     const result = getProductNutrients(product);
 
-    expect(result).toEqual({ protein: 0, kcal: 0 });
+    expect(result).toEqual({ "203": 0, "208": 0 });
   });
 });
 
 describe("createEmptyNutrients", () => {
-  test("returns zero-value nutrients", () => {
+  test("returns empty nutrients record", () => {
     const result = createEmptyNutrients();
 
-    expect(result).toEqual({
-      protein: 0,
-      kcal: 0,
-    });
+    expect(result).toEqual({});
   });
 });
 
 describe("scaleNutrientsByWeight", () => {
   test("scales nutrients correctly for 100g (no change)", () => {
-    const nutrients: NutrientsPer100 = { protein: 10, kcal: 200 };
+    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
     const result = scaleNutrientsByWeight(nutrients, 100);
 
-    expect(result).toEqual({ protein: 10, kcal: 200 });
+    expect(result).toEqual({ "203": 10, "208": 200 });
   });
 
   test("scales nutrients correctly for 50g (half)", () => {
-    const nutrients: NutrientsPer100 = { protein: 10, kcal: 200 };
+    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
     const result = scaleNutrientsByWeight(nutrients, 50);
 
-    expect(result).toEqual({ protein: 5, kcal: 100 });
+    expect(result).toEqual({ "203": 5, "208": 100 });
   });
 
   test("scales nutrients correctly for 200g (double)", () => {
-    const nutrients: NutrientsPer100 = { protein: 10, kcal: 200 };
+    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
     const result = scaleNutrientsByWeight(nutrients, 200);
 
-    expect(result).toEqual({ protein: 20, kcal: 400 });
+    expect(result).toEqual({ "203": 20, "208": 400 });
   });
 
   test("handles decimal weights correctly", () => {
-    const nutrients: NutrientsPer100 = { protein: 10, kcal: 200 };
+    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
     const result = scaleNutrientsByWeight(nutrients, 33.33);
 
-    expect(result.protein).toBeCloseTo(3.333, 3);
-    expect(result.kcal).toBeCloseTo(66.66, 2);
+    expect(result["203"]).toBeCloseTo(3.333, 3);
+    expect(result["208"]).toBeCloseTo(66.66, 2);
   });
 
   test("handles zero weight", () => {
-    const nutrients: NutrientsPer100 = { protein: 10, kcal: 200 };
+    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
     const result = scaleNutrientsByWeight(nutrients, 0);
 
-    expect(result).toEqual({ protein: 0, kcal: 0 });
+    expect(result).toEqual({ "203": 0, "208": 0 });
   });
 });
 
@@ -172,7 +169,7 @@ describe("calculateNutrients", () => {
       food: {
         legacyFoodInfo: null,
         nutritionInfo: {
-          nutrientsPer100: { protein: 20, kcal: 300 },
+          nutrientsPer100: { "203": 20, "208": 300 },
           nutrientSummary: [],
         },
         fdc_id: 0,
@@ -198,8 +195,8 @@ describe("calculateNutrients", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.value).toEqual({
-        protein: 30, // 20 * (150/100)
-        kcal: 450, // 300 * (150/100)
+        "203": 30, // protein: 20 * (150/100)
+        "208": 450, // kcal: 300 * (150/100)
       });
     }
   });
@@ -257,7 +254,7 @@ describe("calculateNutrients", () => {
         food: {
           legacyFoodInfo: null,
           nutritionInfo: {
-            nutrientsPer100: { protein: 25, kcal: 400 },
+            nutrientsPer100: { "203": 25, "208": 400 },
             nutrientSummary: [],
           },
           fdc_id: 0,
@@ -282,8 +279,8 @@ describe("calculateNutrients", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.value).toEqual({
-        protein: 25,
-        kcal: 400,
+        "203": 25,
+        "208": 400,
       });
     }
   });
@@ -310,8 +307,8 @@ describe("getGramAndNutrient", () => {
           legacyFoodInfo: null,
           nutritionInfo: {
             nutrientsPer100: {
-              protein: 10,
-              kcal: 200,
+              "203": 10,
+              "208": 200,
             },
             nutrientSummary: [],
           },
@@ -346,8 +343,8 @@ describe("getGramAndNutrient", () => {
 
     expect(result.nutrient.success).toBe(true);
     expect(result.nutrient.value).toEqual({
-      protein: 24, // (240/100) * 10
-      kcal: 480, // (240/100) * 200
+      "203": 24, // protein: (240/100) * 10
+      "208": 480, // kcal: (240/100) * 200
     });
   });
 
@@ -473,9 +470,7 @@ describe("convertAmountToPrice", () => {
 
     // Assert
     expect(result.success).toBe(false);
-    expect(result.error).toContain(
-      "conv_measure_to_kind: failed to convert '1 invalidunit' to target measure 'Money'",
-    );
+    expect(result.error).toContain("Error converting to money:");
   });
 });
 
@@ -487,7 +482,7 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("failed to convert");
+    expect(result.error).toContain("Failed to convert");
   });
 
   test("handles incompatible unit mappings", async () => {
@@ -504,7 +499,7 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     expect(result.success).toBe(false);
-    expect(result.error).toContain("failed to convert");
+    expect(result.error).toContain("Failed to convert");
   });
 
   test("handles zero values in mappings", async () => {
@@ -651,7 +646,7 @@ describe("WASM Error Scenarios", () => {
 
     // Should fail to convert to money since there's no path to money
     expect(result.success).toBe(false);
-    expect(result.error).toContain("failed to convert");
+    expect(result.error).toContain("Failed to convert");
   });
 
   test("handles custom unit names", async () => {
@@ -729,7 +724,7 @@ describe("calculateTotals", () => {
             food: {
               legacyFoodInfo: null,
               nutritionInfo: {
-                nutrientsPer100: { protein: 20, kcal: 200 },
+                nutrientsPer100: { "203": 20, "208": 200 },
                 nutrientSummary: [],
               },
               fdc_id: 0,
@@ -783,7 +778,7 @@ describe("calculateTotals", () => {
             food: {
               legacyFoodInfo: null,
               nutritionInfo: {
-                nutrientsPer100: { protein: 7, kcal: 130 },
+                nutrientsPer100: { "203": 7, "208": 130 },
                 nutrientSummary: [],
               },
               fdc_id: 0,
@@ -880,8 +875,8 @@ describe("calculateTotals", () => {
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
     expect(result.weight).toBe(0);
-    expect(result.protein).toBe(0);
-    expect(result.kcal).toBe(0);
+    expect(result.nutrients["203"] ?? 0).toBe(0);
+    expect(result.nutrients["208"] ?? 0).toBe(0);
     expect(result.missingByType.price).toEqual(["unknown ingredient"]);
     expect(result.missingByType.weight).toEqual(["unknown ingredient"]);
     expect(result.missingByType.nutrients).toEqual(["unknown ingredient"]);
@@ -933,7 +928,7 @@ describe("calculateTotals", () => {
             food: {
               legacyFoodInfo: null,
               nutritionInfo: {
-                nutrientsPer100: { protein: 20, kcal: 200 },
+                nutrientsPer100: { "203": 20, "208": 200 },
                 nutrientSummary: [],
               },
               fdc_id: 0,
@@ -1066,8 +1061,8 @@ describe("calculateTotals", () => {
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
     expect(result.weight).toBe(240); // Has weight
-    expect(result.protein).toBe(0);
-    expect(result.kcal).toBe(0);
+    expect(result.nutrients["203"] ?? 0).toBe(0);
+    expect(result.nutrients["208"] ?? 0).toBe(0);
     expect(result.missingByType.price).toEqual(["ingredient with weight only"]);
     expect(result.missingByType.weight).toEqual([]);
     expect(result.missingByType.nutrients).toEqual([
@@ -1115,8 +1110,8 @@ describe("calculateTotals", () => {
     expect(result.totalIngredients).toBe(1);
     expect(result.price).toBe(0);
     expect(result.weight).toBe(0);
-    expect(result.protein).toBe(0);
-    expect(result.kcal).toBe(0);
+    expect(result.nutrients["203"] ?? 0).toBe(0);
+    expect(result.nutrients["208"] ?? 0).toBe(0);
     // Error case should add to all missing categories
     expect(result.missingByType.price).toEqual(["problematic ingredient"]);
     expect(result.missingByType.weight).toEqual(["problematic ingredient"]);

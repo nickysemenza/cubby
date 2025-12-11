@@ -3,7 +3,11 @@ import { db } from './client';
 import * as schema from './schema';
 import { toFtsQuery } from './fts';
 import type { z } from 'zod';
-import { nutrient_unit_name, type DataType } from '@recipehub/usda-schemas';
+import {
+  nutrient_unit_name,
+  type DataType,
+  TIER1_CODES,
+} from '@recipehub/usda-schemas';
 import { foodSearch } from './types';
 
 // Drizzle prepared statements for better performance and type safety
@@ -341,8 +345,12 @@ export const getCompleteFoodInfo = async (fdcId: number) => {
     fdcId,
   });
 
-  const proteinNutrient = nutrients.find((n) => n.nutrient_nbr === '203');
-  const energyNutrient = nutrients.find((n) => n.nutrient_nbr === '208');
+  // Extract tier 1 nutrients as a generic record keyed by nutrient code
+  const nutrientsPer100 = Object.fromEntries(
+    nutrients
+      .filter((n) => n.nutrient_nbr && TIER1_CODES.includes(n.nutrient_nbr))
+      .map((n) => [n.nutrient_nbr, n.amount])
+  );
 
   const nutritionInfo = {
     nutrientSummary: nutrients.map((n) => ({
@@ -350,10 +358,7 @@ export const getCompleteFoodInfo = async (fdcId: number) => {
       name: n.name,
       unit: n.unit as z.infer<typeof nutrient_unit_name>,
     })),
-    nutrientsPer100: {
-      protein: proteinNutrient?.amount || 0,
-      kcal: energyNutrient?.amount || 0,
-    },
+    nutrientsPer100,
   };
 
   return {
