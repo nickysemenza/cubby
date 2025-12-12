@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test, beforeAll } from "vitest";
 import { parseCompactRecipe } from "./parser";
 import {
   format_amount,
@@ -6,6 +6,12 @@ import {
   parse_ingredient,
   is_valid_unit,
 } from "@recipehub/recipebridge";
+import { ensureWasm } from "~/lib/wasm";
+
+// Initialize WASM before all tests
+beforeAll(async () => {
+  await ensureWasm();
+});
 
 test("parsing works", async () => {
   const out = await parseCompactRecipe({

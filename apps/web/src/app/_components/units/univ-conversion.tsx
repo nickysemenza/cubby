@@ -7,7 +7,11 @@ import {
   type ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
 import { UnitMapping } from "~/schemas/unitmapping";
-import { type NutrientsPer100 } from "@recipehub/usda-schemas";
+import {
+  type NutrientsPer100,
+  TIER1_NUTRIENTS,
+  type NutrientKey,
+} from "@recipehub/usda-schemas";
 import { wasm } from "~/lib/wasm";
 import { SectionIngredientOut } from "~/schemas/recipe";
 
@@ -15,12 +19,59 @@ import { SectionIngredientOut } from "~/schemas/recipe";
 export type { NutrientsPer100 } from "@recipehub/usda-schemas";
 
 /**
- * Extracts nutrient information from a product
+ * Get nutrient target unit strings for WASM batch conversion
+ * Format: "g protein", "mg sodium", "kcal kcal", etc.
  */
-export const getProductNutrients = (product: {
-  food: { nutritionInfo: { nutrientsPer100: NutrientsPer100 } } | null;
-}): NutrientsPer100 | undefined => {
-  return product.food?.nutritionInfo?.nutrientsPer100;
+const getNutrientTargets = (): { key: NutrientKey; target: string }[] => {
+  return (
+    Object.entries(TIER1_NUTRIENTS) as [
+      NutrientKey,
+      (typeof TIER1_NUTRIENTS)[NutrientKey],
+    ][]
+  ).map(([key, info]) => ({
+    key,
+    target: `${info.unit.toLowerCase()} ${key}`,
+  }));
+};
+
+/**
+ * Convert an amount directly to all nutrients via WASM graph traversal
+ * This replaces the old TypeScript-based scaling approach
+ */
+export const convertAmountToNutrients = (
+  amount: Amount,
+  mappings: UnitMapping[],
+): Result<NutrientsPer100> => {
+  try {
+    const targets = getNutrientTargets();
+    const targetStrings = targets.map((t) => t.target);
+
+    // Batch convert to all nutrient targets in single WASM call
+    const results = wasm.conv_measure_to_nutrients(
+      mappings,
+      targetStrings,
+      amount,
+    ) as Record<string, WMeasure | null>;
+
+    // Map results back to nutrient codes
+    const nutrients: NutrientsPer100 = {};
+    for (const { key, target } of targets) {
+      const converted = results[target];
+      if (converted) {
+        const code = TIER1_NUTRIENTS[key].code;
+        nutrients[code] = converted.value;
+      }
+    }
+
+    // Check if we got any nutrients
+    if (Object.keys(nutrients).length === 0) {
+      return withFailure("No nutrient conversions succeeded");
+    }
+
+    return withSuccess(nutrients);
+  } catch (e) {
+    return withFailure(`Error converting to nutrients: ${e}`);
+  }
 };
 
 /**
@@ -28,23 +79,6 @@ export const getProductNutrients = (product: {
  */
 export const createEmptyNutrients = (): NutrientsPer100 =>
   ({}) as NutrientsPer100;
-
-/**
- * Scales nutrient values based on weight.
- * Nutrients are per 100g, so we scale by weightInGrams / 100.
- */
-export const scaleNutrientsByWeight = (
-  nutrients: NutrientsPer100,
-  weightInGrams: number,
-): NutrientsPer100 => {
-  const scaleFactor = weightInGrams / 100;
-  return Object.fromEntries(
-    Object.entries(nutrients).map(([code, amount]) => [
-      code,
-      amount * scaleFactor,
-    ]),
-  );
-};
 
 /**
  * Generic function to safely convert amounts using wasm
@@ -73,46 +107,19 @@ export const convertAmountToPrice = (
 };
 
 /**
- * Calculates nutrients based on weight in grams and product data
- */
-export const calculateNutrients = (
-  weightInGrams: number,
-  product: ProductWithMappingsAndFoodOut[] | undefined,
-): Result<NutrientsPer100> => {
-  // Try to find nutrient information from products
-  const firstNutrient = product
-    ?.map((p) => getProductNutrients(p))
-    .filter((x): x is NutrientsPer100 => x !== undefined)
-    .pop();
-
-  if (!firstNutrient) {
-    return withFailure(`Product(s) have no nutrients`);
-  }
-
-  // Scale nutrients based on weight
-  const scaledNutrient = scaleNutrientsByWeight(firstNutrient, weightInGrams);
-
-  return withSuccess(scaledNutrient);
-};
-
-/**
- * Extracts gram and nutrient results separately
- * (Previously known as getGramAndNutrient)
+ * Extracts gram and nutrient results separately using WASM for both conversions.
+ * Weight and nutrient conversions are now independent - both use the graph.
  */
 export const getGramAndNutrient = (
   amount: Amount,
   mappings: UnitMapping[],
-  product: ProductWithMappingsAndFoodOut[] | undefined,
+  _product: ProductWithMappingsAndFoodOut[] | undefined,
 ): { gram: Result<WMeasure>; nutrient: Result<NutrientsPer100> } => {
-  // Convert the amount to weight in grams - this should work independently
+  // Convert amount to weight via WASM graph
   const gramResult = safeConvertAmount(amount, mappings, "weight");
 
-  // Calculate nutrients if we have a successful weight conversion
-  const nutrientResult: Result<NutrientsPer100> = gramResult.success
-    ? calculateNutrients(gramResult.value.value, product)
-    : withFailure<NutrientsPer100>(
-        "Cannot calculate nutrients without weight conversion",
-      );
+  // Convert amount to nutrients via WASM graph (independent of weight conversion)
+  const nutrientResult = convertAmountToNutrients(amount, mappings);
 
   return {
     gram: gramResult,

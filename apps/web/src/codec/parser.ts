@@ -1,4 +1,5 @@
 import { type CompactRecipe, type ParsedCompactRecipe } from "./codec";
+import { wasmServer } from "~/lib/wasm";
 
 export const parseCompactRecipe = async (
   raw: CompactRecipe,
@@ -10,10 +11,7 @@ export const parseCompactRecipe = async (
       raw.sections.map(async (section) => ({
         ingredients: await Promise.all(
           section.ingredients.map(async (ingredient) => {
-            const { parse_ingredient } = await import(
-              "@recipehub/recipebridge"
-            );
-            const parsed = parse_ingredient(ingredient);
+            const parsed = await wasmServer.parse_ingredient(ingredient);
             return {
               name: parsed.name,
               amounts: parsed.amounts,

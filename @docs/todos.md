@@ -1,21 +1,17 @@
-## consolidate unit conversions to use WASM everywhere (future optimization)
-* **Current state**: Mixed approach with manual calculations + WASM
-  - Manual: `scaleNutrientsByWeight()`, `calculateNutrients()`, array summing
-  - WASM: Unit conversions via mappings and conversion graph
-* **Opportunity**: Consolidate to use WASM for ALL conversions
-  - Replace manual nutrition scaling with WASM graph traversal
-  - Benefits: Single source of truth, automatic chained conversions (cups → ml → g → kcal), extensible for new nutrients
-  - Challenges: Requires WASM/Rust changes (add "protein" MeasureKind), potential performance impact
-* **Implementation**:
-  - Add nutrition MeasureKinds to ingredient-parser Rust crate
-  - Replace `scaleNutrientsByWeight` with `safeConvertAmount(w, amount, mappings, "calories")`
-  - Replace `calculateNutrients` with WASM-based version
-  - Keep array operations manual (WASM can't sum arrays)
-* **Decision**: Current working solution is good. Consider full consolidation only if we need complex nutrition conversions or are already updating WASM code.
+## Future: WASM Conversion Capabilities
+
+Now that all unit conversions go through WASM with compound unit support:
+
+- [ ] **Price per nutrient**: Add "g protein → cent" mappings to calculate cost per gram of protein
+- [ ] **Daily value %**: Add "mg vitamin_c → % daily_value" mappings for nutrition labels
+- [ ] **Nutrient density comparisons**: Compare foods by protein-per-calorie ratios directly
+- [ ] **Batch ingredient parsing**: Parse entire recipe text and convert all amounts in one WASM call
+- [ ] **Custom unit aliases**: User-defined "1 serving = X g" with automatic nutrient calculation
+- [ ] **Inventory depletion preview**: "If I make this recipe, how much of each nutrient will I have left?"
 
 ## Enhanced Location Inventory Management
 
-* **Quick Inventory Management from Location View**
+- **Quick Inventory Management from Location View**
   - Update `location-detail.tsx`:
     - Add inline "Quick Add" button for new inventory items
     - Add inline edit capabilities for quantities
@@ -26,7 +22,7 @@
     - Product search with amount input
     - Add without leaving location page
 
-* **Additional Enhancements**
+- **Additional Enhancements**
   - Add checkboxes to location table for bulk delete/move
   - Add drag-drop between locations in tree view (future)
   - Update `lastBulkInventory` timestamp on bulk operations

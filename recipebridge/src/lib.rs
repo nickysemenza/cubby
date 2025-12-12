@@ -125,6 +125,62 @@ pub fn conv_measure_to_kind(
         .and_then(|m| to_js(&m, "measure").map(Into::into))
 }
 
+/// Convert a measure to multiple nutrient targets in a single call
+/// Returns a map of target unit -> converted measure (or null if conversion failed)
+#[wasm_bindgen]
+pub fn conv_measure_to_nutrients(
+    mappings: Vec<WUnitMapping>,
+    nutrient_targets: Vec<String>, // ["g protein", "mg sodium", "kcal kcal"]
+    measure_w: WMeasure,
+) -> Result<JsValue, String> {
+    let pairs = parse_mappings(mappings)?;
+    let measure = from_js::<RawAmount>(&measure_w, "measure")?.to_measure();
+
+    // Build JS object manually since serde_wasm_bindgen has issues with HashMap<String, Option<_>>
+    let result = js_sys::Object::new();
+    for target in nutrient_targets {
+        let kind = MeasureKind::Nutrient(target.clone());
+        let converted = measure
+            .clone()
+            .convert_measure_via_mappings(kind, pairs.clone());
+
+        let js_value = match converted {
+            Some(m) => {
+                let (value, upper_value, unit) = m.values();
+                let raw = RawAmount {
+                    unit,
+                    value,
+                    upper_value,
+                };
+                to_js(&raw, "measure")?
+            }
+            None => JsValue::NULL,
+        };
+
+        js_sys::Reflect::set(&result, &JsValue::from_str(&target), &js_value)
+            .map_err(|_| "Failed to set property on result object")?;
+    }
+
+    Ok(result.into())
+}
+
+/// Convert a measure to a specific unit target (e.g., "g protein")
+#[wasm_bindgen]
+pub fn conv_measure_to_unit(
+    mappings: Vec<WUnitMapping>,
+    target_unit: String,
+    measure_w: WMeasure,
+) -> Result<WMeasure, String> {
+    let pairs = parse_mappings(mappings)?;
+    let measure = from_js::<RawAmount>(&measure_w, "measure")?.to_measure();
+    let kind = MeasureKind::Nutrient(target_unit.clone());
+
+    measure
+        .convert_measure_via_mappings(kind, pairs)
+        .ok_or_else(|| format!("Failed to convert to '{target_unit}'"))
+        .and_then(|m| to_js(&m, "measure").map(Into::into))
+}
+
 #[wasm_bindgen]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, String> {
     recipe_scraper::scrape(body, url)
@@ -182,7 +238,10 @@ interface WCompactRecipe {
     image?: string;
 }
 
-type MeasureKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other";
+type MeasureKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;
+
+/** Result from conv_measure_to_nutrients - maps target unit to converted measure or null */
+type NutrientConversionResult = Record<string, WMeasure | null>;
 
 type RichItem =
     | { kind: "Text"; value: string }

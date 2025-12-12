@@ -2,19 +2,13 @@ import { expect, test, describe, beforeAll } from "vitest";
 import {
   getGramAndNutrient,
   convertAmountToPrice,
-  getProductNutrients,
+  convertAmountToNutrients,
   createEmptyNutrients,
-  scaleNutrientsByWeight,
-  calculateNutrients,
   calculateTotals,
 } from "./univ-conversion";
 import { type Amount } from "~/codec/codec";
 import { type UnitMapping } from "~/schemas/unitmapping";
-import {
-  type ProductWithMappingsAndFoodOut,
-  type IngredientWithFoodOut,
-} from "~/server/services/ingredient.service";
-import { NutrientsPer100 } from "@recipehub/usda-schemas";
+import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { SectionIngredientOut } from "~/schemas/recipe";
 import { unsafeProductId, unsafeIngredientId } from "~/schemas/identifiers";
 import { ensureWasm } from "~/lib/wasm";
@@ -22,97 +16,6 @@ import { ensureWasm } from "~/lib/wasm";
 // Initialize WASM before all tests
 beforeAll(async () => {
   await ensureWasm();
-});
-
-describe("getProductNutrients", () => {
-  test("returns nutrients when product has food data", () => {
-    const product: ProductWithMappingsAndFoodOut = {
-      id: unsafeProductId("test-id"),
-      name: "Test Product",
-      food: {
-        legacyFoodInfo: null,
-        nutritionInfo: {
-          nutrientsPer100: {
-            "203": 15.5,
-            "208": 250,
-          },
-          nutrientSummary: [],
-        },
-        fdc_id: 0,
-        brandedFoodInfo: null,
-        foodInfo: { data_type: "branded_food", description: "" },
-        portionInfoRaw: [],
-      },
-      upc: null,
-      ndb_number: null,
-      manufacturer: "",
-      model: null,
-      expectedQuantity: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      images: [],
-      unitMappings: [],
-    };
-
-    const result = getProductNutrients(product);
-
-    expect(result).toEqual({
-      "203": 15.5,
-      "208": 250,
-    });
-  });
-
-  test("returns undefined when product has no food data", () => {
-    const product: ProductWithMappingsAndFoodOut = {
-      id: unsafeProductId("test-id"),
-      name: "Test Product",
-      food: null,
-      upc: null,
-      ndb_number: null,
-      manufacturer: "",
-      model: null,
-      expectedQuantity: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      images: [],
-      unitMappings: [],
-    };
-
-    const result = getProductNutrients(product);
-
-    expect(result).toBeUndefined();
-  });
-
-  test("returns zero-value nutrients when product has nutrition info with zero values", () => {
-    const product: ProductWithMappingsAndFoodOut = {
-      id: unsafeProductId("test-id"),
-      name: "Test Product",
-      food: {
-        legacyFoodInfo: null,
-        nutritionInfo: {
-          nutrientSummary: [],
-          nutrientsPer100: { "203": 0, "208": 0 },
-        },
-        fdc_id: 0,
-        brandedFoodInfo: null,
-        foodInfo: { data_type: "branded_food", description: "" },
-        portionInfoRaw: [],
-      },
-      upc: null,
-      ndb_number: null,
-      manufacturer: "",
-      model: null,
-      expectedQuantity: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      images: [],
-      unitMappings: [],
-    };
-
-    const result = getProductNutrients(product);
-
-    expect(result).toEqual({ "203": 0, "208": 0 });
-  });
 });
 
 describe("createEmptyNutrients", () => {
@@ -123,171 +26,72 @@ describe("createEmptyNutrients", () => {
   });
 });
 
-describe("scaleNutrientsByWeight", () => {
-  test("scales nutrients correctly for 100g (no change)", () => {
-    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
-    const result = scaleNutrientsByWeight(nutrients, 100);
-
-    expect(result).toEqual({ "203": 10, "208": 200 });
-  });
-
-  test("scales nutrients correctly for 50g (half)", () => {
-    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
-    const result = scaleNutrientsByWeight(nutrients, 50);
-
-    expect(result).toEqual({ "203": 5, "208": 100 });
-  });
-
-  test("scales nutrients correctly for 200g (double)", () => {
-    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
-    const result = scaleNutrientsByWeight(nutrients, 200);
-
-    expect(result).toEqual({ "203": 20, "208": 400 });
-  });
-
-  test("handles decimal weights correctly", () => {
-    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
-    const result = scaleNutrientsByWeight(nutrients, 33.33);
-
-    expect(result["203"]).toBeCloseTo(3.333, 3);
-    expect(result["208"]).toBeCloseTo(66.66, 2);
-  });
-
-  test("handles zero weight", () => {
-    const nutrients: NutrientsPer100 = { "203": 10, "208": 200 };
-    const result = scaleNutrientsByWeight(nutrients, 0);
-
-    expect(result).toEqual({ "203": 0, "208": 0 });
-  });
-});
-
-describe("calculateNutrients", () => {
-  const mockProducts: ProductWithMappingsAndFoodOut[] = [
-    {
-      id: unsafeProductId("product-1"),
-      name: "Product 1",
-      food: {
-        legacyFoodInfo: null,
-        nutritionInfo: {
-          nutrientsPer100: { "203": 20, "208": 300 },
-          nutrientSummary: [],
-        },
-        fdc_id: 0,
-        brandedFoodInfo: null,
-        foodInfo: { data_type: "branded_food", description: "" },
-        portionInfoRaw: [],
-      },
-      upc: null,
-      ndb_number: null,
-      manufacturer: "",
-      model: null,
-      expectedQuantity: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      images: [],
-      unitMappings: [],
-    },
-  ];
-
-  test("calculates nutrients successfully with valid products", () => {
-    const result = calculateNutrients(150, mockProducts);
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.value).toEqual({
-        "203": 30, // protein: 20 * (150/100)
-        "208": 450, // kcal: 300 * (150/100)
-      });
-    }
-  });
-
-  test("returns failure when no products provided", () => {
-    const result = calculateNutrients(150, undefined);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("Product(s) have no nutrients");
-  });
-
-  test("returns failure when products have no nutrients", () => {
-    const productsWithoutNutrients: ProductWithMappingsAndFoodOut[] = [
+describe("convertAmountToNutrients", () => {
+  test("converts amount directly to nutrients via WASM graph", async () => {
+    const amount: Amount = { value: 2, unit: "cup" };
+    // Mappings: 1 cup = 125g, 100g = 10g protein, 100g = 200 kcal
+    const mappings: UnitMapping[] = [
       {
-        id: unsafeProductId("product-1"),
-        name: "Product 1",
-        food: null,
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        model: null,
-        expectedQuantity: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        images: [],
-        unitMappings: [],
+        a: { value: 1, unit: "cup" },
+        b: { value: 125, unit: "g" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+      {
+        a: { value: 100, unit: "g" },
+        b: { value: 10, unit: "g protein" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+      {
+        a: { value: 100, unit: "g" },
+        b: { value: 200, unit: "kcal kcal" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
-    const result = calculateNutrients(150, productsWithoutNutrients);
-
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("Product(s) have no nutrients");
-  });
-
-  test("uses first available nutrients from multiple products", () => {
-    const multipleProducts: ProductWithMappingsAndFoodOut[] = [
-      {
-        id: unsafeProductId("product-1"),
-        name: "Product 1",
-        food: null, // No nutrients
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        model: null,
-        expectedQuantity: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        images: [],
-        unitMappings: [],
-      },
-      {
-        id: unsafeProductId("product-2"),
-        name: "Product 2",
-        food: {
-          legacyFoodInfo: null,
-          nutritionInfo: {
-            nutrientsPer100: { "203": 25, "208": 400 },
-            nutrientSummary: [],
-          },
-          fdc_id: 0,
-          brandedFoodInfo: null,
-          foodInfo: { data_type: "branded_food", description: "" },
-          portionInfoRaw: [],
-        },
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        model: null,
-        expectedQuantity: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        images: [],
-        unitMappings: [],
-      },
-    ];
-
-    const result = calculateNutrients(100, multipleProducts);
+    const result = convertAmountToNutrients(amount, mappings);
 
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.value).toEqual({
-        "203": 25,
-        "208": 400,
-      });
+      // 2 cups = 250g, 250g / 100 * 10 = 25g protein
+      expect(result.value["203"]).toBeCloseTo(25, 0);
+      // 2 cups = 250g, 250g / 100 * 200 = 500 kcal
+      expect(result.value["208"]).toBeCloseTo(500, 0);
     }
+  });
+
+  test("returns failure when no nutrient mappings exist", async () => {
+    const amount: Amount = { value: 1, unit: "cup" };
+    const mappings: UnitMapping[] = [
+      {
+        a: { value: 1, unit: "cup" },
+        b: { value: 240, unit: "g" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+      // No nutrient mappings
+    ];
+
+    const result = convertAmountToNutrients(amount, mappings);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe("No nutrient conversions succeeded");
+  });
+
+  test("handles empty mappings array", async () => {
+    const amount: Amount = { value: 1, unit: "cup" };
+    const mappings: UnitMapping[] = [];
+
+    const result = convertAmountToNutrients(amount, mappings);
+
+    expect(result.success).toBe(false);
   });
 });
 
 describe("getGramAndNutrient", () => {
-  test("successfully converts to grams and calculates nutrients", async () => {
+  test("successfully converts to grams and nutrients via WASM", async () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
@@ -297,42 +101,22 @@ describe("getGramAndNutrient", () => {
         source: "test",
         sourceMetadata: { type: "manual" },
       },
-    ];
-
-    const product: ProductWithMappingsAndFoodOut[] = [
       {
-        id: unsafeProductId("123"),
-        name: "Test Product",
-        food: {
-          legacyFoodInfo: null,
-          nutritionInfo: {
-            nutrientsPer100: {
-              "203": 10,
-              "208": 200,
-            },
-            nutrientSummary: [],
-          },
-          fdc_id: 0,
-          brandedFoodInfo: null,
-          foodInfo: {
-            data_type: "branded_food",
-            description: "",
-          },
-          portionInfoRaw: [],
-        },
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        model: null,
-        expectedQuantity: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        images: [],
-        unitMappings: [],
+        a: { value: 100, unit: "g" },
+        b: { value: 10, unit: "g protein" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+      {
+        a: { value: 100, unit: "g" },
+        b: { value: 200, unit: "kcal kcal" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
       },
     ];
 
-    const result = getGramAndNutrient(amount, mappings, product);
+    // Product is no longer used for nutrient calculation (uses mappings instead)
+    const result = getGramAndNutrient(amount, mappings, undefined);
 
     // Assert
     expect(result.gram.success).toBe(true);
@@ -342,10 +126,12 @@ describe("getGramAndNutrient", () => {
     }
 
     expect(result.nutrient.success).toBe(true);
-    expect(result.nutrient.value).toEqual({
-      "203": 24, // protein: (240/100) * 10
-      "208": 480, // kcal: (240/100) * 200
-    });
+    if (result.nutrient.success) {
+      // 1 cup = 240g, 240g / 100 * 10 = 24g protein
+      expect(result.nutrient.value["203"]).toBeCloseTo(24, 0);
+      // 1 cup = 240g, 240g / 100 * 200 = 480 kcal
+      expect(result.nutrient.value["208"]).toBeCloseTo(480, 0);
+    }
   });
 
   test("handles error when conversion to weight fails", async () => {
@@ -364,8 +150,8 @@ describe("getGramAndNutrient", () => {
     expect(result.nutrient.success).toBe(false);
   });
 
-  test("handles missing nutrient data", async () => {
-    // Arrange
+  test("weight succeeds independently from nutrients", async () => {
+    // Arrange - mappings with weight but no nutrients
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
       {
@@ -374,26 +160,11 @@ describe("getGramAndNutrient", () => {
         source: "test",
         sourceMetadata: { type: "manual" },
       },
-    ];
-    const product: ProductWithMappingsAndFoodOut[] = [
-      {
-        id: unsafeProductId("123"),
-        name: "Test Product",
-        food: null, // No nutritionInfo
-        images: [],
-        unitMappings: [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        upc: null,
-        ndb_number: null,
-        manufacturer: "",
-        model: null,
-        expectedQuantity: null,
-      },
+      // No nutrient mappings
     ];
 
     // Act
-    const result = getGramAndNutrient(amount, mappings, product);
+    const result = getGramAndNutrient(amount, mappings, undefined);
 
     // Assert - Weight conversion should succeed
     expect(result.gram.success).toBe(true);
@@ -402,37 +173,42 @@ describe("getGramAndNutrient", () => {
       expect(result.gram.value.value).toBe(240);
     }
 
-    // Nutrient conversion should fail due to missing nutrition data
+    // Nutrient conversion should fail due to missing nutrient mappings
     expect(result.nutrient.success).toBe(false);
-    expect(result.nutrient.error).toBe("Product(s) have no nutrients");
+    expect(result.nutrient.error).toBe("No nutrient conversions succeeded");
   });
 
-  test("handles undefined product", async () => {
-    // Arrange
-    const amount: Amount = { value: 1, unit: "Cup" };
+  test("nutrients succeed independently from weight", async () => {
+    // Arrange - direct nutrient mapping without going through weight
+    const amount: Amount = { value: 1, unit: "serving" };
     const mappings: UnitMapping[] = [
+      // Direct serving to nutrient mapping (no weight path)
       {
-        a: { value: 1, unit: "Cup" },
-        b: { value: 240, unit: "gram" },
+        a: { value: 1, unit: "serving" },
+        b: { value: 15, unit: "g protein" },
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+      {
+        a: { value: 1, unit: "serving" },
+        b: { value: 200, unit: "kcal kcal" },
         source: "test",
         sourceMetadata: { type: "manual" },
       },
     ];
-    const product = undefined;
 
     // Act
-    const result = getGramAndNutrient(amount, mappings, product);
+    const result = getGramAndNutrient(amount, mappings, undefined);
 
-    // Assert - Weight conversion should succeed even with undefined product
-    expect(result.gram.success).toBe(true);
-    if (result.gram.success) {
-      expect(result.gram.value.unit).toBe("Gram");
-      expect(result.gram.value.value).toBe(240);
+    // Assert - Weight conversion should fail (no path to grams)
+    expect(result.gram.success).toBe(false);
+
+    // Nutrient conversion should succeed via direct mapping
+    expect(result.nutrient.success).toBe(true);
+    if (result.nutrient.success) {
+      expect(result.nutrient.value["203"]).toBeCloseTo(15, 0);
+      expect(result.nutrient.value["208"]).toBeCloseTo(200, 0);
     }
-
-    // Nutrient conversion should fail due to undefined product
-    expect(result.nutrient.success).toBe(false);
-    expect(result.nutrient.error).toBe("Product(s) have no nutrients");
   });
 });
 
@@ -759,6 +535,25 @@ describe("calculateTotals", () => {
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
+              // Nutrient mappings for WASM conversion
+              {
+                id: "map1-protein",
+                a: { value: 100, unit: "g" },
+                b: { value: 20, unit: "g protein" },
+                source: "test",
+                sourceMetadata: { type: "manual" },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: "map1-kcal",
+                a: { value: 100, unit: "g" },
+                b: { value: 200, unit: "kcal kcal" },
+                source: "test",
+                sourceMetadata: { type: "manual" },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
             ],
           },
         ],
@@ -808,6 +603,25 @@ describe("calculateTotals", () => {
                 id: "map4",
                 a: { value: 1, unit: "cup" },
                 b: { value: 2.5, unit: "dollar" },
+                source: "test",
+                sourceMetadata: { type: "manual" },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              // Nutrient mappings for WASM conversion
+              {
+                id: "map3-protein",
+                a: { value: 100, unit: "g" },
+                b: { value: 7, unit: "g protein" },
+                source: "test",
+                sourceMetadata: { type: "manual" },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: "map3-kcal",
+                a: { value: 100, unit: "g" },
+                b: { value: 130, unit: "kcal kcal" },
                 source: "test",
                 sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
@@ -958,6 +772,25 @@ describe("calculateTotals", () => {
                 id: "map2",
                 a: { value: 1, unit: "pound" },
                 b: { value: 5.99, unit: "dollar" },
+                source: "test",
+                sourceMetadata: { type: "manual" },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              // Nutrient mappings for WASM conversion
+              {
+                id: "map1-protein",
+                a: { value: 100, unit: "g" },
+                b: { value: 20, unit: "g protein" },
+                source: "test",
+                sourceMetadata: { type: "manual" },
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+              {
+                id: "map1-kcal",
+                a: { value: 100, unit: "g" },
+                b: { value: 200, unit: "kcal kcal" },
                 source: "test",
                 sourceMetadata: { type: "manual" },
                 createdAt: new Date(),

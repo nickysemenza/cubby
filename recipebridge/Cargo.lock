@@ -535,6 +535,7 @@ dependencies = [
  "console_error_panic_hook",
  "getrandom",
  "ingredient",
+ "js-sys",
  "recipe-scraper",
  "serde",
  "serde-wasm-bindgen",
