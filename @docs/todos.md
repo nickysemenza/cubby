@@ -1,3 +1,8 @@
+## Refactor: ingredient-parser unit_mapping.rs
+
+- [x] **Reuse parser module**: Created `parse_amount_string()` in `parser/helpers.rs` that handles "4 lb", "$5", "1/2 cup", etc. using nom + fraction parsing. `unit_mapping.rs` now uses this instead of duplicating parsing logic.
+- [ ] **Add canonical_unit() method to Measure**: Currently we call `unit().to_str()` to get singular form, but `to_str()` is meant for display. Add a dedicated `canonical_unit() -> String` method that returns the singular unit without pluralization logic.
+
 ## Future: WASM Conversion Capabilities
 
 Now that all unit conversions go through WASM with compound unit support:

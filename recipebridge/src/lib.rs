@@ -4,12 +4,11 @@ use ingredient::{
     from_str as parse_ingredient_str,
     rich_text::RichParser,
     unit::{is_valid, make_graph, print_graph, Measure, MeasureKind},
+    unit_mapping::parse_unit_mapping as parse_unit_mapping_internal,
+    util::truncate_3_decimals,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-
-// Constants
-const FLOAT_PRECISION: f64 = 1000.0;
 
 // WASM initialization - called automatically when module loads
 #[wasm_bindgen(start)]
@@ -30,15 +29,26 @@ pub struct RawAmount {
     upper_value: Option<f64>,
 }
 impl RawAmount {
+    pub fn from_measure(m: &Measure) -> Self {
+        let (value, upper_value, _) = m.values();
+        RawAmount {
+            value,
+            upper_value,
+            unit: m.unit().to_str(),
+        }
+    }
+
     pub fn to_measure(&self) -> Measure {
         Measure::from_parts(self.unit.as_str(), self.value, self.upper_value)
     }
 }
-/// Represents a mapping between two raw amounts
+/// Represents a mapping between two raw amounts, with optional source
 #[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
 pub struct UnitMapping {
     a: RawAmount,
     b: RawAmount,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
 }
 
 // WebAssembly type definitions
@@ -87,7 +97,7 @@ pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
         .to_measure()
         .values()
         .0;
-    Ok(f64::trunc(v * FLOAT_PRECISION) / FLOAT_PRECISION)
+    Ok(truncate_3_decimals(v))
 }
 
 #[wasm_bindgen]
@@ -210,6 +220,21 @@ pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
         .and_then(|k| to_js(&k.to_str(), "measure kind").map(Into::into))
 }
 
+/// Parse a unit mapping string in multiple formats:
+/// - "4 lb = $5" (conversion format)
+/// - "$5/4lb" (price-per format)
+/// - "4 lb = $5 @ costco" (with source)
+#[wasm_bindgen]
+pub fn parse_unit_mapping(input: String) -> Result<JsValue, String> {
+    let parsed = parse_unit_mapping_internal(&input)?;
+    let result = UnitMapping {
+        a: RawAmount::from_measure(&parsed.a),
+        b: RawAmount::from_measure(&parsed.b),
+        source: parsed.source,
+    };
+    to_js(&result, "parsed unit mapping")
+}
+
 // TypeScript type definitions
 #[wasm_bindgen(typescript_custom_section)]
 const ITEXT_STYLE: &str = r#"
@@ -228,6 +253,8 @@ interface WMeasure {
 interface WUnitMapping {
     a: WMeasure;
     b: WMeasure;
+    /** Optional source (e.g., "costco" from "4 lb = $5 @ costco") */
+    source?: string | null;
 }
 
 interface WCompactRecipe {

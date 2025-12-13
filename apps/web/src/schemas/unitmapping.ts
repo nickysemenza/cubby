@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
-import { amount } from "~/codec/codec";
-import { parseConversionString } from "./config-parsers";
+import { amount, type Amount } from "~/codec/codec";
 import { productId } from "./identifiers";
+import { wasmServer } from "~/lib/wasm";
 
 const sourceMetadata = z.discriminatedUnion("type", [
   z.object({
@@ -30,30 +30,62 @@ export const unitMappingWithMetadata = unitMappingBase.extend({
   sourceMetadata: sourceMetadata,
 });
 
-// Shorthand string format like "4 lb = $5 @ whole foods" - validation only
-export const unitMappingFlexible = z.string().refine(
-  (val) => {
-    try {
-      parseConversionString(val);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  {
-    error: "Invalid unit mapping format. Expected: '4 lb = $5 @ store'",
-  },
-);
+// Raw result from WASM (source can be undefined)
+interface WasmUnitMappingResult {
+  a: Amount;
+  b: Amount;
+  source?: string;
+}
 
-// Transform function to convert strings to objects
-export function transformUnitMapping(
-  val: string,
-): z.infer<typeof unitMappingBase> {
-  const parsed = parseConversionString(val);
+// Parsed unit mapping result (source normalized to null)
+interface ParsedUnitMappingResult {
+  a: Amount;
+  b: Amount;
+  source: string | null;
+}
+
+/**
+ * Parse a unit mapping string using WASM.
+ * Supports formats: "4 lb = $5", "$5/4lb", "4 lb = $5 @ store"
+ */
+export async function parseUnitMappingString(
+  input: string,
+): Promise<ParsedUnitMappingResult> {
+  const result = (await wasmServer.parse_unit_mapping(input)) as WasmUnitMappingResult;
+  // Normalize undefined to null for source field
   return {
-    a: parsed.from,
-    b: parsed.to,
-    source: parsed.source || null,
+    a: result.a,
+    b: result.b,
+    source: result.source ?? null,
+  };
+}
+
+/**
+ * Validate a unit mapping string (async).
+ * Returns true if valid, false if invalid.
+ */
+export async function isValidUnitMappingString(input: string): Promise<boolean> {
+  try {
+    await parseUnitMappingString(input);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Shorthand string format like "4 lb = $5 @ whole foods" - basic string validation
+// Note: Full format validation happens async via parseUnitMappingString
+export const unitMappingFlexible = z.string().min(1);
+
+// Transform function to convert strings to objects (async)
+export async function transformUnitMapping(
+  val: string,
+): Promise<z.infer<typeof unitMappingBase>> {
+  const parsed = await parseUnitMappingString(val);
+  return {
+    a: parsed.a,
+    b: parsed.b,
+    source: parsed.source,
   };
 }
 

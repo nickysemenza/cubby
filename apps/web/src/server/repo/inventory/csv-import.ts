@@ -30,7 +30,7 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import { type ProductTopLevelOut } from "~/schemas/product";
-import { parseConversionString } from "~/schemas/config-parsers";
+import { parseUnitMappingString } from "~/schemas/unitmapping";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { amount } from "~/codec/codec";
 import { getTotalProductQuantity } from "./helpers";
@@ -208,14 +208,14 @@ const createUnitMappingsFromString = async (
 
   for (const part of mappingParts) {
     try {
-      const { from, to, source } = parseConversionString(part);
+      const parsed = await parseUnitMappingString(part);
       await getDb(db)
         .insert(productUnitMappings)
         .values({
           productId,
-          a: from,
-          b: to,
-          source: source ?? "csv-import",
+          a: parsed.a,
+          b: parsed.b,
+          source: parsed.source ?? "csv-import",
         });
     } catch (e) {
       // Log warning but continue with other mappings
