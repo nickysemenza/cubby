@@ -6,7 +6,7 @@ import { wasmServer } from "~/lib/wasm";
  */
 export const isMoneyUnit = async (unit: string): Promise<boolean> => {
   try {
-    return (await wasmServer.measure_kind({ value: 1, unit })) === "money";
+    return (await wasmServer.amount_kind({ value: 1, unit })) === "money";
   } catch {
     return false;
   }

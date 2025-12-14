@@ -13,7 +13,7 @@ import { SpacedContainer } from "~/components/ui/spaced-container";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
-import { tryFormatMeasure } from "../_components/inventory/format-amount";
+import { tryFormatAmount } from "../_components/inventory/format-amount";
 import { NoneState } from "../_components/NoneState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
@@ -151,7 +151,7 @@ export function ProductList() {
         <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
             {info.getValue().map((e: InventoryEntryWithLocation) => (
-              <div key={e.id}>{tryFormatMeasure(e.amount)}</div>
+              <div key={e.id}>{tryFormatAmount(e.amount)}</div>
             ))}
           </div>
           {}

@@ -5,7 +5,7 @@ import { renderValueOrError } from "~/misc/result";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { wasm } from "~/lib/wasm";
 import { convertAmountToPrice } from "../units/univ-conversion";
-import { WMeasure } from "@recipehub/recipebridge";
+import { WAmount } from "@recipehub/recipebridge";
 import {
   Tooltip,
   TooltipContent,
@@ -29,7 +29,7 @@ export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
   return (
     <div className="flex flex-col">
       <div>{renderValueOrError(price, (p) => wasm.format_amount(p))}</div>
-      <div>{tryFormatMeasure(amount)}</div>
+      <div>{tryFormatAmount(amount)}</div>
     </div>
   );
 };
@@ -37,11 +37,11 @@ export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
 /**
  * Safely formats a measure, returning error string on failure
  */
-export const tryFormatMeasure = (measure: WMeasure): string => {
+export const tryFormatAmount = (amount: WAmount): string => {
   try {
-    return wasm.format_amount(measure);
+    return wasm.format_amount(amount);
   } catch (error) {
-    return `Error formatting measure: ${error}`;
+    return `Error formatting amount: ${error}`;
   }
 };
 
@@ -55,7 +55,7 @@ export const getHoverableMeasureUnitIcon = (x: string) => (
         <ValidInvalidIcon isValid={wasm.is_valid_unit(x, [])} />
       </TooltipTrigger>
       <TooltipContent>
-        <p>{wasm.measure_kind({ unit: x, value: 1 })}</p>
+        <p>{wasm.amount_kind({ unit: x, value: 1 })}</p>
       </TooltipContent>
     </Tooltip>
   </TooltipProvider>

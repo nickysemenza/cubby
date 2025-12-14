@@ -11,7 +11,7 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
-import { tryFormatMeasure } from "../_components/inventory/format-amount";
+import { tryFormatAmount } from "../_components/inventory/format-amount";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
@@ -109,7 +109,7 @@ export function LocationList() {
             {entries.map((entry: InventoryEntryWithProduct) => (
               <div key={entry.id} className="flex items-center gap-1">
                 <span className="text-muted-foreground">
-                  {tryFormatMeasure(entry.amount)}
+                  {tryFormatAmount(entry.amount)}
                 </span>
                 <ProductPillLink product={entry.product} />
               </div>

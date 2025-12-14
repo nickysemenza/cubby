@@ -353,9 +353,9 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
 const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
   const amounts = amount.amounts;
 
-  // Memoize formatted measure values
+  // Memoize formatted amount values
   const formattedAmounts = useMemo(() => {
-    return amounts.map((a) => wasm.format_measure_value(a));
+    return amounts.map((a) => wasm.format_amount_value(a));
   }, [amounts]);
 
   return (

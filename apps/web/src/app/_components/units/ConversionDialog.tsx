@@ -5,7 +5,7 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { MeasureKind, WMeasure } from "@recipehub/recipebridge";
+import { AmountKind, WAmount } from "@recipehub/recipebridge";
 import { amount, Amount } from "~/codec/codec";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { wasm } from "~/lib/wasm";
@@ -43,7 +43,7 @@ interface ConversionDialogProps {
   mappings: UnitMapping[];
 }
 
-const measureKinds: MeasureKind[] = [
+const amountKinds: AmountKind[] = [
   "weight",
   "volume",
   "money",
@@ -57,8 +57,8 @@ const measureKinds: MeasureKind[] = [
 export function ConversionDialog({ mappings }: ConversionDialogProps) {
   const [open, setOpen] = useState(false);
   const [conversions, setConversions] = useState<
-    Record<MeasureKind, Result<WMeasure>>
-  >({} as Record<MeasureKind, Result<WMeasure>>);
+    Record<AmountKind, Result<WAmount>>
+  >({} as Record<AmountKind, Result<WAmount>>);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -73,12 +73,12 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
   // Function to perform conversions using useCallback for memoization
   const performConversions = React.useCallback(
     (currentAmount: Amount) => {
-      const results: Record<MeasureKind, Result<WMeasure>> = {} as Record<
-        MeasureKind,
-        Result<WMeasure>
+      const results: Record<AmountKind, Result<WAmount>> = {} as Record<
+        AmountKind,
+        Result<WAmount>
       >;
 
-      for (const kind of measureKinds) {
+      for (const kind of amountKinds) {
         results[kind] = safeConvertAmount(currentAmount, mappings, kind);
       }
 
@@ -182,7 +182,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
                 <div className="mt-6 space-y-4">
                   <h4 className="text-sm font-medium">Conversion Results</h4>
                   <div className="space-y-2">
-                    {measureKinds.map((kind) => {
+                    {amountKinds.map((kind) => {
                       const result = conversions[kind];
                       const Meta = kindIconMap[kind];
                       return (

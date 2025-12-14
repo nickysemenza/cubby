@@ -4,7 +4,7 @@ use ingredient::{
     from_str as parse_ingredient_str,
     rich_text::RichParser,
     unit::{is_valid, make_graph, print_graph, Measure, MeasureKind},
-    unit_mapping::parse_unit_mapping as parse_unit_mapping_internal,
+    unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
     util::truncate_3_decimals,
 };
 use serde::{Deserialize, Serialize};
@@ -21,51 +21,21 @@ pub fn init() {
 /// A pair of measures that can be used for unit conversion
 type UnitMappingPairs = Vec<(Measure, Measure)>;
 
-/// RawMeasure is a measure with the unit as a string
-#[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub struct RawAmount {
-    unit: String,
-    value: f64,
-    upper_value: Option<f64>,
-}
-impl RawAmount {
-    pub fn from_measure(m: &Measure) -> Self {
-        let (value, upper_value, _) = m.values();
-        RawAmount {
-            value,
-            upper_value,
-            unit: m.unit().to_str(),
-        }
-    }
-
-    pub fn to_measure(&self) -> Measure {
-        Measure::from_parts(self.unit.as_str(), self.value, self.upper_value)
-    }
-}
-/// Represents a mapping between two raw amounts, with optional source
-#[derive(Clone, PartialEq, PartialOrd, Debug, Serialize, Deserialize)]
-pub struct UnitMapping {
-    a: RawAmount,
-    b: RawAmount,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    source: Option<String>,
-}
-
 // WebAssembly type definitions
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "WIngredient")]
     pub type WIngredient;
-    #[wasm_bindgen(typescript_type = "WMeasure")]
-    pub type WMeasure;
+    #[wasm_bindgen(typescript_type = "WAmount")]
+    pub type WAmount;
     #[wasm_bindgen(typescript_type = "WUnitMapping")]
     pub type WUnitMapping;
     #[wasm_bindgen(typescript_type = "WCompactRecipe")]
     pub type WCompactRecipe;
     #[wasm_bindgen(typescript_type = "RichItem[]")]
     pub type RichItems;
-    #[wasm_bindgen(typescript_type = "MeasureKind")]
-    pub type WMeasureKind;
+    #[wasm_bindgen(typescript_type = "AmountKind")]
+    pub type WAmountKind;
 }
 
 // JS <-> Rust serde boundary
@@ -81,22 +51,15 @@ fn to_js<T: Serialize>(v: &T, ctx: &str) -> Result<JsValue, String> {
 fn parse_mappings(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, String> {
     mappings
         .iter()
-        .map(|m| from_js::<UnitMapping>(m, "unit mapping"))
+        .map(|m| from_js::<ParsedUnitMapping>(m, "unit mapping"))
         .collect::<Result<Vec<_>, _>>()
-        .map(|v| {
-            v.into_iter()
-                .map(|m| (m.a.to_measure(), m.b.to_measure()))
-                .collect()
-        })
+        .map(|v| v.into_iter().map(|m| (m.a, m.b)).collect())
 }
 
 // Public API
 #[wasm_bindgen]
-pub fn format_measure_value(input: &WMeasure) -> Result<f64, String> {
-    let v = from_js::<RawAmount>(input, "measure")?
-        .to_measure()
-        .values()
-        .0;
+pub fn format_amount_value(input: &WAmount) -> Result<f64, String> {
+    let v = from_js::<Measure>(input, "amount")?.values().0;
     Ok(truncate_3_decimals(v))
 }
 
@@ -106,10 +69,8 @@ pub fn parse_ingredient(input: &str) -> Result<WIngredient, String> {
 }
 
 #[wasm_bindgen]
-pub fn format_amount(amount: &WMeasure) -> Result<String, String> {
-    Ok(from_js::<RawAmount>(amount, "measure")?
-        .to_measure()
-        .to_string())
+pub fn format_amount(amount: &WAmount) -> Result<String, String> {
+    Ok(from_js::<Measure>(amount, "amount")?.to_string())
 }
 
 #[wasm_bindgen]
@@ -118,33 +79,33 @@ pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String
 }
 
 #[wasm_bindgen]
-pub fn conv_measure_to_kind(
+pub fn conv_amount_to_kind(
     mappings: Vec<WUnitMapping>,
-    target_kind_w: WMeasureKind,
-    measure_w: WMeasure,
-) -> Result<WMeasure, String> {
+    target_kind_w: WAmountKind,
+    amount_w: WAmount,
+) -> Result<WAmount, String> {
     let pairs = parse_mappings(mappings)?;
-    let measure = from_js::<RawAmount>(&measure_w, "measure")?.to_measure();
-    let kind_str: String = from_js(target_kind_w, "measure kind")?;
+    let measure: Measure = from_js(&amount_w, "amount")?;
+    let kind_str: String = from_js(target_kind_w, "amount kind")?;
     let kind = MeasureKind::from_str(&kind_str)
-        .map_err(|_| format!("Invalid measure kind: {kind_str}"))?;
+        .map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
 
     measure
         .convert_measure_via_mappings(kind.clone(), pairs)
         .ok_or_else(|| format!("Failed to convert '{measure}' to '{kind}'"))
-        .and_then(|m| to_js(&m, "measure").map(Into::into))
+        .and_then(|m| to_js(&m, "amount").map(Into::into))
 }
 
-/// Convert a measure to multiple nutrient targets in a single call
-/// Returns a map of target unit -> converted measure (or null if conversion failed)
+/// Convert an amount to multiple nutrient targets in a single call
+/// Returns a map of target unit -> converted amount (or null if conversion failed)
 #[wasm_bindgen]
-pub fn conv_measure_to_nutrients(
+pub fn conv_amount_to_nutrients(
     mappings: Vec<WUnitMapping>,
     nutrient_targets: Vec<String>, // ["g protein", "mg sodium", "kcal kcal"]
-    measure_w: WMeasure,
+    amount_w: WAmount,
 ) -> Result<JsValue, String> {
     let pairs = parse_mappings(mappings)?;
-    let measure = from_js::<RawAmount>(&measure_w, "measure")?.to_measure();
+    let measure: Measure = from_js(&amount_w, "amount")?;
 
     // Build JS object manually since serde_wasm_bindgen has issues with HashMap<String, Option<_>>
     let result = js_sys::Object::new();
@@ -155,15 +116,7 @@ pub fn conv_measure_to_nutrients(
             .convert_measure_via_mappings(kind, pairs.clone());
 
         let js_value = match converted {
-            Some(m) => {
-                let (value, upper_value, unit) = m.values();
-                let raw = RawAmount {
-                    unit,
-                    value,
-                    upper_value,
-                };
-                to_js(&raw, "measure")?
-            }
+            Some(m) => to_js(&m, "amount")?,
             None => JsValue::NULL,
         };
 
@@ -174,21 +127,21 @@ pub fn conv_measure_to_nutrients(
     Ok(result.into())
 }
 
-/// Convert a measure to a specific unit target (e.g., "g protein")
+/// Convert an amount to a specific unit target (e.g., "g protein")
 #[wasm_bindgen]
-pub fn conv_measure_to_unit(
+pub fn conv_amount_to_unit(
     mappings: Vec<WUnitMapping>,
     target_unit: String,
-    measure_w: WMeasure,
-) -> Result<WMeasure, String> {
+    amount_w: WAmount,
+) -> Result<WAmount, String> {
     let pairs = parse_mappings(mappings)?;
-    let measure = from_js::<RawAmount>(&measure_w, "measure")?.to_measure();
+    let measure: Measure = from_js(&amount_w, "amount")?;
     let kind = MeasureKind::Nutrient(target_unit.clone());
 
     measure
         .convert_measure_via_mappings(kind, pairs)
         .ok_or_else(|| format!("Failed to convert to '{target_unit}'"))
-        .and_then(|m| to_js(&m, "measure").map(Into::into))
+        .and_then(|m| to_js(&m, "amount").map(Into::into))
 }
 
 #[wasm_bindgen]
@@ -212,12 +165,11 @@ pub fn is_valid_unit(unit: &str, extra_units: Vec<String>) -> bool {
 }
 
 #[wasm_bindgen]
-pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
-    from_js::<RawAmount>(amount, "measure")?
-        .to_measure()
+pub fn amount_kind(amount: &WAmount) -> Result<WAmountKind, String> {
+    from_js::<Measure>(amount, "amount")?
         .kind()
         .map_err(|_| "Unknown unit kind".to_string())
-        .and_then(|k| to_js(&k.to_str(), "measure kind").map(Into::into))
+        .and_then(|k| to_js(&k.to_str(), "amount kind").map(Into::into))
 }
 
 /// Parse a unit mapping string in multiple formats:
@@ -226,33 +178,27 @@ pub fn measure_kind(amount: &WMeasure) -> Result<WMeasureKind, String> {
 /// - "4 lb = $5 @ costco" (with source)
 #[wasm_bindgen]
 pub fn parse_unit_mapping(input: String) -> Result<JsValue, String> {
-    let parsed = parse_unit_mapping_internal(&input)?;
-    let result = UnitMapping {
-        a: RawAmount::from_measure(&parsed.a),
-        b: RawAmount::from_measure(&parsed.b),
-        source: parsed.source,
-    };
-    to_js(&result, "parsed unit mapping")
+    to_js(&parse_unit_mapping_internal(&input)?, "parsed unit mapping")
 }
 
 // TypeScript type definitions
 #[wasm_bindgen(typescript_custom_section)]
 const ITEXT_STYLE: &str = r#"
 interface WIngredient {
-    amounts: WMeasure[];
+    amounts: WAmount[];
     modifier?: string;
     name: string;
 }
 
-interface WMeasure {
+interface WAmount {
     unit: string;
     value: number;
     upper_value?: number;
 }
 
 interface WUnitMapping {
-    a: WMeasure;
-    b: WMeasure;
+    a: WAmount;
+    b: WAmount;
     /** Optional source (e.g., "costco" from "4 lb = $5 @ costco") */
     source?: string | null;
 }
@@ -265,13 +211,13 @@ interface WCompactRecipe {
     image?: string;
 }
 
-type MeasureKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;
+type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;
 
-/** Result from conv_measure_to_nutrients - maps target unit to converted measure or null */
-type NutrientConversionResult = Record<string, WMeasure | null>;
+/** Result from conv_amount_to_nutrients - maps target unit to converted amount or null */
+type NutrientConversionResult = Record<string, WAmount | null>;
 
 type RichItem =
     | { kind: "Text"; value: string }
     | { kind: "Ing"; value: string }
-    | { kind: "Measure"; value: WMeasure[] };
+    | { kind: "Measure"; value: WAmount[] };
 "#;

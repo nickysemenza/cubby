@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useMemo } from "react";
-import { MeasureKind } from "@recipehub/recipebridge";
+import { AmountKind } from "@recipehub/recipebridge";
 import { UnitMapping } from "~/schemas/unitmapping";
 import { safeConvertAmount } from "./univ-conversion";
 import { ConversionDialog } from "./ConversionDialog";
@@ -22,8 +22,8 @@ interface ConversionCapabilitiesProps {
 
 interface ConversionTest {
   unit: string;
-  from: MeasureKind;
-  to: MeasureKind;
+  from: AmountKind;
+  to: AmountKind;
 }
 
 const testConversions: ConversionTest[] = [

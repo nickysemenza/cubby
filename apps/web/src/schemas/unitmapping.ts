@@ -51,7 +51,9 @@ interface ParsedUnitMappingResult {
 export async function parseUnitMappingString(
   input: string,
 ): Promise<ParsedUnitMappingResult> {
-  const result = (await wasmServer.parse_unit_mapping(input)) as WasmUnitMappingResult;
+  const result = (await wasmServer.parse_unit_mapping(
+    input,
+  )) as WasmUnitMappingResult;
   // Normalize undefined to null for source field
   return {
     a: result.a,
@@ -64,7 +66,9 @@ export async function parseUnitMappingString(
  * Validate a unit mapping string (async).
  * Returns true if valid, false if invalid.
  */
-export async function isValidUnitMappingString(input: string): Promise<boolean> {
+export async function isValidUnitMappingString(
+  input: string,
+): Promise<boolean> {
   try {
     await parseUnitMappingString(input);
     return true;

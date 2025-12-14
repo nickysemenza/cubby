@@ -60,11 +60,18 @@ describe("parseUnitMappingString", () => {
     const examples = [
       {
         input: "1 stick = 113g",
-        expected: { a: { value: 1, unit: "stick" }, b: { value: 113, unit: "g" } },
+        expected: {
+          a: { value: 1, unit: "stick" },
+          b: { value: 113, unit: "g" },
+        },
       },
       {
         input: "12 eggs = $7 @ store",
-        expected: { a: { value: 12, unit: "egg" }, b: { value: 7, unit: "$" }, source: "store" },
+        expected: {
+          a: { value: 12, unit: "egg" },
+          b: { value: 7, unit: "$" },
+          source: "store",
+        },
       },
       {
         input: "2 lbs = $6",

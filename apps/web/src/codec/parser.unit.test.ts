@@ -2,7 +2,7 @@ import { expect, test, beforeAll } from "vitest";
 import { parseCompactRecipe } from "./parser";
 import {
   format_amount,
-  measure_kind,
+  amount_kind,
   parse_ingredient,
   is_valid_unit,
 } from "@recipehub/recipebridge";
@@ -59,16 +59,16 @@ test("wasm unknown ingrecient", () => {
   expect(parseB.amounts[0]!.unit).toEqual("clove");
 });
 
-test("wasm measure_kind", () => {
-  expect(measure_kind({ value: 1, unit: "Cup" })).toEqual("volume");
-  expect(measure_kind({ value: 1, unit: "gram" })).toEqual("weight");
-  expect(measure_kind({ value: 1, unit: "dollar" })).toEqual("money");
-  expect(measure_kind({ value: 1, unit: "kcal" })).toEqual("calories");
-  expect(measure_kind({ value: 1, unit: "second" })).toEqual("time");
-  // expect(measure_kind({ value: 1, unit: "farenheit" })).toEqual("temperature");
-  expect(measure_kind({ value: 1, unit: "inch" })).toEqual("length");
-  expect(measure_kind({ value: 1, unit: "foo" })).toEqual("other");
-  expect(measure_kind({ value: 1, unit: "Whole" })).toEqual("other");
+test("wasm amount_kind", () => {
+  expect(amount_kind({ value: 1, unit: "Cup" })).toEqual("volume");
+  expect(amount_kind({ value: 1, unit: "gram" })).toEqual("weight");
+  expect(amount_kind({ value: 1, unit: "dollar" })).toEqual("money");
+  expect(amount_kind({ value: 1, unit: "kcal" })).toEqual("calories");
+  expect(amount_kind({ value: 1, unit: "second" })).toEqual("time");
+  // expect(amount_kind({ value: 1, unit: "farenheit" })).toEqual("temperature");
+  expect(amount_kind({ value: 1, unit: "inch" })).toEqual("length");
+  expect(amount_kind({ value: 1, unit: "foo" })).toEqual("other");
+  expect(amount_kind({ value: 1, unit: "Whole" })).toEqual("other");
 });
 
 test("wasm is_valid_unit", () => {

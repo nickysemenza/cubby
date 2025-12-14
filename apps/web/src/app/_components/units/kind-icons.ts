@@ -9,10 +9,10 @@ import {
   Ruler,
   Shapes,
 } from "lucide-react";
-import { type MeasureKind } from "@recipehub/recipebridge";
+import { type AmountKind } from "@recipehub/recipebridge";
 
 export const kindIconMap: Record<
-  MeasureKind,
+  AmountKind,
   { Icon: LucideIcon; label: string }
 > = {
   weight: { Icon: Scale, label: "Weight" },
@@ -25,6 +25,6 @@ export const kindIconMap: Record<
   other: { Icon: Shapes, label: "Other" },
 };
 
-export function formatKindsLabel(from: MeasureKind, to: MeasureKind): string {
+export function formatKindsLabel(from: AmountKind, to: AmountKind): string {
   return `${kindIconMap[from].label} ↔ ${kindIconMap[to].label}`;
 }

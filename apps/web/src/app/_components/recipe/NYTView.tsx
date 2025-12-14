@@ -22,7 +22,7 @@ export const NYTView: React.FC<{
                   {i.amounts
                     .filter(
                       (a) =>
-                        !["money", "calories"].includes(wasm.measure_kind(a)),
+                        !["money", "calories"].includes(wasm.amount_kind(a)),
                     )
                     .map((a) => wasm.format_amount(a))
                     .join(" / ")}

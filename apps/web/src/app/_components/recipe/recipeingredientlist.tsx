@@ -20,7 +20,7 @@ import {
   type IngredientDataItem,
 } from "~/app/_components/units/univ-conversion";
 import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
-import { tryFormatMeasure } from "../inventory/format-amount";
+import { tryFormatAmount } from "../inventory/format-amount";
 import { IngredientPillLink, RecipePillLink } from "../EntityPill";
 import {
   EntitySummaryCard,
@@ -83,11 +83,11 @@ export const RecipeIngredientList: React.FC<{
       cell: (info) => {
         const amounts = info.getValue();
 
-        // Format each amount using tryFormatMeasure
+        // Format each amount using tryFormatAmount
         return (
           <div className="space-y-0.5 text-sm">
             {amounts.map((amount, index) => (
-              <div key={index}>{tryFormatMeasure(amount)}</div>
+              <div key={index}>{tryFormatAmount(amount)}</div>
             ))}
           </div>
         );
@@ -99,7 +99,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
         return (
-          measure && renderValueOrError(measure, (m) => tryFormatMeasure(m))
+          measure && renderValueOrError(measure, (m) => tryFormatAmount(m))
         );
       },
     }),
@@ -109,7 +109,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
         return (
-          measure && renderValueOrError(measure, (m) => tryFormatMeasure(m))
+          measure && renderValueOrError(measure, (m) => tryFormatAmount(m))
         );
       },
     }),
