@@ -115,16 +115,19 @@ const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
 
   return Object.entries(nutrients)
     .filter(([_, amount]) => amount > 0)
-    .map(([code, amount]) => ({
-      a: { value: 100, unit: "g" },
-      b: {
-        value: amount,
-        unit: `${getNutrientUnit(code).toLowerCase()} ${getNutrientKey(code)}`,
-      },
-      // e.g., "g protein", "kcal kcal", "mg sodium", "ug vitamin_b12"
-      source: `USDA nutrition`,
-      sourceMetadata: { type: "food" as const, fdcId: fdc_id },
-    }));
+    .map(([code, amount]) => {
+      const unit = getNutrientUnit(code).toLowerCase();
+      const key = getNutrientKey(code);
+      // Avoid duplication like "kcal kcal" - use just the unit when they match
+      const unitStr = unit === key ? unit : `${unit} ${key}`;
+      return {
+        a: { value: 100, unit: "g" },
+        b: { value: amount, unit: unitStr },
+        // e.g., "g protein", "kcal", "mg sodium", "ug vitamin_b12"
+        source: `USDA nutrition`,
+        sourceMetadata: { type: "food" as const, fdcId: fdc_id },
+      };
+    });
 };
 
 export const unitMappingsFromFood = async (

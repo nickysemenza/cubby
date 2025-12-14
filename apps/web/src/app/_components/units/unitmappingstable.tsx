@@ -89,9 +89,9 @@ export const UnitMappingsTable: React.FC<{
     <Table className="table-auto text-xs">
       <TableHeader>
         <TableRow>
-          <TableHead className="p-0.5">a</TableHead>
-          <TableHead className="p-0.5">b</TableHead>
-          <TableHead className="p-0.5">source</TableHead>
+          <TableHead className="p-0.5">From</TableHead>
+          <TableHead className="p-0.5">To</TableHead>
+          <TableHead className="p-0.5">Source</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

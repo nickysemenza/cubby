@@ -20,12 +20,17 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
   let error: unknown = null;
 
   try {
-    graph = wasm
-      .graph_unit_mappings(unitMapping)
-      .replace(
-        "digraph {",
-        `digraph { rankdir=LR; nodesep=0.5;bgcolor="transparent";`,
-      );
+    graph = wasm.graph_unit_mappings(unitMapping).replace(
+      "digraph {",
+      `digraph {
+          layout=fdp;
+          overlap=false;
+          sep="+10";
+          bgcolor="transparent";
+          node [fontsize=11, fontname="sans-serif", shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#64748b"];
+          edge [fontsize=9, fontname="sans-serif", color="#475569", penwidth=1.5, len=1.5];
+        `,
+    );
   } catch (e) {
     error = e;
     console.log({ e });
@@ -36,15 +41,17 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
   }
 
   return (
-    <Graphviz
-      dot={graph!}
-      options={{
-        width: 300,
-        height: 150,
-        background: "transparent",
-        useWorker: false,
-      }}
-      className="w-full"
-    />
+    <div className="overflow-auto rounded border bg-slate-50 p-2">
+      <Graphviz
+        dot={graph!}
+        options={{
+          fit: true,
+          width: 380,
+          height: 280,
+          zoom: true,
+          useWorker: false,
+        }}
+      />
+    </div>
   );
 };

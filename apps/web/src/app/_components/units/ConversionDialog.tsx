@@ -25,6 +25,8 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { Scale } from "lucide-react";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Label } from "~/components/ui/label";
 import { kindIconMap } from "./kind-icons";
 import { Result } from "~/misc/result-types";
 import { FormWrapper } from "~/app/_components/form-utils";
@@ -54,11 +56,19 @@ const amountKinds: AmountKind[] = [
   "other",
 ];
 
+const isNutrientMapping = (m: UnitMapping) => m.source === "USDA nutrition";
+
 export function ConversionDialog({ mappings }: ConversionDialogProps) {
   const [open, setOpen] = useState(false);
+  const [showNutrients, setShowNutrients] = useState(false);
   const [conversions, setConversions] = useState<
     Record<AmountKind, Result<WAmount>>
   >({} as Record<AmountKind, Result<WAmount>>);
+
+  const filteredMappings = showNutrients
+    ? mappings
+    : mappings.filter((m) => !isNutrientMapping(m));
+  const nutrientCount = mappings.filter(isNutrientMapping).length;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -142,22 +152,37 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {nutrientCount > 0 && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="show-nutrients"
+                checked={showNutrients}
+                onCheckedChange={(checked) =>
+                  setShowNutrients(checked === true)
+                }
+              />
+              <Label htmlFor="show-nutrients" className="text-sm">
+                Show nutrient mappings ({nutrientCount})
+              </Label>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <ConversionCapabilities
-              mappings={mappings}
+              mappings={filteredMappings}
               hideConvertButton={true}
             />
 
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Conversion Graph</h4>
-              <UnitMappingGraph unitMapping={mappings} />
+              <UnitMappingGraph unitMapping={filteredMappings} />
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Available Unit Mappings</h4>
               <div className="max-h-60 overflow-y-auto rounded-md border">
-                <UnitMappingsTable mappings={mappings} />
+                <UnitMappingsTable mappings={filteredMappings} />
               </div>
             </div>
             <div>
