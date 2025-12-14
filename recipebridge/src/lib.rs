@@ -14,7 +14,9 @@ use wasm_bindgen::prelude::*;
 #[wasm_bindgen(start)]
 pub fn init() {
     console_error_panic_hook::set_once();
-    let _ = wasm_tracing::try_set_as_global_default();
+    let mut config = wasm_tracing::WasmLayerConfig::new();
+    config.set_max_level(tracing::Level::INFO);
+    let _ = wasm_tracing::set_as_global_default_with_config(config);
 }
 
 // Type definitions
@@ -87,8 +89,8 @@ pub fn conv_amount_to_kind(
     let pairs = parse_mappings(mappings)?;
     let measure: Measure = from_js(&amount_w, "amount")?;
     let kind_str: String = from_js(target_kind_w, "amount kind")?;
-    let kind = MeasureKind::from_str(&kind_str)
-        .map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
+    let kind =
+        MeasureKind::from_str(&kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
 
     measure
         .convert_measure_via_mappings(kind.clone(), pairs)

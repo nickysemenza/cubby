@@ -2,7 +2,6 @@
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
 import RTable from "../_components/data-table/Table";
-import React from "react";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import {
   FoodPillLink,
@@ -25,7 +24,6 @@ import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { TableLink } from "../_components/table";
 import { useTableList } from "../_components/hooks/useTableList";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
-import { type UnitMapping } from "~/schemas/unitmapping";
 
 // Type for inventory entries with location from product list
 type InventoryEntryWithLocation = ProductWithFoodOut["inventoryEntry"][number];
@@ -50,15 +48,17 @@ export function ProductList() {
     tableStateOptions: { initialSort: "createdAt" },
   });
 
-  // Pre-load unit mappings for all products asynchronously
+  // Pre-load unit mappings for all products asynchronously (parallelized)
   const mappingsMap = useAsyncMemo(
     async (signal) => {
-      const result: Record<string, UnitMapping[]> = {};
-      for (const product of data) {
-        if (signal.cancelled) return result;
-        result[product.id] = await getAllUnitMappingsFromProduct(product);
-      }
-      return result;
+      const entries = await Promise.all(
+        data.map(async (product) => {
+          const mappings = await getAllUnitMappingsFromProduct(product);
+          return [product.id, mappings] as const;
+        }),
+      );
+      if (signal.cancelled) return {};
+      return Object.fromEntries(entries);
     },
     [data],
     {},

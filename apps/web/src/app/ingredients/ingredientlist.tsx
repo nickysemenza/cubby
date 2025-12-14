@@ -22,7 +22,6 @@ import { entities } from "~/entities/entities";
 import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { useTableList } from "../_components/hooks/useTableList";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { type UnitMapping } from "~/schemas/unitmapping";
 
 // Types for ingredient list data
 type RecipeItem = IngredientWithFoodOut["appearsInRecipes"][number];
@@ -50,20 +49,19 @@ export function IngredientList() {
     tableStateOptions: { initialSort: "createdAt" },
   });
 
-  // Pre-load unit mappings for all ingredients asynchronously
+  // Pre-load unit mappings for all ingredients asynchronously (parallelized)
   const mappingsMap = useAsyncMemo(
     async (signal) => {
-      const result: Record<string, UnitMapping[]> = {};
-      for (const ingredient of data) {
-        if (signal.cancelled) return result;
-        const mappings: UnitMapping[] = [];
-        for (const p of ingredient.product) {
-          if (signal.cancelled) return result;
-          mappings.push(...(await getAllUnitMappingsFromProduct(p)));
-        }
-        result[ingredient.id] = mappings;
-      }
-      return result;
+      const entries = await Promise.all(
+        data.map(async (ingredient) => {
+          const productMappings = await Promise.all(
+            ingredient.product.map((p) => getAllUnitMappingsFromProduct(p)),
+          );
+          return [ingredient.id, productMappings.flat()] as const;
+        }),
+      );
+      if (signal.cancelled) return {};
+      return Object.fromEntries(entries);
     },
     [data],
     {},

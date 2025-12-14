@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition, useCallback } from "react";
 import {
   type SortingState,
   type ColumnFiltersState,
@@ -39,13 +39,30 @@ export function useTableState(
     initialPagination = defaultPagination,
   } = options;
 
-  const [sorting, setSorting] = useState<SortingState>(
+  const [, startTransition] = useTransition();
+
+  const [sorting, setSortingRaw] = useState<SortingState>(
     defaultSortState(initialSort),
   );
-  const [columnFilters, setColumnFilters] =
+  const [columnFilters, setColumnFiltersRaw] =
     useState<ColumnFiltersState>(initialFilter);
-  const [pagination, setPagination] =
+  const [pagination, setPaginationRaw] =
     useState<PaginationState>(initialPagination);
+
+  // Wrap state setters in startTransition to prevent UI freezing
+  const setSorting = useCallback(
+    (value: SortingState) => startTransition(() => setSortingRaw(value)),
+    [],
+  );
+  const setColumnFilters = useCallback(
+    (value: ColumnFiltersState) =>
+      startTransition(() => setColumnFiltersRaw(value)),
+    [],
+  );
+  const setPagination = useCallback(
+    (value: PaginationState) => startTransition(() => setPaginationRaw(value)),
+    [],
+  );
 
   const getColumnFilter = (columnId: string) => {
     return columnFilters.find((filter) => filter.id === columnId)?.value as

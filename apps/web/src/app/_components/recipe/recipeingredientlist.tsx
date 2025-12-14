@@ -50,21 +50,20 @@ export const RecipeIngredientList: React.FC<{
     undefined,
   );
 
-  // Load unit mappings asynchronously
+  // Load unit mappings asynchronously (parallelized)
   const mappingsMap = useAsyncMemo(
     async (signal) => {
       if (!ingMap) return {};
-      const result: Record<string, UnitMapping[]> = {};
-      for (const [id, entry] of Object.entries(ingMap)) {
-        if (signal.cancelled) return result;
-        const mappings: UnitMapping[] = [];
-        for (const p of entry.product ?? []) {
-          if (signal.cancelled) return result;
-          mappings.push(...(await getAllUnitMappingsFromProduct(p)));
-        }
-        result[id] = mappings;
-      }
-      return result;
+      const entries = await Promise.all(
+        Object.entries(ingMap).map(async ([id, entry]) => {
+          const productMappings = await Promise.all(
+            (entry.product ?? []).map((p) => getAllUnitMappingsFromProduct(p)),
+          );
+          return [id, productMappings.flat()] as const;
+        }),
+      );
+      if (signal.cancelled) return {};
+      return Object.fromEntries(entries);
     },
     [ingMap],
     {},

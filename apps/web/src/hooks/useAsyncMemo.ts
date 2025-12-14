@@ -13,14 +13,14 @@ export interface CancellationSignal {
  *
  * @example
  * ```tsx
+ * // Use Promise.all for parallel execution (preferred for performance)
  * const mappings = useAsyncMemo(
  *   async (signal) => {
- *     const result = {};
- *     for (const item of data) {
- *       if (signal.cancelled) return result;
- *       result[item.id] = await fetchData(item);
- *     }
- *     return result;
+ *     const entries = await Promise.all(
+ *       data.map(async (item) => [item.id, await fetchData(item)] as const)
+ *     );
+ *     if (signal.cancelled) return {};
+ *     return Object.fromEntries(entries);
  *   },
  *   [data],
  *   {}

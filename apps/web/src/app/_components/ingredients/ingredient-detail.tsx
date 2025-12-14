@@ -31,14 +31,15 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     useRouterRefresh: true,
   });
 
-  // Load unit mappings asynchronously
+  // Load unit mappings asynchronously (parallelized)
   const unitMappings = useAsyncMemo(
     async (signal) => {
-      const results: UnitMapping[][] = [];
-      for (const product of ingredient.product) {
-        if (signal.cancelled) return [];
-        results.push(await getAllUnitMappingsFromProduct(product));
-      }
+      const results = await Promise.all(
+        ingredient.product.map((product) =>
+          getAllUnitMappingsFromProduct(product),
+        ),
+      );
+      if (signal.cancelled) return [];
       return results.flat();
     },
     [ingredient.product],
