@@ -17,7 +17,7 @@ export { exportInventoryToCSV } from "./csv-export";
 export {
   importInventoryFromCSV,
   createOrUpdatePriceMapping,
-} from "./csv-import";
+} from "./csv-import/index";
 
 // Utilities
 export { getTotalProductQuantity } from "./helpers";
