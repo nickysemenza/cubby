@@ -52,6 +52,9 @@ export const exportInventoryToCSV = async (
   return Promise.all(
     entries.map(async (entry) => {
       const parsedAmount = amount.parse(entry.amount);
+      const priceAmount = await extractPriceFromMappings(
+        entry.Product.unitMappings,
+      );
       return {
         product_name: entry.Product.name,
         manufacturer: entry.Product.manufacturer,
@@ -60,7 +63,7 @@ export const exportInventoryToCSV = async (
         quantity: parsedAmount.value,
         unit: parsedAmount.unit,
         expected_qty: entry.Product.expectedQuantity,
-        price: await extractPriceFromMappings(entry.Product.unitMappings),
+        price: priceAmount?.value ?? null,
         unit_mappings: await serializeUnitMappings(entry.Product.unitMappings),
         ingredient_name: entry.Product.Ingredient?.name ?? null,
       };

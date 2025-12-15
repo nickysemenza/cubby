@@ -14,16 +14,19 @@ import { wasmServer } from "~/lib/wasm";
 import { isMoneyUnit, isSingleEach } from "~/schemas/price-mapping-utils";
 import { type Amount } from "~/codec/codec";
 
+/** Default currency unit when creating new price mappings */
+const DEFAULT_CURRENCY = "dollar";
+
 interface PriceMappingMatch {
   id: string;
-  priceValue: number;
-  /** Which side has the money: 'a' or 'b' */
-  moneySide: "a" | "b";
+  /** The price amount (includes currency unit) */
+  price: Amount;
 }
 
 /**
  * Find an existing price mapping (1 each <-> $X) in either direction.
  * Price can be in either 'a' or 'b' position.
+ * Returns the price Amount (the side with money).
  */
 const findPriceMapping = async (
   mappings: Array<{ id: string; a: Amount; b: Amount }>,
@@ -31,11 +34,11 @@ const findPriceMapping = async (
   for (const m of mappings) {
     // Check if b is money and a is "1 each"
     if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
-      return { id: m.id, priceValue: m.b.value, moneySide: "b" };
+      return { id: m.id, price: m.b };
     }
     // Check if a is money and b is "1 each"
     if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
-      return { id: m.id, priceValue: m.a.value, moneySide: "a" };
+      return { id: m.id, price: m.a };
     }
   }
   return null;
@@ -44,11 +47,14 @@ const findPriceMapping = async (
 /**
  * Create or update a price mapping for a product (1 each <-> $X)
  * Handles price in either 'a' or 'b' position.
+ *
+ * Always normalizes to canonical format: 1 each <-> $X (a=each, b=price)
+ * Preserves existing currency when updating, uses provided currency or defaults when creating.
  */
 export const createOrUpdatePriceMapping = async (
   db: Database,
   productId: ProductId,
-  price: number,
+  price: Amount,
   source: string = "csv-import",
 ): Promise<void> => {
   const existingMappings = await getDb(db).query.productUnitMappings.findMany({
@@ -57,25 +63,28 @@ export const createOrUpdatePriceMapping = async (
 
   const existingPriceMapping = await findPriceMapping(existingMappings);
 
-  if (existingPriceMapping) {
-    // Update existing price mapping, preserving which side has money
-    const updateData =
-      existingPriceMapping.moneySide === "b"
-        ? { b: { value: price, unit: "dollar" }, source }
-        : { a: { value: price, unit: "dollar" }, source };
+  // Use provided currency, or preserve existing, or default
+  const currency =
+    price.unit || existingPriceMapping?.price.unit || DEFAULT_CURRENCY;
 
+  if (existingPriceMapping) {
+    // Update existing, always normalize to canonical format
     await getDb(db)
       .update(productUnitMappings)
-      .set(updateData)
+      .set({
+        a: { value: 1, unit: "each" },
+        b: { value: price.value, unit: currency },
+        source,
+      })
       .where(eq(productUnitMappings.id, existingPriceMapping.id));
   } else {
-    // Create new price mapping (standard format: 1 each -> $X)
+    // Create new price mapping in canonical format
     await getDb(db)
       .insert(productUnitMappings)
       .values({
         productId,
         a: { value: 1, unit: "each" },
-        b: { value: price, unit: "dollar" },
+        b: { value: price.value, unit: currency },
         source,
       });
   }
@@ -118,12 +127,13 @@ export const createUnitMappingsFromString = async (
  * Check what price mapping changes would occur (for preview)
  * Handles price in either 'a' or 'b' position.
  *
- * Returns the new price if it would be set or changed, undefined otherwise.
+ * Returns the new price value if it would be set or changed, undefined otherwise.
+ * (Returns just the numeric value for preview display purposes)
  */
 export const checkPriceMappingChanges = async (
   db: Database,
   productId: ProductId,
-  newPrice: number,
+  newPrice: Amount,
 ): Promise<number | undefined> => {
   const existingMappings = await getDb(db).query.productUnitMappings.findMany({
     where: eq(productUnitMappings.productId, productId),
@@ -131,9 +141,12 @@ export const checkPriceMappingChanges = async (
 
   const existingPriceMapping = await findPriceMapping(existingMappings);
 
-  // Return the new price if it would be set or changed
-  if (!existingPriceMapping || existingPriceMapping.priceValue !== newPrice) {
-    return newPrice;
+  // Return the new price value if it would be set or changed
+  if (
+    !existingPriceMapping ||
+    existingPriceMapping.price.value !== newPrice.value
+  ) {
+    return newPrice.value;
   }
   return undefined;
 };

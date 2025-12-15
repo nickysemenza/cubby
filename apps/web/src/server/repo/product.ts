@@ -557,7 +557,7 @@ export const quickCreateProduct = async (
     await createOrUpdatePriceMapping(
       db,
       unsafeProductId(newProduct.id),
-      data.price,
+      { value: data.price, unit: "dollar" },
       "quick-create",
     );
   }

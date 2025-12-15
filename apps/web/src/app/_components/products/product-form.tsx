@@ -126,17 +126,20 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   // Extract price from mappings asynchronously
   useEffect(() => {
     const loadPrice = async () => {
-      const price = await extractPriceFromMappings(product?.unitMappings ?? []);
-      form.setValue("price", price);
+      const priceAmount = await extractPriceFromMappings(
+        product?.unitMappings ?? [],
+      );
+      form.setValue("price", priceAmount?.value ?? null);
     };
     void loadPrice();
   }, [product?.unitMappings, form]);
 
   const handleSubmit = async (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
+    // Form uses numeric price (assumes dollar), convert to Amount
     const unitMappingsWithPrice = await syncPriceToMappings(
       values.unitMappings,
-      values.price,
+      values.price !== null ? { value: values.price, unit: "dollar" } : null,
       "product-form",
     );
 

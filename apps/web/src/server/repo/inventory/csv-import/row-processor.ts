@@ -81,13 +81,12 @@ export const processRow = async (
     productWillBeCreated = preview.productWillBeCreated;
     productChanges = preview.productChanges;
 
-    // Check price changes
+    // Check price changes (CSV price is numeric, defaults to dollar)
     if (row.price != null && productData) {
-      const priceChange = await checkPriceMappingChanges(
-        db,
-        productData.id,
-        row.price,
-      );
+      const priceChange = await checkPriceMappingChanges(db, productData.id, {
+        value: row.price,
+        unit: "dollar",
+      });
       if (priceChange !== undefined) {
         productChanges.priceWillBeSet = priceChange;
       }
@@ -116,9 +115,12 @@ export const processRow = async (
       row.aliases,
     );
 
-    // Handle price mapping
+    // Handle price mapping (CSV price is numeric, defaults to dollar)
     if (row.price != null) {
-      await createOrUpdatePriceMapping(db, productData.id, row.price);
+      await createOrUpdatePriceMapping(db, productData.id, {
+        value: row.price,
+        unit: "dollar",
+      });
     }
 
     // Handle unit mappings

@@ -20,14 +20,14 @@ export const isSingleEach = (amount: Amount): boolean =>
 
 interface PriceMappingMatch {
   index: number;
-  priceValue: number;
-  /** Which side has the money: 'a' or 'b' */
-  moneySide: "a" | "b";
+  /** The price amount (includes currency unit) */
+  price: Amount;
 }
 
 /**
  * Find a price mapping (1 each <-> $X) in either direction.
  * Price can be in either 'a' or 'b' position.
+ * Always returns the price Amount (the side with money).
  */
 const findPriceMappingInArray = async <T extends { a: Amount; b: Amount }>(
   mappings: T[],
@@ -36,37 +36,44 @@ const findPriceMappingInArray = async <T extends { a: Amount; b: Amount }>(
     const m = mappings[i]!;
     // Check if b is money and a is "1 each"
     if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
-      return { index: i, priceValue: m.b.value, moneySide: "b" };
+      return { index: i, price: m.b };
     }
     // Check if a is money and b is "1 each"
     if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
-      return { index: i, priceValue: m.a.value, moneySide: "a" };
+      return { index: i, price: m.a };
     }
   }
   return null;
 };
 
 /**
- * Extracts price value from unit mappings (finds "1 each <-> $X" mapping)
+ * Extracts price amount from unit mappings (finds "1 each <-> $X" mapping)
  * Handles price in either 'a' or 'b' position.
+ * Returns full Amount to preserve currency info.
  */
 export const extractPriceFromMappings = async (
   mappings: Array<{ a: Amount; b: Amount }>,
-): Promise<number | null> => {
+): Promise<Amount | null> => {
   const match = await findPriceMappingInArray(mappings);
-  return match?.priceValue ?? null;
+  return match?.price ?? null;
 };
+
+/** Default currency unit when creating new price mappings */
+const DEFAULT_CURRENCY = "dollar";
 
 /**
  * Creates or updates a price mapping in an array of unit mappings
  * Pure function - returns a new array.
- * Preserves which side (a or b) has the money when updating existing mappings.
+ *
+ * Always normalizes to canonical format: 1 each <-> $X (a=each, b=price)
+ * When updating, preserves the existing currency unit.
+ * When creating new, uses provided currency or defaults to "dollar".
  */
 export const syncPriceToMappings = async <
   T extends { a: Amount; b: Amount; source?: string | null },
 >(
   mappings: T[],
-  price: number | null,
+  price: Amount | null,
   source: string = "manual",
 ): Promise<T[]> => {
   const existing = await findPriceMappingInArray(mappings);
@@ -79,18 +86,14 @@ export const syncPriceToMappings = async <
     return mappings;
   }
 
-  // Build new mapping, preserving which side has money if updating
-  const moneySide = existing?.moneySide ?? "b";
+  // Use provided currency, or preserve existing, or default
+  const currency = price.unit || existing?.price.unit || DEFAULT_CURRENCY;
+
+  // Always normalize to canonical format: 1 each <-> $X
   const priceMapping = {
     ...(existing ? mappings[existing.index] : {}),
-    a:
-      moneySide === "a"
-        ? { value: price, unit: "dollar" }
-        : { value: 1, unit: "each" },
-    b:
-      moneySide === "b"
-        ? { value: price, unit: "dollar" }
-        : { value: 1, unit: "each" },
+    a: { value: 1, unit: "each" },
+    b: { value: price.value, unit: currency },
     source: existing ? (mappings[existing.index]?.source ?? source) : source,
   } as T;
 
