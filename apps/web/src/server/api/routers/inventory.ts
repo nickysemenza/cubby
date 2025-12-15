@@ -10,6 +10,7 @@ import {
   checkUniqueProductDuplicate,
   exportInventoryToCSV,
   importInventoryFromCSV,
+  deleteInventoryEntry,
 } from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
@@ -132,6 +133,14 @@ const bulkMove = protectedProcedure
     return await bulkMoveInventoryEntries(ctx.db, ctx.organizationId, input);
   });
 
+// Delete a single inventory entry
+const deleteItem = protectedProcedure
+  .input(z.object({ id: inventoryId }))
+  .output(z.void())
+  .mutation(async ({ ctx, input }) => {
+    await deleteInventoryEntry(ctx.db, input.id, ctx.organizationId!);
+  });
+
 // Find products with expectedQuantity=1 in multiple locations
 const findDuplicates = protectedProcedure
   .input(
@@ -235,6 +244,7 @@ export const inventoryRouter = createTRPCRouter({
   list,
   update,
   create,
+  delete: deleteItem,
   bulkProcess,
   bulkMove,
   findDuplicates,

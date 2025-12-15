@@ -4,7 +4,7 @@ import { type DetailSection } from "../data-table/detail-page";
 import { DetailPage } from "../data-table/detail-page";
 import { InfLocation } from "~/schemas/location";
 import { NoneState } from "../NoneState";
-import { InventoryEntryPillLink, LocationPillLink } from "../EntityPill";
+import { LocationPillLink } from "../EntityPill";
 import { Button } from "~/components/ui/button";
 import { LocationForm } from "./location-form";
 import { type LocationUpdateInput } from "~/schemas/location";
@@ -17,7 +17,8 @@ import { InventoryValueSummary } from "./inventory-value-summary";
 import { useEditMode } from "../hooks/useEditMode";
 
 import { useQuery } from "@tanstack/react-query";
-import { EntityPillLinkList } from "../EntityPillLinkList";
+import { LocationInventoryTable } from "./location-inventory-table";
+import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -31,7 +32,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     useRouterRefresh: true,
   });
 
-  const { data: inventoryItemsData } = useQuery(
+  const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
     api.inventoryItem.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 100 },
@@ -120,11 +121,17 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     {
       title: "Inventory Items",
       content: (
-        <EntityPillLinkList
-          items={inventoryItemsData?.items}
-          Pill={InventoryEntryPillLink}
-          pillPropName="entry"
-        />
+        <div className="space-y-4">
+          <QuickInventoryAdd
+            locationId={location.id}
+            onSuccess={() => refetchInventoryItems()}
+          />
+          <LocationInventoryTable
+            locationId={location.id}
+            inventoryItems={inventoryItemsData?.items ?? []}
+            onRefresh={() => refetchInventoryItems()}
+          />
+        </div>
       ),
     },
   ];

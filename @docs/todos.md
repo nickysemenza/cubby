@@ -14,14 +14,14 @@ Now that all unit conversions go through WASM with compound unit support:
 - **Quick Inventory Management from Location View**
   - ~~"Quick Capture Here" button exists~~ (navigates to `/inventory/quick-capture?locationId=X`)
   - Update `location-detail.tsx`:
-    - [ ] Add inline edit capabilities for quantities
-    - [ ] Add "Move to..." action for individual items
-    - [ ] Add delete action for removing items
-  - [ ] Create `QuickInventoryAdd.tsx` component:
+    - [x] Add inline edit capabilities for quantities
+    - [x] Add "Move to..." action for individual items
+    - [x] Add delete action for removing items
+  - [x] Create `QuickInventoryAdd.tsx` component:
     - Compact inline form for adding products without leaving location page
     - Product search with amount input
 
 - **Additional Enhancements**
-  - [ ] Add checkboxes to location table for bulk delete/move
+  - [x] Add checkboxes to location table for bulk delete/move
   - [ ] Add drag-drop between locations in tree view (future)
   - Update `lastBulkInventory` timestamp on bulk operations

@@ -6,6 +6,7 @@ export {
   updateInventoryEntry,
   createInventoryEntry,
   findInventoryByProductAndLocation,
+  deleteInventoryEntry,
 } from "./crud";
 
 // Bulk operations

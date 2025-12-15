@@ -270,3 +270,21 @@ export const findInventoryByProductAndLocation = async (
     ...relations.inventory.full,
   });
 };
+
+/**
+ * Delete an inventory entry by ID
+ */
+export const deleteInventoryEntry = async (
+  db: Database,
+  id: InventoryId,
+  organizationId: OrganizationId,
+): Promise<void> => {
+  await getDb(db)
+    .delete(inventoryEntry)
+    .where(
+      and(
+        eq(inventoryEntry.id, id),
+        eq(inventoryEntry.organizationId, organizationId),
+      ),
+    );
+};
