@@ -23,12 +23,12 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.6",
+    "@hono/node-server": "^1.19.7",
     "@hono/otel": "^1.0.1",
     "@kubiks/otel-drizzle": "^2.1.0",
     "@openapi-contrib/json-schema-to-openapi-schema": "^4.3.0",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.67.1",
+    "@opentelemetry/auto-instrumentations-node": "^0.67.2",
     "@opentelemetry/exporter-trace-otlp-http": "^0.208.0",
     "@opentelemetry/resources": "^2.2.0",
     "@opentelemetry/sdk-node": "^0.208.0",
@@ -36,28 +36,28 @@
     "@opentelemetry/semantic-conventions": "^1.38.0",
     "@recipehub/usda-contract": "workspace:*",
     "@recipehub/usda-schemas": "workspace:*",
-    "@scalar/hono-api-reference": "^0.9.25",
+    "@scalar/hono-api-reference": "^0.9.28",
     "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/open-api": "3.53.0-rc.1",
-    "better-sqlite3": "^12.4.6",
+    "better-sqlite3": "^12.5.0",
     "commander": "^14.0.2",
     "csv-parse": "^6.1.0",
-    "drizzle-orm": "^0.44.7",
-    "hono": "^4.10.7",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.11.1",
     "ora": "^9.0.0",
-    "zod": "^4.1.13"
+    "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^9.39.2",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^24.10.1",
-    "@vitest/coverage-v8": "^4.0.14",
-    "drizzle-kit": "^0.31.7",
-    "eslint": "^9.39.1",
-    "prettier": "^3.6.2",
-    "tsx": "^4.20.6",
+    "@types/node": "^25.0.2",
+    "@vitest/coverage-v8": "^4.0.15",
+    "drizzle-kit": "^0.31.8",
+    "eslint": "^9.39.2",
+    "prettier": "^3.7.4",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.48.0",
-    "vitest": "^4.0.14"
+    "typescript-eslint": "^8.50.0",
+    "vitest": "^4.0.15"
   }
 }

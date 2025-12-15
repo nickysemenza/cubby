@@ -17,16 +17,16 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
-    "@vitest/coverage-v8": "^4.0.14",
-    "@vitest/ui": "4.0.14",
-    "eslint": "^9.39.1",
+    "@eslint/js": "^9.39.2",
+    "@vitest/coverage-v8": "^4.0.15",
+    "@vitest/ui": "4.0.15",
+    "eslint": "^9.39.2",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "prettier": "^3.6.2",
-    "prettier-plugin-tailwindcss": "^0.7.1",
+    "prettier": "^3.7.4",
+    "prettier-plugin-tailwindcss": "^0.7.2",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.48.0"
+    "typescript-eslint": "^8.50.0"
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx,js,jsx,mdx}": [
