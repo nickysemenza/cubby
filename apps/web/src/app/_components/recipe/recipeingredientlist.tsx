@@ -27,7 +27,6 @@ import {
   type RecipeSummaryData,
 } from "~/components/ui/entity-summary-card";
 import { getIngredientName } from "./recipeutils";
-import { type UnitMapping } from "~/schemas/unitmapping";
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];

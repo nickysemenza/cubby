@@ -30,32 +30,32 @@
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx,js,jsx,mdx}": [
-      "cd apps/web && eslint --fix",
-      "cd apps/web && prettier --write"
+      "bash -c 'cd apps/web && eslint --fix \"$@\"' --",
+      "prettier --write"
     ],
     "apps/web/**/*.{ts,tsx}": [
-      "cd apps/web && bash -c 'tsc --noEmit'"
+      "bash -c 'cd apps/web && tsc --noEmit'"
     ],
     "apps/usda-api/**/*.{ts,js}": [
-      "cd apps/usda-api && eslint --fix",
-      "cd apps/usda-api && prettier --write"
+      "bash -c 'cd apps/usda-api && eslint --fix \"$@\"' --",
+      "prettier --write"
     ],
     "apps/usda-api/**/*.ts": [
-      "cd apps/usda-api && bash -c 'tsc --noEmit'"
+      "bash -c 'cd apps/usda-api && tsc --noEmit'"
     ],
     "packages/usda-contract/**/*.{ts,js}": [
-      "cd packages/usda-contract && eslint --fix",
-      "cd packages/usda-contract && prettier --write"
+      "bash -c 'cd packages/usda-contract && eslint --fix \"$@\"' --",
+      "prettier --write"
     ],
     "packages/usda-contract/**/*.ts": [
-      "cd packages/usda-contract && bash -c 'tsc --noEmit'"
+      "bash -c 'cd packages/usda-contract && tsc --noEmit'"
     ],
     "packages/usda-schemas/**/*.{ts,js}": [
-      "cd packages/usda-schemas && eslint --fix",
-      "cd packages/usda-schemas && prettier --write"
+      "bash -c 'cd packages/usda-schemas && eslint --fix \"$@\"' --",
+      "prettier --write"
     ],
     "packages/usda-schemas/**/*.ts": [
-      "cd packages/usda-schemas && bash -c 'tsc --noEmit'"
+      "bash -c 'cd packages/usda-schemas && tsc --noEmit'"
     ]
   }
 }

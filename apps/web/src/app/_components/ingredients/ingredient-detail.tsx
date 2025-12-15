@@ -16,7 +16,6 @@ import { useTRPC } from "~/trpc/react";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { type UnitMapping } from "~/schemas/unitmapping";
 import { useEditMode } from "../hooks/useEditMode";
 
 interface IngredientDetailProps {
