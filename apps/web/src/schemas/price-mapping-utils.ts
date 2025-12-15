@@ -13,26 +13,54 @@ export const isMoneyUnit = async (unit: string): Promise<boolean> => {
 };
 
 /**
- * Extracts price value from unit mappings (finds "1 each → $X" mapping)
+ * Checks if an amount represents a single unit (1 each)
  */
-export const extractPriceFromMappings = async (
-  mappings: Array<{ a: Amount; b: Amount }>,
-): Promise<number | null> => {
-  for (const m of mappings) {
-    if (
-      m.a.value === 1 &&
-      m.a.unit === "each" &&
-      (await isMoneyUnit(m.b.unit))
-    ) {
-      return m.b.value;
+export const isSingleEach = (amount: Amount): boolean =>
+  amount.value === 1 && amount.unit === "each";
+
+interface PriceMappingMatch {
+  index: number;
+  priceValue: number;
+  /** Which side has the money: 'a' or 'b' */
+  moneySide: "a" | "b";
+}
+
+/**
+ * Find a price mapping (1 each <-> $X) in either direction.
+ * Price can be in either 'a' or 'b' position.
+ */
+const findPriceMappingInArray = async <T extends { a: Amount; b: Amount }>(
+  mappings: T[],
+): Promise<PriceMappingMatch | null> => {
+  for (let i = 0; i < mappings.length; i++) {
+    const m = mappings[i]!;
+    // Check if b is money and a is "1 each"
+    if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
+      return { index: i, priceValue: m.b.value, moneySide: "b" };
+    }
+    // Check if a is money and b is "1 each"
+    if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
+      return { index: i, priceValue: m.a.value, moneySide: "a" };
     }
   }
   return null;
 };
 
 /**
+ * Extracts price value from unit mappings (finds "1 each <-> $X" mapping)
+ * Handles price in either 'a' or 'b' position.
+ */
+export const extractPriceFromMappings = async (
+  mappings: Array<{ a: Amount; b: Amount }>,
+): Promise<number | null> => {
+  const match = await findPriceMappingInArray(mappings);
+  return match?.priceValue ?? null;
+};
+
+/**
  * Creates or updates a price mapping in an array of unit mappings
- * Pure function - returns a new array
+ * Pure function - returns a new array.
+ * Preserves which side (a or b) has the money when updating existing mappings.
  */
 export const syncPriceToMappings = async <
   T extends { a: Amount; b: Amount; source?: string | null },
@@ -41,39 +69,34 @@ export const syncPriceToMappings = async <
   price: number | null,
   source: string = "manual",
 ): Promise<T[]> => {
-  // Find existing price mapping index (any money unit)
-  let existingIndex = -1;
-  for (let i = 0; i < mappings.length; i++) {
-    const m = mappings[i]!;
-    if (
-      m.a.value === 1 &&
-      m.a.unit === "each" &&
-      (await isMoneyUnit(m.b.unit))
-    ) {
-      existingIndex = i;
-      break;
-    }
-  }
+  const existing = await findPriceMappingInArray(mappings);
 
   if (price === null) {
     // Remove price mapping if it exists
-    if (existingIndex >= 0) {
-      return mappings.filter((_, i) => i !== existingIndex);
+    if (existing) {
+      return mappings.filter((_, i) => i !== existing.index);
     }
     return mappings;
   }
 
+  // Build new mapping, preserving which side has money if updating
+  const moneySide = existing?.moneySide ?? "b";
   const priceMapping = {
-    ...(existingIndex >= 0 ? mappings[existingIndex] : {}),
-    a: { value: 1, unit: "each" },
-    b: { value: price, unit: "dollar" },
-    source:
-      existingIndex >= 0 ? (mappings[existingIndex]?.source ?? source) : source,
+    ...(existing ? mappings[existing.index] : {}),
+    a:
+      moneySide === "a"
+        ? { value: price, unit: "dollar" }
+        : { value: 1, unit: "each" },
+    b:
+      moneySide === "b"
+        ? { value: price, unit: "dollar" }
+        : { value: 1, unit: "each" },
+    source: existing ? (mappings[existing.index]?.source ?? source) : source,
   } as T;
 
-  if (existingIndex >= 0) {
+  if (existing) {
     // Update existing mapping
-    return mappings.map((m, i) => (i === existingIndex ? priceMapping : m));
+    return mappings.map((m, i) => (i === existing.index ? priceMapping : m));
   } else {
     // Add new mapping
     return [...mappings, priceMapping];

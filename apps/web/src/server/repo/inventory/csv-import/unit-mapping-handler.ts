@@ -11,7 +11,7 @@ import { productUnitMappings } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { parseUnitMappingString } from "~/schemas/unitmapping";
 import { wasmServer } from "~/lib/wasm";
-import { isMoneyUnit } from "~/schemas/price-mapping-utils";
+import { isMoneyUnit, isSingleEach } from "~/schemas/price-mapping-utils";
 import { type Amount } from "~/codec/codec";
 
 interface PriceMappingMatch {
@@ -30,19 +30,11 @@ const findPriceMapping = async (
 ): Promise<PriceMappingMatch | null> => {
   for (const m of mappings) {
     // Check if b is money and a is "1 each"
-    if (
-      m.a.value === 1 &&
-      m.a.unit === "each" &&
-      (await isMoneyUnit(m.b.unit))
-    ) {
+    if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
       return { id: m.id, priceValue: m.b.value, moneySide: "b" };
     }
     // Check if a is money and b is "1 each"
-    if (
-      m.b.value === 1 &&
-      m.b.unit === "each" &&
-      (await isMoneyUnit(m.a.unit))
-    ) {
+    if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
       return { id: m.id, priceValue: m.a.value, moneySide: "a" };
     }
   }
