@@ -22,6 +22,7 @@ import {
 import { getTracer, TraceNames } from "~/server/tracing";
 import { auth as betterAuth } from "~/lib/auth";
 import { USDAClient } from "~/server/clients/usda";
+import { UPCLookupClient } from "~/server/clients/upc-lookup";
 import { ProductService } from "~/server/services/product.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { USDAService } from "~/server/services/usda.service";
@@ -95,6 +96,10 @@ const mapProductToTopLevelOut = (
  */
 const buildCrudServices = (db: Database) => {
   const usdaClient = new USDAClient(env.USDA_API_URL);
+  const upcLookupClient = new UPCLookupClient(
+    env.UPC_LOOKUP_API_URL,
+    env.UPC_LOOKUP_API_KEY,
+  );
   const usdaService = new USDAService(usdaClient, async (lookup) => {
     const products = await findProductsByFoodIdentifier(db, lookup);
     return products.map(mapProductToTopLevelOut);
@@ -107,6 +112,7 @@ const buildCrudServices = (db: Database) => {
   return {
     db,
     usdaClient,
+    upcLookupClient,
     usdaService,
     services,
   };

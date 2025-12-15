@@ -174,18 +174,22 @@ export default function QuickCaptureForm({
   // Handle barcode scan for a specific item index
   const handleBarcodeScan = useCallback(
     async (barcode: string, index: number) => {
+      console.log(`[Barcode Scan] Scanned: ${barcode} for row ${index}`);
       try {
         const product = await findOrCreateByUPCMutation.mutateAsync({
           upc: barcode,
         });
+        console.log(`[Barcode Scan] Product found/created: ${product.name}`);
         form.setValue(
           `items.${index}.product`,
           buildProductComboboxItem(product),
         );
         toast.success(`Found: ${product.name}`);
       } catch (err) {
-        console.error("Barcode lookup failed:", err);
-        toast.error("Failed to look up barcode");
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error";
+        console.error(`[Barcode Scan] Failed for ${barcode}:`, errorMessage);
+        toast.error(`Failed to look up barcode: ${errorMessage}`);
       }
     },
     [findOrCreateByUPCMutation, form],

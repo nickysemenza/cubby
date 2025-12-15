@@ -88,16 +88,18 @@ const quickCreate = protectedProcedure
   });
 
 // Find or create a product by UPC code
-// Checks local DB first, then USDA, then creates with defaults
+// Checks local DB first, then USDA, then UPC worker, then creates with defaults
 const findOrCreateByUPC = protectedProcedure
   .input(
     z.object({
       upc: upc,
-      defaultName: z.string().optional(), // Fallback if USDA lookup fails
+      defaultName: z.string().optional(), // Fallback if all lookups fail
     }),
   )
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
+    console.log(`[findOrCreateByUPC] Looking up UPC: ${input.upc}`);
+
     // 1. Check if product with this UPC already exists in organization
     const existing = await findProductByUPC(
       ctx.db,
@@ -105,28 +107,73 @@ const findOrCreateByUPC = protectedProcedure
       ctx.organizationId!,
     );
     if (existing) {
+      console.log(
+        `[findOrCreateByUPC] Found existing product: ${existing.name}`,
+      );
       return existing;
     }
 
-    // 2. Lookup in USDA database
+    // 2. Lookup in USDA database (food items)
+    console.log(`[findOrCreateByUPC] Checking USDA for ${input.upc}`);
     const food = await ctx.usdaClient.findFood({
       kind: "upc",
       gtin_upc: input.upc,
     });
 
-    // 3. Create product with USDA data or defaults
-    const name =
-      food?.foodInfo.description ?? input.defaultName ?? `Product ${input.upc}`;
-    const manufacturer =
-      food?.brandedFoodInfo?.brand_owner ??
-      food?.brandedFoodInfo?.brand_name ??
-      UNSPECIFIED_MANUFACTURER;
+    if (food) {
+      console.log(
+        `[findOrCreateByUPC] Found in USDA: ${food.foodInfo.description}`,
+      );
+      // Found in USDA - create product with USDA data
+      return await quickCreateProduct(
+        ctx.db,
+        {
+          name: food.foodInfo.description,
+          manufacturer:
+            food.brandedFoodInfo?.brand_owner ??
+            food.brandedFoodInfo?.brand_name ??
+            UNSPECIFIED_MANUFACTURER,
+          upc: input.upc,
+          expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
+          model: null,
+        },
+        ctx.organizationId!,
+      );
+    }
 
+    // 3. Lookup in UPC worker (general products - tools, electronics, etc.)
+    console.log(`[findOrCreateByUPC] Checking UPC worker for ${input.upc}`);
+    const upcLookup = await ctx.upcLookupClient.lookup(input.upc);
+
+    if (upcLookup) {
+      console.log(`[findOrCreateByUPC] Found in UPC worker: ${upcLookup.name}`);
+      // Found in UPC worker - create product with UPC lookup data
+      return await quickCreateProduct(
+        ctx.db,
+        {
+          name: upcLookup.name,
+          manufacturer:
+            upcLookup.manufacturer ??
+            upcLookup.brand ??
+            UNSPECIFIED_MANUFACTURER,
+          upc: input.upc,
+          expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
+          model: null,
+          price: upcLookup.priceDollars ?? null,
+        },
+        ctx.organizationId!,
+      );
+    }
+
+    // 4. Nothing found anywhere - create with defaults
+    console.log(
+      `[findOrCreateByUPC] Not found anywhere, creating with defaults for ${input.upc}`,
+    );
     return await quickCreateProduct(
       ctx.db,
       {
-        name,
-        manufacturer,
+        name: input.defaultName ?? `Product ${input.upc}`,
+        manufacturer: UNSPECIFIED_MANUFACTURER,
         upc: input.upc,
         expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
         model: null,

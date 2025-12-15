@@ -17,6 +17,8 @@ export const env = createEnv({
     R2_BUCKET_NAME: z.string().min(1),
     R2_PUBLIC_URL: z.url(),
     USDA_API_URL: z.url().default("http://localhost:8080/"),
+    UPC_LOOKUP_API_URL: z.url().default("https://upc-lookup.nicky.workers.dev"),
+    UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
   },
 
   /**
@@ -41,6 +43,8 @@ export const env = createEnv({
     R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
     R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
     USDA_API_URL: process.env.USDA_API_URL,
+    UPC_LOOKUP_API_URL: process.env.UPC_LOOKUP_API_URL,
+    UPC_LOOKUP_API_KEY: process.env.UPC_LOOKUP_API_KEY,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

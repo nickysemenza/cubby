@@ -5,6 +5,7 @@ import { locationRouter } from "./routers/location";
 import { productRouter } from "./routers/product";
 import { inventoryRouter } from "./routers/inventory";
 import { usdaRouter } from "./routers/usda";
+import { upcRouter } from "./routers/upc";
 import { imageRouter } from "./routers/image";
 import { problemsRouter } from "./routers/problems";
 
@@ -20,6 +21,7 @@ export const appRouter = createTRPCRouter({
   product: productRouter,
   inventoryItem: inventoryRouter,
   usda: usdaRouter,
+  upc: upcRouter,
   image: imageRouter,
   problems: problemsRouter,
 });

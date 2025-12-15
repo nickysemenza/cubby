@@ -1,10 +1,11 @@
 "use client";
 
-import { type FC, useEffect } from "react";
+import { type FC, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useTRPCClient } from "~/trpc/react";
 import {
   type ProductInputPayload,
   type ProductTopLevelOut,
@@ -30,6 +31,8 @@ import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { ArrayFieldManager } from "~/components/ui/array-field-manager";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
+import { Button } from "~/components/ui/button";
+import { Search, Loader2 } from "lucide-react";
 import { ComboboxItem } from "../combobox/combobox-types";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import {
@@ -76,14 +79,13 @@ interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
 }
 
 // Props for edit mode
-interface EditProductFormProps
-  extends EditModeProps<
-    {
-      id: string;
-      data: Partial<ProductInputPayload>;
-    },
-    ProductWithIngredient
-  > {
+interface EditProductFormProps extends EditModeProps<
+  {
+    id: string;
+    data: Partial<ProductInputPayload>;
+  },
+  ProductWithIngredient
+> {
   entity: ProductWithIngredient;
 }
 
@@ -98,6 +100,11 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     getImageData,
     hasImageChanges,
   } = useImageState();
+
+  // UPC lookup state
+  const [lookupImageUrl, setLookupImageUrl] = useState<string | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const trpcClient = useTRPCClient();
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
@@ -133,6 +140,45 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     };
     void loadPrice();
   }, [product?.unitMappings, form]);
+
+  // Handle UPC lookup
+  const handleUpcLookup = async () => {
+    const upcValue = form.getValues("upc");
+    if (!upcValue) return;
+
+    console.log(`[Product Form] Looking up UPC: ${upcValue}`);
+    setIsLookingUp(true);
+    try {
+      const result = await trpcClient.upc.lookup.query({ upc: upcValue });
+      if (result) {
+        console.log(
+          `[Product Form] UPC lookup result: ${result.name} (source: ${result.source})`,
+        );
+        // Auto-fill form fields from lookup result
+        if (result.name) {
+          form.setValue("name", result.name);
+        }
+        if (result.manufacturer) {
+          form.setValue("manufacturer", result.manufacturer);
+        } else if (result.brand) {
+          form.setValue("manufacturer", result.brand);
+        }
+        if (result.priceDollars) {
+          form.setValue("price", result.priceDollars);
+        }
+        // Store external image URL for display (read-only)
+        if (result.imageUrl) {
+          setLookupImageUrl(result.imageUrl);
+        }
+      } else {
+        console.log(`[Product Form] UPC lookup returned no results`);
+      }
+    } catch (err) {
+      console.error(`[Product Form] UPC lookup failed:`, err);
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
 
   const handleSubmit = async (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
@@ -272,24 +318,53 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         />
       </SideBySideFields>
 
-      {/* Secondary identifiers */}
-      <SideBySideFields>
-        <UnifiedTextField
-          form={form}
-          name="upc"
-          label="UPC (Optional)"
-          placeholder="12-digit UPC code"
-          nullable={true}
-        />
+      {/* Secondary identifiers with UPC lookup */}
+      <div className="space-y-2">
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <UnifiedTextField
+              form={form}
+              name="upc"
+              label="UPC (Optional)"
+              placeholder="12-digit UPC code"
+              nullable={true}
+            />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleUpcLookup}
+            disabled={isLookingUp || !form.watch("upc")}
+            className="mb-[2px]"
+          >
+            {isLookingUp ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            <span className="ml-1">Lookup</span>
+          </Button>
+        </div>
+        {lookupImageUrl && (
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <img
+              src={lookupImageUrl}
+              alt="Product from UPC lookup"
+              className="h-16 w-16 rounded border object-contain"
+            />
+            <span>Image from UPC lookup (not saved)</span>
+          </div>
+        )}
+      </div>
 
-        <NullableNumericField
-          form={form}
-          step="1"
-          name="ndb_number"
-          label="NDB Number (Optional)"
-          placeholder="NDB number (1000-99999)"
-        />
-      </SideBySideFields>
+      <NullableNumericField
+        form={form}
+        step="1"
+        name="ndb_number"
+        label="NDB Number (Optional)"
+        placeholder="NDB number (1000-99999)"
+      />
       <ComboboxFieldWithSearch
         form={form}
         name="ingredient"
