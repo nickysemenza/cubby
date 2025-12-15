@@ -10,6 +10,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { productUnitMappings } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { parseUnitMappingString } from "~/schemas/unitmapping";
+import { wasmServer } from "~/lib/wasm";
 
 /**
  * Create or update a price mapping for a product (1 each -> $X)
@@ -106,22 +107,56 @@ export const checkPriceMappingChanges = async (
   return undefined;
 };
 
+export interface UnitMappingPreviewDetail {
+  from: string;
+  to: string;
+  source?: string;
+  error?: string;
+}
+
+export interface UnitMappingsPreviewResult {
+  count: number;
+  details: UnitMappingPreviewDetail[];
+  errors: string[];
+}
+
 /**
- * Parse unit mappings string and return count + details (for preview)
+ * Parse unit mappings string using WASM and return count + formatted details (for preview)
+ *
+ * All parsing is done via WASM to properly handle all formats:
+ * - "4 lb = $5" (conversion format)
+ * - "$5/4lb" (price-per format)
+ * - "4 lb = $5 @ costco" (with source)
+ *
+ * Invalid mappings are collected as errors rather than silently falling back.
  */
-export const parseUnitMappingsForPreview = (
+export const parseUnitMappingsForPreview = async (
   mappingsStr: string,
-): { count: number; details: Array<{ from: string; to: string }> } => {
+): Promise<UnitMappingsPreviewResult> => {
   const mappingParts = mappingsStr
     .split(";")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const details = mappingParts.map((part) => {
-    // Parse "1 stick = 113.4g" format
-    const [from, to] = part.split("=").map((s) => s.trim());
-    return { from: from ?? part, to: to ?? "" };
-  });
+  const details: UnitMappingPreviewDetail[] = [];
+  const errors: string[] = [];
 
-  return { count: mappingParts.length, details };
+  for (const part of mappingParts) {
+    try {
+      const parsed = await parseUnitMappingString(part);
+      const fromFormatted = await wasmServer.format_amount(parsed.a);
+      const toFormatted = await wasmServer.format_amount(parsed.b);
+      details.push({
+        from: fromFormatted,
+        to: toFormatted,
+        source: parsed.source ?? undefined,
+      });
+    } catch (e) {
+      const errorMsg =
+        e instanceof Error ? e.message : "Invalid unit mapping format";
+      errors.push(`"${part}": ${errorMsg}`);
+    }
+  }
+
+  return { count: details.length, details, errors };
 };

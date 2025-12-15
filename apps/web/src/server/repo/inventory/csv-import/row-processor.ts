@@ -95,9 +95,9 @@ export const processRow = async (
       productChanges.priceWillBeSet = row.price;
     }
 
-    // Parse unit mappings for preview
+    // Parse unit mappings for preview using WASM
     if (row.unit_mappings) {
-      const mappings = parseUnitMappingsForPreview(row.unit_mappings);
+      const mappings = await parseUnitMappingsForPreview(row.unit_mappings);
       productChanges.unitMappingsWillBeAdded = mappings.count;
       productChanges.unitMappingsDetail = mappings.details;
     }
