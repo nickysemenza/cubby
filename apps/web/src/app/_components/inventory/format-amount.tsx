@@ -18,10 +18,6 @@ import ValidInvalidIcon from "../icons/valid-invalid";
  * Helper function for displaying amount and price
  */
 export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
-  if (amount.unit === "each") {
-    // todo
-    amount.unit = "Whole";
-  }
   if (mappings === undefined) {
     return "loading";
   }

@@ -79,6 +79,14 @@ test("wasm is_valid_unit", () => {
   expect(is_valid_unit("", [])).toEqual(false);
   expect(is_valid_unit("Cup", [])).toEqual(true);
   expect(is_valid_unit("cup", [])).toEqual(true);
+  expect(is_valid_unit("each", [])).toEqual(true);
+  expect(is_valid_unit("whole", [])).toEqual(true);
   expect(is_valid_unit("foo", ["foo"])).toEqual(true);
   expect(is_valid_unit("foo", ["bar"])).toEqual(false);
+});
+
+test("wasm format_amount handles each and whole", () => {
+  // WASM should format "each" and "whole" as equivalent count units
+  expect(format_amount({ value: 3, unit: "each" })).toMatch(/3/);
+  expect(format_amount({ value: 3, unit: "whole" })).toMatch(/3/);
 });
