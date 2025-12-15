@@ -11,9 +11,47 @@ import { productUnitMappings } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { parseUnitMappingString } from "~/schemas/unitmapping";
 import { wasmServer } from "~/lib/wasm";
+import { isMoneyUnit } from "~/schemas/price-mapping-utils";
+import { type Amount } from "~/codec/codec";
+
+interface PriceMappingMatch {
+  id: string;
+  priceValue: number;
+  /** Which side has the money: 'a' or 'b' */
+  moneySide: "a" | "b";
+}
 
 /**
- * Create or update a price mapping for a product (1 each -> $X)
+ * Find an existing price mapping (1 each <-> $X) in either direction.
+ * Price can be in either 'a' or 'b' position.
+ */
+const findPriceMapping = async (
+  mappings: Array<{ id: string; a: Amount; b: Amount }>,
+): Promise<PriceMappingMatch | null> => {
+  for (const m of mappings) {
+    // Check if b is money and a is "1 each"
+    if (
+      m.a.value === 1 &&
+      m.a.unit === "each" &&
+      (await isMoneyUnit(m.b.unit))
+    ) {
+      return { id: m.id, priceValue: m.b.value, moneySide: "b" };
+    }
+    // Check if a is money and b is "1 each"
+    if (
+      m.b.value === 1 &&
+      m.b.unit === "each" &&
+      (await isMoneyUnit(m.a.unit))
+    ) {
+      return { id: m.id, priceValue: m.a.value, moneySide: "a" };
+    }
+  }
+  return null;
+};
+
+/**
+ * Create or update a price mapping for a product (1 each <-> $X)
+ * Handles price in either 'a' or 'b' position.
  */
 export const createOrUpdatePriceMapping = async (
   db: Database,
@@ -21,23 +59,25 @@ export const createOrUpdatePriceMapping = async (
   price: number,
   source: string = "csv-import",
 ): Promise<void> => {
-  // Check if a price mapping already exists (1 each -> $X)
   const existingMappings = await getDb(db).query.productUnitMappings.findMany({
     where: eq(productUnitMappings.productId, productId),
   });
 
-  const existingPriceMapping = existingMappings.find(
-    (m) => m.a.value === 1 && m.a.unit === "each" && m.b.unit === "dollar",
-  );
+  const existingPriceMapping = await findPriceMapping(existingMappings);
 
   if (existingPriceMapping) {
-    // Update existing price mapping
+    // Update existing price mapping, preserving which side has money
+    const updateData =
+      existingPriceMapping.moneySide === "b"
+        ? { b: { value: price, unit: "dollar" }, source }
+        : { a: { value: price, unit: "dollar" }, source };
+
     await getDb(db)
       .update(productUnitMappings)
-      .set({ b: { value: price, unit: "dollar" }, source })
+      .set(updateData)
       .where(eq(productUnitMappings.id, existingPriceMapping.id));
   } else {
-    // Create new price mapping
+    // Create new price mapping (standard format: 1 each -> $X)
     await getDb(db)
       .insert(productUnitMappings)
       .values({
@@ -84,6 +124,7 @@ export const createUnitMappingsFromString = async (
 
 /**
  * Check what price mapping changes would occur (for preview)
+ * Handles price in either 'a' or 'b' position.
  *
  * Returns the new price if it would be set or changed, undefined otherwise.
  */
@@ -96,12 +137,10 @@ export const checkPriceMappingChanges = async (
     where: eq(productUnitMappings.productId, productId),
   });
 
-  const existingPriceMapping = existingMappings.find(
-    (m) => m.a.value === 1 && m.a.unit === "each" && m.b.unit === "dollar",
-  );
+  const existingPriceMapping = await findPriceMapping(existingMappings);
 
   // Return the new price if it would be set or changed
-  if (!existingPriceMapping || existingPriceMapping.b.value !== newPrice) {
+  if (!existingPriceMapping || existingPriceMapping.priceValue !== newPrice) {
     return newPrice;
   }
   return undefined;
