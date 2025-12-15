@@ -121,7 +121,7 @@ describe("getGramAndNutrient", () => {
     // Assert
     expect(result.gram.success).toBe(true);
     if (result.gram.success) {
-      expect(result.gram.value.unit).toBe("Gram");
+      expect(result.gram.value.unit).toBe("g");
       expect(result.gram.value.value).toBe(240);
     }
 
@@ -169,7 +169,7 @@ describe("getGramAndNutrient", () => {
     // Assert - Weight conversion should succeed
     expect(result.gram.success).toBe(true);
     if (result.gram.success) {
-      expect(result.gram.value.unit).toBe("Gram");
+      expect(result.gram.value.unit).toBe("g");
       expect(result.gram.value.value).toBe(240);
     }
 
@@ -231,7 +231,7 @@ describe("convertAmountToPrice", () => {
     // Assert
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.value.unit).toBe("Dollar");
+      expect(result.value.unit).toBe("$");
       expect(result.value.value).toBe(2.99);
     }
   });
@@ -320,7 +320,7 @@ describe("WASM Error Scenarios", () => {
       // The result is close to the expected value but not exact
       expect(result.value.value).toBeGreaterThan(29e9); // At least 29 billion
       expect(result.value.value).toBeLessThan(31e9); // At most 31 billion
-      expect(result.value.unit).toBe("Dollar");
+      expect(result.value.unit).toBe("$");
     }
   });
 
@@ -341,7 +341,7 @@ describe("WASM Error Scenarios", () => {
     if (result.success) {
       // Very small values might be rounded to zero by WASM/floating point precision
       expect(result.value.value).toBeGreaterThanOrEqual(0);
-      expect(result.value.unit).toBe("Dollar");
+      expect(result.value.unit).toBe("$");
     }
   });
 
@@ -362,7 +362,7 @@ describe("WASM Error Scenarios", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.value.value).toBe(2.99);
-      expect(result.value.unit).toBe("Dollar");
+      expect(result.value.unit).toBe("$");
     }
   });
 
@@ -397,7 +397,7 @@ describe("WASM Error Scenarios", () => {
       // WASM returns $0.94-0.96 depending on environment precision
       expect(result.value.value).toBeGreaterThanOrEqual(0.94);
       expect(result.value.value).toBeLessThanOrEqual(0.96);
-      expect(result.value.unit).toBe("Dollar");
+      expect(result.value.unit).toBe("$");
     }
   });
 
@@ -442,7 +442,7 @@ describe("WASM Error Scenarios", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.value.value).toBe(2.99);
-      expect(result.value.unit).toBe("Dollar");
+      expect(result.value.unit).toBe("$");
     }
   });
 });

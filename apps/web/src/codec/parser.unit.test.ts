@@ -23,13 +23,14 @@ test("parsing works", async () => {
       },
     ],
   });
-  expect(out).toEqual({
+  // WASM now returns lowercase unit names and additional optional fields
+  expect(out).toMatchObject({
     name: "Pancakes",
     sections: [
       {
         ingredients: [
-          { name: "flour", amounts: [{ value: 1, unit: "Cup" }] },
-          { name: "milk", amounts: [{ value: 1, unit: "Cup" }] },
+          { name: "flour", amounts: [{ value: 1, unit: "cup" }] },
+          { name: "milk", amounts: [{ value: 1, unit: "cup" }] },
         ],
         instructions: ["Mix ingredients", "Cook on griddle"],
       },
@@ -44,15 +45,16 @@ test("formatting with wasm", () => {
 
 test("wasm unknown ingrecient", () => {
   const parseA = parse_ingredient("1 foo bar");
-  expect(parseA).toEqual({
+  // WASM returns lowercase unit names and additional optional fields
+  expect(parseA).toMatchObject({
     name: "foo bar",
-    amounts: [{ value: 1, unit: "Whole" }],
+    amounts: [{ value: 1, unit: "whole" }],
   });
-  expect(parseA.amounts[0]!.unit).toEqual("Whole");
+  expect(parseA.amounts[0]!.unit).toEqual("whole");
 
   const parseB = parse_ingredient("1 clove garlic");
 
-  expect(parseB).toEqual({
+  expect(parseB).toMatchObject({
     name: "garlic",
     amounts: [{ value: 1, unit: "clove" }],
   });
@@ -68,7 +70,7 @@ test("wasm amount_kind", () => {
   // expect(amount_kind({ value: 1, unit: "farenheit" })).toEqual("temperature");
   expect(amount_kind({ value: 1, unit: "inch" })).toEqual("length");
   expect(amount_kind({ value: 1, unit: "foo" })).toEqual("other");
-  expect(amount_kind({ value: 1, unit: "Whole" })).toEqual("other");
+  expect(amount_kind({ value: 1, unit: "whole" })).toEqual("other");
 });
 
 test("wasm is_valid_unit", () => {
