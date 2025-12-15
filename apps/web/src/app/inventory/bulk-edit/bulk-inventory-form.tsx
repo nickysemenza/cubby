@@ -4,7 +4,6 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
-import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -23,23 +22,23 @@ import {
   FormWrapper,
   getSubmitButtonText,
 } from "~/app/_components/form-utils";
-import { amount } from "~/codec/codec";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import {
+  requiredProductField,
+  requiredLocationField,
+  amountField,
+} from "~/schemas/form-fields";
 
-// Schema for a single inventory item
+// Schema for a single inventory item using shared field schemas
 const inventoryItemSchema = z.object({
-  product: ComboboxItemSchema.nullable().refine((item) => item !== null, {
-    message: "Please select a product",
-  }),
-  amount: amount,
+  product: requiredProductField,
+  amount: amountField,
   id: z.string().optional(), // For existing items
 });
 
 // Schema for the entire form
 const formSchema = z.object({
-  location: ComboboxItemSchema.nullable().refine((item) => item !== null, {
-    message: "Please select a location",
-  }),
+  location: requiredLocationField,
   items: z.array(inventoryItemSchema),
 });
 

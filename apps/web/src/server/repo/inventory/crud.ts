@@ -92,34 +92,18 @@ export const inventoryentryList = async (
   locationNameFilter?: string,
   locationIdFilter?: string,
 ) => {
-  // Build order by array using helper
   const orderByArray = buildOrderBy(inventoryEntry, sort, [
     "createdAt",
     "amount",
   ]);
-
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Build where conditions - note Drizzle doesn't support nested filters in relational queries
-  // We'll need to do joins for filtering on related tables
-  // Always include organization filter for security
-  const baseCondition = eq(inventoryEntry.organizationId, organizationId);
+  // Determine if we need joins (name filters require joining related tables)
+  const needsJoins = productNameFilter || locationNameFilter;
 
-  // For location ID filter, we can use a simple where clause
-  let whereClause: ReturnType<typeof and> | ReturnType<typeof eq> =
-    baseCondition;
-  if (locationIdFilter && !productNameFilter && !locationNameFilter) {
-    whereClause = and(
-      baseCondition,
-      eq(inventoryEntry.locationId, locationIdFilter),
-    );
-  }
-
-  // If we have product or location name filters, we need to use query builder with joins
-  if (productNameFilter || locationNameFilter) {
-    // Always include organization filter for security
+  if (needsJoins) {
+    // Build conditions for join-based query
     const conditions = [eq(inventoryEntry.organizationId, organizationId)];
-
     if (productNameFilter) {
       conditions.push(ilike(product.name, `%${productNameFilter}%`));
     }
@@ -129,17 +113,12 @@ export const inventoryentryList = async (
     if (locationIdFilter) {
       conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
     }
-
     const whereCondition = and(...conditions);
 
-    // Use query builder for complex filtering
+    // Query with joins for name filtering
     const [results, [countResult]] = await Promise.all([
       getDb(db)
-        .select({
-          inventoryEntry: inventoryEntry,
-          Product: product,
-          location: location,
-        })
+        .select({ inventoryEntry })
         .from(inventoryEntry)
         .innerJoin(product, eq(inventoryEntry.productId, product.id))
         .innerJoin(location, eq(inventoryEntry.locationId, location.id))
@@ -157,12 +136,12 @@ export const inventoryentryList = async (
 
     // Fetch full data with relations for each result
     const fullResults = await Promise.all(
-      results.map(async (row) => {
-        return await getDb(db).query.inventoryEntry.findFirst({
+      results.map((row) =>
+        getDb(db).query.inventoryEntry.findFirst({
           where: eq(inventoryEntry.id, row.inventoryEntry.id),
           ...relations.inventory.full,
-        });
-      }),
+        }),
+      ),
     );
 
     const inventoryEntries = fullResults
@@ -171,7 +150,14 @@ export const inventoryentryList = async (
     return { data: inventoryEntries, count: countResult?.count ?? 0 };
   }
 
-  // Simple case: no complex filters
+  // Simple path: no name filters, use relational query
+  const conditions = [eq(inventoryEntry.organizationId, organizationId)];
+  if (locationIdFilter) {
+    conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
+  }
+  const whereClause =
+    conditions.length === 1 ? conditions[0] : and(...conditions);
+
   const [results, [countResult]] = await Promise.all([
     getDb(db).query.inventoryEntry.findMany({
       where: whereClause,

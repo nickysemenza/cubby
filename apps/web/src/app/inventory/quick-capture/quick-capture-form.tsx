@@ -1,3 +1,19 @@
+/**
+ * QuickCaptureForm - Full-featured rapid entry form for inventory data capture.
+ *
+ * Use this component when:
+ * - Rapid multi-item data entry (e.g., inventorying a shelf)
+ * - Need barcode scanner integration for product lookup
+ * - Want keyboard shortcuts (Ctrl+Enter to submit, Ctrl+N to add row)
+ * - Need location context with breadcrumbs and quick navigation to child locations
+ * - Want to see existing inventory at the focused location
+ * - Auto-copying location from previous row for efficiency
+ *
+ * For simple single-item additions embedded within a page,
+ * use the lighter-weight QuickInventoryAdd component instead.
+ *
+ * @see QuickInventoryAdd - Compact inline form for single items
+ */
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -5,7 +21,6 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPC } from "~/trpc/react";
-import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -21,7 +36,6 @@ import {
   getSubmitButtonText,
 } from "~/app/_components/form-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { amount } from "~/codec/codec";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { WithProductSearchQuickCreate } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
@@ -31,21 +45,11 @@ import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadc
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { ProductPillLink } from "~/app/_components/EntityPill";
 import { type InfLocation } from "~/schemas/location";
+import { inventoryItemWithLocationFields } from "~/schemas/form-fields";
 
-// Schema for a single inventory item
-const quickCaptureItemSchema = z.object({
-  location: ComboboxItemSchema.nullable().refine((item) => item !== null, {
-    message: "Please select a location",
-  }),
-  product: ComboboxItemSchema.nullable().refine((item) => item !== null, {
-    message: "Please select a product",
-  }),
-  amount: amount,
-});
-
-// Schema for the entire form
+// Schema for the entire form using shared field schema
 const quickCaptureFormSchema = z.object({
-  items: z.array(quickCaptureItemSchema),
+  items: z.array(inventoryItemWithLocationFields),
 });
 
 type QuickCaptureFormValues = z.infer<typeof quickCaptureFormSchema>;

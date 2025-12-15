@@ -1,3 +1,17 @@
+/**
+ * BulkMoveForm - Full-page workflow for moving inventory between locations.
+ *
+ * Use this component when:
+ * - User needs to select both source and target locations
+ * - Moving multiple items with partial quantity support (e.g., move 5 of 10)
+ * - Need select-all/deselect-all functionality for bulk selection
+ * - Full visibility of what's being moved with editable quantities
+ *
+ * For quick moves from a known location where source is already established,
+ * use the lighter-weight MoveInventoryDialog instead.
+ *
+ * @see MoveInventoryDialog - Lightweight modal for quick moves
+ */
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";

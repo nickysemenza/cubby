@@ -1,3 +1,16 @@
+/**
+ * QuickInventoryAdd - Compact inline form for adding inventory items to a location.
+ *
+ * Use this component when:
+ * - Embedding a quick-add form within a location detail page
+ * - The target location is already known (passed as prop)
+ * - Simple single-item additions without barcode scanning
+ *
+ * For rapid multi-item data entry with barcode scanning, keyboard shortcuts,
+ * and location context navigation, use the dedicated QuickCaptureForm page instead.
+ *
+ * @see /inventory/quick-capture - Full-featured rapid entry form
+ */
 "use client";
 
 import { useForm } from "react-hook-form";

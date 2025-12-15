@@ -1,10 +1,22 @@
 "use client";
 import Link from "next/link";
 import { type Ref, useCallback, useState } from "react";
-import Tree, { type CustomNodeElementProps, type Point } from "react-d3-tree";
+import Tree, {
+  type CustomNodeElementProps,
+  type Point,
+  type RawNodeDatum,
+} from "react-d3-tree";
 import { useTRPC } from "~/trpc/react";
 
 import { useQuery } from "@tanstack/react-query";
+import { LocationId } from "~/schemas/identifiers";
+import { LocationType } from "~/schemas/location";
+
+/** Extended node type that includes location-specific properties */
+interface LocationNodeDatum extends RawNodeDatum {
+  id: LocationId;
+  type: LocationType;
+}
 
 const nodeSize = { x: 100, y: 200 };
 const foreignObjectProps: React.SVGProps<SVGForeignObjectElement> = {
@@ -60,28 +72,28 @@ const useCenteredTree = () => {
 const renderForeignObjectNode = ({
   nodeDatum,
   toggleNode,
-  // foreignObjectProps,
-}: CustomNodeElementProps) => (
-  <g>
-    <circle onClick={toggleNode} r={15}></circle>
-    {/* `foreignObject` requires width & height to be explicitly set. */}
-    <foreignObject {...foreignObjectProps}>
-      <div style={{ border: "1px solid black", backgroundColor: "#dedede" }}>
-        <h3 style={{ textAlign: "center" }}>{nodeDatum.name}</h3>
-        {nodeDatum.name !== rootName && (
-          <>
-            <Link
-              className="text-primary hover:underline"
-              //@ts-expect-error id is a prop
-              href={`locations/${nodeDatum.id}`}
-            >
-              {nodeDatum.name}
-            </Link>
-            {/* @ts-expect-error type is a prop */}
-            <div className="">{nodeDatum.type}</div>
-          </>
-        )}
-      </div>
-    </foreignObject>
-  </g>
-);
+}: CustomNodeElementProps) => {
+  const locationNode = nodeDatum as unknown as LocationNodeDatum;
+  return (
+    <g>
+      <circle onClick={toggleNode} r={15}></circle>
+      {/* `foreignObject` requires width & height to be explicitly set. */}
+      <foreignObject {...foreignObjectProps}>
+        <div style={{ border: "1px solid black", backgroundColor: "#dedede" }}>
+          <h3 style={{ textAlign: "center" }}>{locationNode.name}</h3>
+          {locationNode.name !== rootName && (
+            <>
+              <Link
+                className="text-primary hover:underline"
+                href={`locations/${locationNode.id}`}
+              >
+                {locationNode.name}
+              </Link>
+              <div>{locationNode.type}</div>
+            </>
+          )}
+        </div>
+      </foreignObject>
+    </g>
+  );
+};

@@ -19,7 +19,7 @@ export default function Page() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="table">Table</TabsTrigger>
-          <TabsTrigger value="legacy">Legacy Views</TabsTrigger>
+          <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -34,7 +34,7 @@ export default function Page() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="legacy" className="space-y-4">
+        <TabsContent value="visualizations" className="space-y-4">
           <div className="flex flex-row gap-4">
             <div className="flex-1">
               <h3 className="mb-2 text-lg font-semibold">Tree View</h3>

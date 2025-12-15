@@ -23,19 +23,17 @@ import {
   detectComboboxIdChange,
 } from "../form-utils";
 import { AmountFieldGroup } from "./amount-field-group";
-import { ComboboxItem } from "../combobox/combobox-types";
-import { amount } from "~/codec/codec";
+import {
+  requiredProductField,
+  requiredLocationField,
+  amountField,
+} from "~/schemas/form-fields";
 
-// Form schema for inventory form
-// Note: We use simple Zod schema for validation, TypeScript infers from Zod
+// Form schema using shared field schemas
 const formSchema = z.object({
-  product: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a product",
-  }),
-  location: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a location",
-  }),
-  amount: amount,
+  product: requiredProductField,
+  location: requiredLocationField,
+  amount: amountField,
 });
 
 type InventoryFormValues = z.infer<typeof formSchema>;
