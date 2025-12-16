@@ -1,23 +1,30 @@
-import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import type { Env } from "../types";
-import { createDb, schema } from "../db";
-import { lookupExternalProduct } from "../api";
-import { storeImage, getImageUrl } from "../storage/images";
-import type { ProductLookupResponse, ProductNotFoundResponse } from "../schemas/product";
+import { Hono } from 'hono';
+import { eq } from 'drizzle-orm';
+import type { Env } from '../types';
+import { createDb, schema } from '../db';
+import { lookupExternalProduct } from '../api';
+import { storeImage, getImageUrl } from '../storage/images';
+import type {
+  ProductLookupResponse,
+  ProductNotFoundResponse,
+} from '../schemas/product';
 
 const lookup = new Hono<{ Bindings: Env }>();
 
 // UPC validation regex (8, 12, 13, or 14 digits)
 const UPC_REGEX = /^\d{8}$|^\d{12,14}$/;
 
-lookup.get("/:upc", async (c) => {
-  const upc = c.req.param("upc");
+lookup.get('/:upc', async (c) => {
+  const upc = c.req.param('upc');
+  const baseUrl = new URL(c.req.url).origin;
 
   // Validate UPC format
   if (!UPC_REGEX.test(upc)) {
     return c.json(
-      { error: "Invalid UPC format. Must be 8, 12, 13, or 14 digits.", code: "INVALID_UPC" },
+      {
+        error: 'Invalid UPC format. Must be 8, 12, 13, or 14 digits.',
+        code: 'INVALID_UPC',
+      },
       400
     );
   }
@@ -38,8 +45,8 @@ lookup.get("/:upc", async (c) => {
       category: cached.category,
       description: cached.description,
       priceDollars: cached.priceDollars,
-      imageUrl: cached.imageKey ? getImageUrl(cached.imageKey) : null,
-      source: cached.source as "upcitemdb",
+      imageUrl: cached.imageKey ? getImageUrl(cached.imageKey, baseUrl) : null,
+      source: cached.source as 'upcitemdb',
       cached: true,
     };
     return c.json(response);
@@ -81,7 +88,7 @@ lookup.get("/:upc", async (c) => {
     category: externalData.category,
     description: externalData.description,
     priceDollars: externalData.priceDollars,
-    imageUrl: imageKey ? getImageUrl(imageKey) : null,
+    imageUrl: imageKey ? getImageUrl(imageKey, baseUrl) : null,
     source: externalData.source,
     cached: false,
   };

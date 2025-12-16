@@ -5,6 +5,7 @@ import {
   getS3ObjectUrl,
   deleteS3Object,
 } from "../utils/s3";
+import { fetchAndStoreImage } from "../utils/image-import";
 import {
   type InitiateUploadWithoutEntityInput,
   type ImageWithEntity,
@@ -14,6 +15,7 @@ import {
   getDb,
   buildOrderBy,
   insertAndReturnDb,
+  associatePendingImages,
 } from "~/server/repo/database-helpers";
 import {
   image,
@@ -294,4 +296,68 @@ export const cullPendingImages = async (
     deletedIds: imageIds,
     deletedKeys: imageKeys,
   };
+};
+
+/**
+ * Import an image from an external URL and store it in our system.
+ * Creates an image record with status "UPLOADED" (not PENDING, since it's already uploaded).
+ *
+ * @param db Database client
+ * @param organizationId Organization ID for the image
+ * @param params.sourceUrl The external URL to fetch the image from
+ * @param params.filenamePrefix Prefix for the generated filename (e.g., "upc-123456789012")
+ * @returns Object with imageId, key, and url, or null on failure
+ */
+export const importImageFromUrl = async (
+  db: Database,
+  organizationId: string,
+  params: { sourceUrl: string; filenamePrefix: string },
+): Promise<{ imageId: string; key: string; url: string } | null> => {
+  // Fetch and store the image in R2
+  const stored = await fetchAndStoreImage(
+    params.sourceUrl,
+    params.filenamePrefix,
+  );
+
+  if (!stored) {
+    return null;
+  }
+
+  // Create the image record with status UPLOADED (not PENDING)
+  const createdImage = await insertAndReturnDb(db, image, {
+    organizationId,
+    key: stored.key,
+    filename: `${params.filenamePrefix}.${stored.contentType.split("/")[1] || "jpg"}`,
+    size: stored.size,
+    contentType: stored.contentType,
+    url: stored.url,
+    status: "UPLOADED",
+  });
+
+  return {
+    imageId: createdImage.id,
+    key: stored.key,
+    url: stored.url,
+  };
+};
+
+/**
+ * Associate an image with a product.
+ *
+ * @param db Database client
+ * @param productId Product ID to associate the image with
+ * @param imageIds Array of image IDs to associate
+ */
+export const associateImagesWithProduct = async (
+  db: Database,
+  productId: string,
+  imageIds: string[],
+): Promise<void> => {
+  await associatePendingImages(
+    getDb(db),
+    productImage,
+    "productId",
+    productId,
+    imageIds,
+  );
 };

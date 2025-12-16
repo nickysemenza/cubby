@@ -7,13 +7,18 @@ import {
   productTopLevelOut,
 } from "~/schemas/product";
 import { createEntityCrudProcedures } from "../crud-factory";
-import { productId, type ProductId } from "~/schemas/identifiers";
+import {
+  productId,
+  type ProductId,
+  unsafeProductId,
+} from "~/schemas/identifiers";
 import { findProductByUPC, quickCreateProduct } from "~/server/repo/product";
 import { upc } from "@recipehub/usda-schemas";
 import {
   UNSPECIFIED_MANUFACTURER,
   DEFAULT_EXPECTED_QUANTITY,
 } from "~/lib/constants";
+import { importImageFromUPC } from "~/server/services/image-import";
 
 // Define filters schema for products
 const productFiltersSchema = z.object({
@@ -22,8 +27,8 @@ const productFiltersSchema = z.object({
   upcFilter: z.string().optional(),
 });
 
-// Create standardized CRUD procedures using factory
-const { getByID, list, create, update } = createEntityCrudProcedures({
+// Create standardized CRUD procedures using factory (except create, which we customize)
+const { getByID, list, update } = createEntityCrudProcedures({
   schemas: {
     createInput: productInputPayload,
     updateInput: productInputPayload.partial(),
@@ -67,6 +72,35 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     },
   },
 });
+
+// Custom create procedure that imports UPC images after product creation
+const create = protectedProcedure
+  .input(productInputPayload)
+  .output(productWithFoodOut)
+  .mutation(async ({ ctx, input }) => {
+    // Create the product
+    const product = await ctx.services.product.createProduct(
+      input,
+      ctx.organizationId!,
+    );
+
+    // If product has a UPC, try to import image from UPC lookup (non-blocking)
+    if (input.upc) {
+      try {
+        await importImageFromUPC(
+          ctx.db,
+          ctx.organizationId!,
+          ctx.upcLookupClient,
+          input.upc,
+          unsafeProductId(product.id),
+        );
+      } catch (error) {
+        console.error(`[product.create] Image import failed:`, error);
+      }
+    }
+
+    return product;
+  });
 
 // Quick create a product with minimal data (just name required)
 const quickCreate = protectedProcedure
@@ -148,7 +182,7 @@ const findOrCreateByUPC = protectedProcedure
     if (upcLookup) {
       console.log(`[findOrCreateByUPC] Found in UPC worker: ${upcLookup.name}`);
       // Found in UPC worker - create product with UPC lookup data
-      return await quickCreateProduct(
+      const newProduct = await quickCreateProduct(
         ctx.db,
         {
           name: upcLookup.name,
@@ -163,6 +197,23 @@ const findOrCreateByUPC = protectedProcedure
         },
         ctx.organizationId!,
       );
+
+      // Import image from UPC lookup if available (non-blocking)
+      if (upcLookup.imageUrl) {
+        try {
+          await importImageFromUPC(
+            ctx.db,
+            ctx.organizationId!,
+            ctx.upcLookupClient,
+            input.upc,
+            unsafeProductId(newProduct.id),
+          );
+        } catch (error) {
+          console.error(`[findOrCreateByUPC] Image import failed:`, error);
+        }
+      }
+
+      return newProduct;
     }
 
     // 4. Nothing found anywhere - create with defaults

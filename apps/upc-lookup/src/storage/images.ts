@@ -1,4 +1,4 @@
-import type { Env } from "../types";
+import type { Env } from '../types';
 
 const TIMEOUT_MS = 10000;
 
@@ -27,7 +27,7 @@ export async function storeImage(
       return null;
     }
 
-    const contentType = response.headers.get("content-type") ?? "image/jpeg";
+    const contentType = response.headers.get('content-type') ?? 'image/jpeg';
     const ext = getExtensionFromContentType(contentType);
     const key = `images/${upc}.${ext}`;
 
@@ -38,10 +38,10 @@ export async function storeImage(
     return key;
   } catch (error) {
     clearTimeout(timeoutId);
-    if (error instanceof Error && error.name === "AbortError") {
-      console.error("Image fetch timeout");
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Image fetch timeout');
     } else {
-      console.error("Image storage error:", error);
+      console.error('Image storage error:', error);
     }
     return null;
   }
@@ -49,16 +49,20 @@ export async function storeImage(
 
 /**
  * Get the URL for an image stored in R2.
- * Returns a relative path that the worker serves directly.
+ * When baseUrl is provided, returns a full URL (for API responses).
+ * When baseUrl is omitted, returns a relative path (for HTML rendering).
  */
-export function getImageUrl(imageKey: string): string {
-  // Serve via worker route - works in both dev and prod
-  return `/${imageKey}`;
+export function getImageUrl(imageKey: string, baseUrl?: string): string {
+  const path = `/${imageKey}`;
+  if (baseUrl) {
+    return `${baseUrl}${path}`;
+  }
+  return path;
 }
 
 function getExtensionFromContentType(contentType: string): string {
-  if (contentType.includes("png")) return "png";
-  if (contentType.includes("gif")) return "gif";
-  if (contentType.includes("webp")) return "webp";
-  return "jpg";
+  if (contentType.includes('png')) return 'png';
+  if (contentType.includes('gif')) return 'gif';
+  if (contentType.includes('webp')) return 'webp';
+  return 'jpg';
 }

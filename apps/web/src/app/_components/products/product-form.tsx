@@ -353,7 +353,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               alt="Product from UPC lookup"
               className="h-16 w-16 rounded border object-contain"
             />
-            <span>Image from UPC lookup (not saved)</span>
+            <span>Image will be imported on save</span>
           </div>
         )}
       </div>

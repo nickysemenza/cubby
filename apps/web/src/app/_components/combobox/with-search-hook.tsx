@@ -11,7 +11,10 @@ import {
 } from "./combobox-builders";
 import { toast } from "sonner";
 import { type LocationOut } from "~/schemas/location";
-import { type ProductTopLevelOut } from "~/schemas/product";
+import {
+  type ProductTopLevelOut,
+  type ProductInputPayload,
+} from "~/schemas/product";
 import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "~/lib/query-keys";
@@ -168,14 +171,7 @@ function CreateProductDialog({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onCancel: () => void;
-  onCreate: (data: {
-    name: string;
-    manufacturer: string;
-    model: string | null;
-    upc: string | null;
-    ndb_number: number | null;
-    ingredientId: string | null;
-  }) => void;
+  onCreate: (data: ProductInputPayload) => void;
   isPending: boolean;
   error?: string;
   initialName?: string;

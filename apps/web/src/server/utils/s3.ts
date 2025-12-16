@@ -77,3 +77,22 @@ export const deleteS3Object = async (key: string): Promise<void> => {
 
   await s3Client.send(command);
 };
+
+/**
+ * Upload a file directly to S3/R2 storage (server-side upload)
+ * Use this for importing images from external URLs where presigned URLs aren't needed.
+ */
+export const uploadToS3 = async (params: {
+  key: string;
+  body: Buffer;
+  contentType: string;
+}): Promise<void> => {
+  const command = new PutObjectCommand({
+    Bucket: env.R2_BUCKET_NAME,
+    Key: params.key,
+    Body: params.body,
+    ContentType: params.contentType,
+  });
+
+  await s3Client.send(command);
+};

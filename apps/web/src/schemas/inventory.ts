@@ -129,6 +129,8 @@ export const csvImportResultItem = z.object({
     "product_only",
   ]),
   productName: z.string(),
+  productId: z.string().optional(), // Product ID for image import
+  upc: z.string().optional(), // UPC code for image import
   locationPath: z.string().optional(), // Optional for product-only rows
   message: z.string().optional(),
   // Preview fields

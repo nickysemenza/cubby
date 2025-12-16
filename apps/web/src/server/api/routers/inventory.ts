@@ -26,8 +26,10 @@ import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
   inventoryId,
   locationId,
+  unsafeProductId,
   type InventoryId,
 } from "~/schemas/identifiers";
+import { importImageFromUPC } from "~/server/services/image-import";
 
 // Define filters schema for inventory entries
 const inventoryFiltersSchema = z.object({
@@ -218,12 +220,43 @@ const importCSV = protectedProcedure
   .input(inventoryCSVImportPayload)
   .output(csvImportResult)
   .mutation(async ({ ctx, input }) => {
-    return await importInventoryFromCSV(
+    const result = await importInventoryFromCSV(
       ctx.db,
       ctx.organizationId,
       input.rows,
       false,
     );
+
+    // Import images for newly created products with UPC codes (non-blocking)
+    // We do this after the main import to avoid slowing down the CSV import
+    const productsToImportImages = result.items.filter(
+      (item) =>
+        item.productId &&
+        item.upc &&
+        (item.action === "created" || item.action === "product_only"),
+    );
+
+    // Process image imports in parallel but don't block on failures
+    await Promise.allSettled(
+      productsToImportImages.map(async (item) => {
+        try {
+          await importImageFromUPC(
+            ctx.db,
+            ctx.organizationId!,
+            ctx.upcLookupClient,
+            item.upc!,
+            unsafeProductId(item.productId!),
+          );
+        } catch (error) {
+          console.error(
+            `[importCSV] Image import failed for UPC ${item.upc}:`,
+            error,
+          );
+        }
+      }),
+    );
+
+    return result;
   });
 
 // Preview what CSV import would do (dry run)

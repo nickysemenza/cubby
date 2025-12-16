@@ -135,6 +135,8 @@ export const processRow = async (
       rowIndex,
       action: "product_only",
       productName: row.product_name,
+      productId: productData?.id,
+      upc: row.upc,
       locationPath: undefined,
       message: productWillBeCreated
         ? "Product will be created"
@@ -293,6 +295,8 @@ export const processRow = async (
           rowIndex,
           action: "moved",
           productName: row.product_name,
+          productId: productData.id,
+          upc: row.upc,
           locationPath: row.location_path,
           movedFrom: fromLocations,
           message: `Moved from ${fromLocations.join(", ")}`,
@@ -346,6 +350,8 @@ export const processRow = async (
         rowIndex,
         action: "skipped",
         productName: row.product_name,
+        productId: productData.id,
+        upc: row.upc,
         locationPath: row.location_path,
         message: "Already exists with same quantity",
       };
@@ -363,6 +369,8 @@ export const processRow = async (
           rowIndex,
           action: "updated",
           productName: row.product_name,
+          productId: productData.id,
+          upc: row.upc,
           locationPath: row.location_path,
           message: "Updated existing entry quantity",
         };
@@ -371,6 +379,8 @@ export const processRow = async (
           rowIndex,
           action: "created",
           productName: row.product_name,
+          productId: productData.id,
+          upc: row.upc,
           locationPath: row.location_path,
         };
       }

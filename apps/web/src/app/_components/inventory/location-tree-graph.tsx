@@ -35,7 +35,7 @@ export default function LocationTreeGraph() {
     data && (
       <div
         id="treeWrapper"
-        className="h-[500px] w-full border-2 border-black"
+        className="h-125 w-full border-2 border-black"
         ref={containerRef}
       >
         <Tree
