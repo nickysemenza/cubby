@@ -273,6 +273,17 @@ export const bulkMoveInventoryEntries = async (
       }
     }
 
+    // Update lastBulkInventory for both source and target locations
+    const now = new Date();
+    await tx
+      .update(location)
+      .set({ lastBulkInventory: now })
+      .where(eq(location.id, payload.sourceLocationId));
+    await tx
+      .update(location)
+      .set({ lastBulkInventory: now })
+      .where(eq(location.id, payload.targetLocationId));
+
     return results;
   });
 

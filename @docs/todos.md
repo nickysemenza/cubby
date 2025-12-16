@@ -9,19 +9,6 @@ Now that all unit conversions go through WASM with compound unit support:
 - [ ] **Custom unit aliases**: User-defined "1 serving = X g" with automatic nutrient calculation
 - [ ] **Inventory depletion preview**: "If I make this recipe, how much of each nutrient will I have left?"
 
-## Enhanced Location Inventory Management
+## Future: Location Enhancements
 
-- **Quick Inventory Management from Location View**
-  - ~~"Quick Capture Here" button exists~~ (navigates to `/inventory/quick-capture?locationId=X`)
-  - Update `location-detail.tsx`:
-    - [x] Add inline edit capabilities for quantities
-    - [x] Add "Move to..." action for individual items
-    - [x] Add delete action for removing items
-  - [x] Create `QuickInventoryAdd.tsx` component:
-    - Compact inline form for adding products without leaving location page
-    - Product search with amount input
-
-- **Additional Enhancements**
-  - [x] Add checkboxes to location table for bulk delete/move
-  - [ ] Add drag-drop between locations in tree view (future)
-  - Update `lastBulkInventory` timestamp on bulk operations
+- [ ] Add drag-drop between locations in tree view
