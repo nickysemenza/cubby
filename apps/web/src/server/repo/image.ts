@@ -4,8 +4,9 @@ import {
   generatePresignedUploadUrl,
   getS3ObjectUrl,
   deleteS3Object,
+  fetchAndStoreImage,
+  contentTypeToExtension,
 } from "../utils/s3";
-import { fetchAndStoreImage } from "../utils/image-import";
 import {
   type InitiateUploadWithoutEntityInput,
   type ImageWithEntity,
@@ -63,69 +64,121 @@ export const initiateImageUploadWithoutEntity = async (
   };
 };
 
-// Define the type for database image
-type ImageDB = typeof image.$inferSelect;
+// Type for image with pre-loaded entity relations
+type ImageWithRelations = typeof image.$inferSelect & {
+  productImages: Array<{
+    productId: string;
+    product: { name: string };
+  }>;
+  locationImages: Array<{
+    locationId: string;
+    location: { name: string };
+  }>;
+  recipeImages: Array<{
+    recipeId: string;
+    recipe: { name: string };
+  }>;
+};
 
 /**
- * Get image with entity information (DB to API helper function)
+ * Transform image with pre-loaded relations to API format.
+ * Expects relations to be loaded via `with` clause - no additional queries.
  */
-const dbImageToAPI = async (
-  db: Database,
-  imageData: ImageDB,
-): Promise<ImageWithEntity> => {
-  // Check product associations
-  const productImageRec = await getDb(db).query.productImage.findFirst({
-    where: eq(productImage.imageId, imageData.id),
-    with: { product: true },
-  });
-
-  if (productImageRec) {
+const imageWithRelationsToAPI = (
+  imageData: ImageWithRelations,
+): ImageWithEntity => {
+  // Check product associations (pre-loaded)
+  const productAssoc = imageData.productImages[0];
+  if (productAssoc) {
     return {
-      ...imageData,
+      id: imageData.id,
+      url: imageData.url,
+      key: imageData.key,
+      filename: imageData.filename,
+      size: imageData.size,
+      contentType: imageData.contentType,
+      status: imageData.status,
+      createdAt: imageData.createdAt,
+      updatedAt: imageData.updatedAt,
       entityType: "PRODUCT",
-      entityId: productImageRec.productId,
-      entityName: productImageRec.product.name,
+      entityId: productAssoc.productId,
+      entityName: productAssoc.product.name,
     };
   }
 
-  // Check location associations
-  const locationImageRec = await getDb(db).query.locationImage.findFirst({
-    where: eq(locationImage.imageId, imageData.id),
-    with: { location: true },
-  });
-
-  if (locationImageRec) {
+  // Check location associations (pre-loaded)
+  const locationAssoc = imageData.locationImages[0];
+  if (locationAssoc) {
     return {
-      ...imageData,
+      id: imageData.id,
+      url: imageData.url,
+      key: imageData.key,
+      filename: imageData.filename,
+      size: imageData.size,
+      contentType: imageData.contentType,
+      status: imageData.status,
+      createdAt: imageData.createdAt,
+      updatedAt: imageData.updatedAt,
       entityType: "LOCATION",
-      entityId: locationImageRec.locationId,
-      entityName: locationImageRec.location.name,
+      entityId: locationAssoc.locationId,
+      entityName: locationAssoc.location.name,
     };
   }
 
-  // Check recipe associations
-  const recipeImageRec = await getDb(db).query.recipeImage.findFirst({
-    where: eq(recipeImage.imageId, imageData.id),
-    with: { recipe: true },
-  });
-
-  if (recipeImageRec) {
+  // Check recipe associations (pre-loaded)
+  const recipeAssoc = imageData.recipeImages[0];
+  if (recipeAssoc) {
     return {
-      ...imageData,
+      id: imageData.id,
+      url: imageData.url,
+      key: imageData.key,
+      filename: imageData.filename,
+      size: imageData.size,
+      contentType: imageData.contentType,
+      status: imageData.status,
+      createdAt: imageData.createdAt,
+      updatedAt: imageData.updatedAt,
       entityType: "RECIPE",
-      entityId: recipeImageRec.recipeId,
-      entityName: recipeImageRec.recipe.name,
+      entityId: recipeAssoc.recipeId,
+      entityName: recipeAssoc.recipe.name,
     };
   }
 
   // No entity association found
   return {
-    ...imageData,
+    id: imageData.id,
+    url: imageData.url,
+    key: imageData.key,
+    filename: imageData.filename,
+    size: imageData.size,
+    contentType: imageData.contentType,
+    status: imageData.status,
+    createdAt: imageData.createdAt,
+    updatedAt: imageData.updatedAt,
     entityType: null,
     entityId: null,
     entityName: null,
   };
 };
+
+/** Shared relation config for loading entity associations */
+const imageEntityRelations = {
+  productImages: {
+    with: { product: { columns: { name: true } } },
+    columns: { productId: true },
+    limit: 1,
+  },
+  locationImages: {
+    with: { location: { columns: { name: true } } },
+    columns: { locationId: true },
+    limit: 1,
+  },
+  recipeImages: {
+    with: { recipe: { columns: { name: true } } },
+    columns: { recipeId: true },
+    limit: 1,
+  },
+} as const;
 
 /**
  * List images with pagination, sorting, and filtering
@@ -161,13 +214,14 @@ export const imageList = async (
   const take = pagination.pageSize;
   const skip = pagination.pageIndex * pagination.pageSize;
 
-  // Execute queries in parallel
+  // Execute queries in parallel - load entity relations in single query
   const [images, countResult] = await Promise.all([
     dbClient.query.image.findMany({
       where: whereClause,
       orderBy: orderByClause,
       limit: take,
       offset: skip,
+      with: imageEntityRelations,
     }),
     dbClient
       .select({ count: sql<number>`count(*)::int` })
@@ -175,10 +229,8 @@ export const imageList = async (
       .where(whereClause),
   ]);
 
-  // Process images to include entity information
-  const processedImages = await Promise.all(
-    images.map(async (img) => await dbImageToAPI(db, img)),
-  );
+  // Transform images with pre-loaded relations (no additional queries)
+  const processedImages = images.map(imageWithRelationsToAPI);
 
   return {
     data: processedImages,
@@ -194,17 +246,17 @@ export const getImageById = async (
   organizationId: string,
   imageId: string,
 ): Promise<ImageWithEntity> => {
-  // Find the image by ID with organization filter for security
+  // Find the image by ID with organization filter and entity relations
   const imageRecord = await getDb(db).query.image.findFirst({
     where: and(eq(image.id, imageId), eq(image.organizationId, organizationId)),
+    with: imageEntityRelations,
   });
 
   if (!imageRecord) {
     throw createAppError("IMAGE_NOT_FOUND", "Image not found");
   }
 
-  // Use the dbImageToAPI helper to transform the image
-  return dbImageToAPI(db, imageRecord);
+  return imageWithRelationsToAPI(imageRecord);
 };
 
 /**
@@ -327,7 +379,7 @@ export const importImageFromUrl = async (
   const createdImage = await insertAndReturnDb(db, image, {
     organizationId,
     key: stored.key,
-    filename: `${params.filenamePrefix}.${stored.contentType.split("/")[1] || "jpg"}`,
+    filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
     size: stored.size,
     contentType: stored.contentType,
     url: stored.url,
