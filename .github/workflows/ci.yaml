@@ -97,6 +97,10 @@ jobs:
             path: packages/usda-schemas
             needs-db: false
             needs-wasm: false
+          - name: upc-lookup
+            path: apps/upc-lookup
+            needs-db: false
+            needs-wasm: false
     outputs:
       test-passed: ${{ steps.test.outcome == 'success' }}
     services:

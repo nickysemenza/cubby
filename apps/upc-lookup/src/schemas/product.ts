@@ -1,7 +1,7 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // Product source enum
-export const productSourceSchema = z.enum(["upcitemdb"]);
+export const productSourceSchema = z.enum(['upcitemdb']);
 export type ProductSource = z.infer<typeof productSourceSchema>;
 
 // Successful lookup response
@@ -20,12 +20,22 @@ export const productLookupResponseSchema = z.object({
 });
 export type ProductLookupResponse = z.infer<typeof productLookupResponseSchema>;
 
+// Aliases for external consumers (more descriptive names)
+export const upcLookupResponseSchema = productLookupResponseSchema;
+export type UPCLookupResponse = ProductLookupResponse;
+
 // Not found response
 export const productNotFoundResponseSchema = z.object({
   found: z.literal(false),
   upc: z.string(),
 });
-export type ProductNotFoundResponse = z.infer<typeof productNotFoundResponseSchema>;
+export type ProductNotFoundResponse = z.infer<
+  typeof productNotFoundResponseSchema
+>;
+
+// Alias for external consumers
+export const upcLookupNotFoundSchema = productNotFoundResponseSchema;
+export type UPCLookupNotFound = ProductNotFoundResponse;
 
 // Search response
 export const searchResponseSchema = z.object({

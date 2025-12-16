@@ -3,7 +3,7 @@ import { context, propagation } from "@opentelemetry/api";
 import {
   upcLookupResponseSchema,
   type UPCLookupResponse,
-} from "~/schemas/upc-lookup";
+} from "@recipehub/upc-lookup/schemas";
 
 export class UPCLookupClient {
   constructor(

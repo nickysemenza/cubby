@@ -1,8 +1,17 @@
 {
-  "name": "upc-lookup",
+  "name": "@recipehub/upc-lookup",
+  "version": "0.1.0",
+  "private": true,
   "type": "module",
+  "exports": {
+    "./schemas": {
+      "types": "./src/schemas/product.ts",
+      "import": "./src/schemas/product.ts",
+      "default": "./src/schemas/product.ts"
+    }
+  },
   "scripts": {
-    "dev": "vite",
+    "dev:local": "vite",
     "build": "vite build",
     "preview": "$npm_execpath run build && vite preview",
     "deploy": "$npm_execpath run build && wrangler deploy",
@@ -27,7 +36,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "drizzle-kit": "^0.31.8",
     "tailwindcss": "^4.1.18",
-    "vite": "^6.3.5",
+    "vite": "^7.3.0",
     "vite-ssr-components": "^0.5.1",
     "vitest": "^4.0.15",
     "wrangler": "^4.17.0"
