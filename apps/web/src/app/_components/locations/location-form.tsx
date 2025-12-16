@@ -44,8 +44,10 @@ interface CreateLocationFormProps extends CreateModeProps<LocationCreateInput> {
 }
 
 // Props for edit mode
-interface EditLocationFormProps
-  extends EditModeProps<LocationUpdateInput, LocationOut> {
+interface EditLocationFormProps extends EditModeProps<
+  LocationUpdateInput,
+  LocationOut
+> {
   entity: LocationOut & {
     parent?: LocationOut | null;
     images?: ImageOut[]; // Images from DB

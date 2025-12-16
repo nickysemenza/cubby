@@ -6,8 +6,7 @@ import {
 } from "~/styles/layouts";
 
 export interface GridContainerProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    GridContainerVariants {}
+  extends React.HTMLAttributes<HTMLDivElement>, GridContainerVariants {}
 
 export const GridContainer = React.forwardRef<
   HTMLDivElement,

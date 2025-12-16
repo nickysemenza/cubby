@@ -39,17 +39,17 @@ const formSchema = z.object({
 type InventoryFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
-interface CreateInventoryFormProps
-  extends CreateModeProps<z.infer<typeof inventoryCreatePayloadData>> {
+interface CreateInventoryFormProps extends CreateModeProps<
+  z.infer<typeof inventoryCreatePayloadData>
+> {
   inventoryItem?: never;
 }
 
 // Props for edit mode
-interface EditInventoryFormProps
-  extends EditModeProps<
-    InventoryUpdateInput,
-    z.infer<typeof inventoryWithLocationAndProductOut>
-  > {
+interface EditInventoryFormProps extends EditModeProps<
+  InventoryUpdateInput,
+  z.infer<typeof inventoryWithLocationAndProductOut>
+> {
   entity: z.infer<typeof inventoryWithLocationAndProductOut>;
 }
 

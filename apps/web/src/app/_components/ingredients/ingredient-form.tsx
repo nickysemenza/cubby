@@ -29,18 +29,18 @@ const formSchema = z.object({
 type IngredientFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
-interface CreateIngredientFormProps
-  extends CreateModeProps<z.infer<typeof ingredientBase>> {
+interface CreateIngredientFormProps extends CreateModeProps<
+  z.infer<typeof ingredientBase>
+> {
   ingredient?: never;
   initialName?: string;
 }
 
 // Props for edit mode
-interface EditIngredientFormProps
-  extends EditModeProps<
-    IngredientUpdateInput,
-    IngredientWithRecipesAndProductOut
-  > {
+interface EditIngredientFormProps extends EditModeProps<
+  IngredientUpdateInput,
+  IngredientWithRecipesAndProductOut
+> {
   entity: IngredientWithRecipesAndProductOut;
 }
 

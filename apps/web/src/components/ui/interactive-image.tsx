@@ -47,7 +47,8 @@ const imageContentVariants = cva("object-cover", {
 });
 
 export interface InteractiveImageProps
-  extends Omit<React.HTMLAttributes<HTMLDivElement>, "children">,
+  extends
+    Omit<React.HTMLAttributes<HTMLDivElement>, "children">,
     VariantProps<typeof interactiveImageVariants> {
   src: string;
   alt: string;
