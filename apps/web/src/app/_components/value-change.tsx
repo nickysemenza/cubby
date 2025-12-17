@@ -21,14 +21,21 @@ interface ValueChangeProps {
   className?: string;
 }
 
-function formatValue(value: unknown): string {
+function formatValue(value: unknown, maxLength = 500): string {
   if (value === null || value === undefined || value === "") {
     return "(empty)";
   }
+  let str: string;
   if (typeof value === "object") {
-    return JSON.stringify(value);
+    str = JSON.stringify(value);
+  } else {
+    str = String(value);
   }
-  return String(value);
+  // Truncate long values
+  if (str.length > maxLength) {
+    return str.slice(0, maxLength) + "...";
+  }
+  return str;
 }
 
 export function ValueChange({
