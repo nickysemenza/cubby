@@ -122,10 +122,17 @@ export const serializeUnitMappings = async (
   );
   const nonPriceMappings = results.filter((m) => !m.isMoneyA && !m.isMoneyB);
   if (nonPriceMappings.length === 0) return null;
+
+  // Round to 6 decimal places to avoid floating point precision churn
+  const formatNum = (n: number) => {
+    const rounded = Math.round(n * 1000000) / 1000000;
+    return rounded.toString();
+  };
+
   return nonPriceMappings
     .map((m) => {
       const sourceStr = m.source ? ` @ ${m.source}` : "";
-      return `${m.a.value} ${m.a.unit} = ${m.b.value} ${m.b.unit}${sourceStr}`;
+      return `${formatNum(m.a.value)} ${m.a.unit} = ${formatNum(m.b.value)} ${m.b.unit}${sourceStr}`;
     })
     .join("; ");
 };
