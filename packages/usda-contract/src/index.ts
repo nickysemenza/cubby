@@ -49,6 +49,15 @@ export const listFoodsResponse = z.object({
 // Path params
 export const fdcIdParam = z.object({ fdc_id: z.coerce.number() });
 
+// Pre-define batch schemas to avoid ts-rest type depth issues
+export const batchLookupBody = z.object({
+  lookups: z.array(foodLookupParam),
+});
+
+export const batchLookupResponse = z.object({
+  results: z.array(foodSummary.nullable()),
+});
+
 const c = initContract();
 
 export const usdaContract = c.router({
@@ -83,13 +92,10 @@ export const usdaContract = c.router({
   findByLookupBatch: {
     method: 'POST',
     path: '/api/foods/search/batch',
-    body: z.object({
-      lookups: z.array(foodLookupParam),
-    }),
+    // Use pre-defined schemas to avoid ts-rest type depth issues
+    body: batchLookupBody,
     responses: {
-      200: z.object({
-        results: z.array(foodSummary.nullable()),
-      }),
+      200: batchLookupResponse,
     },
     summary: 'Find multiple foods by lookup (UPC or NDB) in batch',
   },

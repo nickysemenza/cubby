@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, createAppError } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  createAppError,
+  getUserId,
+} from "../trpc";
 import {
   getInventoryEntryByID,
   inventoryentryList,
@@ -94,6 +99,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         services.db,
         data,
         services.organizationId!,
+        getUserId(services.auth),
       );
     },
     update: async (services, id: InventoryId, data) => {
@@ -103,6 +109,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         id,
         services.organizationId!,
         data,
+        getUserId(services.auth),
       );
     },
   },
@@ -123,6 +130,7 @@ const bulkProcess = protectedProcedure
         amount: item.amount,
       })),
       ctx.organizationId,
+      getUserId(ctx.auth),
     );
     return result;
   });
@@ -132,7 +140,12 @@ const bulkMove = protectedProcedure
   .input(bulkMovePayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
-    return await bulkMoveInventoryEntries(ctx.db, ctx.organizationId, input);
+    return await bulkMoveInventoryEntries(
+      ctx.db,
+      ctx.organizationId,
+      input,
+      getUserId(ctx.auth),
+    );
   });
 
 // Delete a single inventory entry
@@ -140,7 +153,12 @@ const deleteItem = protectedProcedure
   .input(z.object({ id: inventoryId }))
   .output(z.void())
   .mutation(async ({ ctx, input }) => {
-    await deleteInventoryEntry(ctx.db, input.id, ctx.organizationId!);
+    await deleteInventoryEntry(
+      ctx.db,
+      input.id,
+      ctx.organizationId!,
+      getUserId(ctx.auth),
+    );
   });
 
 // Find products with expectedQuantity=1 in multiple locations

@@ -78,6 +78,16 @@ export function createAppError(
 }
 
 /**
+ * Extract userId from auth context, converting null to undefined for optional parameters.
+ * Use this when passing userId to repo/service functions that expect `userId?: string`.
+ */
+export function getUserId(
+  auth: { userId: string | null; sessionId: string | null } | undefined,
+): string | undefined {
+  return auth?.userId ?? undefined;
+}
+
+/**
  * Map database product record to ProductTopLevelOut format
  * Excludes DB-only fields (deletedAt, organizationId, ingredientId)
  */

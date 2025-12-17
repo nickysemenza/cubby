@@ -26,6 +26,7 @@ import {
   type UpdateInventoryEntryData,
   type CreateInventoryEntryData,
 } from "./types";
+import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 
 /**
  * Check if a product with expectedQuantity=1 already exists in a different location.
@@ -181,7 +182,16 @@ export const updateInventoryEntry = async (
   id: InventoryId,
   organizationId: OrganizationId,
   data: UpdateInventoryEntryData,
+  userId?: string,
 ) => {
+  // Fetch current state for audit logging
+  const before = await getDb(db).query.inventoryEntry.findFirst({
+    where: and(
+      eq(inventoryEntry.id, id),
+      eq(inventoryEntry.organizationId, organizationId),
+    ),
+  });
+
   // Build update values using helper to filter undefined
   const updateValues = buildPartialUpdateValues({
     amount: data.amount,
@@ -198,6 +208,23 @@ export const updateInventoryEntry = async (
       eq(inventoryEntry.organizationId, organizationId),
     ),
   );
+
+  // Log audit entry with changes
+  if (before) {
+    const changes = computeChanges(before, updated, [
+      "amount",
+      "productId",
+      "locationId",
+    ]);
+    await logAuditEntry(db, {
+      organizationId,
+      entityType: "inventory",
+      entityId: id,
+      action: "update",
+      changes,
+      userId,
+    });
+  }
 
   // Fetch with relations
   const result = await getDb(db).query.inventoryEntry.findFirst({
@@ -216,12 +243,22 @@ export const createInventoryEntry = async (
   db: Database,
   data: CreateInventoryEntryData,
   organizationId: OrganizationId,
+  userId?: string,
 ) => {
   const created = await insertAndReturnDb(db, inventoryEntry, {
     organizationId: organizationId,
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
+  });
+
+  // Log audit entry
+  await logAuditEntry(db, {
+    organizationId,
+    entityType: "inventory",
+    entityId: created.id,
+    action: "create",
+    userId,
   });
 
   // Fetch with relations
@@ -264,6 +301,7 @@ export const deleteInventoryEntry = async (
   db: Database,
   id: InventoryId,
   organizationId: OrganizationId,
+  userId?: string,
 ): Promise<void> => {
   await getDb(db)
     .delete(inventoryEntry)
@@ -273,4 +311,13 @@ export const deleteInventoryEntry = async (
         eq(inventoryEntry.organizationId, organizationId),
       ),
     );
+
+  // Log audit entry
+  await logAuditEntry(db, {
+    organizationId,
+    entityType: "inventory",
+    entityId: id,
+    action: "delete",
+    userId,
+  });
 };

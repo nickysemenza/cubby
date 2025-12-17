@@ -634,3 +634,45 @@ export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
     references: [image.id],
   }),
 }));
+
+// Audit Log table
+export const auditLog = pgTable(
+  "AuditLog",
+  {
+    id: uuid("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    organizationId: text("organizationId")
+      .notNull()
+      .references(() => organization.id),
+    entityType: text("entityType").notNull(), // 'product', 'location', 'inventory', 'recipe', 'ingredient'
+    entityId: uuid("entityId").notNull(),
+    action: text("action").notNull(), // 'create', 'update', 'delete'
+    changes:
+      jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
+    userId: text("userId").references(() => user.id),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("AuditLog_organizationId_createdAt_idx").on(
+      table.organizationId,
+      table.createdAt.desc(),
+    ),
+    index("AuditLog_entityType_entityId_createdAt_idx").on(
+      table.entityType,
+      table.entityId,
+      table.createdAt.desc(),
+    ),
+  ],
+);
+
+export const auditLogRelations = relations(auditLog, ({ one }) => ({
+  organization: one(organization, {
+    fields: [auditLog.organizationId],
+    references: [organization.id],
+  }),
+  user: one(user, {
+    fields: [auditLog.userId],
+    references: [user.id],
+  }),
+}));

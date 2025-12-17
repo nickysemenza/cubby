@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, getUserId } from "../trpc";
 import { productWithFoodOut } from "~/server/services/product.service";
 import {
   productInputPayload,
@@ -60,6 +60,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
       return await services.services.product.createProduct(
         data,
         services.organizationId!,
+        getUserId(services.auth),
       );
     },
     update: async (services, id: ProductId, data) => {
@@ -68,6 +69,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
         id,
         services.organizationId!,
         data,
+        getUserId(services.auth),
       );
     },
   },
@@ -82,6 +84,7 @@ const create = protectedProcedure
     const product = await ctx.services.product.createProduct(
       input,
       ctx.organizationId!,
+      ctx.auth.userId ?? undefined,
     );
 
     // If product has a UPC, try to import image from UPC lookup (non-blocking)
@@ -118,6 +121,7 @@ const quickCreate = protectedProcedure
         price: input.price ?? null,
       },
       ctx.organizationId!,
+      ctx.auth.userId ?? undefined,
     );
   });
 
@@ -172,6 +176,7 @@ const findOrCreateByUPC = protectedProcedure
           model: null,
         },
         ctx.organizationId!,
+        ctx.auth.userId ?? undefined,
       );
     }
 
@@ -196,6 +201,7 @@ const findOrCreateByUPC = protectedProcedure
           price: upcLookup.priceDollars ?? null,
         },
         ctx.organizationId!,
+        ctx.auth.userId ?? undefined,
       );
 
       // Import image from UPC lookup if available (non-blocking)
@@ -230,6 +236,7 @@ const findOrCreateByUPC = protectedProcedure
         model: null,
       },
       ctx.organizationId!,
+      ctx.auth.userId ?? undefined,
     );
   });
 

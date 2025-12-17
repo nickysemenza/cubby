@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, createTRPCRouter } from "../trpc";
+import { protectedProcedure, createTRPCRouter, getUserId } from "../trpc";
 import {
   infLocation,
   locationType,
@@ -63,7 +63,12 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
     },
     create: async (services, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
-      return await createLocation(services.db, data, services.organizationId!);
+      return await createLocation(
+        services.db,
+        data,
+        services.organizationId!,
+        getUserId(services.auth),
+      );
     },
     update: async (services, id: LocationId, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
@@ -72,6 +77,7 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
         id,
         services.organizationId!,
         data,
+        getUserId(services.auth),
       );
     },
   },

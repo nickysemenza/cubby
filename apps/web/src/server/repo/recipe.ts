@@ -39,6 +39,7 @@ import {
   image,
 } from "~/server/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 
 export const getRecipeByID = async (
   id: RecipeId,
@@ -190,6 +191,7 @@ export const createRecipe = async (
   recipeInput: RecipeCreateInput,
   db: Database,
   organizationId: OrganizationId,
+  userId?: string,
 ): Promise<RecipeOut> => {
   const sourceType = recipeInput.meta?.url ? "Website" : "Other";
   const sourceData = recipeInput.meta?.url || null;
@@ -255,6 +257,15 @@ export const createRecipe = async (
         pendingImageIds,
       );
     }
+
+    // Log audit entry
+    await logAuditEntry(tx, {
+      organizationId,
+      entityType: "recipe",
+      entityId: createdRecipe.id,
+      action: "create",
+      userId,
+    });
 
     const fullRecipe = await getRecipeByID(
       createdRecipe.id as RecipeId,
@@ -453,6 +464,7 @@ export const updateRecipe = async (
   updates: RecipeUpdateInput["data"],
   db: Database,
   organizationId: OrganizationId,
+  userId?: string,
 ): Promise<RecipeOut> => {
   // Check if recipe exists and belongs to project
   const existingRecipe = await getDb(db).query.recipe.findFirst({
@@ -469,6 +481,11 @@ export const updateRecipe = async (
   if (!existingRecipe) {
     throw new Error(`Recipe with ID ${id} not found`);
   }
+
+  // Store before state for audit logging
+  const beforeState = {
+    name: existingRecipe.name,
+  };
 
   // Update in a transaction
   return await withTransaction(db, async (tx) => {
@@ -706,6 +723,21 @@ export const updateRecipe = async (
     if (!fullRecipe) {
       throw new Error("Failed to retrieve updated recipe");
     }
+
+    // Log audit entry with changes
+    const afterState = {
+      name: fullRecipe.name,
+    };
+    const changes = computeChanges(beforeState, afterState, ["name"]);
+    await logAuditEntry(tx, {
+      organizationId,
+      entityType: "recipe",
+      entityId: id,
+      action: "update",
+      changes,
+      userId,
+    });
+
     return fullRecipe;
   });
 };

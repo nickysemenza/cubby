@@ -47,6 +47,7 @@ import {
   count,
   arrayOverlaps,
 } from "drizzle-orm";
+import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 
 export const mergeIngredients = async (
   db: Database,
@@ -170,6 +171,7 @@ export const createIngredient = async (
   db: Database | DrizzleTransaction,
   data: z.infer<typeof ingredientBase>,
   organizationId: OrganizationId,
+  userId?: string,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const [newIngredient] = await unwrapDb(db)
     .insert(ingredient)
@@ -183,6 +185,15 @@ export const createIngredient = async (
   if (!newIngredient) {
     throw new Error("Failed to create ingredient");
   }
+
+  // Log audit entry
+  await logAuditEntry(db, {
+    organizationId,
+    entityType: "ingredient",
+    entityId: newIngredient.id,
+    action: "create",
+    userId,
+  });
 
   const ingredientData = await unwrapDb(db).query.ingredient.findFirst({
     where: eq(ingredient.id, newIngredient.id),
@@ -201,13 +212,37 @@ export const updateIngredient = async (
   id: IngredientId,
   organizationId: OrganizationId,
   data: Partial<z.infer<typeof ingredientBase>>,
+  userId?: string,
 ): Promise<IngredientWithRecipesAndProductOut> => {
+  // Capture before state for audit logging
+  const beforeState = await getDb(db).query.ingredient.findFirst({
+    where: and(
+      eq(ingredient.id, id),
+      eq(ingredient.organizationId, organizationId),
+    ),
+  });
+
   const updated = await updateAndReturnDb(
     db,
     ingredient,
     data,
     and(eq(ingredient.id, id), eq(ingredient.organizationId, organizationId)),
   );
+
+  // Log audit entry with changes
+  if (beforeState) {
+    const changes = computeChanges(beforeState, updated, ["name", "aliases"]);
+    if (changes) {
+      await logAuditEntry(db, {
+        organizationId,
+        entityType: "ingredient",
+        entityId: id,
+        action: "update",
+        changes,
+        userId,
+      });
+    }
+  }
 
   const ingredientData = await getDb(db).query.ingredient.findFirst({
     where: eq(ingredient.id, updated.id),

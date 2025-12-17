@@ -19,6 +19,7 @@ import { useEditMode } from "../hooks/useEditMode";
 import { useQuery } from "@tanstack/react-query";
 import { LocationInventoryTable } from "./location-inventory-table";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
+import { AuditLogList } from "../audit-log/audit-log-list";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -132,6 +133,16 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
             onRefresh={() => refetchInventoryItems()}
           />
         </div>
+      ),
+    },
+    {
+      title: "History",
+      content: (
+        <AuditLogList
+          entityType="location"
+          entityId={location.id}
+          showEntityLink={false}
+        />
       ),
     },
   ];

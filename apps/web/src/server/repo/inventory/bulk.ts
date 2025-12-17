@@ -17,12 +17,14 @@ import { inventoryEntry, location } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { dbInventoryEntryToAPI } from "./helpers";
 import { type InventoryEntryDeepDB } from "./types";
+import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 
 export const bulkProcessInventoryEntries = async (
   db: Database,
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
   organizationId: OrganizationId,
+  userId?: string,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await withTransaction(db, async (tx: Transaction) => {
@@ -33,6 +35,11 @@ export const bulkProcessInventoryEntries = async (
       where: eq(inventoryEntry.locationId, locationId),
       ...relations.inventory.full,
     });
+
+    // Create a map of existing items for change tracking
+    const existingItemsMap = new Map(
+      existingItems.map((item) => [item.id, item]),
+    );
 
     // Get IDs of items in the submitted array
     const submittedIds = items.filter((item) => item.id).map((item) => item.id);
@@ -45,6 +52,14 @@ export const bulkProcessInventoryEntries = async (
     // Delete items that are not in the submitted array
     for (const item of itemsToDelete) {
       await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, item.id));
+      // Log delete audit entry
+      await logAuditEntry(tx, {
+        organizationId,
+        entityType: "inventory",
+        entityId: item.id,
+        action: "delete",
+        userId,
+      });
     }
 
     // Process submitted items - create new or update existing
@@ -59,6 +74,15 @@ export const bulkProcessInventoryEntries = async (
           productId: item.productId,
           locationId: locationId,
           amount: item.amount,
+        });
+
+        // Log create audit entry
+        await logAuditEntry(tx, {
+          organizationId,
+          entityType: "inventory",
+          entityId: created.id,
+          action: "create",
+          userId,
         });
 
         // Fetch with relations
@@ -79,12 +103,31 @@ export const bulkProcessInventoryEntries = async (
 
         // Only process if there are actual updates
         if (Object.keys(updateValues).length > 0) {
+          const before = existingItemsMap.get(item.id);
           const updated = await updateAndReturn(
             tx,
             inventoryEntry,
             updateValues,
             eq(inventoryEntry.id, item.id),
           );
+
+          // Log update audit entry with changes
+          if (before) {
+            const changes = computeChanges(before, updated, [
+              "amount",
+              "productId",
+            ]);
+            if (changes) {
+              await logAuditEntry(tx, {
+                organizationId,
+                entityType: "inventory",
+                entityId: item.id,
+                action: "update",
+                changes,
+                userId,
+              });
+            }
+          }
 
           // Fetch with relations
           const fullUpdated = await tx.query.inventoryEntry.findFirst({
@@ -129,6 +172,7 @@ export const bulkMoveInventoryEntries = async (
   db: Database,
   organizationId: OrganizationId,
   payload: BulkMovePayload,
+  userId?: string,
 ) => {
   // Validate source and target are different
   if (payload.sourceLocationId === payload.targetLocationId) {
@@ -184,17 +228,43 @@ export const bulkMoveInventoryEntries = async (
           const newQuantity = existingQuantity + moveQuantity;
 
           // Update target entry with combined quantity
-          await updateAndReturn(
+          const updatedTargetEntry = await updateAndReturn(
             tx,
             inventoryEntry,
             { amount: { value: newQuantity, unit: item.quantity.unit } },
             eq(inventoryEntry.id, existingAtTarget.id),
           );
 
+          // Log update audit for target
+          const targetChanges = computeChanges(
+            existingAtTarget,
+            updatedTargetEntry,
+            ["amount"],
+          );
+          if (targetChanges) {
+            await logAuditEntry(tx, {
+              organizationId,
+              entityType: "inventory",
+              entityId: existingAtTarget.id,
+              action: "update",
+              changes: targetChanges,
+              userId,
+            });
+          }
+
           // Delete source entry since we moved everything
           await tx
             .delete(inventoryEntry)
             .where(eq(inventoryEntry.id, item.inventoryEntryId));
+
+          // Log delete audit for source
+          await logAuditEntry(tx, {
+            organizationId,
+            entityType: "inventory",
+            entityId: item.inventoryEntryId,
+            action: "delete",
+            userId,
+          });
 
           // Fetch updated target entry
           const updatedTarget = await tx.query.inventoryEntry.findFirst({
@@ -204,12 +274,27 @@ export const bulkMoveInventoryEntries = async (
           if (updatedTarget) results.push(updatedTarget);
         } else {
           // Just update location of existing entry
-          await updateAndReturn(
+          const updatedEntry = await updateAndReturn(
             tx,
             inventoryEntry,
             { locationId: payload.targetLocationId },
             eq(inventoryEntry.id, item.inventoryEntryId),
           );
+
+          // Log update audit for location change
+          const locationChanges = computeChanges(sourceEntry, updatedEntry, [
+            "locationId",
+          ]);
+          if (locationChanges) {
+            await logAuditEntry(tx, {
+              organizationId,
+              entityType: "inventory",
+              entityId: item.inventoryEntryId,
+              action: "update",
+              changes: locationChanges,
+              userId,
+            });
+          }
 
           // Fetch updated entry
           const updated = await tx.query.inventoryEntry.findFirst({
@@ -223,7 +308,7 @@ export const bulkMoveInventoryEntries = async (
         const remainingQuantity = sourceQuantity - moveQuantity;
 
         // Reduce source quantity
-        await updateAndReturn(
+        const updatedSource = await updateAndReturn(
           tx,
           inventoryEntry,
           {
@@ -235,18 +320,50 @@ export const bulkMoveInventoryEntries = async (
           eq(inventoryEntry.id, item.inventoryEntryId),
         );
 
+        // Log update audit for source reduction
+        const sourceChanges = computeChanges(sourceEntry, updatedSource, [
+          "amount",
+        ]);
+        if (sourceChanges) {
+          await logAuditEntry(tx, {
+            organizationId,
+            entityType: "inventory",
+            entityId: item.inventoryEntryId,
+            action: "update",
+            changes: sourceChanges,
+            userId,
+          });
+        }
+
         if (existingAtTarget) {
           // Add to existing entry at target
           const existingAmount = amount.parse(existingAtTarget.amount);
           const existingQuantity = existingAmount.value;
           const newQuantity = existingQuantity + moveQuantity;
 
-          await updateAndReturn(
+          const updatedTargetEntry = await updateAndReturn(
             tx,
             inventoryEntry,
             { amount: { value: newQuantity, unit: item.quantity.unit } },
             eq(inventoryEntry.id, existingAtTarget.id),
           );
+
+          // Log update audit for target
+          const targetChanges = computeChanges(
+            existingAtTarget,
+            updatedTargetEntry,
+            ["amount"],
+          );
+          if (targetChanges) {
+            await logAuditEntry(tx, {
+              organizationId,
+              entityType: "inventory",
+              entityId: existingAtTarget.id,
+              action: "update",
+              changes: targetChanges,
+              userId,
+            });
+          }
 
           // Fetch updated target entry
           const updatedTarget = await tx.query.inventoryEntry.findFirst({
@@ -261,6 +378,15 @@ export const bulkMoveInventoryEntries = async (
             productId: sourceEntry.productId,
             locationId: payload.targetLocationId,
             amount: item.quantity,
+          });
+
+          // Log create audit for new target entry
+          await logAuditEntry(tx, {
+            organizationId,
+            entityType: "inventory",
+            entityId: created.id,
+            action: "create",
+            userId,
           });
 
           // Fetch with relations

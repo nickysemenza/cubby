@@ -52,6 +52,7 @@ import {
   productImage,
 } from "~/server/db/schema";
 import { eq, and, count, ilike, inArray } from "drizzle-orm";
+import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 
 export const findProductByName = async (
   db: Database | Transaction,
@@ -256,6 +257,7 @@ export const createProduct = async (
   db: Database,
   data: ProductInputPayload,
   organizationId: OrganizationId,
+  userId?: string,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
@@ -305,6 +307,15 @@ export const createProduct = async (
         .where(inArray(image.id, pendingImageIds));
     }
 
+    // Log audit entry
+    await logAuditEntry(tx, {
+      organizationId,
+      entityType: "product",
+      entityId: newProduct.id,
+      action: "create",
+      userId,
+    });
+
     // Construct and validate the response object
     const result = {
       ...newProduct,
@@ -321,6 +332,7 @@ export const updateProduct = async (
   id: ProductId,
   organizationId: OrganizationId,
   data: Partial<ProductInputPayload>,
+  userId?: string,
 ): Promise<ProductTopLevelOut> => {
   const {
     ingredientId,
@@ -332,6 +344,18 @@ export const updateProduct = async (
 
   // Use a transaction to ensure atomicity
   return await getDb(db).transaction(async (tx: Transaction) => {
+    // Fetch current state for audit logging
+    const beforeProduct = await tx.query.product.findFirst({
+      where: and(
+        eq(product.id, id),
+        eq(product.organizationId, organizationId),
+      ),
+    });
+
+    if (!beforeProduct) {
+      throw new Error(notFoundError("Product", id));
+    }
+
     // Build update data
     const updateData: {
       name?: string;
@@ -447,6 +471,28 @@ export const updateProduct = async (
       },
     });
 
+    // Log audit entry with changes
+    const changes = computeChanges(beforeProduct, updated, [
+      "name",
+      "manufacturer",
+      "upc",
+      "ndb_number",
+      "model",
+      "expectedQuantity",
+      "ingredientId",
+    ]);
+
+    if (changes) {
+      await logAuditEntry(tx, {
+        organizationId,
+        entityType: "product",
+        entityId: updated.id,
+        action: "update",
+        changes,
+        userId,
+      });
+    }
+
     // Construct and validate the response object
     const result = {
       ...updated,
@@ -533,6 +579,7 @@ export const quickCreateProduct = async (
     price?: number | null;
   },
   organizationId: OrganizationId,
+  userId?: string,
 ): Promise<ProductTopLevelOut> => {
   const [newProduct] = await getDb(db)
     .insert(product)
@@ -561,6 +608,15 @@ export const quickCreateProduct = async (
       "quick-create",
     );
   }
+
+  // Log audit entry
+  await logAuditEntry(db, {
+    organizationId,
+    entityType: "product",
+    entityId: newProduct.id,
+    action: "create",
+    userId,
+  });
 
   return productTopLevelOut.parse({
     ...newProduct,

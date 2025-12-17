@@ -42,6 +42,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
+import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 
 // Type context for batch CSV imports with type inference
 export interface LocationTypeContext {
@@ -58,6 +59,7 @@ export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
   organizationId: OrganizationId,
+  userId?: string,
 ) => {
   // Create the location
   const [newLocation] = await getDb(db)
@@ -85,6 +87,15 @@ export const createLocation = async (
     );
   }
 
+  // Log audit entry
+  await logAuditEntry(db, {
+    organizationId,
+    entityType: "location",
+    entityId: newLocation.id,
+    action: "create",
+    userId,
+  });
+
   return getLocationById(db, unsafeLocationId(newLocation.id), organizationId);
 };
 
@@ -94,6 +105,7 @@ export const updateLocation = async (
   id: LocationId,
   organizationId: OrganizationId,
   data: LocationUpdateInput["data"],
+  userId?: string,
 ) => {
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {
@@ -121,6 +133,14 @@ export const updateLocation = async (
         .then((loc: typeof potentialParent) => loc?.parent ?? null);
     }
   }
+
+  // Fetch current state for audit logging
+  const before = await getDb(db).query.location.findFirst({
+    where: and(
+      eq(location.id, id),
+      eq(location.organizationId, organizationId),
+    ),
+  });
 
   return await getDb(db).transaction(async (tx: Transaction) => {
     // Build update values using helper to filter undefined
@@ -159,6 +179,23 @@ export const updateLocation = async (
             inArray(locationImage.imageId, data.removeImageIds),
           ),
         );
+    }
+
+    // Log audit entry with changes
+    if (before) {
+      const changes = computeChanges(before, updated, [
+        "name",
+        "type",
+        "parentId",
+      ]);
+      await logAuditEntry(tx, {
+        organizationId,
+        entityType: "location",
+        entityId: id,
+        action: "update",
+        changes,
+        userId,
+      });
     }
 
     return getLocationById(tx, unsafeLocationId(updated.id), organizationId);

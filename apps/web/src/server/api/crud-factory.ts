@@ -30,6 +30,10 @@ export interface CrudServices {
     ingredient: IngredientService;
   };
   usdaClient: USDAClient;
+  auth?: {
+    userId: string | null;
+    sessionId: string | null;
+  };
 }
 
 // Reusable procedure builders

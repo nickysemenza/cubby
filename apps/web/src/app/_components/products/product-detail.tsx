@@ -21,6 +21,7 @@ import {
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import EntityImageList from "../EntityImageList";
 import { useEditMode } from "../hooks/useEditMode";
+import { AuditLogList } from "../audit-log/audit-log-list";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -147,6 +148,16 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     {
       title: "Unit Mappings",
       content: <UnitMappingDisplay mappings={mappings} title="" />,
+    },
+    {
+      title: "History",
+      content: (
+        <AuditLogList
+          entityType="product"
+          entityId={product.id}
+          showEntityLink={false}
+        />
+      ),
     },
   ];
 

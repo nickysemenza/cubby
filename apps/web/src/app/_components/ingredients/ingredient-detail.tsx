@@ -17,6 +17,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { useEditMode } from "../hooks/useEditMode";
+import { AuditLogList } from "../audit-log/audit-log-list";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
@@ -103,6 +104,16 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
           items={ingredient.appearsInRecipes}
           Pill={RecipePillLink}
           pillPropName="recipe"
+        />
+      ),
+    },
+    {
+      title: "History",
+      content: (
+        <AuditLogList
+          entityType="ingredient"
+          entityId={ingredient.id}
+          showEntityLink={false}
         />
       ),
     },

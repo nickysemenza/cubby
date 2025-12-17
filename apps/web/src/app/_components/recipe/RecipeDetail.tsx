@@ -7,6 +7,8 @@ import { RecipeIngredientList } from "./recipeingredientlist";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import EntityImageList from "../EntityImageList";
 import { useTRPCClient } from "~/trpc/react";
+import { AuditLogList } from "../audit-log/audit-log-list";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
@@ -56,6 +58,22 @@ const RecipeDetail: React.FC<{
       </div>
 
       <RecipeIngredientList ingredients={ingredients} ingMap={data} />
+
+      {/* History Section */}
+      <Card className="mt-6">
+        <CardHeader className="bg-muted/50 px-4 py-3 sm:px-6 sm:py-4">
+          <CardTitle className="text-base font-medium sm:text-lg">
+            History
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6">
+          <AuditLogList
+            entityType="recipe"
+            entityId={recipe.id}
+            showEntityLink={false}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 };

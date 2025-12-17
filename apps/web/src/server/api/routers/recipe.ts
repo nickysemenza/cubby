@@ -3,6 +3,7 @@ import {
   protectedProcedure,
   systemProcedure,
   createAppError,
+  getUserId,
 } from "../trpc";
 
 import { z } from "zod";
@@ -63,7 +64,12 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     },
     create: async (services, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
-      return await createRecipe(data, services.db, services.organizationId!);
+      return await createRecipe(
+        data,
+        services.db,
+        services.organizationId!,
+        getUserId(services.auth),
+      );
     },
     update: async (services, id: RecipeId, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
@@ -72,6 +78,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         data,
         services.db,
         services.organizationId!,
+        getUserId(services.auth),
       );
     },
   },
