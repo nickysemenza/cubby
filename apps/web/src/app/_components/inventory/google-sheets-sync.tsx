@@ -33,6 +33,7 @@ import {
   type CSVImportResultItem,
 } from "~/schemas/inventory";
 import { queryKeys } from "~/lib/query-keys";
+import { ValueChange } from "../value-change";
 
 // Helper to get action styles
 const getActionStyles = (action: CSVImportResultItem["action"]) => {
@@ -367,6 +368,7 @@ export function GoogleSheetsSync() {
                       <th className="w-24 p-2 text-left">Action</th>
                       <th className="p-2 text-left">Product</th>
                       <th className="p-2 text-left">Location</th>
+                      <th className="p-2 text-left">Changes</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -391,11 +393,26 @@ export function GoogleSheetsSync() {
                                 No location
                               </span>
                             )}
-                            {item.message && (
-                              <div className="text-muted-foreground text-xs">
-                                {item.message}
+                          </td>
+                          <td className="p-2">
+                            {item.fieldChanges &&
+                            item.fieldChanges.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {item.fieldChanges.map((change, j) => (
+                                  <div key={j}>
+                                    <ValueChange
+                                      label={change.field}
+                                      from={change.from}
+                                      to={change.to}
+                                    />
+                                  </div>
+                                ))}
                               </div>
-                            )}
+                            ) : item.message ? (
+                              <span className="text-muted-foreground text-xs">
+                                {item.message}
+                              </span>
+                            ) : null}
                           </td>
                         </tr>
                       );

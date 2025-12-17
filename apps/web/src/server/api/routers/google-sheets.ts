@@ -21,6 +21,7 @@ import {
   type InventoryCSVRow,
   type CSVImportResult,
   type CSVImportResultItem,
+  type FieldChange,
 } from "~/schemas/inventory";
 import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
 import { organization } from "~/server/db/auth.schema";
@@ -81,60 +82,78 @@ function makeInventoryKey(
   return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}|${locationPath.toLowerCase()}`;
 }
 
-// Format a value for display in change messages
-function formatValue(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === "") return "(empty)";
-  return String(value);
-}
-
-// Compare two row values and return differences as "field: old → new" strings
+// Compare two row values and return structured field changes
 function getRowDifferences(
   appRow: InventoryCSVExportRow,
   sheetRow: InventoryCSVRow,
-): string[] {
-  const changes: string[] = [];
+): FieldChange[] {
+  const changes: FieldChange[] = [];
 
   if (appRow.quantity !== sheetRow.quantity) {
-    changes.push(`qty: ${sheetRow.quantity} → ${appRow.quantity}`);
+    changes.push({
+      field: "qty",
+      from: sheetRow.quantity,
+      to: appRow.quantity,
+    });
   }
   if (appRow.unit !== sheetRow.unit) {
-    changes.push(`unit: ${sheetRow.unit} → ${appRow.unit}`);
+    changes.push({ field: "unit", from: sheetRow.unit, to: appRow.unit });
   }
   if ((appRow.upc ?? "") !== (sheetRow.upc ?? "")) {
-    changes.push(
-      `upc: ${formatValue(sheetRow.upc)} → ${formatValue(appRow.upc)}`,
-    );
+    changes.push({
+      field: "upc",
+      from: sheetRow.upc ?? null,
+      to: appRow.upc ?? null,
+    });
   }
   if ((appRow.model ?? "") !== (sheetRow.model ?? "")) {
-    changes.push(
-      `model: ${formatValue(sheetRow.model)} → ${formatValue(appRow.model)}`,
-    );
+    changes.push({
+      field: "model",
+      from: sheetRow.model ?? null,
+      to: appRow.model ?? null,
+    });
   }
   if ((appRow.ndb_number ?? null) !== (sheetRow.ndb_number ?? null)) {
-    changes.push(
-      `ndb: ${formatValue(sheetRow.ndb_number)} → ${formatValue(appRow.ndb_number)}`,
-    );
+    changes.push({
+      field: "ndb",
+      from: sheetRow.ndb_number ?? null,
+      to: appRow.ndb_number ?? null,
+    });
   }
   if ((appRow.expected_qty ?? null) !== (sheetRow.expected_qty ?? null)) {
-    changes.push(
-      `expected: ${formatValue(sheetRow.expected_qty)} → ${formatValue(appRow.expected_qty)}`,
-    );
+    changes.push({
+      field: "expected",
+      from: sheetRow.expected_qty ?? null,
+      to: appRow.expected_qty ?? null,
+    });
   }
   if ((appRow.price ?? null) !== (sheetRow.price ?? null)) {
-    const oldPrice = sheetRow.price != null ? `$${sheetRow.price}` : "(empty)";
-    const newPrice = appRow.price != null ? `$${appRow.price}` : "(empty)";
-    changes.push(`price: ${oldPrice} → ${newPrice}`);
+    changes.push({
+      field: "price",
+      from: sheetRow.price ?? null,
+      to: appRow.price ?? null,
+    });
   }
   if ((appRow.unit_mappings ?? "") !== (sheetRow.unit_mappings ?? "")) {
-    changes.push("unit_mappings changed");
+    changes.push({
+      field: "unit_mappings",
+      from: sheetRow.unit_mappings ?? null,
+      to: appRow.unit_mappings ?? null,
+    });
   }
   if ((appRow.ingredient_name ?? "") !== (sheetRow.ingredient_name ?? "")) {
-    changes.push(
-      `ingredient: ${formatValue(sheetRow.ingredient_name)} → ${formatValue(appRow.ingredient_name)}`,
-    );
+    changes.push({
+      field: "ingredient",
+      from: sheetRow.ingredient_name ?? null,
+      to: appRow.ingredient_name ?? null,
+    });
   }
   if ((appRow.aliases ?? "") !== (sheetRow.aliases ?? "")) {
-    changes.push("aliases changed");
+    changes.push({
+      field: "aliases",
+      from: sheetRow.aliases ?? null,
+      to: appRow.aliases ?? null,
+    });
   }
 
   return changes;
@@ -189,15 +208,15 @@ function compareInventoryForPush(
       created++;
     } else {
       // Row exists - check if different
-      const differences = getRowDifferences(appRow, sheetRow);
+      const fieldChanges = getRowDifferences(appRow, sheetRow);
 
-      if (differences.length > 0) {
+      if (fieldChanges.length > 0) {
         items.push({
           rowIndex: i,
           action: "updated",
           productName: appRow.product_name,
           locationPath: appRow.location_path,
-          message: differences.join(", "),
+          fieldChanges,
         });
         updated++;
       } else {
@@ -206,7 +225,6 @@ function compareInventoryForPush(
           action: "skipped",
           productName: appRow.product_name,
           locationPath: appRow.location_path,
-          message: "No changes",
         });
         skipped++;
       }

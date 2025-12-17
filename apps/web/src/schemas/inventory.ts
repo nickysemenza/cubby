@@ -117,6 +117,15 @@ export const productChangesPreview = z.object({
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
 
+// Field change for displaying diffs
+export const fieldChange = z.object({
+  field: z.string(),
+  from: z.unknown(),
+  to: z.unknown(),
+});
+
+export type FieldChange = z.infer<typeof fieldChange>;
+
 // Result types for CSV import (and push preview)
 export const csvImportResultItem = z.object({
   rowIndex: z.number(),
@@ -134,6 +143,7 @@ export const csvImportResultItem = z.object({
   upc: z.string().optional(), // UPC code for image import
   locationPath: z.string().optional(), // Optional for product-only rows
   message: z.string().optional(),
+  fieldChanges: z.array(fieldChange).optional(), // Structured field changes for display
   // Preview fields
   productWillBeCreated: z.boolean().optional(),
   locationWillBeCreated: z.boolean().optional(),

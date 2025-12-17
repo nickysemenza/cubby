@@ -320,18 +320,24 @@ export const processRow = async (
           Object.keys(productChanges).length > 0 ? productChanges : undefined,
       };
     } else if (inventoryCheck.exists) {
-      // Build message showing quantity change
+      // Build structured field changes for quantity update
       const currentAmt = inventoryCheck.currentAmount;
-      const qtyMessage = currentAmt
-        ? `qty: ${currentAmt.value} ${currentAmt.unit} → ${newAmount.value} ${newAmount.unit}`
-        : "Will update quantity";
+      const fieldChanges = currentAmt
+        ? [
+            {
+              field: "qty",
+              from: `${currentAmt.value} ${currentAmt.unit}`,
+              to: `${newAmount.value} ${newAmount.unit}`,
+            },
+          ]
+        : undefined;
 
       return {
         rowIndex,
         action: "updated",
         productName: row.product_name,
         locationPath: row.location_path,
-        message: qtyMessage,
+        fieldChanges,
         productWillBeCreated,
         locationWillBeCreated,
         productChanges:

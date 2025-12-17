@@ -22,6 +22,7 @@ import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { EntityPillById } from "../EntityPillById";
 import { type AuditEntityType } from "~/server/repo/audit-log";
+import { ChangesList } from "../value-change";
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
 
@@ -163,24 +164,15 @@ export function AuditLogEntryComponent({
 
           <CollapsibleContent className="mt-2">
             {entry.changes && (
-              <div className="bg-muted space-y-1 rounded-md p-2 text-xs">
-                {Object.entries(entry.changes).map(([field, change]) => {
-                  const typedChange = change as { from: unknown; to: unknown };
-                  return (
-                    <div key={field} className="flex gap-2">
-                      <span className="text-muted-foreground font-medium">
-                        {field}:
-                      </span>
-                      <span className="text-red-600 line-through dark:text-red-400">
-                        {formatValue(typedChange.from)}
-                      </span>
-                      <span className="text-muted-foreground">&rarr;</span>
-                      <span className="text-green-600 dark:text-green-400">
-                        {formatValue(typedChange.to)}
-                      </span>
-                    </div>
-                  );
-                })}
+              <div className="bg-muted rounded-md p-2">
+                <ChangesList
+                  changes={
+                    entry.changes as Record<
+                      string,
+                      { from: unknown; to: unknown }
+                    >
+                  }
+                />
               </div>
             )}
           </CollapsibleContent>
@@ -188,14 +180,4 @@ export function AuditLogEntryComponent({
       </div>
     </Collapsible>
   );
-}
-
-function formatValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "empty";
-  }
-  if (typeof value === "object") {
-    return JSON.stringify(value);
-  }
-  return String(value);
 }
