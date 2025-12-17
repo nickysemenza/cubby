@@ -11,7 +11,7 @@ import { TRPCError } from "@trpc/server";
 import {
   createTRPCRouter,
   protectedProcedure,
-  requireUserId,
+  requireActorContext,
 } from "~/server/api/trpc";
 import {
   getGoogleSheetsClient,
@@ -627,6 +627,7 @@ const pullFromSheet = protectedProcedure
   .output(csvImportResult)
   .mutation(async ({ ctx }) => {
     const { client, sheetId } = await getClientAndSheetId(ctx);
+    const actor = requireActorContext(ctx);
 
     // Read and parse sheet data
     const sheetData = await client.readSheet(sheetId);
@@ -640,12 +641,11 @@ const pullFromSheet = protectedProcedure
     // Run import in preview mode
     const result = await importInventoryFromCSV(
       ctx.db,
-      ctx.organizationId,
+      actor.organizationId,
       parsedRows,
       {
         dryRun: true,
-        userId: requireUserId(ctx.auth),
-        source: "sheets_import",
+        actor: { ...actor, source: "sheets_import" },
       },
     );
 
@@ -657,6 +657,7 @@ const applyPull = protectedProcedure
   .output(csvImportResult)
   .mutation(async ({ ctx }) => {
     const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
+    const actor = requireActorContext(ctx);
 
     // Read and parse sheet data
     const sheetData = await client.readSheet(sheetId);
@@ -670,12 +671,11 @@ const applyPull = protectedProcedure
     // Run actual import
     const result = await importInventoryFromCSV(
       ctx.db,
-      ctx.organizationId,
+      actor.organizationId,
       parsedRows,
       {
         dryRun: false,
-        userId: requireUserId(ctx.auth),
-        source: "sheets_import",
+        actor: { ...actor, source: "sheets_import" },
       },
     );
 

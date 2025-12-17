@@ -18,7 +18,6 @@ import {
   type OrganizationId,
   type ProductId,
   type LocationId,
-  UserId,
 } from "~/schemas/identifiers";
 import { inventoryEntry, product, location } from "~/server/db/schema";
 import { eq, and, count, not, ilike } from "drizzle-orm";
@@ -28,6 +27,7 @@ import {
   type CreateInventoryEntryData,
 } from "./types";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 /**
  * Check if a product with expectedQuantity=1 already exists in a different location.
@@ -181,10 +181,11 @@ export const inventoryentryList = async (
 export const updateInventoryEntry = async (
   db: Database,
   id: InventoryId,
-  organizationId: OrganizationId,
   data: UpdateInventoryEntryData,
-  userId: UserId,
+  actor: ActorContext,
 ) => {
+  const { organizationId } = actor;
+
   // Fetch current state for audit logging
   const before = await getDb(db).query.inventoryEntry.findFirst({
     where: and(
@@ -218,13 +219,11 @@ export const updateInventoryEntry = async (
       "locationId",
     ]);
     if (changes) {
-      await logAuditEntry(db, {
-        organizationId,
+      await logAuditEntry(db, actor, {
         entityType: "inventory",
         entityId: id,
         action: "update",
         changes,
-        userId,
       });
     }
   }
@@ -245,9 +244,10 @@ export const updateInventoryEntry = async (
 export const createInventoryEntry = async (
   db: Database,
   data: CreateInventoryEntryData,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ) => {
+  const { organizationId } = actor;
+
   const created = await insertAndReturnDb(db, inventoryEntry, {
     organizationId: organizationId,
     productId: data.productId,
@@ -256,12 +256,10 @@ export const createInventoryEntry = async (
   });
 
   // Log audit entry
-  await logAuditEntry(db, {
-    organizationId,
+  await logAuditEntry(db, actor, {
     entityType: "inventory",
     entityId: created.id,
     action: "create",
-    userId,
   });
 
   // Fetch with relations
@@ -286,7 +284,7 @@ export const findInventoryByProductAndLocation = async (
   productId: ProductId,
   targetLocationId: LocationId,
 ) => {
-  const dbClient = "query" in db ? db : getDb(db as Database);
+  const dbClient = "query" in db ? db : getDb(db);
   return await dbClient.query.inventoryEntry.findFirst({
     where: and(
       eq(inventoryEntry.productId, productId),
@@ -303,9 +301,10 @@ export const findInventoryByProductAndLocation = async (
 export const deleteInventoryEntry = async (
   db: Database,
   id: InventoryId,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<void> => {
+  const { organizationId } = actor;
+
   await getDb(db)
     .delete(inventoryEntry)
     .where(
@@ -316,11 +315,9 @@ export const deleteInventoryEntry = async (
     );
 
   // Log audit entry
-  await logAuditEntry(db, {
-    organizationId,
+  await logAuditEntry(db, actor, {
     entityType: "inventory",
     entityId: id,
     action: "delete",
-    userId,
   });
 };

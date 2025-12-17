@@ -7,12 +7,18 @@ import {
   unsafeIngredientId,
   type OrganizationId,
   unsafeUserId,
+  unsafeOrganizationId,
 } from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 import { getDb, withTransaction } from "./database-helpers";
 import { ingredient } from "~/server/db/schema";
 import { eq, count } from "drizzle-orm";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
+const TEST_ACTOR: ActorContext = {
+  userId: unsafeUserId("test-user-id"),
+  organizationId: unsafeOrganizationId("test-org-id"),
+  source: "ui",
+};
 
 describe("ingredient", () => {
   let db: Database;
@@ -46,8 +52,7 @@ describe("ingredient", () => {
         ],
       },
       db,
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
     const a = await findOrCreateIngredient(
       db,

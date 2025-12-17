@@ -122,12 +122,11 @@ export class IngredientService {
     organizationId: OrganizationId,
     userId: UserId,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await createIngredientRepo(
-      this.db,
-      data,
-      organizationId,
+    const ingredient = await createIngredientRepo(this.db, data, {
       userId,
-    );
+      organizationId,
+      source: "ui",
+    });
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -144,13 +143,11 @@ export class IngredientService {
     data: Partial<z.infer<typeof ingredientBase>>,
     userId: UserId,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await updateIngredientRepo(
-      this.db,
-      id,
-      organizationId,
-      data,
+    const ingredient = await updateIngredientRepo(this.db, id, data, {
       userId,
-    );
+      organizationId,
+      source: "ui",
+    });
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );

@@ -29,11 +29,7 @@ import {
   associatePendingImages,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import {
-  type RecipeId,
-  type OrganizationId,
-  UserId,
-} from "~/schemas/identifiers";
+import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
 import {
   recipe,
   recipeSection,
@@ -44,6 +40,7 @@ import {
 } from "~/server/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 export const getRecipeByID = async (
   id: RecipeId,
@@ -143,11 +140,10 @@ const dbRecipeToAPI: (recipe: RecipeDeepDB) => RecipeOut = (recipeData) => {
 export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   db: Database,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ) => {
   const parsed = await parseCompactRecipe(recipe);
-  return await upsertRecipeFromCompact(parsed, db, organizationId, userId);
+  return await upsertRecipeFromCompact(parsed, db, actor);
 };
 
 export const recipeList = async (
@@ -195,9 +191,9 @@ export const recipeList = async (
 export const createRecipe = async (
   recipeInput: RecipeCreateInput,
   db: Database,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<RecipeOut> => {
+  const { organizationId } = actor;
   const sourceType = recipeInput.meta?.url ? "Website" : "Other";
   const sourceData = recipeInput.meta?.url || null;
   const { pendingImageIds } = recipeInput;
@@ -264,12 +260,10 @@ export const createRecipe = async (
     }
 
     // Log audit entry
-    await logAuditEntry(tx, {
-      organizationId,
+    await logAuditEntry(tx, actor, {
       entityType: "recipe",
       entityId: createdRecipe.id,
       action: "create",
-      userId,
     });
 
     const fullRecipe = await getRecipeByID(
@@ -361,9 +355,9 @@ const processIngredients = async (
 export const upsertRecipe = async (
   input: RecipeCreateInput,
   db: Database,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<{ id: string }> => {
+  const { organizationId } = actor;
   const dbClient = getDb(db);
 
   // Check if recipe already exists
@@ -460,7 +454,7 @@ export const upsertRecipe = async (
     return { id: updatedRecipe.id };
   } else {
     // Recipe doesn't exist - create new one
-    const created = await createRecipe(input, db, organizationId, userId);
+    const created = await createRecipe(input, db, actor);
     return { id: created.id };
   }
 };
@@ -469,9 +463,9 @@ export const updateRecipe = async (
   id: RecipeId,
   updates: RecipeUpdateInput["data"],
   db: Database,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<RecipeOut> => {
+  const { organizationId } = actor;
   // Check if recipe exists and belongs to project
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
@@ -736,13 +730,11 @@ export const updateRecipe = async (
     };
     const changes = computeChanges(beforeState, afterState, ["name"]);
     if (changes) {
-      await logAuditEntry(tx, {
-        organizationId,
+      await logAuditEntry(tx, actor, {
         entityType: "recipe",
         entityId: id,
         action: "update",
         changes,
-        userId,
       });
     }
 

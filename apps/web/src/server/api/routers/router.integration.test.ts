@@ -5,9 +5,21 @@ import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { exampleRecipesCompact } from "~/testdata/fakeRecipes";
-import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  unsafeUserId,
+  unsafeOrganizationId,
+} from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 
-const TEST_USER_ID = unsafeUserId("test-user-id");
+const TEST_ACTOR: ActorContext = {
+  userId: unsafeUserId("test-user-id"),
+  organizationId: unsafeOrganizationId("test-org-id"),
+  source: "ui",
+};
+
+// Keep TEST_USER_ID for tRPC context
+const TEST_USER_ID = TEST_ACTOR.userId;
 
 describe("recipe router", () => {
   let db: Database;
@@ -18,7 +30,7 @@ describe("recipe router", () => {
     return teardown;
   });
   it("recipe insert and retrieve", async () => {
-    await seedRealRecipes(db, organizationId, TEST_USER_ID);
+    await seedRealRecipes(db, TEST_ACTOR);
 
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(

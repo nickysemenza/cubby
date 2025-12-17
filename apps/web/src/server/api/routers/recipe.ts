@@ -3,7 +3,7 @@ import {
   protectedProcedure,
   systemProcedure,
   createAppError,
-  requireUserId,
+  requireActorContext,
 } from "../trpc";
 
 import { z } from "zod";
@@ -64,30 +64,21 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     },
     create: async (services, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
-      return await createRecipe(
-        data,
-        services.db,
-        services.organizationId!,
-        requireUserId(services.auth),
-      );
+      const actor = requireActorContext(services);
+      return await createRecipe(data, services.db, actor);
     },
     update: async (services, id: RecipeId, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
-      return await updateRecipe(
-        id,
-        data,
-        services.db,
-        services.organizationId!,
-        requireUserId(services.auth),
-      );
+      const actor = requireActorContext(services);
+      return await updateRecipe(id, data, services.db, actor);
     },
   },
 });
 
-const seed = systemProcedure.mutation(
-  async ({ ctx }) =>
-    await seedRealRecipes(ctx.db, ctx.organizationId, requireUserId(ctx.auth)),
-);
+const seed = systemProcedure.mutation(async ({ ctx }) => {
+  const actor = requireActorContext(ctx);
+  return await seedRealRecipes(ctx.db, actor);
+});
 const scrape = protectedProcedure
   .input(z.url())
   .output(compactRecipeSchema)
@@ -96,12 +87,8 @@ const insertCompact = protectedProcedure
   .input(compactRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    return await insertCompactRecipe(
-      input,
-      ctx.db,
-      ctx.organizationId,
-      requireUserId(ctx.auth),
-    );
+    const actor = requireActorContext(ctx);
+    return await insertCompactRecipe(input, ctx.db, actor);
   });
 
 export const recipeRouter = createTRPCRouter({

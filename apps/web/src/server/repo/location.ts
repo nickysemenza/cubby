@@ -14,7 +14,6 @@ import {
   unsafeLocationId,
   unsafeProductId,
   unsafeInventoryId,
-  UserId,
 } from "~/schemas/identifiers";
 import {
   type SortParams,
@@ -44,6 +43,7 @@ import {
 } from "~/server/db/schema";
 import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 // Type context for batch CSV imports with type inference
 export interface LocationTypeContext {
@@ -59,9 +59,9 @@ export interface LocationTypeContext {
 export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ) => {
+  const { organizationId } = actor;
   // Create the location
   const [newLocation] = await getDb(db)
     .insert(location)
@@ -89,12 +89,10 @@ export const createLocation = async (
   }
 
   // Log audit entry
-  await logAuditEntry(db, {
-    organizationId,
+  await logAuditEntry(db, actor, {
     entityType: "location",
     entityId: newLocation.id,
     action: "create",
-    userId,
   });
 
   return getLocationById(db, unsafeLocationId(newLocation.id), organizationId);
@@ -104,10 +102,10 @@ export const createLocation = async (
 export const updateLocation = async (
   db: Database,
   id: LocationId,
-  organizationId: OrganizationId,
   data: LocationUpdateInput["data"],
-  userId: UserId,
+  actor: ActorContext,
 ) => {
+  const { organizationId } = actor;
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {
     throw new Error("A location cannot be its own parent");
@@ -190,13 +188,11 @@ export const updateLocation = async (
         "parentId",
       ]);
       if (changes) {
-        await logAuditEntry(tx, {
-          organizationId,
+        await logAuditEntry(tx, actor, {
           entityType: "location",
           entityId: id,
           action: "update",
           changes,
-          userId,
         });
       }
     }

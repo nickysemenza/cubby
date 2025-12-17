@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, requireUserId } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  requireActorContext,
+} from "../trpc";
 import { productWithFoodOut } from "~/server/services/product.service";
 import {
   productInputPayload,
@@ -57,19 +61,21 @@ const { getByID, list, update } = createEntityCrudProcedures({
     },
     create: async (services, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
+      const actor = requireActorContext(services);
       return await services.services.product.createProduct(
         data,
-        services.organizationId!,
-        requireUserId(services.auth),
+        actor.organizationId,
+        actor.userId,
       );
     },
     update: async (services, id: ProductId, data) => {
       // organizationId guaranteed non-null by requireOrganization middleware
+      const actor = requireActorContext(services);
       return await services.services.product.updateProduct(
         id,
-        services.organizationId!,
+        actor.organizationId,
         data,
-        requireUserId(services.auth),
+        actor.userId,
       );
     },
   },
@@ -80,11 +86,13 @@ const create = protectedProcedure
   .input(productInputPayload)
   .output(productWithFoodOut)
   .mutation(async ({ ctx, input }) => {
+    const actor = requireActorContext(ctx);
+
     // Create the product
     const product = await ctx.services.product.createProduct(
       input,
-      ctx.organizationId!,
-      requireUserId(ctx.auth),
+      actor.organizationId,
+      actor.userId,
     );
 
     // If product has a UPC, try to import image from UPC lookup (non-blocking)
@@ -92,7 +100,7 @@ const create = protectedProcedure
       try {
         await importImageFromUPC(
           ctx.db,
-          ctx.organizationId!,
+          actor.organizationId,
           ctx.upcLookupClient,
           input.upc,
           unsafeProductId(product.id),
@@ -110,6 +118,7 @@ const quickCreate = protectedProcedure
   .input(productQuickCreatePayload)
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
+    const actor = requireActorContext(ctx);
     return await quickCreateProduct(
       ctx.db,
       {
@@ -120,8 +129,7 @@ const quickCreate = protectedProcedure
         model: input.model ?? null,
         price: input.price ?? null,
       },
-      ctx.organizationId!,
-      requireUserId(ctx.auth),
+      actor,
     );
   });
 
@@ -136,13 +144,14 @@ const findOrCreateByUPC = protectedProcedure
   )
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
+    const actor = requireActorContext(ctx);
     console.log(`[findOrCreateByUPC] Looking up UPC: ${input.upc}`);
 
     // 1. Check if product with this UPC already exists in organization
     const existing = await findProductByUPC(
       ctx.db,
       input.upc,
-      ctx.organizationId!,
+      actor.organizationId,
     );
     if (existing) {
       console.log(
@@ -175,8 +184,7 @@ const findOrCreateByUPC = protectedProcedure
           expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
           model: null,
         },
-        ctx.organizationId!,
-        requireUserId(ctx.auth),
+        actor,
       );
     }
 
@@ -200,8 +208,7 @@ const findOrCreateByUPC = protectedProcedure
           model: null,
           price: upcLookup.priceDollars ?? null,
         },
-        ctx.organizationId!,
-        requireUserId(ctx.auth),
+        actor,
       );
 
       // Import image from UPC lookup if available (non-blocking)
@@ -209,7 +216,7 @@ const findOrCreateByUPC = protectedProcedure
         try {
           await importImageFromUPC(
             ctx.db,
-            ctx.organizationId!,
+            actor.organizationId,
             ctx.upcLookupClient,
             input.upc,
             unsafeProductId(newProduct.id),
@@ -235,8 +242,7 @@ const findOrCreateByUPC = protectedProcedure
         expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
         model: null,
       },
-      ctx.organizationId!,
-      requireUserId(ctx.auth),
+      actor,
     );
   });
 

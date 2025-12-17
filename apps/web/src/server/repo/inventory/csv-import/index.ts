@@ -19,7 +19,7 @@
  */
 
 import { type Database } from "~/server/db";
-import { UserId, type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 import {
   type InventoryCSVRow,
   type CSVImportResultItem,
@@ -27,15 +27,15 @@ import {
 } from "~/schemas/inventory";
 import { buildLocationTypeContext } from "~/server/repo/location";
 import { processRow } from "./row-processor";
-import { logAuditEntry, type AuditSource } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 // Re-export utilities that may be used externally
 export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
 
 export interface ImportOptions {
   dryRun?: boolean;
-  userId: UserId;
-  source?: AuditSource;
+  actor: ActorContext;
 }
 
 /**
@@ -53,7 +53,7 @@ export const importInventoryFromCSV = async (
   rows: InventoryCSVRow[],
   options: ImportOptions,
 ): Promise<CSVImportResult> => {
-  const { dryRun = false, userId, source = "csv_import" } = options;
+  const { dryRun = false, actor } = options;
   const results: CSVImportResultItem[] = [];
   let created = 0;
   let moved = 0;
@@ -96,7 +96,7 @@ export const importInventoryFromCSV = async (
     const row = rows[i];
     try {
       const result = await processRow(
-        { db, organizationId, locationTypeContext, dryRun, userId, source },
+        { db, organizationId, locationTypeContext, dryRun, actor },
         row,
         i,
       );
@@ -116,13 +116,10 @@ export const importInventoryFromCSV = async (
 
         // Log product audit entry
         if (shouldLogProduct && result.productWillBeCreated) {
-          await logAuditEntry(db, {
-            organizationId,
+          await logAuditEntry(db, actor, {
             entityType: "product",
             entityId: result.productId,
             action: "create",
-            userId,
-            source,
           });
         }
 
@@ -130,13 +127,10 @@ export const importInventoryFromCSV = async (
         if (shouldLogInventory) {
           const inventoryAction =
             result.action === "created" ? "create" : "update";
-          await logAuditEntry(db, {
-            organizationId,
+          await logAuditEntry(db, actor, {
             entityType: "inventory",
             entityId: result.productId, // Using productId as reference for now
             action: inventoryAction,
-            userId,
-            source,
           });
         }
       }

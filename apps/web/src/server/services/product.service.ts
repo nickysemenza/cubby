@@ -81,12 +81,11 @@ export class ProductService {
     organizationId: OrganizationId,
     userId: UserId,
   ): Promise<ProductWithFoodOut> {
-    const product = await createProductRepo(
-      this.db,
-      data,
-      organizationId,
+    const product = await createProductRepo(this.db, data, {
       userId,
-    );
+      organizationId,
+      source: "ui",
+    });
     return this.getProductByID(product.id, organizationId);
   }
 
@@ -96,7 +95,11 @@ export class ProductService {
     data: Partial<ProductInputPayload>,
     userId: UserId,
   ): Promise<ProductWithFoodOut> {
-    await updateProductRepo(this.db, id, organizationId, data, userId);
+    await updateProductRepo(this.db, id, data, {
+      userId,
+      organizationId,
+      source: "ui",
+    });
     return this.getProductByID(id, organizationId);
   }
 }

@@ -41,7 +41,6 @@ import {
   type OrganizationId,
   unsafeLocationId,
   unsafeProductId,
-  UserId,
 } from "~/schemas/identifiers";
 import {
   product,
@@ -54,6 +53,7 @@ import {
 } from "~/server/db/schema";
 import { eq, and, count, ilike, inArray } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 export const findProductByName = async (
   db: Database | Transaction,
@@ -257,9 +257,9 @@ export const productList = async (
 export const createProduct = async (
   db: Database,
   data: ProductInputPayload,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
+  const { organizationId } = actor;
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
   // Use a transaction to ensure atomicity
@@ -309,12 +309,10 @@ export const createProduct = async (
     }
 
     // Log audit entry
-    await logAuditEntry(tx, {
-      organizationId,
+    await logAuditEntry(tx, actor, {
       entityType: "product",
       entityId: newProduct.id,
       action: "create",
-      userId,
     });
 
     // Construct and validate the response object
@@ -331,10 +329,10 @@ export const createProduct = async (
 export const updateProduct = async (
   db: Database,
   id: ProductId,
-  organizationId: OrganizationId,
   data: Partial<ProductInputPayload>,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
+  const { organizationId } = actor;
   const {
     ingredientId,
     unitMappings,
@@ -484,13 +482,11 @@ export const updateProduct = async (
     ]);
 
     if (changes) {
-      await logAuditEntry(tx, {
-        organizationId,
+      await logAuditEntry(tx, actor, {
         entityType: "product",
         entityId: updated.id,
         action: "update",
         changes,
-        userId,
       });
     }
 
@@ -609,9 +605,9 @@ export const quickCreateProduct = async (
     ingredientId?: string | null;
     price?: number | null;
   },
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
+  const { organizationId } = actor;
   const [newProduct] = await getDb(db)
     .insert(product)
     .values({
@@ -641,12 +637,10 @@ export const quickCreateProduct = async (
   }
 
   // Log audit entry
-  await logAuditEntry(db, {
-    organizationId,
+  await logAuditEntry(db, actor, {
     entityType: "product",
     entityId: newProduct.id,
     action: "create",
-    userId,
   });
 
   return productTopLevelOut.parse({

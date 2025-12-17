@@ -13,6 +13,7 @@ import {
   type PaginationParams,
 } from "~/schemas/pagination";
 import { UserId, type OrganizationId } from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -25,6 +26,7 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
 export interface CrudServices {
   db: Database;
   organizationId: OrganizationId | null;
+  actorContext: ActorContext | null;
   services: {
     product: ProductService;
     ingredient: IngredientService;

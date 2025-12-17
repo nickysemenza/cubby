@@ -3,13 +3,21 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
-import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  unsafeUserId,
+  unsafeOrganizationId,
+} from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 import { getDb } from "./database-helpers";
 import { recipe, recipeSection } from "~/server/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 
-// Test user ID for audit logging
-const TEST_USER_ID = unsafeUserId("test-user-id");
+const TEST_ACTOR: ActorContext = {
+  userId: unsafeUserId("test-user-id"),
+  organizationId: unsafeOrganizationId("test-org-id"),
+  source: "ui",
+};
 
 describe("upsertRecipeFromCompact", () => {
   let db: Database;
@@ -74,12 +82,7 @@ describe("upsertRecipeFromCompact", () => {
   };
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipeFromCompact(
-      mockRecipe,
-      db,
-      organizationId,
-      TEST_USER_ID,
-    );
+    const result = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
 
     expect(result.id).toBeDefined();
 
@@ -111,8 +114,7 @@ describe("upsertRecipeFromCompact", () => {
     const firstResult = await upsertRecipeFromCompact(
       mockRecipe,
       db,
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
 
     // Verify initial state
@@ -137,8 +139,7 @@ describe("upsertRecipeFromCompact", () => {
     const secondResult = await upsertRecipeFromCompact(
       mockRecipeUpdated,
       db,
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -177,24 +178,9 @@ describe("upsertRecipeFromCompact", () => {
 
   it("handles multiple upserts correctly (back-to-back npm run load-data scenario)", async () => {
     // This tests the exact scenario mentioned - running load-data multiple times
-    const firstRun = await upsertRecipeFromCompact(
-      mockRecipe,
-      db,
-      organizationId,
-      TEST_USER_ID,
-    );
-    const secondRun = await upsertRecipeFromCompact(
-      mockRecipe,
-      db,
-      organizationId,
-      TEST_USER_ID,
-    ); // Same recipe
-    const thirdRun = await upsertRecipeFromCompact(
-      mockRecipe,
-      db,
-      organizationId,
-      TEST_USER_ID,
-    ); // Same recipe again
+    const firstRun = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
+    const secondRun = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR); // Same recipe
+    const thirdRun = await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR); // Same recipe again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -213,12 +199,7 @@ describe("upsertRecipeFromCompact", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertRecipeFromCompact(
-      mockRecipeUpdated,
-      db,
-      organizationId,
-      TEST_USER_ID,
-    );
+    await upsertRecipeFromCompact(mockRecipeUpdated, db, TEST_ACTOR);
 
     const beforeUpdate = await getDb(db).query.recipe.findFirst({
       where: and(
@@ -236,7 +217,7 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertRecipeFromCompact(mockRecipe, db, organizationId, TEST_USER_ID);
+    await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
 
     const afterUpdate = await getDb(db).query.recipe.findFirst({
       where: and(

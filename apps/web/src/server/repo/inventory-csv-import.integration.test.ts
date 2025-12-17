@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  unsafeUserId,
+  unsafeOrganizationId,
+} from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import {
@@ -10,8 +15,11 @@ import {
 } from "~/server/repo/inventory";
 import { type InventoryCSVRow } from "~/schemas/inventory";
 
-// Test user ID for audit logging
-const TEST_USER_ID = unsafeUserId("test-user-id-for-csv-import");
+const TEST_ACTOR: ActorContext = {
+  userId: unsafeUserId("test-user-id-for-csv-import"),
+  organizationId: unsafeOrganizationId("test-org-id"),
+  source: "ui",
+};
 
 describe("CSV import preview logic", () => {
   let db: Database;
@@ -29,8 +37,7 @@ describe("CSV import preview logic", () => {
       const location = await createLocation(
         db,
         { name: "Kitchen", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       const product = await createProduct(
@@ -45,8 +52,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       await createInventoryEntry(
@@ -56,8 +62,7 @@ describe("CSV import preview logic", () => {
           locationId: location.id,
           amount: { value: 5, unit: "lbs" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import same data with dryRun
@@ -73,7 +78,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       expect(result.skipped).toBe(1);
@@ -87,8 +92,7 @@ describe("CSV import preview logic", () => {
       const location = await createLocation(
         db,
         { name: "Pantry", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       const product = await createProduct(
@@ -103,8 +107,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       await createInventoryEntry(
@@ -114,8 +117,7 @@ describe("CSV import preview logic", () => {
           locationId: location.id,
           amount: { value: 5, unit: "kg" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import with different quantity
@@ -131,7 +133,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       expect(result.updated).toBe(1);
@@ -154,7 +156,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       expect(result.created).toBe(1);
@@ -167,8 +169,7 @@ describe("CSV import preview logic", () => {
       const _existingLocation = await createLocation(
         db,
         { name: "Existing Room", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       const _product = await createProduct(
@@ -183,8 +184,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Product exists but not at "New Room"
@@ -200,7 +200,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       expect(result.created).toBe(1);
@@ -215,16 +215,14 @@ describe("CSV import preview logic", () => {
       const locationA = await createLocation(
         db,
         { name: "Location A", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Create Location B which the CSV will reference
       const _locationB = await createLocation(
         db,
         { name: "Location B", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Create a unique product (expectedQuantity=1)
@@ -240,8 +238,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Currently at Location A
@@ -252,8 +249,7 @@ describe("CSV import preview logic", () => {
           locationId: locationA.id,
           amount: { value: 1, unit: "each" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import to Location B
@@ -269,7 +265,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       expect(result.moved).toBe(1);
@@ -281,8 +277,7 @@ describe("CSV import preview logic", () => {
       const location = await createLocation(
         db,
         { name: "Garage", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Create a unique product (expectedQuantity=1)
@@ -298,8 +293,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Already at Garage
@@ -310,8 +304,7 @@ describe("CSV import preview logic", () => {
           locationId: location.id,
           amount: { value: 1, unit: "each" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import to same location (Garage)
@@ -327,7 +320,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       // Should skip, NOT move
@@ -341,8 +334,7 @@ describe("CSV import preview logic", () => {
       const locationA = await createLocation(
         db,
         { name: "Location A", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Create a unique product (expectedQuantity=1)
@@ -358,8 +350,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Currently at Location A
@@ -370,8 +361,7 @@ describe("CSV import preview logic", () => {
           locationId: locationA.id,
           amount: { value: 1, unit: "each" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import to "New Location" (doesn't exist yet)
@@ -387,7 +377,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       // Should be detected as a move (with new location being created)
@@ -403,8 +393,7 @@ describe("CSV import preview logic", () => {
       const location = await createLocation(
         db,
         { name: "Store", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       const product = await createProduct(
@@ -419,8 +408,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [], // No price mapping
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       await createInventoryEntry(
@@ -430,8 +418,7 @@ describe("CSV import preview logic", () => {
           locationId: location.id,
           amount: { value: 1, unit: "each" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import with price
@@ -448,7 +435,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       // Should skip (same quantity) but show price will be set
@@ -461,15 +448,13 @@ describe("CSV import preview logic", () => {
       const parent = await createLocation(
         db,
         { name: "Kitchen", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       const child = await createLocation(
         db,
         { name: "Fridge", type: "shelf", parentId: parent.id },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       const product = await createProduct(
@@ -484,8 +469,7 @@ describe("CSV import preview logic", () => {
           ingredientId: null,
           unitMappings: [],
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       await createInventoryEntry(
@@ -495,8 +479,7 @@ describe("CSV import preview logic", () => {
           locationId: child.id,
           amount: { value: 1, unit: "gallon" },
         },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import with path format
@@ -512,7 +495,7 @@ describe("CSV import preview logic", () => {
         db,
         organizationId,
         [csvRow],
-        { dryRun: true, userId: TEST_USER_ID },
+        { dryRun: true, actor: TEST_ACTOR },
       );
 
       expect(result.skipped).toBe(1);
@@ -543,7 +526,7 @@ describe("CSV import preview logic", () => {
 
       const result = await importInventoryFromCSV(db, organizationId, rows, {
         dryRun: false,
-        userId: TEST_USER_ID,
+        actor: TEST_ACTOR,
       });
 
       expect(result.created).toBe(2);
@@ -591,7 +574,7 @@ describe("CSV import preview logic", () => {
 
       const result = await importInventoryFromCSV(db, organizationId, rows, {
         dryRun: false,
-        userId: TEST_USER_ID,
+        actor: TEST_ACTOR,
       });
 
       expect(result.created).toBe(2);
@@ -616,8 +599,7 @@ describe("CSV import preview logic", () => {
       await createLocation(
         db,
         { name: "Storage", type: "cabinet", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // Import with bare path - should use existing "cabinet" type
@@ -632,7 +614,7 @@ describe("CSV import preview logic", () => {
 
       const result = await importInventoryFromCSV(db, organizationId, rows, {
         dryRun: false,
-        userId: TEST_USER_ID,
+        actor: TEST_ACTOR,
       });
 
       expect(result.created).toBe(1);
@@ -675,7 +657,7 @@ describe("CSV import preview logic", () => {
 
       const result = await importInventoryFromCSV(db, organizationId, rows, {
         dryRun: true,
-        userId: TEST_USER_ID,
+        actor: TEST_ACTOR,
       });
 
       // Should return error for conflict
@@ -691,8 +673,7 @@ describe("CSV import preview logic", () => {
       await createLocation(
         db,
         { name: "ExistingRoom", type: "room", parentId: null },
-        organizationId,
-        TEST_USER_ID,
+        TEST_ACTOR,
       );
 
       // CSV tries to specify a different type for the same location
@@ -707,7 +688,7 @@ describe("CSV import preview logic", () => {
 
       const result = await importInventoryFromCSV(db, organizationId, rows, {
         dryRun: true,
-        userId: TEST_USER_ID,
+        actor: TEST_ACTOR,
       });
 
       // Should return error for conflict with database
@@ -731,7 +712,7 @@ describe("CSV import preview logic", () => {
 
       const result = await importInventoryFromCSV(db, organizationId, rows, {
         dryRun: false,
-        userId: TEST_USER_ID,
+        actor: TEST_ACTOR,
       });
 
       expect(result.created).toBe(1);

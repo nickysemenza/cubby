@@ -12,24 +12,22 @@ import {
   InventoryBulkOperationItem,
   type BulkMovePayload,
 } from "~/schemas/inventory";
-import {
-  type OrganizationId,
-  type LocationId,
-  UserId,
-} from "~/schemas/identifiers";
+import { type LocationId } from "~/schemas/identifiers";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { dbInventoryEntryToAPI } from "./helpers";
 import { type InventoryEntryDeepDB } from "./types";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 export const bulkProcessInventoryEntries = async (
   db: Database,
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ) => {
+  const { organizationId } = actor;
+
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await withTransaction(db, async (tx: Transaction) => {
     const results: InventoryEntryDeepDB[] = [];
@@ -57,12 +55,10 @@ export const bulkProcessInventoryEntries = async (
     for (const item of itemsToDelete) {
       await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, item.id));
       // Log delete audit entry
-      await logAuditEntry(tx, {
-        organizationId,
+      await logAuditEntry(tx, actor, {
         entityType: "inventory",
         entityId: item.id,
         action: "delete",
-        userId,
       });
     }
 
@@ -81,12 +77,10 @@ export const bulkProcessInventoryEntries = async (
         });
 
         // Log create audit entry
-        await logAuditEntry(tx, {
-          organizationId,
+        await logAuditEntry(tx, actor, {
           entityType: "inventory",
           entityId: created.id,
           action: "create",
-          userId,
         });
 
         // Fetch with relations
@@ -122,13 +116,11 @@ export const bulkProcessInventoryEntries = async (
               "productId",
             ]);
             if (changes) {
-              await logAuditEntry(tx, {
-                organizationId,
+              await logAuditEntry(tx, actor, {
                 entityType: "inventory",
                 entityId: item.id,
                 action: "update",
                 changes,
-                userId,
               });
             }
           }
@@ -174,10 +166,11 @@ export const bulkProcessInventoryEntries = async (
  */
 export const bulkMoveInventoryEntries = async (
   db: Database,
-  organizationId: OrganizationId,
   payload: BulkMovePayload,
-  userId: UserId,
+  actor: ActorContext,
 ) => {
+  const { organizationId } = actor;
+
   // Validate source and target are different
   if (payload.sourceLocationId === payload.targetLocationId) {
     throw new Error("Source and target locations must be different");
@@ -246,13 +239,11 @@ export const bulkMoveInventoryEntries = async (
             ["amount"],
           );
           if (targetChanges) {
-            await logAuditEntry(tx, {
-              organizationId,
+            await logAuditEntry(tx, actor, {
               entityType: "inventory",
               entityId: existingAtTarget.id,
               action: "update",
               changes: targetChanges,
-              userId,
             });
           }
 
@@ -262,12 +253,10 @@ export const bulkMoveInventoryEntries = async (
             .where(eq(inventoryEntry.id, item.inventoryEntryId));
 
           // Log delete audit for source
-          await logAuditEntry(tx, {
-            organizationId,
+          await logAuditEntry(tx, actor, {
             entityType: "inventory",
             entityId: item.inventoryEntryId,
             action: "delete",
-            userId,
           });
 
           // Fetch updated target entry
@@ -290,13 +279,11 @@ export const bulkMoveInventoryEntries = async (
             "locationId",
           ]);
           if (locationChanges) {
-            await logAuditEntry(tx, {
-              organizationId,
+            await logAuditEntry(tx, actor, {
               entityType: "inventory",
               entityId: item.inventoryEntryId,
               action: "update",
               changes: locationChanges,
-              userId,
             });
           }
 
@@ -329,13 +316,11 @@ export const bulkMoveInventoryEntries = async (
           "amount",
         ]);
         if (sourceChanges) {
-          await logAuditEntry(tx, {
-            organizationId,
+          await logAuditEntry(tx, actor, {
             entityType: "inventory",
             entityId: item.inventoryEntryId,
             action: "update",
             changes: sourceChanges,
-            userId,
           });
         }
 
@@ -359,13 +344,11 @@ export const bulkMoveInventoryEntries = async (
             ["amount"],
           );
           if (targetChanges2) {
-            await logAuditEntry(tx, {
-              organizationId,
+            await logAuditEntry(tx, actor, {
               entityType: "inventory",
               entityId: existingAtTarget.id,
               action: "update",
               changes: targetChanges2,
-              userId,
             });
           }
 
@@ -385,12 +368,10 @@ export const bulkMoveInventoryEntries = async (
           });
 
           // Log create audit for new target entry
-          await logAuditEntry(tx, {
-            organizationId,
+          await logAuditEntry(tx, actor, {
             entityType: "inventory",
             entityId: created.id,
             action: "create",
-            userId,
           });
 
           // Fetch with relations

@@ -37,6 +37,7 @@ import {
   UserId,
 } from "~/schemas/identifiers";
 import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
+import { type ActorContext, buildActorContext } from "~/schemas/context";
 
 /**
  * Create a TRPCError with consistent error handling:
@@ -102,6 +103,19 @@ export function requireUserId(
     throw createAppError("UNAUTHORIZED", "User authentication required");
   }
   return userId;
+}
+
+/**
+ * Extract ActorContext from tRPC context, throwing if not authenticated.
+ * Use this in protected procedures that modify data.
+ */
+export function requireActorContext(ctx: {
+  actorContext: ActorContext | null;
+}): ActorContext {
+  if (!ctx.actorContext) {
+    throw createAppError("UNAUTHORIZED", "Authentication required");
+  }
+  return ctx.actorContext;
 }
 
 /**
@@ -210,15 +224,23 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
         : null;
     }
 
+    // Build actor context if we have both user and org
+    const userId = betterSession?.user?.id
+      ? unsafeUserId(betterSession.user.id)
+      : null;
+    const actorContext =
+      userId && organizationId
+        ? buildActorContext(userId, organizationId, "ui")
+        : null;
+
     return {
       ...crudServices,
       auth: {
-        userId: betterSession?.user?.id
-          ? unsafeUserId(betterSession.user.id)
-          : null,
+        userId,
         sessionId: betterSession?.session?.id ?? null,
       },
       organizationId,
+      actorContext,
       ...opts,
     };
   });
@@ -422,14 +444,23 @@ export const createTestTRPCContext = (
   } = {},
 ) => {
   const crudServices = buildCrudServices(db);
+  const auth = opts.auth
+    ? createTestAuth(opts.auth.userId)
+    : { userId: null, sessionId: null };
+  const organizationId = opts.organizationId ?? null;
+
+  // Build actorContext if we have both auth and organizationId
+  const actorContext =
+    auth.userId && organizationId
+      ? buildActorContext(auth.userId, organizationId, "ui")
+      : null;
 
   return {
     ...crudServices,
-    auth: opts.auth
-      ? createTestAuth(opts.auth.userId)
-      : { userId: null, sessionId: null },
+    auth,
     isSystemRequest: false, // Test contexts are not system requests by default
-    organizationId: opts.organizationId ?? null,
+    organizationId,
+    actorContext,
     headers: opts.headers ?? new Headers(),
   };
 };

@@ -27,7 +27,6 @@ import {
   type OrganizationId,
   unsafeProductId,
   unsafeIngredientId,
-  UserId,
 } from "~/schemas/identifiers";
 import {
   ingredient,
@@ -49,6 +48,7 @@ import {
   arrayOverlaps,
 } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 export const mergeIngredients = async (
   db: Database,
@@ -171,9 +171,9 @@ export const getIngredientByName = async (db: Database, name: string) => {
 export const createIngredient = async (
   db: Database | DrizzleTransaction,
   data: z.infer<typeof ingredientBase>,
-  organizationId: OrganizationId,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
+  const { organizationId } = actor;
   const [newIngredient] = await unwrapDb(db)
     .insert(ingredient)
     .values({
@@ -188,12 +188,10 @@ export const createIngredient = async (
   }
 
   // Log audit entry
-  await logAuditEntry(db, {
-    organizationId,
+  await logAuditEntry(db, actor, {
     entityType: "ingredient",
     entityId: newIngredient.id,
     action: "create",
-    userId,
   });
 
   const ingredientData = await unwrapDb(db).query.ingredient.findFirst({
@@ -211,10 +209,10 @@ export const createIngredient = async (
 export const updateIngredient = async (
   db: Database,
   id: IngredientId,
-  organizationId: OrganizationId,
   data: Partial<z.infer<typeof ingredientBase>>,
-  userId: UserId,
+  actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
+  const { organizationId } = actor;
   // Capture before state for audit logging
   const beforeState = await getDb(db).query.ingredient.findFirst({
     where: and(
@@ -234,13 +232,11 @@ export const updateIngredient = async (
   if (beforeState) {
     const changes = computeChanges(beforeState, updated, ["name", "aliases"]);
     if (changes) {
-      await logAuditEntry(db, {
-        organizationId,
+      await logAuditEntry(db, actor, {
         entityType: "ingredient",
         entityId: id,
         action: "update",
         changes,
-        userId,
       });
     }
   }

@@ -8,13 +8,18 @@ import {
   unsafeIngredientId,
   type OrganizationId,
   unsafeUserId,
+  unsafeOrganizationId,
 } from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 import { getDb } from "./database-helpers";
 import { recipe } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 
-// Test user ID for audit logging
-const TEST_USER_ID = unsafeUserId("test-user-id");
+const TEST_ACTOR: ActorContext = {
+  userId: unsafeUserId("test-user-id"),
+  organizationId: unsafeOrganizationId("test-org-id"),
+  source: "ui",
+};
 
 describe("upsertRecipe", () => {
   let db: Database;
@@ -32,8 +37,7 @@ describe("upsertRecipe", () => {
         name: "Test Ingredient 1",
         aliases: [],
       },
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
     const ingredient2 = await createIngredient(
       db,
@@ -41,8 +45,7 @@ describe("upsertRecipe", () => {
         name: "Test Ingredient 2",
         aliases: [],
       },
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
     const ingredient3 = await createIngredient(
       db,
@@ -50,8 +53,7 @@ describe("upsertRecipe", () => {
         name: "Test Ingredient 3",
         aliases: [],
       },
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
 
     testIngredients = [ingredient1, ingredient2, ingredient3];
@@ -123,12 +125,7 @@ describe("upsertRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(
-      getMockRecipeInput(),
-      db,
-      organizationId,
-      TEST_USER_ID,
-    );
+    const result = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR);
 
     expect(result.id).toBeDefined();
 
@@ -160,16 +157,14 @@ describe("upsertRecipe", () => {
     const firstResult = await upsertRecipe(
       getMockRecipeInput(),
       db,
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
 
     // Now update with different data
     const secondResult = await upsertRecipe(
       getMockRecipeUpdated(),
       db,
-      organizationId,
-      TEST_USER_ID,
+      TEST_ACTOR,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -208,24 +203,9 @@ describe("upsertRecipe", () => {
 
   it("can be called multiple times without conflicts", async () => {
     // This tests that the function is idempotent
-    const firstRun = await upsertRecipe(
-      getMockRecipeInput(),
-      db,
-      organizationId,
-      TEST_USER_ID,
-    );
-    const secondRun = await upsertRecipe(
-      getMockRecipeInput(),
-      db,
-      organizationId,
-      TEST_USER_ID,
-    ); // Same input
-    const thirdRun = await upsertRecipe(
-      getMockRecipeInput(),
-      db,
-      organizationId,
-      TEST_USER_ID,
-    ); // Same input again
+    const firstRun = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR);
+    const secondRun = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR); // Same input
+    const thirdRun = await upsertRecipe(getMockRecipeInput(), db, TEST_ACTOR); // Same input again
 
     // All should return the same recipe ID
     expect(secondRun.id).toBe(firstRun.id);
@@ -256,7 +236,7 @@ describe("upsertRecipe", () => {
       ],
     };
 
-    await upsertRecipe(recipeNoUrl, db, organizationId, TEST_USER_ID);
+    await upsertRecipe(recipeNoUrl, db, TEST_ACTOR);
 
     const foundRecipe = await getDb(db).query.recipe.findFirst({
       where: and(

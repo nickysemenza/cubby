@@ -9,7 +9,6 @@ import {
   type OrganizationId,
   type IngredientId,
   unsafeIngredientId,
-  UserId,
 } from "~/schemas/identifiers";
 import { type ProductChangesPreview } from "~/schemas/inventory";
 import { getDb } from "~/server/repo/database-helpers";
@@ -22,7 +21,8 @@ import {
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { type ProductPreviewResult } from "./types";
-import { logAuditEntry, type AuditSource } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
+import { type ActorContext } from "~/schemas/context";
 
 /**
  * Parse semicolon-separated aliases string into array
@@ -58,8 +58,7 @@ export const findOrCreateProductForImport = async (
   model: string | undefined,
   ndbNumber: number | undefined,
   aliasesStr: string | null | undefined,
-  userId: UserId,
-  source: AuditSource = "csv_import",
+  actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   // Parse aliases from semicolon-separated string
   const aliases = parseAliasesString(aliasesStr);
@@ -101,8 +100,7 @@ export const findOrCreateProductForImport = async (
         ndb_number: ndbNumber ?? null,
         ingredientId,
       },
-      organizationId,
-      userId,
+      actor,
     );
   } else {
     // Update existing product if CSV provides values
@@ -193,14 +191,11 @@ export const findOrCreateProductForImport = async (
 
       // Log audit entry if there are changes
       if (Object.keys(changes).length > 0) {
-        await logAuditEntry(db, {
-          organizationId,
+        await logAuditEntry(db, actor, {
           entityType: "product",
           entityId: productData.id,
           action: "update",
           changes,
-          userId,
-          source,
         });
       }
 

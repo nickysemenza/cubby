@@ -2,7 +2,8 @@ import { type Database, type Transaction } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { auditLog } from "~/server/db/schema";
 import { and, eq, desc, lt } from "drizzle-orm";
-import { UserId, type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
+import { type ActorContext } from "~/schemas/context";
 
 // Entity types that can be audited
 export type AuditEntityType =
@@ -15,18 +16,12 @@ export type AuditEntityType =
 // Action types for audit entries
 export type AuditAction = "create" | "update" | "delete";
 
-// Source of the action (where it came from)
-export type AuditSource = "ui" | "csv_import" | "sheets_import" | "api";
-
-// Input for creating an audit log entry
-export interface AuditLogInput {
-  organizationId: OrganizationId;
+// Input for the audit entry (without actor context)
+export interface AuditEntryInput {
   entityType: AuditEntityType;
   entityId: string;
   action: AuditAction;
   changes?: Record<string, { from: unknown; to: unknown }>;
-  userId: UserId; // Required - who performed the action
-  source?: AuditSource; // Defaults to 'ui'
 }
 
 // User info included in audit log entries
@@ -74,19 +69,18 @@ export function computeChanges<T extends Record<string, unknown>>(
  */
 export async function logAuditEntry(
   db: Database | Transaction,
-  entry: AuditLogInput,
+  actor: ActorContext,
+  entry: AuditEntryInput,
 ): Promise<void> {
-  await unwrapDb(db)
-    .insert(auditLog)
-    .values({
-      organizationId: entry.organizationId,
-      entityType: entry.entityType,
-      entityId: entry.entityId,
-      action: entry.action,
-      changes: entry.changes,
-      userId: entry.userId,
-      source: entry.source ?? "ui",
-    });
+  await unwrapDb(db).insert(auditLog).values({
+    organizationId: actor.organizationId,
+    entityType: entry.entityType,
+    entityId: entry.entityId,
+    action: entry.action,
+    changes: entry.changes,
+    userId: actor.userId,
+    source: actor.source,
+  });
 }
 
 /**
