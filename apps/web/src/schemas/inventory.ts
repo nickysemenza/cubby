@@ -104,15 +104,33 @@ export const unitMappingDetail = z.object({
 export type UnitMappingDetail = z.infer<typeof unitMappingDetail>;
 
 // Product metadata changes for preview
+// Each field has optional "current" value for showing from→to changes
 export const productChangesPreview = z.object({
+  // Price: "1 each → $X" mapping
   priceWillBeSet: z.number().optional(),
+  priceCurrent: z.number().nullable().optional(),
+  // Expected quantity
   expectedQuantityWillBeSet: z.number().optional(),
+  expectedQuantityCurrent: z.number().nullable().optional(),
+  // Unit mappings
   unitMappingsWillBeAdded: z.number().optional(), // count of new mappings
   unitMappingsDetail: z.array(unitMappingDetail).optional(), // detailed mappings for display
+  unitMappingsCurrent: z.string().nullable().optional(), // current mappings as string
+  // Ingredient linking
   ingredientWillBeLinked: z.string().optional(), // ingredient name
-  modelWillBeSet: z.string().optional(), // model number
-  ndbNumberWillBeSet: z.number().optional(), // USDA NDB number
+  ingredientCurrent: z.string().nullable().optional(),
+  // Model number
+  modelWillBeSet: z.string().optional(),
+  modelCurrent: z.string().nullable().optional(),
+  // UPC code
+  upcWillBeSet: z.string().optional(),
+  upcCurrent: z.string().nullable().optional(),
+  // USDA NDB number
+  ndbNumberWillBeSet: z.number().optional(),
+  ndbNumberCurrent: z.number().nullable().optional(),
+  // Aliases
   aliasesWillBeAdded: z.array(z.string()).optional(), // list of aliases to add
+  aliasesCurrent: z.array(z.string()).optional(),
 });
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;

@@ -102,11 +102,16 @@ export const findOrCreateProductForImport = async (
   } else {
     // Update existing product if CSV provides values
     const updates: {
+      upc?: string | null;
       expectedQuantity?: number;
       ingredientId?: IngredientId | null;
       model?: string | null;
       ndb_number?: number | null;
     } = {};
+    // Update UPC if provided and different
+    if (upc != null && productData.upc !== upc) {
+      updates.upc = upc;
+    }
     if (expectedQty != null) {
       updates.expectedQuantity = expectedQty;
     }
@@ -133,6 +138,12 @@ export const findOrCreateProductForImport = async (
         .set(updates)
         .where(eq(product.id, productData.id));
       // Update local copy for fields that might have changed
+      if (updates.upc !== undefined) {
+        productData = {
+          ...productData,
+          upc: updates.upc,
+        };
+      }
       if (updates.expectedQuantity != null) {
         productData = {
           ...productData,
@@ -161,12 +172,14 @@ export const findOrCreateProductForImport = async (
  * Preview what would happen to a product without actually creating/updating it
  *
  * Used for dry-run mode to show users what changes will occur.
+ * Captures both current values and proposed values for from→to display.
  */
 export const previewProductForImport = async (
   db: Database,
   organizationId: OrganizationId,
   productName: string,
   manufacturer: string,
+  upc: string | undefined,
   expectedQty: number | null | undefined,
   ingredientName: string | null | undefined,
   ingredientFlag: boolean | undefined,
@@ -187,7 +200,10 @@ export const previewProductForImport = async (
   );
 
   if (!existingProduct) {
-    // Product will be created
+    // Product will be created - show what will be set (no current values)
+    if (upc) {
+      productChanges.upcWillBeSet = upc;
+    }
     if (expectedQty != null) {
       productChanges.expectedQuantityWillBeSet = expectedQty;
     }
@@ -210,17 +226,25 @@ export const previewProductForImport = async (
     };
   }
 
-  // Product exists - check what would be updated
+  // Product exists - check what would be updated, capture current values
+  if (upc && existingProduct.upc !== upc) {
+    productChanges.upcWillBeSet = upc;
+    productChanges.upcCurrent = existingProduct.upc;
+  }
+
   if (expectedQty != null && existingProduct.expectedQuantity !== expectedQty) {
     productChanges.expectedQuantityWillBeSet = expectedQty;
+    productChanges.expectedQuantityCurrent = existingProduct.expectedQuantity;
   }
 
   if (model && existingProduct.model !== model) {
     productChanges.modelWillBeSet = model;
+    productChanges.modelCurrent = existingProduct.model;
   }
 
   if (ndbNumber != null && existingProduct.ndb_number !== ndbNumber) {
     productChanges.ndbNumberWillBeSet = ndbNumber;
+    productChanges.ndbNumberCurrent = existingProduct.ndb_number;
   }
 
   // Check ingredient linking
@@ -228,10 +252,13 @@ export const previewProductForImport = async (
     const productWithIngredient = await getDb(db).query.product.findFirst({
       where: eq(product.id, existingProduct.id),
       columns: { ingredientId: true },
+      with: { Ingredient: { columns: { name: true } } },
     });
     if (productWithIngredient?.ingredientId == null) {
       productChanges.ingredientWillBeLinked = effectiveIngredientName;
     }
+    productChanges.ingredientCurrent =
+      productWithIngredient?.Ingredient?.name ?? null;
   }
 
   // Aliases will be added to ingredient if it's being linked
