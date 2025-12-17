@@ -117,7 +117,7 @@ export const productChangesPreview = z.object({
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
 
-// Result types for CSV import
+// Result types for CSV import (and push preview)
 export const csvImportResultItem = z.object({
   rowIndex: z.number(),
   action: z.enum([
@@ -127,6 +127,7 @@ export const csvImportResultItem = z.object({
     "skipped",
     "error",
     "product_only",
+    "removed", // For push preview: row exists in sheet but not in app
   ]),
   productName: z.string(),
   productId: z.string().optional(), // Product ID for image import
@@ -149,6 +150,7 @@ export const csvImportResult = z.object({
   skipped: z.number(),
   errors: z.number(),
   productOnly: z.number(), // Products created/updated without inventory placement
+  removed: z.number().optional(), // For push preview: rows that will be removed from sheet
   items: z.array(csvImportResultItem),
 });
 

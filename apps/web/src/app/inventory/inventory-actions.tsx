@@ -13,6 +13,7 @@ import {
   downloadCSV,
   generateExportFilename,
 } from "~/lib/csv-utils";
+import { GoogleSheetsSync } from "~/app/_components/inventory/google-sheets-sync";
 
 export function InventoryActions() {
   const [isExporting, setIsExporting] = useState(false);
@@ -75,6 +76,7 @@ export function InventoryActions() {
           Quick Capture
         </Button>
       </Link>
+      <GoogleSheetsSync />
       <Link href={`/${entities["inventory-item"].basePath}/import`}>
         <Button variant="outline">
           <Upload className="mr-1 h-4 w-4" />

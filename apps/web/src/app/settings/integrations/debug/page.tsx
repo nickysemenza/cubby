@@ -1,0 +1,105 @@
+"use client";
+
+import { useTRPC } from "~/trpc/react";
+import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { Button } from "~/components/ui/button";
+import JsonRenderer from "~/app/_components/json-renderer";
+
+export default function GoogleSheetsDebugPage() {
+  const api = useTRPC();
+
+  const { data, isLoading, error } = useQuery(
+    api.googleSheets.debugSheetData.queryOptions(),
+  );
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading sheet data...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-6">
+        <div className="mb-4">
+          <Link href="/settings/integrations">
+            <Button variant="outline" size="sm">
+              &larr; Back to Integrations
+            </Button>
+          </Link>
+        </div>
+        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+          <p className="font-medium">Error loading sheet data</p>
+          <p className="text-sm">{error.message}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto py-6">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Google Sheets Debug</h1>
+          <p className="text-muted-foreground text-sm">
+            Raw data from connected sheet for troubleshooting
+          </p>
+        </div>
+        <Link href="/settings/integrations">
+          <Button variant="outline" size="sm">
+            &larr; Back to Integrations
+          </Button>
+        </Link>
+      </div>
+
+      {/* Parse Errors */}
+      {data?.parseErrors && data.parseErrors.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-lg font-semibold text-red-600">
+            Parse Errors ({data.parseErrors.length})
+          </h2>
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+            <JsonRenderer input={data.parseErrors} pretty />
+          </div>
+        </div>
+      )}
+
+      {/* Headers */}
+      <div className="mb-6">
+        <h2 className="mb-2 text-lg font-semibold">
+          Headers ({data?.headers.length ?? 0} columns)
+        </h2>
+        <div className="bg-muted rounded-md border p-4">
+          <JsonRenderer input={data?.headers} pretty />
+        </div>
+      </div>
+
+      {/* Raw Rows */}
+      <div className="mb-6">
+        <h2 className="mb-2 text-lg font-semibold">
+          Raw Rows ({data?.rawRows.length ?? 0} rows)
+        </h2>
+        <div className="bg-muted max-h-[500px] overflow-auto rounded-md border p-4">
+          <JsonRenderer input={data?.rawRows} pretty />
+        </div>
+      </div>
+
+      {/* Parsed Rows */}
+      <div className="mb-6">
+        <h2 className="mb-2 text-lg font-semibold">
+          Parsed Rows ({data?.parsedRows.length ?? 0} rows)
+        </h2>
+        <div className="bg-muted max-h-[500px] overflow-auto rounded-md border p-4">
+          <JsonRenderer input={data?.parsedRows} pretty />
+        </div>
+      </div>
+    </div>
+  );
+}

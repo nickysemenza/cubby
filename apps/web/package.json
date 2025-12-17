@@ -76,6 +76,7 @@
     "dayjs": "^1.11.19",
     "drizzle-orm": "^0.45.1",
     "flat": "^6.0.1",
+    "googleapis": "^169.0.0",
     "graphviz-react": "^1.2.5",
     "json-edit-react": "^1.29.0",
     "lucide-react": "^0.561.0",

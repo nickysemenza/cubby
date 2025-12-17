@@ -9,6 +9,7 @@ import { upcRouter } from "./routers/upc";
 import { imageRouter } from "./routers/image";
 import { problemsRouter } from "./routers/problems";
 import { auditLogRouter } from "./routers/audit-log";
+import { googleSheetsRouter } from "./routers/google-sheets";
 
 /**
  * This is the primary router for your server.
@@ -26,6 +27,7 @@ export const appRouter = createTRPCRouter({
   image: imageRouter,
   problems: problemsRouter,
   auditLog: auditLogRouter,
+  googleSheets: googleSheetsRouter,
 });
 
 // export type definition of API
