@@ -3,14 +3,14 @@ import fs from "fs";
 import path from "path";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { unsafeUserId, type OrganizationId } from "~/schemas/identifiers";
 import { parseInventoryCSV } from "./csv-utils";
 import { importInventoryFromCSV } from "~/server/repo/inventory";
 import { locationList } from "~/server/repo/location";
 import { productList } from "~/server/repo/product";
 
 // Test user ID for audit logging
-const TEST_USER_ID = "test-user-id-for-csv-utils";
+const TEST_USER_ID = unsafeUserId("test-user-id-for-csv-utils");
 
 const readConfigCSV = (): ReturnType<typeof parseInventoryCSV> => {
   const filePath = path.join(__dirname, "../../config.csv");

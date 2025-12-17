@@ -14,6 +14,7 @@ import {
   unsafeLocationId,
   unsafeProductId,
   unsafeInventoryId,
+  UserId,
 } from "~/schemas/identifiers";
 import {
   type SortParams,
@@ -59,7 +60,7 @@ export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ) => {
   // Create the location
   const [newLocation] = await getDb(db)
@@ -105,7 +106,7 @@ export const updateLocation = async (
   id: LocationId,
   organizationId: OrganizationId,
   data: LocationUpdateInput["data"],
-  userId: string,
+  userId: UserId,
 ) => {
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {

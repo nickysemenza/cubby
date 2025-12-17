@@ -12,7 +12,7 @@ import {
   type SortParams,
   type PaginationParams,
 } from "~/schemas/pagination";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { UserId, type OrganizationId } from "~/schemas/identifiers";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -31,7 +31,7 @@ export interface CrudServices {
   };
   usdaClient: USDAClient;
   auth?: {
-    userId: string | null;
+    userId: UserId | null;
     sessionId: string | null;
   };
 }

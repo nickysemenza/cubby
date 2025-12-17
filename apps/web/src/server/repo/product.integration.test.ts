@@ -13,10 +13,11 @@ import {
   unsafeIngredientId,
   unsafeProductId,
   type OrganizationId,
+  unsafeUserId,
 } from "~/schemas/identifiers";
 
 // Test user ID for audit logging
-const TEST_USER_ID = "test-user-id";
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("product repository", () => {
   let db: Database;

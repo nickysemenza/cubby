@@ -18,6 +18,7 @@ import {
   type OrganizationId,
   type ProductId,
   type LocationId,
+  UserId,
 } from "~/schemas/identifiers";
 import { inventoryEntry, product, location } from "~/server/db/schema";
 import { eq, and, count, not, ilike } from "drizzle-orm";
@@ -182,7 +183,7 @@ export const updateInventoryEntry = async (
   id: InventoryId,
   organizationId: OrganizationId,
   data: UpdateInventoryEntryData,
-  userId: string,
+  userId: UserId,
 ) => {
   // Fetch current state for audit logging
   const before = await getDb(db).query.inventoryEntry.findFirst({
@@ -245,7 +246,7 @@ export const createInventoryEntry = async (
   db: Database,
   data: CreateInventoryEntryData,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ) => {
   const created = await insertAndReturnDb(db, inventoryEntry, {
     organizationId: organizationId,
@@ -303,7 +304,7 @@ export const deleteInventoryEntry = async (
   db: Database,
   id: InventoryId,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ): Promise<void> => {
   await getDb(db)
     .delete(inventoryEntry)

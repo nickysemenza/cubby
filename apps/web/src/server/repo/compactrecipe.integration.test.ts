@@ -3,13 +3,13 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { type ParsedCompactRecipe } from "~/codec/codec";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
 import { getDb } from "./database-helpers";
 import { recipe, recipeSection } from "~/server/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 
 // Test user ID for audit logging
-const TEST_USER_ID = "test-user-id";
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("upsertRecipeFromCompact", () => {
   let db: Database;

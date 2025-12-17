@@ -17,7 +17,11 @@ import {
 } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import { type IngredientId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  UserId,
+  type IngredientId,
+  type OrganizationId,
+} from "~/schemas/identifiers";
 import { batchEnrichWithFood, batchEnrichNestedItems } from "./usda-helpers";
 
 // Extended schemas that include food data
@@ -116,7 +120,7 @@ export class IngredientService {
   async createIngredient(
     data: z.infer<typeof ingredientBase>,
     organizationId: OrganizationId,
-    userId: string,
+    userId: UserId,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await createIngredientRepo(
       this.db,
@@ -138,7 +142,7 @@ export class IngredientService {
     id: IngredientId,
     organizationId: OrganizationId,
     data: Partial<z.infer<typeof ingredientBase>>,
-    userId: string,
+    userId: UserId,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await updateIngredientRepo(
       this.db,

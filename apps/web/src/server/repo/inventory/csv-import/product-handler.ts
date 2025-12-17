@@ -9,6 +9,7 @@ import {
   type OrganizationId,
   type IngredientId,
   unsafeIngredientId,
+  UserId,
 } from "~/schemas/identifiers";
 import { type ProductChangesPreview } from "~/schemas/inventory";
 import { getDb } from "~/server/repo/database-helpers";
@@ -21,6 +22,7 @@ import {
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { type ProductPreviewResult } from "./types";
+import { logAuditEntry, type AuditSource } from "~/server/repo/audit-log";
 
 /**
  * Parse semicolon-separated aliases string into array
@@ -56,7 +58,8 @@ export const findOrCreateProductForImport = async (
   model: string | undefined,
   ndbNumber: number | undefined,
   aliasesStr: string | null | undefined,
-  userId: string,
+  userId: UserId,
+  source: AuditSource = "csv_import",
 ): Promise<ProductTopLevelOut> => {
   // Parse aliases from semicolon-separated string
   const aliases = parseAliasesString(aliasesStr);
@@ -123,22 +126,84 @@ export const findOrCreateProductForImport = async (
     if (ndbNumber != null) {
       updates.ndb_number = ndbNumber;
     }
+    // Query existing ingredient link (needed for both updates and audit logging)
+    let existingIngredientId: string | null = null;
     if (ingredientId != null) {
       // Check if product already has an ingredient linked (need to query DB)
       const existingProduct = await getDb(db).query.product.findFirst({
         where: eq(product.id, productData.id),
         columns: { ingredientId: true },
       });
-      if (existingProduct?.ingredientId == null) {
+      existingIngredientId = existingProduct?.ingredientId ?? null;
+      if (existingIngredientId == null) {
         updates.ingredientId = ingredientId;
       }
     }
 
     if (Object.keys(updates).length > 0) {
+      // Capture before state for audit log
+      const beforeState = {
+        upc: productData.upc,
+        expectedQuantity: productData.expectedQuantity,
+        model: productData.model,
+        ndb_number: productData.ndb_number,
+        ingredientId: existingIngredientId,
+      };
+
       await getDb(db)
         .update(product)
         .set(updates)
         .where(eq(product.id, productData.id));
+
+      // Build changes for audit log
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (updates.upc !== undefined && beforeState.upc !== updates.upc) {
+        changes.upc = { from: beforeState.upc, to: updates.upc };
+      }
+      if (
+        updates.expectedQuantity != null &&
+        beforeState.expectedQuantity !== updates.expectedQuantity
+      ) {
+        changes.expectedQuantity = {
+          from: beforeState.expectedQuantity,
+          to: updates.expectedQuantity,
+        };
+      }
+      if (updates.model != null && beforeState.model !== updates.model) {
+        changes.model = { from: beforeState.model, to: updates.model };
+      }
+      if (
+        updates.ndb_number != null &&
+        beforeState.ndb_number !== updates.ndb_number
+      ) {
+        changes.ndb_number = {
+          from: beforeState.ndb_number,
+          to: updates.ndb_number,
+        };
+      }
+      if (
+        updates.ingredientId != null &&
+        beforeState.ingredientId !== updates.ingredientId
+      ) {
+        changes.ingredientId = {
+          from: beforeState.ingredientId,
+          to: updates.ingredientId,
+        };
+      }
+
+      // Log audit entry if there are changes
+      if (Object.keys(changes).length > 0) {
+        await logAuditEntry(db, {
+          organizationId,
+          entityType: "product",
+          entityId: productData.id,
+          action: "update",
+          changes,
+          userId,
+          source,
+        });
+      }
+
       // Update local copy for fields that might have changed
       if (updates.upc !== undefined) {
         productData = {

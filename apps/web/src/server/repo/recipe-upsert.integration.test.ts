@@ -4,13 +4,17 @@ import { buildTestDB } from "tooling/test-setup";
 import { upsertRecipe } from "./recipe";
 import { createIngredient } from "./ingredient";
 import { type RecipeCreateInput } from "~/schemas/recipe";
-import { unsafeIngredientId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  type OrganizationId,
+  unsafeUserId,
+} from "~/schemas/identifiers";
 import { getDb } from "./database-helpers";
 import { recipe } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // Test user ID for audit logging
-const TEST_USER_ID = "test-user-id";
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("upsertRecipe", () => {
   let db: Database;

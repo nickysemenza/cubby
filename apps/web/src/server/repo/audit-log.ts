@@ -2,7 +2,7 @@ import { type Database, type Transaction } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { auditLog } from "~/server/db/schema";
 import { and, eq, desc, lt } from "drizzle-orm";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { UserId, type OrganizationId } from "~/schemas/identifiers";
 
 // Entity types that can be audited
 export type AuditEntityType =
@@ -25,7 +25,7 @@ export interface AuditLogInput {
   entityId: string;
   action: AuditAction;
   changes?: Record<string, { from: unknown; to: unknown }>;
-  userId: string; // Required - who performed the action
+  userId: UserId; // Required - who performed the action
   source?: AuditSource; // Defaults to 'ui'
 }
 

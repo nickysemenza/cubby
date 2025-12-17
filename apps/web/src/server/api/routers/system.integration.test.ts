@@ -3,8 +3,10 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { appRouter } from "../root";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
 import { type InventoryCSVRow } from "~/schemas/inventory";
+
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 // Test data in CSV format
 const testCSVRows: InventoryCSVRow[] = [
@@ -70,7 +72,7 @@ describe("CSV import test", () => {
     const createCaller = createCallerFactory(appRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId,
       }),
     );

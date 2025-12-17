@@ -5,7 +5,11 @@
  */
 
 import { type Database } from "~/server/db";
-import { type OrganizationId, type LocationId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  type LocationId,
+  UserId,
+} from "~/schemas/identifiers";
 import {
   type InventoryCSVRow,
   type CSVImportResultItem,
@@ -36,13 +40,15 @@ import {
   getExistingInventoryLocations,
   checkInventoryMatch,
 } from "./inventory-handler";
+import { type AuditSource } from "~/server/repo/audit-log";
 
 interface RowProcessorContext {
   db: Database;
   organizationId: OrganizationId;
   locationTypeContext: LocationTypeContext;
   dryRun: boolean;
-  userId: string;
+  userId: UserId;
+  source: AuditSource;
 }
 
 /**
@@ -145,7 +151,8 @@ export const processRow = async (
   row: InventoryCSVRow,
   rowIndex: number,
 ): Promise<CSVImportResultItem> => {
-  const { db, organizationId, locationTypeContext, dryRun, userId } = ctx;
+  const { db, organizationId, locationTypeContext, dryRun, userId, source } =
+    ctx;
   const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
 
   // Check if this is a product-only row (no location_path)
@@ -207,6 +214,7 @@ export const processRow = async (
       row.ndb_number,
       row.aliases,
       userId,
+      source,
     );
 
     // Handle price mapping (CSV price is numeric, defaults to dollar)

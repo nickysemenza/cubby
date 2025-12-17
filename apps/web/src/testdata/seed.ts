@@ -3,12 +3,16 @@ import { exampleRecipesCompact } from "./fakeRecipes";
 import { upsertRecipeFromCompact } from "~/server/repo/compactrecipe";
 import { type Database } from "~/server/db";
 import { getRecipeByID } from "~/server/repo/recipe";
-import { unsafeRecipeId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  unsafeRecipeId,
+  UserId,
+  type OrganizationId,
+} from "~/schemas/identifiers";
 
 export const seedRealRecipes = async (
   db: Database,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ) => {
   for (const recipe of exampleRecipesCompact) {
     const parsed = await parseCompactRecipe(recipe);

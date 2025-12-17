@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import {
@@ -11,7 +11,7 @@ import {
 import { type InventoryCSVRow } from "~/schemas/inventory";
 
 // Test user ID for audit logging
-const TEST_USER_ID = "test-user-id-for-csv-import";
+const TEST_USER_ID = unsafeUserId("test-user-id-for-csv-import");
 
 describe("CSV import preview logic", () => {
   let db: Database;

@@ -32,7 +32,9 @@ import { env } from "~/env";
 import {
   unsafeProductId,
   unsafeOrganizationId,
+  unsafeUserId,
   type OrganizationId,
+  UserId,
 } from "~/schemas/identifiers";
 import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
 
@@ -83,7 +85,7 @@ export function createAppError(
  * @deprecated Use requireUserId instead for functions that require userId
  */
 export function getUserId(
-  auth: { userId: string | null; sessionId: string | null } | undefined,
+  auth: { userId: UserId | null; sessionId: string | null } | undefined,
 ): string | undefined {
   return auth?.userId ?? undefined;
 }
@@ -93,8 +95,8 @@ export function getUserId(
  * Use this in protected procedures where a user is required.
  */
 export function requireUserId(
-  auth: { userId: string | null; sessionId: string | null } | undefined,
-): string {
+  auth: { userId: UserId | null; sessionId: string | null } | undefined,
+): UserId {
   const userId = auth?.userId;
   if (!userId) {
     throw createAppError("UNAUTHORIZED", "User authentication required");
@@ -211,7 +213,9 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
     return {
       ...crudServices,
       auth: {
-        userId: betterSession?.user?.id ?? null,
+        userId: betterSession?.user?.id
+          ? unsafeUserId(betterSession.user.id)
+          : null,
         sessionId: betterSession?.session?.id ?? null,
       },
       organizationId,
@@ -401,7 +405,7 @@ export const systemProcedure = publicProcedure
 /**
  * Helper to create a minimal auth object for testing
  */
-const createTestAuth = (userId: string) => ({
+const createTestAuth = (userId: UserId) => ({
   userId,
   sessionId: "test-session-id",
 });
@@ -413,7 +417,7 @@ export const createTestTRPCContext = (
   db: Database,
   opts: {
     headers?: Headers;
-    auth?: { userId: string };
+    auth?: { userId: UserId };
     organizationId?: OrganizationId;
   } = {},
 ) => {

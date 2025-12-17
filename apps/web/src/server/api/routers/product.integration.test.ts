@@ -3,7 +3,9 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { productRouter } from "./product";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("product router", () => {
   let db: Database;
@@ -20,7 +22,7 @@ describe("product router", () => {
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -65,7 +67,7 @@ describe("product router", () => {
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -160,7 +162,7 @@ describe("product router", () => {
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -224,7 +226,7 @@ describe("product router", () => {
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -265,7 +267,7 @@ describe("product router", () => {
     const createCaller = createCallerFactory(productRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );

@@ -19,7 +19,7 @@
  */
 
 import { type Database } from "~/server/db";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { UserId, type OrganizationId } from "~/schemas/identifiers";
 import {
   type InventoryCSVRow,
   type CSVImportResultItem,
@@ -34,7 +34,7 @@ export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
 
 export interface ImportOptions {
   dryRun?: boolean;
-  userId: string;
+  userId: UserId;
   source?: AuditSource;
 }
 
@@ -96,7 +96,7 @@ export const importInventoryFromCSV = async (
     const row = rows[i];
     try {
       const result = await processRow(
-        { db, organizationId, locationTypeContext, dryRun, userId },
+        { db, organizationId, locationTypeContext, dryRun, userId, source },
         row,
         i,
       );

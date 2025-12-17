@@ -4,8 +4,10 @@ import { buildTestDB } from "tooling/test-setup";
 import { recipeRouter } from "./recipe";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
 import { withTransaction } from "~/server/repo/database-helpers";
+
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("recipe router", () => {
   let db: Database;
@@ -21,7 +23,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -102,7 +104,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -221,7 +223,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -311,7 +313,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -374,7 +376,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -392,7 +394,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -471,7 +473,7 @@ describe("recipe router", () => {
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );

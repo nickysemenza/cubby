@@ -3,12 +3,12 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { inventoryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 
 // Test user ID for audit logging
-const TEST_USER_ID = "test-user-id";
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("inventory router", () => {
   let db: Database;
@@ -24,7 +24,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -94,7 +94,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -251,7 +251,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -323,7 +323,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -423,7 +423,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -558,7 +558,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -576,7 +576,7 @@ describe("inventory router", () => {
       const createCaller = createCallerFactory(inventoryRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
-          auth: { userId: "test-user-id" },
+          auth: { userId: TEST_USER_ID },
           organizationId: organizationId,
         }),
       );
@@ -647,7 +647,7 @@ describe("inventory router", () => {
       const createCaller = createCallerFactory(inventoryRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
-          auth: { userId: "test-user-id" },
+          auth: { userId: TEST_USER_ID },
           organizationId: organizationId,
         }),
       );
@@ -712,7 +712,7 @@ describe("inventory router", () => {
       const createCaller = createCallerFactory(inventoryRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
-          auth: { userId: "test-user-id" },
+          auth: { userId: TEST_USER_ID },
           organizationId: organizationId,
         }),
       );
@@ -780,7 +780,7 @@ describe("inventory router", () => {
       const createCaller = createCallerFactory(inventoryRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
-          auth: { userId: "test-user-id" },
+          auth: { userId: TEST_USER_ID },
           organizationId: organizationId,
         }),
       );
@@ -832,7 +832,7 @@ describe("inventory router", () => {
       const createCaller = createCallerFactory(inventoryRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
-          auth: { userId: "test-user-id" },
+          auth: { userId: TEST_USER_ID },
           organizationId: organizationId,
         }),
       );
@@ -892,7 +892,7 @@ describe("inventory router", () => {
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );

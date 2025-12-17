@@ -3,12 +3,16 @@ import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { insertCompactRecipe } from "~/server/repo/recipe";
-import { unsafeIngredientId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  type OrganizationId,
+  unsafeUserId,
+} from "~/schemas/identifiers";
 import { getDb, withTransaction } from "./database-helpers";
 import { ingredient } from "~/server/db/schema";
 import { eq, count } from "drizzle-orm";
 
-const TEST_USER_ID = "test-user-id";
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("ingredient", () => {
   let db: Database;

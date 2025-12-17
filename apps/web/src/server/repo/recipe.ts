@@ -29,7 +29,11 @@ import {
   associatePendingImages,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  type RecipeId,
+  type OrganizationId,
+  UserId,
+} from "~/schemas/identifiers";
 import {
   recipe,
   recipeSection,
@@ -140,7 +144,7 @@ export const insertCompactRecipe = async (
   recipe: CompactRecipe,
   db: Database,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ) => {
   const parsed = await parseCompactRecipe(recipe);
   return await upsertRecipeFromCompact(parsed, db, organizationId, userId);
@@ -192,7 +196,7 @@ export const createRecipe = async (
   recipeInput: RecipeCreateInput,
   db: Database,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ): Promise<RecipeOut> => {
   const sourceType = recipeInput.meta?.url ? "Website" : "Other";
   const sourceData = recipeInput.meta?.url || null;
@@ -358,7 +362,7 @@ export const upsertRecipe = async (
   input: RecipeCreateInput,
   db: Database,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ): Promise<{ id: string }> => {
   const dbClient = getDb(db);
 
@@ -466,7 +470,7 @@ export const updateRecipe = async (
   updates: RecipeUpdateInput["data"],
   db: Database,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ): Promise<RecipeOut> => {
   // Check if recipe exists and belongs to project
   const existingRecipe = await getDb(db).query.recipe.findFirst({

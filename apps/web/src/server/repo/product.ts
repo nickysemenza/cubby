@@ -41,6 +41,7 @@ import {
   type OrganizationId,
   unsafeLocationId,
   unsafeProductId,
+  UserId,
 } from "~/schemas/identifiers";
 import {
   product,
@@ -257,7 +258,7 @@ export const createProduct = async (
   db: Database,
   data: ProductInputPayload,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ): Promise<ProductTopLevelOut> => {
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
@@ -332,7 +333,7 @@ export const updateProduct = async (
   id: ProductId,
   organizationId: OrganizationId,
   data: Partial<ProductInputPayload>,
-  userId: string,
+  userId: UserId,
 ): Promise<ProductTopLevelOut> => {
   const {
     ingredientId,
@@ -609,7 +610,7 @@ export const quickCreateProduct = async (
     price?: number | null;
   },
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ): Promise<ProductTopLevelOut> => {
   const [newProduct] = await getDb(db)
     .insert(product)

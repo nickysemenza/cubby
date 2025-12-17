@@ -3,7 +3,11 @@ import { type ParsedCompactRecipe } from "~/codec/codec";
 import { findOrCreateIngredient } from "./ingredient";
 import { RecipeCreateInput } from "~/schemas/recipe";
 import { upsertRecipe } from "./recipe";
-import { unsafeIngredientId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  UserId,
+  type OrganizationId,
+} from "~/schemas/identifiers";
 import { withTransaction } from "./database-helpers";
 
 // Convert ParsedCompactRecipe to RecipeCreateInput format
@@ -49,7 +53,7 @@ export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
   db: Database,
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ) => {
   // Convert compact recipe format to standard recipe input format
   const recipeInput = await convertParsedCompactToRecipeInput(

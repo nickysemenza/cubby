@@ -3,7 +3,9 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
-import { type OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+
+const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("location router", () => {
   let db: Database;
@@ -20,7 +22,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -56,7 +58,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -95,7 +97,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -175,7 +177,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -215,7 +217,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -254,7 +256,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -312,7 +314,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );
@@ -368,7 +370,7 @@ describe("location router", () => {
     const createCaller = createCallerFactory(locationRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
-        auth: { userId: "test-user-id" },
+        auth: { userId: TEST_USER_ID },
         organizationId: organizationId,
       }),
     );

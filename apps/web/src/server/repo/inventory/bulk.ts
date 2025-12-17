@@ -12,7 +12,11 @@ import {
   InventoryBulkOperationItem,
   type BulkMovePayload,
 } from "~/schemas/inventory";
-import { type OrganizationId, type LocationId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  type LocationId,
+  UserId,
+} from "~/schemas/identifiers";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { dbInventoryEntryToAPI } from "./helpers";
@@ -24,7 +28,7 @@ export const bulkProcessInventoryEntries = async (
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
   organizationId: OrganizationId,
-  userId: string,
+  userId: UserId,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await withTransaction(db, async (tx: Transaction) => {
@@ -172,7 +176,7 @@ export const bulkMoveInventoryEntries = async (
   db: Database,
   organizationId: OrganizationId,
   payload: BulkMovePayload,
-  userId: string,
+  userId: UserId,
 ) => {
   // Validate source and target are different
   if (payload.sourceLocationId === payload.targetLocationId) {
