@@ -91,15 +91,39 @@ export const createOrUpdatePriceMapping = async (
 };
 
 /**
- * Create unit mappings from a semicolon-separated string
+ * Sync unit mappings from a semicolon-separated string
  *
  * Parses format like "4 lb = $5; 1 cup = 120g"
+ * Replaces existing non-price mappings with the new ones from the string.
  */
 export const createUnitMappingsFromString = async (
   db: Database,
   productId: ProductId,
   mappingsStr: string,
 ): Promise<void> => {
+  // First, get existing mappings to identify and preserve price mappings
+  const existingMappings = await getDb(db).query.productUnitMappings.findMany({
+    where: eq(productUnitMappings.productId, productId),
+  });
+
+  // Find IDs of non-price mappings to delete
+  const nonPriceMappingIds: string[] = [];
+  for (const m of existingMappings) {
+    const aIsMoney = await isMoneyUnit(m.a.unit);
+    const bIsMoney = await isMoneyUnit(m.b.unit);
+    if (!aIsMoney && !bIsMoney) {
+      nonPriceMappingIds.push(m.id);
+    }
+  }
+
+  // Delete existing non-price mappings
+  for (const id of nonPriceMappingIds) {
+    await getDb(db)
+      .delete(productUnitMappings)
+      .where(eq(productUnitMappings.id, id));
+  }
+
+  // Parse and insert new mappings
   const mappingParts = mappingsStr
     .split(";")
     .map((s) => s.trim())
@@ -108,6 +132,12 @@ export const createUnitMappingsFromString = async (
   for (const part of mappingParts) {
     try {
       const parsed = await parseUnitMappingString(part);
+      // Skip price mappings (those are handled separately)
+      const aIsMoney = await isMoneyUnit(parsed.a.unit);
+      const bIsMoney = await isMoneyUnit(parsed.b.unit);
+      if (aIsMoney || bIsMoney) {
+        continue;
+      }
       await getDb(db)
         .insert(productUnitMappings)
         .values({
