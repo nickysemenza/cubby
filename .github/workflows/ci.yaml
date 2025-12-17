@@ -52,6 +52,8 @@ jobs:
     name: Lint and Format
     runs-on: ubuntu-latest
     needs: [build-wasm]
+    env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node-with-deps
@@ -176,6 +178,7 @@ jobs:
     outputs:
       test-passed: ${{ steps.e2e-test.outcome == 'success' }}
     env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
       E2E_TEST_USER_EMAIL: nicky@test.com
       E2E_TEST_USER_PASSWORD: password1234
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
