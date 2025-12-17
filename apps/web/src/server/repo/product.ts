@@ -533,6 +533,36 @@ export const findProductByUPC = async (
   });
 };
 
+// Find a product by UPC (global uniqueness) within an organization
+export const findProductByUpc = async (
+  db: Database,
+  upc: string,
+  organizationId: OrganizationId,
+): Promise<ProductTopLevelOut | null> => {
+  const res = await getDb(db).query.product.findFirst({
+    where: and(
+      eq(product.upc, upc),
+      eq(product.organizationId, organizationId),
+    ),
+    with: {
+      images: {
+        with: {
+          image: true,
+        },
+      },
+    },
+  });
+
+  if (!res) {
+    return null;
+  }
+
+  return productTopLevelOut.parse({
+    ...res,
+    images: res.images?.map((pi) => pi.image) ?? [],
+  });
+};
+
 // Find a product by name and manufacturer within an organization
 export const findProductByNameAndManufacturer = async (
   db: Database,

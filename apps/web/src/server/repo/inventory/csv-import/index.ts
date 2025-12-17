@@ -117,12 +117,38 @@ export const importInventoryFromCSV = async (
           break;
       }
     } catch (error) {
+      // Extract meaningful error message from database errors
+      let message = "Unknown error";
+      if (error instanceof Error) {
+        // Check for PostgreSQL constraint violation details
+        const pgError = error as Error & {
+          code?: string;
+          constraint?: string;
+          detail?: string;
+        };
+        if (pgError.constraint) {
+          // Parse constraint name to human-readable message
+          // Include the detail which often has the conflicting value
+          const detail = pgError.detail ? ` (${pgError.detail})` : "";
+          if (pgError.constraint.includes("upc")) {
+            message = `UPC '${row.upc}' already exists on another product${detail}`;
+          } else if (pgError.constraint.includes("ndb_number")) {
+            message = `NDB number '${row.ndb_number}' already exists on another product${detail}`;
+          } else if (pgError.constraint.includes("name_manufacturer")) {
+            message = `Product '${row.product_name}' by '${row.manufacturer}' already exists`;
+          } else {
+            message = `Constraint violation: ${pgError.constraint}${detail}`;
+          }
+        } else {
+          message = error.message;
+        }
+      }
       results.push({
         rowIndex: i,
         action: "error",
         productName: row.product_name,
         locationPath: row.location_path,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message,
       });
       errors++;
     }

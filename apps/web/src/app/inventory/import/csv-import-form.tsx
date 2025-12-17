@@ -199,17 +199,103 @@ export default function CSVImportForm() {
       return;
     }
 
-    // Use papaparse with auto-detect delimiter (handles CSV and TSV from Google Sheets)
-    const result = Papa.parse<Record<string, string>>(data, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (header) =>
-        header.toLowerCase().trim().replace(/\s+/g, "_"),
-    });
+    // Default column order when no header is provided
+    // Also used to detect if first row is a header
+    const defaultColumns = [
+      "product_name",
+      "manufacturer",
+      "upc",
+      "model",
+      "ndb_number",
+      "price",
+      "unit_mappings",
+      "aliases",
+      "ingredient",
+      "ingredient_name",
+      "expected_qty",
+      "location_path",
+      "quantity",
+      "unit",
+    ];
+
+    // Column aliases we also recognize as headers
+    const columnAliases: Record<string, string[]> = {
+      product_name: ["product", "name"],
+      upc: ["barcode"],
+      ndb_number: ["ndbnumber"],
+      unit_mappings: ["unitmappings"],
+      expected_qty: ["expectedqty"],
+      location_path: ["location"],
+      quantity: ["qty"],
+    };
+
+    // Build set of all known header names
+    const knownHeaders = new Set([
+      ...defaultColumns,
+      ...Object.values(columnAliases).flat(),
+    ]);
+
+    // Check if first row looks like a header
+    const firstLineEnd = data.indexOf("\n");
+    const firstLine = (
+      firstLineEnd > 0 ? data.substring(0, firstLineEnd) : data
+    ).trim();
+    const firstRowValues = firstLine
+      .split(/[,\t]/)
+      .map((v) => v.toLowerCase().trim().replace(/\s+/g, "_"));
+    const hasHeader = firstRowValues.some((v) => knownHeaders.has(v));
+
+    let result: Papa.ParseResult<Record<string, string>>;
+
+    if (hasHeader) {
+      // Parse with headers
+      result = Papa.parse<Record<string, string>>(data, {
+        header: true,
+        skipEmptyLines: true,
+        transformHeader: (header) =>
+          header.toLowerCase().trim().replace(/\s+/g, "_"),
+      });
+    } else {
+      // Parse without headers, map columns by position
+      const rawResult = Papa.parse<string[]>(data, {
+        header: false,
+        skipEmptyLines: true,
+      });
+
+      // Convert array rows to objects using default column order
+      const dataWithHeaders: Record<string, string>[] = rawResult.data.map(
+        (row) => {
+          const obj: Record<string, string> = {};
+          row.forEach((value, index) => {
+            if (index < defaultColumns.length) {
+              obj[defaultColumns[index]] = value;
+            }
+          });
+          return obj;
+        },
+      );
+
+      result = {
+        data: dataWithHeaders,
+        errors: rawResult.errors,
+        meta: rawResult.meta as Papa.ParseMeta,
+      };
+    }
 
     if (result.errors.length > 0) {
+      const errorMessages = result.errors.map((e) => {
+        // PapaParse errors include row index (0-based, after header if present)
+        const rowOffset = hasHeader ? 2 : 1; // +2 for 1-based + header, +1 for 1-based only
+        const rowNum = e.row !== undefined ? e.row + rowOffset : undefined;
+        const rowInfo = rowNum ? `Row ${rowNum}: ` : "";
+        return `${rowInfo}${e.message}`;
+      });
+      // Dedupe and limit errors shown
+      const uniqueErrors = [...new Set(errorMessages)];
+      const displayErrors = uniqueErrors.slice(0, 5);
+      const remaining = uniqueErrors.length - displayErrors.length;
       setParseError(
-        `Parse error: ${result.errors.map((e) => e.message).join(", ")}`,
+        `Parse error:\n${displayErrors.join("\n")}${remaining > 0 ? `\n... and ${remaining} more errors` : ""}`,
       );
       return;
     }
@@ -479,7 +565,7 @@ export default function CSVImportForm() {
         <Label htmlFor="csv-paste">Paste CSV/TSV data</Label>
         <Textarea
           id="csv-paste"
-          placeholder={`product_name\tlocation_path\tquantity\tunit\tprice\nHammer\tGarage > Tools > Shelf 1\t1\teach\t15.99\nNails (box)\tGarage > Tools > Bin 3\t2\tbox\t4.99`}
+          placeholder={`Hammer,Milwaukee,,HMR-1,,15.99,,,,,,Garage > Tools > Shelf 1,1,each\nNails (box),,,,,4.99,,,,,,Garage > Tools > Bin 3,2,box\n\nOr with headers:\nproduct_name,manufacturer,upc,model,ndb_number,price,unit_mappings,aliases,ingredient,ingredient_name,expected_qty,location_path,quantity,unit`}
           value={pastedData}
           onChange={handlePaste}
           rows={6}

@@ -76,6 +76,7 @@ export const findOrCreateProductForImport = async (
     ingredientId = unsafeIngredientId(ingredientData.id);
   }
 
+  // Try to find existing product by name+manufacturer (primary lookup)
   let productData = await findProductByNameAndManufacturer(
     db,
     productName,
