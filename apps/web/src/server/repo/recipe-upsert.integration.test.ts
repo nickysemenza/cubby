@@ -9,6 +9,9 @@ import { getDb } from "./database-helpers";
 import { recipe } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 
+// Test user ID for audit logging
+const TEST_USER_ID = "test-user-id";
+
 describe("upsertRecipe", () => {
   let db: Database;
   let organizationId: OrganizationId;
@@ -26,6 +29,7 @@ describe("upsertRecipe", () => {
         aliases: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
     const ingredient2 = await createIngredient(
       db,
@@ -34,6 +38,7 @@ describe("upsertRecipe", () => {
         aliases: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
     const ingredient3 = await createIngredient(
       db,
@@ -42,6 +47,7 @@ describe("upsertRecipe", () => {
         aliases: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     testIngredients = [ingredient1, ingredient2, ingredient3];
@@ -113,7 +119,12 @@ describe("upsertRecipe", () => {
   });
 
   it("creates a new recipe when it doesn't exist", async () => {
-    const result = await upsertRecipe(getMockRecipeInput(), db, organizationId);
+    const result = await upsertRecipe(
+      getMockRecipeInput(),
+      db,
+      organizationId,
+      TEST_USER_ID,
+    );
 
     expect(result.id).toBeDefined();
 
@@ -146,6 +157,7 @@ describe("upsertRecipe", () => {
       getMockRecipeInput(),
       db,
       organizationId,
+      TEST_USER_ID,
     );
 
     // Now update with different data
@@ -153,6 +165,7 @@ describe("upsertRecipe", () => {
       getMockRecipeUpdated(),
       db,
       organizationId,
+      TEST_USER_ID,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -195,16 +208,19 @@ describe("upsertRecipe", () => {
       getMockRecipeInput(),
       db,
       organizationId,
+      TEST_USER_ID,
     );
     const secondRun = await upsertRecipe(
       getMockRecipeInput(),
       db,
       organizationId,
+      TEST_USER_ID,
     ); // Same input
     const thirdRun = await upsertRecipe(
       getMockRecipeInput(),
       db,
       organizationId,
+      TEST_USER_ID,
     ); // Same input again
 
     // All should return the same recipe ID
@@ -236,7 +252,7 @@ describe("upsertRecipe", () => {
       ],
     };
 
-    await upsertRecipe(recipeNoUrl, db, organizationId);
+    await upsertRecipe(recipeNoUrl, db, organizationId, TEST_USER_ID);
 
     const foundRecipe = await getDb(db).query.recipe.findFirst({
       where: and(

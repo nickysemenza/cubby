@@ -16,7 +16,7 @@ describe("recipe router", () => {
     return teardown;
   });
   it("recipe insert and retrieve", async () => {
-    await seedRealRecipes(db, organizationId);
+    await seedRealRecipes(db, organizationId, "test-user-id");
 
     const createCaller = createCallerFactory(recipeRouter);
     const caller = createCaller(

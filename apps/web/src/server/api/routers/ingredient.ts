@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, getUserId } from "../trpc";
+import { createTRPCRouter, protectedProcedure, requireUserId } from "../trpc";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import { mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -44,7 +44,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return await services.services.ingredient.createIngredient(
         data,
         services.organizationId!,
-        getUserId(services.auth),
+        requireUserId(services.auth),
       );
     },
     update: async (services, id: IngredientId, data) => {
@@ -53,7 +53,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         id,
         services.organizationId!,
         data,
-        getUserId(services.auth),
+        requireUserId(services.auth),
       );
     },
   },

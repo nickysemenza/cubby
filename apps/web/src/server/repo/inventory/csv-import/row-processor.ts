@@ -42,6 +42,7 @@ interface RowProcessorContext {
   organizationId: OrganizationId;
   locationTypeContext: LocationTypeContext;
   dryRun: boolean;
+  userId: string;
 }
 
 /**
@@ -144,7 +145,7 @@ export const processRow = async (
   row: InventoryCSVRow,
   rowIndex: number,
 ): Promise<CSVImportResultItem> => {
-  const { db, organizationId, locationTypeContext, dryRun } = ctx;
+  const { db, organizationId, locationTypeContext, dryRun, userId } = ctx;
   const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
 
   // Check if this is a product-only row (no location_path)
@@ -205,6 +206,7 @@ export const processRow = async (
       row.model,
       row.ndb_number,
       row.aliases,
+      userId,
     );
 
     // Handle price mapping (CSV price is numeric, defaults to dollar)

@@ -171,7 +171,7 @@ export const createIngredient = async (
   db: Database | DrizzleTransaction,
   data: z.infer<typeof ingredientBase>,
   organizationId: OrganizationId,
-  userId?: string,
+  userId: string,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const [newIngredient] = await unwrapDb(db)
     .insert(ingredient)
@@ -212,7 +212,7 @@ export const updateIngredient = async (
   id: IngredientId,
   organizationId: OrganizationId,
   data: Partial<z.infer<typeof ingredientBase>>,
-  userId?: string,
+  userId: string,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   // Capture before state for audit logging
   const beforeState = await getDb(db).query.ingredient.findFirst({

@@ -24,7 +24,7 @@ export const bulkProcessInventoryEntries = async (
   locationId: LocationId,
   items: InventoryBulkOperationItem[],
   organizationId: OrganizationId,
-  userId?: string,
+  userId: string,
 ) => {
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await withTransaction(db, async (tx: Transaction) => {
@@ -172,7 +172,7 @@ export const bulkMoveInventoryEntries = async (
   db: Database,
   organizationId: OrganizationId,
   payload: BulkMovePayload,
-  userId?: string,
+  userId: string,
 ) => {
   // Validate source and target are different
   if (payload.sourceLocationId === payload.targetLocationId) {
@@ -349,18 +349,18 @@ export const bulkMoveInventoryEntries = async (
           );
 
           // Log update audit for target
-          const targetChanges = computeChanges(
+          const targetChanges2 = computeChanges(
             existingAtTarget,
             updatedTargetEntry,
             ["amount"],
           );
-          if (targetChanges) {
+          if (targetChanges2) {
             await logAuditEntry(tx, {
               organizationId,
               entityType: "inventory",
               entityId: existingAtTarget.id,
               action: "update",
-              changes: targetChanges,
+              changes: targetChanges2,
               userId,
             });
           }

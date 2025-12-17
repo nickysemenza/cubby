@@ -3,7 +3,7 @@ import {
   createTRPCRouter,
   protectedProcedure,
   createAppError,
-  getUserId,
+  requireUserId,
 } from "../trpc";
 import {
   getInventoryEntryByID,
@@ -99,7 +99,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         services.db,
         data,
         services.organizationId!,
-        getUserId(services.auth),
+        requireUserId(services.auth),
       );
     },
     update: async (services, id: InventoryId, data) => {
@@ -109,7 +109,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         id,
         services.organizationId!,
         data,
-        getUserId(services.auth),
+        requireUserId(services.auth),
       );
     },
   },
@@ -130,7 +130,7 @@ const bulkProcess = protectedProcedure
         amount: item.amount,
       })),
       ctx.organizationId,
-      getUserId(ctx.auth),
+      requireUserId(ctx.auth),
     );
     return result;
   });
@@ -144,7 +144,7 @@ const bulkMove = protectedProcedure
       ctx.db,
       ctx.organizationId,
       input,
-      getUserId(ctx.auth),
+      requireUserId(ctx.auth),
     );
   });
 
@@ -157,7 +157,7 @@ const deleteItem = protectedProcedure
       ctx.db,
       input.id,
       ctx.organizationId!,
-      getUserId(ctx.auth),
+      requireUserId(ctx.auth),
     );
   });
 
@@ -242,7 +242,11 @@ const importCSV = protectedProcedure
       ctx.db,
       ctx.organizationId,
       input.rows,
-      false,
+      {
+        dryRun: false,
+        userId: requireUserId(ctx.auth),
+        source: "csv_import",
+      },
     );
 
     // Import images for newly created products with UPC codes (non-blocking)
@@ -286,7 +290,11 @@ const previewCSVImport = protectedProcedure
       ctx.db,
       ctx.organizationId,
       input.rows,
-      true,
+      {
+        dryRun: true,
+        userId: requireUserId(ctx.auth),
+        source: "csv_import",
+      },
     );
   });
 

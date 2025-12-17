@@ -182,7 +182,7 @@ export const updateInventoryEntry = async (
   id: InventoryId,
   organizationId: OrganizationId,
   data: UpdateInventoryEntryData,
-  userId?: string,
+  userId: string,
 ) => {
   // Fetch current state for audit logging
   const before = await getDb(db).query.inventoryEntry.findFirst({
@@ -216,14 +216,16 @@ export const updateInventoryEntry = async (
       "productId",
       "locationId",
     ]);
-    await logAuditEntry(db, {
-      organizationId,
-      entityType: "inventory",
-      entityId: id,
-      action: "update",
-      changes,
-      userId,
-    });
+    if (changes) {
+      await logAuditEntry(db, {
+        organizationId,
+        entityType: "inventory",
+        entityId: id,
+        action: "update",
+        changes,
+        userId,
+      });
+    }
   }
 
   // Fetch with relations
@@ -243,7 +245,7 @@ export const createInventoryEntry = async (
   db: Database,
   data: CreateInventoryEntryData,
   organizationId: OrganizationId,
-  userId?: string,
+  userId: string,
 ) => {
   const created = await insertAndReturnDb(db, inventoryEntry, {
     organizationId: organizationId,
@@ -301,7 +303,7 @@ export const deleteInventoryEntry = async (
   db: Database,
   id: InventoryId,
   organizationId: OrganizationId,
-  userId?: string,
+  userId: string,
 ): Promise<void> => {
   await getDb(db)
     .delete(inventoryEntry)

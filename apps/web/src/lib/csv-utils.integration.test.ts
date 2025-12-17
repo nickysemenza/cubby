@@ -9,6 +9,9 @@ import { importInventoryFromCSV } from "~/server/repo/inventory";
 import { locationList } from "~/server/repo/location";
 import { productList } from "~/server/repo/product";
 
+// Test user ID for audit logging
+const TEST_USER_ID = "test-user-id-for-csv-utils";
+
 const readConfigCSV = (): ReturnType<typeof parseInventoryCSV> => {
   const filePath = path.join(__dirname, "../../config.csv");
   const csvContent = fs.readFileSync(filePath, "utf8");
@@ -33,12 +36,10 @@ describe("config.csv import integration", () => {
   it("should import all rows into database without errors", async () => {
     const rows = readConfigCSV();
 
-    const result = await importInventoryFromCSV(
-      db,
-      organizationId,
-      rows,
-      false,
-    );
+    const result = await importInventoryFromCSV(db, organizationId, rows, {
+      dryRun: false,
+      userId: TEST_USER_ID,
+    });
 
     expect(result.errors).toBe(0);
     expect(result.created + result.productOnly).toBeGreaterThan(0);
@@ -46,7 +47,10 @@ describe("config.csv import integration", () => {
 
   it("should create expected products from config.csv", async () => {
     const rows = readConfigCSV();
-    await importInventoryFromCSV(db, organizationId, rows, false);
+    await importInventoryFromCSV(db, organizationId, rows, {
+      dryRun: false,
+      userId: TEST_USER_ID,
+    });
 
     const products = await productList(
       db,
@@ -65,7 +69,10 @@ describe("config.csv import integration", () => {
 
   it("should create locations with correct types from bracket notation", async () => {
     const rows = readConfigCSV();
-    await importInventoryFromCSV(db, organizationId, rows, false);
+    await importInventoryFromCSV(db, organizationId, rows, {
+      dryRun: false,
+      userId: TEST_USER_ID,
+    });
 
     const locations = await locationList(
       db,
@@ -90,13 +97,14 @@ describe("config.csv import integration", () => {
   it("should be idempotent - re-importing skips existing items", async () => {
     const rows = readConfigCSV();
 
-    await importInventoryFromCSV(db, organizationId, rows, false);
-    const result2 = await importInventoryFromCSV(
-      db,
-      organizationId,
-      rows,
-      false,
-    );
+    await importInventoryFromCSV(db, organizationId, rows, {
+      dryRun: false,
+      userId: TEST_USER_ID,
+    });
+    const result2 = await importInventoryFromCSV(db, organizationId, rows, {
+      dryRun: false,
+      userId: TEST_USER_ID,
+    });
 
     expect(result2.skipped).toBeGreaterThan(0);
     expect(result2.errors).toBe(0);

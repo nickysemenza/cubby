@@ -15,6 +15,9 @@ import {
   type OrganizationId,
 } from "~/schemas/identifiers";
 
+// Test user ID for audit logging
+const TEST_USER_ID = "test-user-id";
+
 describe("product repository", () => {
   let db: Database;
   let organizationId: OrganizationId;
@@ -38,7 +41,12 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, organizationId);
+    const createdProduct = await createProduct(
+      db,
+      productData,
+      organizationId,
+      TEST_USER_ID,
+    );
 
     // Verify the product was created correctly
     expect(createdProduct.id).toBeDefined();
@@ -79,6 +87,7 @@ describe("product repository", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Test finding the product by name
@@ -112,6 +121,7 @@ describe("product repository", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
     await createProduct(
       db,
@@ -126,6 +136,7 @@ describe("product repository", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     await expect(findProductByName(db, ambiguousName)).rejects.toThrow(
@@ -169,6 +180,7 @@ describe("product repository", () => {
           unitMappings: [],
         },
         organizationId,
+        TEST_USER_ID,
       );
     }
 
@@ -237,7 +249,12 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, organizationId);
+    const createdProduct = await createProduct(
+      db,
+      productData,
+      organizationId,
+      TEST_USER_ID,
+    );
 
     // Update the product
     const updatedProduct = await updateProduct(
@@ -255,6 +272,7 @@ describe("product repository", () => {
           },
         ],
       },
+      TEST_USER_ID,
     );
 
     // Verify the product was updated correctly
@@ -293,6 +311,7 @@ describe("product repository", () => {
         aliases: ["test", "ingredient"],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create a product linked to the ingredient
@@ -308,7 +327,12 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, organizationId);
+    const createdProduct = await createProduct(
+      db,
+      productData,
+      organizationId,
+      TEST_USER_ID,
+    );
 
     // Retrieve the product to verify ingredient association
     const retrievedProduct = await getProductByID(
@@ -332,6 +356,7 @@ describe("product repository", () => {
         aliases: ["ing1"],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const ingredient2 = await createIngredient(
@@ -341,6 +366,7 @@ describe("product repository", () => {
         aliases: ["ing2"],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create a product linked to the first ingredient
@@ -356,7 +382,12 @@ describe("product repository", () => {
     };
 
     // Create the product
-    const createdProduct = await createProduct(db, productData, organizationId);
+    const createdProduct = await createProduct(
+      db,
+      productData,
+      organizationId,
+      TEST_USER_ID,
+    );
 
     // Update the product to link to the second ingredient
     await updateProduct(
@@ -366,6 +397,7 @@ describe("product repository", () => {
       {
         ingredientId: unsafeIngredientId(ingredient2.id),
       },
+      TEST_USER_ID,
     );
 
     // Retrieve the product to verify ingredient association
@@ -388,6 +420,7 @@ describe("product repository", () => {
       {
         ingredientId: null,
       },
+      TEST_USER_ID,
     );
 
     // Retrieve the product again

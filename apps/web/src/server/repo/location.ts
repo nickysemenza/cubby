@@ -59,7 +59,7 @@ export const createLocation = async (
   db: Database,
   data: LocationCreateInput,
   organizationId: OrganizationId,
-  userId?: string,
+  userId: string,
 ) => {
   // Create the location
   const [newLocation] = await getDb(db)
@@ -105,7 +105,7 @@ export const updateLocation = async (
   id: LocationId,
   organizationId: OrganizationId,
   data: LocationUpdateInput["data"],
-  userId?: string,
+  userId: string,
 ) => {
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {
@@ -188,14 +188,16 @@ export const updateLocation = async (
         "type",
         "parentId",
       ]);
-      await logAuditEntry(tx, {
-        organizationId,
-        entityType: "location",
-        entityId: id,
-        action: "update",
-        changes,
-        userId,
-      });
+      if (changes) {
+        await logAuditEntry(tx, {
+          organizationId,
+          entityType: "location",
+          entityId: id,
+          action: "update",
+          changes,
+          userId,
+        });
+      }
     }
 
     return getLocationById(tx, unsafeLocationId(updated.id), organizationId);

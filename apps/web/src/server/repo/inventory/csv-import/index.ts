@@ -11,10 +11,10 @@
  * @example
  * ```ts
  * // Preview what would happen
- * const preview = await importInventoryFromCSV(db, orgId, rows, true);
+ * const preview = await importInventoryFromCSV(db, orgId, rows, { dryRun: true, userId: "user123" });
  *
  * // Actually import
- * const result = await importInventoryFromCSV(db, orgId, rows, false);
+ * const result = await importInventoryFromCSV(db, orgId, rows, { userId: "user123", source: "csv_import" });
  * ```
  */
 
@@ -27,9 +27,16 @@ import {
 } from "~/schemas/inventory";
 import { buildLocationTypeContext } from "~/server/repo/location";
 import { processRow } from "./row-processor";
+import { logAuditEntry, type AuditSource } from "~/server/repo/audit-log";
 
 // Re-export utilities that may be used externally
 export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
+
+export interface ImportOptions {
+  dryRun?: boolean;
+  userId: string;
+  source?: AuditSource;
+}
 
 /**
  * Import inventory data from CSV rows
@@ -37,15 +44,16 @@ export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
  * @param db - Database connection
  * @param organizationId - Organization to import into
  * @param rows - Parsed CSV rows to import
- * @param dryRun - If true, only preview changes without writing to database
+ * @param options - Import options including userId and source for audit logging
  * @returns Import result with counts and per-row details
  */
 export const importInventoryFromCSV = async (
   db: Database,
   organizationId: OrganizationId,
   rows: InventoryCSVRow[],
-  dryRun: boolean = false,
+  options: ImportOptions,
 ): Promise<CSVImportResult> => {
+  const { dryRun = false, userId, source = "csv_import" } = options;
   const results: CSVImportResultItem[] = [];
   let created = 0;
   let moved = 0;
@@ -88,12 +96,50 @@ export const importInventoryFromCSV = async (
     const row = rows[i];
     try {
       const result = await processRow(
-        { db, organizationId, locationTypeContext, dryRun },
+        { db, organizationId, locationTypeContext, dryRun, userId },
         row,
         i,
       );
 
       results.push(result);
+
+      // Log audit entries for actual changes (not dry run)
+      if (!dryRun && result.productId) {
+        const shouldLogProduct =
+          result.action === "created" ||
+          result.action === "product_only" ||
+          result.action === "updated";
+        const shouldLogInventory =
+          result.action === "created" ||
+          result.action === "moved" ||
+          result.action === "updated";
+
+        // Log product audit entry
+        if (shouldLogProduct && result.productWillBeCreated) {
+          await logAuditEntry(db, {
+            organizationId,
+            entityType: "product",
+            entityId: result.productId,
+            action: "create",
+            userId,
+            source,
+          });
+        }
+
+        // Log inventory audit entry
+        if (shouldLogInventory) {
+          const inventoryAction =
+            result.action === "created" ? "create" : "update";
+          await logAuditEntry(db, {
+            organizationId,
+            entityType: "inventory",
+            entityId: result.productId, // Using productId as reference for now
+            action: inventoryAction,
+            userId,
+            source,
+          });
+        }
+      }
 
       // Update counters
       switch (result.action) {

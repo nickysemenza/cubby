@@ -116,7 +116,7 @@ export class IngredientService {
   async createIngredient(
     data: z.infer<typeof ingredientBase>,
     organizationId: OrganizationId,
-    userId?: string,
+    userId: string,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await createIngredientRepo(
       this.db,
@@ -138,7 +138,7 @@ export class IngredientService {
     id: IngredientId,
     organizationId: OrganizationId,
     data: Partial<z.infer<typeof ingredientBase>>,
-    userId?: string,
+    userId: string,
   ): Promise<IngredientWithFoodOut> {
     const ingredient = await updateIngredientRepo(
       this.db,

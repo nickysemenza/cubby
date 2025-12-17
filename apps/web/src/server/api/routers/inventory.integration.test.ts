@@ -7,6 +7,9 @@ import { type OrganizationId } from "~/schemas/identifiers";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 
+// Test user ID for audit logging
+const TEST_USER_ID = "test-user-id";
+
 describe("inventory router", () => {
   let db: Database;
   let organizationId: OrganizationId;
@@ -35,6 +38,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create test product
@@ -51,6 +55,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create inventory entry data
@@ -103,6 +108,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const pantry = await createLocation(
@@ -113,6 +119,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create test products
@@ -129,6 +136,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const sugar = await createProduct(
@@ -144,6 +152,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const rice = await createProduct(
@@ -159,6 +168,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create multiple inventory entries
@@ -255,6 +265,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const product = await createProduct(
@@ -270,6 +281,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create an inventory entry
@@ -325,6 +337,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const location2 = await createLocation(
@@ -335,6 +348,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const product1 = await createProduct(
@@ -350,6 +364,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const product2 = await createProduct(
@@ -365,6 +380,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create an inventory entry
@@ -421,6 +437,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create test products
@@ -437,6 +454,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const product2 = await createProduct(
@@ -452,6 +470,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const product3 = await createProduct(
@@ -467,6 +486,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     // Create an existing entry to be updated
@@ -566,11 +586,13 @@ describe("inventory router", () => {
         db,
         { name: "Source Location", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
       const targetLocation = await createLocation(
         db,
         { name: "Target Location", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
 
       // Create product
@@ -587,6 +609,7 @@ describe("inventory router", () => {
           unitMappings: [],
         },
         organizationId,
+        TEST_USER_ID,
       );
 
       // Create inventory at source
@@ -633,11 +656,13 @@ describe("inventory router", () => {
         db,
         { name: "Source", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
       const targetLocation = await createLocation(
         db,
         { name: "Target", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
 
       const product = await createProduct(
@@ -653,6 +678,7 @@ describe("inventory router", () => {
           unitMappings: [],
         },
         organizationId,
+        TEST_USER_ID,
       );
 
       const entry = await caller.create({
@@ -695,11 +721,13 @@ describe("inventory router", () => {
         db,
         { name: "Source", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
       const targetLocation = await createLocation(
         db,
         { name: "Target", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
 
       const product = await createProduct(
@@ -715,6 +743,7 @@ describe("inventory router", () => {
           unitMappings: [],
         },
         organizationId,
+        TEST_USER_ID,
       );
 
       // Create inventory at both locations
@@ -760,6 +789,7 @@ describe("inventory router", () => {
         db,
         { name: "Same Location", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
 
       const product = await createProduct(
@@ -775,6 +805,7 @@ describe("inventory router", () => {
           unitMappings: [],
         },
         organizationId,
+        TEST_USER_ID,
       );
 
       const entry = await caller.create({
@@ -810,11 +841,13 @@ describe("inventory router", () => {
         db,
         { name: "Source", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
       const targetLocation = await createLocation(
         db,
         { name: "Target", type: "room", parentId: null },
         organizationId,
+        TEST_USER_ID,
       );
 
       const product = await createProduct(
@@ -830,6 +863,7 @@ describe("inventory router", () => {
           unitMappings: [],
         },
         organizationId,
+        TEST_USER_ID,
       );
 
       const entry = await caller.create({
@@ -883,6 +917,7 @@ describe("inventory router", () => {
         parentId: null,
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const product = await createProduct(
@@ -898,6 +933,7 @@ describe("inventory router", () => {
         unitMappings: [],
       },
       organizationId,
+      TEST_USER_ID,
     );
 
     const entry = await caller.create({

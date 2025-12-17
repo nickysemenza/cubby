@@ -8,6 +8,8 @@ import { getDb, withTransaction } from "./database-helpers";
 import { ingredient } from "~/server/db/schema";
 import { eq, count } from "drizzle-orm";
 
+const TEST_USER_ID = "test-user-id";
+
 describe("ingredient", () => {
   let db: Database;
   let organizationId: OrganizationId;
@@ -41,6 +43,7 @@ describe("ingredient", () => {
       },
       db,
       organizationId,
+      TEST_USER_ID,
     );
     const a = await findOrCreateIngredient(
       db,

@@ -80,11 +80,26 @@ export function createAppError(
 /**
  * Extract userId from auth context, converting null to undefined for optional parameters.
  * Use this when passing userId to repo/service functions that expect `userId?: string`.
+ * @deprecated Use requireUserId instead for functions that require userId
  */
 export function getUserId(
   auth: { userId: string | null; sessionId: string | null } | undefined,
 ): string | undefined {
   return auth?.userId ?? undefined;
+}
+
+/**
+ * Extract userId from auth context, throwing if not authenticated.
+ * Use this in protected procedures where a user is required.
+ */
+export function requireUserId(
+  auth: { userId: string | null; sessionId: string | null } | undefined,
+): string {
+  const userId = auth?.userId;
+  if (!userId) {
+    throw createAppError("UNAUTHORIZED", "User authentication required");
+  }
+  return userId;
 }
 
 /**

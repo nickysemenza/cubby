@@ -15,6 +15,9 @@ export type AuditEntityType =
 // Action types for audit entries
 export type AuditAction = "create" | "update" | "delete";
 
+// Source of the action (where it came from)
+export type AuditSource = "ui" | "csv_import" | "sheets_import" | "api";
+
 // Input for creating an audit log entry
 export interface AuditLogInput {
   organizationId: OrganizationId;
@@ -22,7 +25,8 @@ export interface AuditLogInput {
   entityId: string;
   action: AuditAction;
   changes?: Record<string, { from: unknown; to: unknown }>;
-  userId?: string;
+  userId: string; // Required - who performed the action
+  source?: AuditSource; // Defaults to 'ui'
 }
 
 // User info included in audit log entries
@@ -72,14 +76,17 @@ export async function logAuditEntry(
   db: Database | Transaction,
   entry: AuditLogInput,
 ): Promise<void> {
-  await unwrapDb(db).insert(auditLog).values({
-    organizationId: entry.organizationId,
-    entityType: entry.entityType,
-    entityId: entry.entityId,
-    action: entry.action,
-    changes: entry.changes,
-    userId: entry.userId,
-  });
+  await unwrapDb(db)
+    .insert(auditLog)
+    .values({
+      organizationId: entry.organizationId,
+      entityType: entry.entityType,
+      entityId: entry.entityId,
+      action: entry.action,
+      changes: entry.changes,
+      userId: entry.userId,
+      source: entry.source ?? "ui",
+    });
 }
 
 /**

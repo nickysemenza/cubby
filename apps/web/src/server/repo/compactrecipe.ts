@@ -49,6 +49,7 @@ export const upsertRecipeFromCompact = async (
   recipe: ParsedCompactRecipe,
   db: Database,
   organizationId: OrganizationId,
+  userId: string,
 ) => {
   // Convert compact recipe format to standard recipe input format
   const recipeInput = await convertParsedCompactToRecipeInput(
@@ -58,5 +59,5 @@ export const upsertRecipeFromCompact = async (
   );
 
   // Use the centralized upsert logic
-  return await upsertRecipe(recipeInput, db, organizationId);
+  return await upsertRecipe(recipeInput, db, organizationId, userId);
 };

@@ -56,6 +56,7 @@ export const findOrCreateProductForImport = async (
   model: string | undefined,
   ndbNumber: number | undefined,
   aliasesStr: string | null | undefined,
+  userId: string,
 ): Promise<ProductTopLevelOut> => {
   // Parse aliases from semicolon-separated string
   const aliases = parseAliasesString(aliasesStr);
@@ -98,6 +99,7 @@ export const findOrCreateProductForImport = async (
         ingredientId,
       },
       organizationId,
+      userId,
     );
   } else {
     // Update existing product if CSV provides values

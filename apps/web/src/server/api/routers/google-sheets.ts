@@ -8,7 +8,11 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  requireUserId,
+} from "~/server/api/trpc";
 import {
   getGoogleSheetsClient,
   GoogleSheetsClient,
@@ -638,7 +642,11 @@ const pullFromSheet = protectedProcedure
       ctx.db,
       ctx.organizationId,
       parsedRows,
-      true, // dryRun
+      {
+        dryRun: true,
+        userId: requireUserId(ctx.auth),
+        source: "sheets_import",
+      },
     );
 
     return mergeResultWithErrors(result, errorItems);
@@ -664,7 +672,11 @@ const applyPull = protectedProcedure
       ctx.db,
       ctx.organizationId,
       parsedRows,
-      false, // not dryRun
+      {
+        dryRun: false,
+        userId: requireUserId(ctx.auth),
+        source: "sheets_import",
+      },
     );
 
     await updateLastSyncTimestamp(ctx, orgMetadata);

@@ -8,10 +8,16 @@ import { unsafeRecipeId, type OrganizationId } from "~/schemas/identifiers";
 export const seedRealRecipes = async (
   db: Database,
   organizationId: OrganizationId,
+  userId: string,
 ) => {
   for (const recipe of exampleRecipesCompact) {
     const parsed = await parseCompactRecipe(recipe);
-    const recipeOut = await upsertRecipeFromCompact(parsed, db, organizationId);
+    const recipeOut = await upsertRecipeFromCompact(
+      parsed,
+      db,
+      organizationId,
+      userId,
+    );
     const res = await getRecipeByID(
       unsafeRecipeId(recipeOut.id),
       db,

@@ -650,7 +650,10 @@ export const auditLog = pgTable(
     action: text("action").notNull(), // 'create', 'update', 'delete'
     changes:
       jsonb("changes").$type<Record<string, { from: unknown; to: unknown }>>(),
-    userId: text("userId").references(() => user.id),
+    userId: text("userId")
+      .notNull()
+      .references(() => user.id),
+    source: text("source").notNull().default("ui"), // 'ui', 'csv_import', 'sheets_import', 'api'
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [

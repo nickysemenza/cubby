@@ -8,6 +8,9 @@ import { getDb } from "./database-helpers";
 import { recipe, recipeSection } from "~/server/db/schema";
 import { eq, and, ne } from "drizzle-orm";
 
+// Test user ID for audit logging
+const TEST_USER_ID = "test-user-id";
+
 describe("upsertRecipeFromCompact", () => {
   let db: Database;
   let organizationId: OrganizationId;
@@ -75,6 +78,7 @@ describe("upsertRecipeFromCompact", () => {
       mockRecipe,
       db,
       organizationId,
+      TEST_USER_ID,
     );
 
     expect(result.id).toBeDefined();
@@ -108,6 +112,7 @@ describe("upsertRecipeFromCompact", () => {
       mockRecipe,
       db,
       organizationId,
+      TEST_USER_ID,
     );
 
     // Verify initial state
@@ -133,6 +138,7 @@ describe("upsertRecipeFromCompact", () => {
       mockRecipeUpdated,
       db,
       organizationId,
+      TEST_USER_ID,
     );
 
     // Should return same recipe ID (updated, not created new)
@@ -175,16 +181,19 @@ describe("upsertRecipeFromCompact", () => {
       mockRecipe,
       db,
       organizationId,
+      TEST_USER_ID,
     );
     const secondRun = await upsertRecipeFromCompact(
       mockRecipe,
       db,
       organizationId,
+      TEST_USER_ID,
     ); // Same recipe
     const thirdRun = await upsertRecipeFromCompact(
       mockRecipe,
       db,
       organizationId,
+      TEST_USER_ID,
     ); // Same recipe again
 
     // All should return the same recipe ID
@@ -204,7 +213,12 @@ describe("upsertRecipeFromCompact", () => {
 
   it("properly cleans up old sections and ingredients", async () => {
     // Create recipe with 2 sections
-    await upsertRecipeFromCompact(mockRecipeUpdated, db, organizationId);
+    await upsertRecipeFromCompact(
+      mockRecipeUpdated,
+      db,
+      organizationId,
+      TEST_USER_ID,
+    );
 
     const beforeUpdate = await getDb(db).query.recipe.findFirst({
       where: and(
@@ -222,7 +236,7 @@ describe("upsertRecipeFromCompact", () => {
     );
 
     // Update to recipe with 1 section
-    await upsertRecipeFromCompact(mockRecipe, db, organizationId);
+    await upsertRecipeFromCompact(mockRecipe, db, organizationId, TEST_USER_ID);
 
     const afterUpdate = await getDb(db).query.recipe.findFirst({
       where: and(
