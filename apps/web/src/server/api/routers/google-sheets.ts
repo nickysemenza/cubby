@@ -81,6 +81,65 @@ function makeInventoryKey(
   return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}|${locationPath.toLowerCase()}`;
 }
 
+// Format a value for display in change messages
+function formatValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "(empty)";
+  return String(value);
+}
+
+// Compare two row values and return differences as "field: old → new" strings
+function getRowDifferences(
+  appRow: InventoryCSVExportRow,
+  sheetRow: InventoryCSVRow,
+): string[] {
+  const changes: string[] = [];
+
+  if (appRow.quantity !== sheetRow.quantity) {
+    changes.push(`qty: ${sheetRow.quantity} → ${appRow.quantity}`);
+  }
+  if (appRow.unit !== sheetRow.unit) {
+    changes.push(`unit: ${sheetRow.unit} → ${appRow.unit}`);
+  }
+  if ((appRow.upc ?? "") !== (sheetRow.upc ?? "")) {
+    changes.push(
+      `upc: ${formatValue(sheetRow.upc)} → ${formatValue(appRow.upc)}`,
+    );
+  }
+  if ((appRow.model ?? "") !== (sheetRow.model ?? "")) {
+    changes.push(
+      `model: ${formatValue(sheetRow.model)} → ${formatValue(appRow.model)}`,
+    );
+  }
+  if ((appRow.ndb_number ?? null) !== (sheetRow.ndb_number ?? null)) {
+    changes.push(
+      `ndb: ${formatValue(sheetRow.ndb_number)} → ${formatValue(appRow.ndb_number)}`,
+    );
+  }
+  if ((appRow.expected_qty ?? null) !== (sheetRow.expected_qty ?? null)) {
+    changes.push(
+      `expected: ${formatValue(sheetRow.expected_qty)} → ${formatValue(appRow.expected_qty)}`,
+    );
+  }
+  if ((appRow.price ?? null) !== (sheetRow.price ?? null)) {
+    const oldPrice = sheetRow.price != null ? `$${sheetRow.price}` : "(empty)";
+    const newPrice = appRow.price != null ? `$${appRow.price}` : "(empty)";
+    changes.push(`price: ${oldPrice} → ${newPrice}`);
+  }
+  if ((appRow.unit_mappings ?? "") !== (sheetRow.unit_mappings ?? "")) {
+    changes.push("unit_mappings changed");
+  }
+  if ((appRow.ingredient_name ?? "") !== (sheetRow.ingredient_name ?? "")) {
+    changes.push(
+      `ingredient: ${formatValue(sheetRow.ingredient_name)} → ${formatValue(appRow.ingredient_name)}`,
+    );
+  }
+  if ((appRow.aliases ?? "") !== (sheetRow.aliases ?? "")) {
+    changes.push("aliases changed");
+  }
+
+  return changes;
+}
+
 // Compare app inventory rows with sheet rows to generate a diff preview
 function compareInventoryForPush(
   appRows: InventoryCSVExportRow[],
@@ -130,25 +189,15 @@ function compareInventoryForPush(
       created++;
     } else {
       // Row exists - check if different
-      const isDifferent =
-        appRow.quantity !== sheetRow.quantity ||
-        appRow.unit !== sheetRow.unit ||
-        (appRow.upc ?? "") !== (sheetRow.upc ?? "") ||
-        (appRow.model ?? "") !== (sheetRow.model ?? "") ||
-        (appRow.ndb_number ?? null) !== (sheetRow.ndb_number ?? null) ||
-        (appRow.expected_qty ?? null) !== (sheetRow.expected_qty ?? null) ||
-        (appRow.price ?? null) !== (sheetRow.price ?? null) ||
-        (appRow.unit_mappings ?? "") !== (sheetRow.unit_mappings ?? "") ||
-        (appRow.ingredient_name ?? "") !== (sheetRow.ingredient_name ?? "") ||
-        (appRow.aliases ?? "") !== (sheetRow.aliases ?? "");
+      const differences = getRowDifferences(appRow, sheetRow);
 
-      if (isDifferent) {
+      if (differences.length > 0) {
         items.push({
           rowIndex: i,
           action: "updated",
           productName: appRow.product_name,
           locationPath: appRow.location_path,
-          message: "Will be updated in sheet",
+          message: differences.join(", "),
         });
         updated++;
       } else {

@@ -20,4 +20,5 @@ export interface ProductPreviewResult {
 export interface InventoryMatchResult {
   exists: boolean;
   matches: boolean;
+  currentAmount?: { value: number; unit: string };
 }

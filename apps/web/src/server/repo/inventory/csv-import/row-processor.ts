@@ -320,12 +320,18 @@ export const processRow = async (
           Object.keys(productChanges).length > 0 ? productChanges : undefined,
       };
     } else if (inventoryCheck.exists) {
+      // Build message showing quantity change
+      const currentAmt = inventoryCheck.currentAmount;
+      const qtyMessage = currentAmt
+        ? `qty: ${currentAmt.value} ${currentAmt.unit} → ${newAmount.value} ${newAmount.unit}`
+        : "Will update quantity";
+
       return {
         rowIndex,
         action: "updated",
         productName: row.product_name,
         locationPath: row.location_path,
-        message: "Will update quantity",
+        message: qtyMessage,
         productWillBeCreated,
         locationWillBeCreated,
         productChanges:

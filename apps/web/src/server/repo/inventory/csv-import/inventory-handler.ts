@@ -158,5 +158,5 @@ export const checkInventoryMatch = async (
   const matches =
     existingAmount.value === expectedAmount.value &&
     existingAmount.unit === expectedAmount.unit;
-  return { exists: true, matches };
+  return { exists: true, matches, currentAmount: existingAmount };
 };
