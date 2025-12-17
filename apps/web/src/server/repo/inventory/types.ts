@@ -39,6 +39,8 @@ export interface InventoryCSVExportRow {
   product_name: string;
   manufacturer: string;
   upc: string;
+  model: string | null;
+  ndb_number: number | null;
   location_path: string;
   quantity: number;
   unit: string;
@@ -46,6 +48,7 @@ export interface InventoryCSVExportRow {
   price: number | null;
   unit_mappings: string | null;
   ingredient_name: string | null;
+  aliases: string | null;
 }
 
 // Re-export Amount for convenience

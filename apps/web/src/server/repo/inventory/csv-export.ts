@@ -59,6 +59,8 @@ export const exportInventoryToCSV = async (
         product_name: entry.Product.name,
         manufacturer: entry.Product.manufacturer,
         upc: entry.Product.upc ?? "",
+        model: entry.Product.model ?? null,
+        ndb_number: entry.Product.ndb_number ?? null,
         location_path: buildLocationPath(entry.location),
         quantity: parsedAmount.value,
         unit: parsedAmount.unit,
@@ -66,6 +68,7 @@ export const exportInventoryToCSV = async (
         price: priceAmount?.value ?? null,
         unit_mappings: await serializeUnitMappings(entry.Product.unitMappings),
         ingredient_name: entry.Product.Ingredient?.name ?? null,
+        aliases: entry.Product.Ingredient?.aliases?.join("; ") ?? null,
       };
     }),
   );

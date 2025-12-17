@@ -60,6 +60,8 @@ const CSV_HEADERS = [
   "product_name",
   "manufacturer",
   "upc",
+  "model",
+  "ndb_number",
   "location_path",
   "quantity",
   "unit",
@@ -67,6 +69,7 @@ const CSV_HEADERS = [
   "price",
   "unit_mappings",
   "ingredient_name",
+  "aliases",
 ];
 
 // Create a unique key for inventory comparison (product + manufacturer + location)
@@ -131,10 +134,13 @@ function compareInventoryForPush(
         appRow.quantity !== sheetRow.quantity ||
         appRow.unit !== sheetRow.unit ||
         (appRow.upc ?? "") !== (sheetRow.upc ?? "") ||
+        (appRow.model ?? "") !== (sheetRow.model ?? "") ||
+        (appRow.ndb_number ?? null) !== (sheetRow.ndb_number ?? null) ||
         (appRow.expected_qty ?? null) !== (sheetRow.expected_qty ?? null) ||
         (appRow.price ?? null) !== (sheetRow.price ?? null) ||
         (appRow.unit_mappings ?? "") !== (sheetRow.unit_mappings ?? "") ||
-        (appRow.ingredient_name ?? "") !== (sheetRow.ingredient_name ?? "");
+        (appRow.ingredient_name ?? "") !== (sheetRow.ingredient_name ?? "") ||
+        (appRow.aliases ?? "") !== (sheetRow.aliases ?? "");
 
       if (isDifferent) {
         items.push({
@@ -526,6 +532,8 @@ const pushToSheet = protectedProcedure
       row.product_name,
       row.manufacturer,
       row.upc ?? "",
+      row.model ?? "",
+      row.ndb_number !== null ? String(row.ndb_number) : "",
       row.location_path,
       String(row.quantity),
       row.unit,
@@ -533,6 +541,7 @@ const pushToSheet = protectedProcedure
       row.price !== null ? String(row.price) : "",
       row.unit_mappings ?? "",
       row.ingredient_name ?? "",
+      row.aliases ?? "",
     ]);
 
     // Write to sheet (headers + data)
