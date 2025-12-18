@@ -14,6 +14,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { inventoryEntry } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { amount } from "~/codec/codec";
+import { parseWithContext } from "~/lib/zod-utils";
 import { type InventoryMatchResult } from "./types";
 
 /**
@@ -93,7 +94,10 @@ export const createOrUpdateInventoryAtLocation = async (
   });
 
   if (existingAtTarget) {
-    const existingAmount = amount.parse(existingAtTarget.amount);
+    const existingAmount = parseWithContext(amount, existingAtTarget.amount, {
+      entityType: "InventoryEntry",
+      identifier: { id: existingAtTarget.id },
+    });
     await getDb(db)
       .update(inventoryEntry)
       .set({
@@ -154,7 +158,10 @@ export const checkInventoryMatch = async (
     ),
   });
   if (!existing) return { exists: false, matches: false };
-  const existingAmount = amount.parse(existing.amount);
+  const existingAmount = parseWithContext(amount, existing.amount, {
+    entityType: "InventoryEntry",
+    identifier: { id: existing.id },
+  });
   const matches =
     existingAmount.value === expectedAmount.value &&
     existingAmount.unit === expectedAmount.unit;

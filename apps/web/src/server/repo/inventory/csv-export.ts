@@ -5,6 +5,7 @@ import { inventoryEntry } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { buildLocationPath } from "~/server/repo/location";
 import { amount } from "~/codec/codec";
+import { parseWithContext } from "~/lib/zod-utils";
 import {
   extractPriceFromMappings,
   serializeUnitMappings,
@@ -51,7 +52,10 @@ export const exportInventoryToCSV = async (
 
   return Promise.all(
     entries.map(async (entry) => {
-      const parsedAmount = amount.parse(entry.amount);
+      const parsedAmount = parseWithContext(amount, entry.amount, {
+        entityType: "InventoryEntry",
+        identifier: { id: entry.id },
+      });
       const priceAmount = await extractPriceFromMappings(
         entry.Product.unitMappings,
       );

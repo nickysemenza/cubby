@@ -1,6 +1,7 @@
 import { type Database, type Transaction } from "~/server/db";
 import { createOrUpdatePriceMapping } from "./inventory";
 import { type z } from "zod";
+import { parseWithContext } from "~/lib/zod-utils";
 import {
   type SortParams,
   type PaginationParams,
@@ -92,15 +93,26 @@ type ProductDeepDB = typeof product.$inferSelect & {
 };
 
 // Convert product to food lookup parameter
+// Only returns a lookup param if UPC/NDB values pass schema validation
 export const foodLookupParamFromProduct = (product: {
   upc: string | null;
   ndb_number: number | null;
 }): FoodLookupParam | null => {
+  // Try UPC lookup first
   if (product.upc !== null) {
-    return { kind: "upc", gtin_upc: product.upc };
+    const result = foodLookupParam.safeParse({
+      kind: "upc",
+      gtin_upc: product.upc,
+    });
+    if (result.success) return result.data;
   }
+  // Fall back to NDB lookup
   if (product.ndb_number !== null) {
-    return { kind: "ndb", ndb_number: product.ndb_number };
+    const result = foodLookupParam.safeParse({
+      kind: "ndb",
+      ndb_number: product.ndb_number,
+    });
+    if (result.success) return result.data;
   }
   return null;
 };
@@ -132,10 +144,9 @@ export const findProductsByFoodIdentifier = async (
   }));
 };
 
-const dbProductToAPI = async (
-  db: Database,
+const dbProductToAPI = (
   productData: ProductDeepDB,
-): Promise<z.infer<typeof productWithIngredientAndInventoryAndMappingsOut>> => {
+): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
   const { Ingredient, unitMappings, InventoryEntry, images, ...restOfProduct } =
     productData;
 
@@ -164,8 +175,14 @@ const dbProductToAPI = async (
     }),
   };
 
-  // Use Zod parse to validate the transformation
-  return productWithIngredientAndInventoryAndMappingsOut.parse(result);
+  return parseWithContext(
+    productWithIngredientAndInventoryAndMappingsOut,
+    result,
+    {
+      entityType: "Product",
+      identifier: { id: productData.id, name: productData.name },
+    },
+  );
 };
 
 export const getProductByID = async (
@@ -182,7 +199,7 @@ export const getProductByID = async (
     throw new Error(notFoundError("Product", id));
   }
 
-  return dbProductToAPI(db, res);
+  return dbProductToAPI(res);
 };
 
 export const productList = async (
@@ -246,9 +263,7 @@ export const productList = async (
     getDb(db).select({ count: count() }).from(product).where(whereClause),
   );
 
-  const products = await Promise.all(
-    results.map(async (prod: ProductDeepDB) => await dbProductToAPI(db, prod)),
-  );
+  const products = results.map((prod: ProductDeepDB) => dbProductToAPI(prod));
 
   return { data: products, count: totalCount };
 };
@@ -321,7 +336,10 @@ export const createProduct = async (
       images,
     };
 
-    return productTopLevelOut.parse(result);
+    return parseWithContext(productTopLevelOut, result, {
+      entityType: "Product",
+      identifier: { id: newProduct.id, name: newProduct.name },
+    });
   });
 };
 
@@ -496,7 +514,10 @@ export const updateProduct = async (
       images: productImages.map((pi) => pi.image),
     };
 
-    return productTopLevelOut.parse(result);
+    return parseWithContext(productTopLevelOut, result, {
+      entityType: "Product",
+      identifier: { id: updated.id, name: updated.name },
+    });
   });
 };
 
@@ -524,10 +545,17 @@ export const findProductByUPC = async (
     return null;
   }
 
-  return productTopLevelOut.parse({
-    ...res,
-    images: res.images?.map((pi) => pi.image) ?? [],
-  });
+  return parseWithContext(
+    productTopLevelOut,
+    {
+      ...res,
+      images: res.images?.map((pi) => pi.image) ?? [],
+    },
+    {
+      entityType: "Product",
+      identifier: { id: res.id, name: res.name },
+    },
+  );
 };
 
 // Find a product by UPC (global uniqueness) within an organization
@@ -554,10 +582,17 @@ export const findProductByUpc = async (
     return null;
   }
 
-  return productTopLevelOut.parse({
-    ...res,
-    images: res.images?.map((pi) => pi.image) ?? [],
-  });
+  return parseWithContext(
+    productTopLevelOut,
+    {
+      ...res,
+      images: res.images?.map((pi) => pi.image) ?? [],
+    },
+    {
+      entityType: "Product",
+      identifier: { id: res.id, name: res.name },
+    },
+  );
 };
 
 // Find a product by name and manufacturer within an organization
@@ -586,10 +621,17 @@ export const findProductByNameAndManufacturer = async (
     return null;
   }
 
-  return productTopLevelOut.parse({
-    ...res,
-    images: res.images?.map((pi) => pi.image) ?? [],
-  });
+  return parseWithContext(
+    productTopLevelOut,
+    {
+      ...res,
+      images: res.images?.map((pi) => pi.image) ?? [],
+    },
+    {
+      entityType: "Product",
+      identifier: { id: res.id, name: res.name },
+    },
+  );
 };
 
 // Quick create a product with minimal data
@@ -643,10 +685,17 @@ export const quickCreateProduct = async (
     action: "create",
   });
 
-  return productTopLevelOut.parse({
-    ...newProduct,
-    images: [],
-  });
+  return parseWithContext(
+    productTopLevelOut,
+    {
+      ...newProduct,
+      images: [],
+    },
+    {
+      entityType: "Product",
+      identifier: { id: newProduct.id, name: newProduct.name },
+    },
+  );
 };
 
 // Find products with expectedQuantity=1 that appear in multiple locations

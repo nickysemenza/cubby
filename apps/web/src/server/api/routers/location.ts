@@ -50,6 +50,7 @@ const { list } = createEntityListProcedure({
       );
     },
   },
+  entityName: "location",
 });
 
 // Create standardized getByID, create, update procedures using factory

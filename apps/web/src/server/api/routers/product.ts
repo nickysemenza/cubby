@@ -79,6 +79,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
       );
     },
   },
+  entityName: "product",
 });
 
 // Custom create procedure that imports UPC images after product creation

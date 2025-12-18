@@ -104,6 +104,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return await updateInventoryEntry(services.db, id, data, actor);
     },
   },
+  entityName: "inventory-item",
 });
 
 // Bulk process inventory entries (creates and updates in one call)

@@ -63,6 +63,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
   },
+  entityName: "ingredient",
 });
 
 const merge = protectedProcedure

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { upc, ndb } from "@recipehub/usda-schemas";
 import { amount } from "~/codec/codec";
 import { dbTimestampsOut } from "./common";
 import { inventoryId, productId, locationId } from "./identifiers";
@@ -69,9 +70,9 @@ export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 export const inventoryCSVRow = z.object({
   product_name: z.string().min(1),
   manufacturer: z.string().optional(), // defaults to "(unspecified)"
-  upc: z.string().optional(),
+  upc: upc.optional(),
   model: z.string().optional(), // product model number
-  ndb_number: z.coerce.number().optional(), // USDA NDB number for nutrition data linking
+  ndb_number: z.coerce.number().pipe(ndb).optional(), // USDA NDB number (1000-99999)
   location_path: z.string().optional(), // "Room > Shelf > Bin" format, or "Room[type] > Shelf[type]" with types. Empty = product-only row
   quantity: z.coerce.number().positive().default(1),
   unit: z.string().default("each"),
@@ -123,11 +124,11 @@ export const productChangesPreview = z.object({
   modelWillBeSet: z.string().optional(),
   modelCurrent: z.string().nullable().optional(),
   // UPC code
-  upcWillBeSet: z.string().optional(),
-  upcCurrent: z.string().nullable().optional(),
+  upcWillBeSet: upc.optional(),
+  upcCurrent: z.string().nullable().optional(), // lenient - may contain legacy invalid data
   // USDA NDB number
-  ndbNumberWillBeSet: z.number().optional(),
-  ndbNumberCurrent: z.number().nullable().optional(),
+  ndbNumberWillBeSet: ndb.optional(),
+  ndbNumberCurrent: z.number().nullable().optional(), // lenient - may contain legacy invalid data
   // Aliases
   aliasesWillBeAdded: z.array(z.string()).optional(), // list of aliases to add
   aliasesCurrent: z.array(z.string()).optional(),

@@ -44,6 +44,7 @@ import {
 import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
+import { parseWithContext } from "~/lib/zod-utils";
 
 // Re-export path utilities for backwards compatibility
 export {
@@ -264,7 +265,10 @@ const dbLocationToAPI = (
     id: unsafeLocationId(locationData.id),
     lastBulkInventory: locationData.lastBulkInventory,
     name: locationData.name,
-    type: locationType.parse(locationData.type),
+    type: parseWithContext(locationType, locationData.type, {
+      entityType: "Location",
+      identifier: { id: locationData.id, name: locationData.name },
+    }),
     images: extractImagesFromJoinTable(locationData.images),
     ...extractDbTimestampsFromDBRec(locationData),
   };
@@ -288,7 +292,10 @@ const buildLocationWithChildren = (
     name: x.name,
     id: unsafeLocationId(x.id),
     lastBulkInventory: x.lastBulkInventory,
-    type: locationType.parse(x.type),
+    type: parseWithContext(locationType, x.type, {
+      entityType: "Location",
+      identifier: { id: x.id, name: x.name },
+    }),
     images: extractImagesFromJoinTable(x.images),
     children:
       x.children && x.children.length > 0

@@ -7,13 +7,14 @@ import { type USDAClient } from "~/server/clients/usda";
 import { IDInput } from "~/schemas/common";
 import {
   buildPaginatedResponse,
-  createPaginatedResponseSchema,
+  createPaginatedResponseSchemaWithContext,
   sortPaginationCombo,
   type SortParams,
   type PaginationParams,
 } from "~/schemas/pagination";
 import { UserId, type OrganizationId } from "~/schemas/identifiers";
 import { type ActorContext } from "~/schemas/context";
+import { type Entity } from "~/entities/types";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
@@ -88,6 +89,7 @@ const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
 export function createEntityListProcedure<TOutput, TFilters>({
   schemas,
   repository,
+  entityName,
 }: {
   schemas: {
     output: ZodSchema<TOutput>;
@@ -101,6 +103,8 @@ export function createEntityListProcedure<TOutput, TFilters>({
       pagination: PaginationParams,
     ) => Promise<{ data: TOutput[]; count: number }>;
   };
+  /** Entity type for enhanced error messages */
+  entityName: Entity;
 }) {
   const list = protectedProcedure
     .input(
@@ -110,7 +114,9 @@ export function createEntityListProcedure<TOutput, TFilters>({
         })
         .extend(sortPaginationCombo.shape),
     )
-    .output(createPaginatedResponseSchema(schemas.output))
+    .output(
+      createPaginatedResponseSchemaWithContext(schemas.output, entityName),
+    )
     .query(async ({ ctx, input }) => {
       const { data, count } = await repository.list(
         ctx,
@@ -180,6 +186,7 @@ export function createEntityCrudProcedures<
 >({
   schemas,
   repository,
+  entityName,
 }: {
   schemas: {
     createInput: ZodSchema<TCreateInput>;
@@ -203,6 +210,8 @@ export function createEntityCrudProcedures<
       data: TUpdateInput,
     ) => Promise<TOutput>;
   };
+  /** Entity type for enhanced error messages */
+  entityName: Entity;
 }) {
   const { list } = createEntityListProcedure({
     schemas: {
@@ -212,6 +221,7 @@ export function createEntityCrudProcedures<
     repository: {
       list: repository.list,
     },
+    entityName,
   });
 
   const { getByID, create, update } = createEntityCrudWithoutListProcedures({

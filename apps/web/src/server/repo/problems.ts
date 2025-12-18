@@ -8,6 +8,7 @@ import {
 } from "~/server/db/schema";
 import { eq, sql, notExists, and } from "drizzle-orm";
 import { amount } from "~/codec/codec";
+import { parseWithContext } from "~/lib/zod-utils";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -266,7 +267,10 @@ export const findInvalidInventoryAmounts = async (
 
   for (const entry of inventoryEntries) {
     // Validate and parse the JSONB amount column
-    const parsedAmount = amount.parse(entry.amount);
+    const parsedAmount = parseWithContext(amount, entry.amount, {
+      entityType: "InventoryEntry",
+      identifier: { id: entry.id },
+    });
 
     if (parsedAmount.value <= 0) {
       problems.push({

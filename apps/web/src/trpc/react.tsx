@@ -2,7 +2,12 @@
 
 // https://github.com/t3-oss/create-t3-app/issues/2065#issuecomment-2776059485
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  QueryCache,
+  MutationCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { httpBatchStreamLink, loggerLink } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
 import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
@@ -10,8 +15,20 @@ import { useState } from "react";
 import SuperJSON from "superjson";
 import { createTRPCClient } from "@trpc/client";
 import { shouldRetryQuery } from "~/lib/error-utils";
+import { toast } from "sonner";
 
 import { type AppRouter } from "~/server/api/root";
+
+/**
+ * Extract a user-friendly error message from tRPC/Query errors
+ */
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    // tRPC errors often have a message property
+    return error.message;
+  }
+  return "An unexpected error occurred";
+}
 
 function makeQueryClient() {
   return new QueryClient({
@@ -24,6 +41,16 @@ function makeQueryClient() {
         retry: shouldRetryQuery,
       },
     },
+    queryCache: new QueryCache({
+      onError: (error) => {
+        toast.error(getErrorMessage(error));
+      },
+    }),
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        toast.error(getErrorMessage(error));
+      },
+    }),
   });
 }
 let browserQueryClient: QueryClient | undefined = undefined;

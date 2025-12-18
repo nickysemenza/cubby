@@ -73,6 +73,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return await updateRecipe(id, data, services.db, actor);
     },
   },
+  entityName: "recipe",
 });
 
 const seed = systemProcedure.mutation(async ({ ctx }) => {

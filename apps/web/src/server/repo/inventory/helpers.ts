@@ -3,6 +3,7 @@ import { type Database } from "~/server/db";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 import { amount } from "~/codec/codec";
+import { parseWithContext } from "~/lib/zod-utils";
 import {
   getDb,
   extractImagesFromJoinTable,
@@ -33,7 +34,10 @@ export const dbInventoryEntryToAPI: (
   const { type, images: locationImages, ...restOfLocation } = location;
 
   // Validate amount from JSON column
-  const parsedAmount = amount.parse(restOfInventoryEntry.amount);
+  const parsedAmount = parseWithContext(amount, restOfInventoryEntry.amount, {
+    entityType: "InventoryEntry",
+    identifier: { id: restOfInventoryEntry.id },
+  });
 
   return {
     ...restOfInventoryEntry,
@@ -42,7 +46,10 @@ export const dbInventoryEntryToAPI: (
     location: {
       ...restOfLocation,
       id: unsafeLocationId(restOfLocation.id),
-      type: locationType.parse(type),
+      type: parseWithContext(locationType, type, {
+        entityType: "Location",
+        identifier: { id: restOfLocation.id, name: restOfLocation.name },
+      }),
       images: extractImagesFromJoinTable(locationImages),
     },
     product: {
@@ -71,7 +78,10 @@ export const getTotalProductQuantity = async (
   });
 
   return entries.reduce((total, entry) => {
-    const parsedAmount = amount.parse(entry.amount);
+    const parsedAmount = parseWithContext(amount, entry.amount, {
+      entityType: "InventoryEntry",
+      identifier: { id: entry.id },
+    });
     return total + parsedAmount.value;
   }, 0);
 };
