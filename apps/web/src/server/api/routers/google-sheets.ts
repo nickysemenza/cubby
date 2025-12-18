@@ -32,6 +32,7 @@ import { organization } from "~/server/db/auth.schema";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/server/repo/database-helpers";
 import { normalizeLocationPath } from "~/lib/location-path";
+import { toCSVString } from "~/lib/csv-utils";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({
@@ -103,14 +104,18 @@ function getRowDifferences(
     });
   }
 
-  if (appRow.quantity !== sheetRow.quantity) {
+  // For quantity/unit, treat null (product-only rows) as equivalent to defaults (1/each)
+  // since the sheet schema applies these defaults when parsing empty cells
+  const appQty = appRow.quantity ?? 1;
+  const appUnit = appRow.unit ?? "each";
+  if (appQty !== sheetRow.quantity) {
     changes.push({
       field: "qty",
       from: sheetRow.quantity,
       to: appRow.quantity,
     });
   }
-  if (appRow.unit !== sheetRow.unit) {
+  if (appUnit !== sheetRow.unit) {
     changes.push({ field: "unit", from: sheetRow.unit, to: appRow.unit });
   }
   if ((appRow.upc ?? "") !== (sheetRow.upc ?? "")) {
@@ -609,21 +614,9 @@ const pushToSheet = protectedProcedure
     const exportRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
 
     // Convert to string[][] for Google Sheets
-    const dataRows = exportRows.map((row) => [
-      row.product_name,
-      row.manufacturer,
-      row.upc ?? "",
-      row.model ?? "",
-      row.ndb_number !== null ? String(row.ndb_number) : "",
-      row.location_path,
-      row.quantity !== null ? String(row.quantity) : "",
-      row.unit ?? "",
-      row.expected_qty !== null ? String(row.expected_qty) : "",
-      row.price !== null ? String(row.price) : "",
-      row.unit_mappings ?? "",
-      row.ingredient_name ?? "",
-      row.aliases ?? "",
-    ]);
+    const dataRows = exportRows.map((row) =>
+      CSV_HEADERS.map((h) => toCSVString(row[h as keyof typeof row])),
+    );
 
     // Write to sheet (headers + data)
     await client.writeSheet(sheetId, [CSV_HEADERS, ...dataRows]);

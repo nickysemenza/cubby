@@ -6,6 +6,18 @@ import Papa from "papaparse";
 import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
 
 /**
+ * Convert any value to a CSV-safe string.
+ * - null/undefined → ""
+ * - numbers → string representation
+ * - everything else → String(value)
+ */
+export const toCSVString = (value: unknown): string => {
+  if (value == null) return "";
+  if (typeof value === "number") return String(value);
+  return String(value);
+};
+
+/**
  * Parse inventory CSV content into validated rows.
  * Handles header normalization and field mapping.
  */

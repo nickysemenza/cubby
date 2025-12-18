@@ -12,6 +12,7 @@ import {
   buildCSVContent,
   downloadCSV,
   generateExportFilename,
+  toCSVString,
 } from "~/lib/csv-utils";
 import { GoogleSheetsSync } from "~/app/_components/inventory/google-sheets-sync";
 
@@ -42,18 +43,9 @@ export function InventoryActions() {
           "unit_mappings",
           "ingredient_name",
         ];
-        const rows = result.data.map((row) => [
-          row.product_name,
-          row.manufacturer ?? "",
-          row.upc ?? "",
-          row.location_path,
-          row.quantity != null ? String(row.quantity) : "",
-          row.unit ?? "",
-          row.expected_qty != null ? String(row.expected_qty) : "",
-          row.price != null ? String(row.price) : "",
-          row.unit_mappings ?? "",
-          row.ingredient_name ?? "",
-        ]);
+        const rows = result.data.map((row) =>
+          headers.map((h) => toCSVString(row[h as keyof typeof row])),
+        );
 
         const csvContent = buildCSVContent(headers, rows);
         downloadCSV(csvContent, generateExportFilename("inventory-export"));
