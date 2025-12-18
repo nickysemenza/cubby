@@ -33,7 +33,7 @@ export function AmountFieldGroup<
   };
 
   return (
-    <SideBySideFields>
+    <SideBySideFields className="min-w-[13rem] space-x-3">
       <NullableNumericField
         form={form}
         name={valuePath}

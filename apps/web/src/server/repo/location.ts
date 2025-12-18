@@ -45,15 +45,20 @@ import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
 
-// Type context for batch CSV imports with type inference
-export interface LocationTypeContext {
-  // Map of "full_path" (lowercase) -> type from CSV bracket notation
-  pathTypes: Map<string, LocationType>;
-  // Map of "name" (lowercase) -> type from existing database locations
-  existingTypes: Map<string, LocationType>;
-  // Detected conflicts: same path with different types in CSV
-  conflicts: Array<{ path: string; types: LocationType[] }>;
-}
+// Re-export path utilities for backwards compatibility
+export {
+  buildLocationPath,
+  normalizeLocationPath,
+  parseLocationPathWithTypes,
+  parseLocationPathWithContext,
+  type LocationTypeContext,
+  type LocationWithParent,
+} from "~/lib/location-path";
+import {
+  parseLocationPathWithTypes,
+  parseLocationPathWithContext,
+  type LocationTypeContext,
+} from "~/lib/location-path";
 
 // Create a new location
 export const createLocation = async (
@@ -490,63 +495,6 @@ export const locationList = async (
   return { data: items, count: countResult?.count ?? 0 };
 };
 
-// Build a location path string from a location with its parent chain
-// Format: "Room > Shelf > Bin"
-export const buildLocationPath = (
-  locationData: {
-    name: string;
-    parent?: {
-      name: string;
-      parent?: { name: string; parent?: unknown } | null;
-    } | null;
-  },
-  separator = " > ",
-): string => {
-  const parts: string[] = [];
-
-  // Walk up the parent chain
-  let current: typeof locationData | null | undefined = locationData;
-  while (current) {
-    parts.unshift(current.name);
-    current = current.parent as typeof locationData | null | undefined;
-  }
-
-  return parts.join(separator);
-};
-
-/**
- * Parse a location path with optional embedded types
- * Supports both plain format ("garage > shelf") and typed format ("garage[room] > shelf[shelf]")
- *
- * @param path - Path string like "garage[room] > shelf[shelf]" or "garage > shelf"
- * @param separator - Path separator, defaults to " > "
- * @returns Array of {name, type} objects
- */
-export const parseLocationPathWithTypes = (
-  path: string,
-  separator = " > ",
-): Array<{ name: string; type: LocationType }> => {
-  const parts = path.split(separator).map((p) => p.trim());
-
-  return parts.map((part, index) => {
-    // Match "name[type]" format
-    const match = part.match(/^(.+?)\[([^\]]+)\]$/);
-    if (match) {
-      const name = match[1].trim();
-      const typeStr = match[2].trim();
-      // Validate the type
-      const parsedType = locationType.safeParse(typeStr);
-      if (parsedType.success) {
-        return { name, type: parsedType.data };
-      }
-      // Invalid type - fall back to default
-      console.warn(`Invalid location type "${typeStr}" in path, using default`);
-    }
-    // No bracket notation or invalid - use defaults: root = room, children = shelf
-    return { name: part, type: index === 0 ? "room" : "shelf" };
-  });
-};
-
 // Find a location by its path string (e.g., "Room > Shelf > Bin")
 // Supports bracket notation: "Room[room] > Shelf[shelf]" - brackets are stripped for matching
 // Returns null if not found
@@ -839,71 +787,6 @@ export const buildLocationTypeContext = async (
   }
 
   return { pathTypes, existingTypes, conflicts };
-};
-
-/**
- * Parse a location path using type context for inference.
- * Type resolution priority:
- * 1. Explicit bracket notation in the current path
- * 2. Type from another row in the CSV (batch context)
- * 3. Type from existing database location
- * 4. Default (root=room, children=shelf)
- *
- * @param path - Path string like "garage > shelf" or "garage[room] > shelf[shelf]"
- * @param context - Type context from buildLocationTypeContext
- * @param separator - Path separator, defaults to " > "
- * @returns Array of {name, type} objects
- */
-export const parseLocationPathWithContext = (
-  path: string,
-  context: LocationTypeContext,
-  separator = " > ",
-): Array<{ name: string; type: LocationType }> => {
-  const parts = path.split(separator).map((p) => p.trim());
-  const result: Array<{ name: string; type: LocationType }> = [];
-  const pathSegments: string[] = [];
-
-  for (let index = 0; index < parts.length; index++) {
-    const part = parts[index];
-
-    // Check for explicit bracket notation first
-    const match = part.match(/^(.+?)\[([^\]]+)\]$/);
-    if (match) {
-      const name = match[1].trim();
-      const typeStr = match[2].trim();
-      const parsedType = locationType.safeParse(typeStr);
-      if (parsedType.success) {
-        result.push({ name, type: parsedType.data });
-        pathSegments.push(name.toLowerCase());
-        continue;
-      }
-      // Invalid type - fall through to inference
-    }
-
-    // Extract name (strip brackets if present but type was invalid)
-    const name = match ? match[1].trim() : part;
-    pathSegments.push(name.toLowerCase());
-    const fullPath = pathSegments.join(separator);
-
-    // Priority 1: Type from CSV context (another row with explicit type)
-    const csvType = context.pathTypes.get(fullPath);
-    if (csvType) {
-      result.push({ name, type: csvType });
-      continue;
-    }
-
-    // Priority 2: Type from existing database location
-    const dbType = context.existingTypes.get(name.toLowerCase());
-    if (dbType) {
-      result.push({ name, type: dbType });
-      continue;
-    }
-
-    // Priority 3: Default (root=room, children=shelf)
-    result.push({ name, type: index === 0 ? "room" : "shelf" });
-  }
-
-  return result;
 };
 
 /**

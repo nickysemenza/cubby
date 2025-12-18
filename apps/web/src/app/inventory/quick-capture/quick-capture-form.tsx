@@ -379,7 +379,7 @@ export default function QuickCaptureForm({
               onClick={() => setFocusedRowIndex(index)}
             >
               {/* Location field */}
-              <div className="w-full flex-shrink-0 md:w-48">
+              <div className="w-full shrink-0 md:w-48">
                 <ComboboxFieldWithSearch
                   form={form}
                   name={`items.${index}.location`}
@@ -389,7 +389,7 @@ export default function QuickCaptureForm({
               </div>
 
               {/* Product field with quick create */}
-              <div className="min-w-0 flex-1">
+              <div className="w-1/2 min-w-0 flex-1">
                 <WithProductSearchQuickCreate>
                   {({ items, onSearchChange, isLoading, onCreateNew }) => (
                     <ComboboxField
@@ -406,7 +406,7 @@ export default function QuickCaptureForm({
               </div>
 
               {/* Amount field */}
-              <div className="w-full flex-shrink-0 md:w-36">
+              <div className="w-full flex-shrink-0 md:w-52">
                 <AmountFieldGroup
                   form={form}
                   valuePath={`items.${index}.amount.value`}

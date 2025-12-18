@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { cn } from "~/lib/utils";
 
 // Base props shared by all forms
 interface BaseFormProps {
@@ -335,11 +336,13 @@ export function detectComboboxIdChange<TId extends string>(
 // Helper to build a common form layout with two fields side by side
 export function SideBySideFields({
   children,
+  className,
 }: {
   children: ReactNode;
+  className?: string;
 }): ReactNode {
   return (
-    <div className="flex space-x-4">
+    <div className={cn("flex space-x-4", className)}>
       <div className="flex-1">
         {Array.isArray(children) ? children[0] : children}
       </div>

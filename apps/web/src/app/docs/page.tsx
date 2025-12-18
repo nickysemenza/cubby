@@ -14,7 +14,7 @@ import { formatRichText } from "~/app/_components/recipe/richtext";
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
 import { unitMappingWithMetadata } from "~/schemas/unitmapping";
 import { recipeOut } from "~/schemas/recipe";
-import { infLocation } from "~/schemas/location";
+import { infLocation, locationType } from "~/schemas/location";
 import {
   richTextInputSchema,
   entityRelationshipsDot,
@@ -25,6 +25,8 @@ import {
   sampleLocations,
 } from "./_data/samples";
 import { wasm } from "~/lib/wasm";
+import { LocationPathDemo } from "./_components/LocationPathDemo";
+import { ComponentDemo } from "./_components/ComponentDemo";
 
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
@@ -73,6 +75,40 @@ export default function DocsPage() {
         <p>
           Hierarchical storage areas like Kitchen → Pantry → Top Shelf. Used to
           organize where inventory is stored.
+        </p>
+
+        <h4>Location Types</h4>
+        <p>
+          Each location has a <strong>type</strong> that describes what kind of
+          storage it is. Valid types:{" "}
+          <code>{locationType.options.join(", ")}</code>
+        </p>
+
+        <h4>CSV Path Format</h4>
+        <p>
+          When importing/exporting via CSV or Google Sheets, locations are
+          represented as paths with optional type annotations in brackets:
+        </p>
+        <pre className="bg-muted rounded-lg p-3 text-sm">
+          {`Garage > Chrome Shelf > Tool Bin[crate]`}
+        </pre>
+        <p>
+          <strong>Default types:</strong> To keep paths clean, brackets are only
+          needed when a location&apos;s type differs from the default:
+        </p>
+        <ul>
+          <li>
+            Root level (first segment) defaults to <code>room</code>
+          </li>
+          <li>
+            All children default to <code>shelf</code>
+          </li>
+        </ul>
+        <p>
+          So <code>Garage &gt; Chrome Shelf</code> is equivalent to{" "}
+          <code>Garage[room] &gt; Chrome Shelf[shelf]</code>, but{" "}
+          <code>Tool Bin[crate]</code> needs brackets because{" "}
+          <code>crate ≠ shelf</code>.
         </p>
 
         <h3>Recipes</h3>
@@ -219,6 +255,13 @@ export default function DocsPage() {
           </div>
         )}
       </EditableComponentDemo>
+
+      <ComponentDemo
+        title="LocationPathDemo"
+        description="Try building location hierarchies and see how they're formatted as CSV paths. Brackets only appear when a location's type differs from the default (root=room, children=shelf)."
+      >
+        <LocationPathDemo />
+      </ComponentDemo>
     </>
   );
 }

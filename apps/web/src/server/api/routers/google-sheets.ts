@@ -31,6 +31,7 @@ import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
 import { organization } from "~/server/db/auth.schema";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/server/repo/database-helpers";
+import { normalizeLocationPath } from "~/lib/location-path";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({
@@ -83,7 +84,7 @@ function makeInventoryKey(
   manufacturer: string,
   locationPath: string,
 ): string {
-  return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}|${locationPath.toLowerCase()}`;
+  return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}|${normalizeLocationPath(locationPath)}`;
 }
 
 // Compare two row values and return structured field changes
@@ -92,6 +93,15 @@ function getRowDifferences(
   sheetRow: InventoryCSVRow,
 ): FieldChange[] {
   const changes: FieldChange[] = [];
+
+  // Compare location_path (exact match - includes bracket notation)
+  if (appRow.location_path !== (sheetRow.location_path ?? "")) {
+    changes.push({
+      field: "location",
+      from: sheetRow.location_path ?? null,
+      to: appRow.location_path,
+    });
+  }
 
   if (appRow.quantity !== sheetRow.quantity) {
     changes.push({
