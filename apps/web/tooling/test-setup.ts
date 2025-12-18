@@ -5,13 +5,18 @@ import {
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
-import { unsafeOrganizationId } from "../src/schemas/identifiers";
+import { unsafeOrganizationId, unsafeUserId } from "../src/schemas/identifiers";
 import { type Database } from "../src/server/db/database";
+import { type ActorContext } from "../src/schemas/context";
 import * as schema from "../src/server/db/schema";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 
 let hash = "";
+
+// Standard test IDs used across all tests
+export const TEST_ORG_ID = "test-org-id";
+export const TEST_USER_ID = "test-user-id";
 
 export async function setup() {
   console.log("TEST GLOBAL SETUP");
@@ -46,11 +51,25 @@ export async function buildTestDB() {
   const pool = new Pool({ connectionString: connectionUrl });
   const rawDb = drizzle({ client: pool, schema });
 
+  // Automatically create a test user
+  await rawDb
+    .insert(schema.user)
+    .values({
+      id: TEST_USER_ID,
+      name: "Test User",
+      email: "test@example.com",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning()
+    .then((rows) => rows[0]!);
+
   // Automatically create a test organization
   const testOrg = await rawDb
     .insert(schema.organization)
     .values({
-      id: "test-org-id",
+      id: TEST_ORG_ID,
       name: "Test Organization",
       slug: "test-organization",
       createdAt: new Date(),
@@ -58,13 +77,29 @@ export async function buildTestDB() {
     .returning()
     .then((rows) => rows[0]!);
 
+  // Create member relationship between user and org
+  await rawDb.insert(schema.organizationMember).values({
+    id: "test-member-id",
+    userId: TEST_USER_ID,
+    organizationId: TEST_ORG_ID,
+    role: "owner",
+    createdAt: new Date(),
+  });
+
   const teardown = async () => {
     await pool.end();
+  };
+
+  const actor: ActorContext = {
+    userId: unsafeUserId(TEST_USER_ID),
+    organizationId: unsafeOrganizationId(testOrg.id),
+    source: "ui",
   };
 
   return {
     db: rawDb as unknown as Database,
     organizationId: unsafeOrganizationId(testOrg.id),
+    actor,
     teardown,
   };
 }

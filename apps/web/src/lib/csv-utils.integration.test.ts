@@ -3,22 +3,12 @@ import fs from "fs";
 import path from "path";
 import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import {
-  unsafeUserId,
-  type OrganizationId,
-  unsafeOrganizationId,
-} from "~/schemas/identifiers";
+import { type OrganizationId } from "~/schemas/identifiers";
 import { type ActorContext } from "~/schemas/context";
 import { parseInventoryCSV } from "./csv-utils";
 import { importInventoryFromCSV } from "~/server/repo/inventory";
 import { locationList } from "~/server/repo/location";
 import { productList } from "~/server/repo/product";
-
-const TEST_ACTOR: ActorContext = {
-  userId: unsafeUserId("test-user-id-for-csv-utils"),
-  organizationId: unsafeOrganizationId("test-org-id"),
-  source: "ui",
-};
 
 const readConfigCSV = (): ReturnType<typeof parseInventoryCSV> => {
   const filePath = path.join(__dirname, "../../config.csv");
@@ -29,10 +19,11 @@ const readConfigCSV = (): ReturnType<typeof parseInventoryCSV> => {
 describe("config.csv import integration", () => {
   let db: Database;
   let organizationId: OrganizationId;
+  let actor: ActorContext;
   let teardown: () => Promise<void>;
 
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, organizationId, actor, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -46,7 +37,7 @@ describe("config.csv import integration", () => {
 
     const result = await importInventoryFromCSV(db, organizationId, rows, {
       dryRun: false,
-      actor: TEST_ACTOR,
+      actor: actor,
     });
 
     expect(result.errors).toBe(0);
@@ -57,7 +48,7 @@ describe("config.csv import integration", () => {
     const rows = readConfigCSV();
     await importInventoryFromCSV(db, organizationId, rows, {
       dryRun: false,
-      actor: TEST_ACTOR,
+      actor: actor,
     });
 
     const products = await productList(
@@ -79,7 +70,7 @@ describe("config.csv import integration", () => {
     const rows = readConfigCSV();
     await importInventoryFromCSV(db, organizationId, rows, {
       dryRun: false,
-      actor: TEST_ACTOR,
+      actor: actor,
     });
 
     const locations = await locationList(
@@ -107,11 +98,11 @@ describe("config.csv import integration", () => {
 
     await importInventoryFromCSV(db, organizationId, rows, {
       dryRun: false,
-      actor: TEST_ACTOR,
+      actor: actor,
     });
     const result2 = await importInventoryFromCSV(db, organizationId, rows, {
       dryRun: false,
-      actor: TEST_ACTOR,
+      actor: actor,
     });
 
     expect(result2.skipped).toBeGreaterThan(0);
