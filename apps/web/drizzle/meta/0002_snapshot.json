@@ -313,7 +313,14 @@
           "name": "userId",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ui'"
         },
         "createdAt": {
           "name": "createdAt",

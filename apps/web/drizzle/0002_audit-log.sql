@@ -29,7 +29,8 @@ CREATE TABLE "AuditLog" (
 	"entityId" uuid NOT NULL,
 	"action" text NOT NULL,
 	"changes" jsonb,
-	"userId" text,
+	"userId" text NOT NULL,
+	"source" text DEFAULT 'ui' NOT NULL,
 	"createdAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint

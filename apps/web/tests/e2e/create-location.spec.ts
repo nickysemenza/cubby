@@ -19,11 +19,9 @@ test.describe("Create Location", () => {
 
     // Expect redirect to detail page for the new location
     await expect(page).toHaveURL(/\/locations\//);
-    const breadcrumbItem = page
-      .locator("li[data-slot='breadcrumb-item']")
-      .filter({ hasText: name })
-      .last();
-    await expect(breadcrumbItem).toBeVisible();
+    // The location breadcrumb uses a custom nav element with aria-label
+    const breadcrumbNav = page.locator('nav[aria-label="Location breadcrumb"]');
+    await expect(breadcrumbNav.getByText(name)).toBeVisible();
     // Some canonical sections on the detail page
     await expect(
       page.getByText("Child Locations", { exact: true }),
