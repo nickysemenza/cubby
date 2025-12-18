@@ -41,9 +41,9 @@ export interface InventoryCSVExportRow {
   upc: string;
   model: string | null;
   ndb_number: number | null;
-  location_path: string;
-  quantity: number;
-  unit: string;
+  location_path: string; // empty string for product-only rows
+  quantity: number | null; // null for product-only rows
+  unit: string | null; // null for product-only rows
   expected_qty: number | null;
   price: number | null;
   unit_mappings: string | null;

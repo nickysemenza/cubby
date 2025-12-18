@@ -200,8 +200,8 @@ const exportCSV = protectedProcedure
         manufacturer: z.string(),
         upc: z.string(),
         location_path: z.string(),
-        quantity: z.number(),
-        unit: z.string(),
+        quantity: z.number().nullable(), // null for product-only rows
+        unit: z.string().nullable(), // null for product-only rows
         expected_qty: z.number().nullable(),
         price: z.number().nullable(),
         unit_mappings: z.string().nullable(),
