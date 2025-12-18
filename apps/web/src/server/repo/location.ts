@@ -7,6 +7,7 @@ import {
   LocationCreateInput,
   LocationUpdateInput,
   type LocationType,
+  type InventoryItemForTree,
 } from "~/schemas/location";
 import {
   type LocationId,
@@ -281,6 +282,8 @@ type LocationWithParentChild = typeof location.$inferSelect & {
   images?: Array<{
     image: typeof image.$inferSelect;
   }>;
+  directItemCount?: number;
+  inventoryItems?: InventoryItemForTree[];
 };
 
 const buildLocationWithChildren = (
@@ -288,6 +291,21 @@ const buildLocationWithChildren = (
   excludeId?: string,
   includeParent = true,
 ): InfLocation => {
+  const children =
+    x.children && x.children.length > 0
+      ? x.children
+          .filter((child) => child.id !== excludeId)
+          .map((child) =>
+            buildLocationWithChildren(child, excludeId, includeParent),
+          )
+      : [];
+
+  const directItemCount = x.directItemCount ?? 0;
+  const childrenTotalCount = children.reduce(
+    (sum, child) => sum + (child.totalItemCount ?? 0),
+    0,
+  );
+
   return {
     name: x.name,
     id: unsafeLocationId(x.id),
@@ -297,18 +315,14 @@ const buildLocationWithChildren = (
       identifier: { id: x.id, name: x.name },
     }),
     images: extractImagesFromJoinTable(x.images),
-    children:
-      x.children && x.children.length > 0
-        ? x.children
-            .filter((child) => child.id !== excludeId)
-            .map((child) =>
-              buildLocationWithChildren(child, excludeId, includeParent),
-            )
-        : [],
+    children,
     parent:
       includeParent && x.parent
         ? buildLocationWithChildren(x.parent, excludeId, includeParent)
         : undefined,
+    directItemCount,
+    totalItemCount: directItemCount + childrenTotalCount,
+    inventoryItems: x.inventoryItems ?? [],
     ...extractDbTimestampsFromDBRec(x),
   };
 };
@@ -397,6 +411,41 @@ export const buildLocationTree = async (
     imagesByLocationId.set(locImg.locationId, existing);
   }
 
+  // Batch fetch inventory entries with product names for all locations
+  const allInventoryEntries =
+    locationIds.length > 0
+      ? await getDb(db)
+          .select({
+            id: inventoryEntry.id,
+            locationId: inventoryEntry.locationId,
+            amount: inventoryEntry.amount,
+            productId: inventoryEntry.productId,
+            productName: product.name,
+          })
+          .from(inventoryEntry)
+          .innerJoin(product, eq(inventoryEntry.productId, product.id))
+          .where(inArray(inventoryEntry.locationId, locationIds))
+          .orderBy(product.name)
+      : [];
+
+  // Group inventory entries by locationId
+  const inventoryByLocationId = new Map<string, InventoryItemForTree[]>();
+  const countsByLocationId = new Map<string, number>();
+  for (const entry of allInventoryEntries) {
+    const existing = inventoryByLocationId.get(entry.locationId) ?? [];
+    existing.push({
+      id: entry.id,
+      amount: entry.amount,
+      productName: entry.productName,
+      productId: entry.productId,
+    });
+    inventoryByLocationId.set(entry.locationId, existing);
+    countsByLocationId.set(
+      entry.locationId,
+      (countsByLocationId.get(entry.locationId) ?? 0) + 1,
+    );
+  }
+
   // First pass: create all location objects with their images
   for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
@@ -425,6 +474,8 @@ export const buildLocationTree = async (
       children: [],
       parent: null,
       images: imagesByLocationId.get(loc.id) ?? [],
+      directItemCount: countsByLocationId.get(loc.id) ?? 0,
+      inventoryItems: inventoryByLocationId.get(loc.id) ?? [],
     };
     locationsMap.set(loc.id, locationWithRelations);
   }

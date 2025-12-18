@@ -34,14 +34,35 @@ export const locationOut = z
 
 export type LocationOut = z.infer<typeof locationOut>;
 
+/** Minimal inventory item info for tree display */
+export const inventoryItemForTree = z.object({
+  id: z.string(),
+  amount: z.object({
+    value: z.number(),
+    unit: z.string(),
+  }),
+  productName: z.string(),
+  productId: z.string(),
+});
+export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
+
 export type InfLocation = LocationOut & {
   children?: InfLocation[];
   parent?: InfLocation;
+  /** Number of inventory items directly at this location */
+  directItemCount?: number;
+  /** Number of inventory items at this location and all descendants */
+  totalItemCount?: number;
+  /** Inventory items at this location (for expanded tree view) */
+  inventoryItems?: InventoryItemForTree[];
 };
 
 export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
   children: z.lazy(() => infLocation.array()).optional(),
   parent: z.lazy(() => infLocation.optional()),
+  directItemCount: z.number().optional(),
+  totalItemCount: z.number().optional(),
+  inventoryItems: z.array(inventoryItemForTree).optional(),
 });
 
 export type LocationOutWithParentChildren = z.infer<

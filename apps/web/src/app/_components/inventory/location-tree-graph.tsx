@@ -1,5 +1,4 @@
 "use client";
-import Link from "next/link";
 import { type Ref, useCallback, useState } from "react";
 import Tree, {
   type CustomNodeElementProps,
@@ -9,6 +8,7 @@ import Tree, {
 import { useTRPC } from "~/trpc/react";
 
 import { useQuery } from "@tanstack/react-query";
+import { LocationPillLinkCompact } from "~/app/_components/EntityPill";
 import { LocationId } from "~/schemas/identifiers";
 import { LocationType } from "~/schemas/location";
 
@@ -18,11 +18,12 @@ interface LocationNodeDatum extends RawNodeDatum {
   type: LocationType;
 }
 
-const nodeSize = { x: 100, y: 200 };
+const nodeSize = { x: 200, y: 50 };
 const foreignObjectProps: React.SVGProps<SVGForeignObjectElement> = {
   width: nodeSize.x,
   height: nodeSize.y,
   x: 20,
+  y: -10,
 };
 const rootName = "_root";
 export default function LocationTreeGraph() {
@@ -40,9 +41,10 @@ export default function LocationTreeGraph() {
       >
         <Tree
           data={{ children: data, name: rootName }}
-          orientation="vertical"
+          orientation="horizontal"
           translate={translate}
           zoom={0.5}
+          nodeSize={{ x: 40, y: 150 }}
           renderCustomNodeElement={(rd3tProps) =>
             renderForeignObjectNode({
               ...rd3tProps,
@@ -60,8 +62,8 @@ const useCenteredTree = () => {
   const containerRef: Ref<HTMLElement> = useCallback(
     (containerElem: HTMLElement) => {
       if (containerElem !== null) {
-        const { width, height } = containerElem.getBoundingClientRect();
-        setTranslate({ x: width / 2, y: height / 4 });
+        const { height } = containerElem.getBoundingClientRect();
+        setTranslate({ x: 50, y: height / 2 });
       }
     },
     [],
@@ -79,20 +81,15 @@ const renderForeignObjectNode = ({
       <circle onClick={toggleNode} r={15}></circle>
       {/* `foreignObject` requires width & height to be explicitly set. */}
       <foreignObject {...foreignObjectProps}>
-        <div style={{ border: "1px solid black", backgroundColor: "#dedede" }}>
-          <h3 style={{ textAlign: "center" }}>{locationNode.name}</h3>
-          {locationNode.name !== rootName && (
-            <>
-              <Link
-                className="text-primary hover:underline"
-                href={`locations/${locationNode.id}`}
-              >
-                {locationNode.name}
-              </Link>
-              <div>{locationNode.type}</div>
-            </>
-          )}
-        </div>
+        {locationNode.name !== rootName ? (
+          <LocationPillLinkCompact
+            location={{
+              name: locationNode.name,
+              id: locationNode.id,
+              type: locationNode.type,
+            }}
+          />
+        ) : null}
       </foreignObject>
     </g>
   );

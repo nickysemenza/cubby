@@ -15,25 +15,32 @@ interface LocationCardGridProps {
   locations: InfLocation[];
   className?: string;
   showParentPath?: boolean;
+  onLocationSelect?: (location: InfLocation) => void;
+  /** Max columns at largest breakpoint. Default is 4. */
+  maxColumns?: 2 | 3 | 4;
 }
+
+const columnClasses = {
+  2: "grid grid-cols-1 gap-4 md:grid-cols-2",
+  3: "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3",
+  4: "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+};
 
 export function LocationCardGrid({
   locations,
   className,
   showParentPath = false,
+  onLocationSelect,
+  maxColumns = 4,
 }: LocationCardGridProps) {
   return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-        className,
-      )}
-    >
+    <div className={cn(columnClasses[maxColumns], className)}>
       {locations.map((location) => (
         <LocationCard
           key={location.id}
           location={location}
           showParentPath={showParentPath}
+          onLocationSelect={onLocationSelect}
         />
       ))}
     </div>
@@ -43,9 +50,14 @@ export function LocationCardGrid({
 interface LocationCardProps {
   location: InfLocation;
   showParentPath?: boolean;
+  onLocationSelect?: (location: InfLocation) => void;
 }
 
-function LocationCard({ location, showParentPath }: LocationCardProps) {
+function LocationCard({
+  location,
+  showParentPath,
+  onLocationSelect,
+}: LocationCardProps) {
   const api = useTRPC();
 
   // Get inventory items for this location
@@ -189,6 +201,7 @@ function LocationCard({ location, showParentPath }: LocationCardProps) {
         label: "View",
         icon: ExternalLink,
       }}
+      onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
       className="h-full transition-shadow hover:shadow-md"
     />
   );

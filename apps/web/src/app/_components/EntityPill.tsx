@@ -4,6 +4,8 @@ import Link from "next/link";
 import type React from "react";
 import { cva } from "class-variance-authority";
 import { entities } from "~/entities/entities";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
+import type { LocationType } from "~/schemas/location";
 import { type Entity } from "~/entities/types";
 
 const pillVariants = cva(
@@ -88,6 +90,35 @@ export const LocationPillLink: React.FC<{
     label={type}
     openInNewTab={openInNewTab}
   />
+);
+
+/** Compact location pill for tree views: type icon + name + type label */
+export const LocationPillLinkCompact: React.FC<{
+  location: { name: string; id: string; type: LocationType };
+  openInNewTab?: boolean;
+}> = ({ location: { name, id, type }, openInNewTab }) => (
+  <Link
+    href={`/${entities.location.basePath}/${id}`}
+    target={openInNewTab ? "_blank" : undefined}
+    rel={openInNewTab ? "noopener noreferrer" : undefined}
+    className="inline-block max-w-full min-w-0"
+  >
+    <span
+      className={pillVariants({ variant: "default", className: "max-w-full" })}
+    >
+      <LocationIcon type={type} size={12} className="mr-1 flex-shrink-0" />
+      <span className="min-w-0 truncate">{name}</span>
+      <span
+        className={pillVariants({
+          variant: "label",
+          size: "small",
+          className: "ml-1 flex-shrink-0 rounded-sm",
+        })}
+      >
+        {type}
+      </span>
+    </span>
+  </Link>
 );
 export const InventoryEntryPillLink: React.FC<{
   entry: { product: { name: string }; id: string };
