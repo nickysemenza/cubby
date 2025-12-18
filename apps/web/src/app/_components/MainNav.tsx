@@ -11,6 +11,7 @@ import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
 import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
+import { FlexContainer } from "~/components/ui/flex-container";
 
 type NavItem = {
   href: string;
@@ -60,11 +61,13 @@ export function MainNav({
 
   return (
     <div className="flex w-full items-center justify-between">
-      <Link href="/" className="flex items-center space-x-3">
-        <PackageOpen />
-        <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
-          recipehub
-        </span>
+      <Link href="/">
+        <FlexContainer align="center" gap={3}>
+          <PackageOpen />
+          <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
+            recipehub
+          </span>
+        </FlexContainer>
       </Link>
 
       {/* Desktop Navigation */}
@@ -112,7 +115,7 @@ export function MainNav({
         })}
       </nav>
 
-      <div className="flex items-center space-x-4">
+      <FlexContainer align="center" gap={4}>
         {/* Theme Toggle */}
         <ThemeToggle />
 
@@ -161,7 +164,7 @@ export function MainNav({
         >
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
-      </div>
+      </FlexContainer>
 
       {/* Mobile Navigation */}
       {mobileMenuOpen && (

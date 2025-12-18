@@ -1,4 +1,5 @@
 import { cn } from "~/lib/utils";
+import { FlexContainer } from "~/components/ui/flex-container";
 
 interface SkeletonProps {
   className?: string;
@@ -15,13 +16,13 @@ export function SkeletonText({ className }: SkeletonProps) {
 
 export function SkeletonCard() {
   return (
-    <div className="flex items-center space-x-4">
+    <FlexContainer align="center" gap={4}>
       <Skeleton className="h-12 w-12" />
       <div className="flex-1 space-y-2">
         <SkeletonText />
         <SkeletonText className="w-2/3" />
       </div>
-    </div>
+    </FlexContainer>
   );
 }
 
@@ -52,14 +53,14 @@ export function DetailLoadingSkeleton() {
       <Skeleton className="h-10 w-64" />
 
       {/* Hero section */}
-      <div className="flex space-x-6">
+      <FlexContainer gap={6}>
         <Skeleton className="h-48 w-48" />
         <div className="flex-1 space-y-4">
           <SkeletonText />
           <SkeletonText className="w-3/4" />
           <SkeletonText className="w-1/2" />
         </div>
-      </div>
+      </FlexContainer>
 
       {/* Content sections */}
       <div className="space-y-4">
@@ -82,8 +83,12 @@ export function DetailLoadingSkeleton() {
 // Simple loading text for inline use
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <div className="text-muted-foreground flex items-center justify-center p-4">
+    <FlexContainer
+      align="center"
+      justify="center"
+      className="text-muted-foreground p-4"
+    >
       {text}
-    </div>
+    </FlexContainer>
   );
 }

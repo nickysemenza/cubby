@@ -8,6 +8,7 @@ import { LocationIcon } from "../locations/location-icons";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import Link from "next/link";
+import { FlexContainer } from "~/components/ui/flex-container";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -85,7 +86,7 @@ export const LocationTree = ({ data }: LocationTreeProps) => {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <FlexContainer align="center" gap={2}>
         <Checkbox
           id="show-inventory"
           checked={showInventory}
@@ -94,7 +95,7 @@ export const LocationTree = ({ data }: LocationTreeProps) => {
         <Label htmlFor="show-inventory" className="cursor-pointer text-sm">
           Show inventory items
         </Label>
-      </div>
+      </FlexContainer>
       <Tree
         key={showInventory ? "with-inventory" : "without-inventory"}
         initialData={treeData}
@@ -124,7 +125,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
   if (data.nodeType === "inventory") {
     // Render inventory item
     return (
-      <div style={style} ref={dragHandle} className="flex items-center">
+      <FlexContainer style={style} ref={dragHandle} align="center">
         <Link
           href={`/inventory/${data.id.replace("inv-", "")}`}
           className="text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-2 text-sm"
@@ -135,7 +136,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           </span>
           <span className="truncate">{data.productName}</span>
         </Link>
-      </div>
+      </FlexContainer>
     );
   }
 
@@ -145,7 +146,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
     (data.children?.filter((c) => c.nodeType === "location").length ?? 0) > 0;
 
   return (
-    <div style={style} ref={dragHandle} className="flex items-center gap-2">
+    <FlexContainer style={style} ref={dragHandle} align="center" gap={2}>
       <LocationIcon type={data.type} size={14} />
       <span>{data.name}</span>
       {totalItemCount > 0 && (
@@ -162,7 +163,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           )}
         </span>
       )}
-    </div>
+    </FlexContainer>
   );
 }
 

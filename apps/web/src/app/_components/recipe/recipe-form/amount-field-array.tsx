@@ -4,6 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash } from "lucide-react";
 import { type RecipeFormValues } from "./types";
 import { AmountFieldGroup } from "../../inventory/amount-field-group";
+import { FlexContainer } from "~/components/ui/flex-container";
 
 interface AmountFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
@@ -24,7 +25,7 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
   return (
     <div className="space-y-1">
       {fields.map((field, amountIndex) => (
-        <div key={field.id} className="flex items-center space-x-1">
+        <FlexContainer key={field.id} align="center" gap={1}>
           <AmountFieldGroup
             form={form}
             valuePath={`sections.${sectionIndex}.ingredients.${ingredientIndex}.amounts.${amountIndex}.value`}
@@ -54,7 +55,7 @@ export const AmountFieldArray: FC<AmountFieldArrayProps> = ({
           ) : (
             <div className="mt-5 w-9 flex-shrink-0" />
           )}
-        </div>
+        </FlexContainer>
       ))}
     </div>
   );
