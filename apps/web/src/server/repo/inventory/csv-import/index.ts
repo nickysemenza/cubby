@@ -29,6 +29,12 @@ import { buildLocationTypeContext } from "~/server/repo/location";
 import { processRow } from "./row-processor";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
+import {
+  createResultCounters,
+  incrementCounter,
+  buildImportResult,
+  pushErrorItem,
+} from "../csv-result-helpers";
 
 // Re-export utilities that may be used externally
 export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
@@ -54,13 +60,8 @@ export const importInventoryFromCSV = async (
   options: ImportOptions,
 ): Promise<CSVImportResult> => {
   const { dryRun = false, actor } = options;
-  const results: CSVImportResultItem[] = [];
-  let created = 0;
-  let moved = 0;
-  let updated = 0;
-  let skipped = 0;
-  let errors = 0;
-  let productOnly = 0;
+  const items: CSVImportResultItem[] = [];
+  const counters = createResultCounters();
 
   // Build location type context for inference across the batch
   const locationTypeContext = await buildLocationTypeContext(
@@ -72,23 +73,15 @@ export const importInventoryFromCSV = async (
   // Check for conflicting type specifications
   if (locationTypeContext.conflicts.length > 0) {
     for (const conflict of locationTypeContext.conflicts) {
-      results.push({
-        rowIndex: -1,
-        action: "error",
-        productName: "",
-        message: `Location type conflict for "${conflict.path}": specified as both ${conflict.types.join(" and ")}`,
-      });
-      errors++;
+      pushErrorItem(
+        items,
+        counters,
+        -1,
+        "",
+        `Location type conflict for "${conflict.path}": specified as both ${conflict.types.join(" and ")}`,
+      );
     }
-    return {
-      created,
-      moved,
-      updated,
-      skipped,
-      errors,
-      productOnly,
-      items: results,
-    };
+    return buildImportResult(counters, items);
   }
 
   // Process each row
@@ -101,7 +94,8 @@ export const importInventoryFromCSV = async (
         i,
       );
 
-      results.push(result);
+      items.push(result);
+      incrementCounter(counters, result.action);
 
       // Log audit entries for actual changes (not dry run)
       if (!dryRun && result.productId) {
@@ -134,28 +128,6 @@ export const importInventoryFromCSV = async (
           });
         }
       }
-
-      // Update counters
-      switch (result.action) {
-        case "created":
-          created++;
-          break;
-        case "moved":
-          moved++;
-          break;
-        case "updated":
-          updated++;
-          break;
-        case "skipped":
-          skipped++;
-          break;
-        case "product_only":
-          productOnly++;
-          break;
-        case "error":
-          errors++;
-          break;
-      }
     } catch (error) {
       // Extract meaningful error message from database errors
       let message = "Unknown error";
@@ -183,24 +155,16 @@ export const importInventoryFromCSV = async (
           message = error.message;
         }
       }
-      results.push({
-        rowIndex: i,
-        action: "error",
-        productName: row.product_name,
-        locationPath: row.location_path,
+      pushErrorItem(
+        items,
+        counters,
+        i,
+        row.product_name,
         message,
-      });
-      errors++;
+        row.location_path,
+      );
     }
   }
 
-  return {
-    created,
-    moved,
-    updated,
-    skipped,
-    errors,
-    productOnly,
-    items: results,
-  };
+  return buildImportResult(counters, items);
 };

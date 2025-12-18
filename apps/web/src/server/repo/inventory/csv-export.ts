@@ -1,5 +1,9 @@
 import { type Database } from "~/server/db";
-import { type OrganizationId, type LocationId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  type LocationId,
+  locationId as locationIdSchema,
+} from "~/schemas/identifiers";
 import { getDb } from "~/server/repo/database-helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { eq, and, notInArray } from "drizzle-orm";
@@ -67,6 +71,7 @@ export const exportInventoryToCSV = async (
         model: entry.Product.model ?? null,
         ndb_number: entry.Product.ndb_number ?? null,
         location_path: buildLocationPath(entry.location),
+        location_id: locationIdSchema.parse(entry.locationId),
         quantity: parsedAmount.value,
         unit: parsedAmount.unit,
         expected_qty: entry.Product.expectedQuantity,
@@ -112,6 +117,7 @@ export const exportInventoryToCSV = async (
         model: p.model ?? null,
         ndb_number: p.ndb_number ?? null,
         location_path: "", // Empty for product-only rows
+        location_id: null, // No location for product-only rows
         quantity: null, // No inventory
         unit: null, // No inventory
         expected_qty: p.expectedQuantity,

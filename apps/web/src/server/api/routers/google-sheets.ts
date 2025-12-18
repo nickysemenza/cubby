@@ -33,6 +33,11 @@ import { eq } from "drizzle-orm";
 import { getDb } from "~/server/repo/database-helpers";
 import { normalizeLocationPath } from "~/lib/location-path";
 import { toCSVString } from "~/lib/csv-utils";
+import {
+  createResultCounters,
+  buildImportResult,
+  pushResultItem,
+} from "~/server/repo/inventory/csv-result-helpers";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({
@@ -184,10 +189,7 @@ function compareInventoryForPush(
   sheetRows: InventoryCSVRow[],
 ): CSVImportResult {
   const items: CSVImportResultItem[] = [];
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-  let removed = 0;
+  const counters = createResultCounters();
 
   // Build a map of sheet rows by key
   const sheetMap = new Map<string, InventoryCSVRow>();
@@ -217,35 +219,32 @@ function compareInventoryForPush(
 
     if (!sheetRow) {
       // New row - doesn't exist in sheet
-      items.push({
+      pushResultItem(items, counters, "created", {
         rowIndex: i,
-        action: "created",
         productName: appRow.product_name,
         locationPath: appRow.location_path,
+        locationId: appRow.location_id ?? undefined,
         message: "Will be added to sheet",
       });
-      created++;
     } else {
       // Row exists - check if different
       const fieldChanges = getRowDifferences(appRow, sheetRow);
 
       if (fieldChanges.length > 0) {
-        items.push({
+        pushResultItem(items, counters, "updated", {
           rowIndex: i,
-          action: "updated",
           productName: appRow.product_name,
           locationPath: appRow.location_path,
+          locationId: appRow.location_id ?? undefined,
           fieldChanges,
         });
-        updated++;
       } else {
-        items.push({
+        pushResultItem(items, counters, "skipped", {
           rowIndex: i,
-          action: "skipped",
           productName: appRow.product_name,
           locationPath: appRow.location_path,
+          locationId: appRow.location_id ?? undefined,
         });
-        skipped++;
       }
     }
   }
@@ -253,27 +252,16 @@ function compareInventoryForPush(
   // Find rows in sheet that aren't in app (will be removed)
   for (const [key, sheetRow] of sheetMap) {
     if (!seenSheetKeys.has(key)) {
-      items.push({
+      pushResultItem(items, counters, "removed", {
         rowIndex: -1, // Not in app
-        action: "removed",
         productName: sheetRow.product_name,
         locationPath: sheetRow.location_path ?? undefined,
         message: "Will be removed from sheet",
       });
-      removed++;
     }
   }
 
-  return {
-    created,
-    moved: 0,
-    updated,
-    skipped,
-    errors: 0,
-    productOnly: 0,
-    removed,
-    items,
-  };
+  return buildImportResult(counters, items);
 }
 
 // Parse currency string to number (handles $, commas, etc.)

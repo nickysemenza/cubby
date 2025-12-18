@@ -34,6 +34,11 @@ import {
 } from "~/schemas/inventory";
 import { queryKeys } from "~/lib/query-keys";
 import { ValueChange } from "../value-change";
+import { NoneState } from "../NoneState";
+import { entities } from "~/entities/entities";
+
+// Action types that can be filtered
+type ActionType = CSVImportResultItem["action"];
 
 // Helper to get action styles
 const getActionStyles = (action: CSVImportResultItem["action"]) => {
@@ -85,6 +90,9 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
 
 type SyncMode = "push" | "pull";
 
+// Default hidden action types (skipped is hidden by default)
+const DEFAULT_HIDDEN_ACTIONS: Set<ActionType> = new Set(["skipped"]);
+
 export function GoogleSheetsSync() {
   const api = useTRPC();
   const queryClient = useQueryClient();
@@ -96,6 +104,23 @@ export function GoogleSheetsSync() {
   const [completedResult, setCompletedResult] =
     useState<CSVImportResult | null>(null);
   const [pushRowCount, setPushRowCount] = useState<number | null>(null);
+  // Track which action types are hidden (skipped is hidden by default)
+  const [hiddenActions, setHiddenActions] = useState<Set<ActionType>>(
+    () => new Set(DEFAULT_HIDDEN_ACTIONS),
+  );
+
+  // Toggle visibility of an action type
+  const toggleActionVisibility = (action: ActionType) => {
+    setHiddenActions((prev) => {
+      const next = new Set(prev);
+      if (next.has(action)) {
+        next.delete(action);
+      } else {
+        next.add(action);
+      }
+      return next;
+    });
+  };
 
   // Get connection status
   const { data: status, isLoading } = useQuery(
@@ -195,6 +220,7 @@ export function GoogleSheetsSync() {
     setPreviewResult(null);
     setCompletedResult(null);
     setPushRowCount(null);
+    setHiddenActions(new Set(DEFAULT_HIDDEN_ACTIONS));
   };
 
   // Don't render if not configured or loading
@@ -295,7 +321,7 @@ export function GoogleSheetsSync() {
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden">
-            {/* Summary counts */}
+            {/* Summary counts - click to toggle visibility */}
             {currentResult && (
               <div
                 className={`mb-4 grid gap-2 text-sm ${isPushMode ? "grid-cols-4" : "grid-cols-6"}`}
@@ -304,24 +330,32 @@ export function GoogleSheetsSync() {
                   count={currentResult.created}
                   label={isPushMode ? "Add" : "Create"}
                   color="green"
+                  isHidden={hiddenActions.has("created")}
+                  onClick={() => toggleActionVisibility("created")}
                 />
                 {!isPushMode && (
                   <SummaryCard
                     count={currentResult.moved}
                     label="Move"
                     color="yellow"
+                    isHidden={hiddenActions.has("moved")}
+                    onClick={() => toggleActionVisibility("moved")}
                   />
                 )}
                 <SummaryCard
                   count={currentResult.updated}
                   label="Update"
                   color="blue"
+                  isHidden={hiddenActions.has("updated")}
+                  onClick={() => toggleActionVisibility("updated")}
                 />
                 {isPushMode && (
                   <SummaryCard
                     count={currentResult.removed ?? 0}
                     label="Remove"
                     color="orange"
+                    isHidden={hiddenActions.has("removed")}
+                    onClick={() => toggleActionVisibility("removed")}
                   />
                 )}
                 {!isPushMode && (
@@ -329,18 +363,24 @@ export function GoogleSheetsSync() {
                     count={currentResult.productOnly}
                     label="Product"
                     color="purple"
+                    isHidden={hiddenActions.has("product_only")}
+                    onClick={() => toggleActionVisibility("product_only")}
                   />
                 )}
                 <SummaryCard
                   count={currentResult.skipped}
                   label="No change"
                   color="gray"
+                  isHidden={hiddenActions.has("skipped")}
+                  onClick={() => toggleActionVisibility("skipped")}
                 />
                 {!isPushMode && (
                   <SummaryCard
                     count={currentResult.errors}
                     label="Error"
                     color="red"
+                    isHidden={hiddenActions.has("error")}
+                    onClick={() => toggleActionVisibility("error")}
                   />
                 )}
               </div>
@@ -373,51 +413,60 @@ export function GoogleSheetsSync() {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentResult!.items.map((item, i) => {
-                      const styles = getActionStyles(item.action);
-                      return (
-                        <tr key={i} className="border-t">
-                          <td className="p-2">
-                            <span
-                              className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${styles.bg}`}
-                            >
-                              {styles.icon}
-                              {styles.label}
-                            </span>
-                          </td>
-                          <td className="p-2">{item.productName}</td>
-                          <td className="p-2">
-                            {item.locationPath ? (
-                              <div>{item.locationPath}</div>
-                            ) : (
-                              <span className="text-muted-foreground italic">
-                                No location
+                    {currentResult!.items
+                      .filter((item) => !hiddenActions.has(item.action))
+                      .map((item, i) => {
+                        const styles = getActionStyles(item.action);
+                        return (
+                          <tr key={i} className="border-t">
+                            <td className="p-2">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${styles.bg}`}
+                              >
+                                {styles.icon}
+                                {styles.label}
                               </span>
-                            )}
-                          </td>
-                          <td className="p-2">
-                            {item.fieldChanges &&
-                            item.fieldChanges.length > 0 ? (
-                              <div className="space-y-0.5">
-                                {item.fieldChanges.map((change, j) => (
-                                  <div key={j}>
-                                    <ValueChange
-                                      label={change.field}
-                                      from={change.from}
-                                      to={change.to}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            ) : item.message ? (
-                              <span className="text-muted-foreground text-xs">
-                                {item.message}
-                              </span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            </td>
+                            <td className="p-2">{item.productName}</td>
+                            <td className="p-2">
+                              {item.locationPath ? (
+                                item.locationId ? (
+                                  <Link
+                                    href={`/${entities.location.basePath}/${item.locationId}`}
+                                    className="text-primary hover:underline"
+                                  >
+                                    {item.locationPath}
+                                  </Link>
+                                ) : (
+                                  <div>{item.locationPath}</div>
+                                )
+                              ) : (
+                                <NoneState />
+                              )}
+                            </td>
+                            <td className="p-2">
+                              {item.fieldChanges &&
+                              item.fieldChanges.length > 0 ? (
+                                <div className="space-y-0.5">
+                                  {item.fieldChanges.map((change, j) => (
+                                    <div key={j}>
+                                      <ValueChange
+                                        label={change.field}
+                                        from={change.from}
+                                        to={change.to}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : item.message ? (
+                                <span className="text-muted-foreground text-xs">
+                                  {item.message}
+                                </span>
+                              ) : null}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
                 </table>
               </div>
@@ -477,10 +526,14 @@ function SummaryCard({
   count,
   label,
   color,
+  isHidden,
+  onClick,
 }: {
   count: number;
   label: string;
   color: "green" | "yellow" | "blue" | "purple" | "gray" | "red" | "orange";
+  isHidden?: boolean;
+  onClick?: () => void;
 }) {
   const colorClasses = {
     green: "bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400",
@@ -496,9 +549,22 @@ function SummaryCard({
   };
 
   return (
-    <div className={`rounded border p-2 text-center ${colorClasses[color]}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded border p-2 text-center transition-opacity ${colorClasses[color]} ${
+        onClick ? "cursor-pointer hover:ring-2 hover:ring-offset-1" : ""
+      } ${isHidden ? "opacity-40" : ""}`}
+      title={
+        onClick
+          ? isHidden
+            ? `Show ${label.toLowerCase()} items`
+            : `Hide ${label.toLowerCase()} items`
+          : undefined
+      }
+    >
       <div className="text-lg font-bold">{count}</div>
       <div className="text-xs opacity-70">{label}</div>
-    </div>
+    </button>
   );
 }

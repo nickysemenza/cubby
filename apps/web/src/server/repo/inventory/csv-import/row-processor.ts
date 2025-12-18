@@ -274,6 +274,7 @@ export const processRow = async (
       action: "created",
       productName: row.product_name,
       locationPath: row.location_path,
+      locationId: targetLocationId ?? undefined,
       fieldChanges: buildFieldChanges(productChanges),
       productWillBeCreated: true,
       locationWillBeCreated,
@@ -304,6 +305,7 @@ export const processRow = async (
             action: "moved",
             productName: row.product_name,
             locationPath: row.location_path,
+            locationId: undefined, // Location will be created
             movedFrom: existingLocations,
             message: `Will move from ${existingLocations.join(", ")}`,
             fieldChanges: buildFieldChanges(productChanges),
@@ -324,6 +326,7 @@ export const processRow = async (
       action: "created",
       productName: row.product_name,
       locationPath: row.location_path,
+      locationId: undefined, // Location will be created
       fieldChanges: buildFieldChanges(productChanges),
       productWillBeCreated,
       locationWillBeCreated: true,
@@ -373,6 +376,7 @@ export const processRow = async (
         action: "moved",
         productName: row.product_name,
         locationPath: row.location_path,
+        locationId: targetLocationId,
         movedFrom: existingLocations,
         message: `Will move from ${existingLocations.join(", ")}`,
         fieldChanges: buildFieldChanges(productChanges),
@@ -398,6 +402,7 @@ export const processRow = async (
           productId: productData.id,
           upc: row.upc,
           locationPath: row.location_path,
+          locationId: targetLocationId,
           movedFrom: fromLocations,
           message: `Moved from ${fromLocations.join(", ")}`,
         };
@@ -415,6 +420,7 @@ export const processRow = async (
         action: productFieldChanges ? "updated" : "skipped",
         productName: row.product_name,
         locationPath: row.location_path,
+        locationId: targetLocationId,
         message: productFieldChanges
           ? undefined
           : "Already exists with same quantity",
@@ -442,6 +448,7 @@ export const processRow = async (
         action: "updated",
         productName: row.product_name,
         locationPath: row.location_path,
+        locationId: targetLocationId,
         fieldChanges: buildFieldChanges(productChanges, inventoryFieldChanges),
         productWillBeCreated,
         locationWillBeCreated,
@@ -454,6 +461,7 @@ export const processRow = async (
         action: "created",
         productName: row.product_name,
         locationPath: row.location_path,
+        locationId: targetLocationId,
         fieldChanges: buildFieldChanges(productChanges),
         productWillBeCreated,
         locationWillBeCreated,
@@ -471,6 +479,7 @@ export const processRow = async (
         productId: productData.id,
         upc: row.upc,
         locationPath: row.location_path,
+        locationId: targetLocationId,
         message: "Already exists with same quantity",
       };
     } else {
@@ -490,6 +499,7 @@ export const processRow = async (
           productId: productData.id,
           upc: row.upc,
           locationPath: row.location_path,
+          locationId: targetLocationId,
           message: "Updated existing entry quantity",
         };
       } else {
@@ -500,6 +510,7 @@ export const processRow = async (
           productId: productData.id,
           upc: row.upc,
           locationPath: row.location_path,
+          locationId: targetLocationId,
         };
       }
     }

@@ -161,6 +161,7 @@ export const csvImportResultItem = z.object({
   productId: z.string().optional(), // Product ID for image import
   upc: z.string().optional(), // UPC code for image import
   locationPath: z.string().optional(), // Optional for product-only rows
+  locationId: locationId.optional(), // Location ID for linking to location page
   message: z.string().optional(),
   fieldChanges: z.array(fieldChange).optional(), // Structured field changes for display
   // Preview fields
