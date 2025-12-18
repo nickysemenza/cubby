@@ -2,7 +2,7 @@
 /*
   ---break---
 */
-@plugin 'tailwindcss-animate';
+@plugin "tailwindcss-animate";
 /*
   ---break---
 */
@@ -227,5 +227,31 @@
   .terminal .container {
     padding-left: 0.25rem; /* 4px */
     padding-right: 0.25rem; /* 4px */
+  }
+}
+
+/*
+  ---break---
+  Component utility classes - extracted from long inline classNames
+*/
+@layer components {
+  /* Animate popover/dropdown - shared animation for popover, dropdown, select, context-menu */
+  .animate-popover {
+    @apply data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2;
+  }
+
+  /* SVG child defaults - consistent SVG styling in interactive elements */
+  .svg-child-defaults {
+    @apply [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  /* Menu item base - shared styles for dropdown/select/context menu items */
+  .menu-item-base {
+    @apply focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50;
+  }
+
+  /* Command dialog cmdk child selectors */
+  .command-dialog-styles {
+    @apply [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 }

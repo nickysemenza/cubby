@@ -92,7 +92,7 @@ export function BarcodeScannerButton({
 
           <div className="space-y-4">
             {error ? (
-              <div className="rounded border border-red-200 bg-red-50 p-4 text-red-700">
+              <div className="rounded border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
                 <p className="font-medium">Camera Error</p>
                 <p className="text-sm">{error}</p>
                 <Button

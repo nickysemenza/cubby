@@ -17,7 +17,7 @@ export function ErrorDisplay({ error, className }: ErrorDisplayProps) {
   return (
     <div
       role="alert"
-      className={`flex items-center justify-center gap-2 text-red-600 ${className || ""}`}
+      className={`text-destructive flex items-center justify-center gap-2 ${className || ""}`}
     >
       <AlertCircle className="h-4 w-4" aria-hidden="true" />
       {code === "UNAUTHORIZED" ? (

@@ -23,8 +23,14 @@ export const flexContainerVariants = cva("flex", {
       0: "gap-0",
       1: "gap-1",
       2: "gap-2",
+      3: "gap-3",
       4: "gap-4",
       6: "gap-6",
+      8: "gap-8",
+    },
+    wrap: {
+      true: "flex-wrap",
+      false: "flex-nowrap",
     },
   },
   defaultVariants: {
@@ -50,8 +56,10 @@ export const gridContainerVariants = cva("grid", {
       0: "gap-0",
       1: "gap-1",
       2: "gap-2",
+      3: "gap-3",
       4: "gap-4",
       6: "gap-6",
+      8: "gap-8",
     },
   },
   defaultVariants: {
@@ -65,9 +73,11 @@ export const spacedContainerVariants = cva("", {
     space: {
       0: "space-y-0",
       1: "space-y-1",
-      2: "space-y-1",
-      4: "space-y-2",
-      6: "space-y-3",
+      2: "space-y-2",
+      3: "space-y-3",
+      4: "space-y-4",
+      6: "space-y-6",
+      8: "space-y-8",
     },
   },
   defaultVariants: {
