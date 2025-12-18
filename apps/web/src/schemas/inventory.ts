@@ -155,10 +155,11 @@ export const csvImportResultItem = z.object({
     "skipped",
     "error",
     "product_only",
-    "removed", // For push preview: row exists in sheet but not in app
+    "removed", // For pull: exists in app but not in sheet; for push: exists in sheet but not in app
   ]),
   productName: z.string(),
   productId: z.string().optional(), // Product ID for image import
+  inventoryEntryId: inventoryId.optional(), // Inventory entry ID for deletion during pull
   upc: z.string().optional(), // UPC code for image import
   locationPath: z.string().optional(), // Optional for product-only rows
   locationId: locationId.optional(), // Location ID for linking to location page

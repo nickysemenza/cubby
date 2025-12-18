@@ -3,6 +3,8 @@ import {
   type OrganizationId,
   type LocationId,
   locationId as locationIdSchema,
+  inventoryId as inventoryIdSchema,
+  productId as productIdSchema,
 } from "~/schemas/identifiers";
 import { getDb } from "~/server/repo/database-helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
@@ -72,6 +74,8 @@ export const exportInventoryToCSV = async (
         ndb_number: entry.Product.ndb_number ?? null,
         location_path: buildLocationPath(entry.location),
         location_id: locationIdSchema.parse(entry.locationId),
+        inventory_entry_id: inventoryIdSchema.parse(entry.id),
+        product_id: productIdSchema.parse(entry.productId),
         quantity: parsedAmount.value,
         unit: parsedAmount.unit,
         expected_qty: entry.Product.expectedQuantity,
@@ -118,6 +122,8 @@ export const exportInventoryToCSV = async (
         ndb_number: p.ndb_number ?? null,
         location_path: "", // Empty for product-only rows
         location_id: null, // No location for product-only rows
+        inventory_entry_id: null, // No inventory entry for product-only rows
+        product_id: productIdSchema.parse(p.id),
         quantity: null, // No inventory
         unit: null, // No inventory
         expected_qty: p.expectedQuantity,

@@ -7,7 +7,11 @@ import {
   image,
 } from "~/server/db/schema";
 import { type Amount } from "~/codec/codec";
-import { type ProductId, type LocationId } from "~/schemas/identifiers";
+import {
+  type ProductId,
+  type LocationId,
+  type InventoryId,
+} from "~/schemas/identifiers";
 
 export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   Product: typeof product.$inferSelect & {
@@ -43,6 +47,8 @@ export interface InventoryCSVExportRow {
   ndb_number: number | null;
   location_path: string; // empty string for product-only rows
   location_id: LocationId | null; // null for product-only rows
+  inventory_entry_id: InventoryId | null; // null for product-only rows (used for deletion)
+  product_id: ProductId; // used for deletion lookup
   quantity: number | null; // null for product-only rows
   unit: string | null; // null for product-only rows
   expected_qty: number | null;

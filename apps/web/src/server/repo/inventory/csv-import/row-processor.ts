@@ -226,20 +226,35 @@ export const processRow = async (
 
   // Handle product-only rows (no inventory placement)
   if (isProductOnly) {
+    const hasProductChanges = Object.keys(productChanges).length > 0;
+    // In dry-run mode, skip if product already exists with no changes
+    // (productWillBeCreated and productChanges are only populated during dry-run)
+    const shouldSkip = dryRun && !productWillBeCreated && !hasProductChanges;
+
+    // Only show message when there are no field changes to display
+    // (field changes are more informative than a generic message)
+    const fieldChanges = buildFieldChanges(productChanges);
+    const message = shouldSkip
+      ? "Product already exists with no changes"
+      : productWillBeCreated
+        ? "New product"
+        : fieldChanges
+          ? undefined // Let the diff speak for itself
+          : dryRun
+            ? "Product already exists"
+            : undefined; // Non-dryRun doesn't need message
+
     return {
       rowIndex,
-      action: "product_only",
+      action: shouldSkip ? "skipped" : "product_only",
       productName: row.product_name,
       productId: productData?.id,
       upc: row.upc,
       locationPath: undefined,
-      message: productWillBeCreated
-        ? "Product will be created"
-        : "Product already exists",
-      fieldChanges: buildFieldChanges(productChanges),
+      message,
+      fieldChanges,
       productWillBeCreated,
-      productChanges:
-        Object.keys(productChanges).length > 0 ? productChanges : undefined,
+      productChanges: hasProductChanges ? productChanges : undefined,
     };
   }
 

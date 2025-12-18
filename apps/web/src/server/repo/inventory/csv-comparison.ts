@@ -18,6 +18,7 @@ import {
   buildImportResult,
   pushResultItem,
 } from "./csv-result-helpers";
+import { type InventoryId } from "~/schemas/identifiers";
 
 /**
  * Create a unique key for inventory comparison (product + manufacturer + location)
@@ -245,4 +246,116 @@ export function exportRowToImportRow(
     ingredient_name: row.ingredient_name ?? undefined,
     aliases: row.aliases ?? undefined,
   };
+}
+
+import { type ProductId } from "~/schemas/identifiers";
+
+/**
+ * Removed item with inventory entry ID or product ID for deletion
+ */
+export interface RemovedInventoryItem extends CSVImportResultItem {
+  action: "removed";
+  inventoryEntryId?: InventoryId;
+  productIdToDelete?: ProductId; // For products completely removed from sheet
+}
+
+/**
+ * Create a unique key for product comparison (product + manufacturer, no location)
+ */
+function makeProductKey(productName: string, manufacturer: string): string {
+  return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}`;
+}
+
+/**
+ * Find items that exist in app but not in sheet (deleted from sheet)
+ *
+ * Used by pull preview to show what would be deleted, and by apply pull
+ * to actually delete the entries.
+ *
+ * Deletion rules:
+ * 1. If a product is completely removed from sheet (no rows reference it) → delete the product
+ * 2. If only an inventory entry is removed (product still exists in sheet) → delete only the inventory entry
+ */
+export function findRemovedInventoryForPull(
+  appRows: InventoryCSVExportRow[],
+  sheetRows: InventoryCSVRow[],
+): RemovedInventoryItem[] {
+  const removedItems: RemovedInventoryItem[] = [];
+
+  // Build sets of keys from sheet rows
+  const sheetInventoryKeys = new Set<string>(); // For inventory rows
+  const sheetProductKeys = new Set<string>(); // For all products (inventory + product-only)
+
+  for (const row of sheetRows) {
+    const productKey = makeProductKey(
+      row.product_name,
+      row.manufacturer ?? "(unspecified)",
+    );
+    sheetProductKeys.add(productKey);
+
+    if (row.location_path && row.location_path.trim() !== "") {
+      const inventoryKey = makeInventoryKey(
+        row.product_name,
+        row.manufacturer ?? "(unspecified)",
+        row.location_path,
+      );
+      sheetInventoryKeys.add(inventoryKey);
+    }
+  }
+
+  // Track which products we've already marked for deletion
+  const productsToDelete = new Set<string>();
+
+  // First pass: identify products that should be completely deleted
+  // (products that have no presence in the sheet at all)
+  for (const appRow of appRows) {
+    const productKey = makeProductKey(appRow.product_name, appRow.manufacturer);
+
+    if (
+      !sheetProductKeys.has(productKey) &&
+      !productsToDelete.has(productKey)
+    ) {
+      productsToDelete.add(productKey);
+      removedItems.push({
+        rowIndex: -1,
+        action: "removed",
+        productName: appRow.product_name,
+        productIdToDelete: appRow.product_id,
+        message: "Product will be deleted (removed from sheet)",
+      });
+    }
+  }
+
+  // Second pass: identify inventory entries to delete
+  // (only for products that still exist in the sheet)
+  for (const appRow of appRows) {
+    const isProductOnly =
+      !appRow.location_path || appRow.location_path.trim() === "";
+    if (isProductOnly) continue; // Product-only rows handled above
+
+    const productKey = makeProductKey(appRow.product_name, appRow.manufacturer);
+
+    // Skip if product is being deleted entirely
+    if (productsToDelete.has(productKey)) continue;
+
+    const inventoryKey = makeInventoryKey(
+      appRow.product_name,
+      appRow.manufacturer,
+      appRow.location_path,
+    );
+
+    if (!sheetInventoryKeys.has(inventoryKey)) {
+      removedItems.push({
+        rowIndex: -1,
+        action: "removed",
+        productName: appRow.product_name,
+        locationPath: appRow.location_path,
+        locationId: appRow.location_id ?? undefined,
+        inventoryEntryId: appRow.inventory_entry_id ?? undefined,
+        message: "Inventory entry will be deleted (removed from sheet)",
+      });
+    }
+  }
+
+  return removedItems;
 }

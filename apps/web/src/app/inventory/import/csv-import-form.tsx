@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { Label } from "~/components/ui/label";
@@ -531,7 +532,18 @@ export default function CSVImportForm() {
                           {styles.label}
                         </span>
                       </td>
-                      <td className="p-2">{item.productName}</td>
+                      <td className="p-2">
+                        {item.productId ? (
+                          <Link
+                            href={`/${entities.product.basePath}/${item.productId}`}
+                            className="text-primary hover:underline"
+                          >
+                            {item.productName}
+                          </Link>
+                        ) : (
+                          item.productName
+                        )}
+                      </td>
                       <td className="p-2">
                         {item.locationPath ? (
                           <div>{item.locationPath}</div>
@@ -687,7 +699,18 @@ export default function CSVImportForm() {
                         </span>
                       </td>
                       <td className="p-2">
-                        <div>{item.productName}</div>
+                        <div>
+                          {item.productId ? (
+                            <Link
+                              href={`/${entities.product.basePath}/${item.productId}`}
+                              className="text-primary hover:underline"
+                            >
+                              {item.productName}
+                            </Link>
+                          ) : (
+                            item.productName
+                          )}
+                        </div>
                         <ProductChangesPreview item={item} />
                       </td>
                       <td className="p-2">

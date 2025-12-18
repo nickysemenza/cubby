@@ -30,7 +30,12 @@ import { organization } from "~/server/db/auth.schema";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/server/repo/database-helpers";
 import { toCSVString } from "~/lib/csv-utils";
-import { compareInventoryForPush } from "~/server/repo/inventory/csv-comparison";
+import {
+  compareInventoryForPush,
+  findRemovedInventoryForPull,
+} from "~/server/repo/inventory/csv-comparison";
+import { deleteInventoryEntry } from "~/server/repo/inventory";
+import { deleteProduct } from "~/server/repo/product";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({
@@ -438,7 +443,15 @@ const pullFromSheet = protectedProcedure
     const { rows: parsedRows, errors: parseErrors } = parseSheetRows(sheetData);
     const errorItems = parseErrorsToItems(parseErrors);
 
-    if (parsedRows.length === 0 && errorItems.length === 0) {
+    // Get current app inventory to detect deletions
+    const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
+    const removedItems = findRemovedInventoryForPull(appRows, parsedRows);
+
+    if (
+      parsedRows.length === 0 &&
+      errorItems.length === 0 &&
+      removedItems.length === 0
+    ) {
       return EMPTY_IMPORT_RESULT;
     }
 
@@ -453,7 +466,13 @@ const pullFromSheet = protectedProcedure
       },
     );
 
-    return mergeResultWithErrors(result, errorItems);
+    // Add removed items to result
+    const mergedResult = mergeResultWithErrors(result, errorItems);
+    return {
+      ...mergedResult,
+      removed: (mergedResult.removed ?? 0) + removedItems.length,
+      items: [...mergedResult.items, ...removedItems],
+    };
   });
 
 // Apply pull from Google Sheet
@@ -468,7 +487,15 @@ const applyPull = protectedProcedure
     const { rows: parsedRows, errors: parseErrors } = parseSheetRows(sheetData);
     const errorItems = parseErrorsToItems(parseErrors);
 
-    if (parsedRows.length === 0 && errorItems.length === 0) {
+    // Get current app inventory to detect deletions
+    const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
+    const removedItems = findRemovedInventoryForPull(appRows, parsedRows);
+
+    if (
+      parsedRows.length === 0 &&
+      errorItems.length === 0 &&
+      removedItems.length === 0
+    ) {
       return EMPTY_IMPORT_RESULT;
     }
 
@@ -483,8 +510,32 @@ const applyPull = protectedProcedure
       },
     );
 
+    // Delete inventory entries and products that were removed from the sheet
+    for (const item of removedItems) {
+      if (item.inventoryEntryId) {
+        // Delete inventory entry (product with location was removed)
+        await deleteInventoryEntry(ctx.db, item.inventoryEntryId, {
+          ...actor,
+          source: "sheets_import",
+        });
+      } else if (item.productIdToDelete) {
+        // Delete product (product-only row was removed)
+        await deleteProduct(ctx.db, item.productIdToDelete, {
+          ...actor,
+          source: "sheets_import",
+        });
+      }
+    }
+
     await updateLastSyncTimestamp(ctx, orgMetadata);
-    return mergeResultWithErrors(result, errorItems);
+
+    // Add removed items to result
+    const mergedResult = mergeResultWithErrors(result, errorItems);
+    return {
+      ...mergedResult,
+      removed: (mergedResult.removed ?? 0) + removedItems.length,
+      items: [...mergedResult.items, ...removedItems],
+    };
   });
 
 // Debug endpoint - returns raw sheet data for troubleshooting

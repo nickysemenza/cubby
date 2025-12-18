@@ -719,3 +719,31 @@ export const findDuplicateUniqueProducts = async (
 
   return duplicates.filter((prod) => prod.InventoryEntry.length > 1);
 };
+
+/**
+ * Delete a product by ID
+ *
+ * This will also cascade delete:
+ * - Associated inventory entries
+ * - Associated unit mappings
+ * - Associated images (product_image join table)
+ */
+export const deleteProduct = async (
+  db: Database,
+  id: ProductId,
+  actor: ActorContext,
+): Promise<void> => {
+  const { organizationId } = actor;
+
+  // Delete the product (cascades will handle related records)
+  await getDb(db)
+    .delete(product)
+    .where(and(eq(product.id, id), eq(product.organizationId, organizationId)));
+
+  // Log audit entry
+  await logAuditEntry(db, actor, {
+    entityType: "product",
+    entityId: id,
+    action: "delete",
+  });
+};

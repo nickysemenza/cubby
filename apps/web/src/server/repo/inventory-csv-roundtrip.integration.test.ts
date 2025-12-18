@@ -189,8 +189,9 @@ describe("CSV round-trip tests", () => {
         },
       );
 
-      // Product-only row should be detected as existing product
-      expect(result.productOnly).toBe(1);
+      // Product-only row with no changes should be skipped
+      expect(result.skipped).toBe(1);
+      expect(result.productOnly).toBe(0);
       expect(result.errors).toBe(0);
     });
   });

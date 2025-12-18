@@ -38,6 +38,18 @@ export const parseAliasesString = (
 };
 
 /**
+ * Find aliases that are new (don't exist in current set)
+ * Comparison is case-insensitive
+ */
+export const findNewAliases = (
+  newAliases: string[],
+  existingAliases: string[],
+): string[] => {
+  const existingLower = new Set(existingAliases.map((a) => a.toLowerCase()));
+  return newAliases.filter((a) => !existingLower.has(a.toLowerCase()));
+};
+
+/**
  * Find or create a product for CSV import
  *
  * Handles:
@@ -309,23 +321,32 @@ export const previewProductForImport = async (
     productChanges.ndbNumberCurrent = existingProduct.ndb_number;
   }
 
-  // Check ingredient linking
+  // Check ingredient linking and aliases
   if (effectiveIngredientName) {
     const productWithIngredient = await getDb(db).query.product.findFirst({
       where: eq(product.id, existingProduct.id),
       columns: { ingredientId: true },
-      with: { Ingredient: { columns: { name: true } } },
+      with: { Ingredient: { columns: { name: true, aliases: true } } },
     });
+
+    // Only set ingredient change if it's not already linked
     if (productWithIngredient?.ingredientId == null) {
       productChanges.ingredientWillBeLinked = effectiveIngredientName;
+      // Only set current when there's a change to show
+      productChanges.ingredientCurrent = null;
     }
-    productChanges.ingredientCurrent =
-      productWithIngredient?.Ingredient?.name ?? null;
-  }
 
-  // Aliases will be added to ingredient if it's being linked
-  if (aliases.length > 0 && effectiveIngredientName) {
-    productChanges.aliasesWillBeAdded = aliases;
+    // Check for new aliases - only show aliases that don't already exist
+    if (aliases.length > 0) {
+      const existingAliases = productWithIngredient?.Ingredient?.aliases ?? [];
+      const newAliases = findNewAliases(aliases, existingAliases);
+
+      if (newAliases.length > 0) {
+        productChanges.aliasesWillBeAdded = newAliases;
+        productChanges.aliasesCurrent =
+          existingAliases.length > 0 ? existingAliases : undefined;
+      }
+    }
   }
 
   return {

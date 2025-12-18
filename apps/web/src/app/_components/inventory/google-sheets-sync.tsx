@@ -427,7 +427,18 @@ export function GoogleSheetsSync() {
                                 {styles.label}
                               </span>
                             </td>
-                            <td className="p-2">{item.productName}</td>
+                            <td className="p-2">
+                              {item.productId ? (
+                                <Link
+                                  href={`/${entities.product.basePath}/${item.productId}`}
+                                  className="text-primary hover:underline"
+                                >
+                                  {item.productName}
+                                </Link>
+                              ) : (
+                                item.productName
+                              )}
+                            </td>
                             <td className="p-2">
                               {item.locationPath ? (
                                 item.locationId ? (
