@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import { type LocationId, type InventoryId } from "~/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import { getOptionalLocationId } from "~/schemas/form-fields";
 import { type BulkMoveItem } from "~/schemas/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { Form } from "~/components/ui/form";
@@ -105,7 +106,7 @@ export function MoveInventoryDialog({
 
     await bulkMoveMutation.mutateAsync({
       sourceLocationId,
-      targetLocationId: values.targetLocation.id as LocationId,
+      targetLocationId: getOptionalLocationId(values.targetLocation)!,
       items: moveItems,
     });
   };

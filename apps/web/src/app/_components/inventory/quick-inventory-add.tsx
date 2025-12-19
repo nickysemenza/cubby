@@ -20,10 +20,11 @@ import { useTRPC } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { type ProductId, type LocationId } from "~/schemas/identifiers";
+import { type LocationId } from "~/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { ComboboxItem } from "../combobox/combobox-types";
+import { getOptionalProductId } from "~/schemas/form-fields";
 import { AmountFieldGroup } from "./amount-field-group";
 import { Form } from "~/components/ui/form";
 import { amount } from "~/codec/codec";
@@ -71,7 +72,7 @@ export function QuickInventoryAdd({
 
   const onSubmit = async (values: FormValues) => {
     await createMutation.mutateAsync({
-      productId: values.product!.id as ProductId,
+      productId: getOptionalProductId(values.product)!,
       locationId,
       amount: values.amount,
     });

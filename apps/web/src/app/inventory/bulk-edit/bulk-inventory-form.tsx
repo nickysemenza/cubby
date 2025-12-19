@@ -12,7 +12,6 @@ import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
-import { type LocationId, type ProductId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
@@ -27,6 +26,8 @@ import {
   requiredProductField,
   requiredLocationField,
   amountField,
+  getProductId,
+  getLocationId,
 } from "~/schemas/form-fields";
 
 // Schema for a single inventory item using shared field schemas
@@ -172,19 +173,20 @@ export default function BulkInventoryForm() {
           item.amount.value !== null &&
           item.amount.unit !== "",
       );
+      const locationId = getLocationId(location);
       const processItems: InventoryBulkOperationItem[] = validItems.map(
         (item) => {
           const res: InventoryBulkOperationItem = {
-            locationId: location.id as LocationId,
+            locationId,
             ...(item.id && { id: item.id }),
-            productId: item.product.id as ProductId,
+            productId: getProductId(item.product),
             amount: item.amount,
           };
           return res;
         },
       );
       await bulkProcessMutation.mutateAsync({
-        locationId: location.id as LocationId,
+        locationId,
         items: processItems,
       });
       toast.success(`Successfully updated inventory for ${location.name}`);

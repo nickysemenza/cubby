@@ -25,7 +25,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { ArrowRight, Package } from "lucide-react";
 import { toast } from "sonner";
-import { type LocationId, type InventoryId } from "~/schemas/identifiers";
+import { type InventoryId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -33,6 +33,7 @@ import {
   ComboboxFieldWithSearch,
   FormWrapper,
 } from "~/app/_components/form-utils";
+import { getLocationId } from "~/schemas/form-fields";
 import { type BulkMoveItem } from "~/schemas/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 
@@ -216,8 +217,8 @@ export default function BulkMoveForm() {
       }));
 
       await bulkMoveMutation.mutateAsync({
-        sourceLocationId: values.sourceLocation.id as LocationId,
-        targetLocationId: values.targetLocation.id as LocationId,
+        sourceLocationId: getLocationId(values.sourceLocation),
+        targetLocationId: getLocationId(values.targetLocation),
         items,
       });
 

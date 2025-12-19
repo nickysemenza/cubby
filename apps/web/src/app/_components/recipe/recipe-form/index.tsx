@@ -31,14 +31,18 @@ import {
 } from "~/schemas/recipe";
 import { PendingImageUpload } from "../../PendingImageUpload";
 import { z } from "zod";
-import { IngredientId, RecipeId } from "~/schemas/identifiers";
+import { type RecipeId } from "~/schemas/identifiers";
+import {
+  getOptionalIngredientId,
+  getOptionalRecipeId,
+} from "~/schemas/form-fields";
 
 // Helper function to map any ingredient type to the correct API format
 const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
   if (ing.type === "ingredient" && ing.ingredient) {
     return {
       type: "ingredient",
-      ingredientId: ing.ingredient.id as IngredientId,
+      ingredientId: getOptionalIngredientId(ing.ingredient)!,
       recipeId: null,
       amounts: ing.amounts,
       id: ing.id,
@@ -46,7 +50,7 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
   } else if (ing.type === "recipe" && ing.recipe) {
     return {
       type: "recipe",
-      recipeId: ing.recipe.id as RecipeId,
+      recipeId: getOptionalRecipeId(ing.recipe)!,
       ingredientId: null,
       amounts: ing.amounts,
       id: ing.id,

@@ -26,6 +26,7 @@ import {
   detectComboboxIdChange,
   NullableNumericField,
 } from "../form-utils";
+import { getOptionalIngredientId } from "~/schemas/form-fields";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { ArrayFieldManager } from "~/components/ui/array-field-manager";
@@ -192,7 +193,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         upc: values.upc,
         ndb_number: values.ndb_number,
         expectedQuantity: values.expectedQuantity,
-        ingredientId: (values.ingredient?.id as IngredientId) ?? null,
+        ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
         unitMappings: unitMappingsWithPrice,
         ...getImageData(true), // Apply pending images for creation
       };
@@ -216,13 +217,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       );
 
       // Check for ingredient changes
-      const ingredientId = detectComboboxIdChange(
+      const ingredientId = detectComboboxIdChange<IngredientId>(
         product.ingredient ? product.ingredient.id : null,
         values.ingredient,
       );
 
       if (ingredientId !== undefined) {
-        updates.ingredientId = ingredientId as IngredientId | null;
+        updates.ingredientId = ingredientId;
       }
 
       // Check for unit mapping changes (including price sync)

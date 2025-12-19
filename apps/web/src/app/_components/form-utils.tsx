@@ -295,22 +295,22 @@ export function buildUpdateObject<
 
 // Helper to extract ID from a ComboboxItem if different from entity
 // Generic version that preserves ID type branding
-// Accepts either branded or unbranded entity ID for flexibility with DB data
+// Accepts either branded or unbranded combobox items for flexibility with form values
 export function detectComboboxIdChange<TId extends string>(
   entityId: TId | string | undefined | null,
-  comboboxItem: ComboboxItem<TId> | null | undefined,
+  comboboxItem: ComboboxItem | null | undefined,
 ): TId | null | undefined {
   if (entityId === null && !comboboxItem) {
     return undefined; // No change if both are null/empty
   }
   if (entityId === null && comboboxItem) {
-    return comboboxItem.id; // Set new ID if entity was null
+    return comboboxItem.id as TId; // Set new ID if entity was null
   }
   if (entityId !== null && !comboboxItem) {
     return null; // Set to null if removing association
   }
   if (comboboxItem && comboboxItem.id !== entityId) {
-    return comboboxItem.id; // Change ID if different
+    return comboboxItem.id as TId; // Change ID if different
   }
   return undefined; // No change
 }

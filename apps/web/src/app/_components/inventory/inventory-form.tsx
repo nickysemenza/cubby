@@ -27,6 +27,8 @@ import {
   requiredProductField,
   requiredLocationField,
   amountField,
+  getProductId,
+  getLocationId,
 } from "~/schemas/form-fields";
 
 // Form schema using shared field schemas
@@ -80,8 +82,8 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     const amount = values.amount;
     if (mode === "create") {
       const createData: z.infer<typeof inventoryCreatePayloadData> = {
-        productId: values.product!.id as ProductId,
-        locationId: values.location!.id as LocationId,
+        productId: getProductId(values.product),
+        locationId: getLocationId(values.location),
         amount,
       };
       props.onCreate(createData);
@@ -93,19 +95,19 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       ) {
         updates.amount = amount;
       }
-      const productIdChange = detectComboboxIdChange(
+      const productIdChange = detectComboboxIdChange<ProductId>(
         inventoryItem.product.id,
         values.product,
       );
       if (productIdChange) {
-        updates.productId = productIdChange as ProductId;
+        updates.productId = productIdChange;
       }
-      const locationIdChange = detectComboboxIdChange(
+      const locationIdChange = detectComboboxIdChange<LocationId>(
         inventoryItem.location.id,
         values.location,
       );
       if (locationIdChange) {
-        updates.locationId = locationIdChange as LocationId;
+        updates.locationId = locationIdChange;
       }
       if (Object.keys(updates).length > 0) {
         const updateData: InventoryUpdateInput = {

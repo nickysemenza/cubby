@@ -28,6 +28,7 @@ import {
 import { PendingImageUpload } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
+import { getOptionalLocationId } from "~/schemas/form-fields";
 
 // Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({
@@ -90,7 +91,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       const createData: LocationCreateInput = {
         name: values.name,
         type: values.type,
-        parentId: (values.parent?.id as LocationId) ?? null,
+        parentId: getOptionalLocationId(values.parent) ?? null,
         ...getImageData(true), // Apply pending images for creation
       };
 
@@ -104,12 +105,12 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       );
 
       // Check if parent has changed (combobox requires special handling)
-      const parentIdChange = detectComboboxIdChange(
+      const parentIdChange = detectComboboxIdChange<LocationId>(
         location.parent?.id,
         values.parent,
       );
       if (parentIdChange !== undefined) {
-        updates.parentId = parentIdChange as LocationId | null;
+        updates.parentId = parentIdChange;
       }
 
       // Check if we have any changes (field changes or image changes)

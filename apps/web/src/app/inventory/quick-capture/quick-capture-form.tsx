@@ -28,7 +28,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { X, Plus, ChevronDown, ChevronUp, Package } from "lucide-react";
 import { toast } from "sonner";
-import { type LocationId, type ProductId } from "~/schemas/identifiers";
+import { type ProductId } from "~/schemas/identifiers";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   ComboboxFieldWithSearch,
@@ -45,7 +45,12 @@ import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadc
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { ProductPillLink } from "~/app/_components/EntityPill";
 import { type InfLocation } from "~/schemas/location";
-import { inventoryItemWithLocationFields } from "~/schemas/form-fields";
+import {
+  inventoryItemWithLocationFields,
+  getProductId,
+  getOptionalLocationId,
+} from "~/schemas/form-fields";
+import { unsafeLocationId } from "~/schemas/identifiers";
 
 // Schema for the entire form using shared field schema
 const quickCaptureFormSchema = z.object({
@@ -91,12 +96,12 @@ export default function QuickCaptureForm({
   // Watch items to get the last location for copying and focused location
   const items = form.watch("items");
   const focusedItem = items[focusedRowIndex];
-  const focusedLocationId = focusedItem?.location?.id as LocationId | undefined;
+  const focusedLocationId = getOptionalLocationId(focusedItem?.location);
 
   // Fetch initial location if provided
   const { data: initialLocation } = useQuery({
     ...api.location.getByID.queryOptions({
-      id: initialLocationId as LocationId,
+      id: unsafeLocationId(initialLocationId!),
     }),
     enabled: !!initialLocationId,
   });
@@ -228,12 +233,12 @@ export default function QuickCaptureForm({
         >();
 
         for (const item of validItems) {
-          const locationId = item.location.id;
+          const locationId = getOptionalLocationId(item.location)!;
           if (!itemsByLocation.has(locationId)) {
             itemsByLocation.set(locationId, []);
           }
           itemsByLocation.get(locationId)!.push({
-            productId: item.product.id as ProductId,
+            productId: getProductId(item.product),
             amount: item.amount,
           });
         }
@@ -241,9 +246,9 @@ export default function QuickCaptureForm({
         // Process each location's items
         for (const [locationId, locationItems] of itemsByLocation) {
           await bulkProcessMutation.mutateAsync({
-            locationId: locationId as LocationId,
+            locationId,
             items: locationItems.map((item) => ({
-              locationId: locationId as LocationId,
+              locationId,
               productId: item.productId,
               amount: item.amount,
             })),
