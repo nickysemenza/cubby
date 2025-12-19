@@ -50,10 +50,15 @@ const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
     );
   }
 
+  // After error check, graph is guaranteed to be non-null for non-empty mappings
+  if (!graphResult.graph) {
+    return null;
+  }
+
   return (
     <div className="overflow-auto rounded border bg-slate-50 p-2">
       <Graphviz
-        dot={graphResult.graph!}
+        dot={graphResult.graph}
         options={{
           fit: true,
           width: 380,

@@ -11,18 +11,25 @@ interface TableStateOptions {
   initialPagination?: PaginationState;
 }
 
+// Response shape from list queries (used for type narrowing)
+interface ListQueryResponse<TData> {
+  items: TData[];
+  count: number;
+  meta?: { totalCount?: number };
+}
+
+// tRPC queryOptions has complex internal typing that doesn't map cleanly to a simple function type.
+// We use a permissive type here - the TFilters generic provides type safety for buildFilters.
+type TRPCQueryOptionsFn<TFilters> = (params: {
+  sort: { orderBy: string; direction: "asc" | "desc" };
+  pagination: { pageIndex: number; pageSize: number };
+  filters: TFilters;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+}) => any;
+
 export interface UseTableListOptions<TFilters> {
-  // Note: queryOptions should be a tRPC queryOptions function
-  queryOptions: (
-    params: {
-      sort: { orderBy: string; direction: "asc" | "desc" };
-      pagination: { pageIndex: number; pageSize: number };
-      filters: TFilters;
-    },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    opts?: any,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) => any;
+  // tRPC queryOptions function that takes list params and returns query options
+  queryOptions: TRPCQueryOptionsFn<TFilters>;
   buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
   tableStateOptions?: TableStateOptions;
 }
@@ -91,17 +98,16 @@ export function useTableList<TFilters, TData = unknown>({
       pagination: tableState.pagination,
       filters,
     }),
-  );
-
-  // Type assertion: tRPC list query response structure
-  const typedResponse = response as
-    | { items: TData[]; count: number; meta?: { totalCount?: number } }
-    | undefined;
+  ) as {
+    data: ListQueryResponse<TData> | undefined;
+    isLoading: boolean;
+    error: Error | null;
+  };
 
   // useQuery returns error as Error | null when throwOnError is false (default)
   return {
-    data: typedResponse?.items || [],
-    totalCount: typedResponse?.meta?.totalCount || typedResponse?.count || 0,
+    data: response?.items ?? [],
+    totalCount: response?.meta?.totalCount ?? response?.count ?? 0,
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,

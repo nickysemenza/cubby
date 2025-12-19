@@ -62,8 +62,8 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
   const [open, setOpen] = useState(false);
   const [showNutrients, setShowNutrients] = useState(false);
   const [conversions, setConversions] = useState<
-    Record<AmountKind, Result<WAmount>>
-  >({} as Record<AmountKind, Result<WAmount>>);
+    Partial<Record<AmountKind, Result<WAmount>>>
+  >({});
 
   const filteredMappings = showNutrients
     ? mappings

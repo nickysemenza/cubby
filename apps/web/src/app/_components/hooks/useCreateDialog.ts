@@ -1,14 +1,24 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueryClient,
+  type UseMutationOptions,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
 
-export interface UseCreateDialogOptions<TEntity> {
+// Mutation options type that works with tRPC's mutationOptions output
+// Using Omit to exclude callbacks we override (onSuccess, onError)
+type MutationOptionsInput<TEntity, TInput> = Omit<
+  UseMutationOptions<TEntity, unknown, TInput>,
+  "onSuccess" | "onError"
+>;
+
+export interface UseCreateDialogOptions<TEntity, TInput> {
   entityName: string; // e.g., "ingredient", "product"
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mutationOptions: any; // tRPC mutation options
+  mutationOptions: MutationOptionsInput<TEntity, TInput>;
   queryKey?: string[]; // Query key to invalidate on success
   onSuccess?: (entity: TEntity) => void;
 }
@@ -68,7 +78,10 @@ export function useCreateDialog<TEntity, TInput>({
   mutationOptions,
   queryKey,
   onSuccess,
-}: UseCreateDialogOptions<TEntity>): UseCreateDialogReturn<TEntity, TInput> {
+}: UseCreateDialogOptions<TEntity, TInput>): UseCreateDialogReturn<
+  TEntity,
+  TInput
+> {
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [initialData, setInitialData] = useState<Partial<TInput> | undefined>();
