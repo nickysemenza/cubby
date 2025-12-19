@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Database } from "~/server/db";
-import { buildTestDB } from "tooling/test-setup";
+import { buildTestDB, seedFromCSV } from "tooling/test-setup";
 import { inventoryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import {
@@ -99,7 +99,6 @@ describe("inventory router", () => {
   });
 
   it("should list inventory entries with filtering", async () => {
-    // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
@@ -108,91 +107,37 @@ describe("inventory router", () => {
       }),
     );
 
-    // Create test locations
-    const kitchen = await createLocation(
+    // Seed test data using CSV import (creates locations, products, and inventory)
+    const seed = await seedFromCSV(
       db,
-      {
-        name: "Kitchen",
-        type: "room",
-        parentId: null,
-      },
+      organizationId,
+      [
+        {
+          product_name: "Flour",
+          manufacturer: "Brand A",
+          location_path: "Kitchen[room]",
+          quantity: 2,
+          unit: "lbs",
+        },
+        {
+          product_name: "Sugar",
+          manufacturer: "Brand B",
+          location_path: "Kitchen",
+          quantity: 1,
+          unit: "kg",
+        },
+        {
+          product_name: "Rice",
+          manufacturer: "Brand C",
+          location_path: "Pantry[room]",
+          quantity: 3,
+          unit: "lbs",
+        },
+      ],
       TEST_ACTOR,
     );
 
-    const pantry = await createLocation(
-      db,
-      {
-        name: "Pantry",
-        type: "room",
-        parentId: null,
-      },
-      TEST_ACTOR,
-    );
-
-    // Create test products
-    const flour = await createProduct(
-      db,
-      {
-        name: "Flour",
-        manufacturer: "Brand A",
-        model: "All Purpose",
-        upc: "111111111111",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    const sugar = await createProduct(
-      db,
-      {
-        name: "Sugar",
-        manufacturer: "Brand B",
-        model: "White Sugar",
-        upc: "222222222222",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    const rice = await createProduct(
-      db,
-      {
-        name: "Rice",
-        manufacturer: "Brand C",
-        model: "Basmati Rice",
-        upc: "333333333333",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    // Create multiple inventory entries
-    await caller.create({
-      productId: flour.id,
-      locationId: kitchen.id,
-      amount: { value: 2, unit: "lbs" },
-    });
-
-    await caller.create({
-      productId: sugar.id,
-      locationId: kitchen.id,
-      amount: { value: 1, unit: "kg" },
-    });
-
-    await caller.create({
-      productId: rice.id,
-      locationId: pantry.id,
-      amount: { value: 3, unit: "lbs" },
-    });
+    const pantryId = seed.locationIds.get("Pantry")!;
 
     // Test listing without filters
     const allEntries = await caller.list({
@@ -230,14 +175,14 @@ describe("inventory router", () => {
 
     // Test filtering by location ID
     const pantryEntries = await caller.list({
-      filters: { locationIdFilter: pantry.id },
+      filters: { locationIdFilter: pantryId },
       pagination: { pageSize: 10, pageIndex: 0 },
     });
 
     // Should return only pantry entries
     expect(pantryEntries.items.length).toEqual(1);
     expect(pantryEntries.meta.totalCount).toEqual(1);
-    expect(pantryEntries.items[0].location.id).toEqual(pantry.id);
+    expect(pantryEntries.items[0].location.id).toEqual(pantryId);
 
     // Test filtering with no matches
     const noMatches = await caller.list({
