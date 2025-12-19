@@ -12,7 +12,7 @@ import {
   createInventoryEntriesColumn,
 } from "../_components/data-table/columnHelpers";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
-import { LocationType, locationType } from "~/schemas/location";
+import { LocationType, locationTypeOptions } from "~/schemas/location";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
@@ -106,8 +106,6 @@ export function LocationList() {
     totalCount,
   });
 
-  // Get the location types from zod schema
-
   const filterableColumns: FilterableColumn[] = [
     {
       id: "name",
@@ -117,10 +115,7 @@ export function LocationList() {
       id: "type",
       placeholder: "Filter by type...",
       filterType: "select",
-      options: Object.values(locationType.enum).map((type) => ({
-        value: type,
-        label: type,
-      })),
+      options: locationTypeOptions,
     },
   ];
 

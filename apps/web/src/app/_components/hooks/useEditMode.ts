@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { getErrorMessage } from "~/lib/error-utils";
 
+/**
+ * Mutation options from tRPC's .mutationOptions() call.
+ * We use `object` since tRPC's options include complex error types and
+ * function signatures that are difficult to type precisely. Type safety
+ * is maintained at the call site via the generic TData/TResult parameters.
+ */
+type TRPCMutationOptions = object;
+
 export interface UseEditModeOptions<TResult = unknown> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mutationOptions: any; // tRPC mutation options
+  mutationOptions: TRPCMutationOptions;
   onSuccess?: (result?: TResult) => void;
   useRouterRefresh?: boolean;
 }

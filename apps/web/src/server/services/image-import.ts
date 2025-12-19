@@ -40,7 +40,6 @@ export const importImageFromUPC = async (
     const upcData = await upcLookupClient.lookup(upc);
 
     if (!upcData?.imageUrl) {
-      console.log(`[importImageFromUPC] No image URL for UPC ${upc}`);
       return null;
     }
 
@@ -50,10 +49,6 @@ export const importImageFromUPC = async (
       upcData.imageUrl,
       env.UPC_LOOKUP_API_URL,
     ).toString();
-
-    console.log(
-      `[importImageFromUPC] Importing image for UPC ${upc} from ${fullImageUrl}`,
-    );
 
     // 3. Import the image to R2 and create image record
     const imported = await importImageFromUrl(db, organizationId, {
@@ -70,10 +65,6 @@ export const importImageFromUPC = async (
 
     // 4. Associate image with product
     await associateImagesWithProduct(db, productId, [imported.imageId]);
-
-    console.log(
-      `[importImageFromUPC] Successfully imported image for UPC ${upc}: ${imported.imageId}`,
-    );
 
     return { imageId: imported.imageId };
   } catch (error) {

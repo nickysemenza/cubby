@@ -13,6 +13,14 @@ type EntityMutationCallbacks<TResult> = {
 };
 
 /**
+ * Mutation options from tRPC's .mutationOptions() call.
+ * We use `object` since tRPC's options include complex error types and
+ * function signatures that are difficult to type precisely. Type safety
+ * is maintained at the call site via the generic TData/TResult parameters.
+ */
+type TRPCMutationOptions = object;
+
+/**
  * Hook for entity create mode that handles:
  * - Error state management
  * - Router navigation
@@ -22,8 +30,7 @@ type EntityMutationCallbacks<TResult> = {
  */
 export function useEntityCreateMode<TData, TResult extends { id: string }>(
   entityKey: Entity,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mutationOptions: any,
+  mutationOptions: TRPCMutationOptions,
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {
   const router = useRouter();
@@ -70,8 +77,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
  * - Custom onCancel callback
  */
 export function useEntityEditMode<TData, TResult>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  mutationOptions: any,
+  mutationOptions: TRPCMutationOptions,
   onCancel: () => void,
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {

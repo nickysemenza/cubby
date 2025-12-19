@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   formatSearchTerm,
-  getSortDirection,
   buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
 import { product } from "~/server/db/schema";
@@ -48,38 +47,6 @@ describe("formatSearchTerm", () => {
     const result = formatSearchTerm(product.name, "  trimmed  ");
     expect(result).toBeDefined();
     expect(result).toBeTruthy();
-  });
-});
-
-describe("getSortDirection", () => {
-  it("should return direction when field matches orderBy", () => {
-    const sort = { orderBy: "name", direction: "asc" as const };
-    expect(getSortDirection(sort, "name")).toBe("asc");
-  });
-
-  it("should return undefined when field does not match orderBy", () => {
-    const sort = { orderBy: "name", direction: "asc" as const };
-    expect(getSortDirection(sort, "createdAt")).toBeUndefined();
-  });
-
-  it("should handle desc direction", () => {
-    const sort = { orderBy: "createdAt", direction: "desc" as const };
-    expect(getSortDirection(sort, "createdAt")).toBe("desc");
-  });
-
-  it("should handle different field names correctly", () => {
-    const sort = { orderBy: "manufacturer", direction: "asc" as const };
-
-    expect(getSortDirection(sort, "manufacturer")).toBe("asc");
-    expect(getSortDirection(sort, "name")).toBeUndefined();
-    expect(getSortDirection(sort, "price")).toBeUndefined();
-  });
-
-  it("should be case sensitive for field matching", () => {
-    const sort = { orderBy: "Name", direction: "asc" as const };
-
-    expect(getSortDirection(sort, "name")).toBeUndefined();
-    expect(getSortDirection(sort, "Name")).toBe("asc");
   });
 });
 

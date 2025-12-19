@@ -146,14 +146,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     const upcValue = form.getValues("upc");
     if (!upcValue) return;
 
-    console.log(`[Product Form] Looking up UPC: ${upcValue}`);
     setIsLookingUp(true);
     try {
       const result = await trpcClient.upc.lookup.query({ upc: upcValue });
       if (result) {
-        console.log(
-          `[Product Form] UPC lookup result: ${result.name} (source: ${result.source})`,
-        );
         // Auto-fill form fields from lookup result
         if (result.name) {
           form.setValue("name", result.name);
@@ -170,8 +166,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         if (result.imageUrl) {
           setLookupImageUrl(result.imageUrl);
         }
-      } else {
-        console.log(`[Product Form] UPC lookup returned no results`);
       }
     } catch (err) {
       console.error(`[Product Form] UPC lookup failed:`, err);

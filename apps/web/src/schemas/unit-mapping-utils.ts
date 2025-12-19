@@ -58,7 +58,6 @@ const createServingMapping = async (
     );
     const b = p.amounts.pop();
     if (b === undefined) {
-      console.log(`branded food ${fdc_id} missing amounts`);
       return undefined;
     }
     const servingSizeUnit = branded_food_serving_size_unit.parse(
@@ -73,8 +72,7 @@ const createServingMapping = async (
       source: `USDA FDC serving`,
       sourceMetadata: { type: "food" as const, fdcId: fdc_id },
     };
-  } catch (error) {
-    console.log(`branded food ${fdc_id} serving parsing failed:`, error);
+  } catch {
     return undefined;
   }
 };

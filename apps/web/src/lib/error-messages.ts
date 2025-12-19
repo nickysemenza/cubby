@@ -16,11 +16,3 @@ export const ambiguousNameError = (entity: string, name: string) =>
 // Database operation errors
 export const FAILED_TO_INSERT = "Failed to insert record";
 export const FAILED_TO_UPDATE = "Failed to update record";
-
-export const failedToCreate = (entity: string) => `Failed to create ${entity}`;
-export const failedToRetrieve = (entity: string) =>
-  `Failed to retrieve created ${entity}`;
-export const failedToFetch = (
-  entity: string,
-  operation: "created" | "updated",
-) => `Failed to fetch ${operation} ${entity}`;

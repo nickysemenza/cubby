@@ -49,7 +49,6 @@ export class UPCLookupClient {
   async lookup(upc: string): Promise<UPCLookupResponse | null> {
     return this.traced("lookup", async () => {
       const url = new URL(`/lookup/${upc}`, this.baseUrl);
-      console.log(`[UPC Lookup] Fetching ${url.toString()}`);
 
       const res = await fetch(url.toString(), {
         method: "GET",
@@ -71,9 +70,6 @@ export class UPCLookupClient {
         return null;
       }
 
-      console.log(
-        `[UPC Lookup] Found: ${parsed.data.name} (source: ${parsed.data.source}, cached: ${parsed.data.cached})`,
-      );
       return parsed.data;
     });
   }

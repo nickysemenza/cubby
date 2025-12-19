@@ -185,10 +185,6 @@ export const fetchAndStoreImage = async (
 
     const url = getS3ObjectUrl(key);
 
-    console.log(
-      `[fetchAndStoreImage] Successfully stored image: ${sourceUrl} -> ${key} (${size} bytes)`,
-    );
-
     return {
       key,
       url,

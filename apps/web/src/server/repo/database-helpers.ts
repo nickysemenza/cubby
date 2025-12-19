@@ -26,10 +26,6 @@ export const formatSearchTerm = (
   return ilike(column, `%${term}%`);
 };
 
-// Helper function to get sort direction for a field
-export const getSortDirection = (sort: SortParams, field: string) =>
-  sort.orderBy === field ? sort.direction : undefined;
-
 /**
  * Get the underlying Drizzle client from the opaque Database type.
  * This should ONLY be used within repo files to access the database.

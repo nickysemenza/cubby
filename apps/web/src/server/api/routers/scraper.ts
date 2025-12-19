@@ -11,7 +11,6 @@ const scrapeRecipe = async (url: string) => {
     const activityId = url.split("/").pop();
     url = `https://www.chefsteps.com/api/v0/activities/${activityId}`;
   }
-  console.log("scrapeRecipe: fetching", url);
   const options = {
     method: "GET",
   };

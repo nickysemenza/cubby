@@ -2,6 +2,7 @@
 import dynamic from "next/dynamic";
 import { WUnitMapping } from "@recipehub/recipebridge";
 import { wasm } from "~/lib/wasm";
+import { getErrorMessage } from "~/lib/error-utils";
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
 export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
@@ -33,11 +34,10 @@ export const UnitMappingGraph: React.FC<{ unitMapping: WUnitMapping[] }> = ({
     );
   } catch (e) {
     error = e;
-    console.log({ e });
   }
 
   if (error) {
-    return <div className="text-destructive">{JSON.stringify(error)}</div>;
+    return <div className="text-destructive">{getErrorMessage(error)}</div>;
   }
 
   return (

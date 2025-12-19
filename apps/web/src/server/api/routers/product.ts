@@ -146,7 +146,6 @@ const findOrCreateByUPC = protectedProcedure
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
     const actor = requireActorContext(ctx);
-    console.log(`[findOrCreateByUPC] Looking up UPC: ${input.upc}`);
 
     // 1. Check if product with this UPC already exists in organization
     const existing = await findProductByUPC(
@@ -155,23 +154,16 @@ const findOrCreateByUPC = protectedProcedure
       actor.organizationId,
     );
     if (existing) {
-      console.log(
-        `[findOrCreateByUPC] Found existing product: ${existing.name}`,
-      );
       return existing;
     }
 
     // 2. Lookup in USDA database (food items)
-    console.log(`[findOrCreateByUPC] Checking USDA for ${input.upc}`);
     const food = await ctx.usdaClient.findFood({
       kind: "upc",
       gtin_upc: input.upc,
     });
 
     if (food) {
-      console.log(
-        `[findOrCreateByUPC] Found in USDA: ${food.foodInfo.description}`,
-      );
       // Found in USDA - create product with USDA data
       return await quickCreateProduct(
         ctx.db,
@@ -190,11 +182,9 @@ const findOrCreateByUPC = protectedProcedure
     }
 
     // 3. Lookup in UPC worker (general products - tools, electronics, etc.)
-    console.log(`[findOrCreateByUPC] Checking UPC worker for ${input.upc}`);
     const upcLookup = await ctx.upcLookupClient.lookup(input.upc);
 
     if (upcLookup) {
-      console.log(`[findOrCreateByUPC] Found in UPC worker: ${upcLookup.name}`);
       // Found in UPC worker - create product with UPC lookup data
       const newProduct = await quickCreateProduct(
         ctx.db,
@@ -231,9 +221,6 @@ const findOrCreateByUPC = protectedProcedure
     }
 
     // 4. Nothing found anywhere - create with defaults
-    console.log(
-      `[findOrCreateByUPC] Not found anywhere, creating with defaults for ${input.upc}`,
-    );
     return await quickCreateProduct(
       ctx.db,
       {

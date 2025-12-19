@@ -7,6 +7,7 @@ import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import {
   locationType,
+  locationTypeOptions,
   type LocationOut,
   type LocationCreateInput,
   type LocationUpdateInput,
@@ -84,73 +85,57 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
 
   const handleSubmit = async (values: LocationFormValues) => {
     if (mode === "create") {
-      try {
-        // For creation, pass all fields including pending image IDs
-        const createData: LocationCreateInput = {
-          name: values.name,
-          type: values.type,
-          parentId: (values.parent?.id as LocationId) ?? null,
-          ...getImageData(true), // Apply pending images for creation
+      // For creation, pass all fields including pending image IDs
+      const createData: LocationCreateInput = {
+        name: values.name,
+        type: values.type,
+        parentId: (values.parent?.id as LocationId) ?? null,
+        ...getImageData(true), // Apply pending images for creation
+      };
+
+      await props.onCreate(createData);
+    } else if (mode === "edit" && location) {
+      // Build update object
+      const updates: LocationUpdateInput["data"] = {};
+
+      // Check if name has changed
+      if (values.name !== location.name) {
+        updates.name = values.name;
+      }
+
+      // Check if type has changed
+      if (values.type !== location.type) {
+        updates.type = values.type;
+      }
+
+      // Check if parent has changed
+      const parentIdChange = detectComboboxIdChange(
+        location.parent?.id,
+        values.parent,
+      );
+      if (parentIdChange !== undefined) {
+        updates.parentId = parentIdChange as LocationId | null;
+      }
+
+      // Check if we have any changes (field changes or image changes)
+      const imageChanges = hasImageChanges();
+      const hasFieldChanges = Object.keys(updates).length > 0;
+
+      // Only update if there are changes
+      if (hasFieldChanges || imageChanges) {
+        // Create the update data object
+        const updateData: LocationUpdateInput = {
+          id: location.id,
+          data: {
+            ...updates,
+            ...getImageData(), // Apply image updates
+          },
         };
 
-        // Create the location with images in a single transaction
-        await props.onCreate(createData);
-
-        // Success message is shown by the parent component
-      } catch (error) {
-        console.error("Failed to create location:", error);
-        // The parent component will handle displaying the error
-      }
-    } else if (mode === "edit" && location) {
-      try {
-        // Build update object
-        const updates: LocationUpdateInput["data"] = {};
-
-        // Check if name has changed
-        if (values.name !== location.name) {
-          updates.name = values.name;
-        }
-
-        // Check if type has changed
-        if (values.type !== location.type) {
-          updates.type = values.type;
-        }
-
-        // Check if parent has changed
-        const parentIdChange = detectComboboxIdChange(
-          location.parent?.id,
-          values.parent,
-        );
-        if (parentIdChange !== undefined) {
-          updates.parentId = parentIdChange as LocationId | null;
-        }
-
-        // Check if we have any changes (field changes or image changes)
-        const imageChanges = hasImageChanges();
-        const hasFieldChanges = Object.keys(updates).length > 0;
-
-        // Only update if there are changes
-        if (hasFieldChanges || imageChanges) {
-          // Create the update data object
-          const updateData: LocationUpdateInput = {
-            id: location.id,
-            data: {
-              ...updates,
-              ...getImageData(), // Apply image updates
-            },
-          };
-
-          // Update the location with images in a single transaction
-          await props.onEdit(updateData);
-
-          // Success message is shown by the parent component
-        } else if (onCancel) {
-          // If no changes, just run the cancel function
-          onCancel();
-        }
-      } catch (error) {
-        console.error("Failed to update location:", error);
-        // The parent component will handle displaying the error
+        await props.onEdit(updateData);
+      } else if (onCancel) {
+        // If no changes, just run the cancel function
+        onCancel();
       }
     }
   };
@@ -179,10 +164,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           form={form}
           name="type"
           label="Type"
-          options={Object.values(locationType.enum).map((type) => ({
-            value: type,
-            label: type,
-          }))}
+          options={locationTypeOptions}
           placeholder="Select a location type"
         />
       </SideBySideFields>

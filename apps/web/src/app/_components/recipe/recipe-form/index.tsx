@@ -243,10 +243,8 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             ...getImageData(), // Apply image updates
           },
         };
-        console.log("found updates", updateData);
         props.onEdit(updateData);
       } else if (onCancel) {
-        console.log("No changes detected");
         // If no changes, just run the cancel function
         onCancel();
       }

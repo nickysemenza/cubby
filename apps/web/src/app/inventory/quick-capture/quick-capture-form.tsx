@@ -174,12 +174,10 @@ export default function QuickCaptureForm({
   // Handle barcode scan for a specific item index
   const handleBarcodeScan = useCallback(
     async (barcode: string, index: number) => {
-      console.log(`[Barcode Scan] Scanned: ${barcode} for row ${index}`);
       try {
         const product = await findOrCreateByUPCMutation.mutateAsync({
           upc: barcode,
         });
-        console.log(`[Barcode Scan] Product found/created: ${product.name}`);
         form.setValue(
           `items.${index}.product`,
           buildProductComboboxItem(product),
