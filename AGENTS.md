@@ -3,7 +3,7 @@
 - read the readme.md to understand project structure
 - after touching files, format them with prettier
 - ensure the typechecker and linter is happy with all changes (pnpm run check)
-- todos are kept in @docs/todos.md
+- todos are kept in docs/todos.md
 - helper functions should not be added without being used
 - **IMPORTANT**: When architecture, routes, schemas, or integration patterns change, always update both AGENTS.md and relevant README.md files to keep documentation current and accurate
 
