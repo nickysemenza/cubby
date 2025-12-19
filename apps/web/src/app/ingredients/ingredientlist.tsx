@@ -8,7 +8,6 @@ import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import { IngredientMerger } from "./ingredient-merger";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Button } from "~/components/ui/button";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
@@ -16,15 +15,13 @@ import {
   createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
+  createEntityPillColumn,
+  createUnitMappingsColumn,
 } from "../_components/data-table/columnHelpers";
 import Link from "next/link";
 import { entities } from "~/entities/entities";
-import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { useTableList } from "../_components/hooks/useTableList";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
-
-// Types for ingredient list data
-type RecipeItem = IngredientWithFoodOut["appearsInRecipes"][number];
 
 export function IngredientList() {
   const api = useTRPC();
@@ -85,42 +82,25 @@ export function IngredientList() {
       ),
     }),
     createCreatedAtColumn(columnHelper),
-    columnHelper.accessor("appearsInRecipes", {
-      enableSorting: false,
-      meta: { className: "w-48 max-w-48" },
-      cell: (info) => (
-        <EntityPillLinkList
-          items={info
-            .getValue()
-            .filter(
-              (obj1: RecipeItem, i: number, arr: RecipeItem[]) =>
-                arr.findIndex((obj2: RecipeItem) => obj2.id === obj1.id) === i,
-            )}
-          Pill={RecipePillLink}
-          pillPropName="recipe"
-        />
-      ),
-    }),
-    columnHelper.accessor("product", {
-      enableSorting: false,
-      meta: { className: "w-48 max-w-48" },
-      cell: (info) => (
-        <EntityPillLinkList
-          items={info.getValue()}
-          Pill={ProductPillLink}
-          pillPropName="product"
-        />
-      ),
-    }),
-    columnHelper.accessor("product", {
-      id: "product2",
-      enableSorting: false,
-      meta: { className: "w-72 max-w-72" },
-      cell: (info) => {
-        const ingredient = info.row.original;
-        const mappings = mappingsMap[ingredient.id] ?? [];
-        return <UnitMappingDisplay mappings={mappings} title="" />;
+    createEntityPillColumn(
+      columnHelper,
+      "appearsInRecipes",
+      RecipePillLink,
+      "recipe",
+      { className: "w-48 max-w-48", dedupe: true },
+    ),
+    createEntityPillColumn(
+      columnHelper,
+      "product",
+      ProductPillLink,
+      "product",
+      {
+        className: "w-48 max-w-48",
       },
+    ),
+    createUnitMappingsColumn(columnHelper, mappingsMap, {
+      id: "product2",
+      className: "w-72 max-w-72",
     }),
   ];
 

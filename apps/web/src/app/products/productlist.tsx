@@ -8,25 +8,20 @@ import {
   IngredientPillLink,
   LocationPillLink,
 } from "../_components/EntityPill";
-import { SpacedContainer } from "~/components/ui/spaced-container";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
-import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
-import { tryFormatAmount } from "../_components/inventory/format-amount";
 import { NoneState } from "../_components/NoneState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import {
   createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
+  createUnitMappingsColumn,
+  createInventoryEntriesColumn,
 } from "../_components/data-table/columnHelpers";
-import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { TableLink } from "../_components/table";
 import { useTableList } from "../_components/hooks/useTableList";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
-
-// Type for inventory entries with location from product list
-type InventoryEntryWithLocation = ProductWithFoodOut["inventoryEntry"][number];
 
 export function ProductList() {
   const api = useTRPC();
@@ -132,39 +127,14 @@ export function ProductList() {
         );
       },
     }),
-    columnHelper.accessor("unitMappings", {
-      enableSorting: false,
-      meta: { className: "w-96 max-w-96" },
-      cell: (info) => {
-        const product = info.row.original;
-        const mappings = mappingsMap[product.id] ?? [];
-        return (
-          <div className="w-full">
-            <UnitMappingDisplay mappings={mappings} title="" />
-          </div>
-        );
-      },
-    }),
-    columnHelper.accessor("inventoryEntry", {
-      enableSorting: false,
-      cell: (info) => (
-        <SpacedContainer space={0} className="space-y-0.5">
-          <div className="space-y-0.5 text-xs">
-            {info.getValue().map((e: InventoryEntryWithLocation) => (
-              <div key={e.id}>{tryFormatAmount(e.amount)}</div>
-            ))}
-          </div>
-          {}
-          <EntityPillLinkList
-            items={info
-              .getValue()
-              .map((e: InventoryEntryWithLocation) => e.location)}
-            Pill={LocationPillLink}
-            pillPropName="location"
-          />
-        </SpacedContainer>
-      ),
-    }),
+    createUnitMappingsColumn(columnHelper, mappingsMap),
+    createInventoryEntriesColumn(
+      columnHelper,
+      "inventoryEntry",
+      LocationPillLink,
+      "location",
+      (e) => e.location,
+    ),
     createCreatedAtColumn(columnHelper),
   ];
 

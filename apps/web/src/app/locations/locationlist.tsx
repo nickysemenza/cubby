@@ -8,11 +8,11 @@ import {
   createCreatedAtColumn,
   createNameColumn,
   createImageColumn,
+  createEntityPillColumn,
+  createInventoryEntriesColumn,
 } from "../_components/data-table/columnHelpers";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { LocationType, locationType } from "~/schemas/location";
-import { tryFormatAmount } from "../_components/inventory/format-amount";
-import { EntityPillLinkList } from "../_components/EntityPillLinkList";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
@@ -21,14 +21,9 @@ import {
   type LocationOutWithParentChildren,
 } from "~/schemas/location";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
-import { NoneState } from "../_components/NoneState";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 import { useTableList } from "../_components/hooks/useTableList";
 import { flattenLocations } from "~/lib/location-utils";
-
-// Type for inventory entries in location list
-type InventoryEntryWithProduct =
-  LocationOutWithParentChildren["inventoryEntries"][number];
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
@@ -56,16 +51,12 @@ export function LocationList() {
     createImageColumn(columnHelper),
     // Name column with link to detail page
     createNameColumn(columnHelper, "location"),
-    columnHelper.accessor("children", {
-      enableSorting: false,
-      cell: (info) => (
-        <EntityPillLinkList
-          items={info.getValue()}
-          Pill={LocationPillLink}
-          pillPropName="location"
-        />
-      ),
-    }),
+    createEntityPillColumn(
+      columnHelper,
+      "children",
+      LocationPillLink,
+      "location",
+    ),
     columnHelper.accessor("parent", {
       enableSorting: false,
       cell: (info) => {
@@ -97,27 +88,14 @@ export function LocationList() {
         return date ? <HoverableTimestamp timestamp={date} /> : "Never";
       },
     }),
-    columnHelper.accessor("inventoryEntries", {
-      enableSorting: false,
-      cell: (info) => {
-        const entries = info.getValue();
-        if (!entries || entries.length === 0) {
-          return <NoneState />;
-        }
-        return (
-          <div className="space-y-0.5 text-xs">
-            {entries.map((entry: InventoryEntryWithProduct) => (
-              <div key={entry.id} className="flex items-center gap-1">
-                <span className="text-muted-foreground">
-                  {tryFormatAmount(entry.amount)}
-                </span>
-                <ProductPillLink product={entry.product} />
-              </div>
-            ))}
-          </div>
-        );
-      },
-    }),
+    createInventoryEntriesColumn(
+      columnHelper,
+      "inventoryEntries",
+      ProductPillLink,
+      "product",
+      (e) => e.product,
+      { layout: "inline" },
+    ),
   ];
 
   // Configure the table

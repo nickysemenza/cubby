@@ -37,7 +37,7 @@ import {
 } from "~/app/_components/form-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
-import { WithProductSearchQuickCreate } from "~/app/_components/combobox/with-search-hook";
+import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -390,7 +390,7 @@ export default function QuickCaptureForm({
 
               {/* Product field with quick create */}
               <div className="w-1/2 min-w-0 flex-1">
-                <WithProductSearchQuickCreate>
+                <WithProductSearch>
                   {({ items, onSearchChange, isLoading, onCreateNew }) => (
                     <ComboboxField
                       form={form}
@@ -402,7 +402,7 @@ export default function QuickCaptureForm({
                       onCreateNew={onCreateNew}
                     />
                   )}
-                </WithProductSearchQuickCreate>
+                </WithProductSearch>
               </div>
 
               {/* Amount field */}

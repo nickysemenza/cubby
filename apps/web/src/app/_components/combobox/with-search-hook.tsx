@@ -10,7 +10,7 @@ import {
   buildRecipeComboboxItem,
 } from "./combobox-builders";
 import { toast } from "sonner";
-import { type LocationOut } from "~/schemas/location";
+import { type LocationOut, type LocationCreateInput } from "~/schemas/location";
 import {
   type ProductTopLevelOut,
   type ProductInputPayload,
@@ -114,6 +114,41 @@ function useEntitySearchWithDialog() {
   };
 }
 
+/**
+ * Common dialog wrapper that prevents closing when clicking on Popover contents.
+ * Used by all Create*Dialog components.
+ */
+function CreateEntityDialogWrapper({
+  isOpen,
+  onOpenChange,
+  title,
+  children,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent
+        onPointerDownOutside={(e) => {
+          // Prevent closing when clicking on Popover contents
+          const target = e.target as HTMLElement;
+          if (target.closest("[data-radix-popper-content-wrapper]")) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function CreateIngredientDialog({
   isOpen,
   onOpenChange,
@@ -132,29 +167,55 @@ export function CreateIngredientDialog({
   initialName?: string;
 }) {
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent
-        onPointerDownOutside={(e) => {
-          // Prevent closing when clicking on Popover contents
-          const target = e.target as HTMLElement;
-          if (target.closest("[data-radix-popper-content-wrapper]")) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Create New Ingredient</DialogTitle>
-        </DialogHeader>
-        <IngredientForm
-          mode="create"
-          isPending={isPending}
-          error={error}
-          onCancel={onCancel}
-          onCreate={onCreate}
-          initialName={initialName}
-        />
-      </DialogContent>
-    </Dialog>
+    <CreateEntityDialogWrapper
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Create New Ingredient"
+    >
+      <IngredientForm
+        mode="create"
+        isPending={isPending}
+        error={error}
+        onCancel={onCancel}
+        onCreate={onCreate}
+        initialName={initialName}
+      />
+    </CreateEntityDialogWrapper>
+  );
+}
+
+function CreateLocationDialog({
+  isOpen,
+  onOpenChange,
+  onCancel,
+  onCreate,
+  isPending,
+  error,
+  initialName,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCancel: () => void;
+  onCreate: (data: LocationCreateInput) => Promise<LocationOut>;
+  isPending: boolean;
+  error?: string;
+  initialName?: string;
+}) {
+  return (
+    <CreateEntityDialogWrapper
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Create New Location"
+    >
+      <LocationForm
+        mode="create"
+        isPending={isPending}
+        error={error}
+        onCancel={onCancel}
+        onCreate={onCreate}
+        initialName={initialName}
+      />
+    </CreateEntityDialogWrapper>
   );
 }
 
@@ -178,30 +239,21 @@ function CreateProductDialog({
   initialExpectedQuantity?: number | null;
 }) {
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent
-        onPointerDownOutside={(e) => {
-          // Prevent closing when clicking on Popover contents
-          const target = e.target as HTMLElement;
-          if (target.closest("[data-radix-popper-content-wrapper]")) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <DialogHeader>
-          <DialogTitle>Create New Product</DialogTitle>
-        </DialogHeader>
-        <ProductForm
-          mode="create"
-          isPending={isPending}
-          error={error}
-          onCancel={onCancel}
-          onCreate={onCreate}
-          initialName={initialName}
-          initialExpectedQuantity={initialExpectedQuantity}
-        />
-      </DialogContent>
-    </Dialog>
+    <CreateEntityDialogWrapper
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      title="Create New Product"
+    >
+      <ProductForm
+        mode="create"
+        isPending={isPending}
+        error={error}
+        onCancel={onCancel}
+        onCreate={onCreate}
+        initialName={initialName}
+        initialExpectedQuantity={initialExpectedQuantity}
+      />
+    </CreateEntityDialogWrapper>
   );
 }
 
@@ -296,28 +348,15 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
 
   return (
     <>
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent
-          onPointerDownOutside={(e) => {
-            const target = e.target as HTMLElement;
-            if (target.closest("[data-radix-popper-content-wrapper]")) {
-              e.preventDefault();
-            }
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle>Create New Location</DialogTitle>
-          </DialogHeader>
-          <LocationForm
-            mode="create"
-            isPending={createMutation.isPending}
-            error={createMutation.error?.message}
-            onCancel={closeDialog}
-            onCreate={async (data) => createMutation.mutateAsync(data)}
-            initialName={pendingName}
-          />
-        </DialogContent>
-      </Dialog>
+      <CreateLocationDialog
+        isOpen={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+        onCancel={closeDialog}
+        onCreate={async (data) => createMutation.mutateAsync(data)}
+        isPending={createMutation.isPending}
+        error={createMutation.error?.message}
+        initialName={pendingName}
+      />
       {children({
         items: data?.items.map(buildLocationComboboxItem) ?? [],
         onSearchChange,
@@ -354,69 +393,6 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
       onSuccess: (newProduct: ProductTopLevelOut) => {
         toast.success(`Created new product: ${newProduct.name}`);
         queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
-        resolveWithEntity(buildProductComboboxItem(newProduct));
-      },
-      onError: (error) => {
-        toast.error(`Failed to create product: ${error.message}`);
-      },
-    }),
-  );
-
-  return (
-    <>
-      <CreateProductDialog
-        isOpen={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        onCancel={closeDialog}
-        onCreate={(data) => createMutation.mutate(data)}
-        isPending={createMutation.isPending}
-        error={createMutation.error?.message}
-        initialName={pendingName}
-      />
-      {children({
-        items: data?.items.map(buildProductComboboxItem) ?? [],
-        onSearchChange,
-        isLoading,
-        onCreateNew: openDialog,
-      })}
-    </>
-  );
-}
-
-/**
- * A variant of WithProductSearch for rapid inventory capture.
- * Uses the same CreateProductDialog with quick create support.
- */
-export function WithProductSearchQuickCreate({
-  children,
-}: WithEntitySearchProps) {
-  const api = useTRPC();
-  const queryClient = useQueryClient();
-  const {
-    searchQuery,
-    onSearchChange,
-    isDialogOpen,
-    setIsDialogOpen,
-    pendingName,
-    openDialog,
-    closeDialog,
-    resolveWithEntity,
-  } = useEntitySearchWithDialog();
-
-  const { data, isLoading } = useQuery(
-    api.product.list.queryOptions({
-      filters: { nameFilter: searchQuery },
-      pagination,
-    }),
-  );
-
-  const createMutation = useMutation(
-    api.product.create.mutationOptions({
-      onSuccess: (newProduct: ProductTopLevelOut) => {
-        toast.success(`Created new product: ${newProduct.name}`);
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.product.list,
-        });
         resolveWithEntity(buildProductComboboxItem(newProduct));
       },
       onError: (error) => {
