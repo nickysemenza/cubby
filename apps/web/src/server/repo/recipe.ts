@@ -459,6 +459,297 @@ export const upsertRecipe = async (
   }
 };
 
+// ============================================================================
+// Helper functions for updateRecipe
+// ============================================================================
+
+type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
+  sections: Array<
+    typeof recipeSection.$inferSelect & {
+      ingredients: Array<typeof recipeSectionIngredient.$inferSelect>;
+    }
+  >;
+};
+
+/** Update recipe name and source metadata */
+async function updateRecipeBasicProperties(
+  tx: Transaction,
+  recipeId: RecipeId,
+  organizationId: OrganizationId,
+  updates: RecipeUpdateInput["data"],
+  existingRecipe: ExistingRecipeWithSections,
+): Promise<void> {
+  if (!updates.name && updates.meta === undefined) return;
+
+  const sourceType = updates.meta?.url
+    ? "Website"
+    : existingRecipe.SourceType || "Other";
+  const sourceData =
+    updates.meta?.url !== undefined
+      ? updates.meta.url
+      : existingRecipe.SourceData;
+
+  const updateData: {
+    name?: string;
+    SourceType?: "Book" | "Website" | "Other";
+    SourceData?: string | null;
+  } = {};
+
+  if (updates.name) {
+    updateData.name = updates.name;
+  }
+  if (updates.meta !== undefined) {
+    updateData.SourceType = sourceType;
+    updateData.SourceData = sourceData;
+  }
+
+  await tx
+    .update(recipe)
+    .set(updateData)
+    .where(
+      and(eq(recipe.id, recipeId), eq(recipe.organizationId, organizationId)),
+    );
+}
+
+/** Add new images and remove requested images */
+async function updateRecipeImages(
+  tx: Transaction,
+  recipeId: RecipeId,
+  updates: RecipeUpdateInput["data"],
+): Promise<void> {
+  // Add new images if provided
+  if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
+    await tx.insert(recipeImage).values(
+      updates.pendingImageIds.map((imageId) => ({
+        recipeId,
+        imageId,
+      })),
+    );
+    await tx
+      .update(image)
+      .set({ status: "UPLOADED" })
+      .where(inArray(image.id, updates.pendingImageIds));
+  }
+
+  // Remove images if requested
+  if (updates.removeImageIds && updates.removeImageIds.length > 0) {
+    await tx
+      .delete(recipeImage)
+      .where(
+        and(
+          eq(recipeImage.recipeId, recipeId),
+          inArray(recipeImage.imageId, updates.removeImageIds),
+        ),
+      );
+  }
+}
+
+/** Delete all sections and their ingredients for a recipe */
+async function deleteAllSections(
+  tx: Transaction,
+  sectionIds: string[],
+): Promise<void> {
+  if (sectionIds.length === 0) return;
+
+  await tx
+    .delete(recipeSectionIngredient)
+    .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
+  await tx.delete(recipeSection).where(inArray(recipeSection.id, sectionIds));
+}
+
+/** Create a new recipe section with ingredients */
+async function createSectionWithIngredients(
+  tx: Transaction,
+  recipeId: RecipeId,
+  sectionInput: NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
+  organizationId: OrganizationId,
+): Promise<void> {
+  const processedIngredients = sectionInput.ingredients
+    ? await processIngredients(tx, sectionInput.ingredients, organizationId)
+    : [];
+
+  const [createdSection] = await tx
+    .insert(recipeSection)
+    .values({
+      recipeId,
+      name: sectionInput.name || null,
+      instructions: sectionInput.instructions
+        ? sectionInput.instructions.map((inst) => ({ text: inst.instruction }))
+        : [],
+    })
+    .returning();
+
+  if (!createdSection) {
+    throw new Error("Failed to create recipe section");
+  }
+
+  if (processedIngredients.length > 0) {
+    await tx.insert(recipeSectionIngredient).values(
+      processedIngredients.map((ing) => ({
+        recipeSectionId: createdSection.id,
+        ingredientId: ing.ingredientId as string,
+        amounts: ing.amounts,
+      })),
+    );
+  }
+}
+
+/** Update an existing section's ingredients */
+async function updateSectionIngredients(
+  tx: Transaction,
+  sectionId: string,
+  ingredientUpdates: NonNullable<
+    NonNullable<RecipeUpdateInput["data"]["sections"]>[number]["ingredients"]
+  >,
+  existingIngredients: Array<typeof recipeSectionIngredient.$inferSelect>,
+  organizationId: OrganizationId,
+): Promise<void> {
+  // Process each ingredient in the update
+  for (const ingredientUpdate of ingredientUpdates) {
+    const processedIngredient = await processIngredient(
+      tx,
+      ingredientUpdate,
+      organizationId,
+    );
+
+    if (!ingredientUpdate.id) {
+      // Create new ingredient
+      await tx.insert(recipeSectionIngredient).values({
+        recipeSectionId: sectionId,
+        ingredientId: processedIngredient.ingredientId,
+        amounts: processedIngredient.amounts,
+      });
+    } else {
+      // Update existing ingredient
+      await tx
+        .update(recipeSectionIngredient)
+        .set({
+          ingredientId: processedIngredient.ingredientId,
+          amounts: processedIngredient.amounts,
+        })
+        .where(eq(recipeSectionIngredient.id, ingredientUpdate.id));
+    }
+  }
+
+  // Delete ingredients that weren't included in the update
+  const updatedIngredientIds = ingredientUpdates
+    .filter((ing) => ing.id)
+    .map((ing) => ing.id!);
+
+  const ingredientsToDelete = existingIngredients.filter(
+    (ing) => !updatedIngredientIds.includes(ing.id),
+  );
+
+  for (const ingToDelete of ingredientsToDelete) {
+    await tx
+      .delete(recipeSectionIngredient)
+      .where(eq(recipeSectionIngredient.id, ingToDelete.id));
+  }
+}
+
+/** Update an existing recipe section */
+async function updateExistingSection(
+  tx: Transaction,
+  sectionUpdate: NonNullable<RecipeUpdateInput["data"]["sections"]>[number] & {
+    id: string;
+  },
+  existingSection: ExistingRecipeWithSections["sections"][number],
+  organizationId: OrganizationId,
+): Promise<void> {
+  // Update section name if provided
+  if (sectionUpdate.name !== undefined) {
+    await tx
+      .update(recipeSection)
+      .set({ name: sectionUpdate.name })
+      .where(eq(recipeSection.id, sectionUpdate.id));
+  }
+
+  // Handle ingredient updates
+  if (sectionUpdate.ingredients) {
+    await updateSectionIngredients(
+      tx,
+      sectionUpdate.id,
+      sectionUpdate.ingredients,
+      existingSection.ingredients,
+      organizationId,
+    );
+  }
+
+  // Handle instruction updates
+  if (sectionUpdate.instructions) {
+    const instructionsJson = sectionUpdate.instructions.map((inst) => ({
+      text: inst.instruction,
+    }));
+    await tx
+      .update(recipeSection)
+      .set({ instructions: instructionsJson })
+      .where(eq(recipeSection.id, sectionUpdate.id));
+  }
+}
+
+/** Handle all section updates (create, update, delete) */
+async function handleSectionUpdates(
+  tx: Transaction,
+  recipeId: RecipeId,
+  sectionUpdates: NonNullable<RecipeUpdateInput["data"]["sections"]>,
+  existingRecipe: ExistingRecipeWithSections,
+  organizationId: OrganizationId,
+): Promise<void> {
+  const sectionIdsInUpdate = sectionUpdates
+    .map((s) => s.id)
+    .filter((sectionId): sectionId is string => Boolean(sectionId));
+
+  // If no IDs are provided, treat as full replacement: delete all existing sections first
+  if (sectionIdsInUpdate.length === 0) {
+    await deleteAllSections(
+      tx,
+      existingRecipe.sections.map((s) => s.id),
+    );
+  }
+
+  for (const sectionUpdate of sectionUpdates) {
+    if (!sectionUpdate.id) {
+      // Create new section
+      await createSectionWithIngredients(
+        tx,
+        recipeId,
+        sectionUpdate,
+        organizationId,
+      );
+    } else {
+      // Update existing section
+      const existingSection = existingRecipe.sections.find(
+        (s) => s.id === sectionUpdate.id,
+      );
+
+      if (!existingSection) {
+        throw new Error(
+          `Section with ID ${sectionUpdate.id} not found in recipe ${recipeId}`,
+        );
+      }
+
+      await updateExistingSection(
+        tx,
+        { ...sectionUpdate, id: sectionUpdate.id },
+        existingSection,
+        organizationId,
+      );
+    }
+  }
+
+  // If we are doing partial update with specific section IDs, remove any sections not referenced
+  if (sectionIdsInUpdate.length > 0) {
+    const sectionsToDelete = existingRecipe.sections
+      .map((s) => s.id)
+      .filter((sid) => !sectionIdsInUpdate.includes(sid));
+    await deleteAllSections(tx, sectionsToDelete);
+  }
+}
+
+// ============================================================================
+// Main updateRecipe function
+// ============================================================================
+
 export const updateRecipe = async (
   id: RecipeId,
   updates: RecipeUpdateInput["data"],
@@ -466,7 +757,8 @@ export const updateRecipe = async (
   actor: ActorContext,
 ): Promise<RecipeOut> => {
   const { organizationId } = actor;
-  // Check if recipe exists and belongs to project
+
+  // Check if recipe exists and belongs to organization
   const existingRecipe = await getDb(db).query.recipe.findFirst({
     where: and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
     with: {
@@ -483,240 +775,27 @@ export const updateRecipe = async (
   }
 
   // Store before state for audit logging
-  const beforeState = {
-    name: existingRecipe.name,
-  };
+  const beforeState = { name: existingRecipe.name };
 
   // Update in a transaction
   return await withTransaction(db, async (tx) => {
-    // Update basic recipe properties
-    if (updates.name || updates.meta !== undefined) {
-      const sourceType = updates.meta?.url
-        ? "Website"
-        : existingRecipe.SourceType || "Other";
-      const sourceData =
-        updates.meta?.url !== undefined
-          ? updates.meta.url
-          : existingRecipe.SourceData;
+    await updateRecipeBasicProperties(
+      tx,
+      id,
+      organizationId,
+      updates,
+      existingRecipe,
+    );
+    await updateRecipeImages(tx, id, updates);
 
-      const updateData: {
-        name?: string;
-        SourceType?: "Book" | "Website" | "Other";
-        SourceData?: string | null;
-      } = {};
-
-      if (updates.name) {
-        updateData.name = updates.name;
-      }
-      if (updates.meta !== undefined) {
-        updateData.SourceType = sourceType;
-        updateData.SourceData = sourceData;
-      }
-
-      await tx
-        .update(recipe)
-        .set(updateData)
-        .where(
-          and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
-        );
-    }
-
-    // Add new images if provided
-    if (updates.pendingImageIds && updates.pendingImageIds.length > 0) {
-      // Create RecipeImage records in batch
-      await tx.insert(recipeImage).values(
-        updates.pendingImageIds.map((imageId) => ({
-          recipeId: id,
-          imageId,
-        })),
-      );
-
-      // Update all image statuses to UPLOADED in batch
-      await tx
-        .update(image)
-        .set({ status: "UPLOADED" })
-        .where(inArray(image.id, updates.pendingImageIds));
-    }
-
-    // Remove images if requested
-    if (updates.removeImageIds && updates.removeImageIds.length > 0) {
-      await tx
-        .delete(recipeImage)
-        .where(
-          and(
-            eq(recipeImage.recipeId, id),
-            inArray(recipeImage.imageId, updates.removeImageIds),
-          ),
-        );
-    }
-
-    // Handle section updates if provided
     if (updates.sections) {
-      const sectionIdsInUpdate = updates.sections
-        .map((s) => s.id)
-        .filter((sectionId): sectionId is string => Boolean(sectionId));
-
-      // If no IDs are provided, treat as full replacement: delete all existing sections first
-      if (sectionIdsInUpdate.length === 0) {
-        // Delete all ingredients for existing sections, then delete sections
-        const allSectionIds = existingRecipe.sections.map((s) => s.id);
-        if (allSectionIds.length > 0) {
-          await tx
-            .delete(recipeSectionIngredient)
-            .where(
-              inArray(recipeSectionIngredient.recipeSectionId, allSectionIds),
-            );
-          await tx
-            .delete(recipeSection)
-            .where(inArray(recipeSection.id, allSectionIds));
-        }
-      }
-
-      for (const sectionUpdate of updates.sections) {
-        // If this is a new section (no ID), create it
-        if (!sectionUpdate.id) {
-          const processedIngredients = sectionUpdate.ingredients
-            ? await processIngredients(
-                tx,
-                sectionUpdate.ingredients,
-                organizationId,
-              )
-            : [];
-
-          const [createdSection] = await tx
-            .insert(recipeSection)
-            .values({
-              recipeId: id,
-              name: sectionUpdate.name || null,
-              instructions: sectionUpdate.instructions
-                ? sectionUpdate.instructions.map((inst) => ({
-                    text: inst.instruction,
-                  }))
-                : [],
-            })
-            .returning();
-
-          if (!createdSection) {
-            throw new Error("Failed to create recipe section");
-          }
-
-          // Create ingredients for this section
-          if (processedIngredients.length > 0) {
-            await tx.insert(recipeSectionIngredient).values(
-              processedIngredients.map((ing) => ({
-                recipeSectionId: createdSection.id,
-                ingredientId: ing.ingredientId as string,
-                amounts: ing.amounts,
-              })),
-            );
-          }
-        } else {
-          // This is an existing section, update it
-          const existingSection = existingRecipe.sections.find(
-            (s) => s.id === sectionUpdate.id,
-          );
-
-          if (!existingSection) {
-            throw new Error(
-              `Section with ID ${sectionUpdate.id} not found in recipe ${id}`,
-            );
-          }
-
-          // Update section name if provided
-          if (sectionUpdate.name !== undefined) {
-            await tx
-              .update(recipeSection)
-              .set({ name: sectionUpdate.name })
-              .where(eq(recipeSection.id, sectionUpdate.id));
-          }
-
-          // Handle ingredient updates
-          if (sectionUpdate.ingredients) {
-            // First, get existing ingredients for this section
-            const existingIngredients = existingSection.ingredients;
-
-            // Process each ingredient in the update
-            for (const ingredientUpdate of sectionUpdate.ingredients) {
-              if (!ingredientUpdate.id) {
-                // Process the ingredient and create it
-                const processedIngredient = await processIngredient(
-                  tx,
-                  ingredientUpdate,
-                  organizationId,
-                );
-                await tx.insert(recipeSectionIngredient).values({
-                  recipeSectionId: sectionUpdate.id,
-                  ingredientId: processedIngredient.ingredientId,
-                  amounts: processedIngredient.amounts,
-                });
-              } else {
-                // Process the ingredient and update it
-                const processedIngredient = await processIngredient(
-                  tx,
-                  ingredientUpdate,
-                  organizationId,
-                );
-                await tx
-                  .update(recipeSectionIngredient)
-                  .set({
-                    ingredientId: processedIngredient.ingredientId,
-                    amounts: processedIngredient.amounts,
-                  })
-                  .where(eq(recipeSectionIngredient.id, ingredientUpdate.id));
-              }
-            }
-
-            // Delete ingredients that weren't included in the update
-            const updatedIngredientIds = sectionUpdate.ingredients
-              .filter((ing) => ing.id)
-              .map((ing) => ing.id!);
-
-            const ingredientsToDelete = existingIngredients.filter(
-              (ing) => !updatedIngredientIds.includes(ing.id),
-            );
-
-            for (const ingToDelete of ingredientsToDelete) {
-              await tx
-                .delete(recipeSectionIngredient)
-                .where(eq(recipeSectionIngredient.id, ingToDelete.id));
-            }
-          }
-
-          // Handle instruction updates
-          if (sectionUpdate.instructions) {
-            // Since instructions are stored as a JSON array, we update the entire array
-            const instructionsJson = sectionUpdate.instructions.map((inst) => ({
-              text: inst.instruction,
-            }));
-
-            await tx
-              .update(recipeSection)
-              .set({ instructions: instructionsJson })
-              .where(eq(recipeSection.id, sectionUpdate.id));
-          }
-        }
-
-        // If we are doing partial update with specific section IDs, remove any sections not referenced
-        if (sectionIdsInUpdate.length > 0) {
-          const sectionsToDelete = existingRecipe.sections
-            .map((s) => s.id)
-            .filter((sid) => !sectionIdsInUpdate.includes(sid));
-          if (sectionsToDelete.length > 0) {
-            // Delete their ingredients first, then the sections
-            await tx
-              .delete(recipeSectionIngredient)
-              .where(
-                inArray(
-                  recipeSectionIngredient.recipeSectionId,
-                  sectionsToDelete,
-                ),
-              );
-            await tx
-              .delete(recipeSection)
-              .where(inArray(recipeSection.id, sectionsToDelete));
-          }
-        }
-      }
+      await handleSectionUpdates(
+        tx,
+        id,
+        updates.sections,
+        existingRecipe,
+        organizationId,
+      );
     }
 
     const fullRecipe = await getRecipeByID(id, tx, organizationId);
@@ -725,9 +804,7 @@ export const updateRecipe = async (
     }
 
     // Log audit entry with changes
-    const afterState = {
-      name: fullRecipe.name,
-    };
+    const afterState = { name: fullRecipe.name };
     const changes = computeChanges(beforeState, afterState, ["name"]);
     if (changes) {
       await logAuditEntry(tx, actor, {

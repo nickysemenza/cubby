@@ -33,6 +33,7 @@ import {
   mapRelation,
   associatePendingImages,
   buildPartialUpdateValues,
+  executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
 import { notFoundError } from "~/lib/error-messages";
 import {
@@ -537,8 +538,8 @@ export const locationList = async (
 
   const { take, skip } = buildTakeSkip(pagination);
 
-  // Execute both queries in parallel
-  const [results, [countResult]] = await Promise.all([
+  // Execute both queries in parallel using shared helper
+  const { data: results, count: totalCount } = await executeListQueryWithCount(
     getDb(db).query.location.findMany({
       where: whereClause,
       ...relations.location.full,
@@ -547,10 +548,10 @@ export const locationList = async (
       offset: skip,
     }),
     getDb(db).select({ count: count() }).from(location).where(whereClause),
-  ]);
+  );
 
   const items = results.map(dbLocationToAPIWithChildren);
-  return { data: items, count: countResult?.count ?? 0 };
+  return { data: items, count: totalCount };
 };
 
 // Find a location by its path string (e.g., "Room > Shelf > Bin")

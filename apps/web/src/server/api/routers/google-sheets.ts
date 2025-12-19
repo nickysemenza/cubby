@@ -33,7 +33,9 @@ import { toCSVString } from "~/lib/csv-utils";
 import {
   compareInventoryForPush,
   findRemovedInventoryForPull,
+  type RemovedInventoryItem,
 } from "~/server/repo/inventory/csv-comparison";
+import type { OrganizationId } from "~/schemas/identifiers";
 import { deleteInventoryEntry } from "~/server/repo/inventory";
 import { deleteProduct } from "~/server/repo/product";
 
@@ -107,7 +109,7 @@ type ParseSheetResult = {
 // Helper context type for procedures that need sheet access
 type SheetContext = {
   db: Parameters<typeof getDb>[0];
-  organizationId: string;
+  organizationId: OrganizationId;
 };
 
 // Get configured client and validated sheet ID, or throw appropriate error
@@ -188,6 +190,49 @@ function mergeResultWithErrors(
     ...result,
     errors: result.errors + errorItems.length,
     items: [...result.items, ...errorItems],
+  };
+}
+
+// Prepare data for pull operations (shared between preview and apply)
+type PullData = {
+  parsedRows: InventoryCSVRow[];
+  errorItems: CSVImportResultItem[];
+  removedItems: RemovedInventoryItem[];
+  orgMetadata: string | null;
+  isEmpty: boolean;
+};
+
+async function preparePullData(ctx: SheetContext): Promise<PullData> {
+  const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
+
+  // Read and parse sheet data
+  const sheetData = await client.readSheet(sheetId);
+  const { rows: parsedRows, errors: parseErrors } = parseSheetRows(sheetData);
+  const errorItems = parseErrorsToItems(parseErrors);
+
+  // Get current app inventory to detect deletions
+  const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
+  const removedItems = findRemovedInventoryForPull(appRows, parsedRows);
+
+  const isEmpty =
+    parsedRows.length === 0 &&
+    errorItems.length === 0 &&
+    removedItems.length === 0;
+
+  return { parsedRows, errorItems, removedItems, orgMetadata, isEmpty };
+}
+
+// Build final pull result by merging import result with errors and removed items
+function buildPullResult(
+  result: CSVImportResult,
+  errorItems: CSVImportResultItem[],
+  removedItems: RemovedInventoryItem[],
+): CSVImportResult {
+  const mergedResult = mergeResultWithErrors(result, errorItems);
+  return {
+    ...mergedResult,
+    removed: (mergedResult.removed ?? 0) + removedItems.length,
+    items: [...mergedResult.items, ...removedItems],
   };
 }
 
@@ -435,91 +480,45 @@ const pushToSheet = protectedProcedure
 const pullFromSheet = protectedProcedure
   .output(csvImportResult)
   .mutation(async ({ ctx }) => {
-    const { client, sheetId } = await getClientAndSheetId(ctx);
+    const { parsedRows, errorItems, removedItems, isEmpty } =
+      await preparePullData(ctx);
+    if (isEmpty) return EMPTY_IMPORT_RESULT;
+
     const actor = requireActorContext(ctx);
-
-    // Read and parse sheet data
-    const sheetData = await client.readSheet(sheetId);
-    const { rows: parsedRows, errors: parseErrors } = parseSheetRows(sheetData);
-    const errorItems = parseErrorsToItems(parseErrors);
-
-    // Get current app inventory to detect deletions
-    const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
-    const removedItems = findRemovedInventoryForPull(appRows, parsedRows);
-
-    if (
-      parsedRows.length === 0 &&
-      errorItems.length === 0 &&
-      removedItems.length === 0
-    ) {
-      return EMPTY_IMPORT_RESULT;
-    }
-
-    // Run import in preview mode
     const result = await importInventoryFromCSV(
       ctx.db,
       actor.organizationId,
       parsedRows,
-      {
-        dryRun: true,
-        actor: { ...actor, source: "sheets_import" },
-      },
+      { dryRun: true, actor: { ...actor, source: "sheets_import" } },
     );
 
-    // Add removed items to result
-    const mergedResult = mergeResultWithErrors(result, errorItems);
-    return {
-      ...mergedResult,
-      removed: (mergedResult.removed ?? 0) + removedItems.length,
-      items: [...mergedResult.items, ...removedItems],
-    };
+    return buildPullResult(result, errorItems, removedItems);
   });
 
 // Apply pull from Google Sheet
 const applyPull = protectedProcedure
   .output(csvImportResult)
   .mutation(async ({ ctx }) => {
-    const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
+    const { parsedRows, errorItems, removedItems, orgMetadata, isEmpty } =
+      await preparePullData(ctx);
+    if (isEmpty) return EMPTY_IMPORT_RESULT;
+
     const actor = requireActorContext(ctx);
-
-    // Read and parse sheet data
-    const sheetData = await client.readSheet(sheetId);
-    const { rows: parsedRows, errors: parseErrors } = parseSheetRows(sheetData);
-    const errorItems = parseErrorsToItems(parseErrors);
-
-    // Get current app inventory to detect deletions
-    const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
-    const removedItems = findRemovedInventoryForPull(appRows, parsedRows);
-
-    if (
-      parsedRows.length === 0 &&
-      errorItems.length === 0 &&
-      removedItems.length === 0
-    ) {
-      return EMPTY_IMPORT_RESULT;
-    }
-
-    // Run actual import
     const result = await importInventoryFromCSV(
       ctx.db,
       actor.organizationId,
       parsedRows,
-      {
-        dryRun: false,
-        actor: { ...actor, source: "sheets_import" },
-      },
+      { dryRun: false, actor: { ...actor, source: "sheets_import" } },
     );
 
     // Delete inventory entries and products that were removed from the sheet
     for (const item of removedItems) {
       if (item.inventoryEntryId) {
-        // Delete inventory entry (product with location was removed)
         await deleteInventoryEntry(ctx.db, item.inventoryEntryId, {
           ...actor,
           source: "sheets_import",
         });
       } else if (item.productIdToDelete) {
-        // Delete product (product-only row was removed)
         await deleteProduct(ctx.db, item.productIdToDelete, {
           ...actor,
           source: "sheets_import",
@@ -528,14 +527,7 @@ const applyPull = protectedProcedure
     }
 
     await updateLastSyncTimestamp(ctx, orgMetadata);
-
-    // Add removed items to result
-    const mergedResult = mergeResultWithErrors(result, errorItems);
-    return {
-      ...mergedResult,
-      removed: (mergedResult.removed ?? 0) + removedItems.length,
-      items: [...mergedResult.items, ...removedItems],
-    };
+    return buildPullResult(result, errorItems, removedItems);
   });
 
 // Debug endpoint - returns raw sheet data for troubleshooting
