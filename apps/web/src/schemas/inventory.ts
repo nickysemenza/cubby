@@ -107,6 +107,9 @@ export type UnitMappingDetail = z.infer<typeof unitMappingDetail>;
 // Product metadata changes for preview
 // Each field has optional "current" value for showing from→to changes
 export const productChangesPreview = z.object({
+  // Manufacturer update (from "(unspecified)" to specific)
+  manufacturerWillBeSet: z.string().optional(),
+  manufacturerCurrent: z.string().nullable().optional(),
   // Price: "1 each → $X" mapping
   priceWillBeSet: z.number().optional(),
   priceCurrent: z.number().nullable().optional(),

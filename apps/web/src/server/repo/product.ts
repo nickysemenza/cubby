@@ -634,6 +634,113 @@ export const findProductByNameAndManufacturer = async (
   );
 };
 
+/**
+ * Check if a manufacturer value is "unspecified" (empty, null, or "(unspecified)")
+ */
+const isUnspecifiedManufacturer = (
+  manufacturer: string | null | undefined,
+): boolean => {
+  if (!manufacturer) return true;
+  const trimmed = manufacturer.trim().toLowerCase();
+  return trimmed === "" || trimmed === UNSPECIFIED_MANUFACTURER.toLowerCase();
+};
+
+/**
+ * Find a product by name with fuzzy manufacturer matching
+ *
+ * Matching logic:
+ * - If incoming manufacturer is unspecified → match by name only (any manufacturer)
+ * - If incoming manufacturer is specific → try exact match first, then fallback
+ *   to matching a product with "(unspecified)" manufacturer in DB
+ *
+ * This allows sheet rows with empty manufacturer to match existing products
+ * regardless of their manufacturer, while specific manufacturers require
+ * exact match or fallback to unspecified.
+ */
+export const findProductByNameFuzzyManufacturer = async (
+  db: Database,
+  name: string,
+  manufacturer: string | null | undefined,
+  organizationId: OrganizationId,
+): Promise<ProductTopLevelOut | null> => {
+  // If incoming manufacturer is unspecified, match by name only
+  if (isUnspecifiedManufacturer(manufacturer)) {
+    const res = await getDb(db).query.product.findFirst({
+      where: and(
+        ilike(product.name, name),
+        eq(product.organizationId, organizationId),
+      ),
+      with: {
+        images: {
+          with: {
+            image: true,
+          },
+        },
+      },
+    });
+
+    if (!res) {
+      return null;
+    }
+
+    return parseWithContext(
+      productTopLevelOut,
+      {
+        ...res,
+        images: res.images?.map((pi) => pi.image) ?? [],
+      },
+      {
+        entityType: "Product",
+        identifier: { id: res.id, name: res.name },
+      },
+    );
+  }
+
+  // Incoming manufacturer is specific - try exact match first
+  const exactMatch = await findProductByNameAndManufacturer(
+    db,
+    name,
+    manufacturer!,
+    organizationId,
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  // Fallback: try to match a product with "(unspecified)" manufacturer
+  const unspecifiedMatch = await getDb(db).query.product.findFirst({
+    where: and(
+      ilike(product.name, name),
+      ilike(product.manufacturer, UNSPECIFIED_MANUFACTURER),
+      eq(product.organizationId, organizationId),
+    ),
+    with: {
+      images: {
+        with: {
+          image: true,
+        },
+      },
+    },
+  });
+
+  if (!unspecifiedMatch) {
+    return null;
+  }
+
+  return parseWithContext(
+    productTopLevelOut,
+    {
+      ...unspecifiedMatch,
+      images: unspecifiedMatch.images?.map((pi) => pi.image) ?? [],
+    },
+    {
+      entityType: "Product",
+      identifier: { id: unspecifiedMatch.id, name: unspecifiedMatch.name },
+    },
+  );
+};
+
 // Quick create a product with minimal data
 export const quickCreateProduct = async (
   db: Database,
@@ -723,7 +830,7 @@ export const findDuplicateUniqueProducts = async (
 /**
  * Delete a product by ID
  *
- * This will also cascade delete:
+ * This will also delete:
  * - Associated inventory entries
  * - Associated unit mappings
  * - Associated images (product_image join table)
@@ -735,7 +842,28 @@ export const deleteProduct = async (
 ): Promise<void> => {
   const { organizationId } = actor;
 
-  // Delete the product (cascades will handle related records)
+  // Delete related records first (no ON DELETE CASCADE in schema)
+  // Order matters due to potential dependencies
+
+  // Delete inventory entries for this product
+  await getDb(db)
+    .delete(inventoryEntry)
+    .where(
+      and(
+        eq(inventoryEntry.productId, id),
+        eq(inventoryEntry.organizationId, organizationId),
+      ),
+    );
+
+  // Delete unit mappings for this product
+  await getDb(db)
+    .delete(productUnitMappings)
+    .where(eq(productUnitMappings.productId, id));
+
+  // Delete product image associations
+  await getDb(db).delete(productImage).where(eq(productImage.productId, id));
+
+  // Finally delete the product itself
   await getDb(db)
     .delete(product)
     .where(and(eq(product.id, id), eq(product.organizationId, organizationId)));

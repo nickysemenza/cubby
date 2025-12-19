@@ -10,7 +10,7 @@ import {
   type CSVImportResultItem,
   type FieldChange,
 } from "~/schemas/inventory";
-import { type LocationId } from "~/schemas/identifiers";
+import { type LocationId, type ProductId } from "~/schemas/identifiers";
 
 /**
  * Mutable counters for tracking import/export results
@@ -97,6 +97,7 @@ export function buildImportResult(
 interface ResultItemBase {
   rowIndex: number;
   productName: string;
+  productId?: ProductId;
   locationPath?: string;
   locationId?: LocationId;
   message?: string;
@@ -116,6 +117,7 @@ export function pushResultItem(
     rowIndex: base.rowIndex,
     action,
     productName: base.productName,
+    productId: base.productId,
     locationPath: base.locationPath,
     locationId: base.locationId,
     message: base.message,

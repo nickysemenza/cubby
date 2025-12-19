@@ -72,6 +72,20 @@ describe("makeInventoryKey", () => {
     const key2 = makeInventoryKey("Widget", "Acme", "Kitchen");
     expect(key1).toBe(key2);
   });
+
+  it("should normalize empty manufacturer to (unspecified)", () => {
+    const key1 = makeInventoryKey("Widget", "", "Kitchen");
+    const key2 = makeInventoryKey("Widget", "(unspecified)", "Kitchen");
+    expect(key1).toBe(key2);
+  });
+
+  it("should normalize null/undefined manufacturer to (unspecified)", () => {
+    const key1 = makeInventoryKey("Widget", null, "Kitchen");
+    const key2 = makeInventoryKey("Widget", undefined, "Kitchen");
+    const key3 = makeInventoryKey("Widget", "(unspecified)", "Kitchen");
+    expect(key1).toBe(key2);
+    expect(key2).toBe(key3);
+  });
 });
 
 describe("getRowDifferences", () => {
@@ -216,6 +230,217 @@ describe("compareInventoryForPush", () => {
     expect(result.removed).toBe(1);
     expect(result.items[0].action).toBe("removed");
     expect(result.items[0].productName).toBe("Old Widget");
+  });
+
+  it("should match items when app has real manufacturer but sheet has (unspecified)", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Dewalt Planer",
+        manufacturer: "DeWalt",
+        location_path: "Garage > Shelf",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Dewalt Planer",
+        manufacturer: "(unspecified)",
+        location_path: "Garage > Shelf",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    // Should match as the same item, not show Add+Remove
+    expect(result.skipped).toBe(1);
+    expect(result.created).toBe(0);
+    expect(result.removed ?? 0).toBe(0);
+  });
+
+  it("should match items when sheet has empty manufacturer", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Router Table",
+        manufacturer: "Bosch",
+        location_path: "Workshop",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Router Table",
+        manufacturer: undefined, // empty
+        location_path: "Workshop",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    expect(result.skipped).toBe(1);
+    expect(result.created).toBe(0);
+    expect(result.removed ?? 0).toBe(0);
+  });
+
+  it("should match items when app has (unspecified) and sheet has specific manufacturer", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Power Drill",
+        manufacturer: "(unspecified)",
+        location_path: "Garage",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Power Drill",
+        manufacturer: "Makita",
+        location_path: "Garage",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    // Should match - (unspecified) is a wildcard
+    expect(result.skipped).toBe(1);
+    expect(result.created).toBe(0);
+    expect(result.removed ?? 0).toBe(0);
+  });
+
+  it("should NOT match items with different specific manufacturers", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Table Saw",
+        manufacturer: "DeWalt",
+        location_path: "Workshop",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Table Saw",
+        manufacturer: "Bosch",
+        location_path: "Workshop",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    // Different specific manufacturers = different products
+    expect(result.created).toBe(1); // App item is new to sheet
+    expect(result.removed).toBe(1); // Sheet item doesn't exist in app
+  });
+
+  it("should match multiple items with fuzzy manufacturers correctly", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Screwdriver",
+        manufacturer: "DeWalt",
+        location_path: "Toolbox",
+        quantity: 1,
+        unit: "each",
+        product_id: unsafeProductId("prod-1"),
+      }),
+      makeAppRow({
+        product_name: "Screwdriver",
+        manufacturer: "Bosch",
+        location_path: "Garage",
+        quantity: 1,
+        unit: "each",
+        product_id: unsafeProductId("prod-2"),
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Screwdriver",
+        manufacturer: "(unspecified)", // Should match one of them
+        location_path: "Toolbox",
+        quantity: 1,
+        unit: "each",
+      }),
+      makeSheetRow({
+        product_name: "Screwdriver",
+        manufacturer: "(unspecified)", // Should match the other
+        location_path: "Garage",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    // Both should match via fuzzy matching
+    expect(result.skipped).toBe(2);
+    expect(result.created).toBe(0);
+    expect(result.removed ?? 0).toBe(0);
+  });
+
+  it("should show updated when quantities differ despite fuzzy manufacturer match", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Hammer",
+        manufacturer: "Stanley",
+        location_path: "Toolbox",
+        quantity: 3,
+        unit: "each",
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Hammer",
+        manufacturer: "(unspecified)",
+        location_path: "Toolbox",
+        quantity: 1,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    expect(result.updated).toBe(1);
+    expect(result.items[0].action).toBe("updated");
+    expect(result.items[0].fieldChanges).toContainEqual({
+      field: "qty",
+      from: 1,
+      to: 3,
+    });
+  });
+
+  it("should include productId in result items for product links", () => {
+    const appRows = [
+      makeAppRow({
+        product_name: "Widget",
+        manufacturer: "Acme",
+        location_path: "Kitchen",
+        product_id: unsafeProductId("prod-123"),
+        quantity: 5,
+        unit: "each",
+      }),
+    ];
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Widget",
+        manufacturer: "Acme",
+        location_path: "Kitchen",
+        quantity: 5,
+        unit: "each",
+      }),
+    ];
+
+    const result = compareInventoryForPush(appRows, sheetRows);
+
+    expect(result.items[0].productId).toBe("prod-123");
   });
 });
 
@@ -384,6 +609,135 @@ describe("findRemovedInventoryForPull", () => {
 
       const result = findRemovedInventoryForPull(appRows, sheetRows);
 
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("fuzzy manufacturer matching", () => {
+    it("should NOT mark as removed when app has specific manufacturer but sheet has (unspecified)", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Dewalt Planer",
+          manufacturer: "DeWalt",
+          location_path: "Garage > Shelf",
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Dewalt Planer",
+          manufacturer: "(unspecified)", // Should match via fuzzy matching
+          location_path: "Garage > Shelf",
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+
+      const result = findRemovedInventoryForPull(appRows, sheetRows);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("should NOT mark as removed when app has (unspecified) but sheet has specific manufacturer", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Router Table",
+          manufacturer: "(unspecified)",
+          location_path: "Workshop",
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Router Table",
+          manufacturer: "Bosch",
+          location_path: "Workshop",
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+
+      const result = findRemovedInventoryForPull(appRows, sheetRows);
+
+      expect(result).toHaveLength(0);
+    });
+
+    it("should mark as removed when manufacturers are both specific and different", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Table Saw",
+          manufacturer: "DeWalt",
+          location_path: "Workshop",
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Table Saw",
+          manufacturer: "Bosch", // Different specific manufacturer
+          location_path: "Workshop",
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+
+      const result = findRemovedInventoryForPull(appRows, sheetRows);
+
+      // Different specific manufacturers = product doesn't exist in sheet
+      expect(result).toHaveLength(1);
+      expect(result[0].productIdToDelete).toBe("prod-1");
+    });
+
+    it("should handle multiple products with same name but different manufacturers", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "All purpose flour",
+          manufacturer: "King Arthur",
+          location_path: "Pantry",
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+        makeAppRow({
+          product_name: "All purpose flour",
+          manufacturer: "(unspecified)",
+          location_path: "Pantry",
+          inventory_entry_id: unsafeInventoryId("inv-2"),
+          product_id: unsafeProductId("prod-2"),
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "All purpose flour",
+          manufacturer: "King Arthur",
+          location_path: "Pantry",
+          quantity: 1,
+          unit: "each",
+        }),
+        makeSheetRow({
+          product_name: "All purpose flour",
+          manufacturer: "(unspecified)",
+          location_path: "Pantry",
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+
+      const result = findRemovedInventoryForPull(appRows, sheetRows);
+
+      // Both products should be matched
       expect(result).toHaveLength(0);
     });
   });

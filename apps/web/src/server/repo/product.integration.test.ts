@@ -7,6 +7,7 @@ import {
   productList,
   updateProduct,
   findProductByName,
+  findProductByNameFuzzyManufacturer,
 } from "./product";
 import { createIngredient } from "./ingredient";
 import {
@@ -408,5 +409,266 @@ describe("product repository", () => {
 
     // Verify the ingredient association was removed
     expect(updatedProduct.ingredient).toBeNull();
+  });
+
+  describe("findProductByNameFuzzyManufacturer", () => {
+    it("should find product by exact name and manufacturer match", async () => {
+      // Create a product with specific manufacturer
+      await createProduct(
+        db,
+        {
+          name: "Power Drill",
+          manufacturer: "DeWalt",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find exact match
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Power Drill",
+        "DeWalt",
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.name).toEqual("Power Drill");
+      expect(found!.manufacturer).toEqual("DeWalt");
+    });
+
+    it("should find product when incoming manufacturer is (unspecified)", async () => {
+      // Create a product with specific manufacturer
+      await createProduct(
+        db,
+        {
+          name: "Router Table",
+          manufacturer: "Bosch",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find product when searching with "(unspecified)" - matches by name only
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Router Table",
+        "(unspecified)",
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.name).toEqual("Router Table");
+      expect(found!.manufacturer).toEqual("Bosch");
+    });
+
+    it("should find product when incoming manufacturer is empty string", async () => {
+      // Create a product with specific manufacturer
+      await createProduct(
+        db,
+        {
+          name: "Table Saw",
+          manufacturer: "Makita",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find product when searching with empty string
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Table Saw",
+        "",
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.name).toEqual("Table Saw");
+    });
+
+    it("should find product when incoming manufacturer is null", async () => {
+      // Create a product with specific manufacturer
+      await createProduct(
+        db,
+        {
+          name: "Circular Saw",
+          manufacturer: "Ryobi",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find product when searching with null
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Circular Saw",
+        null,
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.name).toEqual("Circular Saw");
+    });
+
+    it("should fallback to (unspecified) manufacturer when specific manufacturer not found", async () => {
+      // Create a product with (unspecified) manufacturer
+      await createProduct(
+        db,
+        {
+          name: "Hammer",
+          manufacturer: "(unspecified)",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find product with "(unspecified)" when searching for specific manufacturer
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Hammer",
+        "Stanley",
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.name).toEqual("Hammer");
+      expect(found!.manufacturer).toEqual("(unspecified)");
+    });
+
+    it("should NOT find product when both have different specific manufacturers", async () => {
+      // Create a product with specific manufacturer
+      await createProduct(
+        db,
+        {
+          name: "Jigsaw",
+          manufacturer: "DeWalt",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should NOT find product when manufacturers are both specific and different
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Jigsaw",
+        "Bosch",
+        organizationId,
+      );
+
+      expect(found).toBeNull();
+    });
+
+    it("should prefer exact manufacturer match over (unspecified)", async () => {
+      // Create two products: one with specific manufacturer, one with (unspecified)
+      await createProduct(
+        db,
+        {
+          name: "Screwdriver",
+          manufacturer: "Stanley",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      await createProduct(
+        db,
+        {
+          name: "Screwdriver",
+          manufacturer: "(unspecified)",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find exact match first
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Screwdriver",
+        "Stanley",
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.manufacturer).toEqual("Stanley");
+    });
+
+    it("should return null when product does not exist", async () => {
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "Non-existent Product",
+        "Any Manufacturer",
+        organizationId,
+      );
+
+      expect(found).toBeNull();
+    });
+
+    it("should be case insensitive for product name", async () => {
+      await createProduct(
+        db,
+        {
+          name: "Power Drill PRO",
+          manufacturer: "DeWalt",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        TEST_ACTOR,
+      );
+
+      // Should find with different case
+      const found = await findProductByNameFuzzyManufacturer(
+        db,
+        "POWER DRILL PRO",
+        "dewalt", // also lowercase
+        organizationId,
+      );
+
+      expect(found).not.toBeNull();
+      expect(found!.name).toEqual("Power Drill PRO");
+    });
   });
 });

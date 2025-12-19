@@ -18,7 +18,38 @@ import {
   buildImportResult,
   pushResultItem,
 } from "./csv-result-helpers";
-import { type InventoryId } from "~/schemas/identifiers";
+import { type InventoryId, type ProductId } from "~/schemas/identifiers";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+
+/**
+ * Normalize manufacturer value (empty/null becomes UNSPECIFIED_MANUFACTURER)
+ */
+function normalizeManufacturer(
+  manufacturer: string | null | undefined,
+): string {
+  return manufacturer?.trim() || UNSPECIFIED_MANUFACTURER;
+}
+
+/**
+ * Check if two manufacturers are compatible for matching purposes.
+ * "(unspecified)" acts as a wildcard and matches any manufacturer.
+ */
+function manufacturersMatch(
+  mfr1: string | null | undefined,
+  mfr2: string | null | undefined,
+): boolean {
+  const norm1 = normalizeManufacturer(mfr1).toLowerCase();
+  const norm2 = normalizeManufacturer(mfr2).toLowerCase();
+
+  // Exact match
+  if (norm1 === norm2) return true;
+
+  // "(unspecified)" matches anything
+  const unspecified = UNSPECIFIED_MANUFACTURER.toLowerCase();
+  if (norm1 === unspecified || norm2 === unspecified) return true;
+
+  return false;
+}
 
 /**
  * Create a unique key for inventory comparison (product + manufacturer + location)
@@ -28,10 +59,21 @@ import { type InventoryId } from "~/schemas/identifiers";
  */
 export function makeInventoryKey(
   productName: string,
-  manufacturer: string,
+  manufacturer: string | null | undefined,
   locationPath: string,
 ): string {
-  return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}|${normalizeLocationPath(locationPath)}`;
+  return `${productName.toLowerCase()}|${normalizeManufacturer(manufacturer).toLowerCase()}|${normalizeLocationPath(locationPath)}`;
+}
+
+/**
+ * Create a key for product + location lookup (ignoring manufacturer)
+ * Used for fuzzy matching when manufacturer differs
+ */
+function makeProductLocationKey(
+  productName: string,
+  locationPath: string,
+): string {
+  return `${productName.toLowerCase()}|${normalizeLocationPath(locationPath)}`;
 }
 
 /**
@@ -139,6 +181,8 @@ export function getRowDifferences(
  *
  * Used by push preview to show what changes would be made to the sheet,
  * and by round-trip tests to verify export/import symmetry.
+ *
+ * Uses fuzzy manufacturer matching: "(unspecified)" matches any manufacturer.
  */
 export function compareInventoryForPush(
   appRows: InventoryCSVExportRow[],
@@ -147,49 +191,74 @@ export function compareInventoryForPush(
   const items: CSVImportResultItem[] = [];
   const counters = createResultCounters();
 
-  // Build a map of sheet rows by key
-  const sheetMap = new Map<string, InventoryCSVRow>();
+  // Build a map of sheet rows by product+location key (ignoring manufacturer for lookup)
+  // Each key may have multiple rows with different manufacturers
+  const sheetByProductLocation = new Map<string, InventoryCSVRow[]>();
   for (const row of sheetRows) {
-    const key = makeInventoryKey(
+    const plKey = makeProductLocationKey(
       row.product_name,
-      row.manufacturer ?? "(unspecified)",
       row.location_path ?? "",
     );
-    sheetMap.set(key, row);
+    const existing = sheetByProductLocation.get(plKey) ?? [];
+    existing.push(row);
+    sheetByProductLocation.set(plKey, existing);
   }
 
-  // Track which sheet keys we've seen
-  const seenSheetKeys = new Set<string>();
+  // Track which sheet rows we've matched (by index in original array)
+  const matchedSheetIndices = new Set<number>();
 
   // Compare app rows against sheet
   for (let i = 0; i < appRows.length; i++) {
     const appRow = appRows[i];
-    const key = makeInventoryKey(
+    const plKey = makeProductLocationKey(
       appRow.product_name,
-      appRow.manufacturer,
       appRow.location_path,
     );
-    seenSheetKeys.add(key);
 
-    const sheetRow = sheetMap.get(key);
+    // Find sheet rows with same product+location
+    const candidates = sheetByProductLocation.get(plKey) ?? [];
 
-    if (!sheetRow) {
+    // Find a matching row (manufacturer must be compatible)
+    let matchedSheetRow: InventoryCSVRow | undefined;
+    let matchedSheetIndex = -1;
+
+    for (let j = 0; j < candidates.length; j++) {
+      const candidate = candidates[j];
+      const sheetIndex = sheetRows.indexOf(candidate);
+
+      // Skip already matched rows
+      if (matchedSheetIndices.has(sheetIndex)) continue;
+
+      // Check if manufacturers are compatible
+      if (manufacturersMatch(appRow.manufacturer, candidate.manufacturer)) {
+        matchedSheetRow = candidate;
+        matchedSheetIndex = sheetIndex;
+        break;
+      }
+    }
+
+    if (!matchedSheetRow) {
       // New row - doesn't exist in sheet
       pushResultItem(items, counters, "created", {
         rowIndex: i,
         productName: appRow.product_name,
+        productId: appRow.product_id,
         locationPath: appRow.location_path,
         locationId: appRow.location_id ?? undefined,
         message: "Will be added to sheet",
       });
     } else {
+      // Mark this sheet row as matched
+      matchedSheetIndices.add(matchedSheetIndex);
+
       // Row exists - check if different
-      const fieldChanges = getRowDifferences(appRow, sheetRow);
+      const fieldChanges = getRowDifferences(appRow, matchedSheetRow);
 
       if (fieldChanges.length > 0) {
         pushResultItem(items, counters, "updated", {
           rowIndex: i,
           productName: appRow.product_name,
+          productId: appRow.product_id,
           locationPath: appRow.location_path,
           locationId: appRow.location_id ?? undefined,
           fieldChanges,
@@ -198,6 +267,7 @@ export function compareInventoryForPush(
         pushResultItem(items, counters, "skipped", {
           rowIndex: i,
           productName: appRow.product_name,
+          productId: appRow.product_id,
           locationPath: appRow.location_path,
           locationId: appRow.location_id ?? undefined,
         });
@@ -205,9 +275,11 @@ export function compareInventoryForPush(
     }
   }
 
-  // Find rows in sheet that aren't in app (will be removed)
-  for (const [key, sheetRow] of sheetMap) {
-    if (!seenSheetKeys.has(key)) {
+  // Find rows in sheet that weren't matched (will be removed)
+  // Note: removed items don't have productId since they only exist in the sheet
+  for (let i = 0; i < sheetRows.length; i++) {
+    if (!matchedSheetIndices.has(i)) {
+      const sheetRow = sheetRows[i];
       pushResultItem(items, counters, "removed", {
         rowIndex: -1, // Not in app
         productName: sheetRow.product_name,
@@ -248,8 +320,6 @@ export function exportRowToImportRow(
   };
 }
 
-import { type ProductId } from "~/schemas/identifiers";
-
 /**
  * Removed item with inventory entry ID or product ID for deletion
  */
@@ -257,13 +327,6 @@ export interface RemovedInventoryItem extends CSVImportResultItem {
   action: "removed";
   inventoryEntryId?: InventoryId;
   productIdToDelete?: ProductId; // For products completely removed from sheet
-}
-
-/**
- * Create a unique key for product comparison (product + manufacturer, no location)
- */
-function makeProductKey(productName: string, manufacturer: string): string {
-  return `${productName.toLowerCase()}|${manufacturer.toLowerCase()}`;
 }
 
 /**
@@ -275,6 +338,8 @@ function makeProductKey(productName: string, manufacturer: string): string {
  * Deletion rules:
  * 1. If a product is completely removed from sheet (no rows reference it) → delete the product
  * 2. If only an inventory entry is removed (product still exists in sheet) → delete only the inventory entry
+ *
+ * Uses fuzzy manufacturer matching: "(unspecified)" matches any manufacturer.
  */
 export function findRemovedInventoryForPull(
   appRows: InventoryCSVExportRow[],
@@ -282,44 +347,74 @@ export function findRemovedInventoryForPull(
 ): RemovedInventoryItem[] {
   const removedItems: RemovedInventoryItem[] = [];
 
-  // Build sets of keys from sheet rows
-  const sheetInventoryKeys = new Set<string>(); // For inventory rows
-  const sheetProductKeys = new Set<string>(); // For all products (inventory + product-only)
+  // Build lookup structures from sheet rows
+  // Group by product name (lowercase) for fuzzy product matching
+  const sheetProductsByName = new Map<
+    string,
+    Array<{
+      manufacturer: string | undefined;
+      locationPath: string | undefined;
+    }>
+  >();
 
   for (const row of sheetRows) {
-    const productKey = makeProductKey(
-      row.product_name,
-      row.manufacturer ?? "(unspecified)",
-    );
-    sheetProductKeys.add(productKey);
-
-    if (row.location_path && row.location_path.trim() !== "") {
-      const inventoryKey = makeInventoryKey(
-        row.product_name,
-        row.manufacturer ?? "(unspecified)",
-        row.location_path,
-      );
-      sheetInventoryKeys.add(inventoryKey);
-    }
+    const nameKey = row.product_name.toLowerCase();
+    const existing = sheetProductsByName.get(nameKey) ?? [];
+    existing.push({
+      manufacturer: row.manufacturer,
+      locationPath: row.location_path,
+    });
+    sheetProductsByName.set(nameKey, existing);
   }
 
-  // Track which products we've already marked for deletion
+  // Helper to check if product exists in sheet (with fuzzy manufacturer matching)
+  const productExistsInSheet = (
+    productName: string,
+    manufacturer: string | null | undefined,
+  ): boolean => {
+    const nameKey = productName.toLowerCase();
+    const candidates = sheetProductsByName.get(nameKey);
+    if (!candidates) return false;
+
+    return candidates.some((c) =>
+      manufacturersMatch(manufacturer, c.manufacturer),
+    );
+  };
+
+  // Helper to check if inventory entry exists in sheet (with fuzzy manufacturer matching)
+  const inventoryExistsInSheet = (
+    productName: string,
+    manufacturer: string | null | undefined,
+    locationPath: string,
+  ): boolean => {
+    const nameKey = productName.toLowerCase();
+    const candidates = sheetProductsByName.get(nameKey);
+    if (!candidates) return false;
+
+    const normalizedLocation = normalizeLocationPath(locationPath);
+    return candidates.some(
+      (c) =>
+        manufacturersMatch(manufacturer, c.manufacturer) &&
+        c.locationPath &&
+        normalizeLocationPath(c.locationPath) === normalizedLocation,
+    );
+  };
+
+  // Track which products we've already marked for deletion (by product_id)
   const productsToDelete = new Set<string>();
 
   // First pass: identify products that should be completely deleted
   // (products that have no presence in the sheet at all)
   for (const appRow of appRows) {
-    const productKey = makeProductKey(appRow.product_name, appRow.manufacturer);
+    if (productsToDelete.has(appRow.product_id)) continue;
 
-    if (
-      !sheetProductKeys.has(productKey) &&
-      !productsToDelete.has(productKey)
-    ) {
-      productsToDelete.add(productKey);
+    if (!productExistsInSheet(appRow.product_name, appRow.manufacturer)) {
+      productsToDelete.add(appRow.product_id);
       removedItems.push({
         rowIndex: -1,
         action: "removed",
         productName: appRow.product_name,
+        productId: appRow.product_id,
         productIdToDelete: appRow.product_id,
         message: "Product will be deleted (removed from sheet)",
       });
@@ -333,22 +428,21 @@ export function findRemovedInventoryForPull(
       !appRow.location_path || appRow.location_path.trim() === "";
     if (isProductOnly) continue; // Product-only rows handled above
 
-    const productKey = makeProductKey(appRow.product_name, appRow.manufacturer);
-
     // Skip if product is being deleted entirely
-    if (productsToDelete.has(productKey)) continue;
+    if (productsToDelete.has(appRow.product_id)) continue;
 
-    const inventoryKey = makeInventoryKey(
-      appRow.product_name,
-      appRow.manufacturer,
-      appRow.location_path,
-    );
-
-    if (!sheetInventoryKeys.has(inventoryKey)) {
+    if (
+      !inventoryExistsInSheet(
+        appRow.product_name,
+        appRow.manufacturer,
+        appRow.location_path,
+      )
+    ) {
       removedItems.push({
         rowIndex: -1,
         action: "removed",
         productName: appRow.product_name,
+        productId: appRow.product_id,
         locationPath: appRow.location_path,
         locationId: appRow.location_id ?? undefined,
         inventoryEntryId: appRow.inventory_entry_id ?? undefined,

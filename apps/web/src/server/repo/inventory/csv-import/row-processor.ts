@@ -29,6 +29,7 @@ import {
   createUnitMappingsFromString,
   checkPriceMappingChanges,
   parseUnitMappingsForPreview,
+  checkUnitMappingsChanges,
 } from "./unit-mapping-handler";
 import {
   moveInventoryEntries,
@@ -189,10 +190,26 @@ export const processRow = async (
     }
 
     // Parse unit mappings for preview using WASM
+    // Only show changes if they differ from existing mappings
     if (row.unit_mappings) {
-      const mappings = await parseUnitMappingsForPreview(row.unit_mappings);
-      productChanges.unitMappingsWillBeAdded = mappings.count;
-      productChanges.unitMappingsDetail = mappings.details;
+      if (productData) {
+        // Product exists - compare against existing mappings
+        const mappingChanges = await checkUnitMappingsChanges(
+          db,
+          productData.id,
+          row.unit_mappings,
+        );
+        if (mappingChanges) {
+          productChanges.unitMappingsWillBeAdded = mappingChanges.willBeAdded;
+          productChanges.unitMappingsDetail = mappingChanges.details;
+          productChanges.unitMappingsCurrent = mappingChanges.current;
+        }
+      } else {
+        // New product - show all mappings as new
+        const mappings = await parseUnitMappingsForPreview(row.unit_mappings);
+        productChanges.unitMappingsWillBeAdded = mappings.count;
+        productChanges.unitMappingsDetail = mappings.details;
+      }
     }
   } else {
     productData = await findOrCreateProductForImport(

@@ -234,3 +234,96 @@ export const parseUnitMappingsForPreview = async (
 
   return { count: details.length, details, errors };
 };
+
+/**
+ * Check if unit mappings would change (for preview)
+ *
+ * Compares the incoming unit mappings string against the product's existing mappings.
+ * Returns preview result only if there are actual changes, null otherwise.
+ */
+export const checkUnitMappingsChanges = async (
+  db: Database,
+  productId: ProductId,
+  newMappingsStr: string,
+): Promise<{
+  willBeAdded: number;
+  details: UnitMappingPreviewDetail[];
+  current: string | null;
+} | null> => {
+  // Get existing unit mappings for this product
+  const existingMappings = await getDb(db).query.productUnitMappings.findMany({
+    where: eq(productUnitMappings.productId, productId),
+  });
+
+  // Filter to non-price mappings (same logic as serializeUnitMappings)
+  const nonPriceResults = await Promise.all(
+    existingMappings.map(async (m) => ({
+      ...m,
+      isMoneyA: await isMoneyUnit(m.a.unit),
+      isMoneyB: await isMoneyUnit(m.b.unit),
+    })),
+  );
+  const nonPriceMappings = nonPriceResults.filter(
+    (m) => !m.isMoneyA && !m.isMoneyB,
+  );
+
+  // Parse the incoming mappings string (filtering out price mappings)
+  const parsedNew = await parseUnitMappingsForPreview(newMappingsStr);
+  const newNonPriceMappings = parsedNew.details.filter((d) => {
+    // Check if either side looks like money (simplified check for preview)
+    const looksLikeMoney = (s: string) =>
+      s.includes("$") || s.toLowerCase().includes("dollar");
+    return !looksLikeMoney(d.from) && !looksLikeMoney(d.to);
+  });
+
+  // Serialize existing mappings for comparison
+  const formatNum = (n: number) => {
+    const rounded = Math.round(n * 1000000) / 1000000;
+    return rounded.toString();
+  };
+
+  const existingSerialized =
+    nonPriceMappings.length > 0
+      ? nonPriceMappings
+          .map((m) => {
+            const sourceStr = m.source ? ` @ ${m.source}` : "";
+            return `${formatNum(m.a.value)} ${m.a.unit} = ${formatNum(m.b.value)} ${m.b.unit}${sourceStr}`;
+          })
+          .join("; ")
+      : null;
+
+  // Compare counts - if same number of mappings, check if they're equivalent
+  if (nonPriceMappings.length === newNonPriceMappings.length) {
+    // Simple check: if counts match and we have existing, likely no change
+    // (A more robust check would compare parsed values, but this handles most cases)
+    if (newNonPriceMappings.length === 0) {
+      return null; // Both have no non-price mappings
+    }
+    // Compare serialized versions (normalized format)
+    const newSerialized = newNonPriceMappings
+      .map((d) => `${d.from} = ${d.to}${d.source ? ` @ ${d.source}` : ""}`)
+      .join("; ");
+
+    // Normalize for comparison (lowercase, trim spaces)
+    const normalizeForCompare = (s: string) =>
+      s.toLowerCase().replace(/\s+/g, " ").trim();
+    if (
+      existingSerialized &&
+      normalizeForCompare(existingSerialized) ===
+        normalizeForCompare(newSerialized)
+    ) {
+      return null; // No changes
+    }
+  }
+
+  // There are changes
+  if (newNonPriceMappings.length === 0) {
+    return null; // No new mappings to add
+  }
+
+  return {
+    willBeAdded: newNonPriceMappings.length,
+    details: newNonPriceMappings,
+    current: existingSerialized,
+  };
+};

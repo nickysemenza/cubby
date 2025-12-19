@@ -15,9 +15,10 @@ import { getDb } from "~/server/repo/database-helpers";
 import { product } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import {
-  findProductByNameAndManufacturer,
+  findProductByNameFuzzyManufacturer,
   quickCreateProduct,
 } from "~/server/repo/product";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { type ProductPreviewResult } from "./types";
@@ -91,8 +92,9 @@ export const findOrCreateProductForImport = async (
     ingredientId = unsafeIngredientId(ingredientData.id);
   }
 
-  // Try to find existing product by name+manufacturer (primary lookup)
-  let productData = await findProductByNameAndManufacturer(
+  // Try to find existing product by name with fuzzy manufacturer matching
+  // This allows sheet rows with "(unspecified)" to match existing products
+  let productData = await findProductByNameFuzzyManufacturer(
     db,
     productName,
     manufacturer,
@@ -117,12 +119,24 @@ export const findOrCreateProductForImport = async (
   } else {
     // Update existing product if CSV provides values
     const updates: {
+      manufacturer?: string;
       upc?: string | null;
       expectedQuantity?: number;
       ingredientId?: IngredientId | null;
       model?: string | null;
       ndb_number?: number | null;
     } = {};
+
+    // Update manufacturer if going from "(unspecified)" to a specific value
+    const isCurrentUnspecified =
+      productData.manufacturer.toLowerCase() ===
+      UNSPECIFIED_MANUFACTURER.toLowerCase();
+    const isNewSpecific =
+      manufacturer &&
+      manufacturer.toLowerCase() !== UNSPECIFIED_MANUFACTURER.toLowerCase();
+    if (isCurrentUnspecified && isNewSpecific) {
+      updates.manufacturer = manufacturer;
+    }
     // Update UPC if provided and different
     if (upc != null && productData.upc !== upc) {
       updates.upc = upc;
@@ -153,6 +167,7 @@ export const findOrCreateProductForImport = async (
     if (Object.keys(updates).length > 0) {
       // Capture before state for audit log
       const beforeState = {
+        manufacturer: productData.manufacturer,
         upc: productData.upc,
         expectedQuantity: productData.expectedQuantity,
         model: productData.model,
@@ -167,6 +182,15 @@ export const findOrCreateProductForImport = async (
 
       // Build changes for audit log
       const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (
+        updates.manufacturer != null &&
+        beforeState.manufacturer !== updates.manufacturer
+      ) {
+        changes.manufacturer = {
+          from: beforeState.manufacturer,
+          to: updates.manufacturer,
+        };
+      }
       if (updates.upc !== undefined && beforeState.upc !== updates.upc) {
         changes.upc = { from: beforeState.upc, to: updates.upc };
       }
@@ -212,6 +236,12 @@ export const findOrCreateProductForImport = async (
       }
 
       // Update local copy for fields that might have changed
+      if (updates.manufacturer != null) {
+        productData = {
+          ...productData,
+          manufacturer: updates.manufacturer,
+        };
+      }
       if (updates.upc !== undefined) {
         productData = {
           ...productData,
@@ -266,7 +296,8 @@ export const previewProductForImport = async (
   const effectiveIngredientName =
     ingredientName ?? (ingredientFlag ? productName : null);
 
-  const existingProduct = await findProductByNameAndManufacturer(
+  // Use fuzzy matching to find existing product (consistent with actual import behavior)
+  const existingProduct = await findProductByNameFuzzyManufacturer(
     db,
     productName,
     manufacturer,
@@ -301,6 +332,19 @@ export const previewProductForImport = async (
   }
 
   // Product exists - check what would be updated, capture current values
+
+  // Check manufacturer update (from "(unspecified)" to specific)
+  const isCurrentUnspecified =
+    existingProduct.manufacturer.toLowerCase() ===
+    UNSPECIFIED_MANUFACTURER.toLowerCase();
+  const isNewSpecific =
+    manufacturer &&
+    manufacturer.toLowerCase() !== UNSPECIFIED_MANUFACTURER.toLowerCase();
+  if (isCurrentUnspecified && isNewSpecific) {
+    productChanges.manufacturerWillBeSet = manufacturer;
+    productChanges.manufacturerCurrent = existingProduct.manufacturer;
+  }
+
   if (upc && existingProduct.upc !== upc) {
     productChanges.upcWillBeSet = upc;
     productChanges.upcCurrent = existingProduct.upc;
