@@ -21,6 +21,7 @@ import {
   getSubmitButtonText,
   ComboboxFieldWithSearch,
   detectComboboxIdChange,
+  buildUpdateObject,
   SideBySideFields,
   SelectField,
 } from "../form-utils";
@@ -95,20 +96,14 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
 
       await props.onCreate(createData);
     } else if (mode === "edit" && location) {
-      // Build update object
-      const updates: LocationUpdateInput["data"] = {};
+      // Build update object for simple fields
+      const updates: LocationUpdateInput["data"] = buildUpdateObject(
+        location,
+        values,
+        ["name", "type"],
+      );
 
-      // Check if name has changed
-      if (values.name !== location.name) {
-        updates.name = values.name;
-      }
-
-      // Check if type has changed
-      if (values.type !== location.type) {
-        updates.type = values.type;
-      }
-
-      // Check if parent has changed
+      // Check if parent has changed (combobox requires special handling)
       const parentIdChange = detectComboboxIdChange(
         location.parent?.id,
         values.parent,
