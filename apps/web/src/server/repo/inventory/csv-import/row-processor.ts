@@ -465,6 +465,15 @@ export const processRow = async (
     );
   }
 
+  // After the isProductOnly check above, location_path is guaranteed to be defined
+  // TypeScript doesn't understand this control flow, so we add a defensive check
+  const locationPath = row.location_path;
+  if (!locationPath) {
+    throw new Error(
+      "Unexpected: location_path should be defined after isProductOnly check",
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Step 3: Resolve target location
   // -------------------------------------------------------------------------
@@ -472,7 +481,7 @@ export const processRow = async (
     await resolveTargetLocation(
       db,
       organizationId,
-      row.location_path!,
+      locationPath,
       locationTypeContext,
       dryRun,
     );

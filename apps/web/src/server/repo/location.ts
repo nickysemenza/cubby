@@ -668,7 +668,11 @@ export const findOrCreateLocationByPath = async (
     }
   }
 
-  return unsafeLocationId(currentParentId!);
+  // currentParentId is guaranteed non-null because parsedParts.length > 0
+  if (currentParentId === null) {
+    throw new Error("Invalid location path: no locations processed");
+  }
+  return unsafeLocationId(currentParentId);
 };
 
 export const getLocationById = async (
@@ -916,5 +920,9 @@ export const findOrCreateLocationByPathWithContext = async (
     }
   }
 
-  return unsafeLocationId(currentParentId!);
+  // currentParentId is guaranteed non-null because parsedParts.length > 0
+  if (currentParentId === null) {
+    throw new Error("Invalid location path: no locations processed");
+  }
+  return unsafeLocationId(currentParentId);
 };
