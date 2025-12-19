@@ -375,7 +375,7 @@ const isAuthed = t.middleware(({ next, ctx }) => {
   });
 });
 
-// Check if an organization is selected
+// Check if an organization is selected and actorContext is present
 // Otherwise, throw a PRECONDITION_FAILED code
 const requireOrganization = t.middleware(({ next, ctx }) => {
   if (!ctx.organizationId) {
@@ -384,11 +384,18 @@ const requireOrganization = t.middleware(({ next, ctx }) => {
       "Please select an organization to continue",
     );
   }
-  // Type assertion is safe because we've checked ctx.organizationId is not null
+  if (!ctx.actorContext) {
+    throw createAppError(
+      "UNAUTHORIZED",
+      "Actor context required for this operation",
+    );
+  }
+  // Narrow the context type to guarantee organizationId and actorContext are non-null
   return next({
     ctx: {
       ...ctx,
-      organizationId: ctx.organizationId as OrganizationId,
+      organizationId: ctx.organizationId,
+      actorContext: ctx.actorContext,
     },
   });
 });

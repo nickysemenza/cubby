@@ -23,7 +23,7 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
     data: dataSchema,
   });
 
-// Interface for services needed by CRUD operations
+// Base interface for services - used in public procedures where org may be null
 export interface CrudServices {
   db: Database;
   organizationId: OrganizationId | null;
@@ -39,10 +39,20 @@ export interface CrudServices {
   };
 }
 
+/**
+ * Extended interface for protected procedures where organization is guaranteed.
+ * Use this type for repository callbacks in protected procedures to avoid
+ * non-null assertions (!) on organizationId and actorContext.
+ */
+export interface ProtectedCrudServices extends CrudServices {
+  organizationId: OrganizationId;
+  actorContext: ActorContext;
+}
+
 // Reusable procedure builders
 const createGetByIdProcedure = <T, TId extends string = string>(
   outputSchema: ZodSchema<T>,
-  getByIdFn: (ctx: CrudServices, id: TId) => Promise<T>,
+  getByIdFn: (ctx: ProtectedCrudServices, id: TId) => Promise<T>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
@@ -58,7 +68,7 @@ const createGetByIdProcedure = <T, TId extends string = string>(
 const createCreateProcedure = <TInput, TOutput>(
   inputSchema: ZodSchema<TInput>,
   outputSchema: ZodSchema<TOutput>,
-  createFn: (ctx: CrudServices, data: TInput) => Promise<TOutput>,
+  createFn: (ctx: ProtectedCrudServices, data: TInput) => Promise<TOutput>,
 ) =>
   protectedProcedure
     .input(inputSchema)
@@ -68,7 +78,11 @@ const createCreateProcedure = <TInput, TOutput>(
 const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
   inputSchema: ZodSchema<TInput>,
   outputSchema: ZodSchema<TOutput>,
-  updateFn: (ctx: CrudServices, id: TId, data: TInput) => Promise<TOutput>,
+  updateFn: (
+    ctx: ProtectedCrudServices,
+    id: TId,
+    data: TInput,
+  ) => Promise<TOutput>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
@@ -97,7 +111,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
   };
   repository: {
     list: (
-      ctx: CrudServices,
+      ctx: ProtectedCrudServices,
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
@@ -147,10 +161,13 @@ export function createEntityCrudWithoutListProcedures<
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: CrudServices, id: TId) => Promise<TOutput>;
-    create: (ctx: CrudServices, data: TCreateInput) => Promise<TOutput>;
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
+    create: (
+      ctx: ProtectedCrudServices,
+      data: TCreateInput,
+    ) => Promise<TOutput>;
     update: (
-      ctx: CrudServices,
+      ctx: ProtectedCrudServices,
       id: TId,
       data: TUpdateInput,
     ) => Promise<TOutput>;
@@ -196,16 +213,19 @@ export function createEntityCrudProcedures<
     idSchema?: z.ZodType<unknown>;
   };
   repository: {
-    getByID: (ctx: CrudServices, id: TId) => Promise<TOutput>;
+    getByID: (ctx: ProtectedCrudServices, id: TId) => Promise<TOutput>;
     list: (
-      ctx: CrudServices,
+      ctx: ProtectedCrudServices,
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
     ) => Promise<{ data: TOutput[]; count: number }>;
-    create: (ctx: CrudServices, data: TCreateInput) => Promise<TOutput>;
+    create: (
+      ctx: ProtectedCrudServices,
+      data: TCreateInput,
+    ) => Promise<TOutput>;
     update: (
-      ctx: CrudServices,
+      ctx: ProtectedCrudServices,
       id: TId,
       data: TUpdateInput,
     ) => Promise<TOutput>;

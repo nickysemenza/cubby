@@ -35,16 +35,14 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: IngredientId) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       return await services.services.ingredient.getIngredientByID(
         id,
-        services.organizationId!,
+        services.organizationId,
       );
     },
     list: async (services, filters, sort, pagination) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       return await services.services.ingredient.ingredientList(
-        services.organizationId!,
+        services.organizationId,
         filters.nameFilter,
         sort,
         pagination,
@@ -52,7 +50,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await services.services.ingredient.createIngredient(
         data,
@@ -61,7 +58,6 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     update: async (services, id: IngredientId, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await services.services.ingredient.updateIngredient(
         id,

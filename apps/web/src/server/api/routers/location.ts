@@ -47,10 +47,9 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       return await locationList(
         services.db,
-        services.organizationId!,
+        services.organizationId,
         filters.nameFilter,
         filters.itemTypeFilter,
         sort,
@@ -71,16 +70,13 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: LocationId) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
-      return await getLocationById(services.db, id, services.organizationId!);
+      return await getLocationById(services.db, id, services.organizationId);
     },
     create: async (services, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await createLocation(services.db, data, actor);
     },
     update: async (services, id: LocationId, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await updateLocation(services.db, id, data, actor);
     },

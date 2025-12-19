@@ -23,7 +23,7 @@ export const auditLogRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       return getAuditLog(ctx.db, {
-        organizationId: ctx.organizationId!,
+        organizationId: ctx.organizationId,
         entityType: input.entityType as AuditEntityType | undefined,
         entityId: input.entityId,
         limit: input.limit,

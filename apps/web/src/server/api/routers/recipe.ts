@@ -49,34 +49,26 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: RecipeId) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
-      const res = await getRecipeByID(
-        id,
-        services.db,
-        services.organizationId!,
-      );
+      const res = await getRecipeByID(id, services.db, services.organizationId);
       if (res === null) {
         throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
       }
       return res;
     },
     list: async (services, filters, sort, pagination) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       return await recipeList(
         services.db,
-        services.organizationId!,
+        services.organizationId,
         filters.nameFilter,
         sort,
         pagination,
       );
     },
     create: async (services, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await createRecipe(data, services.db, actor);
     },
     update: async (services, id: RecipeId, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await updateRecipe(id, data, services.db, actor);
     },

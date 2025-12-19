@@ -62,11 +62,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: InventoryId) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const res = await getInventoryEntryByID(
         services.db,
         id,
-        services.organizationId!,
+        services.organizationId,
       );
       if (res === null) {
         throw createAppError(
@@ -79,7 +78,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
     list: async (services, filters, sort, pagination) => {
       return await inventoryentryList(
         services.db,
-        services.organizationId!,
+        services.organizationId,
         sort,
         pagination,
         filters.productNameFilter,
@@ -102,12 +101,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         );
       }
 
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await createInventoryEntry(services.db, data, actor);
     },
     update: async (services, id: InventoryId, data) => {
-      // organizationId guaranteed non-null by requireOrganization middleware
       const actor = requireActorContext(services);
       return await updateInventoryEntry(services.db, id, data, actor);
     },
