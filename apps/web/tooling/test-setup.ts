@@ -121,7 +121,10 @@ const remapDBConfig = (
 // CSV Seed Helper
 // ============================================================================
 
-import { importInventoryFromCSV } from "../src/server/repo/inventory";
+import {
+  importInventoryFromCSV,
+  inventoryentryList,
+} from "../src/server/repo/inventory";
 import {
   type InventoryCSVRow,
   type CSVImportResult,
@@ -227,12 +230,22 @@ export async function seedFromCSV(
       const cleanName = leafName.replace(/\[.*?\]$/, "").trim();
       locationIds.set(cleanName, locationIdSchema.parse(item.locationId));
     }
+  }
 
-    // Inventory entry ID by "productName@locationPath"
-    if (item.inventoryEntryId && item.productName && item.locationPath) {
-      const key = `${item.productName}@${item.locationPath}`;
-      inventoryIds.set(key, inventoryIdSchema.parse(item.inventoryEntryId));
-    }
+  // Query for inventory entries to get their IDs
+  // (import doesn't return inventoryEntryId for created entries)
+  const inventoryEntries = await inventoryentryList(
+    db,
+    organizationId,
+    { orderBy: "createdAt", direction: "asc" },
+    { pageIndex: 0, pageSize: 1000 },
+  );
+
+  for (const entry of inventoryEntries.data) {
+    const productName = entry.product.name;
+    const locationName = entry.location.name;
+    const key = `${productName}@${locationName}`;
+    inventoryIds.set(key, inventoryIdSchema.parse(entry.id));
   }
 
   return { result, productIds, locationIds, inventoryIds };

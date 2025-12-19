@@ -11,6 +11,7 @@ import {
 import { type ActorContext } from "~/schemas/context";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
+import { createInventoryEntry } from "~/server/repo/inventory";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
@@ -196,7 +197,6 @@ describe("inventory router", () => {
   });
 
   it("should update an inventory entry", async () => {
-    // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
@@ -205,43 +205,25 @@ describe("inventory router", () => {
       }),
     );
 
-    // Create test location and product
-    const location = await createLocation(
+    // Seed initial inventory
+    const seed = await seedFromCSV(
       db,
-      {
-        name: "Test Location",
-        type: "room",
-        parentId: null,
-      },
+      organizationId,
+      [
+        {
+          product_name: "Test Product",
+          manufacturer: "Test Brand",
+          location_path: "Test Location[room]",
+          quantity: 2,
+          unit: "pieces",
+        },
+      ],
       TEST_ACTOR,
     );
 
-    const product = await createProduct(
-      db,
-      {
-        name: "Test Product",
-        manufacturer: "Test Brand",
-        model: "Test Model",
-        upc: "123456789012",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    // Create an inventory entry
-    const inventoryData = {
-      productId: product.id,
-      locationId: location.id,
-      amount: {
-        value: 2,
-        unit: "pieces",
-      },
+    const createdEntry = {
+      id: seed.inventoryIds.get("Test Product@Test Location")!,
     };
-
-    const createdEntry = await caller.create(inventoryData);
 
     // Update the inventory entry
     const updatedEntry = await caller.update({
@@ -266,7 +248,6 @@ describe("inventory router", () => {
   });
 
   it("should handle partial updates correctly", async () => {
-    // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
@@ -275,94 +256,63 @@ describe("inventory router", () => {
       }),
     );
 
-    // Create test location and products
-    const location1 = await createLocation(
+    // Seed: Product 1 with inventory, Product 2 without (to avoid unique constraint when switching)
+    const seed = await seedFromCSV(
       db,
-      {
-        name: "Location 1",
-        type: "room",
-        parentId: null,
-      },
+      organizationId,
+      [
+        {
+          product_name: "Product 1",
+          manufacturer: "Brand",
+          location_path: "Location 1[room]",
+          quantity: 1,
+          unit: "piece",
+        },
+        { product_name: "Product 2", manufacturer: "Brand" }, // product-only
+      ],
       TEST_ACTOR,
     );
-
+    // Create Location 2 separately (empty location to move to)
     const location2 = await createLocation(
       db,
-      {
-        name: "Location 2",
-        type: "shelf",
-        parentId: null,
-      },
+      { name: "Location 2", type: "shelf", parentId: null },
       TEST_ACTOR,
     );
 
-    const product1 = await createProduct(
-      db,
-      {
-        name: "Product 1",
-        manufacturer: "Brand",
-        model: "Model 1",
-        upc: "111111111111",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    const product2 = await createProduct(
-      db,
-      {
-        name: "Product 2",
-        manufacturer: "Brand",
-        model: "Model 2",
-        upc: "222222222222",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    // Create an inventory entry
-    const createdEntry = await caller.create({
-      productId: product1.id,
-      locationId: location1.id,
-      amount: { value: 1, unit: "piece" },
-    });
+    const product2Id = seed.productIds.get("Product 2")!;
+    const location1Id = seed.locationIds.get("Location 1")!;
+    const location2Id = location2.id;
+    const createdEntryId = seed.inventoryIds.get("Product 1@Location 1")!;
 
     // Update only the product
     const updatedEntry = await caller.update({
-      id: createdEntry.id,
+      id: createdEntryId,
       data: {
-        productId: product2.id,
+        productId: product2Id,
       },
     });
 
     // Verify only product was changed
-    expect(updatedEntry.id).toEqual(createdEntry.id);
-    expect(updatedEntry.product.id).toEqual(product2.id);
-    expect(updatedEntry.location.id).toEqual(location1.id); // Unchanged
+    expect(updatedEntry.id).toEqual(createdEntryId);
+    expect(updatedEntry.product.id).toEqual(product2Id);
+    expect(updatedEntry.location.id).toEqual(location1Id); // Unchanged
     expect(updatedEntry.amount.value).toEqual(1); // Unchanged
     expect(updatedEntry.amount.unit).toEqual("piece"); // Unchanged
 
     // Update only the location
     const updatedEntry2 = await caller.update({
-      id: createdEntry.id,
+      id: createdEntryId,
       data: {
-        locationId: location2.id,
+        locationId: location2Id,
       },
     });
 
     // Verify only location was changed
-    expect(updatedEntry2.location.id).toEqual(location2.id);
-    expect(updatedEntry2.product.id).toEqual(product2.id); // From previous update
+    expect(updatedEntry2.location.id).toEqual(location2Id);
+    expect(updatedEntry2.product.id).toEqual(product2Id); // From previous update
   });
 
   it("should perform bulk operations correctly", async () => {
-    // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
@@ -371,90 +321,52 @@ describe("inventory router", () => {
       }),
     );
 
-    // Create test location
-    const location = await createLocation(
+    // Seed: 3 products, one with existing inventory
+    const seed = await seedFromCSV(
       db,
-      {
-        name: "Bulk Location",
-        type: "room",
-        parentId: null,
-      },
+      organizationId,
+      [
+        {
+          product_name: "Bulk Product 1",
+          manufacturer: "Brand",
+          location_path: "Bulk Location[room]",
+          quantity: 1,
+          unit: "piece",
+        },
+        { product_name: "Bulk Product 2", manufacturer: "Brand" }, // product-only
+        { product_name: "Bulk Product 3", manufacturer: "Brand" }, // product-only
+      ],
       TEST_ACTOR,
     );
 
-    // Create test products
-    const product1 = await createProduct(
-      db,
-      {
-        name: "Bulk Product 1",
-        manufacturer: "Brand",
-        model: "Model 1",
-        upc: "111111111111",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    const product2 = await createProduct(
-      db,
-      {
-        name: "Bulk Product 2",
-        manufacturer: "Brand",
-        model: "Model 2",
-        upc: "222222222222",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    const product3 = await createProduct(
-      db,
-      {
-        name: "Bulk Product 3",
-        manufacturer: "Brand",
-        model: "Model 3",
-        upc: "333333333333",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    // Create an existing entry to be updated
-    const existingEntry = await caller.create({
-      productId: product1.id,
-      locationId: location.id,
-      amount: { value: 1, unit: "piece" },
-    });
+    const locationId = seed.locationIds.get("Bulk Location")!;
+    const product1Id = seed.productIds.get("Bulk Product 1")!;
+    const product2Id = seed.productIds.get("Bulk Product 2")!;
+    const product3Id = seed.productIds.get("Bulk Product 3")!;
+    const existingEntryId = seed.inventoryIds.get(
+      "Bulk Product 1@Bulk Location",
+    )!;
 
     // Perform bulk operation (update existing + create new entries)
     const bulkResult = await caller.bulkProcess({
-      locationId: location.id,
+      locationId: locationId,
       items: [
         {
-          id: existingEntry.id, // Update existing entry
-          productId: product1.id,
-          locationId: location.id,
+          id: existingEntryId, // Update existing entry
+          productId: product1Id,
+          locationId: locationId,
           amount: { value: 5, unit: "pieces" },
         },
         {
           // Create new entry
-          productId: product2.id,
-          locationId: location.id,
+          productId: product2Id,
+          locationId: locationId,
           amount: { value: 2, unit: "kg" },
         },
         {
           // Create another new entry
-          productId: product3.id,
-          locationId: location.id,
+          productId: product3Id,
+          locationId: locationId,
           amount: { value: 10, unit: "grams" },
         },
       ],
@@ -465,7 +377,7 @@ describe("inventory router", () => {
 
     // Find the updated entry
     const updatedEntry = bulkResult.find(
-      (entry) => entry.id === existingEntry.id,
+      (entry) => entry.id === existingEntryId,
     );
     expect(updatedEntry).toBeDefined();
     expect(updatedEntry?.amount.value).toEqual(5);
@@ -473,14 +385,14 @@ describe("inventory router", () => {
 
     // Find the new entries
     const newEntry1 = bulkResult.find(
-      (entry) => entry.product.id === product2.id,
+      (entry) => entry.product.id === product2Id,
     );
     expect(newEntry1).toBeDefined();
     expect(newEntry1?.amount.value).toEqual(2);
     expect(newEntry1?.amount.unit).toEqual("kg");
 
     const newEntry2 = bulkResult.find(
-      (entry) => entry.product.id === product3.id,
+      (entry) => entry.product.id === product3Id,
     );
     expect(newEntry2).toBeDefined();
     expect(newEntry2?.amount.value).toEqual(10);
@@ -488,7 +400,7 @@ describe("inventory router", () => {
 
     // Verify all entries are for the correct location
     bulkResult.forEach((entry) => {
-      expect(entry.location.id).toEqual(location.id);
+      expect(entry.location.id).toEqual(locationId);
     });
   });
 
@@ -520,10 +432,19 @@ describe("inventory router", () => {
         }),
       );
 
-      // Create source and target locations
-      const sourceLocation = await createLocation(
+      // Seed source with inventory, create empty target
+      const seed = await seedFromCSV(
         db,
-        { name: "Source Location", type: "room", parentId: null },
+        organizationId,
+        [
+          {
+            product_name: "Move Product",
+            manufacturer: "Brand",
+            location_path: "Source Location[room]",
+            quantity: 10,
+            unit: "pieces",
+          },
+        ],
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
@@ -532,36 +453,16 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
 
-      // Create product
-      const product = await createProduct(
-        db,
-        {
-          name: "Move Product",
-          manufacturer: "Brand",
-          model: "Model",
-          upc: "123456789012",
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-        },
-        TEST_ACTOR,
-      );
-
-      // Create inventory at source
-      const entry = await caller.create({
-        productId: product.id,
-        locationId: sourceLocation.id,
-        amount: { value: 10, unit: "pieces" },
-      });
+      const sourceLocationId = seed.locationIds.get("Source Location")!;
+      const entryId = seed.inventoryIds.get("Move Product@Source Location")!;
 
       // Move full quantity
       const result = await caller.bulkMove({
-        sourceLocationId: sourceLocation.id,
+        sourceLocationId,
         targetLocationId: targetLocation.id,
         items: [
           {
-            inventoryEntryId: entry.id,
+            inventoryEntryId: entryId,
             quantity: { value: 10, unit: "pieces" },
           },
         ],
@@ -573,7 +474,7 @@ describe("inventory router", () => {
 
       // Verify source location is empty
       const sourceEntries = await caller.list({
-        filters: { locationIdFilter: sourceLocation.id },
+        filters: { locationIdFilter: sourceLocationId },
         pagination: { pageSize: 10, pageIndex: 0 },
       });
       expect(sourceEntries.items.length).toEqual(0);
@@ -588,9 +489,18 @@ describe("inventory router", () => {
         }),
       );
 
-      const sourceLocation = await createLocation(
+      const seed = await seedFromCSV(
         db,
-        { name: "Source", type: "room", parentId: null },
+        organizationId,
+        [
+          {
+            product_name: "Split Product",
+            manufacturer: "Brand",
+            location_path: "Source[room]",
+            quantity: 10,
+            unit: "kg",
+          },
+        ],
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
@@ -599,36 +509,15 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
 
-      const product = await createProduct(
-        db,
-        {
-          name: "Split Product",
-          manufacturer: "Brand",
-          model: "Model",
-          upc: "111111111111",
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-        },
-        TEST_ACTOR,
-      );
-
-      const entry = await caller.create({
-        productId: product.id,
-        locationId: sourceLocation.id,
-        amount: { value: 10, unit: "kg" },
-      });
+      const sourceLocationId = seed.locationIds.get("Source")!;
+      const entryId = seed.inventoryIds.get("Split Product@Source")!;
 
       // Move only 3 of 10
       const result = await caller.bulkMove({
-        sourceLocationId: sourceLocation.id,
+        sourceLocationId,
         targetLocationId: targetLocation.id,
         items: [
-          {
-            inventoryEntryId: entry.id,
-            quantity: { value: 3, unit: "kg" },
-          },
+          { inventoryEntryId: entryId, quantity: { value: 3, unit: "kg" } },
         ],
       });
 
@@ -637,7 +526,7 @@ describe("inventory router", () => {
       expect(result[0].location.id).toEqual(targetLocation.id);
 
       // Verify source still has 7
-      const sourceEntry = await caller.getByID({ id: entry.id });
+      const sourceEntry = await caller.getByID({ id: entryId });
       expect(sourceEntry.amount.value).toEqual(7);
     });
 
@@ -650,6 +539,8 @@ describe("inventory router", () => {
         }),
       );
 
+      // Same product at two locations requires direct creation
+      // (seedFromCSV inventoryIds lookup doesn't support same product at multiple locations reliably)
       const sourceLocation = await createLocation(
         db,
         { name: "Source", type: "room", parentId: null },
@@ -660,14 +551,13 @@ describe("inventory router", () => {
         { name: "Target", type: "room", parentId: null },
         TEST_ACTOR,
       );
-
       const product = await createProduct(
         db,
         {
           name: "Merge Product",
           manufacturer: "Brand",
-          model: "Model",
-          upc: "222222222222",
+          model: null,
+          upc: null,
           ndb_number: null,
           expectedQuantity: null,
           ingredientId: null,
@@ -676,18 +566,25 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
 
-      // Create inventory at both locations
-      const sourceEntry = await caller.create({
-        productId: product.id,
-        locationId: sourceLocation.id,
-        amount: { value: 5, unit: "lbs" },
-      });
+      const sourceEntry = await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: sourceLocation.id,
+          amount: { value: 5, unit: "lbs" },
+        },
+        TEST_ACTOR,
+      );
 
-      const targetEntry = await caller.create({
-        productId: product.id,
-        locationId: targetLocation.id,
-        amount: { value: 3, unit: "lbs" },
-      });
+      const targetEntry = await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: targetLocation.id,
+          amount: { value: 3, unit: "lbs" },
+        },
+        TEST_ACTOR,
+      );
 
       // Move full quantity from source - should merge
       const result = await caller.bulkMove({
@@ -715,40 +612,31 @@ describe("inventory router", () => {
         }),
       );
 
-      const location = await createLocation(
+      const seed = await seedFromCSV(
         db,
-        { name: "Same Location", type: "room", parentId: null },
+        organizationId,
+        [
+          {
+            product_name: "Error Product",
+            manufacturer: "Brand",
+            location_path: "Same Location[room]",
+            quantity: 5,
+            unit: "units",
+          },
+        ],
         TEST_ACTOR,
       );
 
-      const product = await createProduct(
-        db,
-        {
-          name: "Error Product",
-          manufacturer: "Brand",
-          model: "Model",
-          upc: "333333333333",
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-        },
-        TEST_ACTOR,
-      );
-
-      const entry = await caller.create({
-        productId: product.id,
-        locationId: location.id,
-        amount: { value: 5, unit: "units" },
-      });
+      const locationId = seed.locationIds.get("Same Location")!;
+      const entryId = seed.inventoryIds.get("Error Product@Same Location")!;
 
       await expect(
         caller.bulkMove({
-          sourceLocationId: location.id,
-          targetLocationId: location.id,
+          sourceLocationId: locationId,
+          targetLocationId: locationId,
           items: [
             {
-              inventoryEntryId: entry.id,
+              inventoryEntryId: entryId,
               quantity: { value: 5, unit: "units" },
             },
           ],
@@ -765,9 +653,18 @@ describe("inventory router", () => {
         }),
       );
 
-      const sourceLocation = await createLocation(
+      const seed = await seedFromCSV(
         db,
-        { name: "Source", type: "room", parentId: null },
+        organizationId,
+        [
+          {
+            product_name: "Limited Product",
+            manufacturer: "Brand",
+            location_path: "Source[room]",
+            quantity: 5,
+            unit: "items",
+          },
+        ],
         TEST_ACTOR,
       );
       const targetLocation = await createLocation(
@@ -776,44 +673,25 @@ describe("inventory router", () => {
         TEST_ACTOR,
       );
 
-      const product = await createProduct(
-        db,
-        {
-          name: "Limited Product",
-          manufacturer: "Brand",
-          model: "Model",
-          upc: "444444444444",
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-        },
-        TEST_ACTOR,
-      );
-
-      const entry = await caller.create({
-        productId: product.id,
-        locationId: sourceLocation.id,
-        amount: { value: 5, unit: "items" },
-      });
+      const sourceLocationId = seed.locationIds.get("Source")!;
+      const entryId = seed.inventoryIds.get("Limited Product@Source")!;
 
       await expect(
         caller.bulkMove({
-          sourceLocationId: sourceLocation.id,
+          sourceLocationId,
           targetLocationId: targetLocation.id,
           items: [
             {
-              inventoryEntryId: entry.id,
-              quantity: { value: 10, unit: "items" }, // More than available
+              inventoryEntryId: entryId,
+              quantity: { value: 10, unit: "items" },
             },
-          ],
+          ], // More than available
         }),
       ).rejects.toThrow("Cannot move 10 items - only 5 available");
     });
   });
 
   it("should handle create and update failures gracefully", async () => {
-    // Create a test caller for the inventory router
     const createCaller = createCallerFactory(inventoryRouter);
     const caller = createCaller(
       createTestTRPCContext(db, {
@@ -833,45 +711,28 @@ describe("inventory router", () => {
       }),
     ).rejects.toThrow(/Failed query/);
 
-    // Create a valid entry first
-    const location = await createLocation(
+    // Seed a valid entry
+    const seed = await seedFromCSV(
       db,
-      {
-        name: "Test Location",
-        type: "room",
-        parentId: null,
-      },
+      organizationId,
+      [
+        {
+          product_name: "Test Product",
+          manufacturer: "Brand",
+          location_path: "Test Location[room]",
+          quantity: 1,
+          unit: "piece",
+        },
+      ],
       TEST_ACTOR,
     );
-
-    const product = await createProduct(
-      db,
-      {
-        name: "Test Product",
-        manufacturer: "Brand",
-        model: "Model",
-        upc: "123456789012",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    const entry = await caller.create({
-      productId: product.id,
-      locationId: location.id,
-      amount: { value: 1, unit: "piece" },
-    });
+    const entryId = seed.inventoryIds.get("Test Product@Test Location")!;
 
     // Try to update with non-existent product
     await expect(
       caller.update({
-        id: entry.id,
-        data: {
-          productId: nonExistentId,
-        },
+        id: entryId,
+        data: { productId: nonExistentId },
       }),
     ).rejects.toThrow(/Failed query/);
   });
