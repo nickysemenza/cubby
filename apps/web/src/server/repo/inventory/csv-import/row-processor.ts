@@ -48,6 +48,20 @@ interface RowProcessorContext {
 }
 
 /**
+ * Helper to add a field change if the value is defined
+ */
+function addFieldChange(
+  result: FieldChange[],
+  field: string,
+  willBeSet: unknown,
+  current: unknown,
+): void {
+  if (willBeSet !== undefined) {
+    result.push({ field, from: current ?? null, to: willBeSet });
+  }
+}
+
+/**
  * Convert ProductChangesPreview to FieldChange[] for consistent display
  */
 function productChangesToFieldChanges(
@@ -55,53 +69,34 @@ function productChangesToFieldChanges(
 ): FieldChange[] {
   const result: FieldChange[] = [];
 
-  if (changes.upcWillBeSet !== undefined) {
-    result.push({
-      field: "upc",
-      from: changes.upcCurrent ?? null,
-      to: changes.upcWillBeSet,
-    });
-  }
-  if (changes.modelWillBeSet !== undefined) {
-    result.push({
-      field: "model",
-      from: changes.modelCurrent ?? null,
-      to: changes.modelWillBeSet,
-    });
-  }
-  if (changes.ndbNumberWillBeSet !== undefined) {
-    result.push({
-      field: "ndb",
-      from: changes.ndbNumberCurrent ?? null,
-      to: changes.ndbNumberWillBeSet,
-    });
-  }
-  if (changes.expectedQuantityWillBeSet !== undefined) {
-    result.push({
-      field: "expected",
-      from: changes.expectedQuantityCurrent ?? null,
-      to: changes.expectedQuantityWillBeSet,
-    });
-  }
-  if (changes.priceWillBeSet !== undefined) {
-    result.push({
-      field: "price",
-      from: changes.priceCurrent ?? null,
-      to: changes.priceWillBeSet,
-    });
-  }
-  if (changes.ingredientWillBeLinked !== undefined) {
-    result.push({
-      field: "ingredient",
-      from: changes.ingredientCurrent ?? null,
-      to: changes.ingredientWillBeLinked,
-    });
-  }
+  // Simple field mappings
+  addFieldChange(result, "upc", changes.upcWillBeSet, changes.upcCurrent);
+  addFieldChange(result, "model", changes.modelWillBeSet, changes.modelCurrent);
+  addFieldChange(
+    result,
+    "ndb",
+    changes.ndbNumberWillBeSet,
+    changes.ndbNumberCurrent,
+  );
+  addFieldChange(
+    result,
+    "expected",
+    changes.expectedQuantityWillBeSet,
+    changes.expectedQuantityCurrent,
+  );
+  addFieldChange(result, "price", changes.priceWillBeSet, changes.priceCurrent);
+  addFieldChange(
+    result,
+    "ingredient",
+    changes.ingredientWillBeLinked,
+    changes.ingredientCurrent,
+  );
+
+  // Unit mappings need special formatting
   if (
     changes.unitMappingsWillBeAdded !== undefined &&
     changes.unitMappingsWillBeAdded > 0
   ) {
-    // Format unit mappings as readable string
     const newMappings = changes.unitMappingsDetail
       ?.map((d) => `${d.from} = ${d.to}`)
       .join("; ");
@@ -111,6 +106,8 @@ function productChangesToFieldChanges(
       to: newMappings ?? `${changes.unitMappingsWillBeAdded} mappings`,
     });
   }
+
+  // Aliases need array-to-string conversion
   if (
     changes.aliasesWillBeAdded !== undefined &&
     changes.aliasesWillBeAdded.length > 0
@@ -138,6 +135,287 @@ function buildFieldChanges(
 }
 
 /**
+ * Check if productChanges has any entries
+ */
+function hasChanges(productChanges: ProductChangesPreview): boolean {
+  return Object.keys(productChanges).length > 0;
+}
+
+/**
+ * Wrap productChanges for result if non-empty
+ */
+function wrapChanges(
+  productChanges: ProductChangesPreview,
+): ProductChangesPreview | undefined {
+  return hasChanges(productChanges) ? productChanges : undefined;
+}
+
+// ============================================================================
+// Product Processing
+// ============================================================================
+
+interface ProductProcessingResult {
+  productData: ProductTopLevelOut | null;
+  productWillBeCreated: boolean;
+  productChanges: ProductChangesPreview;
+}
+
+/**
+ * Handle product preview - check what changes would occur without making them
+ */
+async function previewProduct(
+  db: Database,
+  organizationId: OrganizationId,
+  row: InventoryCSVRow,
+  manufacturer: string,
+): Promise<ProductProcessingResult> {
+  const preview = await previewProductForImport(
+    db,
+    organizationId,
+    row.product_name,
+    manufacturer,
+    row.upc,
+    row.expected_qty,
+    row.ingredient_name,
+    row.ingredient,
+    row.model,
+    row.ndb_number,
+    row.aliases,
+  );
+
+  const productData = preview.existingProduct;
+  const productWillBeCreated = preview.productWillBeCreated;
+  const productChanges = { ...preview.productChanges };
+
+  // Check price changes
+  if (row.price != null && productData) {
+    const priceChange = await checkPriceMappingChanges(db, productData.id, {
+      value: row.price,
+      unit: "dollar",
+    });
+    if (priceChange !== undefined) {
+      productChanges.priceWillBeSet = priceChange;
+    }
+  } else if (row.price != null && productWillBeCreated) {
+    productChanges.priceWillBeSet = row.price;
+  }
+
+  // Check unit mappings changes
+  if (row.unit_mappings) {
+    if (productData) {
+      const mappingChanges = await checkUnitMappingsChanges(
+        db,
+        productData.id,
+        row.unit_mappings,
+      );
+      if (mappingChanges) {
+        productChanges.unitMappingsWillBeAdded = mappingChanges.willBeAdded;
+        productChanges.unitMappingsDetail = mappingChanges.details;
+        productChanges.unitMappingsCurrent = mappingChanges.current;
+      }
+    } else {
+      const mappings = await parseUnitMappingsForPreview(row.unit_mappings);
+      productChanges.unitMappingsWillBeAdded = mappings.count;
+      productChanges.unitMappingsDetail = mappings.details;
+    }
+  }
+
+  return { productData, productWillBeCreated, productChanges };
+}
+
+/**
+ * Execute product creation/update and related operations
+ */
+async function executeProductOperations(
+  db: Database,
+  organizationId: OrganizationId,
+  row: InventoryCSVRow,
+  manufacturer: string,
+  actor: ActorContext,
+): Promise<ProductTopLevelOut> {
+  const productData = await findOrCreateProductForImport(
+    db,
+    organizationId,
+    row.product_name,
+    manufacturer,
+    row.upc,
+    row.expected_qty,
+    row.ingredient_name,
+    row.ingredient,
+    row.model,
+    row.ndb_number,
+    row.aliases,
+    actor,
+  );
+
+  if (row.price != null) {
+    await createOrUpdatePriceMapping(db, productData.id, {
+      value: row.price,
+      unit: "dollar",
+    });
+  }
+
+  if (row.unit_mappings) {
+    await createUnitMappingsFromString(db, productData.id, row.unit_mappings);
+  }
+
+  return productData;
+}
+
+// ============================================================================
+// Location Resolution
+// ============================================================================
+
+interface LocationResolutionResult {
+  targetLocationId: LocationId | null;
+  locationWillBeCreated: boolean;
+}
+
+/**
+ * Find or create the target location for an inventory row
+ */
+async function resolveTargetLocation(
+  db: Database,
+  organizationId: OrganizationId,
+  locationPath: string,
+  locationTypeContext: LocationTypeContext,
+  dryRun: boolean,
+): Promise<LocationResolutionResult> {
+  if (dryRun) {
+    const targetLocationId = await findLocationByPath(
+      db,
+      organizationId,
+      locationPath,
+    );
+    return {
+      targetLocationId,
+      locationWillBeCreated: targetLocationId === null,
+    };
+  }
+
+  const targetLocationId = await findOrCreateLocationByPathWithContext(
+    db,
+    organizationId,
+    locationPath,
+    locationTypeContext,
+  );
+  return { targetLocationId, locationWillBeCreated: false };
+}
+
+// ============================================================================
+// Move Detection
+// ============================================================================
+
+interface MoveCheckResult {
+  shouldMove: boolean;
+  existingLocations: string[];
+  isOnlyAtTarget: boolean;
+}
+
+/**
+ * Check if inventory should be moved (product at capacity, not already at target)
+ */
+async function checkMoveConditions(
+  db: Database,
+  organizationId: OrganizationId,
+  productData: ProductTopLevelOut,
+  targetLocationId: LocationId | null,
+  inventoryExists: boolean,
+): Promise<MoveCheckResult> {
+  const totalExistingQty = await getTotalProductQuantity(
+    db,
+    productData.id,
+    organizationId,
+  );
+
+  const shouldMove =
+    productData.expectedQuantity !== null &&
+    totalExistingQty >= productData.expectedQuantity;
+
+  if (!shouldMove) {
+    return { shouldMove: false, existingLocations: [], isOnlyAtTarget: false };
+  }
+
+  const existingLocations = await getExistingInventoryLocations(
+    db,
+    organizationId,
+    productData.id,
+  );
+
+  const isOnlyAtTarget = existingLocations.length === 1 && inventoryExists;
+
+  return { shouldMove, existingLocations, isOnlyAtTarget };
+}
+
+// ============================================================================
+// Result Building Helpers
+// ============================================================================
+
+interface BaseResultFields {
+  rowIndex: number;
+  productName: string;
+  locationPath?: string;
+  locationId?: LocationId;
+  productId?: string;
+  upc?: string;
+}
+
+/**
+ * Build a dry-run result item with preview-specific fields
+ */
+function buildDryRunResult(
+  base: BaseResultFields,
+  action: CSVImportResultItem["action"],
+  options: {
+    productChanges: ProductChangesPreview;
+    productWillBeCreated: boolean;
+    locationWillBeCreated: boolean;
+    inventoryFieldChanges?: FieldChange[];
+    movedFrom?: string[];
+    message?: string;
+  },
+): CSVImportResultItem {
+  return {
+    rowIndex: base.rowIndex,
+    action,
+    productName: base.productName,
+    locationPath: base.locationPath,
+    locationId: base.locationId,
+    movedFrom: options.movedFrom,
+    message: options.message,
+    fieldChanges: buildFieldChanges(
+      options.productChanges,
+      options.inventoryFieldChanges,
+    ),
+    productWillBeCreated: options.productWillBeCreated,
+    locationWillBeCreated: options.locationWillBeCreated,
+    productChanges: wrapChanges(options.productChanges),
+  };
+}
+
+/**
+ * Build an execution result item (non-dry-run)
+ */
+function buildExecutionResult(
+  base: BaseResultFields,
+  action: CSVImportResultItem["action"],
+  message?: string,
+  movedFrom?: string[],
+): CSVImportResultItem {
+  return {
+    rowIndex: base.rowIndex,
+    action,
+    productName: base.productName,
+    productId: base.productId,
+    upc: base.upc,
+    locationPath: base.locationPath,
+    locationId: base.locationId,
+    movedFrom,
+    message,
+  };
+}
+
+/**
  * Process a single CSV row for import
  *
  * Handles both preview (dry-run) and actual execution modes.
@@ -149,230 +427,99 @@ export const processRow = async (
 ): Promise<CSVImportResultItem> => {
   const { db, organizationId, locationTypeContext, dryRun, actor } = ctx;
   const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
-
-  // Check if this is a product-only row (no location_path)
   const isProductOnly = !row.location_path || row.location_path.trim() === "";
 
-  let productData: ProductTopLevelOut | null = null;
+  // -------------------------------------------------------------------------
+  // Step 1: Process product (preview or execute)
+  // -------------------------------------------------------------------------
+  let productData: ProductTopLevelOut | null;
   let productWillBeCreated = false;
   let productChanges: ProductChangesPreview = {};
 
-  // Handle product creation/update
   if (dryRun) {
-    const preview = await previewProductForImport(
-      db,
-      organizationId,
-      row.product_name,
-      manufacturer,
-      row.upc,
-      row.expected_qty,
-      row.ingredient_name,
-      row.ingredient,
-      row.model,
-      row.ndb_number,
-      row.aliases,
-    );
-    productData = preview.existingProduct;
-    productWillBeCreated = preview.productWillBeCreated;
-    productChanges = preview.productChanges;
-
-    // Check price changes (CSV price is numeric, defaults to dollar)
-    if (row.price != null && productData) {
-      const priceChange = await checkPriceMappingChanges(db, productData.id, {
-        value: row.price,
-        unit: "dollar",
-      });
-      if (priceChange !== undefined) {
-        productChanges.priceWillBeSet = priceChange;
-      }
-    } else if (row.price != null && productWillBeCreated) {
-      productChanges.priceWillBeSet = row.price;
-    }
-
-    // Parse unit mappings for preview using WASM
-    // Only show changes if they differ from existing mappings
-    if (row.unit_mappings) {
-      if (productData) {
-        // Product exists - compare against existing mappings
-        const mappingChanges = await checkUnitMappingsChanges(
-          db,
-          productData.id,
-          row.unit_mappings,
-        );
-        if (mappingChanges) {
-          productChanges.unitMappingsWillBeAdded = mappingChanges.willBeAdded;
-          productChanges.unitMappingsDetail = mappingChanges.details;
-          productChanges.unitMappingsCurrent = mappingChanges.current;
-        }
-      } else {
-        // New product - show all mappings as new
-        const mappings = await parseUnitMappingsForPreview(row.unit_mappings);
-        productChanges.unitMappingsWillBeAdded = mappings.count;
-        productChanges.unitMappingsDetail = mappings.details;
-      }
-    }
+    const result = await previewProduct(db, organizationId, row, manufacturer);
+    productData = result.productData;
+    productWillBeCreated = result.productWillBeCreated;
+    productChanges = result.productChanges;
   } else {
-    productData = await findOrCreateProductForImport(
+    productData = await executeProductOperations(
       db,
       organizationId,
-      row.product_name,
+      row,
       manufacturer,
-      row.upc,
-      row.expected_qty,
-      row.ingredient_name,
-      row.ingredient,
-      row.model,
-      row.ndb_number,
-      row.aliases,
       actor,
     );
-
-    // Handle price mapping (CSV price is numeric, defaults to dollar)
-    if (row.price != null) {
-      await createOrUpdatePriceMapping(db, productData.id, {
-        value: row.price,
-        unit: "dollar",
-      });
-    }
-
-    // Handle unit mappings
-    if (row.unit_mappings) {
-      await createUnitMappingsFromString(db, productData.id, row.unit_mappings);
-    }
   }
 
-  // Handle product-only rows (no inventory placement)
+  // -------------------------------------------------------------------------
+  // Step 2: Handle product-only rows (no inventory placement)
+  // -------------------------------------------------------------------------
   if (isProductOnly) {
-    const hasProductChanges = Object.keys(productChanges).length > 0;
-    // In dry-run mode, skip if product already exists with no changes
-    // (productWillBeCreated and productChanges are only populated during dry-run)
-    const shouldSkip = dryRun && !productWillBeCreated && !hasProductChanges;
-
-    // Only show message when there are no field changes to display
-    // (field changes are more informative than a generic message)
-    const fieldChanges = buildFieldChanges(productChanges);
-    const message = shouldSkip
-      ? "Product already exists with no changes"
-      : productWillBeCreated
-        ? "New product"
-        : fieldChanges
-          ? undefined // Let the diff speak for itself
-          : dryRun
-            ? "Product already exists"
-            : undefined; // Non-dryRun doesn't need message
-
-    return {
+    return handleProductOnlyRow(
+      row,
       rowIndex,
-      action: shouldSkip ? "skipped" : "product_only",
-      productName: row.product_name,
-      productId: productData?.id,
-      upc: row.upc,
-      locationPath: undefined,
-      message,
-      fieldChanges,
+      productData,
       productWillBeCreated,
-      productChanges: hasProductChanges ? productChanges : undefined,
-    };
+      productChanges,
+      dryRun,
+    );
   }
 
-  // For rows with location_path, continue with inventory processing
-  let targetLocationId: LocationId | null = null;
-  let locationWillBeCreated = false;
-
-  if (dryRun) {
-    targetLocationId = await findLocationByPath(
-      db,
-      organizationId,
-      row.location_path!,
-    );
-    if (!targetLocationId) {
-      locationWillBeCreated = true;
-    }
-  } else {
-    targetLocationId = await findOrCreateLocationByPathWithContext(
+  // -------------------------------------------------------------------------
+  // Step 3: Resolve target location
+  // -------------------------------------------------------------------------
+  const { targetLocationId, locationWillBeCreated } =
+    await resolveTargetLocation(
       db,
       organizationId,
       row.location_path!,
       locationTypeContext,
+      dryRun,
+    );
+
+  const newAmount = { value: row.quantity, unit: row.unit };
+  const base: BaseResultFields = {
+    rowIndex,
+    productName: row.product_name,
+    locationPath: row.location_path,
+    locationId: targetLocationId ?? undefined,
+    productId: productData?.id,
+    upc: row.upc,
+  };
+
+  // -------------------------------------------------------------------------
+  // Step 4: Handle new product creation (dry-run)
+  // -------------------------------------------------------------------------
+  if (dryRun && productWillBeCreated) {
+    return buildDryRunResult(base, "created", {
+      productChanges,
+      productWillBeCreated: true,
+      locationWillBeCreated,
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Step 5: Handle missing location (dry-run) - check for move
+  // -------------------------------------------------------------------------
+  if (dryRun && !targetLocationId) {
+    return handleMissingLocationDryRun(
+      db,
+      organizationId,
+      base,
+      productData,
+      productWillBeCreated,
+      productChanges,
     );
   }
 
-  const newAmount = { value: row.quantity, unit: row.unit };
-
-  // Handle dry-run with new product
-  if (dryRun && productWillBeCreated) {
-    return {
-      rowIndex,
-      action: "created",
-      productName: row.product_name,
-      locationPath: row.location_path,
-      locationId: targetLocationId ?? undefined,
-      fieldChanges: buildFieldChanges(productChanges),
-      productWillBeCreated: true,
-      locationWillBeCreated,
-      productChanges:
-        Object.keys(productChanges).length > 0 ? productChanges : undefined,
-    };
-  }
-
-  // Handle dry-run with no location found - check if this is a move
-  if (dryRun && !targetLocationId) {
-    if (productData && productData.expectedQuantity !== null) {
-      const totalExistingQty = await getTotalProductQuantity(
-        db,
-        productData.id,
-        organizationId,
-      );
-
-      if (totalExistingQty >= productData.expectedQuantity) {
-        const existingLocations = await getExistingInventoryLocations(
-          db,
-          organizationId,
-          productData.id,
-        );
-
-        if (existingLocations.length > 0) {
-          return {
-            rowIndex,
-            action: "moved",
-            productName: row.product_name,
-            locationPath: row.location_path,
-            locationId: undefined, // Location will be created
-            movedFrom: existingLocations,
-            message: `Will move from ${existingLocations.join(", ")}`,
-            fieldChanges: buildFieldChanges(productChanges),
-            productWillBeCreated,
-            locationWillBeCreated: true,
-            productChanges:
-              Object.keys(productChanges).length > 0
-                ? productChanges
-                : undefined,
-          };
-        }
-      }
-    }
-
-    // Not a move - it's a create with new location
-    return {
-      rowIndex,
-      action: "created",
-      productName: row.product_name,
-      locationPath: row.location_path,
-      locationId: undefined, // Location will be created
-      fieldChanges: buildFieldChanges(productChanges),
-      productWillBeCreated,
-      locationWillBeCreated: true,
-      productChanges:
-        Object.keys(productChanges).length > 0 ? productChanges : undefined,
-    };
-  }
-
-  // At this point we should have productData and targetLocationId
+  // At this point we must have productData and targetLocationId
   if (!productData || !targetLocationId) {
     throw new Error("Unexpected state: missing product or location data");
   }
 
-  // Check inventory state at target
+  // -------------------------------------------------------------------------
+  // Step 6: Check inventory state and move conditions
+  // -------------------------------------------------------------------------
   const inventoryCheck = await checkInventoryMatch(
     db,
     organizationId,
@@ -381,89 +528,229 @@ export const processRow = async (
     newAmount,
   );
 
-  // Get total existing quantity for move logic
-  const totalExistingQty = await getTotalProductQuantity(
+  const moveCheck = await checkMoveConditions(
     db,
-    productData.id,
     organizationId,
+    productData,
+    targetLocationId,
+    inventoryCheck.exists,
   );
 
-  // Smart move logic: if at expected capacity and NOT already at target, move instead of adding
-  const shouldMove =
-    productData.expectedQuantity !== null &&
-    totalExistingQty >= productData.expectedQuantity;
+  // -------------------------------------------------------------------------
+  // Step 7: Handle move case
+  // -------------------------------------------------------------------------
+  if (
+    moveCheck.shouldMove &&
+    !moveCheck.isOnlyAtTarget &&
+    moveCheck.existingLocations.length > 0
+  ) {
+    return handleMoveCase(
+      db,
+      organizationId,
+      base,
+      productData,
+      targetLocationId,
+      newAmount,
+      moveCheck.existingLocations,
+      productChanges,
+      productWillBeCreated,
+      locationWillBeCreated,
+      dryRun,
+    );
+  }
 
-  // Check if product is ONLY at the target location (don't move if already there)
-  const existingLocations = shouldMove
-    ? await getExistingInventoryLocations(db, organizationId, productData.id)
-    : [];
-  const isOnlyAtTarget =
-    existingLocations.length === 1 && inventoryCheck.exists;
+  // -------------------------------------------------------------------------
+  // Step 8: Handle skip/update/create
+  // -------------------------------------------------------------------------
+  return handleInventoryResult(
+    db,
+    organizationId,
+    base,
+    productData,
+    targetLocationId,
+    newAmount,
+    inventoryCheck,
+    productChanges,
+    productWillBeCreated,
+    locationWillBeCreated,
+    dryRun,
+  );
+};
 
-  // Handle move case
-  if (shouldMove && !isOnlyAtTarget && existingLocations.length > 0) {
-    if (dryRun) {
-      return {
-        rowIndex,
-        action: "moved",
-        productName: row.product_name,
-        locationPath: row.location_path,
-        locationId: targetLocationId,
-        movedFrom: existingLocations,
-        message: `Will move from ${existingLocations.join(", ")}`,
-        fieldChanges: buildFieldChanges(productChanges),
-        productWillBeCreated,
-        locationWillBeCreated,
-        productChanges:
-          Object.keys(productChanges).length > 0 ? productChanges : undefined,
-      };
-    } else {
-      const fromLocations = await moveInventoryEntries(
+// ============================================================================
+// Row Processing Sub-handlers
+// ============================================================================
+
+/**
+ * Handle product-only rows (no location_path)
+ */
+function handleProductOnlyRow(
+  row: InventoryCSVRow,
+  rowIndex: number,
+  productData: ProductTopLevelOut | null,
+  productWillBeCreated: boolean,
+  productChanges: ProductChangesPreview,
+  dryRun: boolean,
+): CSVImportResultItem {
+  const hasProductChanges_ = hasChanges(productChanges);
+  const shouldSkip = dryRun && !productWillBeCreated && !hasProductChanges_;
+  const fieldChanges = buildFieldChanges(productChanges);
+
+  const message = shouldSkip
+    ? "Product already exists with no changes"
+    : productWillBeCreated
+      ? "New product"
+      : fieldChanges
+        ? undefined
+        : dryRun
+          ? "Product already exists"
+          : undefined;
+
+  return {
+    rowIndex,
+    action: shouldSkip ? "skipped" : "product_only",
+    productName: row.product_name,
+    productId: productData?.id,
+    upc: row.upc,
+    locationPath: undefined,
+    message,
+    fieldChanges,
+    productWillBeCreated,
+    productChanges: wrapChanges(productChanges),
+  };
+}
+
+/**
+ * Handle dry-run with no target location found
+ */
+async function handleMissingLocationDryRun(
+  db: Database,
+  organizationId: OrganizationId,
+  base: BaseResultFields,
+  productData: ProductTopLevelOut | null,
+  productWillBeCreated: boolean,
+  productChanges: ProductChangesPreview,
+): Promise<CSVImportResultItem> {
+  // Check if this should be a move
+  if (productData && productData.expectedQuantity !== null) {
+    const totalExistingQty = await getTotalProductQuantity(
+      db,
+      productData.id,
+      organizationId,
+    );
+
+    if (totalExistingQty >= productData.expectedQuantity) {
+      const existingLocations = await getExistingInventoryLocations(
         db,
         organizationId,
         productData.id,
-        targetLocationId,
-        newAmount,
       );
 
-      if (fromLocations.length > 0) {
-        return {
-          rowIndex,
-          action: "moved",
-          productName: row.product_name,
-          productId: productData.id,
-          upc: row.upc,
-          locationPath: row.location_path,
-          locationId: targetLocationId,
-          movedFrom: fromLocations,
-          message: `Moved from ${fromLocations.join(", ")}`,
-        };
+      if (existingLocations.length > 0) {
+        return buildDryRunResult({ ...base, locationId: undefined }, "moved", {
+          productChanges,
+          productWillBeCreated,
+          locationWillBeCreated: true,
+          movedFrom: existingLocations,
+          message: `Will move from ${existingLocations.join(", ")}`,
+        });
       }
     }
   }
 
-  // Handle skip/update/create cases
+  // Not a move - it's a create with new location
+  return buildDryRunResult({ ...base, locationId: undefined }, "created", {
+    productChanges,
+    productWillBeCreated,
+    locationWillBeCreated: true,
+  });
+}
+
+/**
+ * Handle move case (both dry-run and execution)
+ */
+async function handleMoveCase(
+  db: Database,
+  organizationId: OrganizationId,
+  base: BaseResultFields,
+  productData: ProductTopLevelOut,
+  targetLocationId: LocationId,
+  newAmount: { value: number; unit: string },
+  existingLocations: string[],
+  productChanges: ProductChangesPreview,
+  productWillBeCreated: boolean,
+  locationWillBeCreated: boolean,
+  dryRun: boolean,
+): Promise<CSVImportResultItem> {
+  if (dryRun) {
+    return buildDryRunResult(base, "moved", {
+      productChanges,
+      productWillBeCreated,
+      locationWillBeCreated,
+      movedFrom: existingLocations,
+      message: `Will move from ${existingLocations.join(", ")}`,
+    });
+  }
+
+  const fromLocations = await moveInventoryEntries(
+    db,
+    organizationId,
+    productData.id,
+    targetLocationId,
+    newAmount,
+  );
+
+  if (fromLocations.length > 0) {
+    return buildExecutionResult(
+      base,
+      "moved",
+      `Moved from ${fromLocations.join(", ")}`,
+      fromLocations,
+    );
+  }
+
+  // Fallback - shouldn't happen but handle gracefully
+  return buildExecutionResult(base, "created");
+}
+
+/**
+ * Handle final inventory result (skip/update/create)
+ */
+async function handleInventoryResult(
+  db: Database,
+  organizationId: OrganizationId,
+  base: BaseResultFields,
+  productData: ProductTopLevelOut,
+  targetLocationId: LocationId,
+  newAmount: { value: number; unit: string },
+  inventoryCheck: {
+    exists: boolean;
+    matches: boolean;
+    currentAmount?: { value: number; unit: string };
+  },
+  productChanges: ProductChangesPreview,
+  productWillBeCreated: boolean,
+  locationWillBeCreated: boolean,
+  dryRun: boolean,
+): Promise<CSVImportResultItem> {
   if (dryRun) {
     if (inventoryCheck.matches) {
-      // Even if inventory matches, product fields might change
       const productFieldChanges = buildFieldChanges(productChanges);
-      return {
-        rowIndex,
-        action: productFieldChanges ? "updated" : "skipped",
-        productName: row.product_name,
-        locationPath: row.location_path,
-        locationId: targetLocationId,
-        message: productFieldChanges
-          ? undefined
-          : "Already exists with same quantity",
-        fieldChanges: productFieldChanges,
-        productWillBeCreated,
-        locationWillBeCreated,
-        productChanges:
-          Object.keys(productChanges).length > 0 ? productChanges : undefined,
-      };
-    } else if (inventoryCheck.exists) {
-      // Build structured field changes for quantity update
+      return buildDryRunResult(
+        base,
+        productFieldChanges ? "updated" : "skipped",
+        {
+          productChanges,
+          productWillBeCreated,
+          locationWillBeCreated,
+          message: productFieldChanges
+            ? undefined
+            : "Already exists with same quantity",
+        },
+      );
+    }
+
+    if (inventoryCheck.exists) {
       const currentAmt = inventoryCheck.currentAmount;
       const inventoryFieldChanges: FieldChange[] = currentAmt
         ? [
@@ -475,76 +762,41 @@ export const processRow = async (
           ]
         : [];
 
-      return {
-        rowIndex,
-        action: "updated",
-        productName: row.product_name,
-        locationPath: row.location_path,
-        locationId: targetLocationId,
-        fieldChanges: buildFieldChanges(productChanges, inventoryFieldChanges),
+      return buildDryRunResult(base, "updated", {
+        productChanges,
         productWillBeCreated,
         locationWillBeCreated,
-        productChanges:
-          Object.keys(productChanges).length > 0 ? productChanges : undefined,
-      };
-    } else {
-      return {
-        rowIndex,
-        action: "created",
-        productName: row.product_name,
-        locationPath: row.location_path,
-        locationId: targetLocationId,
-        fieldChanges: buildFieldChanges(productChanges),
-        productWillBeCreated,
-        locationWillBeCreated,
-        productChanges:
-          Object.keys(productChanges).length > 0 ? productChanges : undefined,
-      };
+        inventoryFieldChanges,
+      });
     }
-  } else {
-    // Actually create or update inventory
-    if (inventoryCheck.matches) {
-      return {
-        rowIndex,
-        action: "skipped",
-        productName: row.product_name,
-        productId: productData.id,
-        upc: row.upc,
-        locationPath: row.location_path,
-        locationId: targetLocationId,
-        message: "Already exists with same quantity",
-      };
-    } else {
-      const action = await createOrUpdateInventoryAtLocation(
-        db,
-        organizationId,
-        productData.id,
-        targetLocationId,
-        newAmount,
-      );
 
-      if (action === "updated") {
-        return {
-          rowIndex,
-          action: "updated",
-          productName: row.product_name,
-          productId: productData.id,
-          upc: row.upc,
-          locationPath: row.location_path,
-          locationId: targetLocationId,
-          message: "Updated existing entry quantity",
-        };
-      } else {
-        return {
-          rowIndex,
-          action: "created",
-          productName: row.product_name,
-          productId: productData.id,
-          upc: row.upc,
-          locationPath: row.location_path,
-          locationId: targetLocationId,
-        };
-      }
-    }
+    return buildDryRunResult(base, "created", {
+      productChanges,
+      productWillBeCreated,
+      locationWillBeCreated,
+    });
   }
-};
+
+  // Execution mode
+  if (inventoryCheck.matches) {
+    return buildExecutionResult(
+      base,
+      "skipped",
+      "Already exists with same quantity",
+    );
+  }
+
+  const action = await createOrUpdateInventoryAtLocation(
+    db,
+    organizationId,
+    productData.id,
+    targetLocationId,
+    newAmount,
+  );
+
+  return buildExecutionResult(
+    base,
+    action,
+    action === "updated" ? "Updated existing entry quantity" : undefined,
+  );
+}
