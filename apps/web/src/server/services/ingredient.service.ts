@@ -16,12 +16,9 @@ import {
 } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import {
-  UserId,
-  type IngredientId,
-  type OrganizationId,
-} from "~/schemas/identifiers";
+import { type IngredientId, type OrganizationId } from "~/schemas/identifiers";
 import { batchEnrichWithFood, batchEnrichNestedItems } from "./usda-helpers";
+import { type ActorContext } from "~/schemas/context";
 
 // Extended schemas that include food data
 import { productTopLevelOut } from "~/schemas/product";
@@ -118,14 +115,9 @@ export class IngredientService {
 
   async createIngredient(
     data: z.infer<typeof ingredientBase>,
-    organizationId: OrganizationId,
-    userId: UserId,
+    actor: ActorContext,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await createIngredientRepo(this.db, data, {
-      userId,
-      organizationId,
-      source: "ui",
-    });
+    const ingredient = await createIngredientRepo(this.db, data, actor);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -138,15 +130,10 @@ export class IngredientService {
 
   async updateIngredient(
     id: IngredientId,
-    organizationId: OrganizationId,
     data: Partial<z.infer<typeof ingredientBase>>,
-    userId: UserId,
+    actor: ActorContext,
   ): Promise<IngredientWithFoodOut> {
-    const ingredient = await updateIngredientRepo(this.db, id, data, {
-      userId,
-      organizationId,
-      source: "ui",
-    });
+    const ingredient = await updateIngredientRepo(this.db, id, data, actor);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );

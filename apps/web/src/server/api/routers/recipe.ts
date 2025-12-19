@@ -11,7 +11,6 @@ import {
   protectedProcedure,
   systemProcedure,
   createAppError,
-  requireActorContext,
 } from "../trpc";
 
 import { z } from "zod";
@@ -65,20 +64,17 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      const actor = requireActorContext(services);
-      return await createRecipe(data, services.db, actor);
+      return await createRecipe(data, services.db, services.actorContext);
     },
     update: async (services, id: RecipeId, data) => {
-      const actor = requireActorContext(services);
-      return await updateRecipe(id, data, services.db, actor);
+      return await updateRecipe(id, data, services.db, services.actorContext);
     },
   },
   entityName: "recipe",
 });
 
 const seed = systemProcedure.mutation(async ({ ctx }) => {
-  const actor = requireActorContext(ctx);
-  return await seedRealRecipes(ctx.db, actor);
+  return await seedRealRecipes(ctx.db, ctx.actorContext);
 });
 const scrape = protectedProcedure
   .input(z.url())
@@ -88,8 +84,7 @@ const insertCompact = protectedProcedure
   .input(compactRecipeSchema)
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
-    return await insertCompactRecipe(input, ctx.db, actor);
+    return await insertCompactRecipe(input, ctx.db, ctx.actorContext);
   });
 
 export const recipeRouter = createTRPCRouter({

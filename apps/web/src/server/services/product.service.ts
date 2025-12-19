@@ -12,12 +12,9 @@ import { type SortParams, type PaginationParams } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import {
-  type ProductId,
-  type OrganizationId,
-  UserId,
-} from "~/schemas/identifiers";
+import { type ProductId, type OrganizationId } from "~/schemas/identifiers";
 import { batchEnrichWithFood } from "./usda-helpers";
+import { type ActorContext } from "~/schemas/context";
 
 // Extended schema that includes food data
 export const productWithFoodOut =
@@ -78,28 +75,18 @@ export class ProductService {
 
   async createProduct(
     data: ProductInputPayload,
-    organizationId: OrganizationId,
-    userId: UserId,
+    actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
-    const product = await createProductRepo(this.db, data, {
-      userId,
-      organizationId,
-      source: "ui",
-    });
-    return this.getProductByID(product.id, organizationId);
+    const product = await createProductRepo(this.db, data, actor);
+    return this.getProductByID(product.id, actor.organizationId);
   }
 
   async updateProduct(
     id: ProductId,
-    organizationId: OrganizationId,
     data: Partial<ProductInputPayload>,
-    userId: UserId,
+    actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
-    await updateProductRepo(this.db, id, data, {
-      userId,
-      organizationId,
-      source: "ui",
-    });
-    return this.getProductByID(id, organizationId);
+    await updateProductRepo(this.db, id, data, actor);
+    return this.getProductByID(id, actor.organizationId);
   }
 }

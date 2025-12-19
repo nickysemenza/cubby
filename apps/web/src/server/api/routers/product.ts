@@ -7,11 +7,7 @@
  */
 
 import { z } from "zod";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  requireActorContext,
-} from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { productWithFoodOut } from "~/server/services/product.service";
 import {
   productInputPayload,
@@ -66,20 +62,16 @@ const { getByID, list, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      const actor = requireActorContext(services);
       return await services.services.product.createProduct(
         data,
-        actor.organizationId,
-        actor.userId,
+        services.actorContext,
       );
     },
     update: async (services, id: ProductId, data) => {
-      const actor = requireActorContext(services);
       return await services.services.product.updateProduct(
         id,
-        actor.organizationId,
         data,
-        actor.userId,
+        services.actorContext,
       );
     },
   },
@@ -91,13 +83,10 @@ const create = protectedProcedure
   .input(productInputPayload)
   .output(productWithFoodOut)
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
-
     // Create the product
     const product = await ctx.services.product.createProduct(
       input,
-      actor.organizationId,
-      actor.userId,
+      ctx.actorContext,
     );
 
     // If product has a UPC, try to import image from UPC lookup (non-blocking)
@@ -105,7 +94,7 @@ const create = protectedProcedure
       try {
         await importImageFromUPC(
           ctx.db,
-          actor.organizationId,
+          ctx.actorContext.organizationId,
           ctx.upcLookupClient,
           input.upc,
           unsafeProductId(product.id),
@@ -123,7 +112,6 @@ const quickCreate = protectedProcedure
   .input(productQuickCreatePayload)
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
     return await quickCreateProduct(
       ctx.db,
       {
@@ -134,7 +122,7 @@ const quickCreate = protectedProcedure
         model: input.model ?? null,
         price: input.price ?? null,
       },
-      actor,
+      ctx.actorContext,
     );
   });
 
@@ -149,13 +137,11 @@ const findOrCreateByUPC = protectedProcedure
   )
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
-
     // 1. Check if product with this UPC already exists in organization
     const existing = await findProductByUPC(
       ctx.db,
       input.upc,
-      actor.organizationId,
+      ctx.actorContext.organizationId,
     );
     if (existing) {
       return existing;
@@ -181,7 +167,7 @@ const findOrCreateByUPC = protectedProcedure
           expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
           model: null,
         },
-        actor,
+        ctx.actorContext,
       );
     }
 
@@ -203,7 +189,7 @@ const findOrCreateByUPC = protectedProcedure
           model: null,
           price: upcLookup.priceDollars ?? null,
         },
-        actor,
+        ctx.actorContext,
       );
 
       // Import image from UPC lookup if available (non-blocking)
@@ -211,7 +197,7 @@ const findOrCreateByUPC = protectedProcedure
         try {
           await importImageFromUPC(
             ctx.db,
-            actor.organizationId,
+            ctx.actorContext.organizationId,
             ctx.upcLookupClient,
             input.upc,
             unsafeProductId(newProduct.id),
@@ -234,7 +220,7 @@ const findOrCreateByUPC = protectedProcedure
         expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
         model: null,
       },
-      actor,
+      ctx.actorContext,
     );
   });
 

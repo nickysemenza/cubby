@@ -8,11 +8,7 @@
 
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  requireActorContext,
-} from "~/server/api/trpc";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   getGoogleSheetsClient,
   GoogleSheetsClient,
@@ -484,12 +480,11 @@ const pullFromSheet = protectedProcedure
       await preparePullData(ctx);
     if (isEmpty) return EMPTY_IMPORT_RESULT;
 
-    const actor = requireActorContext(ctx);
     const result = await importInventoryFromCSV(
       ctx.db,
-      actor.organizationId,
+      ctx.actorContext.organizationId,
       parsedRows,
-      { dryRun: true, actor: { ...actor, source: "sheets_import" } },
+      { dryRun: true, actor: { ...ctx.actorContext, source: "sheets_import" } },
     );
 
     return buildPullResult(result, errorItems, removedItems);
@@ -503,24 +498,26 @@ const applyPull = protectedProcedure
       await preparePullData(ctx);
     if (isEmpty) return EMPTY_IMPORT_RESULT;
 
-    const actor = requireActorContext(ctx);
     const result = await importInventoryFromCSV(
       ctx.db,
-      actor.organizationId,
+      ctx.actorContext.organizationId,
       parsedRows,
-      { dryRun: false, actor: { ...actor, source: "sheets_import" } },
+      {
+        dryRun: false,
+        actor: { ...ctx.actorContext, source: "sheets_import" },
+      },
     );
 
     // Delete inventory entries and products that were removed from the sheet
     for (const item of removedItems) {
       if (item.inventoryEntryId) {
         await deleteInventoryEntry(ctx.db, item.inventoryEntryId, {
-          ...actor,
+          ...ctx.actorContext,
           source: "sheets_import",
         });
       } else if (item.productIdToDelete) {
         await deleteProduct(ctx.db, item.productIdToDelete, {
-          ...actor,
+          ...ctx.actorContext,
           source: "sheets_import",
         });
       }

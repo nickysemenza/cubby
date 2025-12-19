@@ -7,11 +7,7 @@
  */
 
 import { z } from "zod";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  requireActorContext,
-} from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import { mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -50,20 +46,16 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
     create: async (services, data) => {
-      const actor = requireActorContext(services);
       return await services.services.ingredient.createIngredient(
         data,
-        actor.organizationId,
-        actor.userId,
+        services.actorContext,
       );
     },
     update: async (services, id: IngredientId, data) => {
-      const actor = requireActorContext(services);
       return await services.services.ingredient.updateIngredient(
         id,
-        actor.organizationId,
         data,
-        actor.userId,
+        services.actorContext,
       );
     },
   },

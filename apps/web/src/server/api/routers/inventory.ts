@@ -7,12 +7,7 @@
  */
 
 import { z } from "zod";
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  createAppError,
-  requireActorContext,
-} from "../trpc";
+import { createTRPCRouter, protectedProcedure, createAppError } from "../trpc";
 import {
   getInventoryEntryByID,
   inventoryentryList,
@@ -101,12 +96,19 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
         );
       }
 
-      const actor = requireActorContext(services);
-      return await createInventoryEntry(services.db, data, actor);
+      return await createInventoryEntry(
+        services.db,
+        data,
+        services.actorContext,
+      );
     },
     update: async (services, id: InventoryId, data) => {
-      const actor = requireActorContext(services);
-      return await updateInventoryEntry(services.db, id, data, actor);
+      return await updateInventoryEntry(
+        services.db,
+        id,
+        data,
+        services.actorContext,
+      );
     },
   },
   entityName: "inventory-item",
@@ -117,8 +119,7 @@ const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
-    const result = await bulkProcessInventoryEntries(
+    return await bulkProcessInventoryEntries(
       ctx.db,
       input.locationId,
       input.items.map((item) => ({
@@ -127,9 +128,8 @@ const bulkProcess = protectedProcedure
         locationId: item.locationId ?? input.locationId,
         amount: item.amount,
       })),
-      actor,
+      ctx.actorContext,
     );
-    return result;
   });
 
 // Bulk move inventory entries between locations
@@ -137,8 +137,7 @@ const bulkMove = protectedProcedure
   .input(bulkMovePayload)
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
-    return await bulkMoveInventoryEntries(ctx.db, input, actor);
+    return await bulkMoveInventoryEntries(ctx.db, input, ctx.actorContext);
   });
 
 // Delete a single inventory entry
@@ -146,8 +145,7 @@ const deleteItem = protectedProcedure
   .input(z.object({ id: inventoryId }))
   .output(z.void())
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
-    await deleteInventoryEntry(ctx.db, input.id, actor);
+    await deleteInventoryEntry(ctx.db, input.id, ctx.actorContext);
   });
 
 // Find products with expectedQuantity=1 in multiple locations
@@ -227,14 +225,13 @@ const importCSV = protectedProcedure
   .input(inventoryCSVImportPayload)
   .output(csvImportResult)
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
     const result = await importInventoryFromCSV(
       ctx.db,
-      actor.organizationId,
+      ctx.actorContext.organizationId,
       input.rows,
       {
         dryRun: false,
-        actor: { ...actor, source: "csv_import" },
+        actor: { ...ctx.actorContext, source: "csv_import" },
       },
     );
 
@@ -253,7 +250,7 @@ const importCSV = protectedProcedure
         try {
           await importImageFromUPC(
             ctx.db,
-            actor.organizationId,
+            ctx.actorContext.organizationId,
             ctx.upcLookupClient,
             item.upc!,
             unsafeProductId(item.productId!),
@@ -275,14 +272,13 @@ const previewCSVImport = protectedProcedure
   .input(inventoryCSVImportPayload)
   .output(csvImportResult)
   .mutation(async ({ ctx, input }) => {
-    const actor = requireActorContext(ctx);
     return await importInventoryFromCSV(
       ctx.db,
-      actor.organizationId,
+      ctx.actorContext.organizationId,
       input.rows,
       {
         dryRun: true,
-        actor: { ...actor, source: "csv_import" },
+        actor: { ...ctx.actorContext, source: "csv_import" },
       },
     );
   });
