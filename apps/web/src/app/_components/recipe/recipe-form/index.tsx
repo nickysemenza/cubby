@@ -21,6 +21,7 @@ import {
   type RecipeFormValues,
   formSchema,
 } from "./types";
+import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
 import {
   RecipeIngredientInput,
   recipeInstructionInput,
@@ -170,33 +171,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         }
 
         // Check for ingredient changes
-        const ingredientsChanged =
-          JSON.stringify(
-            originalSection.ingredients.map((ing) => ({
-              id: ing.id,
-              type: ing.type,
-              ingredientId:
-                ing.type === "ingredient" && ing.ingredient
-                  ? ing.ingredient.id
-                  : null,
-              recipeId:
-                ing.type === "recipe" && ing.recipe ? ing.recipe.id : null,
-              amounts: ing.amounts,
-            })),
-          ) !==
-          JSON.stringify(
-            section.ingredients.map((ing) => ({
-              id: ing.id,
-              type: ing.type,
-              ingredientId:
-                ing.type === "ingredient" && ing.ingredient
-                  ? ing.ingredient.id
-                  : null,
-              recipeId:
-                ing.type === "recipe" && ing.recipe ? ing.recipe.id : null,
-              amounts: ing.amounts,
-            })),
-          );
+        const ingredientsChanged = haveIngredientsChanged(
+          originalSection.ingredients,
+          section.ingredients,
+        );
 
         if (ingredientsChanged) {
           sectionUpdate.ingredients = section.ingredients.map(
@@ -205,9 +183,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         }
 
         // Check for instruction changes
-        const instructionsChanged =
-          JSON.stringify(originalSection.instructions) !==
-          JSON.stringify(section.instructions);
+        const instructionsChanged = haveInstructionsChanged(
+          originalSection.instructions,
+          section.instructions,
+        );
 
         if (instructionsChanged) {
           sectionUpdate.instructions = section.instructions.map((inst) => {

@@ -182,62 +182,44 @@ export function NullableNumericField<
     <FormField
       control={form.control}
       name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            {prefix ? (
-              <div className="relative">
-                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">
-                  {prefix}
-                </span>
-                <Input
-                  type="number"
-                  step={step}
-                  placeholder={placeholder}
-                  className="pl-7"
-                  {...field}
-                  value={
-                    (field.value as number | null) !== null
-                      ? (field.value as number).toString()
-                      : ""
-                  }
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    const numberValue = value ? parseFloat(value) : null;
-                    field.onChange(
-                      numberValue as PathValue<
-                        TFieldValues,
-                        Path<TFieldValues>
-                      >,
-                    );
-                  }}
-                />
-              </div>
-            ) : (
-              <Input
-                type="number"
-                step={step}
-                placeholder={placeholder}
-                {...field}
-                value={
-                  (field.value as number | null) !== null
-                    ? (field.value as number).toString()
-                    : ""
-                }
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const numberValue = value ? parseFloat(value) : null;
-                  field.onChange(
-                    numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
-                  );
-                }}
-              />
-            )}
-          </FormControl>
-          <FormMessage />
-        </FormItem>
-      )}
+      render={({ field }) => {
+        const inputProps = {
+          type: "number" as const,
+          step,
+          placeholder,
+          ...field,
+          value:
+            (field.value as number | null) !== null
+              ? (field.value as number).toString()
+              : "",
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+            const value = e.target.value;
+            const numberValue = value ? parseFloat(value) : null;
+            field.onChange(
+              numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
+            );
+          },
+        };
+
+        return (
+          <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl>
+              {prefix ? (
+                <div className="relative">
+                  <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">
+                    {prefix}
+                  </span>
+                  <Input {...inputProps} className="pl-7" />
+                </div>
+              ) : (
+                <Input {...inputProps} />
+              )}
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 }

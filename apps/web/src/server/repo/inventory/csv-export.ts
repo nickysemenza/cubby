@@ -6,12 +6,10 @@ import {
   inventoryId as inventoryIdSchema,
   productId as productIdSchema,
 } from "~/schemas/identifiers";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { eq, and, notInArray } from "drizzle-orm";
 import { buildLocationPath } from "~/server/repo/location";
-import { amount } from "~/codec/codec";
-import { parseWithContext } from "~/lib/zod-utils";
 import {
   extractPriceFromMappings,
   serializeUnitMappings,
@@ -89,10 +87,7 @@ export const exportInventoryToCSV = async (
   // Convert inventory entries to export rows
   const inventoryRows = await Promise.all(
     entries.map(async (entry) => {
-      const parsedAmount = parseWithContext(amount, entry.amount, {
-        entityType: "InventoryEntry",
-        identifier: { id: entry.id },
-      });
+      const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
       const productFields = await buildProductExportFields(entry.Product);
       return {
         ...productFields,

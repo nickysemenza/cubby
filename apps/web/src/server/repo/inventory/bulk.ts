@@ -1,12 +1,11 @@
 import { type Database, type Transaction } from "~/server/db";
-import { amount } from "~/codec/codec";
-import { parseWithContext } from "~/lib/zod-utils";
 import {
   withTransaction,
   insertAndReturn,
   updateAndReturn,
   relations,
   buildPartialUpdateValues,
+  parseInventoryAmount,
 } from "~/server/repo/database-helpers";
 import { notFoundError } from "~/lib/error-messages";
 import {
@@ -197,10 +196,10 @@ export const bulkMoveInventoryEntries = async (
       }
 
       // 2. Parse quantities (amount.value is already a number)
-      const parsedSourceAmount = parseWithContext(amount, sourceEntry.amount, {
-        entityType: "InventoryEntry",
-        identifier: { id: sourceEntry.id },
-      });
+      const parsedSourceAmount = parseInventoryAmount(
+        sourceEntry.amount,
+        sourceEntry.id,
+      );
       const sourceQuantity = parsedSourceAmount.value;
       const moveQuantity = item.quantity.value;
 
@@ -224,13 +223,9 @@ export const bulkMoveInventoryEntries = async (
         // Full move
         if (existingAtTarget) {
           // Merge with existing entry at target
-          const existingAmount = parseWithContext(
-            amount,
+          const existingAmount = parseInventoryAmount(
             existingAtTarget.amount,
-            {
-              entityType: "InventoryEntry",
-              identifier: { id: existingAtTarget.id },
-            },
+            existingAtTarget.id,
           );
           const existingQuantity = existingAmount.value;
           const newQuantity = existingQuantity + moveQuantity;
@@ -337,13 +332,9 @@ export const bulkMoveInventoryEntries = async (
 
         if (existingAtTarget) {
           // Add to existing entry at target
-          const existingAmount = parseWithContext(
-            amount,
+          const existingAmount = parseInventoryAmount(
             existingAtTarget.amount,
-            {
-              entityType: "InventoryEntry",
-              identifier: { id: existingAtTarget.id },
-            },
+            existingAtTarget.id,
           );
           const existingQuantity = existingAmount.value;
           const newQuantity = existingQuantity + moveQuantity;

@@ -2,12 +2,12 @@ import { type z } from "zod";
 import { type Database } from "~/server/db";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
-import { amount } from "~/codec/codec";
 import { parseWithContext } from "~/lib/zod-utils";
 import {
   getDb,
   extractImagesFromJoinTable,
   addProductSourceMetadata,
+  parseInventoryAmount,
 } from "~/server/repo/database-helpers";
 import {
   unsafeInventoryId,
@@ -34,10 +34,10 @@ export const dbInventoryEntryToAPI: (
   const { type, images: locationImages, ...restOfLocation } = location;
 
   // Validate amount from JSON column
-  const parsedAmount = parseWithContext(amount, restOfInventoryEntry.amount, {
-    entityType: "InventoryEntry",
-    identifier: { id: restOfInventoryEntry.id },
-  });
+  const parsedAmount = parseInventoryAmount(
+    restOfInventoryEntry.amount,
+    restOfInventoryEntry.id,
+  );
 
   return {
     ...restOfInventoryEntry,
@@ -78,10 +78,7 @@ export const getTotalProductQuantity = async (
   });
 
   return entries.reduce((total, entry) => {
-    const parsedAmount = parseWithContext(amount, entry.amount, {
-      entityType: "InventoryEntry",
-      identifier: { id: entry.id },
-    });
+    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
     return total + parsedAmount.value;
   }, 0);
 };

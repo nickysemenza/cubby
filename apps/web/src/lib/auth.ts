@@ -16,9 +16,12 @@ export const auth = betterAuth({
   },
   plugins: [
     organization({
-      // Wire up real email delivery later
+      // TODO: Wire up real email delivery later
       sendInvitationEmail: async (data) => {
-        console.log("[better-auth] send invitation:", data.email);
+        // Placeholder until email service is configured
+        if (process.env.NODE_ENV === "development") {
+          console.log("[better-auth] send invitation:", data.email);
+        }
       },
     }),
     apiKey({

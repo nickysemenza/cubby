@@ -141,7 +141,7 @@ export const findProductsByFoodIdentifier = async (
 
   return res.map((p) => ({
     ...p,
-    images: p.images?.map((pi) => pi.image) ?? [],
+    images: extractImagesFromJoinTable(p.images),
   }));
 };
 
@@ -512,7 +512,7 @@ export const updateProduct = async (
     // Construct and validate the response object
     const result = {
       ...updated,
-      images: productImages.map((pi) => pi.image),
+      images: extractImagesFromJoinTable(productImages),
     };
 
     return parseWithContext(productTopLevelOut, result, {
@@ -550,7 +550,7 @@ export const findProductByUPC = async (
     productTopLevelOut,
     {
       ...res,
-      images: res.images?.map((pi) => pi.image) ?? [],
+      images: extractImagesFromJoinTable(res.images),
     },
     {
       entityType: "Product",
@@ -589,7 +589,7 @@ export const findProductByNameAndManufacturer = async (
     productTopLevelOut,
     {
       ...res,
-      images: res.images?.map((pi) => pi.image) ?? [],
+      images: extractImagesFromJoinTable(res.images),
     },
     {
       entityType: "Product",
@@ -640,7 +640,7 @@ export const findProductByNameFuzzyManufacturer = async (
       productTopLevelOut,
       {
         ...res,
-        images: res.images?.map((pi) => pi.image) ?? [],
+        images: extractImagesFromJoinTable(res.images),
       },
       {
         entityType: "Product",
@@ -685,7 +685,7 @@ export const findProductByNameFuzzyManufacturer = async (
     productTopLevelOut,
     {
       ...unspecifiedMatch,
-      images: unspecifiedMatch.images?.map((pi) => pi.image) ?? [],
+      images: extractImagesFromJoinTable(unspecifiedMatch.images),
     },
     {
       entityType: "Product",

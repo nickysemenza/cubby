@@ -1,3 +1,11 @@
+/**
+ * Inventory Router - Direct repo access
+ *
+ * Inventory entries do not require external API enrichment (e.g., USDA),
+ * so they call repo functions directly without a service layer.
+ * See CLAUDE.md "Service Layer Architecture" for details.
+ */
+
 import { z } from "zod";
 import {
   createTRPCRouter,

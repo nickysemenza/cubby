@@ -1,3 +1,11 @@
+/**
+ * Location Router - Direct repo access
+ *
+ * This entity does not require external API enrichment (e.g., USDA),
+ * so it calls repo functions directly without a service layer.
+ * See CLAUDE.md "Service Layer Architecture" for details.
+ */
+
 import { z } from "zod";
 import {
   protectedProcedure,

@@ -218,6 +218,7 @@ export function LocationInventoryTable({
     [columnHelper, editingRowId, editingAmount, updateMutation],
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API limitation
   const table = useReactTable({
     data: inventoryItems,
     columns,

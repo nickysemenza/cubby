@@ -1,3 +1,11 @@
+/**
+ * Ingredient Router - Uses service layer
+ *
+ * Ingredients integrate with the USDA external API for nutrition data enrichment,
+ * so CRUD operations go through the ingredient service layer.
+ * See CLAUDE.md "Service Layer Architecture" for details.
+ */
+
 import { z } from "zod";
 import {
   createTRPCRouter,

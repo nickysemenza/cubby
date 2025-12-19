@@ -6,7 +6,6 @@ import {
   ingredientList as ingredientListRepo,
   createIngredient as createIngredientRepo,
   updateIngredient as updateIngredientRepo,
-  mergeIngredients as mergeIngredientsRepo,
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
 import { ingredientBase } from "~/schemas/ingredient";
@@ -156,12 +155,5 @@ export class IngredientService {
       ...ingredient,
       product: enrichedProducts,
     };
-  }
-
-  async mergeIngredients(
-    target: IngredientId,
-    aliases: IngredientId[],
-  ): Promise<void> {
-    return mergeIngredientsRepo(this.db, target, aliases);
   }
 }

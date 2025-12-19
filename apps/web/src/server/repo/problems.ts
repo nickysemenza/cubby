@@ -1,5 +1,5 @@
 import { type Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import {
   product,
   inventoryEntry,
@@ -7,8 +7,6 @@ import {
   productUnitMappings,
 } from "~/server/db/schema";
 import { eq, sql, notExists, and } from "drizzle-orm";
-import { amount } from "~/codec/codec";
-import { parseWithContext } from "~/lib/zod-utils";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -267,10 +265,7 @@ export const findInvalidInventoryAmounts = async (
 
   for (const entry of inventoryEntries) {
     // Validate and parse the JSONB amount column
-    const parsedAmount = parseWithContext(amount, entry.amount, {
-      entityType: "InventoryEntry",
-      identifier: { id: entry.id },
-    });
+    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
 
     if (parsedAmount.value <= 0) {
       problems.push({

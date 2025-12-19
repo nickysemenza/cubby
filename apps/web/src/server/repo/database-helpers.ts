@@ -5,6 +5,7 @@ import {
   type InferSelectModel,
 } from "drizzle-orm";
 import { type PgTable } from "drizzle-orm/pg-core";
+import { type z } from "zod";
 import { type SortParams } from "~/schemas/pagination";
 import {
   type Database,
@@ -14,6 +15,8 @@ import {
 import { productUnitMappings, image } from "~/server/db/schema";
 import { unsafeProductId } from "~/schemas/identifiers";
 import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
+import { amount } from "~/codec/codec";
+import { parseWithContext } from "~/lib/zod-utils";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (
@@ -545,3 +548,33 @@ export function buildPartialUpdateValues<T extends Record<string, unknown>>(
 
   return result;
 }
+
+/**
+ * Parse an inventory entry's amount field with consistent error context.
+ * Consolidates the repeated pattern of parsing amount JSON columns.
+ *
+ * @param rawAmount - The raw amount value from the database (JSON column)
+ * @param entryId - The inventory entry ID for error context
+ * @returns Parsed amount object
+ *
+ * @example
+ * ```typescript
+ * // Before
+ * const parsedAmount = parseWithContext(amount, entry.amount, {
+ *   entityType: "InventoryEntry",
+ *   identifier: { id: entry.id },
+ * });
+ *
+ * // After
+ * const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
+ * ```
+ */
+export const parseInventoryAmount = (
+  rawAmount: unknown,
+  entryId: string,
+): z.infer<typeof amount> => {
+  return parseWithContext(amount, rawAmount, {
+    entityType: "InventoryEntry",
+    identifier: { id: entryId },
+  });
+};
