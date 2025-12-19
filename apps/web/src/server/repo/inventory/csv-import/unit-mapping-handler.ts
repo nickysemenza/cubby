@@ -276,12 +276,32 @@ export const checkUnitMappingsChanges = async (
     return !looksLikeMoney(d.from) && !looksLikeMoney(d.to);
   });
 
-  // Serialize existing mappings for comparison
+  // Serialize existing mappings for comparison (without source for comparison purposes)
   const formatNum = (n: number) => {
     const rounded = Math.round(n * 1000000) / 1000000;
     return rounded.toString();
   };
 
+  // Normalize for comparison (lowercase, trim spaces, remove source annotations)
+  const normalizeForCompare = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/ @ [^;]+/g, "") // Remove source annotations like " @ test"
+      .replace(/\s+/g, " ")
+      .trim();
+
+  // Serialize existing without source for comparison
+  const existingForCompare =
+    nonPriceMappings.length > 0
+      ? nonPriceMappings
+          .map(
+            (m) =>
+              `${formatNum(m.a.value)} ${m.a.unit} = ${formatNum(m.b.value)} ${m.b.unit}`,
+          )
+          .join("; ")
+      : null;
+
+  // Serialize with source for display purposes
   const existingSerialized =
     nonPriceMappings.length > 0
       ? nonPriceMappings
@@ -299,18 +319,15 @@ export const checkUnitMappingsChanges = async (
     if (newNonPriceMappings.length === 0) {
       return null; // Both have no non-price mappings
     }
-    // Compare serialized versions (normalized format)
-    const newSerialized = newNonPriceMappings
-      .map((d) => `${d.from} = ${d.to}${d.source ? ` @ ${d.source}` : ""}`)
+    // Compare serialized versions (normalized format, without source)
+    const newForCompare = newNonPriceMappings
+      .map((d) => `${d.from} = ${d.to}`)
       .join("; ");
 
-    // Normalize for comparison (lowercase, trim spaces)
-    const normalizeForCompare = (s: string) =>
-      s.toLowerCase().replace(/\s+/g, " ").trim();
     if (
-      existingSerialized &&
-      normalizeForCompare(existingSerialized) ===
-        normalizeForCompare(newSerialized)
+      existingForCompare &&
+      normalizeForCompare(existingForCompare) ===
+        normalizeForCompare(newForCompare)
     ) {
       return null; // No changes
     }

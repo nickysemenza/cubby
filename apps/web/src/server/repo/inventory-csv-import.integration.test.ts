@@ -494,6 +494,303 @@ describe("CSV import preview logic", () => {
     });
   });
 
+  describe("fuzzy manufacturer matching", () => {
+    it("should match existing product with specific manufacturer when importing with (unspecified)", async () => {
+      // Create product with specific manufacturer
+      const location = await createLocation(
+        db,
+        { name: "Garage", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Power Drill",
+          manufacturer: "DeWalt",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        actor,
+      );
+
+      await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        actor,
+      );
+
+      // Import with (unspecified) manufacturer - should match existing product
+      const csvRow: InventoryCSVRow = {
+        product_name: "Power Drill",
+        manufacturer: "(unspecified)",
+        location_path: "Garage",
+        quantity: 1,
+        unit: "each",
+      };
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        [csvRow],
+        { dryRun: true, actor: actor },
+      );
+
+      // Should skip because it matches existing product
+      expect(result.skipped).toBe(1);
+      expect(result.created).toBe(0);
+      expect(result.items[0].productWillBeCreated).toBe(false);
+    });
+
+    it("should update manufacturer from (unspecified) to specific when importing", async () => {
+      // Create product with (unspecified) manufacturer
+      const location = await createLocation(
+        db,
+        { name: "Workshop", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Router Table",
+          manufacturer: "(unspecified)",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        actor,
+      );
+
+      await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        actor,
+      );
+
+      // Import with specific manufacturer - should update product
+      const csvRow: InventoryCSVRow = {
+        product_name: "Router Table",
+        manufacturer: "Bosch",
+        location_path: "Workshop",
+        quantity: 1,
+        unit: "each",
+      };
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        [csvRow],
+        { dryRun: true, actor: actor },
+      );
+
+      // Should show manufacturer update in changes
+      expect(result.items[0].productChanges?.manufacturerWillBeSet).toBe(
+        "Bosch",
+      );
+      expect(result.items[0].productChanges?.manufacturerCurrent).toBe(
+        "(unspecified)",
+      );
+    });
+
+    it("should actually update manufacturer when not in dryRun mode", async () => {
+      // Create product with (unspecified) manufacturer
+      const location = await createLocation(
+        db,
+        { name: "Shed", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Lawn Mower",
+          manufacturer: "(unspecified)",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        actor,
+      );
+
+      await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        actor,
+      );
+
+      // Import with specific manufacturer (not dryRun)
+      const csvRow: InventoryCSVRow = {
+        product_name: "Lawn Mower",
+        manufacturer: "Honda",
+        location_path: "Shed",
+        quantity: 1,
+        unit: "each",
+      };
+
+      await importInventoryFromCSV(db, organizationId, [csvRow], {
+        dryRun: false,
+        actor: actor,
+      });
+
+      // Verify manufacturer was updated
+      const { getProductByID } = await import("~/server/repo/product");
+      const updatedProduct = await getProductByID(
+        db,
+        product.id,
+        organizationId,
+      );
+      expect(updatedProduct.manufacturer).toBe("Honda");
+    });
+  });
+
+  describe("unit mappings round-trip", () => {
+    it("should not show false positive unit_mappings changes on re-import", async () => {
+      // Create product with unit mappings
+      const location = await createLocation(
+        db,
+        { name: "Kitchen", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Flour",
+          manufacturer: "King Arthur",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "cup" },
+              b: { value: 120, unit: "g" },
+              source: "test",
+            },
+          ],
+        },
+        actor,
+      );
+
+      await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 5, unit: "lbs" },
+        },
+        actor,
+      );
+
+      // Re-import with same unit mappings
+      const csvRow: InventoryCSVRow = {
+        product_name: "Flour",
+        manufacturer: "King Arthur",
+        location_path: "Kitchen",
+        quantity: 5,
+        unit: "lbs",
+        unit_mappings: "1 cup = 120g",
+      };
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        [csvRow],
+        { dryRun: true, actor: actor },
+      );
+
+      // Should skip - no changes detected including unit mappings
+      expect(result.skipped).toBe(1);
+      expect(result.items[0].productChanges?.unitMappingsWillBeAdded).toBe(
+        undefined,
+      );
+    });
+
+    it("should detect actual unit_mappings changes", async () => {
+      // Create product with unit mappings
+      const location = await createLocation(
+        db,
+        { name: "Pantry", type: "cabinet", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Sugar",
+          manufacturer: "Domino",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "cup" },
+              b: { value: 200, unit: "g" },
+              source: "test",
+            },
+          ],
+        },
+        actor,
+      );
+
+      await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 2, unit: "lbs" },
+        },
+        actor,
+      );
+
+      // Import with DIFFERENT unit mappings
+      const csvRow: InventoryCSVRow = {
+        product_name: "Sugar",
+        manufacturer: "Domino",
+        location_path: "Pantry",
+        quantity: 2,
+        unit: "lbs",
+        unit_mappings: "1 tbsp = 12g", // Different from existing
+      };
+
+      const result = await importInventoryFromCSV(
+        db,
+        organizationId,
+        [csvRow],
+        { dryRun: true, actor: actor },
+      );
+
+      // Should show unit mapping changes
+      expect(result.items[0].productChanges?.unitMappingsWillBeAdded).toBe(1);
+    });
+  });
+
   describe("type inference from context", () => {
     it("should infer type from later row with bracket notation", async () => {
       // Row 1: bare path (no types)
