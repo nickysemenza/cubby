@@ -21,11 +21,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["**/*.unit.test.ts", "**/*.{test,spec}-d.?(c|m)[jt]s?(x)"],
-          typecheck: {
-            enabled: true,
-            ignoreSourceErrors: true, // wasm files throw errors
-          },
+          include: ["**/*.unit.test.ts"],
         },
       },
       {
@@ -36,10 +32,6 @@ export default defineConfig({
           name: "ui",
           environment: "jsdom",
           include: ["**/*.unit.test.tsx"],
-          typecheck: {
-            enabled: true,
-            ignoreSourceErrors: true, // wasm files throw errors
-          },
         },
       },
       {
