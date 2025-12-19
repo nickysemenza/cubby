@@ -18,7 +18,10 @@ export const isMoneyUnit = async (unit: string): Promise<boolean> => {
 export const isSingleEach = (amount: Amount): boolean =>
   amount.value === 1 && amount.unit === "each";
 
-interface PriceMappingMatch {
+export interface PriceMappingMatch<T> {
+  /** The matched mapping object */
+  match: T;
+  /** Index in the original array */
   index: number;
   /** The price amount (includes currency unit) */
   price: Amount;
@@ -27,20 +30,23 @@ interface PriceMappingMatch {
 /**
  * Find a price mapping (1 each <-> $X) in either direction.
  * Price can be in either 'a' or 'b' position.
- * Always returns the price Amount (the side with money).
+ * Returns the matched object, its index, and the price Amount.
+ *
+ * This is the single source of truth for price mapping detection,
+ * used by both in-memory array operations and database operations.
  */
-const findPriceMappingInArray = async <T extends { a: Amount; b: Amount }>(
+export const findPriceMapping = async <T extends { a: Amount; b: Amount }>(
   mappings: T[],
-): Promise<PriceMappingMatch | null> => {
+): Promise<PriceMappingMatch<T> | null> => {
   for (let i = 0; i < mappings.length; i++) {
     const m = mappings[i]!;
     // Check if b is money and a is "1 each"
     if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
-      return { index: i, price: m.b };
+      return { match: m, index: i, price: m.b };
     }
     // Check if a is money and b is "1 each"
     if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
-      return { index: i, price: m.a };
+      return { match: m, index: i, price: m.a };
     }
   }
   return null;
@@ -54,7 +60,7 @@ const findPriceMappingInArray = async <T extends { a: Amount; b: Amount }>(
 export const extractPriceFromMappings = async (
   mappings: Array<{ a: Amount; b: Amount }>,
 ): Promise<Amount | null> => {
-  const match = await findPriceMappingInArray(mappings);
+  const match = await findPriceMapping(mappings);
   return match?.price ?? null;
 };
 
@@ -76,7 +82,7 @@ export const syncPriceToMappings = async <
   price: Amount | null,
   source: string = "manual",
 ): Promise<T[]> => {
-  const existing = await findPriceMappingInArray(mappings);
+  const existing = await findPriceMapping(mappings);
 
   if (price === null) {
     // Remove price mapping if it exists

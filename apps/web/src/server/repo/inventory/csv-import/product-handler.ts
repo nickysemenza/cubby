@@ -18,7 +18,7 @@ import {
   findProductByNameFuzzyManufacturer,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import { getManufacturerUpdate } from "~/lib/manufacturer-utils";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { type ProductPreviewResult } from "./types";
@@ -128,14 +128,12 @@ export const findOrCreateProductForImport = async (
     } = {};
 
     // Update manufacturer if going from "(unspecified)" to a specific value
-    const isCurrentUnspecified =
-      productData.manufacturer.toLowerCase() ===
-      UNSPECIFIED_MANUFACTURER.toLowerCase();
-    const isNewSpecific =
-      manufacturer &&
-      manufacturer.toLowerCase() !== UNSPECIFIED_MANUFACTURER.toLowerCase();
-    if (isCurrentUnspecified && isNewSpecific) {
-      updates.manufacturer = manufacturer;
+    const manufacturerUpdate = getManufacturerUpdate(
+      productData.manufacturer,
+      manufacturer,
+    );
+    if (manufacturerUpdate) {
+      updates.manufacturer = manufacturerUpdate;
     }
     // Update UPC if provided and different
     if (upc != null && productData.upc !== upc) {
@@ -334,14 +332,12 @@ export const previewProductForImport = async (
   // Product exists - check what would be updated, capture current values
 
   // Check manufacturer update (from "(unspecified)" to specific)
-  const isCurrentUnspecified =
-    existingProduct.manufacturer.toLowerCase() ===
-    UNSPECIFIED_MANUFACTURER.toLowerCase();
-  const isNewSpecific =
-    manufacturer &&
-    manufacturer.toLowerCase() !== UNSPECIFIED_MANUFACTURER.toLowerCase();
-  if (isCurrentUnspecified && isNewSpecific) {
-    productChanges.manufacturerWillBeSet = manufacturer;
+  const manufacturerUpdate = getManufacturerUpdate(
+    existingProduct.manufacturer,
+    manufacturer,
+  );
+  if (manufacturerUpdate) {
+    productChanges.manufacturerWillBeSet = manufacturerUpdate;
     productChanges.manufacturerCurrent = existingProduct.manufacturer;
   }
 

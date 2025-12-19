@@ -58,5 +58,19 @@ export interface InventoryCSVExportRow {
   aliases: string | null;
 }
 
+/**
+ * Product with related data needed for CSV export field building
+ */
+export interface ProductExportFields {
+  name: string;
+  manufacturer: string;
+  upc: string | null;
+  model: string | null;
+  ndb_number: number | null;
+  expectedQuantity: number | null;
+  unitMappings: Array<{ a: Amount; b: Amount; source: string | null }>;
+  Ingredient: { name: string; aliases: string[] } | null;
+}
+
 // Re-export Amount for convenience
 export type { Amount };

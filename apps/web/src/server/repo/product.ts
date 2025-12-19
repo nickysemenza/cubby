@@ -19,6 +19,7 @@ import {
   UNSPECIFIED_MANUFACTURER,
   DEFAULT_EXPECTED_QUANTITY,
 } from "~/lib/constants";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
   formatSearchTerm,
   getDb,
@@ -632,17 +633,6 @@ export const findProductByNameAndManufacturer = async (
       identifier: { id: res.id, name: res.name },
     },
   );
-};
-
-/**
- * Check if a manufacturer value is "unspecified" (empty, null, or "(unspecified)")
- */
-const isUnspecifiedManufacturer = (
-  manufacturer: string | null | undefined,
-): boolean => {
-  if (!manufacturer) return true;
-  const trimmed = manufacturer.trim().toLowerCase();
-  return trimmed === "" || trimmed === UNSPECIFIED_MANUFACTURER.toLowerCase();
 };
 
 /**

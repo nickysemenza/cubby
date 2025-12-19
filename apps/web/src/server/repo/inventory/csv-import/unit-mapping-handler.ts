@@ -11,38 +11,11 @@ import { productUnitMappings } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { parseUnitMappingString } from "~/schemas/unitmapping";
 import { wasmServer } from "~/lib/wasm";
-import { isMoneyUnit, isSingleEach } from "~/schemas/price-mapping-utils";
+import { isMoneyUnit, findPriceMapping } from "~/schemas/price-mapping-utils";
 import { type Amount } from "~/codec/codec";
 
 /** Default currency unit when creating new price mappings */
 const DEFAULT_CURRENCY = "dollar";
-
-interface PriceMappingMatch {
-  id: string;
-  /** The price amount (includes currency unit) */
-  price: Amount;
-}
-
-/**
- * Find an existing price mapping (1 each <-> $X) in either direction.
- * Price can be in either 'a' or 'b' position.
- * Returns the price Amount (the side with money).
- */
-const findPriceMapping = async (
-  mappings: Array<{ id: string; a: Amount; b: Amount }>,
-): Promise<PriceMappingMatch | null> => {
-  for (const m of mappings) {
-    // Check if b is money and a is "1 each"
-    if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
-      return { id: m.id, price: m.b };
-    }
-    // Check if a is money and b is "1 each"
-    if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
-      return { id: m.id, price: m.a };
-    }
-  }
-  return null;
-};
 
 /**
  * Create or update a price mapping for a product (1 each <-> $X)
@@ -76,7 +49,7 @@ export const createOrUpdatePriceMapping = async (
         b: { value: price.value, unit: currency },
         source,
       })
-      .where(eq(productUnitMappings.id, existingPriceMapping.id));
+      .where(eq(productUnitMappings.id, existingPriceMapping.match.id));
   } else {
     // Create new price mapping in canonical format
     await getDb(db)

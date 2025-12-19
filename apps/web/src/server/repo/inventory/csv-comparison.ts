@@ -19,37 +19,10 @@ import {
   pushResultItem,
 } from "./csv-result-helpers";
 import { type InventoryId, type ProductId } from "~/schemas/identifiers";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-
-/**
- * Normalize manufacturer value (empty/null becomes UNSPECIFIED_MANUFACTURER)
- */
-function normalizeManufacturer(
-  manufacturer: string | null | undefined,
-): string {
-  return manufacturer?.trim() || UNSPECIFIED_MANUFACTURER;
-}
-
-/**
- * Check if two manufacturers are compatible for matching purposes.
- * "(unspecified)" acts as a wildcard and matches any manufacturer.
- */
-function manufacturersMatch(
-  mfr1: string | null | undefined,
-  mfr2: string | null | undefined,
-): boolean {
-  const norm1 = normalizeManufacturer(mfr1).toLowerCase();
-  const norm2 = normalizeManufacturer(mfr2).toLowerCase();
-
-  // Exact match
-  if (norm1 === norm2) return true;
-
-  // "(unspecified)" matches anything
-  const unspecified = UNSPECIFIED_MANUFACTURER.toLowerCase();
-  if (norm1 === unspecified || norm2 === unspecified) return true;
-
-  return false;
-}
+import {
+  normalizeManufacturer,
+  manufacturersMatch,
+} from "~/lib/manufacturer-utils";
 
 /**
  * Create a unique key for inventory comparison (product + manufacturer + location)

@@ -16,7 +16,37 @@ import {
   extractPriceFromMappings,
   serializeUnitMappings,
 } from "~/schemas/price-mapping-utils";
-import { type InventoryCSVExportRow } from "./types";
+import { type InventoryCSVExportRow, type ProductExportFields } from "./types";
+
+/**
+ * Build common product export fields from a product with unit mappings and ingredient
+ */
+async function buildProductExportFields(p: ProductExportFields): Promise<{
+  product_name: string;
+  manufacturer: string;
+  upc: string;
+  model: string | null;
+  ndb_number: number | null;
+  expected_qty: number | null;
+  price: number | null;
+  unit_mappings: string | null;
+  ingredient_name: string | null;
+  aliases: string | null;
+}> {
+  const priceAmount = await extractPriceFromMappings(p.unitMappings);
+  return {
+    product_name: p.name,
+    manufacturer: p.manufacturer,
+    upc: p.upc ?? "",
+    model: p.model ?? null,
+    ndb_number: p.ndb_number ?? null,
+    expected_qty: p.expectedQuantity,
+    price: priceAmount?.value ?? null,
+    unit_mappings: await serializeUnitMappings(p.unitMappings),
+    ingredient_name: p.Ingredient?.name ?? null,
+    aliases: p.Ingredient?.aliases?.join("; ") ?? null,
+  };
+}
 
 export const exportInventoryToCSV = async (
   db: Database,
@@ -63,26 +93,15 @@ export const exportInventoryToCSV = async (
         entityType: "InventoryEntry",
         identifier: { id: entry.id },
       });
-      const priceAmount = await extractPriceFromMappings(
-        entry.Product.unitMappings,
-      );
+      const productFields = await buildProductExportFields(entry.Product);
       return {
-        product_name: entry.Product.name,
-        manufacturer: entry.Product.manufacturer,
-        upc: entry.Product.upc ?? "",
-        model: entry.Product.model ?? null,
-        ndb_number: entry.Product.ndb_number ?? null,
+        ...productFields,
         location_path: buildLocationPath(entry.location),
         location_id: locationIdSchema.parse(entry.locationId),
         inventory_entry_id: inventoryIdSchema.parse(entry.id),
         product_id: productIdSchema.parse(entry.productId),
         quantity: parsedAmount.value,
         unit: parsedAmount.unit,
-        expected_qty: entry.Product.expectedQuantity,
-        price: priceAmount?.value ?? null,
-        unit_mappings: await serializeUnitMappings(entry.Product.unitMappings),
-        ingredient_name: entry.Product.Ingredient?.name ?? null,
-        aliases: entry.Product.Ingredient?.aliases?.join("; ") ?? null,
       };
     }),
   );
@@ -113,24 +132,15 @@ export const exportInventoryToCSV = async (
   // Convert products without inventory to export rows (product-only rows)
   const productOnlyRows = await Promise.all(
     productsWithoutInventory.map(async (p) => {
-      const priceAmount = await extractPriceFromMappings(p.unitMappings);
+      const productFields = await buildProductExportFields(p);
       return {
-        product_name: p.name,
-        manufacturer: p.manufacturer,
-        upc: p.upc ?? "",
-        model: p.model ?? null,
-        ndb_number: p.ndb_number ?? null,
+        ...productFields,
         location_path: "", // Empty for product-only rows
         location_id: null, // No location for product-only rows
         inventory_entry_id: null, // No inventory entry for product-only rows
         product_id: productIdSchema.parse(p.id),
         quantity: null, // No inventory
         unit: null, // No inventory
-        expected_qty: p.expectedQuantity,
-        price: priceAmount?.value ?? null,
-        unit_mappings: await serializeUnitMappings(p.unitMappings),
-        ingredient_name: p.Ingredient?.name ?? null,
-        aliases: p.Ingredient?.aliases?.join("; ") ?? null,
       };
     }),
   );
