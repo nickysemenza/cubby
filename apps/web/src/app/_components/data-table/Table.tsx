@@ -126,7 +126,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
             </TableRow>
           ))}
         </TableHeader>
-        <TableBody>
+        <TableBody
+          className={
+            !isLoading && table.getRowModel().rows?.length
+              ? "stagger-children"
+              : undefined
+          }
+        >
           {isLoading ? (
             <TableRow>
               <TableCell

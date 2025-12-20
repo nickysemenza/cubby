@@ -6,7 +6,7 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ className }: SkeletonProps) {
-  return <div className={cn("animate-pulse rounded bg-gray-200", className)} />;
+  return <div className={cn("skeleton-shimmer rounded", className)} />;
 }
 
 // Reusable skeleton patterns

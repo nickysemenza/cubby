@@ -39,9 +39,9 @@ export const DetailPage: FC<DetailPageProps> = ({
       </h1>
 
       {/* Grid sections */}
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+      <div className="stagger-children grid gap-4 sm:gap-6 md:grid-cols-2">
         {gridSections.map((section, index) => (
-          <Card key={index} className="overflow-hidden">
+          <Card key={index} className="card-hover overflow-hidden">
             <CardHeader className="bg-muted/50 px-4 py-3 sm:px-6 sm:py-4">
               <CardTitle className="text-base font-medium sm:text-lg">
                 {section.title}

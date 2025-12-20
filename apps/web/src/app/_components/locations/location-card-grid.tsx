@@ -34,7 +34,9 @@ export function LocationCardGrid({
   maxColumns = 4,
 }: LocationCardGridProps) {
   return (
-    <div className={cn(columnClasses[maxColumns], className)}>
+    <div
+      className={cn(columnClasses[maxColumns], "stagger-children", className)}
+    >
       {locations.map((location) => (
         <LocationCard
           key={location.id}
@@ -202,7 +204,7 @@ function LocationCard({
         icon: ExternalLink,
       }}
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
-      className="h-full transition-shadow hover:shadow-md"
+      className="card-hover h-full"
     />
   );
 }
