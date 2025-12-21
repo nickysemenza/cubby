@@ -1,12 +1,24 @@
 "use client";
 
+import { useMemo } from "react";
 import { type RecipeOut } from "~/schemas/recipe";
+import { wasm } from "~/lib/wasm";
+import { formatRichText } from "./richtext";
 
 interface RecipeInstructionsProps {
   recipe: RecipeOut;
 }
 
 export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
+  // Extract all ingredient names for rich text highlighting
+  const ingredientNames = useMemo(() => {
+    return recipe.sections.flatMap((section) =>
+      section.ingredients.map((ing) =>
+        ing.type === "ingredient" ? ing.ingredient.name : ing.recipe.name,
+      ),
+    );
+  }, [recipe.sections]);
+
   return (
     <div className="space-y-8">
       {recipe.sections.map((section, sectionIndex) => (
@@ -26,9 +38,14 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
                 <div className="bg-primary text-primary-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
                   {stepIndex + 1}
                 </div>
-                {/* Instruction text */}
+                {/* Instruction text with highlighted ingredients and measurements */}
                 <p className="text-foreground/90 flex-1 pt-1 leading-relaxed">
-                  {instruction.instruction}
+                  {formatRichText(
+                    wasm.parse_rich_text(
+                      instruction.instruction,
+                      ingredientNames,
+                    ),
+                  )}
                 </p>
               </li>
             ))}
