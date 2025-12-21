@@ -3,7 +3,6 @@
 import { RecipeOut } from "~/schemas/recipe";
 import { useSearchParams } from "next/navigation";
 import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
-import { NYTView } from "~/app/_components/recipe/NYTView";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import { Button } from "~/components/ui/button";
 import { Edit, X } from "lucide-react";
@@ -50,10 +49,7 @@ export default function RecipePageClient({ recipe }: RecipePageClientProps) {
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
       ) : (
-        <>
-          <NYTView recipe={recipe} />
-          <RecipeDetail recipe={recipe} />
-        </>
+        <RecipeDetail recipe={recipe} />
       )}
     </div>
   );
