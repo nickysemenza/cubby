@@ -1,9 +1,9 @@
 "use client";
+
 import { useState } from "react";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import RTable, { FilterableColumn } from "../_components/data-table/Table";
-import { useTableConfig } from "../_components/data-table/useTableConfig";
+import RTable from "../_components/data-table/Table";
 import {
   createCreatedAtColumn,
   createNameColumn,
@@ -12,7 +12,7 @@ import {
   createInventoryEntriesColumn,
 } from "../_components/data-table/columnHelpers";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
-import { LocationType, locationTypeOptions } from "~/schemas/location";
+import { type LocationType, locationTypeOptions } from "~/schemas/location";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
@@ -22,102 +22,79 @@ import {
 } from "~/schemas/location";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
-import { useTableList } from "../_components/hooks/useTableList";
+import { useEntityList } from "../_components/hooks/useEntityList";
 import { flattenLocations } from "~/lib/location-utils";
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const api = useTRPC();
-
-  const { data, totalCount, isLoading, error, tableState } = useTableList<
-    {
-      nameFilter: string | undefined;
-      itemTypeFilter: LocationType | undefined;
-    },
-    LocationOutWithParentChildren
-  >({
-    queryOptions: api.location.list.queryOptions,
-    buildFilters: (tableState) => ({
-      nameFilter: tableState.getColumnFilter("name"),
-      itemTypeFilter: tableState.getColumnFilter("type") as LocationType,
-    }),
-    tableStateOptions: { initialSort: "createdAt" },
-  });
-
-  // Set up columns using helpers
   const columnHelper = createColumnHelper<LocationOutWithParentChildren>();
-  const columns = [
-    // Image column
-    createImageColumn(columnHelper),
-    // Name column with link to detail page
-    createNameColumn(columnHelper, "location"),
-    createEntityPillColumn(
-      columnHelper,
-      "children",
-      LocationPillLink,
-      "location",
-    ),
-    columnHelper.accessor("parent", {
-      enableSorting: false,
-      cell: (info) => {
-        const item = info.getValue();
-        return <div>{item && <LocationPillLink location={item} />}</div>;
-      },
+
+  const { table, filterableColumns, data, isLoading, error } = useEntityList({
+    entity: "location",
+    queryOptions: api.location.list.queryOptions,
+    buildFilters: (ts) => ({
+      nameFilter: ts.getColumnFilter("name"),
+      itemTypeFilter: ts.getColumnFilter("type") as LocationType,
     }),
-    columnHelper.accessor("type", {
-      cell: (info) => info.getValue(),
-    }),
-    columnHelper.display({
-      id: "inventory_value",
-      header: "Value",
-      cell: (info) => (
-        <InventoryValueSummary
-          locationId={info.row.original.id}
-          variant="compact"
-        />
+    // Location has custom column order (createdAt in middle), so we define all columns
+    columns: [
+      createImageColumn(columnHelper),
+      createNameColumn(columnHelper, "location"),
+      createEntityPillColumn(
+        columnHelper,
+        "children",
+        LocationPillLink,
+        "location",
       ),
-      meta: {
-        className: "w-[180px]",
+      columnHelper.accessor("parent", {
+        enableSorting: false,
+        cell: (info) => {
+          const item = info.getValue();
+          return <div>{item && <LocationPillLink location={item} />}</div>;
+        },
+      }),
+      columnHelper.accessor("type", {
+        cell: (info) => info.getValue(),
+      }),
+      columnHelper.display({
+        id: "inventory_value",
+        header: "Value",
+        cell: (info) => (
+          <InventoryValueSummary
+            locationId={info.row.original.id}
+            variant="compact"
+          />
+        ),
+        meta: { className: "w-[180px]" },
+      }),
+      createCreatedAtColumn(columnHelper),
+      columnHelper.accessor("lastBulkInventory", {
+        header: "Last Bulk Inventory",
+        cell: (info) => {
+          const date = info.getValue();
+          return date ? <HoverableTimestamp timestamp={date} /> : "Never";
+        },
+      }),
+      createInventoryEntriesColumn(
+        columnHelper,
+        "inventoryEntries",
+        ProductPillLink,
+        "product",
+        (e) => e.product,
+        { layout: "inline" },
+      ),
+    ],
+    filters: [
+      { id: "name", placeholder: "Filter by location name..." },
+      {
+        id: "type",
+        placeholder: "Filter by type...",
+        filterType: "select",
+        options: locationTypeOptions,
       },
-    }),
-    createCreatedAtColumn(columnHelper),
-    columnHelper.accessor("lastBulkInventory", {
-      header: "Last Bulk Inventory",
-      cell: (info) => {
-        const date = info.getValue();
-        return date ? <HoverableTimestamp timestamp={date} /> : "Never";
-      },
-    }),
-    createInventoryEntriesColumn(
-      columnHelper,
-      "inventoryEntries",
-      ProductPillLink,
-      "product",
-      (e) => e.product,
-      { layout: "inline" },
-    ),
-  ];
-
-  // Configure the table
-  const table = useTableConfig({
-    data,
-    columns,
-    tableState,
-    totalCount,
+    ],
   });
-
-  const filterableColumns: FilterableColumn[] = [
-    {
-      id: "name",
-      placeholder: "Filter by location name...",
-    },
-    {
-      id: "type",
-      placeholder: "Filter by type...",
-      filterType: "select",
-      options: locationTypeOptions,
-    },
-  ];
 
   return (
     <div className="space-y-4">

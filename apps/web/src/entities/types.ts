@@ -11,3 +11,38 @@ export type Entity =
   | "inventory-item"
   | "usda-food"
   | "image";
+
+/** Common section types that can be auto-generated for detail pages */
+export type CommonSectionType = "images" | "history" | "unit-mappings";
+
+/** Standard column types that can be auto-included in list pages */
+export type StandardColumnType = "image" | "name" | "createdAt";
+
+/** Detail page conventions for an entity */
+export interface EntityDetailConfig {
+  /** Auto-include these common section types */
+  commonSections?: CommonSectionType[];
+}
+
+/** List page conventions for an entity */
+export interface EntityListConfig {
+  /** Include unit mappings column (triggers async loading) */
+  hasUnitMappings?: boolean;
+  /** Default sort column */
+  defaultSort?: string;
+  /** Auto-include these column types */
+  standardColumns?: StandardColumnType[];
+}
+
+/** Full entity definition including UI conventions */
+export interface EntityDefinition {
+  label: string;
+  basePath: string;
+  pluralLabel: string;
+  shortcut?: string;
+  icon: string;
+  /** Detail page conventions */
+  detail?: EntityDetailConfig;
+  /** List page conventions */
+  list?: EntityListConfig;
+}

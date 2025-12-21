@@ -1,0 +1,166 @@
+"use client";
+
+import { type Entity } from "~/entities/types";
+import { entities } from "~/entities/entities";
+import { useEditMode, type UseEditModeReturn } from "./useEditMode";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { type DetailSection } from "../data-table/detail-page";
+import { type UnitMapping } from "~/schemas/unitmapping";
+import { type AuditEntityType } from "~/server/repo/audit-log";
+import EntityImageList from "../EntityImageList";
+import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import { AuditLogList } from "../audit-log/audit-log-list";
+import { createElement } from "react";
+
+/** Map Entity type to AuditEntityType (they differ slightly) */
+const entityToAuditType: Partial<Record<Entity, AuditEntityType>> = {
+  product: "product",
+  location: "location",
+  "inventory-item": "inventory",
+  recipe: "recipe",
+  ingredient: "ingredient",
+};
+
+/** Base interface for entities that can have images */
+interface WithImages {
+  images?: Array<{ id: string; url: string; filename: string }>;
+}
+
+/** Base interface for entities with an ID (for audit log) */
+interface WithId {
+  id: string;
+}
+
+export interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
+  /** The entity type */
+  entity: Entity;
+  /** The entity data */
+  data: TData;
+  /** tRPC mutation options for updates */
+  mutationOptions: object;
+  /** For entities with unit mappings - async function to extract mappings */
+  getMappings?: (data: TData) => Promise<UnitMapping[]>;
+  /** Custom callback on successful update */
+  onSuccess?: () => void;
+}
+
+export interface UseEntityDetailReturn<TUpdateInput> {
+  /** Common sections based on entity config (images, unit-mappings, history) */
+  commonSections: DetailSection[];
+  /** Edit mode state and handlers */
+  editMode: UseEditModeReturn<TUpdateInput>;
+  /** Loaded unit mappings (empty array if not applicable) */
+  mappings: UnitMapping[];
+}
+
+/**
+ * Hook for managing entity detail pages with common conventions.
+ *
+ * Handles:
+ * - Edit mode state via useEditMode
+ * - Async unit mappings loading if getMappings provided
+ * - Building common sections based on entity config (images, unit-mappings, history)
+ *
+ * @example
+ * ```tsx
+ * const { commonSections, editMode, mappings } = useEntityDetail({
+ *   entity: "product",
+ *   data: product,
+ *   mutationOptions: api.product.update.mutationOptions(),
+ *   getMappings: getAllUnitMappingsFromProduct,
+ * });
+ *
+ * const sections: DetailSection[] = [
+ *   {
+ *     title: "Basic Information",
+ *     content: editMode.isEditing
+ *       ? <ProductForm mode="edit" ... />
+ *       : <ProductBasicInfo product={product} onEdit={editMode.startEditing} />,
+ *   },
+ *   ...customSections,
+ *   ...commonSections,
+ * ];
+ * ```
+ */
+export function useEntityDetail<
+  TData extends WithId & Partial<WithImages>,
+  TUpdateInput,
+>({
+  entity,
+  data,
+  mutationOptions,
+  getMappings,
+  onSuccess,
+}: UseEntityDetailOptions<
+  TData,
+  unknown
+>): UseEntityDetailReturn<TUpdateInput> {
+  const entityConfig = entities[entity];
+  const commonSectionTypes = entityConfig.detail?.commonSections ?? [];
+
+  // Set up edit mode
+  const editMode = useEditMode<TUpdateInput>({
+    mutationOptions,
+    useRouterRefresh: true,
+    onSuccess,
+  });
+
+  // Load unit mappings asynchronously if getMappings is provided
+  const mappings = useAsyncMemo(
+    async (signal) => {
+      if (!getMappings) return [];
+      const result = await getMappings(data);
+      if (signal.cancelled) return [];
+      return result;
+    },
+    [data, getMappings],
+    [],
+  );
+
+  // Build common sections based on entity config
+  const commonSections: DetailSection[] = [];
+
+  for (const sectionType of commonSectionTypes) {
+    switch (sectionType) {
+      case "images":
+        commonSections.push({
+          title: "Images",
+          content: createElement(EntityImageList, {
+            images: data.images ?? [],
+          }),
+        });
+        break;
+
+      case "unit-mappings":
+        commonSections.push({
+          title: "Unit Mappings",
+          content: createElement(UnitMappingDisplay, {
+            mappings,
+            title: "",
+          }),
+        });
+        break;
+
+      case "history": {
+        const auditType = entityToAuditType[entity];
+        if (auditType) {
+          commonSections.push({
+            title: "History",
+            content: createElement(AuditLogList, {
+              entityType: auditType,
+              entityId: data.id,
+              showEntityLink: false,
+            }),
+          });
+        }
+        break;
+      }
+    }
+  }
+
+  return {
+    commonSections,
+    editMode,
+    mappings,
+  };
+}

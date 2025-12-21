@@ -1,50 +1,50 @@
 "use client";
 
 import { type FC } from "react";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { type DetailSection } from "../data-table/detail-page";
-import { DetailPage } from "../data-table/detail-page";
+import { type DetailSection, DetailPage } from "../data-table/detail-page";
 import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { NutritionInfoTable } from "../usda/nutrition";
-import { NoneState } from "../NoneState";
 import { EntityPillLinkList } from "../EntityPillLinkList";
-import { Button } from "~/components/ui/button";
 import { IngredientForm } from "./ingredient-form";
 import { type IngredientUpdateInput } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { useEditMode } from "../hooks/useEditMode";
-import { AuditLogList } from "../audit-log/audit-log-list";
+import { useEntityDetail } from "../hooks/useEntityDetail";
+import { IngredientBasicInfo } from "./ingredient-basic-info";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
 }
 
+/** Aggregate unit mappings from all products for an ingredient */
+async function getIngredientMappings(
+  ingredient: IngredientWithFoodOut,
+): Promise<Awaited<ReturnType<typeof getAllUnitMappingsFromProduct>>> {
+  const results = await Promise.all(
+    ingredient.product.map((product) => getAllUnitMappingsFromProduct(product)),
+  );
+  return results.flat();
+}
+
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const api = useTRPC();
 
-  const editMode = useEditMode<IngredientUpdateInput>({
+  const { commonSections, editMode, mappings } = useEntityDetail<
+    IngredientWithFoodOut,
+    IngredientUpdateInput
+  >({
+    entity: "ingredient",
+    data: ingredient,
     mutationOptions: api.ingredient.update.mutationOptions(),
-    useRouterRefresh: true,
+    getMappings: getIngredientMappings,
   });
 
-  // Load unit mappings asynchronously (parallelized)
-  const unitMappings = useAsyncMemo(
-    async (signal) => {
-      const results = await Promise.all(
-        ingredient.product.map((product) =>
-          getAllUnitMappingsFromProduct(product),
-        ),
-      );
-      if (signal.cancelled) return [];
-      return results.flat();
-    },
-    [ingredient.product],
-    [],
-  );
+  // Find nutrition info from any product
+  const nutritionInfo = ingredient.product.find((p) => p.food?.nutritionInfo)
+    ?.food?.nutritionInfo;
 
   const sections: DetailSection[] = [
     {
@@ -63,26 +63,26 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-2">
-          <div>
-            <span className="font-medium">Name:</span> {ingredient.name}
-          </div>
-          <div>
-            <span className="font-medium">Aliases:</span>{" "}
-            {ingredient.aliases.length > 0 ? (
-              ingredient.aliases.join(", ")
-            ) : (
-              <NoneState />
-            )}
-          </div>
-          <div className="pt-2">
-            <Button onClick={editMode.startEditing} variant="outline" size="sm">
-              Edit Ingredient
-            </Button>
-          </div>
-        </div>
+        <IngredientBasicInfo
+          ingredient={ingredient}
+          onEdit={editMode.startEditing}
+        />
       ),
     },
+    // Custom section: Nutrition (only if available)
+    ...(nutritionInfo
+      ? [
+          {
+            title: "Nutrition Information",
+            content: (
+              <div className="bg-muted rounded-md p-4">
+                <NutritionInfoTable n={nutritionInfo} limit={10} />
+              </div>
+            ),
+          },
+        ]
+      : []),
+    // Custom section: Related Products
     {
       title: "Related Products",
       content: (
@@ -93,10 +93,12 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         />
       ),
     },
+    // Custom section: Unit Mappings (uses UnitMappingsTable, not UnitMappingDisplay)
     {
       title: "Unit Mappings",
-      content: <UnitMappingsTable mappings={unitMappings} />,
+      content: <UnitMappingsTable mappings={mappings} />,
     },
+    // Custom section: Appears In Recipes
     {
       title: "Appears In Recipes",
       content: (
@@ -107,31 +109,9 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         />
       ),
     },
-    {
-      title: "History",
-      content: (
-        <AuditLogList
-          entityType="ingredient"
-          entityId={ingredient.id}
-          showEntityLink={false}
-        />
-      ),
-    },
+    // Common sections from entity config (History)
+    ...commonSections,
   ];
-
-  // Add nutrition section if any product has nutrition info
-  const nutritionInfo = ingredient.product.find((p) => p.food?.nutritionInfo)
-    ?.food?.nutritionInfo;
-  if (nutritionInfo) {
-    sections.splice(1, 0, {
-      title: "Nutrition Information",
-      content: (
-        <div className="bg-muted rounded-md p-4">
-          <NutritionInfoTable n={nutritionInfo} limit={10} />
-        </div>
-      ),
-    });
-  }
 
   return (
     <DetailPage

@@ -1,25 +1,20 @@
 "use client";
+
 import { type FC } from "react";
-import { type DetailSection } from "../data-table/detail-page";
-import { DetailPage } from "../data-table/detail-page";
-import { InfLocation } from "~/schemas/location";
+import { type DetailSection, DetailPage } from "../data-table/detail-page";
+import { type InfLocation } from "~/schemas/location";
 import { NoneState } from "../NoneState";
-import { LocationPillLink } from "../EntityPill";
-import { Button } from "~/components/ui/button";
 import { LocationForm } from "./location-form";
 import { type LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
-import Link from "next/link";
 import EntityImageList from "../EntityImageList";
 import { LocationCardGrid } from "./location-card-grid";
-import { LocationIconWithLabel } from "./location-icons";
 import { InventoryValueSummary } from "./inventory-value-summary";
-import { useEditMode } from "../hooks/useEditMode";
-
 import { useQuery } from "@tanstack/react-query";
 import { LocationInventoryTable } from "./location-inventory-table";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
-import { AuditLogList } from "../audit-log/audit-log-list";
+import { useEntityDetail } from "../hooks/useEntityDetail";
+import { LocationBasicInfo } from "./location-basic-info";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -28,9 +23,13 @@ interface LocationDetailProps {
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
 
-  const editMode = useEditMode<LocationUpdateInput>({
+  const { commonSections, editMode } = useEntityDetail<
+    InfLocation,
+    LocationUpdateInput
+  >({
+    entity: "location",
+    data: location,
     mutationOptions: api.location.update.mutationOptions(),
-    useRouterRefresh: true,
   });
 
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
@@ -40,9 +39,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       filters: { locationIdFilter: location.id },
     }),
   );
-
-  // Get location images from the location object
-  const locationImages = location.images;
 
   const sections: DetailSection[] = [
     {
@@ -60,41 +56,10 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           />
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <LocationIconWithLabel
-              type={location.type}
-              label={location.name}
-              size={20}
-            />
-          </div>
-          <div>
-            <span className="font-medium">Type:</span> {location.type}
-          </div>
-          <div>
-            <span className="font-medium">Parent Location:</span>{" "}
-            {location.parent ? (
-              <LocationPillLink location={location.parent} />
-            ) : (
-              <NoneState />
-            )}
-          </div>
-          <div className="mt-4 flex gap-2">
-            <Button onClick={editMode.startEditing}>Edit</Button>
-            <Button variant="outline" asChild>
-              <Link href={`/inventory/quick-capture?locationId=${location.id}`}>
-                Quick Capture Here
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
-                Bulk Edit Inventory
-              </Link>
-            </Button>
-          </div>
-        </div>
+        <LocationBasicInfo location={location} onEdit={editMode.startEditing} />
       ),
     },
+    // Custom section: Inventory Value
     {
       title: "Inventory Value",
       content: (
@@ -103,10 +68,12 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         </div>
       ),
     },
+    // Custom section: Images (positioned before child locations)
     {
       title: "Images",
-      content: <EntityImageList images={locationImages} />,
+      content: <EntityImageList images={location.images ?? []} />,
     },
+    // Custom section: Child Locations
     {
       title: "Child Locations",
       content:
@@ -119,6 +86,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           <NoneState />
         ),
     },
+    // Custom section: Inventory Items (with interactive refetch)
     {
       title: "Inventory Items",
       content: (
@@ -135,16 +103,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         </div>
       ),
     },
-    {
-      title: "History",
-      content: (
-        <AuditLogList
-          entityType="location"
-          entityId={location.id}
-          showEntityLink={false}
-        />
-      ),
-    },
+    // Common sections from entity config (History)
+    ...commonSections,
   ];
 
   return (

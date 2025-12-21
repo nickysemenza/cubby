@@ -1,27 +1,15 @@
 "use client";
+
 import { type FC } from "react";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { type DetailSection } from "../data-table/detail-page";
-import { DetailPage } from "../data-table/detail-page";
+import { type DetailSection, DetailPage } from "../data-table/detail-page";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { type ProductWithFoodOut } from "~/server/services/product.service";
 import { NutritionInfoTable } from "../usda/nutrition";
-import { NoneState } from "../NoneState";
 import { ProductForm } from "./product-form";
 import { type ProductInputPayload } from "~/schemas/product";
-import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
-import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import Link from "next/link";
-import {
-  IngredientPillLink,
-  LocationPillLink,
-  FoodPillLink,
-} from "../EntityPill";
-import { EntityPillLinkList } from "../EntityPillLinkList";
-import EntityImageList from "../EntityImageList";
-import { useEditMode } from "../hooks/useEditMode";
-import { AuditLogList } from "../audit-log/audit-log-list";
+import { useEntityDetail } from "../hooks/useEntityDetail";
+import { ProductBasicInfo } from "./product-basic-info";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;
@@ -30,23 +18,15 @@ interface ProductDetailProps {
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const api = useTRPC();
 
-  const editMode = useEditMode<{
-    id: string;
-    data: Partial<ProductInputPayload>;
-  }>({
+  const { commonSections, editMode } = useEntityDetail<
+    ProductWithFoodOut,
+    { id: string; data: Partial<ProductInputPayload> }
+  >({
+    entity: "product",
+    data: product,
     mutationOptions: api.product.update.mutationOptions(),
-    useRouterRefresh: true,
+    getMappings: getAllUnitMappingsFromProduct,
   });
-
-  // Get product images from the product object
-  const productImages = product.images;
-
-  // Load mappings asynchronously
-  const mappings = useAsyncMemo(
-    async () => getAllUnitMappingsFromProduct(product),
-    [product],
-    [],
-  );
 
   const sections: DetailSection[] = [
     {
@@ -64,114 +44,25 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           />
         </div>
       ) : (
-        <div className="space-y-2">
-          <div>
-            <span className="font-medium">Name:</span> {product.name}
-          </div>
-          <div>
-            <span className="font-medium">Manufacturer:</span>{" "}
-            {product.manufacturer}
-          </div>
-          <div>
-            <span className="font-medium">Model:</span>{" "}
-            {product.model ? product.model : <NoneState />}
-          </div>
-          <div>
-            <span className="font-medium">UPC:</span>{" "}
-            {product.upc ? (
-              <Link
-                href={`/usda/upc/${product.upc}`}
-                className="text-primary hover:underline"
-              >
-                {product.upc}
-              </Link>
-            ) : (
-              <NoneState />
-            )}
-          </div>
-          <div>
-            <span className="font-medium">NDB Number:</span>{" "}
-            {product.ndb_number ? (
-              <Link
-                href={`/usda/ndb/${product.ndb_number}`}
-                className="text-primary hover:underline"
-              >
-                {product.ndb_number}
-              </Link>
-            ) : (
-              <NoneState />
-            )}
-          </div>
-          <div className="mt-4 space-y-2">
-            {product.ingredient && (
-              <div>
-                <span className="font-medium">Ingredient:</span>{" "}
-                <IngredientPillLink
-                  name={product.ingredient.name}
-                  id={product.ingredient.id}
-                />
-              </div>
-            )}
-            {product.food && (
-              <div>
-                <span className="font-medium">USDA Food:</span>{" "}
-                <FoodPillLink food={product.food} />
-              </div>
-            )}
-            {product.inventoryEntry && product.inventoryEntry.length > 0 && (
-              <div>
-                <span className="font-medium">Inventory Locations:</span>{" "}
-                <div className="mt-1 flex flex-wrap gap-1">
-                  <EntityPillLinkList
-                    items={product.inventoryEntry.map((entry) => ({
-                      id: entry.location.id,
-                      name: entry.location.name,
-                      type: entry.location.type,
-                    }))}
-                    Pill={LocationPillLink}
-                    pillPropName="location"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="mt-4">
-            <Button onClick={editMode.startEditing}>Edit</Button>
-          </div>
-        </div>
+        <ProductBasicInfo product={product} onEdit={editMode.startEditing} />
       ),
     },
-    {
-      title: "Images",
-      content: <EntityImageList images={productImages} />,
-    },
-    {
-      title: "Unit Mappings",
-      content: <UnitMappingDisplay mappings={mappings} title="" />,
-    },
-    {
-      title: "History",
-      content: (
-        <AuditLogList
-          entityType="product"
-          entityId={product.id}
-          showEntityLink={false}
-        />
-      ),
-    },
+    // Custom section: Nutrition (only if available)
+    ...(product.food?.nutritionInfo
+      ? [
+          {
+            title: "Nutrition Information",
+            content: (
+              <div className="bg-muted rounded-md p-4">
+                <NutritionInfoTable n={product.food.nutritionInfo} limit={10} />
+              </div>
+            ),
+          },
+        ]
+      : []),
+    // Common sections from entity config (Images, Unit Mappings, History)
+    ...commonSections,
   ];
-
-  // Add nutrition section if available
-  if (product.food?.nutritionInfo) {
-    sections.splice(2, 0, {
-      title: "Nutrition Information",
-      content: (
-        <div className="bg-muted rounded-md p-4">
-          <NutritionInfoTable n={product.food.nutritionInfo} limit={10} />
-        </div>
-      ),
-    });
-  }
 
   return (
     <DetailPage

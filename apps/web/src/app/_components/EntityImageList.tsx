@@ -4,13 +4,19 @@ import { FC } from "react";
 import Link from "next/link";
 import { NoneState } from "./NoneState";
 import { Button } from "~/components/ui/button";
-import { type ImageOut } from "~/schemas/image";
 import { GridContainer } from "~/components/ui/grid-container";
 import { FlexContainer } from "~/components/ui/flex-container";
 import { InteractiveImage } from "~/components/ui/interactive-image";
 
+/** Minimal image type for display - only the fields we actually use */
+interface MinimalImage {
+  id: string;
+  url: string;
+  filename: string;
+}
+
 interface EntityImageListProps {
-  images: ImageOut[];
+  images: MinimalImage[];
   title?: string;
   showViewAllButton?: boolean;
 }
