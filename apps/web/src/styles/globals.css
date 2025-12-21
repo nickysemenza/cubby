@@ -370,4 +370,50 @@
       background-position: -200% 0;
     }
   }
+
+  /*
+    ---break---
+    Visual depth utilities - gradients and textures for atmosphere
+  */
+
+  /* Gradient mesh background - subtle colorful atmosphere */
+  .gradient-mesh {
+    position: relative;
+  }
+  .gradient-mesh::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: var(--background);
+    background-image:
+      radial-gradient(at 40% 20%, var(--chart-1) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, var(--chart-2) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, var(--chart-3) 0px, transparent 50%),
+      radial-gradient(at 80% 80%, var(--chart-4) 0px, transparent 40%);
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .gradient-mesh > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Subtle noise texture overlay */
+  .noise-texture {
+    position: relative;
+  }
+  .noise-texture::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .noise-texture > * {
+    position: relative;
+    z-index: 1;
+  }
 }
