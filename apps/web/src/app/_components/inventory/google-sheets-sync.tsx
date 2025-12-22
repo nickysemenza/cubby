@@ -32,7 +32,10 @@ import {
   type CSVImportResult,
   type CSVImportResultItem,
 } from "~/schemas/inventory";
-import { type LocationCSVImportResult } from "~/schemas/location";
+import {
+  type LocationCSVImportResult,
+  type LocationCSVImportResultItem,
+} from "~/schemas/location";
 import { queryKeys } from "~/lib/query-keys";
 
 // Combined sync result type (matches router output)
@@ -46,9 +49,12 @@ import { entities } from "~/entities/entities";
 
 // Action types that can be filtered
 type ActionType = CSVImportResultItem["action"];
+type LocationActionType = LocationCSVImportResultItem["action"];
 
 // Helper to get action styles
-const getActionStyles = (action: CSVImportResultItem["action"]) => {
+const getActionStyles = (
+  action: CSVImportResultItem["action"] | LocationActionType,
+) => {
   switch (action) {
     case "created":
       return {
@@ -336,6 +342,10 @@ export function GoogleSheetsSync() {
           </DialogHeader>
 
           <div className="flex-1 overflow-hidden">
+            {/* Inventory section */}
+            {currentResult && (
+              <h3 className="mb-2 text-sm font-medium">Inventory</h3>
+            )}
             {/* Summary counts - click to toggle visibility */}
             {currentResult && (
               <div
@@ -498,14 +508,127 @@ export function GoogleSheetsSync() {
               </div>
             )}
 
+            {/* Locations section */}
+            {currentResult &&
+              (currentResult.locations.items.length > 0 ||
+                currentResult.locations.created > 0 ||
+                currentResult.locations.updated > 0 ||
+                (currentResult.locations.removed ?? 0) > 0) && (
+                <>
+                  <h3 className="mt-4 mb-2 text-sm font-medium">Locations</h3>
+                  {/* Location summary counts */}
+                  <div className="mb-4 grid grid-cols-4 gap-2 text-sm">
+                    <SummaryCard
+                      count={currentResult.locations.created}
+                      label={isPushMode ? "Add" : "Create"}
+                      color="green"
+                      isHidden={hiddenActions.has("created")}
+                      onClick={() => toggleActionVisibility("created")}
+                    />
+                    <SummaryCard
+                      count={currentResult.locations.updated}
+                      label="Update"
+                      color="blue"
+                      isHidden={hiddenActions.has("updated")}
+                      onClick={() => toggleActionVisibility("updated")}
+                    />
+                    {isPushMode && (
+                      <SummaryCard
+                        count={currentResult.locations.removed ?? 0}
+                        label="Remove"
+                        color="orange"
+                        isHidden={hiddenActions.has("removed")}
+                        onClick={() => toggleActionVisibility("removed")}
+                      />
+                    )}
+                    <SummaryCard
+                      count={currentResult.locations.skipped}
+                      label="No change"
+                      color="gray"
+                      isHidden={hiddenActions.has("skipped")}
+                      onClick={() => toggleActionVisibility("skipped")}
+                    />
+                  </div>
+
+                  {/* Locations table */}
+                  {currentResult.locations.items.filter(
+                    (item) => !hiddenActions.has(item.action),
+                  ).length > 0 && (
+                    <div className="max-h-[30vh] overflow-y-auto rounded border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted sticky top-0">
+                          <tr>
+                            <th className="w-24 p-2 text-left">Action</th>
+                            <th className="p-2 text-left">Location</th>
+                            <th className="p-2 text-left">Changes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {currentResult.locations.items
+                            .filter((item) => !hiddenActions.has(item.action))
+                            .map((item, i) => {
+                              const styles = getActionStyles(item.action);
+                              return (
+                                <tr key={i} className="border-t">
+                                  <td className="p-2">
+                                    <span
+                                      className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs ${styles.bg}`}
+                                    >
+                                      {styles.icon}
+                                      {styles.label}
+                                    </span>
+                                  </td>
+                                  <td className="p-2">
+                                    {item.locationId ? (
+                                      <Link
+                                        href={`/${entities.location.basePath}/${item.locationId}`}
+                                        className="text-primary hover:underline"
+                                      >
+                                        {item.locationName}
+                                      </Link>
+                                    ) : (
+                                      item.locationName
+                                    )}
+                                  </td>
+                                  <td className="p-2">
+                                    {item.fieldChanges &&
+                                    item.fieldChanges.length > 0 ? (
+                                      <div className="space-y-0.5">
+                                        {item.fieldChanges.map((change, j) => (
+                                          <div key={j}>
+                                            <ValueChange
+                                              label={change.field}
+                                              from={change.from}
+                                              to={change.to}
+                                            />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : item.message ? (
+                                      <span className="text-muted-foreground text-xs">
+                                        {item.message}
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
             {/* Empty state */}
-            {currentResult?.inventory.items.length === 0 && (
-              <div className="text-muted-foreground py-8 text-center">
-                {isPushMode
-                  ? "No changes to make. The sheet is already up to date."
-                  : "No changes to make. The sheet may be empty or all items are unchanged."}
-              </div>
-            )}
+            {currentResult?.inventory.items.length === 0 &&
+              currentResult?.locations.items.length === 0 && (
+                <div className="text-muted-foreground py-8 text-center">
+                  {isPushMode
+                    ? "No changes to make. The sheet is already up to date."
+                    : "No changes to make. The sheet may be empty or all items are unchanged."}
+                </div>
+              )}
           </div>
 
           <DialogFooter>
