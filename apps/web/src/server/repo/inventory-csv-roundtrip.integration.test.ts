@@ -174,7 +174,7 @@ describe("CSV round-trip tests", () => {
       // Export (includes product-only rows)
       const exportedRows = await exportInventoryToCSV(db, organizationId);
       expect(exportedRows.length).toBe(1);
-      expect(exportedRows[0].location_path).toBe("");
+      expect(exportedRows[0].location_name).toBe("");
 
       // Convert and re-import
       const importRows = exportedRows.map(exportRowToImportRow);
@@ -205,7 +205,7 @@ describe("CSV round-trip tests", () => {
           manufacturer: "WidgetCo",
           upc: "111222333444",
           model: "WA-100",
-          location_path: "Warehouse",
+          location_name: "Warehouse",
           quantity: 10,
           unit: "each",
           expected_qty: 20,
@@ -213,7 +213,7 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "Widget B",
           manufacturer: "WidgetCo",
-          location_path: "Warehouse > Shelf A",
+          location_name: "Warehouse > Shelf A",
           quantity: 5,
           unit: "boxes",
         },
@@ -258,7 +258,7 @@ describe("CSV round-trip tests", () => {
           upc: "999888777666",
           model: "TP-500",
           ndb_number: 12345,
-          location_path: "Storage",
+          location_name: "Storage",
           quantity: 7,
           unit: "pieces",
           expected_qty: 10,
@@ -406,7 +406,7 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "Pen",
           manufacturer: "Pilot",
-          location_path: "Desk",
+          location_name: "Desk",
           quantity: 5,
           unit: "each",
         },
@@ -460,14 +460,14 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "Scissors",
           manufacturer: "Fiskars",
-          location_path: "Drawer",
+          location_name: "Drawer",
           quantity: 1,
           unit: "each",
         },
         {
           product_name: "Tape",
           manufacturer: "3M",
-          location_path: "Drawer",
+          location_name: "Drawer",
           quantity: 2,
           unit: "each",
         },
@@ -519,7 +519,7 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "Notebook",
           manufacturer: "Moleskine",
-          location_path: "Cabinet",
+          location_name: "Cabinet",
           quantity: 5, // Different from app's 3
           unit: "each",
         },
@@ -595,7 +595,7 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "Item",
           manufacturer: "Brand",
-          location_path: "Kitchen[room] > Fridge[cabinet] > Top Shelf[shelf]",
+          location_name: "Kitchen[room] > Fridge[cabinet] > Top Shelf[shelf]",
           quantity: 1,
           unit: "each",
         },
@@ -610,9 +610,9 @@ describe("CSV round-trip tests", () => {
       const exportedRows = await exportInventoryToCSV(db, organizationId);
 
       // The exported path should include bracket notation from DB types
-      expect(exportedRows[0].location_path).toContain("Kitchen");
-      expect(exportedRows[0].location_path).toContain("Fridge");
-      expect(exportedRows[0].location_path).toContain("Top Shelf");
+      expect(exportedRows[0].location_name).toContain("Kitchen");
+      expect(exportedRows[0].location_name).toContain("Fridge");
+      expect(exportedRows[0].location_name).toContain("Top Shelf");
 
       // Re-import should still match (normalized comparison)
       const importRows = exportedRows.map(exportRowToImportRow);
@@ -670,7 +670,7 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "TEST PRODUCT",
           manufacturer: "TEST BRAND",
-          location_path: "ROOM",
+          location_name: "ROOM",
           quantity: 1,
           unit: "each",
         },

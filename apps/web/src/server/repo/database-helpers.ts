@@ -301,6 +301,20 @@ export const updateAndReturn = async <T extends PgTable>(
   values: Partial<InferInsertModel<T>>,
   where: SQL | undefined,
 ): Promise<InferSelectModel<T>> => {
+  // If no values to update, just fetch and return the existing record
+  // This handles cases like image-only updates where the main table doesn't change
+  if (Object.keys(values).length === 0) {
+    const result = await tx
+      .select()
+      .from(table as PgTable)
+      .where(where);
+    const [existing] = result as InferSelectModel<T>[];
+    if (!existing) {
+      throw new Error(FAILED_TO_UPDATE);
+    }
+    return existing;
+  }
+
   const result = await tx.update(table).set(values).where(where).returning();
   const [updated] = result as InferSelectModel<T>[];
   if (!updated) {
@@ -325,6 +339,20 @@ export const updateAndReturnDb = async <T extends PgTable>(
   values: Partial<InferInsertModel<T>>,
   where: SQL | undefined,
 ): Promise<InferSelectModel<T>> => {
+  // If no values to update, just fetch and return the existing record
+  // This handles cases like image-only updates where the main table doesn't change
+  if (Object.keys(values).length === 0) {
+    const result = await getDb(db)
+      .select()
+      .from(table as PgTable)
+      .where(where);
+    const [existing] = result as InferSelectModel<T>[];
+    if (!existing) {
+      throw new Error(FAILED_TO_UPDATE);
+    }
+    return existing;
+  }
+
   const result = await getDb(db)
     .update(table)
     .set(values)

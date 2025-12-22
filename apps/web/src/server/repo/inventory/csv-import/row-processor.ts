@@ -13,11 +13,7 @@ import {
   type FieldChange,
 } from "~/schemas/inventory";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-import {
-  findLocationByPath,
-  findOrCreateLocationByPathWithContext,
-  type LocationTypeContext,
-} from "~/server/repo/location";
+import { findLocationByName } from "~/server/repo/location";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { getTotalProductQuantity } from "../helpers";
 import {
@@ -31,6 +27,7 @@ import {
   parseUnitMappingsForPreview,
   checkUnitMappingsChanges,
 } from "./unit-mapping-handler";
+import { importProductImages, previewProductImages } from "./image-handler";
 import {
   moveInventoryEntries,
   createOrUpdateInventoryAtLocation,
@@ -42,7 +39,6 @@ import { type ActorContext } from "~/schemas/context";
 interface RowProcessorContext {
   db: Database;
   organizationId: OrganizationId;
-  locationTypeContext: LocationTypeContext;
   dryRun: boolean;
   actor: ActorContext;
 }
@@ -220,7 +216,30 @@ async function previewProduct(
     }
   }
 
+  // Check image import preview
+  if (row.product_image) {
+    const imagePreview = await previewProductImages(
+      db,
+      productData?.id ?? null,
+      row.product_image,
+    );
+    if (imagePreview.imageWillBeImported) {
+      productChanges.imageWillBeImported = imagePreview.imageWillBeImported;
+    }
+    if (imagePreview.imageImportSkipped) {
+      productChanges.imageImportSkipped = true;
+    }
+  }
+
   return { productData, productWillBeCreated, productChanges };
+}
+
+/**
+ * Result of product operations including image import status
+ */
+interface ProductOperationsResult {
+  productData: ProductTopLevelOut;
+  imageImportError?: string;
 }
 
 /**
@@ -232,7 +251,7 @@ async function executeProductOperations(
   row: InventoryCSVRow,
   manufacturer: string,
   actor: ActorContext,
-): Promise<ProductTopLevelOut> {
+): Promise<ProductOperationsResult> {
   const productData = await findOrCreateProductForImport(
     db,
     organizationId,
@@ -259,7 +278,22 @@ async function executeProductOperations(
     await createUnitMappingsFromString(db, productData.id, row.unit_mappings);
   }
 
-  return productData;
+  // Import product images if provided
+  let imageImportError: string | undefined;
+  if (row.product_image) {
+    const imageResult = await importProductImages(
+      db,
+      organizationId,
+      productData.id,
+      row.product_image,
+      row.product_name,
+    );
+    if (!imageResult.success && imageResult.error) {
+      imageImportError = imageResult.error;
+    }
+  }
+
+  return { productData, imageImportError };
 }
 
 // ============================================================================
@@ -268,38 +302,27 @@ async function executeProductOperations(
 
 interface LocationResolutionResult {
   targetLocationId: LocationId | null;
-  locationWillBeCreated: boolean;
+  locationNotFound: boolean;
 }
 
 /**
- * Find or create the target location for an inventory row
+ * Find the target location for an inventory row by name
+ * Locations must exist (created via Locations sheet)
  */
 async function resolveTargetLocation(
   db: Database,
   organizationId: OrganizationId,
-  locationPath: string,
-  locationTypeContext: LocationTypeContext,
-  dryRun: boolean,
+  locationName: string,
 ): Promise<LocationResolutionResult> {
-  if (dryRun) {
-    const targetLocationId = await findLocationByPath(
-      db,
-      organizationId,
-      locationPath,
-    );
-    return {
-      targetLocationId,
-      locationWillBeCreated: targetLocationId === null,
-    };
-  }
-
-  const targetLocationId = await findOrCreateLocationByPathWithContext(
+  const targetLocationId = await findLocationByName(
     db,
     organizationId,
-    locationPath,
-    locationTypeContext,
+    locationName,
   );
-  return { targetLocationId, locationWillBeCreated: false };
+  return {
+    targetLocationId,
+    locationNotFound: targetLocationId === null,
+  };
 }
 
 // ============================================================================
@@ -354,7 +377,7 @@ async function checkMoveConditions(
 interface BaseResultFields {
   rowIndex: number;
   productName: string;
-  locationPath?: string;
+  locationName?: string;
   locationId?: LocationId;
   productId?: string;
   upc?: string;
@@ -369,7 +392,7 @@ function buildDryRunResult(
   options: {
     productChanges: ProductChangesPreview;
     productWillBeCreated: boolean;
-    locationWillBeCreated: boolean;
+    locationNotFound?: boolean;
     inventoryFieldChanges?: FieldChange[];
     movedFrom?: string[];
     message?: string;
@@ -379,7 +402,7 @@ function buildDryRunResult(
     rowIndex: base.rowIndex,
     action,
     productName: base.productName,
-    locationPath: base.locationPath,
+    locationName: base.locationName,
     locationId: base.locationId,
     movedFrom: options.movedFrom,
     message: options.message,
@@ -388,7 +411,7 @@ function buildDryRunResult(
       options.inventoryFieldChanges,
     ),
     productWillBeCreated: options.productWillBeCreated,
-    locationWillBeCreated: options.locationWillBeCreated,
+    locationNotFound: options.locationNotFound,
     productChanges: wrapChanges(options.productChanges),
   };
 }
@@ -401,17 +424,25 @@ function buildExecutionResult(
   action: CSVImportResultItem["action"],
   message?: string,
   movedFrom?: string[],
+  imageImportError?: string,
 ): CSVImportResultItem {
+  let finalMessage = message;
+  if (imageImportError) {
+    const imageWarning = `(image import failed: ${imageImportError})`;
+    finalMessage = finalMessage
+      ? `${finalMessage} ${imageWarning}`
+      : imageWarning;
+  }
   return {
     rowIndex: base.rowIndex,
     action,
     productName: base.productName,
     productId: base.productId,
     upc: base.upc,
-    locationPath: base.locationPath,
+    locationName: base.locationName,
     locationId: base.locationId,
     movedFrom,
-    message,
+    message: finalMessage,
   };
 }
 
@@ -425,9 +456,9 @@ export const processRow = async (
   row: InventoryCSVRow,
   rowIndex: number,
 ): Promise<CSVImportResultItem> => {
-  const { db, organizationId, locationTypeContext, dryRun, actor } = ctx;
+  const { db, organizationId, dryRun, actor } = ctx;
   const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
-  const isProductOnly = !row.location_path || row.location_path.trim() === "";
+  const isProductOnly = !row.location_name || row.location_name.trim() === "";
 
   // -------------------------------------------------------------------------
   // Step 1: Process product (preview or execute)
@@ -435,6 +466,7 @@ export const processRow = async (
   let productData: ProductTopLevelOut | null;
   let productWillBeCreated = false;
   let productChanges: ProductChangesPreview = {};
+  let imageImportError: string | undefined;
 
   if (dryRun) {
     const result = await previewProduct(db, organizationId, row, manufacturer);
@@ -442,13 +474,15 @@ export const processRow = async (
     productWillBeCreated = result.productWillBeCreated;
     productChanges = result.productChanges;
   } else {
-    productData = await executeProductOperations(
+    const result = await executeProductOperations(
       db,
       organizationId,
       row,
       manufacturer,
       actor,
     );
+    productData = result.productData;
+    imageImportError = result.imageImportError;
   }
 
   // -------------------------------------------------------------------------
@@ -462,35 +496,33 @@ export const processRow = async (
       productWillBeCreated,
       productChanges,
       dryRun,
+      imageImportError,
     );
   }
 
-  // After the isProductOnly check above, location_path is guaranteed to be defined
+  // After the isProductOnly check above, location_name is guaranteed to be defined
   // TypeScript doesn't understand this control flow, so we add a defensive check
-  const locationPath = row.location_path;
-  if (!locationPath) {
+  const locationName = row.location_name;
+  if (!locationName) {
     throw new Error(
-      "Unexpected: location_path should be defined after isProductOnly check",
+      "Unexpected: location_name should be defined after isProductOnly check",
     );
   }
 
   // -------------------------------------------------------------------------
   // Step 3: Resolve target location
   // -------------------------------------------------------------------------
-  const { targetLocationId, locationWillBeCreated } =
-    await resolveTargetLocation(
-      db,
-      organizationId,
-      locationPath,
-      locationTypeContext,
-      dryRun,
-    );
+  const { targetLocationId, locationNotFound } = await resolveTargetLocation(
+    db,
+    organizationId,
+    locationName,
+  );
 
   const newAmount = { value: row.quantity, unit: row.unit };
   const base: BaseResultFields = {
     rowIndex,
     productName: row.product_name,
-    locationPath: row.location_path,
+    locationName: row.location_name,
     locationId: targetLocationId ?? undefined,
     productId: productData?.id,
     upc: row.upc,
@@ -503,27 +535,26 @@ export const processRow = async (
     return buildDryRunResult(base, "created", {
       productChanges,
       productWillBeCreated: true,
-      locationWillBeCreated,
+      locationNotFound,
     });
   }
 
   // -------------------------------------------------------------------------
-  // Step 5: Handle missing location (dry-run) - check for move
+  // Step 5: Handle missing location - return error
   // -------------------------------------------------------------------------
-  if (dryRun && !targetLocationId) {
-    return handleMissingLocationDryRun(
-      db,
-      organizationId,
-      base,
-      productData,
-      productWillBeCreated,
-      productChanges,
-    );
+  if (!targetLocationId) {
+    return {
+      rowIndex,
+      action: "error",
+      productName: row.product_name,
+      locationName: row.location_name,
+      message: `Location "${locationName}" not found. Create it in the Locations sheet first.`,
+    };
   }
 
   // At this point we must have productData and targetLocationId
-  if (!productData || !targetLocationId) {
-    throw new Error("Unexpected state: missing product or location data");
+  if (!productData) {
+    throw new Error("Unexpected state: missing product data");
   }
 
   // -------------------------------------------------------------------------
@@ -563,8 +594,8 @@ export const processRow = async (
       moveCheck.existingLocations,
       productChanges,
       productWillBeCreated,
-      locationWillBeCreated,
       dryRun,
+      imageImportError,
     );
   }
 
@@ -581,8 +612,8 @@ export const processRow = async (
     inventoryCheck,
     productChanges,
     productWillBeCreated,
-    locationWillBeCreated,
     dryRun,
+    imageImportError,
   );
 };
 
@@ -591,7 +622,7 @@ export const processRow = async (
 // ============================================================================
 
 /**
- * Handle product-only rows (no location_path)
+ * Handle product-only rows (no location_name)
  */
 function handleProductOnlyRow(
   row: InventoryCSVRow,
@@ -600,12 +631,13 @@ function handleProductOnlyRow(
   productWillBeCreated: boolean,
   productChanges: ProductChangesPreview,
   dryRun: boolean,
+  imageImportError?: string,
 ): CSVImportResultItem {
   const hasProductChanges_ = hasChanges(productChanges);
   const shouldSkip = dryRun && !productWillBeCreated && !hasProductChanges_;
   const fieldChanges = buildFieldChanges(productChanges);
 
-  const message = shouldSkip
+  let message = shouldSkip
     ? "Product already exists with no changes"
     : productWillBeCreated
       ? "New product"
@@ -615,64 +647,24 @@ function handleProductOnlyRow(
           ? "Product already exists"
           : undefined;
 
+  // Append image import error if present
+  if (imageImportError) {
+    const imageWarning = `(image import failed: ${imageImportError})`;
+    message = message ? `${message} ${imageWarning}` : imageWarning;
+  }
+
   return {
     rowIndex,
     action: shouldSkip ? "skipped" : "product_only",
     productName: row.product_name,
     productId: productData?.id,
     upc: row.upc,
-    locationPath: undefined,
+    locationName: undefined,
     message,
     fieldChanges,
     productWillBeCreated,
     productChanges: wrapChanges(productChanges),
   };
-}
-
-/**
- * Handle dry-run with no target location found
- */
-async function handleMissingLocationDryRun(
-  db: Database,
-  organizationId: OrganizationId,
-  base: BaseResultFields,
-  productData: ProductTopLevelOut | null,
-  productWillBeCreated: boolean,
-  productChanges: ProductChangesPreview,
-): Promise<CSVImportResultItem> {
-  // Check if this should be a move
-  if (productData && productData.expectedQuantity !== null) {
-    const totalExistingQty = await getTotalProductQuantity(
-      db,
-      productData.id,
-      organizationId,
-    );
-
-    if (totalExistingQty >= productData.expectedQuantity) {
-      const existingLocations = await getExistingInventoryLocations(
-        db,
-        organizationId,
-        productData.id,
-      );
-
-      if (existingLocations.length > 0) {
-        return buildDryRunResult({ ...base, locationId: undefined }, "moved", {
-          productChanges,
-          productWillBeCreated,
-          locationWillBeCreated: true,
-          movedFrom: existingLocations,
-          message: `Will move from ${existingLocations.join(", ")}`,
-        });
-      }
-    }
-  }
-
-  // Not a move - it's a create with new location
-  return buildDryRunResult({ ...base, locationId: undefined }, "created", {
-    productChanges,
-    productWillBeCreated,
-    locationWillBeCreated: true,
-  });
 }
 
 /**
@@ -688,14 +680,13 @@ async function handleMoveCase(
   existingLocations: string[],
   productChanges: ProductChangesPreview,
   productWillBeCreated: boolean,
-  locationWillBeCreated: boolean,
   dryRun: boolean,
+  imageImportError?: string,
 ): Promise<CSVImportResultItem> {
   if (dryRun) {
     return buildDryRunResult(base, "moved", {
       productChanges,
       productWillBeCreated,
-      locationWillBeCreated,
       movedFrom: existingLocations,
       message: `Will move from ${existingLocations.join(", ")}`,
     });
@@ -715,11 +706,18 @@ async function handleMoveCase(
       "moved",
       `Moved from ${fromLocations.join(", ")}`,
       fromLocations,
+      imageImportError,
     );
   }
 
   // Fallback - shouldn't happen but handle gracefully
-  return buildExecutionResult(base, "created");
+  return buildExecutionResult(
+    base,
+    "created",
+    undefined,
+    undefined,
+    imageImportError,
+  );
 }
 
 /**
@@ -739,8 +737,8 @@ async function handleInventoryResult(
   },
   productChanges: ProductChangesPreview,
   productWillBeCreated: boolean,
-  locationWillBeCreated: boolean,
   dryRun: boolean,
+  imageImportError?: string,
 ): Promise<CSVImportResultItem> {
   if (dryRun) {
     if (inventoryCheck.matches) {
@@ -751,7 +749,6 @@ async function handleInventoryResult(
         {
           productChanges,
           productWillBeCreated,
-          locationWillBeCreated,
           message: productFieldChanges
             ? undefined
             : "Already exists with same quantity",
@@ -774,7 +771,6 @@ async function handleInventoryResult(
       return buildDryRunResult(base, "updated", {
         productChanges,
         productWillBeCreated,
-        locationWillBeCreated,
         inventoryFieldChanges,
       });
     }
@@ -782,7 +778,6 @@ async function handleInventoryResult(
     return buildDryRunResult(base, "created", {
       productChanges,
       productWillBeCreated,
-      locationWillBeCreated,
     });
   }
 
@@ -792,6 +787,8 @@ async function handleInventoryResult(
       base,
       "skipped",
       "Already exists with same quantity",
+      undefined,
+      imageImportError,
     );
   }
 
@@ -807,5 +804,7 @@ async function handleInventoryResult(
     base,
     action,
     action === "updated" ? "Updated existing entry quantity" : undefined,
+    undefined,
+    imageImportError,
   );
 }

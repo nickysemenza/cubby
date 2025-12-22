@@ -202,7 +202,7 @@ const exportCSV = protectedProcedure
         product_name: z.string(),
         manufacturer: z.string(),
         upc: z.string(),
-        location_path: z.string(),
+        location_name: z.string(),
         quantity: z.number().nullable(), // null for product-only rows
         unit: z.string().nullable(), // null for product-only rows
         expected_qty: z.number().nullable(),

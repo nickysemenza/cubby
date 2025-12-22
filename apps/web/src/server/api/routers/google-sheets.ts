@@ -12,6 +12,7 @@ import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
 import {
   getGoogleSheetsClient,
   GoogleSheetsClient,
+  SHEET_NAMES,
 } from "~/server/clients/google-sheets";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
 import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
@@ -22,6 +23,13 @@ import {
   type CSVImportResult,
   type CSVImportResultItem,
 } from "~/schemas/inventory";
+import {
+  locationCSVRow,
+  locationCSVImportResult,
+  type LocationCSVRow,
+  type LocationCSVImportResult,
+  type LocationCSVImportResultItem,
+} from "~/schemas/location";
 import { organization } from "~/server/db/auth.schema";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/server/repo/database-helpers";
@@ -31,6 +39,9 @@ import {
   findRemovedInventoryForPull,
   type RemovedInventoryItem,
 } from "~/server/repo/inventory/csv-comparison";
+import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
+import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
+import { compareLocationsForPush } from "~/server/repo/location/csv-comparison";
 import type { OrganizationId } from "~/schemas/identifiers";
 import { deleteInventoryEntry } from "~/server/repo/inventory";
 import { deleteProduct } from "~/server/repo/product";
@@ -63,14 +74,14 @@ function mergeOrgMetadata(
   return JSON.stringify({ ...current, ...updates });
 }
 
-// CSV column headers for Google Sheets
-const CSV_HEADERS = [
+// CSV column headers for Inventory sheet
+const INVENTORY_CSV_HEADERS = [
   "product_name",
   "manufacturer",
   "upc",
   "model",
   "ndb_number",
-  "location_path",
+  "location_name",
   "quantity",
   "unit",
   "expected_qty",
@@ -78,6 +89,16 @@ const CSV_HEADERS = [
   "unit_mappings",
   "ingredient_name",
   "aliases",
+  "product_image",
+];
+
+// CSV column headers for Locations sheet
+const LOCATION_CSV_HEADERS = [
+  "location_name",
+  "parent_name",
+  "location_type",
+  "description",
+  "location_image",
 ];
 
 // Parse currency string to number (handles $, commas, etc.)
@@ -198,24 +219,75 @@ type PullData = {
   isEmpty: boolean;
 };
 
-async function preparePullData(ctx: SheetContext): Promise<PullData> {
+// Combined pull data for both sheets
+type CombinedPullData = {
+  inventory: PullData;
+  locations: {
+    parsedRows: LocationCSVRow[];
+    errorItems: LocationCSVImportResultItem[];
+  };
+  orgMetadata: string | null;
+};
+
+async function prepareCombinedPullData(
+  ctx: SheetContext,
+): Promise<CombinedPullData> {
   const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
 
-  // Read and parse sheet data
-  const sheetData = await client.readSheet(sheetId);
-  const { rows: parsedRows, errors: parseErrors } = parseSheetRows(sheetData);
-  const errorItems = parseErrorsToItems(parseErrors);
+  // Read inventory sheet
+  const inventorySheetData = await client.readSheet(
+    sheetId,
+    SHEET_NAMES.INVENTORY,
+  );
+  const { rows: inventoryParsedRows, errors: inventoryParseErrors } =
+    parseSheetRows(inventorySheetData);
+  const inventoryErrorItems = parseErrorsToItems(inventoryParseErrors);
 
   // Get current app inventory to detect deletions
-  const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
-  const removedItems = findRemovedInventoryForPull(appRows, parsedRows);
+  const inventoryAppRows = await exportInventoryToCSV(
+    ctx.db,
+    ctx.organizationId,
+  );
+  const removedItems = findRemovedInventoryForPull(
+    inventoryAppRows,
+    inventoryParsedRows,
+  );
 
-  const isEmpty =
-    parsedRows.length === 0 &&
-    errorItems.length === 0 &&
-    removedItems.length === 0;
+  // Try to read locations sheet
+  let locationParsedRows: LocationCSVRow[] = [];
+  let locationErrorItems: LocationCSVImportResultItem[] = [];
+  try {
+    const sheets = await client.listSheets(sheetId);
+    if (sheets.includes(SHEET_NAMES.LOCATIONS)) {
+      const locationSheetData = await client.readSheet(
+        sheetId,
+        SHEET_NAMES.LOCATIONS,
+      );
+      const { rows, errors } = parseLocationSheetRows(locationSheetData);
+      locationParsedRows = rows;
+      locationErrorItems = locationParseErrorsToItems(errors);
+    }
+  } catch {
+    // Locations sheet doesn't exist, skip location import
+  }
 
-  return { parsedRows, errorItems, removedItems, orgMetadata, isEmpty };
+  return {
+    inventory: {
+      parsedRows: inventoryParsedRows,
+      errorItems: inventoryErrorItems,
+      removedItems,
+      orgMetadata,
+      isEmpty:
+        inventoryParsedRows.length === 0 &&
+        inventoryErrorItems.length === 0 &&
+        removedItems.length === 0,
+    },
+    locations: {
+      parsedRows: locationParsedRows,
+      errorItems: locationErrorItems,
+    },
+    orgMetadata,
+  };
 }
 
 // Build final pull result by merging import result with errors and removed items
@@ -265,7 +337,7 @@ function parseSheetRows(rows: string[][]): ParseSheetResult {
       upc: rowObj.upc || rowObj.barcode || undefined,
       model: rowObj.model || undefined,
       ndb_number: rowObj.ndb_number || rowObj.ndbnumber || undefined,
-      location_path: rowObj.location_path || rowObj.location || undefined,
+      location_name: rowObj.location_name || rowObj.location || undefined,
       quantity: rowObj.quantity || rowObj.qty || 1,
       unit: rowObj.unit || "each",
       expected_qty: rowObj.expected_qty || rowObj.expectedqty || undefined,
@@ -294,6 +366,94 @@ function parseSheetRows(rows: string[][]): ParseSheetResult {
 
   return { rows: parsed, errors };
 }
+
+// Parse location sheet rows (2D array) to LocationCSVRow[]
+type LocationParseError = {
+  rowIndex: number;
+  locationName: string;
+  error: string;
+};
+
+type ParseLocationSheetResult = {
+  rows: LocationCSVRow[];
+  errors: LocationParseError[];
+};
+
+function parseLocationSheetRows(rows: string[][]): ParseLocationSheetResult {
+  if (rows.length < 2) return { rows: [], errors: [] };
+
+  const headers = rows[0].map((h) =>
+    h.toLowerCase().trim().replace(/\s+/g, "_"),
+  );
+  const dataRows = rows.slice(1);
+
+  const parsed: LocationCSVRow[] = [];
+  const errors: LocationParseError[] = [];
+
+  for (let rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
+    const row = dataRows[rowIdx];
+    const rowObj: Record<string, string> = {};
+    for (let i = 0; i < headers.length; i++) {
+      rowObj[headers[i]] = row[i] ?? "";
+    }
+
+    const locationName = rowObj.location_name || rowObj.name || "";
+    if (!locationName) {
+      continue; // Skip empty rows
+    }
+
+    const result = locationCSVRow.safeParse({
+      location_name: locationName,
+      parent_name: rowObj.parent_name || rowObj.parent || null,
+      location_type: rowObj.location_type || rowObj.type || undefined,
+      description: rowObj.description || undefined,
+      location_image: rowObj.location_image || rowObj.image || undefined,
+    });
+
+    if (result.success) {
+      parsed.push(result.data);
+    } else {
+      const firstIssue = result.error.issues[0];
+      const errorMsg = firstIssue
+        ? `${firstIssue.path.join(".")}: ${firstIssue.message}`
+        : "Invalid row data";
+      errors.push({
+        rowIndex: rowIdx + 2,
+        locationName,
+        error: errorMsg,
+      });
+    }
+  }
+
+  return { rows: parsed, errors };
+}
+
+// Convert location parse errors to LocationCSVImportResultItem array
+function locationParseErrorsToItems(
+  errors: LocationParseError[],
+): LocationCSVImportResultItem[] {
+  return errors.map((err) => ({
+    rowIndex: err.rowIndex,
+    action: "error" as const,
+    locationName: err.locationName,
+    message: err.error,
+  }));
+}
+
+// Combined sync result for both inventory and locations
+const combinedSyncResult = z.object({
+  inventory: csvImportResult,
+  locations: locationCSVImportResult,
+});
+
+// Empty location import result
+const EMPTY_LOCATION_RESULT: LocationCSVImportResult = {
+  created: 0,
+  updated: 0,
+  skipped: 0,
+  errors: 0,
+  items: [],
+};
 
 // Get connection status
 const getConnectionStatus = protectedProcedure
@@ -432,99 +592,224 @@ const updateSheetConnection = protectedProcedure
     return { success: true };
   });
 
-// Preview what pushing to sheet would do
+// Preview what pushing to sheet would do (combined for both sheets)
 const previewPush = protectedProcedure
-  .output(csvImportResult)
+  .output(combinedSyncResult)
   .mutation(async ({ ctx }) => {
     const { client, sheetId } = await getClientAndSheetId(ctx);
 
-    // Get app inventory and current sheet data
-    const appRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
-    const sheetData = await client.readSheet(sheetId);
-    const { rows: sheetRows } = parseSheetRows(sheetData);
+    // Get app data for both inventory and locations
+    const inventoryAppRows = await exportInventoryToCSV(
+      ctx.db,
+      ctx.organizationId,
+    );
+    const locationAppRows = await exportLocationsToCSV(
+      ctx.db,
+      ctx.organizationId,
+    );
 
-    return compareInventoryForPush(appRows, sheetRows);
+    // Get list of existing sheets
+    const sheets = await client.listSheets(sheetId);
+
+    // Determine which sheet to read for inventory (handle legacy "Sheet1")
+    const inventorySheetName = sheets.includes(SHEET_NAMES.INVENTORY)
+      ? SHEET_NAMES.INVENTORY
+      : sheets.includes("Sheet1")
+        ? "Sheet1"
+        : null;
+
+    // Read inventory sheet data (may not exist yet)
+    let inventorySheetRows: InventoryCSVRow[] = [];
+    if (inventorySheetName) {
+      const inventorySheetData = await client.readSheet(
+        sheetId,
+        inventorySheetName,
+      );
+      const parsed = parseSheetRows(inventorySheetData);
+      inventorySheetRows = parsed.rows;
+    }
+
+    // Read locations sheet data (may not exist yet)
+    let locationSheetRows: LocationCSVRow[] = [];
+    if (sheets.includes(SHEET_NAMES.LOCATIONS)) {
+      const locationSheetData = await client.readSheet(
+        sheetId,
+        SHEET_NAMES.LOCATIONS,
+      );
+      const parsed = parseLocationSheetRows(locationSheetData);
+      locationSheetRows = parsed.rows;
+    }
+
+    return {
+      inventory: compareInventoryForPush(inventoryAppRows, inventorySheetRows),
+      locations: compareLocationsForPush(locationAppRows, locationSheetRows),
+    };
   });
 
-// Push inventory to Google Sheet
+// Push inventory and locations to Google Sheet
 const pushToSheet = protectedProcedure
   .output(
     z.object({
       success: z.boolean(),
-      rowCount: z.number(),
+      inventoryRowCount: z.number(),
+      locationRowCount: z.number(),
     }),
   )
   .mutation(async ({ ctx }) => {
     const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
 
-    // Export inventory to rows
-    const exportRows = await exportInventoryToCSV(ctx.db, ctx.organizationId);
+    // Export inventory and locations
+    const inventoryRows = await exportInventoryToCSV(
+      ctx.db,
+      ctx.organizationId,
+    );
+    const locationRows = await exportLocationsToCSV(ctx.db, ctx.organizationId);
 
-    // Convert to string[][] for Google Sheets
-    const dataRows = exportRows.map((row) =>
-      CSV_HEADERS.map((h) => toCSVString(row[h as keyof typeof row])),
+    // Ensure both sheets exist
+    await client.ensureSheetExists(sheetId, SHEET_NAMES.INVENTORY);
+    await client.ensureSheetExists(sheetId, SHEET_NAMES.LOCATIONS);
+
+    // Write locations first (they may be referenced by inventory)
+    const locationDataRows = locationRows.map((row) =>
+      LOCATION_CSV_HEADERS.map((h) => toCSVString(row[h as keyof typeof row])),
+    );
+    await client.writeSheet(
+      sheetId,
+      [LOCATION_CSV_HEADERS, ...locationDataRows],
+      SHEET_NAMES.LOCATIONS,
     );
 
-    // Write to sheet (headers + data)
-    await client.writeSheet(sheetId, [CSV_HEADERS, ...dataRows]);
+    // Write inventory
+    const inventoryDataRows = inventoryRows.map((row) =>
+      INVENTORY_CSV_HEADERS.map((h) => toCSVString(row[h as keyof typeof row])),
+    );
+    await client.writeSheet(
+      sheetId,
+      [INVENTORY_CSV_HEADERS, ...inventoryDataRows],
+      SHEET_NAMES.INVENTORY,
+    );
+
     await updateLastSyncTimestamp(ctx, orgMetadata);
 
-    return { success: true, rowCount: exportRows.length };
+    return {
+      success: true,
+      inventoryRowCount: inventoryRows.length,
+      locationRowCount: locationRows.length,
+    };
   });
 
-// Pull from Google Sheet (preview mode)
+// Pull from Google Sheet (preview mode) - combined for both sheets
 const pullFromSheet = protectedProcedure
-  .output(csvImportResult)
+  .output(combinedSyncResult)
   .mutation(async ({ ctx }) => {
-    const { parsedRows, errorItems, removedItems, isEmpty } =
-      await preparePullData(ctx);
-    if (isEmpty) return EMPTY_IMPORT_RESULT;
+    const pullData = await prepareCombinedPullData(ctx);
 
-    const result = await importInventoryFromCSV(
-      ctx.db,
-      ctx.actorContext.organizationId,
-      parsedRows,
-      { dryRun: true, actor: { ...ctx.actorContext, source: "sheets_import" } },
-    );
-
-    return buildPullResult(result, errorItems, removedItems);
-  });
-
-// Apply pull from Google Sheet
-const applyPull = protectedProcedure
-  .output(csvImportResult)
-  .mutation(async ({ ctx }) => {
-    const { parsedRows, errorItems, removedItems, orgMetadata, isEmpty } =
-      await preparePullData(ctx);
-    if (isEmpty) return EMPTY_IMPORT_RESULT;
-
-    const result = await importInventoryFromCSV(
-      ctx.db,
-      ctx.actorContext.organizationId,
-      parsedRows,
-      {
-        dryRun: false,
-        actor: { ...ctx.actorContext, source: "sheets_import" },
-      },
-    );
-
-    // Delete inventory entries and products that were removed from the sheet
-    for (const item of removedItems) {
-      if (item.inventoryEntryId) {
-        await deleteInventoryEntry(ctx.db, item.inventoryEntryId, {
-          ...ctx.actorContext,
-          source: "sheets_import",
-        });
-      } else if (item.productIdToDelete) {
-        await deleteProduct(ctx.db, item.productIdToDelete, {
-          ...ctx.actorContext,
-          source: "sheets_import",
-        });
-      }
+    // Preview locations import first
+    let locationsResult: LocationCSVImportResult;
+    if (pullData.locations.parsedRows.length > 0) {
+      locationsResult = await importLocationsFromCSV(
+        ctx.db,
+        ctx.organizationId,
+        pullData.locations.parsedRows,
+        { dryRun: true },
+      );
+      // Add error items
+      locationsResult = {
+        ...locationsResult,
+        errors: locationsResult.errors + pullData.locations.errorItems.length,
+        items: [...locationsResult.items, ...pullData.locations.errorItems],
+      };
+    } else {
+      locationsResult = EMPTY_LOCATION_RESULT;
     }
 
-    await updateLastSyncTimestamp(ctx, orgMetadata);
-    return buildPullResult(result, errorItems, removedItems);
+    // Preview inventory import
+    let inventoryResult: CSVImportResult;
+    if (!pullData.inventory.isEmpty) {
+      inventoryResult = await importInventoryFromCSV(
+        ctx.db,
+        ctx.actorContext.organizationId,
+        pullData.inventory.parsedRows,
+        {
+          dryRun: true,
+          actor: { ...ctx.actorContext, source: "sheets_import" },
+        },
+      );
+      inventoryResult = buildPullResult(
+        inventoryResult,
+        pullData.inventory.errorItems,
+        pullData.inventory.removedItems,
+      );
+    } else {
+      inventoryResult = EMPTY_IMPORT_RESULT;
+    }
+
+    return { inventory: inventoryResult, locations: locationsResult };
+  });
+
+// Apply pull from Google Sheet - combined for both sheets
+const applyPull = protectedProcedure
+  .output(combinedSyncResult)
+  .mutation(async ({ ctx }) => {
+    const pullData = await prepareCombinedPullData(ctx);
+
+    // Import locations FIRST (so they exist for inventory)
+    let locationsResult: LocationCSVImportResult;
+    if (pullData.locations.parsedRows.length > 0) {
+      locationsResult = await importLocationsFromCSV(
+        ctx.db,
+        ctx.organizationId,
+        pullData.locations.parsedRows,
+        { dryRun: false },
+      );
+      locationsResult = {
+        ...locationsResult,
+        errors: locationsResult.errors + pullData.locations.errorItems.length,
+        items: [...locationsResult.items, ...pullData.locations.errorItems],
+      };
+    } else {
+      locationsResult = EMPTY_LOCATION_RESULT;
+    }
+
+    // Import inventory
+    let inventoryResult: CSVImportResult;
+    if (!pullData.inventory.isEmpty) {
+      inventoryResult = await importInventoryFromCSV(
+        ctx.db,
+        ctx.actorContext.organizationId,
+        pullData.inventory.parsedRows,
+        {
+          dryRun: false,
+          actor: { ...ctx.actorContext, source: "sheets_import" },
+        },
+      );
+
+      // Delete inventory entries and products that were removed from the sheet
+      for (const item of pullData.inventory.removedItems) {
+        if (item.inventoryEntryId) {
+          await deleteInventoryEntry(ctx.db, item.inventoryEntryId, {
+            ...ctx.actorContext,
+            source: "sheets_import",
+          });
+        } else if (item.productIdToDelete) {
+          await deleteProduct(ctx.db, item.productIdToDelete, {
+            ...ctx.actorContext,
+            source: "sheets_import",
+          });
+        }
+      }
+
+      inventoryResult = buildPullResult(
+        inventoryResult,
+        pullData.inventory.errorItems,
+        pullData.inventory.removedItems,
+      );
+    } else {
+      inventoryResult = EMPTY_IMPORT_RESULT;
+    }
+
+    await updateLastSyncTimestamp(ctx, pullData.orgMetadata);
+    return { inventory: inventoryResult, locations: locationsResult };
   });
 
 // Debug endpoint - returns raw sheet data for troubleshooting

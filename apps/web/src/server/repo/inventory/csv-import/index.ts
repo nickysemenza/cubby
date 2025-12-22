@@ -25,7 +25,6 @@ import {
   type CSVImportResultItem,
   type CSVImportResult,
 } from "~/schemas/inventory";
-import { buildLocationTypeContext } from "~/server/repo/location";
 import { processRow } from "./row-processor";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
@@ -63,33 +62,12 @@ export const importInventoryFromCSV = async (
   const items: CSVImportResultItem[] = [];
   const counters = createResultCounters();
 
-  // Build location type context for inference across the batch
-  const locationTypeContext = await buildLocationTypeContext(
-    db,
-    organizationId,
-    rows,
-  );
-
-  // Check for conflicting type specifications
-  if (locationTypeContext.conflicts.length > 0) {
-    for (const conflict of locationTypeContext.conflicts) {
-      pushErrorItem(
-        items,
-        counters,
-        -1,
-        "",
-        `Location type conflict for "${conflict.path}": specified as both ${conflict.types.join(" and ")}`,
-      );
-    }
-    return buildImportResult(counters, items);
-  }
-
   // Process each row
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
       const result = await processRow(
-        { db, organizationId, locationTypeContext, dryRun, actor },
+        { db, organizationId, dryRun, actor },
         row,
         i,
       );
@@ -161,7 +139,7 @@ export const importInventoryFromCSV = async (
         i,
         row.product_name,
         message,
-        row.location_path,
+        row.location_name,
       );
     }
   }

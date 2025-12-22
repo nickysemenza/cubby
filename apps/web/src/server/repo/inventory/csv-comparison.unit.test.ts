@@ -27,7 +27,7 @@ function makeAppRow(
     upc: "",
     model: null,
     ndb_number: null,
-    location_path: "",
+    location_name: "",
     location_id: null,
     inventory_entry_id: null,
     product_id: unsafeProductId("prod-1"),
@@ -38,6 +38,7 @@ function makeAppRow(
     unit_mappings: null,
     ingredient_name: null,
     aliases: null,
+    product_image: null,
     ...rest,
   };
 }
@@ -67,12 +68,6 @@ describe("makeInventoryKey", () => {
     expect(key1).toBe(key2);
   });
 
-  it("should normalize location paths with brackets", () => {
-    const key1 = makeInventoryKey("Widget", "Acme", "Kitchen[room]");
-    const key2 = makeInventoryKey("Widget", "Acme", "Kitchen");
-    expect(key1).toBe(key2);
-  });
-
   it("should normalize empty manufacturer to (unspecified)", () => {
     const key1 = makeInventoryKey("Widget", "", "Kitchen");
     const key2 = makeInventoryKey("Widget", "(unspecified)", "Kitchen");
@@ -93,14 +88,14 @@ describe("getRowDifferences", () => {
     const appRow = makeAppRow({
       product_name: "Widget",
       manufacturer: "Acme",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       quantity: 5,
       unit: "each",
     });
     const sheetRow = makeSheetRow({
       product_name: "Widget",
       manufacturer: "Acme",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       quantity: 5,
       unit: "each",
     });
@@ -113,13 +108,13 @@ describe("getRowDifferences", () => {
     const appRow = makeAppRow({
       product_name: "Widget",
       manufacturer: "Acme",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       quantity: 10,
       unit: "each",
     });
     const sheetRow = makeSheetRow({
       product_name: "Widget",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       quantity: 5,
       unit: "each",
     });
@@ -132,13 +127,13 @@ describe("getRowDifferences", () => {
     const appRow = makeAppRow({
       product_name: "Widget",
       manufacturer: "Acme",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       quantity: 5,
       unit: "box",
     });
     const sheetRow = makeSheetRow({
       product_name: "Widget",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       quantity: 5,
       unit: "each",
     });
@@ -151,12 +146,12 @@ describe("getRowDifferences", () => {
     const appRow = makeAppRow({
       product_name: "Widget",
       manufacturer: "Acme",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       upc: "123456789012",
     });
     const sheetRow = makeSheetRow({
       product_name: "Widget",
-      location_path: "Kitchen",
+      location_name: "Kitchen",
       upc: undefined,
     });
 
@@ -175,7 +170,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "New Widget",
         manufacturer: "Acme",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         quantity: 1,
         unit: "each",
       }),
@@ -194,7 +189,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Widget",
         manufacturer: "Acme",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         quantity: 5,
         unit: "each",
       }),
@@ -203,7 +198,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Widget",
         manufacturer: "Acme",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         quantity: 5,
         unit: "each",
       }),
@@ -221,7 +216,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Old Widget",
         manufacturer: "Acme",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
       }),
     ];
 
@@ -237,7 +232,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Dewalt Planer",
         manufacturer: "DeWalt",
-        location_path: "Garage > Shelf",
+        location_name: "Garage > Shelf",
         quantity: 1,
         unit: "each",
       }),
@@ -246,7 +241,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Dewalt Planer",
         manufacturer: "(unspecified)",
-        location_path: "Garage > Shelf",
+        location_name: "Garage > Shelf",
         quantity: 1,
         unit: "each",
       }),
@@ -265,7 +260,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Router Table",
         manufacturer: "Bosch",
-        location_path: "Workshop",
+        location_name: "Workshop",
         quantity: 1,
         unit: "each",
       }),
@@ -274,7 +269,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Router Table",
         manufacturer: undefined, // empty
-        location_path: "Workshop",
+        location_name: "Workshop",
         quantity: 1,
         unit: "each",
       }),
@@ -292,7 +287,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Power Drill",
         manufacturer: "(unspecified)",
-        location_path: "Garage",
+        location_name: "Garage",
         quantity: 1,
         unit: "each",
       }),
@@ -301,7 +296,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Power Drill",
         manufacturer: "Makita",
-        location_path: "Garage",
+        location_name: "Garage",
         quantity: 1,
         unit: "each",
       }),
@@ -320,7 +315,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Table Saw",
         manufacturer: "DeWalt",
-        location_path: "Workshop",
+        location_name: "Workshop",
         quantity: 1,
         unit: "each",
       }),
@@ -329,7 +324,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Table Saw",
         manufacturer: "Bosch",
-        location_path: "Workshop",
+        location_name: "Workshop",
         quantity: 1,
         unit: "each",
       }),
@@ -347,7 +342,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Screwdriver",
         manufacturer: "DeWalt",
-        location_path: "Toolbox",
+        location_name: "Toolbox",
         quantity: 1,
         unit: "each",
         product_id: unsafeProductId("prod-1"),
@@ -355,7 +350,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Screwdriver",
         manufacturer: "Bosch",
-        location_path: "Garage",
+        location_name: "Garage",
         quantity: 1,
         unit: "each",
         product_id: unsafeProductId("prod-2"),
@@ -365,14 +360,14 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Screwdriver",
         manufacturer: "(unspecified)", // Should match one of them
-        location_path: "Toolbox",
+        location_name: "Toolbox",
         quantity: 1,
         unit: "each",
       }),
       makeSheetRow({
         product_name: "Screwdriver",
         manufacturer: "(unspecified)", // Should match the other
-        location_path: "Garage",
+        location_name: "Garage",
         quantity: 1,
         unit: "each",
       }),
@@ -391,7 +386,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Hammer",
         manufacturer: "Stanley",
-        location_path: "Toolbox",
+        location_name: "Toolbox",
         quantity: 3,
         unit: "each",
       }),
@@ -400,7 +395,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Hammer",
         manufacturer: "(unspecified)",
-        location_path: "Toolbox",
+        location_name: "Toolbox",
         quantity: 1,
         unit: "each",
       }),
@@ -422,7 +417,7 @@ describe("compareInventoryForPush", () => {
       makeAppRow({
         product_name: "Widget",
         manufacturer: "Acme",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         product_id: unsafeProductId("prod-123"),
         quantity: 5,
         unit: "each",
@@ -432,7 +427,7 @@ describe("compareInventoryForPush", () => {
       makeSheetRow({
         product_name: "Widget",
         manufacturer: "Acme",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         quantity: 5,
         unit: "each",
       }),
@@ -451,7 +446,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Deleted Product",
           manufacturer: "(unspecified)",
-          location_path: "", // product-only
+          location_name: "", // product-only
           product_id: unsafeProductId("prod-deleted"),
         }),
       ];
@@ -471,7 +466,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Deleted Product",
           manufacturer: "(unspecified)",
-          location_path: "Kitchen > Shelf",
+          location_name: "Kitchen > Shelf",
           location_id: unsafeLocationId("loc-1"),
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-deleted"),
@@ -493,7 +488,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "Kitchen",
+          location_name: "Kitchen",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -502,7 +497,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "Garage",
+          location_name: "Garage",
           inventory_entry_id: unsafeInventoryId("inv-2"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -514,7 +509,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "Kitchen",
+          location_name: "Kitchen",
         }),
       ];
 
@@ -524,7 +519,7 @@ describe("findRemovedInventoryForPull", () => {
       expect(result).toHaveLength(1);
       expect(result[0].action).toBe("removed");
       expect(result[0].productName).toBe("Widget");
-      expect(result[0].locationPath).toBe("Garage");
+      expect(result[0].locationName).toBe("Garage");
       expect(result[0].inventoryEntryId).toBe("inv-2");
       expect(result[0].productIdToDelete).toBeUndefined();
     });
@@ -536,7 +531,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "Kitchen",
+          location_name: "Kitchen",
           location_id: unsafeLocationId("loc-1"),
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
@@ -549,7 +544,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "", // product-only
+          location_name: "", // product-only
         }),
       ];
 
@@ -567,7 +562,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "Kitchen",
+          location_name: "Kitchen",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -578,7 +573,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "Widget",
           manufacturer: "(unspecified)",
-          location_path: "Kitchen",
+          location_name: "Kitchen",
         }),
       ];
 
@@ -594,7 +589,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Widget",
           manufacturer: "Acme Corp",
-          location_path: "Kitchen",
+          location_name: "Kitchen",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
         }),
@@ -603,7 +598,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "WIDGET",
           manufacturer: "ACME CORP",
-          location_path: "KITCHEN",
+          location_name: "KITCHEN",
         }),
       ];
 
@@ -619,7 +614,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Dewalt Planer",
           manufacturer: "DeWalt",
-          location_path: "Garage > Shelf",
+          location_name: "Garage > Shelf",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -630,7 +625,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "Dewalt Planer",
           manufacturer: "(unspecified)", // Should match via fuzzy matching
-          location_path: "Garage > Shelf",
+          location_name: "Garage > Shelf",
           quantity: 1,
           unit: "each",
         }),
@@ -646,7 +641,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Router Table",
           manufacturer: "(unspecified)",
-          location_path: "Workshop",
+          location_name: "Workshop",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -657,7 +652,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "Router Table",
           manufacturer: "Bosch",
-          location_path: "Workshop",
+          location_name: "Workshop",
           quantity: 1,
           unit: "each",
         }),
@@ -673,7 +668,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "Table Saw",
           manufacturer: "DeWalt",
-          location_path: "Workshop",
+          location_name: "Workshop",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -684,7 +679,7 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "Table Saw",
           manufacturer: "Bosch", // Different specific manufacturer
-          location_path: "Workshop",
+          location_name: "Workshop",
           quantity: 1,
           unit: "each",
         }),
@@ -702,7 +697,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "All purpose flour",
           manufacturer: "King Arthur",
-          location_path: "Pantry",
+          location_name: "Pantry",
           inventory_entry_id: unsafeInventoryId("inv-1"),
           product_id: unsafeProductId("prod-1"),
           quantity: 1,
@@ -711,7 +706,7 @@ describe("findRemovedInventoryForPull", () => {
         makeAppRow({
           product_name: "All purpose flour",
           manufacturer: "(unspecified)",
-          location_path: "Pantry",
+          location_name: "Pantry",
           inventory_entry_id: unsafeInventoryId("inv-2"),
           product_id: unsafeProductId("prod-2"),
           quantity: 1,
@@ -722,14 +717,14 @@ describe("findRemovedInventoryForPull", () => {
         makeSheetRow({
           product_name: "All purpose flour",
           manufacturer: "King Arthur",
-          location_path: "Pantry",
+          location_name: "Pantry",
           quantity: 1,
           unit: "each",
         }),
         makeSheetRow({
           product_name: "All purpose flour",
           manufacturer: "(unspecified)",
-          location_path: "Pantry",
+          location_name: "Pantry",
           quantity: 1,
           unit: "each",
         }),

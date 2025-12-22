@@ -157,7 +157,7 @@ export const updateLocation = async (
       parentId: data.parentId,
     });
 
-    // Update the location
+    // Update the location (updateAndReturn handles empty values gracefully)
     const updated = await updateAndReturn(
       tx,
       location,
@@ -607,6 +607,60 @@ export const findLocationByPath = async (
   }
 
   return currentParentId ? unsafeLocationId(currentParentId) : null;
+};
+
+/**
+ * Find a location by its unique name (case-insensitive)
+ * Returns null if not found
+ */
+export const findLocationByName = async (
+  db: Database,
+  organizationId: OrganizationId,
+  name: string,
+): Promise<LocationId | null> => {
+  const loc = await getDb(db).query.location.findFirst({
+    where: and(
+      eq(location.organizationId, organizationId),
+      ilike(location.name, name),
+    ),
+  });
+  return loc ? unsafeLocationId(loc.id) : null;
+};
+
+/**
+ * Find or create a location by name with optional parent
+ * If location exists, returns its ID (does not update type/parent)
+ * If location doesn't exist, creates it with the given type and parent
+ */
+export const findOrCreateLocationByName = async (
+  db: Database,
+  organizationId: OrganizationId,
+  name: string,
+  parentId: LocationId | null,
+  type: LocationType,
+): Promise<{ locationId: LocationId; created: boolean }> => {
+  // Check if location already exists
+  const existingId = await findLocationByName(db, organizationId, name);
+  if (existingId) {
+    return { locationId: existingId, created: false };
+  }
+
+  // Create new location
+  const result = await getDb(db)
+    .insert(location)
+    .values({
+      organizationId,
+      name,
+      type,
+      parentId,
+    })
+    .returning();
+
+  if (!result[0]) {
+    throw new Error("Failed to create location");
+  }
+
+  return { locationId: unsafeLocationId(result[0].id), created: true };
 };
 
 // Find or create a location by its path string

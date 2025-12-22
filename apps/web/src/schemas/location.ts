@@ -100,3 +100,67 @@ export const collectInfiniteParents = (location: InfLocation) => {
   }
   return parentHierarchy;
 };
+
+// ============================================================================
+// Location CSV Import/Export Schemas
+// ============================================================================
+
+/**
+ * CSV row schema for location import/export
+ * Uses location_name (unique) and parent_name instead of hierarchical paths
+ */
+export const locationCSVRow = z.object({
+  location_name: z.string().min(1), // Required: unique location name
+  parent_name: z.string().nullable().optional(), // Parent location name (null for root)
+  location_type: locationType.optional(), // Optional: defaults to "room" for root, "shelf" for children
+  description: z.string().nullable().optional(),
+  location_image: z.string().optional(), // Semicolon-separated image URLs
+});
+
+export type LocationCSVRow = z.infer<typeof locationCSVRow>;
+
+/**
+ * Field change for displaying diffs in location sync
+ */
+export const locationFieldChange = z.object({
+  field: z.string(),
+  from: z.unknown(),
+  to: z.unknown(),
+});
+
+export type LocationFieldChange = z.infer<typeof locationFieldChange>;
+
+/**
+ * Individual result item for location CSV import
+ */
+export const locationCSVImportResultItem = z.object({
+  rowIndex: z.number(),
+  action: z.enum(["created", "updated", "skipped", "error", "removed"]),
+  locationName: z.string(),
+  locationId: locationId.optional(),
+  message: z.string().optional(),
+  fieldChanges: z.array(locationFieldChange).optional(),
+  // Preview fields
+  locationWillBeCreated: z.boolean().optional(),
+  imageWillBeImported: z.string().optional(),
+  imageImportSkipped: z.boolean().optional(),
+  imageImportError: z.string().optional(),
+});
+
+export type LocationCSVImportResultItem = z.infer<
+  typeof locationCSVImportResultItem
+>;
+
+/**
+ * Result of location CSV import operation
+ */
+export const locationCSVImportResult = z.object({
+  created: z.number(),
+  updated: z.number(),
+  skipped: z.number(),
+  errors: z.number(),
+  removed: z.number().optional(), // For push preview: locations that will be removed from sheet
+  items: z.array(locationCSVImportResultItem),
+});
+
+export type LocationCSVImportResult = z.infer<typeof locationCSVImportResult>;

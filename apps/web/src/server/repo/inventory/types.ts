@@ -45,7 +45,7 @@ export interface InventoryCSVExportRow {
   upc: string;
   model: string | null;
   ndb_number: number | null;
-  location_path: string; // empty string for product-only rows
+  location_name: string; // empty string for product-only rows
   location_id: LocationId | null; // null for product-only rows
   inventory_entry_id: InventoryId | null; // null for product-only rows (used for deletion)
   product_id: ProductId; // used for deletion lookup
@@ -56,6 +56,7 @@ export interface InventoryCSVExportRow {
   unit_mappings: string | null;
   ingredient_name: string | null;
   aliases: string | null;
+  product_image: string | null;
 }
 
 /**
@@ -70,6 +71,7 @@ export interface ProductExportFields {
   expectedQuantity: number | null;
   unitMappings: Array<{ a: Amount; b: Amount; source: string | null }>;
   Ingredient: { name: string; aliases: string[] } | null;
+  images: Array<{ image: { url: string } }>;
 }
 
 // Re-export Amount for convenience

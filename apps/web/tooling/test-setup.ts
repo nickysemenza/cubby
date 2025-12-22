@@ -181,7 +181,7 @@ export async function seedFromCSV(
     upc: row.upc,
     model: row.model,
     ndb_number: row.ndb_number,
-    location_path: row.location_path ?? "",
+    location_name: row.location_name ?? "",
     quantity: row.quantity ?? 1,
     unit: row.unit ?? "each",
     expected_qty: row.expected_qty,
@@ -222,13 +222,12 @@ export async function seedFromCSV(
       productIds.set(item.productName, productIdSchema.parse(item.productId));
     }
 
-    // Location ID by leaf name (last segment of path)
-    if (item.locationId && item.locationPath) {
-      const leafName =
-        item.locationPath.split(">").pop()?.trim() ?? item.locationPath;
-      // Remove type annotation if present: "Pantry[room]" -> "Pantry"
-      const cleanName = leafName.replace(/\[.*?\]$/, "").trim();
-      locationIds.set(cleanName, locationIdSchema.parse(item.locationId));
+    // Location ID by name
+    if (item.locationId && item.locationName) {
+      locationIds.set(
+        item.locationName,
+        locationIdSchema.parse(item.locationId),
+      );
     }
   }
 

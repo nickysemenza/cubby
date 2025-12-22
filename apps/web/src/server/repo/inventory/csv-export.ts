@@ -9,11 +9,11 @@ import {
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { eq, and, notInArray } from "drizzle-orm";
-import { buildLocationPath } from "~/server/repo/location";
 import {
   extractPriceFromMappings,
   serializeUnitMappings,
 } from "~/schemas/price-mapping-utils";
+import { joinImageUrls } from "~/lib/image-utils";
 import { type InventoryCSVExportRow, type ProductExportFields } from "./types";
 
 /**
@@ -30,6 +30,7 @@ async function buildProductExportFields(p: ProductExportFields): Promise<{
   unit_mappings: string | null;
   ingredient_name: string | null;
   aliases: string | null;
+  product_image: string | null;
 }> {
   const priceAmount = await extractPriceFromMappings(p.unitMappings);
   return {
@@ -43,6 +44,7 @@ async function buildProductExportFields(p: ProductExportFields): Promise<{
     unit_mappings: await serializeUnitMappings(p.unitMappings),
     ingredient_name: p.Ingredient?.name ?? null,
     aliases: p.Ingredient?.aliases?.join("; ") ?? null,
+    product_image: joinImageUrls(p.images),
   };
 }
 
@@ -66,21 +68,12 @@ export const exportInventoryToCSV = async (
         with: {
           unitMappings: true,
           Ingredient: true,
-        },
-      },
-      location: {
-        with: {
-          parent: {
-            with: {
-              parent: {
-                with: {
-                  parent: true, // Support up to 4 levels deep
-                },
-              },
-            },
+          images: {
+            with: { image: true },
           },
         },
       },
+      location: true,
     },
   });
 
@@ -91,7 +84,7 @@ export const exportInventoryToCSV = async (
       const productFields = await buildProductExportFields(entry.Product);
       return {
         ...productFields,
-        location_path: buildLocationPath(entry.location),
+        location_name: entry.location.name,
         location_id: locationIdSchema.parse(entry.locationId),
         inventory_entry_id: inventoryIdSchema.parse(entry.id),
         product_id: productIdSchema.parse(entry.productId),
@@ -121,6 +114,10 @@ export const exportInventoryToCSV = async (
     with: {
       unitMappings: true,
       Ingredient: true,
+      images: {
+        with: { image: true },
+        limit: 1,
+      },
     },
   });
 
@@ -130,7 +127,7 @@ export const exportInventoryToCSV = async (
       const productFields = await buildProductExportFields(p);
       return {
         ...productFields,
-        location_path: "", // Empty for product-only rows
+        location_name: "", // Empty for product-only rows
         location_id: null, // No location for product-only rows
         inventory_entry_id: null, // No inventory entry for product-only rows
         product_id: productIdSchema.parse(p.id),

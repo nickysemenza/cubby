@@ -390,7 +390,7 @@ export const updateProduct = async (
       updateData.ingredientId = ingredientId;
     }
 
-    // Update the product
+    // Update the product (updateAndReturn handles empty values gracefully)
     const updated = await updateAndReturn(
       tx,
       product,

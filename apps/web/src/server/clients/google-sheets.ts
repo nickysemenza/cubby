@@ -2,6 +2,14 @@ import { google } from "googleapis";
 import type { sheets_v4 } from "googleapis";
 
 /**
+ * Sheet name constants for the Google Sheets workbook
+ */
+export const SHEET_NAMES = {
+  INVENTORY: "Inventory",
+  LOCATIONS: "Locations",
+} as const;
+
+/**
  * Google Sheets client using service account authentication.
  *
  * Setup:
@@ -75,17 +83,145 @@ export class GoogleSheetsClient {
   }
 
   /**
-   * Read all rows from the first sheet
-   * Returns a 2D array of strings (header row + data rows)
+   * List all sheet names in the spreadsheet
    */
-  async readSheet(spreadsheetId: string): Promise<string[][]> {
+  async listSheets(spreadsheetId: string): Promise<string[]> {
     if (!this.sheets) {
       throw new Error("Google Sheets client is not configured");
     }
 
+    const response = await this.sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "sheets.properties.title",
+    });
+
+    return (
+      response.data.sheets?.map((s) => s.properties?.title ?? "") ?? []
+    ).filter((name) => name !== "");
+  }
+
+  /**
+   * Ensure a sheet with the given name exists in the spreadsheet.
+   * - If the sheet exists, returns immediately
+   * - If looking for "Inventory" and only "Sheet1" exists, renames it
+   * - Otherwise creates a new sheet
+   */
+  async ensureSheetExists(
+    spreadsheetId: string,
+    sheetName: string,
+  ): Promise<void> {
+    if (!this.sheets) {
+      throw new Error("Google Sheets client is not configured");
+    }
+
+    const existingSheets = await this.listSheets(spreadsheetId);
+    if (existingSheets.includes(sheetName)) {
+      return; // Sheet already exists
+    }
+
+    // Migration: if looking for "Inventory" and only "Sheet1" exists, rename it
+    if (
+      sheetName === SHEET_NAMES.INVENTORY &&
+      existingSheets.includes("Sheet1") &&
+      !existingSheets.includes(SHEET_NAMES.INVENTORY)
+    ) {
+      await this.renameSheet(spreadsheetId, "Sheet1", SHEET_NAMES.INVENTORY);
+      return;
+    }
+
+    // Create the sheet
+    await this.sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetName,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Rename a sheet
+   */
+  private async renameSheet(
+    spreadsheetId: string,
+    oldName: string,
+    newName: string,
+  ): Promise<void> {
+    if (!this.sheets) {
+      throw new Error("Google Sheets client is not configured");
+    }
+
+    // First get the sheet ID
+    const response = await this.sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "sheets.properties",
+    });
+
+    const sheet = response.data.sheets?.find(
+      (s) => s.properties?.title === oldName,
+    );
+    if (!sheet?.properties?.sheetId) {
+      throw new Error(`Sheet "${oldName}" not found`);
+    }
+
+    // Rename the sheet
+    await this.sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId: sheet.properties.sheetId,
+                title: newName,
+              },
+              fields: "title",
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Build a range string for a sheet
+   * @param sheetName - Optional sheet name (defaults to first sheet)
+   * @param cellRange - Cell range like "A:ZZ" or "A1"
+   */
+  private buildRange(sheetName: string | undefined, cellRange: string): string {
+    if (!sheetName) {
+      return cellRange;
+    }
+    // Sheet names with spaces or special chars need quotes
+    const quotedName = sheetName.includes(" ") ? `'${sheetName}'` : sheetName;
+    return `${quotedName}!${cellRange}`;
+  }
+
+  /**
+   * Read all rows from a sheet
+   * Returns a 2D array of strings (header row + data rows)
+   * @param spreadsheetId - The Google Sheet ID
+   * @param sheetName - Optional sheet name (defaults to first sheet)
+   */
+  async readSheet(
+    spreadsheetId: string,
+    sheetName?: string,
+  ): Promise<string[][]> {
+    if (!this.sheets) {
+      throw new Error("Google Sheets client is not configured");
+    }
+
+    const range = this.buildRange(sheetName, "A:ZZ");
     const response = await this.sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: "A:ZZ", // Read all columns
+      range,
     });
 
     // Convert all values to strings, handling undefined/null
@@ -95,19 +231,27 @@ export class GoogleSheetsClient {
   }
 
   /**
-   * Write rows to the first sheet (clears existing content first)
+   * Write rows to a sheet (clears existing content first)
    * @param spreadsheetId - The Google Sheet ID
    * @param rows - 2D array of values (including header row)
+   * @param sheetName - Optional sheet name (defaults to first sheet)
    */
-  async writeSheet(spreadsheetId: string, rows: string[][]): Promise<void> {
+  async writeSheet(
+    spreadsheetId: string,
+    rows: string[][],
+    sheetName?: string,
+  ): Promise<void> {
     if (!this.sheets) {
       throw new Error("Google Sheets client is not configured");
     }
 
+    const clearRange = this.buildRange(sheetName, "A:ZZ");
+    const writeRange = this.buildRange(sheetName, "A1");
+
     // Clear existing content
     await this.sheets.spreadsheets.values.clear({
       spreadsheetId,
-      range: "A:ZZ",
+      range: clearRange,
     });
 
     if (rows.length === 0) return;
@@ -115,7 +259,7 @@ export class GoogleSheetsClient {
     // Write new content
     await this.sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: "A1",
+      range: writeRange,
       valueInputOption: "RAW",
       requestBody: {
         values: rows,

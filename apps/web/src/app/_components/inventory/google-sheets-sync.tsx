@@ -32,7 +32,14 @@ import {
   type CSVImportResult,
   type CSVImportResultItem,
 } from "~/schemas/inventory";
+import { type LocationCSVImportResult } from "~/schemas/location";
 import { queryKeys } from "~/lib/query-keys";
+
+// Combined sync result type (matches router output)
+interface CombinedSyncResult {
+  inventory: CSVImportResult;
+  locations: LocationCSVImportResult;
+}
 import { ValueChange } from "../value-change";
 import { NoneState } from "../NoneState";
 import { entities } from "~/entities/entities";
@@ -98,12 +105,15 @@ export function GoogleSheetsSync() {
   const queryClient = useQueryClient();
   const [showPreview, setShowPreview] = useState(false);
   const [syncMode, setSyncMode] = useState<SyncMode>("pull");
-  const [previewResult, setPreviewResult] = useState<CSVImportResult | null>(
+  const [previewResult, setPreviewResult] = useState<CombinedSyncResult | null>(
     null,
   );
   const [completedResult, setCompletedResult] =
-    useState<CSVImportResult | null>(null);
-  const [pushRowCount, setPushRowCount] = useState<number | null>(null);
+    useState<CombinedSyncResult | null>(null);
+  const [pushRowCounts, setPushRowCounts] = useState<{
+    inventory: number;
+    locations: number;
+  } | null>(null);
   // Track which action types are hidden (skipped is hidden by default)
   const [hiddenActions, setHiddenActions] = useState<Set<ActionType>>(
     () => new Set(DEFAULT_HIDDEN_ACTIONS),
@@ -146,13 +156,17 @@ export function GoogleSheetsSync() {
   const pushMutation = useMutation(
     api.googleSheets.pushToSheet.mutationOptions({
       onSuccess: (result) => {
-        setPushRowCount(result.rowCount);
+        setPushRowCounts({
+          inventory: result.inventoryRowCount,
+          locations: result.locationRowCount,
+        });
         setCompletedResult(previewResult);
         setPreviewResult(null);
         queryClient.invalidateQueries({
           queryKey: api.googleSheets.getConnectionStatus.queryKey(),
         });
-        toast.success(`Pushed ${result.rowCount} items to Google Sheet`);
+        const totalRows = result.inventoryRowCount + result.locationRowCount;
+        toast.success(`Pushed ${totalRows} items to Google Sheet`);
       },
       onError: (error) => {
         toast.error(error.message);
@@ -189,8 +203,9 @@ export function GoogleSheetsSync() {
         queryClient.invalidateQueries({
           queryKey: api.googleSheets.getConnectionStatus.queryKey(),
         });
+        const inv = result.inventory;
         toast.success(
-          `Import complete: ${result.created} created, ${result.moved} moved, ${result.updated} updated`,
+          `Import complete: ${inv.created} created, ${inv.moved} moved, ${inv.updated} updated`,
         );
       },
       onError: (error) => {
@@ -219,7 +234,7 @@ export function GoogleSheetsSync() {
     setShowPreview(false);
     setPreviewResult(null);
     setCompletedResult(null);
-    setPushRowCount(null);
+    setPushRowCounts(null);
     setHiddenActions(new Set(DEFAULT_HIDDEN_ACTIONS));
   };
 
@@ -312,7 +327,7 @@ export function GoogleSheetsSync() {
             <DialogDescription>
               {completedResult
                 ? isPushMode
-                  ? `Successfully pushed ${pushRowCount} items to the sheet.`
+                  ? `Successfully pushed ${(pushRowCounts?.inventory ?? 0) + (pushRowCounts?.locations ?? 0)} items to the sheet.`
                   : "Changes have been applied to your inventory."
                 : isPushMode
                   ? `Review what will be written to "${status.sheetName}".`
@@ -327,7 +342,7 @@ export function GoogleSheetsSync() {
                 className={`mb-4 grid gap-2 text-sm ${isPushMode ? "grid-cols-4" : "grid-cols-6"}`}
               >
                 <SummaryCard
-                  count={currentResult.created}
+                  count={currentResult.inventory.created}
                   label={isPushMode ? "Add" : "Create"}
                   color="green"
                   isHidden={hiddenActions.has("created")}
@@ -335,7 +350,7 @@ export function GoogleSheetsSync() {
                 />
                 {!isPushMode && (
                   <SummaryCard
-                    count={currentResult.moved}
+                    count={currentResult.inventory.moved}
                     label="Move"
                     color="yellow"
                     isHidden={hiddenActions.has("moved")}
@@ -343,7 +358,7 @@ export function GoogleSheetsSync() {
                   />
                 )}
                 <SummaryCard
-                  count={currentResult.updated}
+                  count={currentResult.inventory.updated}
                   label="Update"
                   color="blue"
                   isHidden={hiddenActions.has("updated")}
@@ -351,7 +366,7 @@ export function GoogleSheetsSync() {
                 />
                 {isPushMode && (
                   <SummaryCard
-                    count={currentResult.removed ?? 0}
+                    count={currentResult.inventory.removed ?? 0}
                     label="Remove"
                     color="orange"
                     isHidden={hiddenActions.has("removed")}
@@ -360,7 +375,7 @@ export function GoogleSheetsSync() {
                 )}
                 {!isPushMode && (
                   <SummaryCard
-                    count={currentResult.productOnly}
+                    count={currentResult.inventory.productOnly}
                     label="Product"
                     color="purple"
                     isHidden={hiddenActions.has("product_only")}
@@ -368,7 +383,7 @@ export function GoogleSheetsSync() {
                   />
                 )}
                 <SummaryCard
-                  count={currentResult.skipped}
+                  count={currentResult.inventory.skipped}
                   label="No change"
                   color="gray"
                   isHidden={hiddenActions.has("skipped")}
@@ -376,7 +391,7 @@ export function GoogleSheetsSync() {
                 />
                 {!isPushMode && (
                   <SummaryCard
-                    count={currentResult.errors}
+                    count={currentResult.inventory.errors}
                     label="Error"
                     color="red"
                     isHidden={hiddenActions.has("error")}
@@ -393,15 +408,15 @@ export function GoogleSheetsSync() {
                   <CheckCircle2 className="h-4 w-4" />
                   <span className="font-medium">
                     {isPushMode
-                      ? `Successfully pushed ${pushRowCount} items`
-                      : `Successfully imported ${completedResult.created + completedResult.moved + completedResult.updated} items`}
+                      ? `Successfully pushed ${(pushRowCounts?.inventory ?? 0) + (pushRowCounts?.locations ?? 0)} items`
+                      : `Successfully imported ${completedResult.inventory.created + completedResult.inventory.moved + completedResult.inventory.updated} items`}
                   </span>
                 </div>
               </div>
             )}
 
             {/* Items table */}
-            {(currentResult?.items.length ?? 0) > 0 && (
+            {(currentResult?.inventory.items.length ?? 0) > 0 && (
               <div className="max-h-[60vh] overflow-y-auto rounded border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
@@ -413,7 +428,7 @@ export function GoogleSheetsSync() {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentResult!.items
+                    {currentResult!.inventory.items
                       .filter((item) => !hiddenActions.has(item.action))
                       .map((item, i) => {
                         const styles = getActionStyles(item.action);
@@ -440,16 +455,16 @@ export function GoogleSheetsSync() {
                               )}
                             </td>
                             <td className="p-2">
-                              {item.locationPath ? (
+                              {item.locationName ? (
                                 item.locationId ? (
                                   <Link
                                     href={`/${entities.location.basePath}/${item.locationId}`}
                                     className="text-primary hover:underline"
                                   >
-                                    {item.locationPath}
+                                    {item.locationName}
                                   </Link>
                                 ) : (
-                                  <div>{item.locationPath}</div>
+                                  <div>{item.locationName}</div>
                                 )
                               ) : (
                                 <NoneState />
@@ -484,7 +499,7 @@ export function GoogleSheetsSync() {
             )}
 
             {/* Empty state */}
-            {currentResult?.items.length === 0 && (
+            {currentResult?.inventory.items.length === 0 && (
               <div className="text-muted-foreground py-8 text-center">
                 {isPushMode
                   ? "No changes to make. The sheet is already up to date."
@@ -506,11 +521,14 @@ export function GoogleSheetsSync() {
                   disabled={
                     isApplying ||
                     !previewResult ||
-                    (previewResult.created === 0 &&
-                      previewResult.moved === 0 &&
-                      previewResult.updated === 0 &&
-                      previewResult.productOnly === 0 &&
-                      (previewResult.removed ?? 0) === 0)
+                    (previewResult.inventory.created === 0 &&
+                      previewResult.inventory.moved === 0 &&
+                      previewResult.inventory.updated === 0 &&
+                      previewResult.inventory.productOnly === 0 &&
+                      (previewResult.inventory.removed ?? 0) === 0 &&
+                      previewResult.locations.created === 0 &&
+                      previewResult.locations.updated === 0 &&
+                      (previewResult.locations.removed ?? 0) === 0)
                   }
                 >
                   {isApplying ? (

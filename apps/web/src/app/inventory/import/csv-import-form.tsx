@@ -87,7 +87,7 @@ const ProductChangesPreview = ({ item }: { item: CSVImportResultItem }) => {
   if (item.productWillBeCreated) {
     changes.push("New product");
   }
-  if (item.locationWillBeCreated) {
+  if (item.locationNotFound) {
     changes.push("New location");
   }
   if (item.productChanges?.priceWillBeSet) {
@@ -221,7 +221,7 @@ export default function CSVImportForm() {
       "ingredient",
       "ingredient_name",
       "expected_qty",
-      "location_path",
+      "location_name",
       "quantity",
       "unit",
     ];
@@ -233,7 +233,7 @@ export default function CSVImportForm() {
       ndb_number: ["ndbnumber"],
       unit_mappings: ["unitmappings"],
       expected_qty: ["expectedqty"],
-      location_path: ["location"],
+      location_name: ["location"],
       quantity: ["qty"],
     };
 
@@ -314,7 +314,7 @@ export default function CSVImportForm() {
 
     result.data.forEach((row, index) => {
       const productName = row.product_name || row.product || row.name;
-      const locationPath = row.location_path || row.location || undefined; // Now optional
+      const locationPath = row.location_name || row.location || undefined; // Now optional
       const quantity = parseFloat(row.quantity || row.qty || "1");
       const unit = row.unit || "each";
       const manufacturer = row.manufacturer || UNSPECIFIED_MANUFACTURER;
@@ -357,7 +357,7 @@ export default function CSVImportForm() {
         errors.push(`Row ${index + 1}: Missing product name`);
         return;
       }
-      // location_path is now optional - empty means product-only row
+      // location_name is now optional - empty means product-only row
       if (locationPath && (isNaN(quantity) || quantity <= 0)) {
         errors.push(`Row ${index + 1}: Invalid quantity`);
         return;
@@ -388,7 +388,7 @@ export default function CSVImportForm() {
         upc,
         model,
         ndb_number,
-        location_path: locationPath,
+        location_name: locationPath,
         quantity,
         unit,
         expected_qty: expected_qty ?? null,
@@ -545,8 +545,8 @@ export default function CSVImportForm() {
                         )}
                       </td>
                       <td className="p-2">
-                        {item.locationPath ? (
-                          <div>{item.locationPath}</div>
+                        {item.locationName ? (
+                          <div>{item.locationName}</div>
                         ) : (
                           <span className="text-muted-foreground italic">
                             No location
@@ -584,7 +584,7 @@ export default function CSVImportForm() {
         <Label htmlFor="csv-paste">Paste CSV/TSV data</Label>
         <Textarea
           id="csv-paste"
-          placeholder={`Hammer,Milwaukee,,HMR-1,,15.99,,,,,,Garage > Tools > Shelf 1,1,each\nNails (box),,,,,4.99,,,,,,Garage > Tools > Bin 3,2,box\n\nOr with headers:\nproduct_name,manufacturer,upc,model,ndb_number,price,unit_mappings,aliases,ingredient,ingredient_name,expected_qty,location_path,quantity,unit`}
+          placeholder={`Hammer,Milwaukee,,HMR-1,,15.99,,,,,,Garage > Tools > Shelf 1,1,each\nNails (box),,,,,4.99,,,,,,Garage > Tools > Bin 3,2,box\n\nOr with headers:\nproduct_name,manufacturer,upc,model,ndb_number,price,unit_mappings,aliases,ingredient,ingredient_name,expected_qty,location_name,quantity,unit`}
           value={pastedData}
           onChange={handlePaste}
           rows={6}
@@ -714,8 +714,8 @@ export default function CSVImportForm() {
                         <ProductChangesPreview item={item} />
                       </td>
                       <td className="p-2">
-                        {item.locationPath ? (
-                          <div>{item.locationPath}</div>
+                        {item.locationName ? (
+                          <div>{item.locationName}</div>
                         ) : (
                           <span className="text-muted-foreground italic">
                             No location

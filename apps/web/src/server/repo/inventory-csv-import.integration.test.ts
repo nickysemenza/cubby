@@ -60,7 +60,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Test Flour",
         manufacturer: "Brand A",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         quantity: 5,
         unit: "lbs",
       };
@@ -115,7 +115,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Sugar",
         manufacturer: "Brand B",
-        location_path: "Pantry",
+        location_name: "Pantry",
         quantity: 10,
         unit: "kg",
       };
@@ -138,7 +138,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "New Product",
         manufacturer: "New Brand",
-        location_path: "New Location",
+        location_name: "New Location",
         quantity: 1,
         unit: "each",
       };
@@ -153,7 +153,7 @@ describe("CSV import preview logic", () => {
       expect(result.created).toBe(1);
       expect(result.items[0].action).toBe("created");
       expect(result.items[0].productWillBeCreated).toBe(true);
-      expect(result.items[0].locationWillBeCreated).toBe(true);
+      expect(result.items[0].locationNotFound).toBe(true);
     });
 
     it("should show created for existing product at new location", async () => {
@@ -182,7 +182,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Existing Product",
         manufacturer: "Brand",
-        location_path: "New Room",
+        location_name: "New Room",
         quantity: 2,
         unit: "each",
       };
@@ -197,7 +197,7 @@ describe("CSV import preview logic", () => {
       expect(result.created).toBe(1);
       expect(result.items[0].action).toBe("created");
       expect(result.items[0].productWillBeCreated).toBe(false);
-      expect(result.items[0].locationWillBeCreated).toBe(true);
+      expect(result.items[0].locationNotFound).toBe(true);
     });
   });
 
@@ -247,7 +247,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Unique Tool",
         manufacturer: "ToolCo",
-        location_path: "Location B",
+        location_name: "Location B",
         quantity: 1,
         unit: "each",
       };
@@ -302,7 +302,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Power Drill",
         manufacturer: "DeWalt",
-        location_path: "Garage",
+        location_name: "Garage",
         quantity: 1,
         unit: "each",
       };
@@ -359,7 +359,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Unique Item",
         manufacturer: "ItemCo",
-        location_path: "New Location",
+        location_name: "New Location",
         quantity: 1,
         unit: "each",
       };
@@ -374,7 +374,7 @@ describe("CSV import preview logic", () => {
       // Should be detected as a move (with new location being created)
       expect(result.moved).toBe(1);
       expect(result.items[0].action).toBe("moved");
-      expect(result.items[0].locationWillBeCreated).toBe(true);
+      expect(result.items[0].locationNotFound).toBe(true);
       expect(result.items[0].movedFrom).toContain("Location A");
     });
   });
@@ -416,7 +416,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Widget",
         manufacturer: "WidgetCo",
-        location_path: "Store",
+        location_name: "Store",
         quantity: 1,
         unit: "each",
         price: 9.99,
@@ -477,7 +477,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Milk",
         manufacturer: "Farm Fresh",
-        location_path: "Kitchen > Fridge",
+        location_name: "Kitchen > Fridge",
         quantity: 1,
         unit: "gallon",
       };
@@ -532,7 +532,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Power Drill",
         manufacturer: "(unspecified)",
-        location_path: "Garage",
+        location_name: "Garage",
         quantity: 1,
         unit: "each",
       };
@@ -587,7 +587,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Router Table",
         manufacturer: "Bosch",
-        location_path: "Workshop",
+        location_name: "Workshop",
         quantity: 1,
         unit: "each",
       };
@@ -645,7 +645,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Lawn Mower",
         manufacturer: "Honda",
-        location_path: "Shed",
+        location_name: "Shed",
         quantity: 1,
         unit: "each",
       };
@@ -710,7 +710,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Flour",
         manufacturer: "King Arthur",
-        location_path: "Kitchen",
+        location_name: "Kitchen",
         quantity: 5,
         unit: "lbs",
         unit_mappings: "1 cup = 120g",
@@ -773,7 +773,7 @@ describe("CSV import preview logic", () => {
       const csvRow: InventoryCSVRow = {
         product_name: "Sugar",
         manufacturer: "Domino",
-        location_path: "Pantry",
+        location_name: "Pantry",
         quantity: 2,
         unit: "lbs",
         unit_mappings: "1 tbsp = 12g", // Different from existing
@@ -799,13 +799,13 @@ describe("CSV import preview logic", () => {
       const rows: InventoryCSVRow[] = [
         {
           product_name: "Widget A",
-          location_path: "garage > chrome wire shelf > bin",
+          location_name: "garage > chrome wire shelf > bin",
           quantity: 1,
           unit: "each",
         },
         {
           product_name: "Widget B",
-          location_path:
+          location_name:
             "garage[room] > chrome wire shelf[shelf] > bin[half-crate]",
           quantity: 1,
           unit: "each",
@@ -848,13 +848,13 @@ describe("CSV import preview logic", () => {
       const rows: InventoryCSVRow[] = [
         {
           product_name: "Widget A",
-          location_path: "warehouse[room] > rack1[shelf] > container[crate]",
+          location_name: "warehouse[room] > rack1[shelf] > container[crate]",
           quantity: 1,
           unit: "each",
         },
         {
           product_name: "Widget B",
-          location_path: "warehouse > rack1 > container",
+          location_name: "warehouse > rack1 > container",
           quantity: 1,
           unit: "each",
         },
@@ -894,7 +894,7 @@ describe("CSV import preview logic", () => {
       const rows: InventoryCSVRow[] = [
         {
           product_name: "Widget",
-          location_path: "Storage > new shelf",
+          location_name: "Storage > new shelf",
           quantity: 1,
           unit: "each",
         },
@@ -931,13 +931,13 @@ describe("CSV import preview logic", () => {
       const rows: InventoryCSVRow[] = [
         {
           product_name: "Widget A",
-          location_path: "room1[room]",
+          location_name: "room1[room]",
           quantity: 1,
           unit: "each",
         },
         {
           product_name: "Widget B",
-          location_path: "room1[cabinet]",
+          location_name: "room1[cabinet]",
           quantity: 1,
           unit: "each",
         },
@@ -968,7 +968,7 @@ describe("CSV import preview logic", () => {
       const rows: InventoryCSVRow[] = [
         {
           product_name: "Widget",
-          location_path: "ExistingRoom[cabinet]", // Different type than DB
+          location_name: "ExistingRoom[cabinet]", // Different type than DB
           quantity: 1,
           unit: "each",
         },
@@ -992,7 +992,7 @@ describe("CSV import preview logic", () => {
       const rows: InventoryCSVRow[] = [
         {
           product_name: "Widget",
-          location_path: "office > drawer1[drawer] > section",
+          location_name: "office > drawer1[drawer] > section",
           quantity: 1,
           unit: "each",
         },

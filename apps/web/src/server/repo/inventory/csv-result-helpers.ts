@@ -98,7 +98,7 @@ interface ResultItemBase {
   rowIndex: number;
   productName: string;
   productId?: ProductId;
-  locationPath?: string;
+  locationName?: string;
   locationId?: LocationId;
   message?: string;
   fieldChanges?: FieldChange[];
@@ -118,7 +118,7 @@ export function pushResultItem(
     action,
     productName: base.productName,
     productId: base.productId,
-    locationPath: base.locationPath,
+    locationName: base.locationName,
     locationId: base.locationId,
     message: base.message,
     fieldChanges: base.fieldChanges,
@@ -135,12 +135,12 @@ export function pushErrorItem(
   rowIndex: number,
   productName: string,
   message: string,
-  locationPath?: string,
+  locationName?: string,
 ): void {
   pushResultItem(items, counters, "error", {
     rowIndex,
     productName,
-    locationPath,
+    locationName,
     message,
   });
 }

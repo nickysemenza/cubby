@@ -73,7 +73,7 @@ export const inventoryCSVRow = z.object({
   upc: upc.optional(),
   model: z.string().optional(), // product model number
   ndb_number: z.coerce.number().pipe(ndb).optional(), // USDA NDB number (1000-99999)
-  location_path: z.string().optional(), // "Room > Shelf > Bin" format, or "Room[type] > Shelf[type]" with types. Empty = product-only row
+  location_name: z.string().optional(), // Location name (must exist). Empty = product-only row
   quantity: z.coerce.number().positive().default(1),
   unit: z.string().default("each"),
   expected_qty: z.coerce.number().int().positive().nullable().optional(), // product's expectedQuantity
@@ -84,6 +84,7 @@ export const inventoryCSVRow = z.object({
     .preprocess((val) => val === "true" || val === true, z.boolean())
     .optional(), // true = create ingredient with same name as product
   aliases: z.string().nullable().optional(), // semicolon-separated: "sugar;granulated sugar"
+  product_image: z.string().url().nullable().optional(), // URL of product's primary image
 });
 
 export type InventoryCSVRow = z.infer<typeof inventoryCSVRow>;
@@ -135,6 +136,10 @@ export const productChangesPreview = z.object({
   // Aliases
   aliasesWillBeAdded: z.array(z.string()).optional(), // list of aliases to add
   aliasesCurrent: z.array(z.string()).optional(),
+  // Image import preview
+  imageWillBeImported: z.string().optional(), // URL of image to import
+  imageImportSkipped: z.boolean().optional(), // true if product already has images
+  imageImportError: z.string().optional(), // error message if import failed
 });
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
@@ -164,13 +169,13 @@ export const csvImportResultItem = z.object({
   productId: z.string().optional(), // Product ID for image import
   inventoryEntryId: inventoryId.optional(), // Inventory entry ID for deletion during pull
   upc: z.string().optional(), // UPC code for image import
-  locationPath: z.string().optional(), // Optional for product-only rows
+  locationName: z.string().optional(), // Optional for product-only rows
   locationId: locationId.optional(), // Location ID for linking to location page
   message: z.string().optional(),
   fieldChanges: z.array(fieldChange).optional(), // Structured field changes for display
   // Preview fields
   productWillBeCreated: z.boolean().optional(),
-  locationWillBeCreated: z.boolean().optional(),
+  locationNotFound: z.boolean().optional(), // True if location name doesn't exist
   movedFrom: z.array(z.string()).optional(), // Location names where item currently is
   productChanges: productChangesPreview.optional(),
 });

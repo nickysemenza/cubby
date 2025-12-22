@@ -12,7 +12,6 @@ import {
   type FieldChange,
 } from "~/schemas/inventory";
 import type { InventoryCSVExportRow } from "./types";
-import { normalizeLocationPath } from "~/lib/location-path";
 import {
   createResultCounters,
   buildImportResult,
@@ -25,17 +24,23 @@ import {
 } from "~/lib/manufacturer-utils";
 
 /**
+ * Normalize a location name for comparison (lowercase, trimmed)
+ */
+function normalizeLocationName(name: string): string {
+  return name.toLowerCase().trim();
+}
+
+/**
  * Create a unique key for inventory comparison (product + manufacturer + location)
  *
- * Uses case-insensitive comparison for product name and manufacturer,
- * and normalized location path (strips brackets, lowercase).
+ * Uses case-insensitive comparison for product name, manufacturer, and location name.
  */
 export function makeInventoryKey(
   productName: string,
   manufacturer: string | null | undefined,
-  locationPath: string,
+  locationName: string,
 ): string {
-  return `${productName.toLowerCase()}|${normalizeManufacturer(manufacturer).toLowerCase()}|${normalizeLocationPath(locationPath)}`;
+  return `${productName.toLowerCase()}|${normalizeManufacturer(manufacturer).toLowerCase()}|${normalizeLocationName(locationName)}`;
 }
 
 /**
@@ -44,9 +49,9 @@ export function makeInventoryKey(
  */
 function makeProductLocationKey(
   productName: string,
-  locationPath: string,
+  locationName: string,
 ): string {
-  return `${productName.toLowerCase()}|${normalizeLocationPath(locationPath)}`;
+  return `${productName.toLowerCase()}|${normalizeLocationName(locationName)}`;
 }
 
 /**
@@ -61,17 +66,16 @@ export function getRowDifferences(
 ): FieldChange[] {
   const changes: FieldChange[] = [];
 
-  // Compare location_path using normalized comparison (strips brackets, lowercase)
-  // This ensures "Drawer[drawer]" matches "Drawer" as they refer to the same location
-  const normalizedAppPath = normalizeLocationPath(appRow.location_path);
-  const normalizedSheetPath = normalizeLocationPath(
-    sheetRow.location_path ?? "",
+  // Compare location_name using normalized comparison (lowercase, trimmed)
+  const normalizedAppName = normalizeLocationName(appRow.location_name);
+  const normalizedSheetName = normalizeLocationName(
+    sheetRow.location_name ?? "",
   );
-  if (normalizedAppPath !== normalizedSheetPath) {
+  if (normalizedAppName !== normalizedSheetName) {
     changes.push({
       field: "location",
-      from: sheetRow.location_path ?? null,
-      to: appRow.location_path,
+      from: sheetRow.location_name ?? null,
+      to: appRow.location_name,
     });
   }
 
@@ -145,6 +149,13 @@ export function getRowDifferences(
       to: appRow.aliases ?? null,
     });
   }
+  if ((appRow.product_image ?? "") !== (sheetRow.product_image ?? "")) {
+    changes.push({
+      field: "product_image",
+      from: sheetRow.product_image ?? null,
+      to: appRow.product_image ?? null,
+    });
+  }
 
   return changes;
 }
@@ -170,7 +181,7 @@ export function compareInventoryForPush(
   for (const row of sheetRows) {
     const plKey = makeProductLocationKey(
       row.product_name,
-      row.location_path ?? "",
+      row.location_name ?? "",
     );
     const existing = sheetByProductLocation.get(plKey) ?? [];
     existing.push(row);
@@ -185,7 +196,7 @@ export function compareInventoryForPush(
     const appRow = appRows[i];
     const plKey = makeProductLocationKey(
       appRow.product_name,
-      appRow.location_path,
+      appRow.location_name,
     );
 
     // Find sheet rows with same product+location
@@ -216,7 +227,7 @@ export function compareInventoryForPush(
         rowIndex: i,
         productName: appRow.product_name,
         productId: appRow.product_id,
-        locationPath: appRow.location_path,
+        locationName: appRow.location_name,
         locationId: appRow.location_id ?? undefined,
         message: "Will be added to sheet",
       });
@@ -232,7 +243,7 @@ export function compareInventoryForPush(
           rowIndex: i,
           productName: appRow.product_name,
           productId: appRow.product_id,
-          locationPath: appRow.location_path,
+          locationName: appRow.location_name,
           locationId: appRow.location_id ?? undefined,
           fieldChanges,
         });
@@ -241,7 +252,7 @@ export function compareInventoryForPush(
           rowIndex: i,
           productName: appRow.product_name,
           productId: appRow.product_id,
-          locationPath: appRow.location_path,
+          locationName: appRow.location_name,
           locationId: appRow.location_id ?? undefined,
         });
       }
@@ -256,7 +267,7 @@ export function compareInventoryForPush(
       pushResultItem(items, counters, "removed", {
         rowIndex: -1, // Not in app
         productName: sheetRow.product_name,
-        locationPath: sheetRow.location_path ?? undefined,
+        locationName: sheetRow.location_name ?? undefined,
         message: "Will be removed from sheet",
       });
     }
@@ -282,7 +293,7 @@ export function exportRowToImportRow(
     upc: row.upc || undefined,
     model: row.model ?? undefined,
     ndb_number: row.ndb_number ?? undefined,
-    location_path: row.location_path || undefined,
+    location_name: row.location_name || undefined,
     quantity: row.quantity ?? 1,
     unit: row.unit ?? "each",
     expected_qty: row.expected_qty ?? undefined,
@@ -326,7 +337,7 @@ export function findRemovedInventoryForPull(
     string,
     Array<{
       manufacturer: string | undefined;
-      locationPath: string | undefined;
+      locationName: string | undefined;
     }>
   >();
 
@@ -335,7 +346,7 @@ export function findRemovedInventoryForPull(
     const existing = sheetProductsByName.get(nameKey) ?? [];
     existing.push({
       manufacturer: row.manufacturer,
-      locationPath: row.location_path,
+      locationName: row.location_name,
     });
     sheetProductsByName.set(nameKey, existing);
   }
@@ -358,18 +369,18 @@ export function findRemovedInventoryForPull(
   const inventoryExistsInSheet = (
     productName: string,
     manufacturer: string | null | undefined,
-    locationPath: string,
+    locationName: string,
   ): boolean => {
     const nameKey = productName.toLowerCase();
     const candidates = sheetProductsByName.get(nameKey);
     if (!candidates) return false;
 
-    const normalizedLocation = normalizeLocationPath(locationPath);
+    const normalizedLocation = normalizeLocationName(locationName);
     return candidates.some(
       (c) =>
         manufacturersMatch(manufacturer, c.manufacturer) &&
-        c.locationPath &&
-        normalizeLocationPath(c.locationPath) === normalizedLocation,
+        c.locationName &&
+        normalizeLocationName(c.locationName) === normalizedLocation,
     );
   };
 
@@ -398,7 +409,7 @@ export function findRemovedInventoryForPull(
   // (only for products that still exist in the sheet)
   for (const appRow of appRows) {
     const isProductOnly =
-      !appRow.location_path || appRow.location_path.trim() === "";
+      !appRow.location_name || appRow.location_name.trim() === "";
     if (isProductOnly) continue; // Product-only rows handled above
 
     // Skip if product is being deleted entirely
@@ -408,7 +419,7 @@ export function findRemovedInventoryForPull(
       !inventoryExistsInSheet(
         appRow.product_name,
         appRow.manufacturer,
-        appRow.location_path,
+        appRow.location_name,
       )
     ) {
       removedItems.push({
@@ -416,7 +427,7 @@ export function findRemovedInventoryForPull(
         action: "removed",
         productName: appRow.product_name,
         productId: appRow.product_id,
-        locationPath: appRow.location_path,
+        locationName: appRow.location_name,
         locationId: appRow.location_id ?? undefined,
         inventoryEntryId: appRow.inventory_entry_id ?? undefined,
         message: "Inventory entry will be deleted (removed from sheet)",
