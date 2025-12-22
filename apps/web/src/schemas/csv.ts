@@ -47,6 +47,7 @@ export const INVENTORY_CSV_ACTIONS = [
   ...BASE_CSV_ACTIONS,
   "moved",
   "product_only",
+  "renamed",
 ] as const;
 
 export type InventoryCSVAction = (typeof INVENTORY_CSV_ACTIONS)[number];

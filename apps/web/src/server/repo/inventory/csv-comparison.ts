@@ -231,12 +231,181 @@ const compareInventoryInternal = createComparisonFunction<
 });
 
 /**
+ * Detect renames by matching created (app→sheet) and removed (sheet→app) items
+ *
+ * Uses multiple heuristics to pair items:
+ * 1. UPC match - same UPC, different name (highest confidence)
+ * 2. Name containment - one name contains the other (e.g., "misc: X" contains "X")
+ * 3. Location match - same non-empty location (lower confidence, used when other signals present)
+ *
+ * Returns modified items list and rename count.
+ */
+function detectRenames(
+  items: CSVImportResultItem[],
+  appRows: InventoryCSVExportRow[],
+  sheetRows: InventoryCSVRow[],
+): { items: CSVImportResultItem[]; renameCount: number } {
+  // Separate created and removed items
+  const createdItems = items.filter((item) => item.action === "created");
+  const removedItems = items.filter((item) => item.action === "removed");
+  const otherItems = items.filter(
+    (item) => item.action !== "created" && item.action !== "removed",
+  );
+
+  // Build lookup maps for detailed row data
+  const appRowsByName = new Map<string, InventoryCSVExportRow>();
+  for (const row of appRows) {
+    appRowsByName.set(row.product_name.toLowerCase(), row);
+  }
+
+  const sheetRowsByName = new Map<string, InventoryCSVRow>();
+  for (const row of sheetRows) {
+    sheetRowsByName.set(row.product_name.toLowerCase(), row);
+  }
+
+  // Track which items have been paired
+  const pairedCreatedIndices = new Set<number>();
+  const pairedRemovedIndices = new Set<number>();
+  const renamedItems: CSVImportResultItem[] = [];
+
+  // Score potential pairs based on heuristics
+  interface RenamePair {
+    createdIdx: number;
+    removedIdx: number;
+    score: number;
+    reason: string;
+  }
+
+  const potentialPairs: RenamePair[] = [];
+
+  for (let ci = 0; ci < createdItems.length; ci++) {
+    const created = createdItems[ci];
+    const appRow = appRowsByName.get(created.productName.toLowerCase());
+    if (!appRow) continue;
+
+    for (let ri = 0; ri < removedItems.length; ri++) {
+      const removed = removedItems[ri];
+      const sheetRow = sheetRowsByName.get(removed.productName.toLowerCase());
+      if (!sheetRow) continue;
+
+      let score = 0;
+      const reasons: string[] = [];
+
+      // Heuristic 1: UPC match (highest weight)
+      const appUpc = appRow.upc?.trim();
+      const sheetUpc = sheetRow.upc?.trim();
+      if (appUpc && sheetUpc && appUpc === sheetUpc) {
+        score += 100;
+        reasons.push("UPC");
+      }
+
+      // Heuristic 2: Name containment (with punctuation normalization)
+      const createdNameLower = created.productName.toLowerCase();
+      const removedNameLower = removed.productName.toLowerCase();
+      // Normalize punctuation for fuzzy matching (e.g., "misc:" vs "misc.")
+      const normalizeForFuzzy = (s: string) =>
+        s
+          .replace(/[:.;,]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      const createdNormalized = normalizeForFuzzy(createdNameLower);
+      const removedNormalized = normalizeForFuzzy(removedNameLower);
+      if (
+        createdNameLower.includes(removedNameLower) ||
+        removedNameLower.includes(createdNameLower) ||
+        createdNormalized.includes(removedNormalized) ||
+        removedNormalized.includes(createdNormalized)
+      ) {
+        score += 50;
+        reasons.push("name");
+      }
+
+      // Heuristic 3: Same location
+      const createdLoc = normalizeForComparison(created.locationName ?? "");
+      const removedLoc = normalizeForComparison(removed.locationName ?? "");
+      if (createdLoc && removedLoc && createdLoc === removedLoc) {
+        score += 25;
+        reasons.push("location");
+      }
+
+      // Heuristic 4: Same manufacturer
+      if (
+        manufacturersMatch(appRow.manufacturer, sheetRow.manufacturer) &&
+        appRow.manufacturer !== "(unspecified)"
+      ) {
+        score += 10;
+        reasons.push("manufacturer");
+      }
+
+      // Only consider as rename if at least one strong signal
+      if (score >= 50) {
+        potentialPairs.push({
+          createdIdx: ci,
+          removedIdx: ri,
+          score,
+          reason: reasons.join("+"),
+        });
+      }
+    }
+  }
+
+  // Sort by score (highest first) and greedily match
+  potentialPairs.sort((a, b) => b.score - a.score);
+
+  for (const pair of potentialPairs) {
+    if (
+      pairedCreatedIndices.has(pair.createdIdx) ||
+      pairedRemovedIndices.has(pair.removedIdx)
+    ) {
+      continue;
+    }
+
+    pairedCreatedIndices.add(pair.createdIdx);
+    pairedRemovedIndices.add(pair.removedIdx);
+
+    const created = createdItems[pair.createdIdx];
+    const removed = removedItems[pair.removedIdx];
+
+    // Create renamed item
+    renamedItems.push({
+      rowIndex: created.rowIndex,
+      action: "renamed",
+      productName: created.productName,
+      productId: created.productId,
+      locationName: created.locationName,
+      locationId: created.locationId,
+      renamedFrom: removed.productName,
+      message: `Renamed from "${removed.productName}" (matched by ${pair.reason})`,
+    });
+  }
+
+  // Keep unpaired items as-is
+  const unpairedCreated = createdItems.filter(
+    (_, i) => !pairedCreatedIndices.has(i),
+  );
+  const unpairedRemoved = removedItems.filter(
+    (_, i) => !pairedRemovedIndices.has(i),
+  );
+
+  return {
+    items: [
+      ...otherItems,
+      ...unpairedCreated,
+      ...unpairedRemoved,
+      ...renamedItems,
+    ],
+    renameCount: renamedItems.length,
+  };
+}
+
+/**
  * Compare app inventory rows with sheet rows to generate a diff preview
  *
  * Used by push preview to show what changes would be made to the sheet,
  * and by round-trip tests to verify export/import symmetry.
  *
  * Uses fuzzy manufacturer matching: "(unspecified)" matches any manufacturer.
+ * Detects renames using UPC matching, name containment, and location matching.
  */
 export function compareInventoryForPush(
   appRows: InventoryCSVExportRow[],
@@ -244,16 +413,28 @@ export function compareInventoryForPush(
 ): CSVImportResult {
   const result = compareInventoryInternal(appRows, sheetRows);
 
+  // Detect renames from created/removed pairs
+  const { items: itemsWithRenames, renameCount } = detectRenames(
+    result.items,
+    appRows,
+    sheetRows,
+  );
+
+  // Adjust counters: renames reduce both created and removed counts
+  const adjustedCreated = result.created - renameCount;
+  const adjustedRemoved = result.removed - renameCount;
+
   // Map to CSVImportResult format (legacy counter names)
   return {
-    created: result.created,
+    created: adjustedCreated,
     moved: result.moved,
     updated: result.updated,
     skipped: result.skipped,
     errors: result.error,
     productOnly: result.product_only,
-    removed: result.removed > 0 ? result.removed : undefined,
-    items: result.items,
+    removed: adjustedRemoved > 0 ? adjustedRemoved : undefined,
+    renamed: renameCount > 0 ? renameCount : undefined,
+    items: itemsWithRenames,
   };
 }
 
@@ -417,4 +598,179 @@ export function findRemovedInventoryForPull(
   }
 
   return removedItems;
+}
+
+/**
+ * Detect renames for pull operation by matching created (from sheet) with removed (from app) items
+ *
+ * For pull:
+ * - "created" = new product from sheet that will be created in app
+ * - "removed" = old product in app that will be deleted
+ *
+ * Uses same heuristics as push rename detection:
+ * 1. UPC match - same UPC, different name (highest confidence)
+ * 2. Name containment - one name contains the other
+ * 3. Location match - same non-empty location
+ *
+ * Returns modified items list with renames detected.
+ */
+export function detectRenamesForPull(
+  items: CSVImportResultItem[],
+  sheetRows: InventoryCSVRow[],
+  appRows: InventoryCSVExportRow[],
+): { items: CSVImportResultItem[]; renameCount: number } {
+  // Separate created and removed items
+  const createdItems = items.filter((item) => item.action === "created");
+  const removedItems = items.filter((item) => item.action === "removed");
+  const otherItems = items.filter(
+    (item) => item.action !== "created" && item.action !== "removed",
+  );
+
+  // Build lookup maps for detailed row data
+  // For pull: sheet has the new names (created), app has the old names (removed)
+  const sheetRowsByName = new Map<string, InventoryCSVRow>();
+  for (const row of sheetRows) {
+    sheetRowsByName.set(row.product_name.toLowerCase(), row);
+  }
+
+  const appRowsByName = new Map<string, InventoryCSVExportRow>();
+  for (const row of appRows) {
+    appRowsByName.set(row.product_name.toLowerCase(), row);
+  }
+
+  // Track which items have been paired
+  const pairedCreatedIndices = new Set<number>();
+  const pairedRemovedIndices = new Set<number>();
+  const renamedItems: CSVImportResultItem[] = [];
+
+  // Score potential pairs based on heuristics
+  interface RenamePair {
+    createdIdx: number;
+    removedIdx: number;
+    score: number;
+    reason: string;
+  }
+
+  const potentialPairs: RenamePair[] = [];
+
+  for (let ci = 0; ci < createdItems.length; ci++) {
+    const created = createdItems[ci];
+    // For pull: created items come from sheet
+    const sheetRow = sheetRowsByName.get(created.productName.toLowerCase());
+    if (!sheetRow) continue;
+
+    for (let ri = 0; ri < removedItems.length; ri++) {
+      const removed = removedItems[ri];
+      // For pull: removed items come from app
+      const appRow = appRowsByName.get(removed.productName.toLowerCase());
+      if (!appRow) continue;
+
+      let score = 0;
+      const reasons: string[] = [];
+
+      // Heuristic 1: UPC match (highest weight)
+      const sheetUpc = sheetRow.upc?.trim();
+      const appUpc = appRow.upc?.trim();
+      if (sheetUpc && appUpc && sheetUpc === appUpc) {
+        score += 100;
+        reasons.push("UPC");
+      }
+
+      // Heuristic 2: Name containment (with punctuation normalization)
+      const createdNameLower = created.productName.toLowerCase();
+      const removedNameLower = removed.productName.toLowerCase();
+      // Normalize punctuation for fuzzy matching (e.g., "misc:" vs "misc.")
+      const normalizeForFuzzy = (s: string) =>
+        s
+          .replace(/[:.;,]/g, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      const createdNormalized = normalizeForFuzzy(createdNameLower);
+      const removedNormalized = normalizeForFuzzy(removedNameLower);
+      if (
+        createdNameLower.includes(removedNameLower) ||
+        removedNameLower.includes(createdNameLower) ||
+        createdNormalized.includes(removedNormalized) ||
+        removedNormalized.includes(createdNormalized)
+      ) {
+        score += 50;
+        reasons.push("name");
+      }
+
+      // Heuristic 3: Same location
+      const createdLoc = normalizeForComparison(created.locationName ?? "");
+      const removedLoc = normalizeForComparison(removed.locationName ?? "");
+      if (createdLoc && removedLoc && createdLoc === removedLoc) {
+        score += 25;
+        reasons.push("location");
+      }
+
+      // Heuristic 4: Same manufacturer
+      if (
+        manufacturersMatch(sheetRow.manufacturer, appRow.manufacturer) &&
+        appRow.manufacturer !== "(unspecified)"
+      ) {
+        score += 10;
+        reasons.push("manufacturer");
+      }
+
+      // Only consider as rename if at least one strong signal
+      if (score >= 50) {
+        potentialPairs.push({
+          createdIdx: ci,
+          removedIdx: ri,
+          score,
+          reason: reasons.join("+"),
+        });
+      }
+    }
+  }
+
+  // Sort by score (highest first) and greedily match
+  potentialPairs.sort((a, b) => b.score - a.score);
+
+  for (const pair of potentialPairs) {
+    if (
+      pairedCreatedIndices.has(pair.createdIdx) ||
+      pairedRemovedIndices.has(pair.removedIdx)
+    ) {
+      continue;
+    }
+
+    pairedCreatedIndices.add(pair.createdIdx);
+    pairedRemovedIndices.add(pair.removedIdx);
+
+    const created = createdItems[pair.createdIdx];
+    const removed = removedItems[pair.removedIdx];
+
+    // Create renamed item - for pull, the new name is from sheet (created)
+    renamedItems.push({
+      rowIndex: created.rowIndex,
+      action: "renamed",
+      productName: created.productName, // New name (from sheet)
+      productId: removed.productId, // Keep the existing product ID
+      locationName: created.locationName,
+      locationId: created.locationId ?? removed.locationId,
+      renamedFrom: removed.productName, // Old name (from app)
+      message: `Renamed from "${removed.productName}" (matched by ${pair.reason})`,
+    });
+  }
+
+  // Keep unpaired items as-is
+  const unpairedCreated = createdItems.filter(
+    (_, i) => !pairedCreatedIndices.has(i),
+  );
+  const unpairedRemoved = removedItems.filter(
+    (_, i) => !pairedRemovedIndices.has(i),
+  );
+
+  return {
+    items: [
+      ...otherItems,
+      ...unpairedCreated,
+      ...unpairedRemoved,
+      ...renamedItems,
+    ],
+    renameCount: renamedItems.length,
+  };
 }

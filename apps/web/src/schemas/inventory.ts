@@ -160,6 +160,7 @@ export const csvImportResultItem = z.object({
     "error",
     "product_only",
     "removed", // For pull: exists in app but not in sheet; for push: exists in sheet but not in app
+    "renamed", // Product renamed (detected by UPC match, name containment, or location match)
   ]),
   productName: z.string(),
   productId: z.string().optional(), // Product ID for image import
@@ -174,6 +175,8 @@ export const csvImportResultItem = z.object({
   locationNotFound: z.boolean().optional(), // True if location name doesn't exist
   movedFrom: z.array(z.string()).optional(), // Location names where item currently is
   productChanges: productChangesPreview.optional(),
+  // Rename tracking
+  renamedFrom: z.string().optional(), // Previous product name for renamed action
 });
 
 export type CSVImportResultItem = z.infer<typeof csvImportResultItem>;
@@ -186,6 +189,7 @@ export const csvImportResult = z.object({
   errors: z.number(),
   productOnly: z.number(), // Products created/updated without inventory placement
   removed: z.number().optional(), // For push preview: rows that will be removed from sheet
+  renamed: z.number().optional(), // For push preview: products that were renamed
   items: z.array(csvImportResultItem),
 });
 

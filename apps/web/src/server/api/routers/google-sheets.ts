@@ -37,6 +37,7 @@ import { toCSVString } from "~/lib/csv-utils";
 import {
   compareInventoryForPush,
   findRemovedInventoryForPull,
+  detectRenamesForPull,
   type RemovedInventoryItem,
 } from "~/server/repo/inventory/csv-comparison";
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
@@ -213,6 +214,7 @@ function mergeResultWithErrors(
 // Prepare data for pull operations (shared between preview and apply)
 type PullData = {
   parsedRows: InventoryCSVRow[];
+  appRows: Awaited<ReturnType<typeof exportInventoryToCSV>>; // App rows for rename detection
   errorItems: CSVImportResultItem[];
   removedItems: RemovedInventoryItem[];
   orgMetadata: string | null;
@@ -243,7 +245,7 @@ async function prepareCombinedPullData(
     parseSheetRows(inventorySheetData);
   const inventoryErrorItems = parseErrorsToItems(inventoryParseErrors);
 
-  // Get current app inventory to detect deletions
+  // Get current app inventory to detect deletions and renames
   const inventoryAppRows = await exportInventoryToCSV(
     ctx.db,
     ctx.organizationId,
@@ -274,6 +276,7 @@ async function prepareCombinedPullData(
   return {
     inventory: {
       parsedRows: inventoryParsedRows,
+      appRows: inventoryAppRows, // Include app rows for rename detection
       errorItems: inventoryErrorItems,
       removedItems,
       orgMetadata,
@@ -740,6 +743,24 @@ const pullFromSheet = protectedProcedure
         pullData.inventory.errorItems,
         pullData.inventory.removedItems,
       );
+
+      // Detect renames from created/removed pairs
+      const { items: itemsWithRenames, renameCount } = detectRenamesForPull(
+        inventoryResult.items,
+        pullData.inventory.parsedRows,
+        pullData.inventory.appRows,
+      );
+
+      // Update result with rename detection
+      if (renameCount > 0) {
+        inventoryResult = {
+          ...inventoryResult,
+          created: inventoryResult.created - renameCount,
+          removed: (inventoryResult.removed ?? 0) - renameCount || undefined,
+          renamed: renameCount,
+          items: itemsWithRenames,
+        };
+      }
     } else {
       inventoryResult = EMPTY_IMPORT_RESULT;
     }

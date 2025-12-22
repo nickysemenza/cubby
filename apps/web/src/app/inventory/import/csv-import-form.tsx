@@ -17,6 +17,7 @@ import {
   Package,
   MapPin,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import { useTRPC } from "~/trpc/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -76,6 +77,12 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
         bg: "bg-orange-100 text-orange-700",
         icon: <Trash2 className="h-3 w-3" />,
         label: "Remove",
+      };
+    case "renamed":
+      return {
+        bg: "bg-cyan-100 text-cyan-700",
+        icon: <Pencil className="h-3 w-3" />,
+        label: "Rename",
       };
   }
 };

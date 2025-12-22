@@ -27,6 +27,7 @@ import {
   Package,
   CheckCircle2,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import {
   type CSVImportResult,
@@ -97,6 +98,12 @@ const getActionStyles = (
         bg: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
         icon: <Trash2 className="h-3 w-3" />,
         label: "Remove",
+      };
+    case "renamed":
+      return {
+        bg: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300",
+        icon: <Pencil className="h-3 w-3" />,
+        label: "Rename",
       };
   }
 };
@@ -348,9 +355,7 @@ export function GoogleSheetsSync() {
             )}
             {/* Summary counts - click to toggle visibility */}
             {currentResult && (
-              <div
-                className={`mb-4 grid gap-2 text-sm ${isPushMode ? "grid-cols-4" : "grid-cols-6"}`}
-              >
+              <div className="mb-4 flex flex-wrap gap-1.5 text-sm">
                 <SummaryCard
                   count={currentResult.inventory.created}
                   label={isPushMode ? "Add" : "Create"}
@@ -373,6 +378,13 @@ export function GoogleSheetsSync() {
                   color="blue"
                   isHidden={hiddenActions.has("updated")}
                   onClick={() => toggleActionVisibility("updated")}
+                />
+                <SummaryCard
+                  count={currentResult.inventory.renamed ?? 0}
+                  label="Rename"
+                  color="cyan"
+                  isHidden={hiddenActions.has("renamed")}
+                  onClick={() => toggleActionVisibility("renamed")}
                 />
                 {isPushMode && (
                   <SummaryCard
@@ -453,7 +465,23 @@ export function GoogleSheetsSync() {
                               </span>
                             </td>
                             <td className="p-2">
-                              {item.productId ? (
+                              {item.action === "renamed" && item.renamedFrom ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-muted-foreground text-sm line-through">
+                                    {item.renamedFrom}
+                                  </span>
+                                  {item.productId ? (
+                                    <Link
+                                      href={`/${entities.product.basePath}/${item.productId}`}
+                                      className="text-primary hover:underline"
+                                    >
+                                      {item.productName}
+                                    </Link>
+                                  ) : (
+                                    item.productName
+                                  )}
+                                </div>
+                              ) : item.productId ? (
                                 <Link
                                   href={`/${entities.product.basePath}/${item.productId}`}
                                   className="text-primary hover:underline"
@@ -649,6 +677,7 @@ export function GoogleSheetsSync() {
                       previewResult.inventory.updated === 0 &&
                       previewResult.inventory.productOnly === 0 &&
                       (previewResult.inventory.removed ?? 0) === 0 &&
+                      (previewResult.inventory.renamed ?? 0) === 0 &&
                       previewResult.locations.created === 0 &&
                       previewResult.locations.updated === 0 &&
                       (previewResult.locations.removed ?? 0) === 0)
@@ -683,7 +712,15 @@ function SummaryCard({
 }: {
   count: number;
   label: string;
-  color: "green" | "yellow" | "blue" | "purple" | "gray" | "red" | "orange";
+  color:
+    | "green"
+    | "yellow"
+    | "blue"
+    | "purple"
+    | "gray"
+    | "red"
+    | "orange"
+    | "cyan";
   isHidden?: boolean;
   onClick?: () => void;
 }) {
@@ -698,13 +735,14 @@ function SummaryCard({
     red: "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400",
     orange:
       "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
+    cyan: "bg-cyan-50 text-cyan-600 dark:bg-cyan-950 dark:text-cyan-400",
   };
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded border p-2 text-center transition-opacity ${colorClasses[color]} ${
+      className={`rounded border px-3 py-1.5 text-center transition-opacity ${colorClasses[color]} ${
         onClick ? "cursor-pointer hover:ring-2 hover:ring-offset-1" : ""
       } ${isHidden ? "opacity-40" : ""}`}
       title={
@@ -715,7 +753,7 @@ function SummaryCard({
           : undefined
       }
     >
-      <div className="text-lg font-bold">{count}</div>
+      <div className="text-base font-bold">{count}</div>
       <div className="text-xs opacity-70">{label}</div>
     </button>
   );
