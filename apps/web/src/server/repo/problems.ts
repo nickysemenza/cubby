@@ -8,6 +8,7 @@ import {
 } from "~/server/db/schema";
 import { eq, sql, notExists, and } from "drizzle-orm";
 import { upc as upcSchema } from "@recipehub/usda-schemas";
+import { isMiscProduct } from "~/lib/constants";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -168,9 +169,9 @@ export const findInvalidUPCs = async (
     },
   });
 
-  // Check for invalid barcode formats using shared schema
+  // Check for invalid barcode formats using shared schema (skip misc products)
   for (const prod of productsWithUPCs) {
-    if (prod.upc) {
+    if (prod.upc && !isMiscProduct(prod.name)) {
       const result = upcSchema.safeParse(prod.upc);
       if (!result.success) {
         problems.push({
@@ -187,7 +188,7 @@ export const findInvalidUPCs = async (
   // Find duplicate UPCs (database should prevent this, but check anyway)
   const upcCounts = new Map<string, typeof productsWithUPCs>();
   for (const prod of productsWithUPCs) {
-    if (prod.upc) {
+    if (prod.upc && !isMiscProduct(prod.name)) {
       const existing = upcCounts.get(prod.upc);
       if (existing) {
         // Found duplicate
@@ -208,6 +209,7 @@ export const findInvalidUPCs = async (
 };
 
 // Find products without any unit mappings (no pricing information)
+// Excludes misc products since they don't need pricing
 export const findProductsWithoutMappings = async (
   db: Database,
   organizationId: string,
@@ -234,7 +236,8 @@ export const findProductsWithoutMappings = async (
       ),
     );
 
-  return productsWithoutMappings;
+  // Filter out misc products - they don't need pricing
+  return productsWithoutMappings.filter((p) => !isMiscProduct(p.name));
 };
 
 // Find inventory entries with zero or negative amounts

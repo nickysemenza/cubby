@@ -141,6 +141,12 @@ export default function DocsPage() {
           <li>Add unit mappings for volume, weight, and price conversions</li>
           <li>Connect to USDA database via UPC barcode or NDB number</li>
           <li>Pull in nutrition data from linked USDA entries</li>
+          <li>
+            <strong>Misc products:</strong> Name a product starting with{" "}
+            <code>misc:</code> (e.g., &ldquo;misc: assorted cables&rdquo;) to
+            skip validation for pricing, UPC, etc. Useful for bulk bins or items
+            not worth individually tracking.
+          </li>
         </ul>
 
         <h3>Inventory Management</h3>

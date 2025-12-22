@@ -6,6 +6,7 @@ import { cva } from "class-variance-authority";
 import { entities } from "~/entities/entities";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import type { LocationType } from "~/schemas/location";
+import { isMiscProduct, getMiscDisplayName } from "~/lib/constants";
 import { type Entity } from "~/entities/types";
 
 const pillVariants = cva(
@@ -145,15 +146,18 @@ export const RecipePillLink: React.FC<{
 export const ProductPillLink: React.FC<{
   product: { name: string; id: string; manufacturer: string };
   openInNewTab?: boolean;
-}> = ({ product: { name, id, manufacturer }, openInNewTab }) => (
-  <PillLink
-    href={`/${entities.product.basePath}/${id}`}
-    text={name}
-    label={manufacturer}
-    entity={"product"}
-    openInNewTab={openInNewTab}
-  />
-);
+}> = ({ product: { name, id, manufacturer }, openInNewTab }) => {
+  const isMisc = isMiscProduct(name);
+  return (
+    <PillLink
+      href={`/${entities.product.basePath}/${id}`}
+      text={isMisc ? getMiscDisplayName(name) : name}
+      label={isMisc ? "misc" : manufacturer}
+      entity={"product"}
+      openInNewTab={openInNewTab}
+    />
+  );
+};
 export const FoodPillLink: React.FC<{
   food: { foodInfo: { description: string | null }; fdc_id: number };
   openInNewTab?: boolean;

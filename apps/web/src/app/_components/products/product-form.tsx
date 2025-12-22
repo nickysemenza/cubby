@@ -35,7 +35,7 @@ import { type ImageOut } from "~/schemas/image";
 import { Button } from "~/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
 import { ComboboxItem } from "../combobox/combobox-types";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import { UNSPECIFIED_MANUFACTURER, isMiscProduct } from "~/lib/constants";
 import {
   extractPriceFromMappings,
   syncPriceToMappings,
@@ -258,6 +258,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   const buttonText = getSubmitButtonText(mode, isPending);
 
+  // Watch the name field to detect misc products
+  const nameValue = form.watch("name");
+  const isMisc = isMiscProduct(nameValue);
+
   return (
     <FormWrapper
       form={form}
@@ -286,86 +290,91 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         />
       </SideBySideFields>
 
-      <UnifiedTextField
-        form={form}
-        name="manufacturer"
-        label="Manufacturer"
-        placeholder="Enter manufacturer"
-        nullable={false}
-      />
+      {/* Hide manufacturer, pricing, UPC, NDB, ingredient for misc products */}
+      {!isMisc && (
+        <>
+          <UnifiedTextField
+            form={form}
+            name="manufacturer"
+            label="Manufacturer"
+            placeholder="Enter manufacturer"
+            nullable={false}
+          />
 
-      {/* Inventory-specific fields */}
-      <SideBySideFields>
-        <NullableNumericField
-          form={form}
-          step="1"
-          name="expectedQuantity"
-          label="Expected Quantity (1 for unique items)"
-          placeholder="Leave empty for unlimited"
-        />
-        <NullableNumericField
-          form={form}
-          step="0.01"
-          name="price"
-          label="Price per Item"
-          placeholder="e.g. 12.99"
-          prefix="$"
-        />
-      </SideBySideFields>
-
-      {/* Secondary identifiers with UPC lookup */}
-      <div className="space-y-2">
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            <UnifiedTextField
+          {/* Inventory-specific fields */}
+          <SideBySideFields>
+            <NullableNumericField
               form={form}
-              name="upc"
-              label="UPC (Optional)"
-              placeholder="12-digit UPC code"
-              nullable={true}
+              step="1"
+              name="expectedQuantity"
+              label="Expected Quantity (1 for unique items)"
+              placeholder="Leave empty for unlimited"
             />
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleUpcLookup}
-            disabled={isLookingUp || !form.watch("upc")}
-            className="mb-[2px]"
-          >
-            {isLookingUp ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            <span className="ml-1">Lookup</span>
-          </Button>
-        </div>
-        {lookupImageUrl && (
-          <div className="text-muted-foreground flex items-center gap-2 text-sm">
-            <img
-              src={lookupImageUrl}
-              alt="Product from UPC lookup"
-              className="h-16 w-16 rounded border object-contain"
+            <NullableNumericField
+              form={form}
+              step="0.01"
+              name="price"
+              label="Price per Item"
+              placeholder="e.g. 12.99"
+              prefix="$"
             />
-            <span>Image will be imported on save</span>
-          </div>
-        )}
-      </div>
+          </SideBySideFields>
 
-      <NullableNumericField
-        form={form}
-        step="1"
-        name="ndb_number"
-        label="NDB Number (Optional)"
-        placeholder="NDB number (1000-99999)"
-      />
-      <ComboboxFieldWithSearch
-        form={form}
-        name="ingredient"
-        label="Ingredient"
-        searchType="ingredient"
-      />
+          {/* Secondary identifiers with UPC lookup */}
+          <div className="space-y-2">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <UnifiedTextField
+                  form={form}
+                  name="upc"
+                  label="UPC (Optional)"
+                  placeholder="12-digit UPC code"
+                  nullable={true}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleUpcLookup}
+                disabled={isLookingUp || !form.watch("upc")}
+                className="mb-[2px]"
+              >
+                {isLookingUp ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                <span className="ml-1">Lookup</span>
+              </Button>
+            </div>
+            {lookupImageUrl && (
+              <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                <img
+                  src={lookupImageUrl}
+                  alt="Product from UPC lookup"
+                  className="h-16 w-16 rounded border object-contain"
+                />
+                <span>Image will be imported on save</span>
+              </div>
+            )}
+          </div>
+
+          <NullableNumericField
+            form={form}
+            step="1"
+            name="ndb_number"
+            label="NDB Number (Optional)"
+            placeholder="NDB number (1000-99999)"
+          />
+          <ComboboxFieldWithSearch
+            form={form}
+            name="ingredient"
+            label="Ingredient"
+            searchType="ingredient"
+          />
+        </>
+      )}
 
       {/* Show image upload in both create and edit modes */}
       <PendingImageUpload
@@ -378,49 +387,52 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         className="mt-4"
       />
 
-      <ArrayFieldManager<UnitMappingInput, ProductFormValues>
-        form={form}
-        name="unitMappings"
-        title="Unit Mappings"
-        addButtonText="Add Mapping"
-        emptyValue={{
-          a: { value: 1, unit: "" },
-          b: { value: 1, unit: "" },
-          source: null,
-        }}
-      >
-        {(_, index) => (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <h5 className="text-sm font-medium">From</h5>
-                <AmountFieldGroup
-                  form={form}
-                  valuePath={`unitMappings.${index}.a.value`}
-                  unitPath={`unitMappings.${index}.a.unit`}
-                />
+      {/* Hide unit mappings for misc products */}
+      {!isMisc && (
+        <ArrayFieldManager<UnitMappingInput, ProductFormValues>
+          form={form}
+          name="unitMappings"
+          title="Unit Mappings"
+          addButtonText="Add Mapping"
+          emptyValue={{
+            a: { value: 1, unit: "" },
+            b: { value: 1, unit: "" },
+            source: null,
+          }}
+        >
+          {(_, index) => (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h5 className="text-sm font-medium">From</h5>
+                  <AmountFieldGroup
+                    form={form}
+                    valuePath={`unitMappings.${index}.a.value`}
+                    unitPath={`unitMappings.${index}.a.unit`}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <h5 className="text-sm font-medium">To</h5>
+                  <AmountFieldGroup
+                    form={form}
+                    valuePath={`unitMappings.${index}.b.value`}
+                    unitPath={`unitMappings.${index}.b.unit`}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <h5 className="text-sm font-medium">To</h5>
-                <AmountFieldGroup
-                  form={form}
-                  valuePath={`unitMappings.${index}.b.value`}
-                  unitPath={`unitMappings.${index}.b.unit`}
-                />
-              </div>
-            </div>
-
-            <UnifiedTextField
-              form={form}
-              name={`unitMappings.${index}.source`}
-              label="Source (Optional)"
-              placeholder="Enter source"
-              nullable={true}
-            />
-          </>
-        )}
-      </ArrayFieldManager>
+              <UnifiedTextField
+                form={form}
+                name={`unitMappings.${index}.source`}
+                label="Source (Optional)"
+                placeholder="Enter source"
+                nullable={true}
+              />
+            </>
+          )}
+        </ArrayFieldManager>
+      )}
     </FormWrapper>
   );
 };
