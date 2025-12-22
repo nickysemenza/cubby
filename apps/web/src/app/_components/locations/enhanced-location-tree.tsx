@@ -40,6 +40,29 @@ function getAncestorIds(
   return ancestors;
 }
 
+/** Find all location IDs that match the search term */
+function findMatchingLocationIds(
+  locations: InfLocation[],
+  searchTerm: string,
+): string[] {
+  const matches: string[] = [];
+  const term = searchTerm.toLowerCase();
+
+  function search(locs: InfLocation[]) {
+    for (const loc of locs) {
+      if (loc.name.toLowerCase().includes(term)) {
+        matches.push(loc.id);
+      }
+      if (loc.children) {
+        search(loc.children);
+      }
+    }
+  }
+
+  search(locations);
+  return matches;
+}
+
 interface EnhancedLocationTreeProps {
   className?: string;
   onLocationSelect?: (location: InfLocation) => void;
@@ -70,15 +93,33 @@ export function EnhancedLocationTree({
     new Set(),
   );
 
-  // Auto-expand ancestors for selected location
+  // Auto-expand ancestors for selected location and search matches
   const expandedNodes = useMemo(() => {
     const nodes = new Set(manualExpandedNodes);
+
+    // Expand ancestors of selected location
     if (selectedLocationId && locations) {
       const ancestors = getAncestorIds(selectedLocationId, parentMap);
       ancestors.forEach((id) => nodes.add(id));
     }
+
+    // When searching, expand ancestors of all matching locations
+    if (searchTerm && locations) {
+      const matchingIds = findMatchingLocationIds(locations, searchTerm);
+      for (const matchId of matchingIds) {
+        const ancestors = getAncestorIds(matchId, parentMap);
+        ancestors.forEach((id) => nodes.add(id));
+      }
+    }
+
     return nodes;
-  }, [manualExpandedNodes, selectedLocationId, locations, parentMap]);
+  }, [
+    manualExpandedNodes,
+    selectedLocationId,
+    locations,
+    parentMap,
+    searchTerm,
+  ]);
 
   const toggleNode = (nodeId: string) => {
     const newExpanded = new Set(manualExpandedNodes);
@@ -166,6 +207,9 @@ function LocationTreeNode({
   const hasChildren = location.children && location.children.length > 0;
   const isExpanded = expandedNodes.has(location.id);
   const isSelected = selectedLocationId === location.id;
+  const isMatch =
+    searchTerm &&
+    location.name.toLowerCase().includes(searchTerm.toLowerCase());
   const indent = level * 16;
 
   const handleClick = () => {
@@ -192,6 +236,7 @@ function LocationTreeNode({
         className={cn(
           "hover:bg-muted/50 flex cursor-pointer items-center gap-2 rounded p-2 transition-colors",
           isSelected && "bg-primary/10 border-primary/20 border",
+          isMatch && !isSelected && "bg-yellow-100 dark:bg-yellow-900/30",
         )}
         style={{ paddingLeft: `${12 + indent}px` }}
         onClick={handleClick}
