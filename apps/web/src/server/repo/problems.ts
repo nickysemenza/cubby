@@ -7,6 +7,7 @@ import {
   productUnitMappings,
 } from "~/server/db/schema";
 import { eq, sql, notExists, and } from "drizzle-orm";
+import { upc as upcSchema } from "@recipehub/usda-schemas";
 
 // Interface for the complete problems result
 export interface AllProblems {
@@ -167,11 +168,11 @@ export const findInvalidUPCs = async (
     },
   });
 
-  // Check for invalid UPC formats (should be 8 or 12 digits)
+  // Check for invalid barcode formats using shared schema
   for (const prod of productsWithUPCs) {
     if (prod.upc) {
-      const cleanUpc = prod.upc.replace(/[\s-]/g, "");
-      if (!/^\d{8}$/.test(cleanUpc) && !/^\d{12}$/.test(cleanUpc)) {
+      const result = upcSchema.safeParse(prod.upc);
+      if (!result.success) {
         problems.push({
           id: prod.id,
           name: prod.name,
@@ -281,14 +282,20 @@ export const findInvalidInventoryAmounts = async (
   return problems;
 };
 
-// Find locations with no inventory entries
+// Find leaf locations with no inventory entries (excludes parent locations)
 export const findEmptyLocations = async (
   db: Database,
   organizationId: string,
 ): Promise<EmptyLocation[]> => {
   const dbClient = getDb(db);
 
+  // Alias for checking child locations
+  const childLocation = dbClient
+    .$with("child_location")
+    .as(dbClient.select({ parentId: location.parentId }).from(location));
+
   const emptyLocations = await dbClient
+    .with(childLocation)
     .select({
       id: location.id,
       name: location.name,
@@ -300,11 +307,19 @@ export const findEmptyLocations = async (
     .where(
       and(
         eq(location.organizationId, organizationId),
+        // No inventory entries
         notExists(
           dbClient
             .select({ id: sql`1` })
             .from(inventoryEntry)
             .where(eq(inventoryEntry.locationId, location.id)),
+        ),
+        // No child locations (is a leaf node)
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(childLocation)
+            .where(eq(childLocation.parentId, location.id)),
         ),
       ),
     );

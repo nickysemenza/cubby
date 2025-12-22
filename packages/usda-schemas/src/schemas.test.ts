@@ -12,7 +12,11 @@ describe('UPC validation', () => {
     expect(() => upc.parse('123456789012')).not.toThrow();
   });
 
-  it('should accept valid 14-digit UPC', () => {
+  it('should accept valid 13-digit EAN-13', () => {
+    expect(() => upc.parse('1234567890123')).not.toThrow();
+  });
+
+  it('should accept valid 14-digit GTIN-14', () => {
     expect(() => upc.parse('12345678901234')).not.toThrow();
   });
 

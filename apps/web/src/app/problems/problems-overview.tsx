@@ -228,11 +228,11 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
   return (
     <ProblemSection
       title="Empty Locations"
-      description="Locations with no inventory entries. Consider adding inventory or removing unused locations."
+      description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
       icon={MapPin}
       iconColor={locations.length > 0 ? "text-purple-500" : "text-green-500"}
       items={locations}
-      emptyMessage="All locations have inventory entries."
+      emptyMessage="All leaf locations have inventory entries."
       renderItem={(location) => {
         const details = [
           <div

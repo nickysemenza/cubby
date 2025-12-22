@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-export const upc = z.string().min(12).max(14).describe('12 digit UPC code');
+export const upc = z
+  .string()
+  .min(12)
+  .max(14)
+  .describe('UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode');
 // NDB (Nutrient Data Bank) number - USDA-specific identifier
 export const ndb = z.number().max(99999).min(1000).describe('NDB number');
 
