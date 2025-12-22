@@ -34,12 +34,9 @@ const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
     }
   }, [unitMapping]);
 
+  // No mappings = nothing to visualize (expected for misc items)
   if (unitMapping.length === 0) {
-    return (
-      <div className="border-destructive text-destructive border-2">
-        No unit mappings
-      </div>
-    );
+    return null;
   }
 
   if (graphResult.error) {

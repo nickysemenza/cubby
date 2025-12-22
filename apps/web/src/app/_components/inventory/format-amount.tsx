@@ -21,6 +21,18 @@ export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
   if (mappings === undefined) {
     return "loading";
   }
+
+  // If no unit mappings exist, show amount only without attempting price conversion
+  // This is expected for misc items and shouldn't show as an error
+  if (mappings.length === 0) {
+    return (
+      <div className="flex flex-col">
+        <div className="text-muted-foreground">—</div>
+        <div>{tryFormatAmount(amount)}</div>
+      </div>
+    );
+  }
+
   const price = convertAmountToPrice(amount, mappings);
   return (
     <div className="flex flex-col">
