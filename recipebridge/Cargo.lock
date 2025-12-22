@@ -216,9 +216,10 @@ dependencies = [
  "itertools",
  "nom",
  "nom-language",
+ "once_cell",
  "petgraph",
  "rand",
- "recipe-vocab",
+ "regex",
  "serde",
  "serde_json",
  "tracing",
@@ -501,14 +502,6 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "recipe-vocab"
-version = "0.1.0"
-dependencies = [
- "once_cell",
- "regex",
 ]
 
 [[package]]

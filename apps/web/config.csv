@@ -1,4 +1,4 @@
-product_name,manufacturer,upc,model,ndb_number,price,unit_mappings,aliases,ingredient,expected_qty,location_path,quantity,unit
+product_name,manufacturer,upc,model,ndb_number,price,unit_mappings,aliases,ingredient,expected_qty,location_name,quantity,unit
 White sugar,C&H,015800030621,,,,4 lb = $5 @ whole foods; 4 lb = 1each @ general,sugar;granulated sugar,true,,,,
 powdered sugar,generic,,,19336,,2 lb = $5 @ whole foods,confectioner's sugar;confectioners sugar,true,,,,
 All Purpose Flour,King Arthur,071012010509,,,,5 lb = $8 @ whole foods; 1 cup = 120g @ unk,AP flour;flour;white flour;all-purpose flour,true,,,,
@@ -28,9 +28,9 @@ cilantro,generic,,,11165,,1 bunch = $2 @ whole foods; 1 bunch = 100sprig @ gener
 molasses,generic,,,19304,,2 oz = $8 @ whole foods,,true,,,,
 vanilla extract,generic,,,2050,,2 oz = $8 @ whole foods,,true,,,,
 salsa,generic,,,6164,,2 cups = $6 @ whole foods,,true,,,,
-Packout toolbag,Milwaukee,045242505296,48-22-8315,,99,,,false,1,garage[room] > toolbag[bag],1,each
-Ryobi Angle Grinder,Ryobi,033287188048,PBLAG01B,,129,,,false,1,garage[room] > chrome wire shelf[shelf] > oscillating and grinder[half-crate],1,each
-Ryobi Oscillating Tool,Ryobi,033287190706,PBLMT50B,,129,,,false,1,garage[room] > chrome wire shelf[shelf] > oscillating and grinder[half-crate],1,each
-angle grinder discs,generic,,,,4,,,false,,garage[room] > chrome wire shelf[shelf] > oscillating and grinder[half-crate],1,each
-oscillating toolblades,generic,,,,8,,,false,,garage[room] > chrome wire shelf[shelf] > oscillating and grinder[half-crate],1,each
+Packout toolbag,Milwaukee,045242505296,48-22-8315,,99,,,false,1,toolbag,1,each
+Ryobi Angle Grinder,Ryobi,033287188048,PBLAG01B,,129,,,false,1,oscillating and grinder,1,each
+Ryobi Oscillating Tool,Ryobi,033287190706,PBLMT50B,,129,,,false,1,oscillating and grinder,1,each
+angle grinder discs,generic,,,,4,,,false,,oscillating and grinder,1,each
+oscillating toolblades,generic,,,,8,,,false,,oscillating and grinder,1,each
 M18 Hackzall,Milwaukee,045242502776,2719-20,,169,,,false,1,,,

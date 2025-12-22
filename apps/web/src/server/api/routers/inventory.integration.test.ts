@@ -116,7 +116,7 @@ describe("inventory router", () => {
         {
           product_name: "Flour",
           manufacturer: "Brand A",
-          location_name: "Kitchen[room]",
+          location_name: "Kitchen",
           quantity: 2,
           unit: "lbs",
         },
@@ -130,7 +130,7 @@ describe("inventory router", () => {
         {
           product_name: "Rice",
           manufacturer: "Brand C",
-          location_name: "Pantry[room]",
+          location_name: "Pantry",
           quantity: 3,
           unit: "lbs",
         },
@@ -213,7 +213,7 @@ describe("inventory router", () => {
         {
           product_name: "Test Product",
           manufacturer: "Test Brand",
-          location_name: "Test Location[room]",
+          location_name: "Test Location",
           quantity: 2,
           unit: "pieces",
         },
@@ -264,7 +264,7 @@ describe("inventory router", () => {
         {
           product_name: "Product 1",
           manufacturer: "Brand",
-          location_name: "Location 1[room]",
+          location_name: "Location 1",
           quantity: 1,
           unit: "piece",
         },
@@ -329,7 +329,7 @@ describe("inventory router", () => {
         {
           product_name: "Bulk Product 1",
           manufacturer: "Brand",
-          location_name: "Bulk Location[room]",
+          location_name: "Bulk Location",
           quantity: 1,
           unit: "piece",
         },
@@ -440,7 +440,7 @@ describe("inventory router", () => {
           {
             product_name: "Move Product",
             manufacturer: "Brand",
-            location_name: "Source Location[room]",
+            location_name: "Source Location",
             quantity: 10,
             unit: "pieces",
           },
@@ -496,7 +496,7 @@ describe("inventory router", () => {
           {
             product_name: "Split Product",
             manufacturer: "Brand",
-            location_name: "Source[room]",
+            location_name: "Source",
             quantity: 10,
             unit: "kg",
           },
@@ -619,7 +619,7 @@ describe("inventory router", () => {
           {
             product_name: "Error Product",
             manufacturer: "Brand",
-            location_name: "Same Location[room]",
+            location_name: "Same Location",
             quantity: 5,
             unit: "units",
           },
@@ -660,7 +660,7 @@ describe("inventory router", () => {
           {
             product_name: "Limited Product",
             manufacturer: "Brand",
-            location_name: "Source[room]",
+            location_name: "Source",
             quantity: 5,
             unit: "items",
           },
@@ -719,7 +719,7 @@ describe("inventory router", () => {
         {
           product_name: "Test Product",
           manufacturer: "Brand",
-          location_name: "Test Location[room]",
+          location_name: "Test Location",
           quantity: 1,
           unit: "piece",
         },

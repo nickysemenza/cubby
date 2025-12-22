@@ -198,6 +198,18 @@ describe("CSV round-trip tests", () => {
 
   describe("Import → Export → Import round-trip", () => {
     it("should produce identical data after full cycle", async () => {
+      // Create locations first
+      const warehouse = await createLocation(
+        db,
+        { name: "Warehouse", type: "room", parentId: null },
+        actor,
+      );
+      await createLocation(
+        db,
+        { name: "Shelf A", type: "shelf", parentId: warehouse.id },
+        actor,
+      );
+
       // Step 1: Import CSV rows
       const csvRows: InventoryCSVRow[] = [
         {
@@ -213,7 +225,7 @@ describe("CSV round-trip tests", () => {
         {
           product_name: "Widget B",
           manufacturer: "WidgetCo",
-          location_name: "Warehouse > Shelf A",
+          location_name: "Shelf A",
           quantity: 5,
           unit: "boxes",
         },
@@ -250,6 +262,13 @@ describe("CSV round-trip tests", () => {
     });
 
     it("should preserve all fields through round-trip", async () => {
+      // Create location first
+      await createLocation(
+        db,
+        { name: "Storage", type: "room", parentId: null },
+        actor,
+      );
+
       // Import with various optional fields
       const csvRows: InventoryCSVRow[] = [
         {
@@ -575,47 +594,6 @@ describe("CSV round-trip tests", () => {
       const exportedRows = await exportInventoryToCSV(db, organizationId);
       const importRows = exportedRows.map(exportRowToImportRow);
 
-      const result = await importInventoryFromCSV(
-        db,
-        organizationId,
-        importRows,
-        {
-          dryRun: true,
-          actor: actor,
-        },
-      );
-
-      expect(result.skipped).toBe(1);
-      expect(result.errors).toBe(0);
-    });
-
-    it("should handle location paths with bracket notation types", async () => {
-      // Import with bracket notation
-      const csvRows: InventoryCSVRow[] = [
-        {
-          product_name: "Item",
-          manufacturer: "Brand",
-          location_name: "Kitchen[room] > Fridge[cabinet] > Top Shelf[shelf]",
-          quantity: 1,
-          unit: "each",
-        },
-      ];
-
-      await importInventoryFromCSV(db, organizationId, csvRows, {
-        dryRun: false,
-        actor: actor,
-      });
-
-      // Export
-      const exportedRows = await exportInventoryToCSV(db, organizationId);
-
-      // The exported path should include bracket notation from DB types
-      expect(exportedRows[0].location_name).toContain("Kitchen");
-      expect(exportedRows[0].location_name).toContain("Fridge");
-      expect(exportedRows[0].location_name).toContain("Top Shelf");
-
-      // Re-import should still match (normalized comparison)
-      const importRows = exportedRows.map(exportRowToImportRow);
       const result = await importInventoryFromCSV(
         db,
         organizationId,

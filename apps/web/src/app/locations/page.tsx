@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Suspense } from "react";
 import { SimpleLoading } from "~/components/ui/loading-skeletons";
 import { EntityLayout } from "~/components/layouts/entity-layout";
+import { LocationActions } from "./location-actions";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Locations",
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function Page() {
   return (
-    <EntityLayout title="Locations">
+    <EntityLayout title="Locations" actions={<LocationActions />}>
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>

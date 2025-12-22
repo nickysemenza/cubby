@@ -5,15 +5,49 @@ import { type Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { type OrganizationId } from "~/schemas/identifiers";
 import { type ActorContext } from "~/schemas/context";
-import { parseInventoryCSV } from "./csv-utils";
+import { parseInventoryCSV, parseLocationsCSV } from "./csv-utils";
 import { importInventoryFromCSV } from "~/server/repo/inventory";
-import { locationList } from "~/server/repo/location";
+import {
+  locationList,
+  findOrCreateLocationByName,
+  findLocationByName,
+} from "~/server/repo/location";
 import { productList } from "~/server/repo/product";
 
 const readConfigCSV = (): ReturnType<typeof parseInventoryCSV> => {
   const filePath = path.join(__dirname, "../../config.csv");
   const csvContent = fs.readFileSync(filePath, "utf8");
   return parseInventoryCSV(csvContent);
+};
+
+const readLocationsCSV = (): ReturnType<typeof parseLocationsCSV> => {
+  const filePath = path.join(__dirname, "../../locations.csv");
+  const csvContent = fs.readFileSync(filePath, "utf8");
+  return parseLocationsCSV(csvContent);
+};
+
+/**
+ * Import locations from locations.csv before importing inventory
+ */
+const seedLocations = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<void> => {
+  const rows = readLocationsCSV();
+  for (const row of rows) {
+    // Find parent if specified
+    let parentId = null;
+    if (row.parent_name) {
+      parentId = await findLocationByName(db, organizationId, row.parent_name);
+    }
+    await findOrCreateLocationByName(
+      db,
+      organizationId,
+      row.location_name,
+      parentId,
+      row.location_type ?? (parentId ? "shelf" : "room"),
+    );
+  }
 };
 
 describe("config.csv import integration", () => {
@@ -33,6 +67,7 @@ describe("config.csv import integration", () => {
   });
 
   it("should import all rows into database without errors", async () => {
+    await seedLocations(db, organizationId);
     const rows = readConfigCSV();
 
     const result = await importInventoryFromCSV(db, organizationId, rows, {
@@ -45,6 +80,7 @@ describe("config.csv import integration", () => {
   });
 
   it("should create expected products from config.csv", async () => {
+    await seedLocations(db, organizationId);
     const rows = readConfigCSV();
     await importInventoryFromCSV(db, organizationId, rows, {
       dryRun: false,
@@ -66,12 +102,8 @@ describe("config.csv import integration", () => {
     expect(productNames.some((name) => name.includes("flour"))).toBe(true);
   });
 
-  it("should create locations with correct types from bracket notation", async () => {
-    const rows = readConfigCSV();
-    await importInventoryFromCSV(db, organizationId, rows, {
-      dryRun: false,
-      actor: actor,
-    });
+  it("should create locations with correct types from locations.csv", async () => {
+    await seedLocations(db, organizationId);
 
     const locations = await locationList(
       db,
@@ -94,6 +126,7 @@ describe("config.csv import integration", () => {
   });
 
   it("should be idempotent - re-importing skips existing items", async () => {
+    await seedLocations(db, organizationId);
     const rows = readConfigCSV();
 
     await importInventoryFromCSV(db, organizationId, rows, {

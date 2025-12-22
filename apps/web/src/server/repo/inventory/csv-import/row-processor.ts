@@ -13,7 +13,10 @@ import {
   type FieldChange,
 } from "~/schemas/inventory";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-import { findLocationByName } from "~/server/repo/location";
+import {
+  findLocationByName,
+  findOrCreateLocationByName,
+} from "~/server/repo/location";
 import { type ProductTopLevelOut } from "~/schemas/product";
 import { getTotalProductQuantity } from "../helpers";
 import {
@@ -540,19 +543,39 @@ export const processRow = async (
   }
 
   // -------------------------------------------------------------------------
-  // Step 5: Handle missing location - return error
+  // Step 5: Handle missing location - auto-create as root "room"
   // -------------------------------------------------------------------------
-  if (!targetLocationId) {
-    return {
-      rowIndex,
-      action: "error",
-      productName: row.product_name,
-      locationName: row.location_name,
-      message: `Location "${locationName}" not found. Create it in the Locations sheet first.`,
-    };
+  let resolvedLocationId = targetLocationId;
+  let locationWasCreated = false;
+
+  if (!resolvedLocationId) {
+    if (dryRun) {
+      // In dry-run mode, we can't create the location, but we can indicate it will be created
+      // For now, return a "created" action with locationNotFound flag
+      return buildDryRunResult(base, "created", {
+        productChanges,
+        productWillBeCreated,
+        locationNotFound: true,
+        message: `Location "${locationName}" will be auto-created`,
+      });
+    }
+
+    // Auto-create the location as a root with default type "room"
+    const createResult = await findOrCreateLocationByName(
+      db,
+      organizationId,
+      locationName,
+      null, // no parent
+      "room", // default type for auto-created locations
+    );
+    resolvedLocationId = createResult.locationId;
+    locationWasCreated = createResult.created;
+
+    // Update base with the new location ID
+    base.locationId = resolvedLocationId;
   }
 
-  // At this point we must have productData and targetLocationId
+  // At this point we must have productData and resolvedLocationId
   if (!productData) {
     throw new Error("Unexpected state: missing product data");
   }
@@ -564,7 +587,7 @@ export const processRow = async (
     db,
     organizationId,
     productData.id,
-    targetLocationId,
+    resolvedLocationId,
     newAmount,
   );
 
@@ -572,7 +595,7 @@ export const processRow = async (
     db,
     organizationId,
     productData,
-    targetLocationId,
+    resolvedLocationId,
     inventoryCheck.exists,
   );
 
@@ -589,13 +612,14 @@ export const processRow = async (
       organizationId,
       base,
       productData,
-      targetLocationId,
+      resolvedLocationId,
       newAmount,
       moveCheck.existingLocations,
       productChanges,
       productWillBeCreated,
       dryRun,
       imageImportError,
+      locationWasCreated,
     );
   }
 
@@ -607,13 +631,14 @@ export const processRow = async (
     organizationId,
     base,
     productData,
-    targetLocationId,
+    resolvedLocationId,
     newAmount,
     inventoryCheck,
     productChanges,
     productWillBeCreated,
     dryRun,
     imageImportError,
+    locationWasCreated,
   );
 };
 
@@ -682,13 +707,16 @@ async function handleMoveCase(
   productWillBeCreated: boolean,
   dryRun: boolean,
   imageImportError?: string,
+  locationWasCreated?: boolean,
 ): Promise<CSVImportResultItem> {
+  const locationNote = locationWasCreated ? " (location auto-created)" : "";
+
   if (dryRun) {
     return buildDryRunResult(base, "moved", {
       productChanges,
       productWillBeCreated,
       movedFrom: existingLocations,
-      message: `Will move from ${existingLocations.join(", ")}`,
+      message: `Will move from ${existingLocations.join(", ")}${locationNote}`,
     });
   }
 
@@ -704,7 +732,7 @@ async function handleMoveCase(
     return buildExecutionResult(
       base,
       "moved",
-      `Moved from ${fromLocations.join(", ")}`,
+      `Moved from ${fromLocations.join(", ")}${locationNote}`,
       fromLocations,
       imageImportError,
     );
@@ -714,7 +742,7 @@ async function handleMoveCase(
   return buildExecutionResult(
     base,
     "created",
-    undefined,
+    locationNote || undefined,
     undefined,
     imageImportError,
   );
@@ -739,7 +767,10 @@ async function handleInventoryResult(
   productWillBeCreated: boolean,
   dryRun: boolean,
   imageImportError?: string,
+  locationWasCreated?: boolean,
 ): Promise<CSVImportResultItem> {
+  const locationNote = locationWasCreated ? " (location auto-created)" : "";
+
   if (dryRun) {
     if (inventoryCheck.matches) {
       const productFieldChanges = buildFieldChanges(productChanges);
@@ -800,10 +831,15 @@ async function handleInventoryResult(
     newAmount,
   );
 
+  const message =
+    action === "updated"
+      ? `Updated existing entry quantity${locationNote}`
+      : locationNote || undefined;
+
   return buildExecutionResult(
     base,
     action,
-    action === "updated" ? "Updated existing entry quantity" : undefined,
+    message,
     undefined,
     imageImportError,
   );

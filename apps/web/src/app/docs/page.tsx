@@ -25,8 +25,6 @@ import {
   sampleLocations,
 } from "./_data/samples";
 import { wasm } from "~/lib/wasm";
-import { LocationPathDemo } from "./_components/LocationPathDemo";
-import { ComponentDemo } from "./_components/ComponentDemo";
 
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 
@@ -84,31 +82,18 @@ export default function DocsPage() {
           <code>{locationType.options.join(", ")}</code>
         </p>
 
-        <h4>CSV Path Format</h4>
+        <h4>CSV Format</h4>
         <p>
-          When importing/exporting via CSV or Google Sheets, locations are
-          represented as paths with optional type annotations in brackets:
+          When importing/exporting via CSV or Google Sheets, locations use a
+          simple name-based format. Each location has a unique{" "}
+          <code>location_name</code> and optionally references its parent via{" "}
+          <code>parent_name</code>.
         </p>
-        <pre className="bg-muted rounded-lg p-3 text-sm">
-          {`Garage > Chrome Shelf > Tool Bin[crate]`}
-        </pre>
         <p>
-          <strong>Default types:</strong> To keep paths clean, brackets are only
-          needed when a location&apos;s type differs from the default:
-        </p>
-        <ul>
-          <li>
-            Root level (first segment) defaults to <code>room</code>
-          </li>
-          <li>
-            All children default to <code>shelf</code>
-          </li>
-        </ul>
-        <p>
-          So <code>Garage &gt; Chrome Shelf</code> is equivalent to{" "}
-          <code>Garage[room] &gt; Chrome Shelf[shelf]</code>, but{" "}
-          <code>Tool Bin[crate]</code> needs brackets because{" "}
-          <code>crate ≠ shelf</code>.
+          <strong>Default types:</strong> Root locations (no parent) default to{" "}
+          <code>room</code>, and child locations default to <code>shelf</code>.
+          You can specify a different type via the <code>location_type</code>{" "}
+          column.
         </p>
 
         <h3>Recipes</h3>
@@ -255,13 +240,6 @@ export default function DocsPage() {
           </div>
         )}
       </EditableComponentDemo>
-
-      <ComponentDemo
-        title="LocationPathDemo"
-        description="Try building location hierarchies and see how they're formatted as CSV paths. Brackets only appear when a location's type differs from the default (root=room, children=shelf)."
-      >
-        <LocationPathDemo />
-      </ComponentDemo>
     </>
   );
 }

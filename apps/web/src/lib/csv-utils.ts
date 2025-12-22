@@ -4,6 +4,15 @@
 
 import Papa from "papaparse";
 import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
+import { locationType, type LocationType } from "~/schemas/location";
+
+/** Row from locations.csv */
+export interface LocationCSVRow {
+  location_name: string;
+  parent_name: string | null;
+  location_type: LocationType | null;
+  description: string | null;
+}
 
 /**
  * Convert any value to a CSV-safe string.
@@ -42,7 +51,7 @@ export function parseInventoryCSV(csvContent: string): InventoryCSVRow[] {
       upc: row.upc || row.barcode || undefined,
       model: row.model || undefined,
       ndb_number: row.ndb_number || row.ndbnumber || undefined,
-      location_path: row.location_path || row.location || undefined,
+      location_name: row.location_name || row.location || undefined,
       quantity: row.quantity || row.qty || 1,
       unit: row.unit || "each",
       expected_qty: row.expected_qty || row.expectedqty || undefined,
@@ -58,6 +67,39 @@ export function parseInventoryCSV(csvContent: string): InventoryCSVRow[] {
       throw new Error(`Failed to validate CSV row`);
     }
     rows.push(parsed.data);
+  }
+
+  return rows;
+}
+
+/**
+ * Parse locations CSV content into rows.
+ * Handles header normalization and field mapping.
+ */
+export function parseLocationsCSV(csvContent: string): LocationCSVRow[] {
+  const result = Papa.parse<Record<string, string>>(csvContent, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (header) =>
+      header.toLowerCase().trim().replace(/\s+/g, "_"),
+  });
+
+  if (result.errors.length > 0) {
+    console.error("CSV parse errors:", result.errors);
+    throw new Error("Failed to parse locations CSV file");
+  }
+
+  const rows: LocationCSVRow[] = [];
+  for (const row of result.data) {
+    const typeValue = row.location_type?.trim();
+    const parsedType = typeValue ? locationType.safeParse(typeValue) : null;
+
+    rows.push({
+      location_name: row.location_name?.trim() || "",
+      parent_name: row.parent_name?.trim() || null,
+      location_type: parsedType?.success ? parsedType.data : null,
+      description: row.description?.trim() || null,
+    });
   }
 
   return rows;

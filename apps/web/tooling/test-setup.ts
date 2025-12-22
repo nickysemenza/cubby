@@ -121,10 +121,8 @@ const remapDBConfig = (
 // CSV Seed Helper
 // ============================================================================
 
-import {
-  importInventoryFromCSV,
-  inventoryentryList,
-} from "../src/server/repo/inventory";
+// NOTE: We use dynamic imports for repo modules to avoid loading env.js
+// during vitest globalSetup phase (before test.env variables are applied)
 import {
   type InventoryCSVRow,
   type CSVImportResult,
@@ -159,7 +157,7 @@ export interface SeedResult {
  * @example
  * ```ts
  * const seed = await seedFromCSV(db, organizationId, [
- *   { product_name: "Flour", manufacturer: "Brand", location_path: "Pantry[room]", quantity: 5, unit: "lbs" },
+ *   { product_name: "Flour", manufacturer: "Brand", location_name: "Pantry", quantity: 5, unit: "lbs" },
  *   { product_name: "Blender", manufacturer: "KitchenAid" }, // product-only (no inventory)
  * ], actor);
  *
@@ -174,6 +172,28 @@ export async function seedFromCSV(
   rows: Array<Partial<InventoryCSVRow> & { product_name: string }>,
   actor: ActorContext,
 ): Promise<SeedResult> {
+  // Dynamic import to avoid loading env.js during globalSetup
+  const { importInventoryFromCSV, inventoryentryList } =
+    await import("../src/server/repo/inventory");
+  const { findOrCreateLocationByName } =
+    await import("../src/server/repo/location");
+
+  // Auto-create any locations referenced in the rows
+  const uniqueLocationNames = [
+    ...new Set(
+      rows.map((r) => r.location_name).filter((name): name is string => !!name),
+    ),
+  ];
+  for (const locationName of uniqueLocationNames) {
+    await findOrCreateLocationByName(
+      db,
+      organizationId,
+      locationName,
+      null, // parentId - test locations are roots
+      "room", // type - default to room for test locations
+    );
+  }
+
   // Apply defaults for convenience
   const normalizedRows: InventoryCSVRow[] = rows.map((row) => ({
     product_name: row.product_name,
