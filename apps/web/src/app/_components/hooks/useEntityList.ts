@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { type ColumnDef, type Table } from "@tanstack/react-table";
 import { type Entity } from "~/entities/types";
 import { entities } from "~/entities/entities";
@@ -156,30 +157,44 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     {},
   );
 
-  // Build columns array with standard columns
-  const columnHelper = createColumnHelper<TData>() as ColumnHelper<TData>;
-  const allColumns: AnyColumnDef<TData>[] = [];
+  // Build columns array with standard columns - memoized to prevent infinite re-renders
+  // Note: mappingsMap is only included in deps when actually used (hasUnitMappings && getMappings)
+  // to avoid re-renders from useAsyncMemo returning new {} references
+  const allColumns = useMemo(() => {
+    const columnHelper = createColumnHelper<TData>() as ColumnHelper<TData>;
+    const cols: AnyColumnDef<TData>[] = [];
 
-  // Prepend standard columns
-  if (standardColumns.includes("image")) {
-    allColumns.push(createImageColumn(columnHelper));
-  }
-  if (standardColumns.includes("name")) {
-    allColumns.push(createNameColumn(columnHelper, entity));
-  }
+    // Prepend standard columns
+    if (standardColumns.includes("image")) {
+      cols.push(createImageColumn(columnHelper));
+    }
+    if (standardColumns.includes("name")) {
+      cols.push(createNameColumn(columnHelper, entity));
+    }
 
-  // Add custom columns
-  allColumns.push(...customColumns);
+    // Add custom columns
+    cols.push(...customColumns);
 
-  // Append unit mappings column if configured
-  if (hasUnitMappings && getMappings) {
-    allColumns.push(createUnitMappingsColumn(columnHelper, mappingsMap));
-  }
+    // Append unit mappings column if configured
+    if (hasUnitMappings && getMappings) {
+      cols.push(createUnitMappingsColumn(columnHelper, mappingsMap));
+    }
 
-  // Append createdAt column
-  if (standardColumns.includes("createdAt")) {
-    allColumns.push(createCreatedAtColumn(columnHelper));
-  }
+    // Append createdAt column
+    if (standardColumns.includes("createdAt")) {
+      cols.push(createCreatedAtColumn(columnHelper));
+    }
+
+    return cols;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mappingsMap only matters when hasUnitMappings && getMappings
+  }, [
+    customColumns,
+    entity,
+    getMappings,
+    hasUnitMappings,
+    standardColumns,
+    hasUnitMappings && getMappings ? mappingsMap : null,
+  ]);
 
   // Configure the table
   const table = useTableConfig({
@@ -191,8 +206,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     onGlobalFilterChange,
   });
 
-  // Expand filter definitions
-  const filterableColumns = filters.map(expandFilterDef);
+  // Expand filter definitions - memoized to prevent unnecessary re-renders
+  const filterableColumns = useMemo(
+    () => filters.map(expandFilterDef),
+    [filters],
+  );
 
   return {
     table,

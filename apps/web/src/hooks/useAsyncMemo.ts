@@ -1,7 +1,32 @@
-import { useState, useEffect, type DependencyList } from "react";
+import { useState, useEffect, useRef, type DependencyList } from "react";
 
 export interface CancellationSignal {
   cancelled: boolean;
+}
+
+/**
+ * Check if two values are equivalent for the purpose of avoiding re-renders.
+ * Handles empty objects/arrays specially to prevent unnecessary updates.
+ */
+function isEquivalent<T>(a: T, b: T): boolean {
+  // Same reference
+  if (a === b) return true;
+
+  // Both are empty objects
+  if (
+    typeof a === "object" &&
+    a !== null &&
+    typeof b === "object" &&
+    b !== null &&
+    !Array.isArray(a) &&
+    !Array.isArray(b) &&
+    Object.keys(a).length === 0 &&
+    Object.keys(b).length === 0
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -33,6 +58,7 @@ export function useAsyncMemo<T>(
   initialValue: T,
 ): T {
   const [value, setValue] = useState<T>(initialValue);
+  const valueRef = useRef<T>(initialValue);
 
   useEffect(() => {
     const signal: CancellationSignal = { cancelled: false };
@@ -40,7 +66,12 @@ export function useAsyncMemo<T>(
     void (async () => {
       const result = await asyncFn(signal);
       if (!signal.cancelled) {
-        setValue(result);
+        // Only update state if the result is meaningfully different
+        // This prevents re-renders when returning equivalent empty objects
+        if (!isEquivalent(valueRef.current, result)) {
+          valueRef.current = result;
+          setValue(result);
+        }
       }
     })();
 
