@@ -145,13 +145,9 @@ export const productChangesPreview = z.object({
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
 
 // Field change for displaying diffs
-export const fieldChange = z.object({
-  field: z.string(),
-  from: z.unknown(),
-  to: z.unknown(),
-});
-
-export type FieldChange = z.infer<typeof fieldChange>;
+// Re-exported from shared csv types for backward compatibility
+import { fieldChange } from "./csv";
+export { fieldChange, type FieldChange } from "./csv";
 
 // Result types for CSV import (and push preview)
 export const csvImportResultItem = z.object({

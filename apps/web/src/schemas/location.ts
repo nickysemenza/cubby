@@ -105,6 +105,8 @@ export const collectInfiniteParents = (location: InfLocation) => {
 // Location CSV Import/Export Schemas
 // ============================================================================
 
+import { fieldChange, type FieldChange } from "./csv";
+
 /**
  * CSV row schema for location import/export
  * Uses location_name (unique) and parent_name instead of hierarchical paths
@@ -121,14 +123,11 @@ export type LocationCSVRow = z.infer<typeof locationCSVRow>;
 
 /**
  * Field change for displaying diffs in location sync
+ * @deprecated Use FieldChange from schemas/csv.ts instead
  */
-export const locationFieldChange = z.object({
-  field: z.string(),
-  from: z.unknown(),
-  to: z.unknown(),
-});
+export const locationFieldChange = fieldChange;
 
-export type LocationFieldChange = z.infer<typeof locationFieldChange>;
+export type LocationFieldChange = FieldChange;
 
 /**
  * Individual result item for location CSV import

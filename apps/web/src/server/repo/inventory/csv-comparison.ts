@@ -9,26 +9,16 @@ import {
   type InventoryCSVRow,
   type CSVImportResult,
   type CSVImportResultItem,
-  type FieldChange,
 } from "~/schemas/inventory";
+import { type FieldChange, INVENTORY_CSV_ACTIONS } from "~/schemas/csv";
 import type { InventoryCSVExportRow } from "./types";
 import {
-  createResultCounters,
-  buildImportResult,
-  pushResultItem,
-} from "./csv-result-helpers";
-import { type InventoryId, type ProductId } from "~/schemas/identifiers";
-import {
+  createComparisonFunction,
+  normalizeForComparison,
   normalizeManufacturer,
   manufacturersMatch,
-} from "~/lib/manufacturer-utils";
-
-/**
- * Normalize a location name for comparison (lowercase, trimmed)
- */
-function normalizeLocationName(name: string): string {
-  return name.toLowerCase().trim();
-}
+} from "~/server/repo/csv";
+import { type InventoryId, type ProductId } from "~/schemas/identifiers";
 
 /**
  * Create a unique key for inventory comparison (product + manufacturer + location)
@@ -40,7 +30,7 @@ export function makeInventoryKey(
   manufacturer: string | null | undefined,
   locationName: string,
 ): string {
-  return `${productName.toLowerCase()}|${normalizeManufacturer(manufacturer).toLowerCase()}|${normalizeLocationName(locationName)}`;
+  return `${productName.toLowerCase()}|${normalizeManufacturer(manufacturer).toLowerCase()}|${normalizeForComparison(locationName)}`;
 }
 
 /**
@@ -51,7 +41,7 @@ function makeProductLocationKey(
   productName: string,
   locationName: string,
 ): string {
-  return `${productName.toLowerCase()}|${normalizeLocationName(locationName)}`;
+  return `${productName.toLowerCase()}|${normalizeForComparison(locationName)}`;
 }
 
 /**
@@ -67,8 +57,8 @@ export function getRowDifferences(
   const changes: FieldChange[] = [];
 
   // Compare location_name using normalized comparison (lowercase, trimmed)
-  const normalizedAppName = normalizeLocationName(appRow.location_name);
-  const normalizedSheetName = normalizeLocationName(
+  const normalizedAppName = normalizeForComparison(appRow.location_name);
+  const normalizedSheetName = normalizeForComparison(
     sheetRow.location_name ?? "",
   );
   if (normalizedAppName !== normalizedSheetName) {
@@ -161,6 +151,86 @@ export function getRowDifferences(
 }
 
 /**
+ * Internal comparison function using shared framework
+ *
+ * Uses fuzzy manufacturer matching: "(unspecified)" matches any manufacturer.
+ */
+const compareInventoryInternal = createComparisonFunction<
+  InventoryCSVExportRow,
+  InventoryCSVRow,
+  CSVImportResultItem,
+  (typeof INVENTORY_CSV_ACTIONS)[number]
+>({
+  actions: INVENTORY_CSV_ACTIONS,
+
+  // Use product+location as key (ignoring manufacturer for initial lookup)
+  getSheetKey: (row) =>
+    makeProductLocationKey(row.product_name, row.location_name ?? ""),
+  getAppKey: (row) =>
+    makeProductLocationKey(row.product_name, row.location_name),
+
+  // Custom matching with fuzzy manufacturer logic
+  findMatch: (appRow, candidates, matchedIndices, allSheetRows) => {
+    for (const candidate of candidates) {
+      const sheetIndex = allSheetRows.indexOf(candidate);
+
+      // Skip already matched rows
+      if (matchedIndices.has(sheetIndex)) continue;
+
+      // Check if manufacturers are compatible
+      if (manufacturersMatch(appRow.manufacturer, candidate.manufacturer)) {
+        return { row: candidate, index: sheetIndex };
+      }
+    }
+    return undefined;
+  },
+
+  getDifferences: getRowDifferences,
+
+  buildCreatedItem: (rowIndex, appRow) => ({
+    rowIndex,
+    action: "created",
+    productName: appRow.product_name,
+    productId: appRow.product_id,
+    locationName: appRow.location_name,
+    locationId: appRow.location_id ?? undefined,
+    message: "Will be added to sheet",
+  }),
+
+  buildUpdatedItem: (rowIndex, appRow, fieldChanges) => ({
+    rowIndex,
+    action: "updated",
+    productName: appRow.product_name,
+    productId: appRow.product_id,
+    locationName: appRow.location_name,
+    locationId: appRow.location_id ?? undefined,
+    fieldChanges,
+  }),
+
+  buildSkippedItem: (rowIndex, appRow) => ({
+    rowIndex,
+    action: "skipped",
+    productName: appRow.product_name,
+    productId: appRow.product_id,
+    locationName: appRow.location_name,
+    locationId: appRow.location_id ?? undefined,
+  }),
+
+  buildRemovedItem: (sheetRow) => ({
+    rowIndex: -1,
+    action: "removed",
+    productName: sheetRow.product_name,
+    locationName: sheetRow.location_name ?? undefined,
+    message: "Will be removed from sheet",
+  }),
+
+  createdAction: "created",
+  updatedAction: "updated",
+  skippedAction: "skipped",
+  removedAction: "removed",
+});
+
+/**
  * Compare app inventory rows with sheet rows to generate a diff preview
  *
  * Used by push preview to show what changes would be made to the sheet,
@@ -172,108 +242,19 @@ export function compareInventoryForPush(
   appRows: InventoryCSVExportRow[],
   sheetRows: InventoryCSVRow[],
 ): CSVImportResult {
-  const items: CSVImportResultItem[] = [];
-  const counters = createResultCounters();
+  const result = compareInventoryInternal(appRows, sheetRows);
 
-  // Build a map of sheet rows by product+location key (ignoring manufacturer for lookup)
-  // Each key may have multiple rows with different manufacturers
-  const sheetByProductLocation = new Map<string, InventoryCSVRow[]>();
-  for (const row of sheetRows) {
-    const plKey = makeProductLocationKey(
-      row.product_name,
-      row.location_name ?? "",
-    );
-    const existing = sheetByProductLocation.get(plKey) ?? [];
-    existing.push(row);
-    sheetByProductLocation.set(plKey, existing);
-  }
-
-  // Track which sheet rows we've matched (by index in original array)
-  const matchedSheetIndices = new Set<number>();
-
-  // Compare app rows against sheet
-  for (let i = 0; i < appRows.length; i++) {
-    const appRow = appRows[i];
-    const plKey = makeProductLocationKey(
-      appRow.product_name,
-      appRow.location_name,
-    );
-
-    // Find sheet rows with same product+location
-    const candidates = sheetByProductLocation.get(plKey) ?? [];
-
-    // Find a matching row (manufacturer must be compatible)
-    let matchedSheetRow: InventoryCSVRow | undefined;
-    let matchedSheetIndex = -1;
-
-    for (let j = 0; j < candidates.length; j++) {
-      const candidate = candidates[j];
-      const sheetIndex = sheetRows.indexOf(candidate);
-
-      // Skip already matched rows
-      if (matchedSheetIndices.has(sheetIndex)) continue;
-
-      // Check if manufacturers are compatible
-      if (manufacturersMatch(appRow.manufacturer, candidate.manufacturer)) {
-        matchedSheetRow = candidate;
-        matchedSheetIndex = sheetIndex;
-        break;
-      }
-    }
-
-    if (!matchedSheetRow) {
-      // New row - doesn't exist in sheet
-      pushResultItem(items, counters, "created", {
-        rowIndex: i,
-        productName: appRow.product_name,
-        productId: appRow.product_id,
-        locationName: appRow.location_name,
-        locationId: appRow.location_id ?? undefined,
-        message: "Will be added to sheet",
-      });
-    } else {
-      // Mark this sheet row as matched
-      matchedSheetIndices.add(matchedSheetIndex);
-
-      // Row exists - check if different
-      const fieldChanges = getRowDifferences(appRow, matchedSheetRow);
-
-      if (fieldChanges.length > 0) {
-        pushResultItem(items, counters, "updated", {
-          rowIndex: i,
-          productName: appRow.product_name,
-          productId: appRow.product_id,
-          locationName: appRow.location_name,
-          locationId: appRow.location_id ?? undefined,
-          fieldChanges,
-        });
-      } else {
-        pushResultItem(items, counters, "skipped", {
-          rowIndex: i,
-          productName: appRow.product_name,
-          productId: appRow.product_id,
-          locationName: appRow.location_name,
-          locationId: appRow.location_id ?? undefined,
-        });
-      }
-    }
-  }
-
-  // Find rows in sheet that weren't matched (will be removed)
-  // Note: removed items don't have productId since they only exist in the sheet
-  for (let i = 0; i < sheetRows.length; i++) {
-    if (!matchedSheetIndices.has(i)) {
-      const sheetRow = sheetRows[i];
-      pushResultItem(items, counters, "removed", {
-        rowIndex: -1, // Not in app
-        productName: sheetRow.product_name,
-        locationName: sheetRow.location_name ?? undefined,
-        message: "Will be removed from sheet",
-      });
-    }
-  }
-
-  return buildImportResult(counters, items);
+  // Map to CSVImportResult format (legacy counter names)
+  return {
+    created: result.created,
+    moved: result.moved,
+    updated: result.updated,
+    skipped: result.skipped,
+    errors: result.error,
+    productOnly: result.product_only,
+    removed: result.removed > 0 ? result.removed : undefined,
+    items: result.items,
+  };
 }
 
 /**
@@ -375,12 +356,12 @@ export function findRemovedInventoryForPull(
     const candidates = sheetProductsByName.get(nameKey);
     if (!candidates) return false;
 
-    const normalizedLocation = normalizeLocationName(locationName);
+    const normalizedLocation = normalizeForComparison(locationName);
     return candidates.some(
       (c) =>
         manufacturersMatch(manufacturer, c.manufacturer) &&
         c.locationName &&
-        normalizeLocationName(c.locationName) === normalizedLocation,
+        normalizeForComparison(c.locationName) === normalizedLocation,
     );
   };
 

@@ -19,16 +19,10 @@ import {
   previewLocationImages,
   locationHasImages,
 } from "~/server/repo/inventory/csv-import/image-handler";
+import { createLocationCounters, incrementCounter } from "~/server/repo/csv";
 
 interface ImportOptions {
   dryRun: boolean;
-}
-
-interface ResultCounters {
-  created: number;
-  updated: number;
-  skipped: number;
-  errors: number;
 }
 
 /**
@@ -241,12 +235,7 @@ export const importLocationsFromCSV = async (
   rows: LocationCSVRow[],
   options: ImportOptions,
 ): Promise<LocationCSVImportResult> => {
-  const counters: ResultCounters = {
-    created: 0,
-    updated: 0,
-    skipped: 0,
-    errors: 0,
-  };
+  const counters = createLocationCounters();
   const items: LocationCSVImportResultItem[] = [];
 
   // Sort rows so parents are processed before children
@@ -268,28 +257,17 @@ export const importLocationsFromCSV = async (
     );
 
     items.push(result);
-
-    switch (result.action) {
-      case "created":
-        counters.created++;
-        break;
-      case "updated":
-        counters.updated++;
-        break;
-      case "skipped":
-        counters.skipped++;
-        break;
-      case "error":
-        counters.errors++;
-        break;
-    }
+    incrementCounter(counters, result.action);
   }
 
   // Re-sort items by original row index for display
   items.sort((a, b) => a.rowIndex - b.rowIndex);
 
   return {
-    ...counters,
+    created: counters.created,
+    updated: counters.updated,
+    skipped: counters.skipped,
+    errors: counters.error,
     items,
   };
 };

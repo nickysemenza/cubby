@@ -30,10 +30,10 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
 import {
   createResultCounters,
-  incrementCounter,
+  incrementLegacyCounter,
   buildImportResult,
   pushErrorItem,
-} from "../csv-result-helpers";
+} from "~/server/repo/csv";
 
 // Re-export utilities that may be used externally
 export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
@@ -73,7 +73,7 @@ export const importInventoryFromCSV = async (
       );
 
       items.push(result);
-      incrementCounter(counters, result.action);
+      incrementLegacyCounter(counters, result.action);
 
       // Log audit entries for actual changes (not dry run)
       if (!dryRun && result.productId) {

@@ -9,16 +9,13 @@ import {
   type LocationCSVRow,
   type LocationCSVImportResult,
   type LocationCSVImportResultItem,
-  type LocationFieldChange,
 } from "~/schemas/location";
+import { type FieldChange, LOCATION_CSV_ACTIONS } from "~/schemas/csv";
 import { type LocationCSVExportRow } from "./types";
-
-/**
- * Normalize a location name for comparison (lowercase, trimmed)
- */
-function normalizeName(name: string): string {
-  return name.toLowerCase().trim();
-}
+import {
+  createComparisonFunction,
+  normalizeForComparison,
+} from "~/server/repo/csv";
 
 /**
  * Compare two location rows and return structured field changes
@@ -26,8 +23,8 @@ function normalizeName(name: string): string {
 export function getLocationRowDifferences(
   appRow: LocationCSVExportRow,
   sheetRow: LocationCSVRow,
-): LocationFieldChange[] {
-  const changes: LocationFieldChange[] = [];
+): FieldChange[] {
+  const changes: FieldChange[] = [];
 
   // Compare parent_name
   const appParent = appRow.parent_name?.toLowerCase().trim() ?? null;
@@ -78,6 +75,58 @@ export function getLocationRowDifferences(
 }
 
 /**
+ * Internal comparison function using shared framework
+ */
+const compareLocationsInternal = createComparisonFunction<
+  LocationCSVExportRow,
+  LocationCSVRow,
+  LocationCSVImportResultItem,
+  (typeof LOCATION_CSV_ACTIONS)[number]
+>({
+  actions: LOCATION_CSV_ACTIONS,
+
+  getSheetKey: (row) => normalizeForComparison(row.location_name),
+  getAppKey: (row) => normalizeForComparison(row.location_name),
+
+  getDifferences: getLocationRowDifferences,
+
+  buildCreatedItem: (rowIndex, appRow) => ({
+    rowIndex,
+    action: "created",
+    locationName: appRow.location_name,
+    locationId: appRow.location_id,
+    message: "Will be added to sheet",
+  }),
+
+  buildUpdatedItem: (rowIndex, appRow, fieldChanges) => ({
+    rowIndex,
+    action: "updated",
+    locationName: appRow.location_name,
+    locationId: appRow.location_id,
+    fieldChanges,
+  }),
+
+  buildSkippedItem: (rowIndex, appRow) => ({
+    rowIndex,
+    action: "skipped",
+    locationName: appRow.location_name,
+    locationId: appRow.location_id,
+  }),
+
+  buildRemovedItem: (sheetRow) => ({
+    rowIndex: -1,
+    action: "removed",
+    locationName: sheetRow.location_name,
+    message: "Will be removed from sheet",
+  }),
+
+  createdAction: "created",
+  updatedAction: "updated",
+  skippedAction: "skipped",
+  removedAction: "removed",
+});
+
+/**
  * Compare app location rows with sheet rows to generate a diff preview
  *
  * Used by push preview to show what changes would be made to the Locations sheet.
@@ -87,83 +136,15 @@ export function compareLocationsForPush(
   appRows: LocationCSVExportRow[],
   sheetRows: LocationCSVRow[],
 ): LocationCSVImportResult {
-  const items: LocationCSVImportResultItem[] = [];
-  const counters = {
-    created: 0,
-    updated: 0,
-    skipped: 0,
-    errors: 0,
-    removed: 0,
-  };
+  const result = compareLocationsInternal(appRows, sheetRows);
 
-  // Build a map of sheet rows by normalized name
-  const sheetByName = new Map<string, LocationCSVRow>();
-  for (const row of sheetRows) {
-    sheetByName.set(normalizeName(row.location_name), row);
-  }
-
-  // Track which sheet names we've matched
-  const matchedSheetNames = new Set<string>();
-
-  // Compare app rows against sheet
-  for (let i = 0; i < appRows.length; i++) {
-    const appRow = appRows[i];
-    const normalizedName = normalizeName(appRow.location_name);
-    const sheetRow = sheetByName.get(normalizedName);
-
-    if (!sheetRow) {
-      // New location - doesn't exist in sheet
-      items.push({
-        rowIndex: i,
-        action: "created",
-        locationName: appRow.location_name,
-        locationId: appRow.location_id,
-        message: "Will be added to sheet",
-      });
-      counters.created++;
-    } else {
-      matchedSheetNames.add(normalizedName);
-
-      // Location exists - check if different
-      const fieldChanges = getLocationRowDifferences(appRow, sheetRow);
-
-      if (fieldChanges.length > 0) {
-        items.push({
-          rowIndex: i,
-          action: "updated",
-          locationName: appRow.location_name,
-          locationId: appRow.location_id,
-          fieldChanges,
-        });
-        counters.updated++;
-      } else {
-        items.push({
-          rowIndex: i,
-          action: "skipped",
-          locationName: appRow.location_name,
-          locationId: appRow.location_id,
-        });
-        counters.skipped++;
-      }
-    }
-  }
-
-  // Find locations in sheet that weren't matched (will be removed)
-  for (const sheetRow of sheetRows) {
-    const normalizedName = normalizeName(sheetRow.location_name);
-    if (!matchedSheetNames.has(normalizedName)) {
-      items.push({
-        rowIndex: -1,
-        action: "removed",
-        locationName: sheetRow.location_name,
-        message: "Will be removed from sheet",
-      });
-      counters.removed++;
-    }
-  }
-
+  // Map to LocationCSVImportResult format
   return {
-    ...counters,
-    items,
+    created: result.created,
+    updated: result.updated,
+    skipped: result.skipped,
+    errors: result.error,
+    removed: result.removed > 0 ? result.removed : undefined,
+    items: result.items,
   };
 }
