@@ -24,8 +24,8 @@ const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
           overlap=false;
           sep="+10";
           bgcolor="transparent";
-          node [fontsize=11, fontname="sans-serif", shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#64748b"];
-          edge [fontsize=9, fontname="sans-serif", color="#475569", penwidth=1.5, len=1.5];
+          node [fontsize=9, fontname="sans-serif", shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#64748b"];
+          edge [fontsize=7, fontname="sans-serif", color="#475569", penwidth=1.2, len=1.2];
         `,
       );
       return { graph, error: null };
@@ -53,13 +53,13 @@ const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
   }
 
   return (
-    <div className="overflow-auto rounded border bg-slate-50 p-2">
+    <div className="overflow-auto rounded border bg-slate-50 p-1">
       <Graphviz
         dot={graphResult.graph}
         options={{
           fit: true,
-          width: 380,
-          height: 280,
+          width: 220,
+          height: 140,
           zoom: true,
           useWorker: false,
         }}
