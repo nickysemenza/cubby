@@ -2,7 +2,7 @@
 
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ProductPillLink,
   LocationPillLink,
@@ -28,15 +28,19 @@ export default function ImageList() {
   // Set up table state
   const tableState = useTableState({ initialSort: "createdAt" });
 
-  // Set up search
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  // Set up search - track input value and debounced value separately
+  const [searchInput, setSearchInput] = useState<string>("");
+  const debouncedSearchQuery = useDebounce(searchInput, 300);
+  const isFirstRender = useRef(true);
 
-  // Create debounced search function
-  const debouncedSearch = useDebounce((value: string) => {
-    setSearchQuery(value);
-    // Reset to first page on search
+  // Reset to first page when debounced search changes (but not on initial render)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     tableState.setPagination({ ...tableState.pagination, pageIndex: 0 });
-  }, 300);
+  }, [debouncedSearchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Query for images using the new list endpoint
   const {
@@ -46,7 +50,7 @@ export default function ImageList() {
   } = useQuery(
     api.image.list.queryOptions({
       filters: {
-        searchFilter: searchQuery || undefined,
+        searchFilter: debouncedSearchQuery || undefined,
       },
       sort: {
         orderBy: tableState.sorting[0]?.id || "createdAt",
@@ -169,7 +173,7 @@ export default function ImageList() {
   });
 
   // Show empty state when no images
-  if (!isLoading && (!data || data.length === 0) && !searchQuery) {
+  if (!isLoading && (!data || data.length === 0) && !searchInput) {
     return <NoneState />;
   }
 
@@ -179,7 +183,8 @@ export default function ImageList() {
         <Input
           placeholder="Search images..."
           className="max-w-sm"
-          onChange={(e) => debouncedSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
       </div>
 
