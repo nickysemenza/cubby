@@ -5,10 +5,13 @@ import {
   type UPCLookupResponse,
 } from "@recipehub/upc-lookup/schemas";
 
+const DEFAULT_TIMEOUT_MS = 5000;
+
 export class UPCLookupClient {
   constructor(
     private baseUrl: string,
     private apiKey?: string,
+    private timeoutMs: number = DEFAULT_TIMEOUT_MS,
   ) {}
 
   private getHeaders(): Record<string, string> {
@@ -50,27 +53,39 @@ export class UPCLookupClient {
     return this.traced("lookup", async () => {
       const url = new URL(`/lookup/${upc}`, this.baseUrl);
 
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: this.getHeaders(),
-      });
+      try {
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          headers: this.getHeaders(),
+          signal: AbortSignal.timeout(this.timeoutMs),
+        });
 
-      if (!res.ok) {
-        console.warn(
-          `[UPC Lookup] Failed for ${upc}: ${res.status} ${res.statusText}`,
-        );
+        if (!res.ok) {
+          console.warn(
+            `[UPC Lookup] Failed for ${upc}: ${res.status} ${res.statusText}`,
+          );
+          return null;
+        }
+
+        const data = await res.json();
+        const parsed = upcLookupResponseSchema.safeParse(data);
+
+        if (!parsed.success) {
+          console.warn("[UPC Lookup] Response parse error:", parsed.error);
+          return null;
+        }
+
+        return parsed.data;
+      } catch (error) {
+        if (error instanceof Error && error.name === "TimeoutError") {
+          console.warn(
+            `[UPC Lookup] Timeout for ${upc} after ${this.timeoutMs}ms`,
+          );
+        } else {
+          console.warn(`[UPC Lookup] Error for ${upc}:`, error);
+        }
         return null;
       }
-
-      const data = await res.json();
-      const parsed = upcLookupResponseSchema.safeParse(data);
-
-      if (!parsed.success) {
-        console.warn("[UPC Lookup] Response parse error:", parsed.error);
-        return null;
-      }
-
-      return parsed.data;
     });
   }
 
@@ -83,17 +98,25 @@ export class UPCLookupClient {
       url.searchParams.set("q", query);
       url.searchParams.set("limit", String(limit));
 
-      const res = await fetch(url.toString(), {
-        method: "GET",
-        headers: this.getHeaders(),
-      });
+      try {
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          headers: this.getHeaders(),
+          signal: AbortSignal.timeout(this.timeoutMs),
+        });
 
-      if (!res.ok) {
+        if (!res.ok) {
+          return { products: [], total: 0 };
+        }
+
+        const data = await res.json();
+        return data as { products: UPCLookupResponse[]; total: number };
+      } catch (error) {
+        if (error instanceof Error && error.name === "TimeoutError") {
+          console.warn(`[UPC Lookup] Search timeout after ${this.timeoutMs}ms`);
+        }
         return { products: [], total: 0 };
       }
-
-      const data = await res.json();
-      return data as { products: UPCLookupResponse[]; total: number };
     });
   }
 }

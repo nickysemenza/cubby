@@ -21,8 +21,11 @@ import {
   ExternalLink,
   Unlink,
   Bug,
+  ImagePlus,
+  Barcode,
 } from "lucide-react";
 import Link from "next/link";
+import { Badge } from "~/components/ui/badge";
 
 export default function IntegrationsPage() {
   const api = useTRPC();
@@ -270,6 +273,122 @@ export default function IntegrationsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* UPC Image Sync Card */}
+      <UPCImageSyncCard />
     </div>
+  );
+}
+
+function UPCImageSyncCard() {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  // Get count of products that need images
+  const { data: countData, isLoading: countLoading } = useQuery(
+    api.product.getUPCImageBackfillCount.queryOptions(),
+  );
+
+  // Backfill mutation
+  const backfillMutation = useMutation(
+    api.product.backfillUPCImages.mutationOptions({
+      onSuccess: (result) => {
+        if (result.imported > 0) {
+          toast.success(
+            `Imported ${result.imported} image${result.imported !== 1 ? "s" : ""}`,
+          );
+        } else if (result.found === 0) {
+          toast.info("No products need UPC images");
+        } else {
+          toast.info(`No images found for ${result.skipped} product(s)`);
+        }
+        // Refresh the count
+        queryClient.invalidateQueries({
+          queryKey: api.product.getUPCImageBackfillCount.queryKey(),
+        });
+        // Also refresh product list to show new images
+        queryClient.invalidateQueries({
+          queryKey: api.product.list.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  const count = countData?.count ?? 0;
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Barcode className="h-5 w-5" />
+          UPC Image Lookup
+        </CardTitle>
+        <CardDescription>
+          Automatically fetch product images from UPC codes using the product
+          database.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              Products with UPC but no image
+            </p>
+            <p className="text-muted-foreground text-xs">
+              These products have a UPC code but are missing images
+            </p>
+          </div>
+          {countLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Badge variant={count > 0 ? "default" : "secondary"}>{count}</Badge>
+          )}
+        </div>
+
+        {count > 0 && (
+          <Button
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+            className="w-full"
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fetching images...
+              </>
+            ) : (
+              <>
+                <ImagePlus className="mr-2 h-4 w-4" />
+                Fetch Missing Images
+              </>
+            )}
+          </Button>
+        )}
+
+        {backfillMutation.data && (
+          <div className="bg-muted/50 rounded-md border p-3 text-xs">
+            <p className="font-medium">Last run results:</p>
+            <ul className="text-muted-foreground mt-1 space-y-0.5">
+              <li>Found: {backfillMutation.data.found} products</li>
+              <li>Imported: {backfillMutation.data.imported} images</li>
+              {backfillMutation.data.skipped > 0 && (
+                <li>
+                  Skipped: {backfillMutation.data.skipped} (no image available)
+                </li>
+              )}
+              {backfillMutation.data.failed > 0 && (
+                <li className="text-red-600">
+                  Failed: {backfillMutation.data.failed}
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

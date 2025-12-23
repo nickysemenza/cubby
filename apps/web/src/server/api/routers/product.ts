@@ -20,7 +20,11 @@ import {
   type ProductId,
   unsafeProductId,
 } from "~/schemas/identifiers";
-import { findProductByUPC, quickCreateProduct } from "~/server/repo/product";
+import {
+  findProductByUPC,
+  quickCreateProduct,
+  findProductsWithUPCNoImages,
+} from "~/server/repo/product";
 import { upc } from "@recipehub/usda-schemas";
 import {
   UNSPECIFIED_MANUFACTURER,
@@ -224,6 +228,116 @@ const findOrCreateByUPC = protectedProcedure
     );
   });
 
+// Backfill UPC images for products that have a UPC but no images
+const backfillUPCImages = protectedProcedure
+  .output(
+    z.object({
+      found: z.number(),
+      imported: z.number(),
+      failed: z.number(),
+      skipped: z.number(),
+      details: z.array(
+        z.object({
+          productId: z.string(),
+          productName: z.string(),
+          upc: z.string(),
+          status: z.enum(["imported", "failed", "skipped"]),
+          error: z.string().optional(),
+        }),
+      ),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    // Find all products with UPC but without images
+    const productsWithUPCNoImages = await findProductsWithUPCNoImages(
+      ctx.db,
+      ctx.organizationId,
+    );
+
+    const details: Array<{
+      productId: string;
+      productName: string;
+      upc: string;
+      status: "imported" | "failed" | "skipped";
+      error?: string;
+    }> = [];
+
+    let imported = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    // Process in parallel batches of 10
+    const BATCH_SIZE = 10;
+    for (let i = 0; i < productsWithUPCNoImages.length; i += BATCH_SIZE) {
+      const batch = productsWithUPCNoImages.slice(i, i + BATCH_SIZE);
+
+      const batchResults = await Promise.all(
+        batch.map(async (p) => {
+          try {
+            const result = await importImageFromUPC(
+              ctx.db,
+              ctx.organizationId,
+              ctx.upcLookupClient,
+              p.upc,
+              unsafeProductId(p.id),
+            );
+
+            if (result) {
+              return {
+                productId: p.id,
+                productName: p.name,
+                upc: p.upc,
+                status: "imported" as const,
+              };
+            } else {
+              return {
+                productId: p.id,
+                productName: p.name,
+                upc: p.upc,
+                status: "skipped" as const,
+                error: "No image found in UPC lookup",
+              };
+            }
+          } catch (error) {
+            return {
+              productId: p.id,
+              productName: p.name,
+              upc: p.upc,
+              status: "failed" as const,
+              error: error instanceof Error ? error.message : "Unknown error",
+            };
+          }
+        }),
+      );
+
+      for (const result of batchResults) {
+        details.push(result);
+        if (result.status === "imported") imported++;
+        else if (result.status === "skipped") skipped++;
+        else failed++;
+      }
+    }
+
+    return {
+      found: productsWithUPCNoImages.length,
+      imported,
+      failed,
+      skipped,
+      details,
+    };
+  });
+
+// Get count of products with UPC but no images (for UI preview)
+const getUPCImageBackfillCount = protectedProcedure
+  .output(z.object({ count: z.number() }))
+  .query(async ({ ctx }) => {
+    const products = await findProductsWithUPCNoImages(
+      ctx.db,
+      ctx.organizationId,
+    );
+    return { count: products.length };
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   list,
@@ -231,4 +345,6 @@ export const productRouter = createTRPCRouter({
   update,
   quickCreate,
   findOrCreateByUPC,
+  backfillUPCImages,
+  getUPCImageBackfillCount,
 });

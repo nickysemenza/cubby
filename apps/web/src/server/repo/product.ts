@@ -53,7 +53,7 @@ import {
   image,
   productImage,
 } from "~/server/db/schema";
-import { eq, and, count, ilike, inArray } from "drizzle-orm";
+import { eq, and, count, ilike, inArray, isNotNull, isNull } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
 
@@ -827,4 +827,71 @@ export const deleteProduct = async (
     entityId: id,
     action: "delete",
   });
+};
+
+/**
+ * Find all products that have a UPC but no UPC-fetched image.
+ * Products may have other images (user-uploaded), but are missing the UPC image.
+ * Used for UPC image backfill functionality.
+ */
+export const findProductsWithUPCNoImages = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<Array<{ id: string; name: string; upc: string }>> => {
+  const dbClient = getDb(db);
+
+  // Get all products with UPCs and their images in a single query
+  const productsWithImages = await dbClient
+    .select({
+      id: product.id,
+      name: product.name,
+      upc: product.upc,
+      imageUrl: image.url,
+    })
+    .from(product)
+    .leftJoin(productImage, eq(productImage.productId, product.id))
+    .leftJoin(image, eq(productImage.imageId, image.id))
+    .where(
+      and(
+        eq(product.organizationId, organizationId),
+        isNotNull(product.upc),
+        isNull(product.deletedAt),
+      ),
+    );
+
+  // Group by product and check for UPC images
+  const productMap = new Map<
+    string,
+    { name: string; upc: string; hasUPCImage: boolean }
+  >();
+
+  for (const row of productsWithImages) {
+    if (!row.upc) continue;
+
+    const existing = productMap.get(row.id);
+    const isUPCImage = row.imageUrl?.includes("/upc-") ?? false;
+
+    if (existing) {
+      // Update if this row has a UPC image
+      if (isUPCImage) {
+        existing.hasUPCImage = true;
+      }
+    } else {
+      productMap.set(row.id, {
+        name: row.name,
+        upc: row.upc,
+        hasUPCImage: isUPCImage,
+      });
+    }
+  }
+
+  // Return products without UPC images
+  const results: Array<{ id: string; name: string; upc: string }> = [];
+  for (const [id, data] of productMap) {
+    if (!data.hasUPCImage) {
+      results.push({ id, name: data.name, upc: data.upc });
+    }
+  }
+
+  return results;
 };

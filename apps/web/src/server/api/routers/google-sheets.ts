@@ -43,9 +43,11 @@ import {
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
 import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
 import { compareLocationsForPush } from "~/server/repo/location/csv-comparison";
-import type { OrganizationId } from "~/schemas/identifiers";
+import { type OrganizationId, unsafeProductId } from "~/schemas/identifiers";
 import { deleteInventoryEntry } from "~/server/repo/inventory";
 import { deleteProduct } from "~/server/repo/product";
+import { importImageFromUPC } from "~/server/services/image-import";
+import { productHasUPCImage } from "~/server/repo/inventory/csv-import/image-handler";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({
@@ -825,6 +827,65 @@ const applyPull = protectedProcedure
         pullData.inventory.errorItems,
         pullData.inventory.removedItems,
       );
+
+      // After import, try to fetch UPC images for products that have UPCs but no images
+      // This handles cases where product_image column is empty but UPC is present
+      const productsWithUPCNoImage = pullData.inventory.parsedRows.filter(
+        (row) => row.upc && !row.product_image,
+      );
+
+      if (productsWithUPCNoImage.length > 0) {
+        let upcImagesImported = 0;
+
+        for (const row of productsWithUPCNoImage) {
+          // Find the product ID from the import result
+          const importItem = inventoryResult.items.find(
+            (item) =>
+              item.productName === row.product_name &&
+              item.productId &&
+              (item.action === "created" ||
+                item.action === "updated" ||
+                item.action === "product_only"),
+          );
+
+          if (importItem?.productId && row.upc) {
+            // Check if product already has a UPC image (allow adding UPC image even if other images exist)
+            const hasUPCImage = await productHasUPCImage(
+              ctx.db,
+              unsafeProductId(importItem.productId),
+            );
+
+            if (!hasUPCImage) {
+              try {
+                const result = await importImageFromUPC(
+                  ctx.db,
+                  ctx.organizationId,
+                  ctx.upcLookupClient,
+                  row.upc,
+                  unsafeProductId(importItem.productId),
+                );
+                if (result) {
+                  upcImagesImported++;
+                }
+              } catch {
+                // Silently continue - UPC image import is best-effort
+              }
+            }
+          }
+        }
+
+        // Add info about UPC images to the first item's message if any were imported
+        if (upcImagesImported > 0 && inventoryResult.items.length > 0) {
+          const firstItem = inventoryResult.items[0];
+          const upcNote = `(+${upcImagesImported} UPC image${upcImagesImported !== 1 ? "s" : ""} imported)`;
+          inventoryResult.items[0] = {
+            ...firstItem,
+            message: firstItem.message
+              ? `${firstItem.message} ${upcNote}`
+              : upcNote,
+          };
+        }
+      }
     } else {
       inventoryResult = EMPTY_IMPORT_RESULT;
     }
