@@ -100,7 +100,8 @@ describe("calculateInventoryValue", () => {
     expect(res.totalValue).toBe(2 * 5 + 3 * 3); // 19
     expect(res.breakdown.find((b) => b.key === "BrandA")?.value).toBe(10);
     expect(res.breakdown.find((b) => b.key === "BrandB")?.value).toBe(9);
-    expect(res.missingPriceItemNames.length).toBe(0);
+    expect(res.pricingStatus.missingPricing.count).toBe(0);
+    expect(res.pricingStatus.priced.count).toBe(2);
   });
 
   it("handles missing price mappings gracefully", async () => {
@@ -122,7 +123,8 @@ describe("calculateInventoryValue", () => {
 
     const res = await calculateInventoryValue(items);
     expect(res.totalValue).toBe(0);
-    expect(res.missingPriceItemNames).toContain("Sugar");
+    expect(res.pricingStatus.missingPricing.itemNames).toContain("Sugar");
+    expect(res.pricingStatus.missingPricing.count).toBe(1);
   });
 
   it("handles chained conversions via intermediate units to money", async () => {

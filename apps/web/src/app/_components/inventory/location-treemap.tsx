@@ -8,9 +8,14 @@ import { InfLocation, type LocationType } from "~/schemas/location";
 import { LocationIcon } from "../locations/location-icons";
 import Link from "next/link";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { convertAmountToPrice } from "~/app/_components/units/univ-conversion";
-import { type InventoryItem } from "../locations/calculate-inventory-value";
+import {
+  type InventoryItem,
+  type PricingStatus,
+  emptyPricingStatus,
+  mergePricingStatus,
+  formatPricingStatusSummary,
+  calculateInventoryValue,
+} from "../locations/calculate-inventory-value";
 
 interface TreemapNode {
   name: string;
@@ -19,8 +24,10 @@ interface TreemapNode {
   value: number; // total item count (named "value" for d3 treemap sizing)
   directCount: number;
   totalCount: number;
-  directValuation: number; // price value for items directly in this location
-  totalValuation: number; // total price including children
+  directValuation: number;
+  totalValuation: number;
+  directPricingStatus: PricingStatus;
+  totalPricingStatus: PricingStatus;
   children?: TreemapNode[];
 }
 
@@ -49,28 +56,36 @@ export default function LocationTreemap() {
     [inventoryQuery.data],
   );
 
-  // Calculate price values for each location
+  // Group items by location, then calculate pricing for each
   const valuationByLocation = useAsyncMemo(
     async () => {
-      const valueByLocationId = new Map<string, number>();
-
+      // Group items by location
+      const itemsByLocation = new Map<string, InventoryItem[]>();
       for (const item of items) {
-        const mappings = await getAllUnitMappingsFromProduct(item.product);
-        const priceRes = convertAmountToPrice(item.amount, mappings);
-        if (priceRes.success) {
-          const val = priceRes.value.value || 0;
-          if (val > 0) {
-            const locationId = item.location.id;
-            const current = valueByLocationId.get(locationId) ?? 0;
-            valueByLocationId.set(locationId, current + val);
-          }
-        }
+        const locationId = item.location.id;
+        const existing = itemsByLocation.get(locationId) ?? [];
+        existing.push(item);
+        itemsByLocation.set(locationId, existing);
       }
 
-      return valueByLocationId;
+      // Calculate inventory value per location using centralized function
+      const resultByLocation = new Map<
+        string,
+        { valuation: number; pricingStatus: PricingStatus }
+      >();
+
+      for (const [locationId, locationItems] of itemsByLocation) {
+        const result = await calculateInventoryValue(locationItems);
+        resultByLocation.set(locationId, {
+          valuation: result.totalValue,
+          pricingStatus: result.pricingStatus,
+        });
+      }
+
+      return resultByLocation;
     },
     [items],
-    new Map<string, number>(),
+    new Map<string, { valuation: number; pricingStatus: PricingStatus }>(),
   );
 
   const treemapData = useMemo(() => {
@@ -80,25 +95,36 @@ export default function LocationTreemap() {
     function transformNode(location: InfLocation): TreemapNode {
       const children = location.children?.map(transformNode);
       const directCount = location.directItemCount ?? 0;
-      const directValuation = valuationByLocation.get(location.id) ?? 0;
+      const locationData = valuationByLocation.get(location.id);
+      const directValuation = locationData?.valuation ?? 0;
+      const directPricingStatus =
+        locationData?.pricingStatus ?? emptyPricingStatus();
 
       const childrenCount =
         children?.reduce((sum, c) => sum + c.totalCount, 0) ?? 0;
       const childrenValuation =
         children?.reduce((sum, c) => sum + c.totalValuation, 0) ?? 0;
+      const childrenPricingStatuses =
+        children?.map((c) => c.totalPricingStatus) ?? [];
 
       const totalCount = directCount + childrenCount;
       const totalValuation = directValuation + childrenValuation;
+      const totalPricingStatus = mergePricingStatus([
+        directPricingStatus,
+        ...childrenPricingStatuses,
+      ]);
 
       return {
         name: location.name,
         id: location.id as LocationId,
         type: location.type,
-        value: totalCount, // sizing always by count
+        value: 1, // equal sizing - all locations get same weight
         directCount,
         totalCount,
         directValuation,
         totalValuation,
+        directPricingStatus,
+        totalPricingStatus,
         children: children?.length ? children : undefined,
       };
     }
@@ -106,30 +132,26 @@ export default function LocationTreemap() {
     const allNodes = data.map(transformNode);
     if (allNodes.length === 0) return null;
 
-    // Give empty locations a small value so they show up (but smaller)
-    const nodesWithMinValue = allNodes.map((n) => ({
-      ...n,
-      value: Math.max(n.totalCount, 0.5), // minimum value for visibility
-    }));
-
-    const totalCount = nodesWithMinValue.reduce(
-      (sum, n) => sum + n.totalCount,
-      0,
-    );
-    const totalValuation = nodesWithMinValue.reduce(
+    const totalCount = allNodes.reduce((sum, n) => sum + n.totalCount, 0);
+    const totalValuation = allNodes.reduce(
       (sum, n) => sum + n.totalValuation,
       0,
+    );
+    const totalPricingStatus = mergePricingStatus(
+      allNodes.map((n) => n.totalPricingStatus),
     );
     return {
       name: "All Locations",
       id: "_root" as LocationId,
       type: "room" as LocationType,
-      value: nodesWithMinValue.reduce((sum, n) => sum + n.value, 0),
+      value: allNodes.length, // root value = number of children
       directCount: 0,
       totalCount,
       directValuation: 0,
       totalValuation,
-      children: nodesWithMinValue,
+      directPricingStatus: emptyPricingStatus(),
+      totalPricingStatus,
+      children: allNodes,
     };
   }, [locations.data, valuationByLocation]);
 
@@ -241,7 +263,7 @@ function Treemap({ data }: TreemapProps) {
                 onMouseEnter={() => setHoveredNode(node.data.id)}
                 onMouseLeave={() => setHoveredNode(null)}
               />
-              {height > 30 && width > 60 && (
+              {height > 24 && (
                 <foreignObject
                   x={node.x0 + 4}
                   y={node.y0 + 2}
@@ -250,7 +272,13 @@ function Treemap({ data }: TreemapProps) {
                   style={{ pointerEvents: "none" }}
                 >
                   <div className="flex h-full flex-col overflow-hidden">
-                    <div className="flex items-center gap-1 text-xs text-white drop-shadow-sm">
+                    <div
+                      className={`flex items-center gap-1 text-xs ${
+                        node.data.totalCount === 0
+                          ? "text-slate-600"
+                          : "text-white drop-shadow-sm"
+                      }`}
+                    >
                       <Link
                         href={`/locations/${node.data.id}`}
                         className="flex min-w-0 items-center gap-1 font-medium hover:underline"
@@ -263,16 +291,32 @@ function Treemap({ data }: TreemapProps) {
                         />
                         <span className="truncate">{node.data.name}</span>
                       </Link>
-                      {width > 140 && node.data.totalCount > 0 && (
+                      {width > 160 && node.data.totalCount > 0 && (
                         <span className="shrink-0 text-[10px] text-white/80">
                           · {node.data.totalCount}
-                          {width > 200 && node.data.totalValuation > 0 && (
-                            <> · {currency.format(node.data.totalValuation)}</>
+                        </span>
+                      )}
+                      {width > 220 && node.data.totalValuation > 0 && (
+                        <span className="shrink-0 text-[10px] text-white/80">
+                          · {currency.format(node.data.totalValuation)}
+                          {(node.data.totalPricingStatus.missingPricing.count >
+                            0 ||
+                            node.data.totalPricingStatus.miscNoPrice.count >
+                              0) && (
+                            <span className="text-white/60">
+                              {" "}
+                              (
+                              {node.data.totalPricingStatus.missingPricing
+                                .count +
+                                node.data.totalPricingStatus.miscNoPrice
+                                  .count}{" "}
+                              unpriced)
+                            </span>
                           )}
                         </span>
                       )}
-                      {width > 100 && node.data.totalCount === 0 && (
-                        <span className="shrink-0 text-[10px] text-white/60">
+                      {width > 120 && node.data.totalCount === 0 && (
+                        <span className="shrink-0 text-[10px] text-slate-500">
                           · empty
                         </span>
                       )}
@@ -323,6 +367,12 @@ function HoverTooltip({
             {currency.format(node.data.totalValuation)} total
           </div>
         )}
+        {(() => {
+          const summary = formatPricingStatusSummary(
+            node.data.totalPricingStatus,
+          );
+          return summary ? <div>{summary}</div> : null;
+        })()}
       </div>
     </div>
   );

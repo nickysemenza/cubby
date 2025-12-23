@@ -6,6 +6,8 @@ import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import {
   calculateInventoryValue,
+  formatPricingStatusSummary,
+  emptyPricingStatus,
   type InventoryItem,
   type InventoryValueResult,
 } from "./calculate-inventory-value";
@@ -28,7 +30,7 @@ const currency = new Intl.NumberFormat("en-US", {
 const emptyResult: InventoryValueResult = {
   totalValue: 0,
   breakdown: [],
-  missingPriceItemNames: [],
+  pricingStatus: emptyPricingStatus(),
 };
 
 export function InventoryValueSummary({
@@ -62,16 +64,14 @@ export function InventoryValueSummary({
     emptyResult,
   );
 
+  const pricingSummary = formatPricingStatusSummary(result.pricingStatus);
+
   if (variant === "compact") {
     return (
       <div className={className}>
         <div className="text-muted-foreground text-xs">
           Value: {currency.format(result.totalValue)}
-          {result.missingPriceItemNames.length > 0 && (
-            <span className="ml-1">
-              (no pricing for {result.missingPriceItemNames.length})
-            </span>
-          )}
+          {pricingSummary && <span className="ml-1">({pricingSummary})</span>}
         </div>
       </div>
     );
@@ -84,10 +84,8 @@ export function InventoryValueSummary({
       <div className="text-lg font-semibold">
         {currency.format(result.totalValue)}
       </div>
-      {result.missingPriceItemNames.length > 0 && (
-        <div className="text-muted-foreground text-xs">
-          Missing pricing for {result.missingPriceItemNames.length} item(s)
-        </div>
+      {pricingSummary && (
+        <div className="text-muted-foreground text-xs">{pricingSummary}</div>
       )}
 
       {result.breakdown.length > 0 && (
