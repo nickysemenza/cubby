@@ -4,9 +4,10 @@ import {
   getRowDifferences,
   compareInventoryForPush,
   findRemovedInventoryForPull,
+  detectRenamesForPull,
 } from "./csv-comparison";
 import type { InventoryCSVExportRow } from "./types";
-import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { InventoryCSVRow, CSVImportResultItem } from "~/schemas/inventory";
 import {
   unsafeLocationId,
   unsafeProductId,
@@ -440,6 +441,84 @@ describe("compareInventoryForPush", () => {
 });
 
 describe("findRemovedInventoryForPull", () => {
+  describe("move detection", () => {
+    it("should NOT mark as removed when item is being moved (1-to-1 location change)", () => {
+      // App: Widget at Kitchen (1 entry)
+      // Sheet: Widget at Garage (1 entry at different location)
+      // This is a MOVE, not a removal - the import logic handles this
+      const appRows = [
+        makeAppRow({
+          product_name: "Widget",
+          manufacturer: "(unspecified)",
+          location_name: "Kitchen",
+          location_id: unsafeLocationId("loc-kitchen"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Widget",
+          manufacturer: "(unspecified)",
+          location_name: "Garage", // Different location
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+
+      const result = findRemovedInventoryForPull(appRows, sheetRows);
+
+      // Should be empty - this is a move, handled by import logic
+      expect(result).toHaveLength(0);
+    });
+
+    it("should mark as removed when consolidating multiple entries to one", () => {
+      // App: Widget at Kitchen AND Widget at Bedroom (2 entries)
+      // Sheet: Widget at Kitchen only (1 entry)
+      // The Bedroom entry should be removed (consolidation, not a move)
+      const appRows = [
+        makeAppRow({
+          product_name: "Widget",
+          manufacturer: "(unspecified)",
+          location_name: "Kitchen",
+          location_id: unsafeLocationId("loc-kitchen"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+        makeAppRow({
+          product_name: "Widget",
+          manufacturer: "(unspecified)",
+          location_name: "Bedroom",
+          location_id: unsafeLocationId("loc-bedroom"),
+          inventory_entry_id: unsafeInventoryId("inv-2"),
+          product_id: unsafeProductId("prod-1"),
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Widget",
+          manufacturer: "(unspecified)",
+          location_name: "Kitchen",
+          quantity: 1,
+          unit: "each",
+        }),
+      ];
+
+      const result = findRemovedInventoryForPull(appRows, sheetRows);
+
+      // Bedroom entry should be marked as removed
+      expect(result).toHaveLength(1);
+      expect(result[0].locationName).toBe("Bedroom");
+      expect(result[0].inventoryEntryId).toBe("inv-2");
+    });
+  });
+
   describe("product deletion", () => {
     it("should mark product for deletion when completely removed from sheet", () => {
       const appRows = [
@@ -735,5 +814,184 @@ describe("findRemovedInventoryForPull", () => {
       // Both products should be matched
       expect(result).toHaveLength(0);
     });
+  });
+});
+
+describe("detectRenamesForPull", () => {
+  it("should NOT detect rename when product names are identical", () => {
+    // This was a bug: items with same name were being detected as "renames"
+    // because name containment check (a.includes(b)) returns true when a === b
+    const items: CSVImportResultItem[] = [
+      {
+        rowIndex: 1,
+        action: "created",
+        productName: "23 Ga Pin Nailer",
+        productId: "prod-new",
+        locationName: "nailers",
+      },
+      {
+        rowIndex: -1,
+        action: "removed",
+        productName: "23 Ga Pin Nailer", // Same name!
+        productId: "prod-old",
+        locationName: "nailers",
+      },
+    ];
+
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "23 Ga Pin Nailer",
+        location_name: "nailers",
+        upc: "123456789012",
+      }),
+    ];
+
+    const appRows = [
+      makeAppRow({
+        product_name: "23 Ga Pin Nailer",
+        manufacturer: "(unspecified)",
+        location_name: "nailers",
+        upc: "123456789012",
+        product_id: unsafeProductId("prod-old"),
+      }),
+    ];
+
+    const result = detectRenamesForPull(items, sheetRows, appRows);
+
+    // Should NOT create a rename - names are identical
+    expect(result.renameCount).toBe(0);
+    expect(result.items.filter((i) => i.action === "renamed")).toHaveLength(0);
+    // Original items should be preserved
+    expect(result.items.filter((i) => i.action === "created")).toHaveLength(1);
+    expect(result.items.filter((i) => i.action === "removed")).toHaveLength(1);
+  });
+
+  it("should NOT detect rename when normalized names are identical", () => {
+    // Names with different punctuation but same normalized form
+    const items: CSVImportResultItem[] = [
+      {
+        rowIndex: 1,
+        action: "created",
+        productName: "misc: bags", // with colon
+        productId: "prod-new",
+        locationName: "kitchen",
+      },
+      {
+        rowIndex: -1,
+        action: "removed",
+        productName: "misc. bags", // with period - normalizes to same
+        productId: "prod-old",
+        locationName: "kitchen",
+      },
+    ];
+
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "misc: bags",
+        location_name: "kitchen",
+      }),
+    ];
+
+    const appRows = [
+      makeAppRow({
+        product_name: "misc. bags",
+        manufacturer: "(unspecified)",
+        location_name: "kitchen",
+        product_id: unsafeProductId("prod-old"),
+      }),
+    ];
+
+    const result = detectRenamesForPull(items, sheetRows, appRows);
+
+    // Should NOT create a rename - normalized names are identical
+    expect(result.renameCount).toBe(0);
+  });
+
+  it("should detect rename when names are different but UPC matches", () => {
+    const items: CSVImportResultItem[] = [
+      {
+        rowIndex: 1,
+        action: "created",
+        productName: "Brad Nailer 18 Gauge",
+        productId: "prod-new",
+        locationName: "tools",
+      },
+      {
+        rowIndex: -1,
+        action: "removed",
+        productName: "18 Ga Brad Nailer", // Different name
+        productId: "prod-old",
+        locationName: "tools",
+      },
+    ];
+
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "Brad Nailer 18 Gauge",
+        location_name: "tools",
+        upc: "123456789012",
+      }),
+    ];
+
+    const appRows = [
+      makeAppRow({
+        product_name: "18 Ga Brad Nailer",
+        manufacturer: "(unspecified)",
+        location_name: "tools",
+        upc: "123456789012", // Same UPC
+        product_id: unsafeProductId("prod-old"),
+      }),
+    ];
+
+    const result = detectRenamesForPull(items, sheetRows, appRows);
+
+    // Should detect a rename via UPC match
+    expect(result.renameCount).toBe(1);
+    expect(result.items.filter((i) => i.action === "renamed")).toHaveLength(1);
+    const renamed = result.items.find((i) => i.action === "renamed");
+    expect(renamed?.productName).toBe("Brad Nailer 18 Gauge");
+    expect(renamed?.renamedFrom).toBe("18 Ga Brad Nailer");
+  });
+
+  it("should detect rename when one name contains the other", () => {
+    const items: CSVImportResultItem[] = [
+      {
+        rowIndex: 1,
+        action: "created",
+        productName: "misc: paper bags",
+        productId: "prod-new",
+        locationName: "storage",
+      },
+      {
+        rowIndex: -1,
+        action: "removed",
+        productName: "paper bags", // Contained in the new name
+        productId: "prod-old",
+        locationName: "storage",
+      },
+    ];
+
+    const sheetRows = [
+      makeSheetRow({
+        product_name: "misc: paper bags",
+        location_name: "storage",
+      }),
+    ];
+
+    const appRows = [
+      makeAppRow({
+        product_name: "paper bags",
+        manufacturer: "(unspecified)",
+        location_name: "storage",
+        product_id: unsafeProductId("prod-old"),
+      }),
+    ];
+
+    const result = detectRenamesForPull(items, sheetRows, appRows);
+
+    // Should detect a rename via name containment
+    expect(result.renameCount).toBe(1);
+    const renamed = result.items.find((i) => i.action === "renamed");
+    expect(renamed?.renamedFrom).toBe("paper bags");
   });
 });

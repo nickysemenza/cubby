@@ -302,6 +302,10 @@ function detectRenames(
       // Heuristic 2: Name containment (with punctuation normalization)
       const createdNameLower = created.productName.toLowerCase();
       const removedNameLower = removed.productName.toLowerCase();
+      // Skip if names are identical - this is NOT a rename
+      if (createdNameLower === removedNameLower) {
+        continue;
+      }
       // Normalize punctuation for fuzzy matching (e.g., "misc:" vs "misc.")
       const normalizeForFuzzy = (s: string) =>
         s
@@ -310,6 +314,10 @@ function detectRenames(
           .trim();
       const createdNormalized = normalizeForFuzzy(createdNameLower);
       const removedNormalized = normalizeForFuzzy(removedNameLower);
+      // Skip if normalized names are identical - this is NOT a rename
+      if (createdNormalized === removedNormalized) {
+        continue;
+      }
       if (
         createdNameLower.includes(removedNameLower) ||
         removedNameLower.includes(createdNameLower) ||
@@ -567,6 +575,30 @@ export function findRemovedInventoryForPull(
     }
   }
 
+  // Build counts for move detection
+  // Count inventory entries per product in app (by product_id)
+  const appEntriesPerProduct = new Map<string, number>();
+  for (const appRow of appRows) {
+    if (appRow.location_name && appRow.location_name.trim() !== "") {
+      appEntriesPerProduct.set(
+        appRow.product_id,
+        (appEntriesPerProduct.get(appRow.product_id) ?? 0) + 1,
+      );
+    }
+  }
+
+  // Count inventory entries per product in sheet (by product name + manufacturer)
+  const sheetEntriesPerProduct = new Map<string, number>();
+  for (const row of sheetRows) {
+    if (row.location_name && row.location_name.trim() !== "") {
+      const key = `${row.product_name.toLowerCase()}|${normalizeManufacturer(row.manufacturer).toLowerCase()}`;
+      sheetEntriesPerProduct.set(
+        key,
+        (sheetEntriesPerProduct.get(key) ?? 0) + 1,
+      );
+    }
+  }
+
   // Second pass: identify inventory entries to delete
   // (only for products that still exist in the sheet)
   for (const appRow of appRows) {
@@ -584,6 +616,18 @@ export function findRemovedInventoryForPull(
         appRow.location_name,
       )
     ) {
+      // Check if this is a "move" scenario: product has exactly 1 entry in app
+      // and exactly 1 entry in sheet (at a different location)
+      // In this case, the import logic will handle it as a move, not a removal
+      const appEntryCount = appEntriesPerProduct.get(appRow.product_id) ?? 0;
+      const sheetKey = `${appRow.product_name.toLowerCase()}|${normalizeManufacturer(appRow.manufacturer).toLowerCase()}`;
+      const sheetEntryCount = sheetEntriesPerProduct.get(sheetKey) ?? 0;
+
+      if (appEntryCount === 1 && sheetEntryCount === 1) {
+        // This is a 1-to-1 move scenario - import will handle it as a move
+        continue;
+      }
+
       removedItems.push({
         rowIndex: -1,
         action: "removed",
@@ -679,6 +723,10 @@ export function detectRenamesForPull(
       // Heuristic 2: Name containment (with punctuation normalization)
       const createdNameLower = created.productName.toLowerCase();
       const removedNameLower = removed.productName.toLowerCase();
+      // Skip if names are identical - this is NOT a rename
+      if (createdNameLower === removedNameLower) {
+        continue;
+      }
       // Normalize punctuation for fuzzy matching (e.g., "misc:" vs "misc.")
       const normalizeForFuzzy = (s: string) =>
         s
@@ -687,6 +735,10 @@ export function detectRenamesForPull(
           .trim();
       const createdNormalized = normalizeForFuzzy(createdNameLower);
       const removedNormalized = normalizeForFuzzy(removedNameLower);
+      // Skip if normalized names are identical - this is NOT a rename
+      if (createdNormalized === removedNormalized) {
+        continue;
+      }
       if (
         createdNameLower.includes(removedNameLower) ||
         removedNameLower.includes(createdNameLower) ||

@@ -386,15 +386,13 @@ export function GoogleSheetsSync() {
                   isHidden={hiddenActions.has("renamed")}
                   onClick={() => toggleActionVisibility("renamed")}
                 />
-                {isPushMode && (
-                  <SummaryCard
-                    count={currentResult.inventory.removed ?? 0}
-                    label="Remove"
-                    color="orange"
-                    isHidden={hiddenActions.has("removed")}
-                    onClick={() => toggleActionVisibility("removed")}
-                  />
-                )}
+                <SummaryCard
+                  count={currentResult.inventory.removed ?? 0}
+                  label="Remove"
+                  color="orange"
+                  isHidden={hiddenActions.has("removed")}
+                  onClick={() => toggleActionVisibility("removed")}
+                />
                 {!isPushMode && (
                   <SummaryCard
                     count={currentResult.inventory.productOnly}
