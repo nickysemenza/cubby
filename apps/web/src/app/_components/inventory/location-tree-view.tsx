@@ -7,6 +7,7 @@ import { useTRPC } from "~/trpc/react";
 import { LocationIcon } from "../locations/location-icons";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
 import Link from "next/link";
 import { FlexContainer } from "~/components/layout/flex-container";
 
@@ -149,19 +150,18 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
     <FlexContainer style={style} ref={dragHandle} align="center" gap={2}>
       <LocationIcon type={data.type} size={14} />
       <span>{data.name}</span>
-      {totalItemCount > 0 && (
-        <span className="text-muted-foreground text-xs">
-          {hasLocationChildren ? (
-            <>
-              {directItemCount}
-              <span className="text-muted-foreground/60 ml-0.5">
-                ({totalItemCount})
-              </span>
-            </>
-          ) : (
-            directItemCount
-          )}
-        </span>
+      {directItemCount > 0 && (
+        <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+          {directItemCount}
+        </Badge>
+      )}
+      {hasLocationChildren && totalItemCount > directItemCount && (
+        <Badge
+          variant="outline"
+          className="text-muted-foreground h-5 px-1.5 text-xs"
+        >
+          {totalItemCount} total
+        </Badge>
       )}
     </FlexContainer>
   );

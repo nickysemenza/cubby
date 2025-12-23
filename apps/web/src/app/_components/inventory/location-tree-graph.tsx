@@ -1,96 +1,185 @@
 "use client";
-import { type Ref, useCallback, useState } from "react";
-import Tree, {
-  type CustomNodeElementProps,
-  type Point,
-  type RawNodeDatum,
-} from "react-d3-tree";
+import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import * as d3Hierarchy from "d3-hierarchy";
 import { useTRPC } from "~/trpc/react";
-
 import { useQuery } from "@tanstack/react-query";
 import { LocationPillLinkCompact } from "~/app/_components/EntityPill";
 import { LocationId } from "~/schemas/identifiers";
-import { LocationType } from "~/schemas/location";
+import { InfLocation, LocationType } from "~/schemas/location";
 
-/** Extended node type that includes location-specific properties */
-interface LocationNodeDatum extends RawNodeDatum {
+interface TreeNode {
+  name: string;
   id: LocationId;
   type: LocationType;
+  children?: TreeNode[];
 }
 
-const nodeSize = { x: 200, y: 50 };
-const foreignObjectProps: React.SVGProps<SVGForeignObjectElement> = {
-  width: nodeSize.x,
-  height: nodeSize.y,
-  x: 20,
-  y: -10,
-};
-const rootName = "_root";
+function transformToTreeNode(location: InfLocation): TreeNode {
+  return {
+    name: location.name,
+    id: location.id as LocationId,
+    type: location.type,
+    children: location.children?.map(transformToTreeNode),
+  };
+}
+
 export default function LocationTreeGraph() {
   const api = useTRPC();
   const locations = useQuery(api.location.makeTree.queryOptions());
   const data = locations.data;
-  const { translate, containerRef } = useCenteredTree();
+
+  const treeData = useMemo(() => {
+    if (!data || data.length === 0) return null;
+    return {
+      name: "_root",
+      id: "_root" as LocationId,
+      type: "room" as LocationType,
+      children: data.map(transformToTreeNode),
+    };
+  }, [data]);
+
+  if (!treeData) return null;
+
+  return <TidyTree data={treeData} />;
+}
+
+interface TidyTreeProps {
+  data: TreeNode;
+}
+
+function TidyTree({ data }: TidyTreeProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const isDragging = useRef(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      setDimensions({ width, height });
+    }
+  }, []);
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    setTransform((t) => ({
+      ...t,
+      scale: Math.max(0.2, Math.min(3, t.scale * scaleFactor)),
+    }));
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button === 0) {
+      isDragging.current = true;
+      lastPos.current = { x: e.clientX, y: e.clientY };
+    }
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isDragging.current) {
+      const dx = e.clientX - lastPos.current.x;
+      const dy = e.clientY - lastPos.current.y;
+      lastPos.current = { x: e.clientX, y: e.clientY };
+      setTransform((t) => ({ ...t, x: t.x + dx, y: t.y + dy }));
+    }
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  const hierarchy = useMemo(() => d3Hierarchy.hierarchy(data), [data]);
+
+  // Calculate layout with nodeSize for consistent spacing
+  const root = useMemo(() => {
+    const dx = 28; // vertical spacing between nodes
+    const dy = 220; // horizontal spacing between levels
+    const layout = d3Hierarchy.tree<TreeNode>().nodeSize([dx, dy]);
+    return layout(hierarchy);
+  }, [hierarchy]);
+
+  // Center the tree vertically
+  const offsetY = dimensions.height / 2;
+  const offsetX = 100; // Left margin for the root
+
+  const nodes = useMemo(() => root.descendants(), [root]);
+  const links = useMemo(() => root.links(), [root]);
 
   return (
-    data && (
-      <div
-        id="treeWrapper"
-        className="h-125 w-full border-2 border-black"
-        ref={containerRef}
+    <div
+      ref={containerRef}
+      className="h-[600px] w-full cursor-grab overflow-hidden rounded-md border active:cursor-grabbing"
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      <svg
+        width={dimensions.width}
+        height={dimensions.height}
+        style={{ overflow: "visible" }}
       >
-        <Tree
-          data={{ children: data, name: rootName }}
-          orientation="horizontal"
-          translate={translate}
-          zoom={0.5}
-          nodeSize={{ x: 40, y: 150 }}
-          renderCustomNodeElement={(rd3tProps) =>
-            renderForeignObjectNode({
-              ...rd3tProps,
-              // foreignObjectProps,
-            })
-          }
-        />
-      </div>
-    )
+        <g
+          transform={`translate(${offsetX + transform.x}, ${offsetY + transform.y}) scale(${transform.scale})`}
+        >
+          {/* Links - curved bezier paths */}
+          {links.map((link, i) => {
+            // In d3 tree: x = vertical position, y = horizontal position
+            // We swap them for horizontal layout
+            const x1 = link.source.y; // horizontal start
+            const y1 = link.source.x; // vertical start
+            const x2 = link.target.y; // horizontal end
+            const y2 = link.target.x; // vertical end
+            const midX = (x1 + x2) / 2;
+
+            return (
+              <path
+                key={i}
+                d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+                fill="none"
+                className="stroke-muted-foreground/50"
+                strokeWidth={1.5}
+              />
+            );
+          })}
+
+          {/* Nodes positioned using swapped x/y coordinates */}
+          {nodes.map((node, i) => {
+            const isRoot = node.data.name === "_root";
+            const hasChildren = !!node.children?.length;
+
+            return (
+              <g key={i} transform={`translate(${node.y}, ${node.x})`}>
+                <circle r={isRoot ? 6 : 4} className="fill-primary" />
+                {!isRoot && (
+                  <foreignObject
+                    x={hasChildren ? -200 : 8}
+                    y={-12}
+                    width={190}
+                    height={24}
+                    style={{ overflow: "visible" }}
+                  >
+                    <div
+                      className={`flex ${hasChildren ? "justify-end" : "justify-start"}`}
+                    >
+                      <LocationPillLinkCompact
+                        location={{
+                          name: node.data.name,
+                          id: node.data.id,
+                          type: node.data.type,
+                        }}
+                      />
+                    </div>
+                  </foreignObject>
+                )}
+              </g>
+            );
+          })}
+        </g>
+      </svg>
+    </div>
   );
 }
-// cf https://github.com/bkrem/react-d3-tree/issues/394#issuecomment-1150687311
-const useCenteredTree = () => {
-  const [translate, setTranslate] = useState<Point>({ x: 0, y: 0 });
-  const containerRef: Ref<HTMLElement> = useCallback(
-    (containerElem: HTMLElement) => {
-      if (containerElem !== null) {
-        const { height } = containerElem.getBoundingClientRect();
-        setTranslate({ x: 50, y: height / 2 });
-      }
-    },
-    [],
-  );
-  return { translate, containerRef };
-};
-
-const renderForeignObjectNode = ({
-  nodeDatum,
-  toggleNode,
-}: CustomNodeElementProps) => {
-  const locationNode = nodeDatum as unknown as LocationNodeDatum;
-  return (
-    <g>
-      <circle onClick={toggleNode} r={15}></circle>
-      {/* `foreignObject` requires width & height to be explicitly set. */}
-      <foreignObject {...foreignObjectProps}>
-        {locationNode.name !== rootName ? (
-          <LocationPillLinkCompact
-            location={{
-              name: locationNode.name,
-              id: locationNode.id,
-              type: locationNode.type,
-            }}
-          />
-        ) : null}
-      </foreignObject>
-    </g>
-  );
-};
