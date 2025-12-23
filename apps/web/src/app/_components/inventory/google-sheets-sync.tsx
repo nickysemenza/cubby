@@ -348,7 +348,7 @@ export function GoogleSheetsSync() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
             {/* Inventory section */}
             {currentResult && (
               <h3 className="mb-2 text-sm font-medium">Inventory</h3>
@@ -437,7 +437,7 @@ export function GoogleSheetsSync() {
 
             {/* Items table */}
             {(currentResult?.inventory.items.length ?? 0) > 0 && (
-              <div className="max-h-[60vh] overflow-y-auto rounded border">
+              <div className="rounded border">
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
                     <tr>
@@ -580,7 +580,7 @@ export function GoogleSheetsSync() {
                   {currentResult.locations.items.filter(
                     (item) => !hiddenActions.has(item.action),
                   ).length > 0 && (
-                    <div className="max-h-[30vh] overflow-y-auto rounded border">
+                    <div className="rounded border">
                       <table className="w-full text-sm">
                         <thead className="bg-muted sticky top-0">
                           <tr>
