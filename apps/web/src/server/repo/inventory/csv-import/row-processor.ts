@@ -18,7 +18,6 @@ import {
   findOrCreateLocationByName,
 } from "~/server/repo/location";
 import { type ProductTopLevelOut } from "~/schemas/product";
-import { getTotalProductQuantity } from "../helpers";
 import {
   findOrCreateProductForImport,
   previewProductForImport,
@@ -339,36 +338,40 @@ interface MoveCheckResult {
 }
 
 /**
- * Check if inventory should be moved (product at capacity, not already at target)
+ * Check if inventory should be moved (product exists elsewhere, not at target)
+ *
+ * Move detection: if product has exactly 1 inventory entry in the app
+ * and it's NOT at the target location, this is a move scenario.
  */
 async function checkMoveConditions(
   db: Database,
   organizationId: OrganizationId,
   productData: ProductTopLevelOut,
-  targetLocationId: LocationId | null,
   inventoryExists: boolean,
 ): Promise<MoveCheckResult> {
-  const totalExistingQty = await getTotalProductQuantity(
-    db,
-    productData.id,
-    organizationId,
-  );
-
-  const shouldMove =
-    productData.expectedQuantity !== null &&
-    totalExistingQty >= productData.expectedQuantity;
-
-  if (!shouldMove) {
-    return { shouldMove: false, existingLocations: [], isOnlyAtTarget: false };
-  }
-
+  // Get all locations where this product has inventory
   const existingLocations = await getExistingInventoryLocations(
     db,
     organizationId,
     productData.id,
   );
 
+  // No existing inventory → nothing to move
+  if (existingLocations.length === 0) {
+    return { shouldMove: false, existingLocations: [], isOnlyAtTarget: false };
+  }
+
+  // Check if inventory is only at the target location already
   const isOnlyAtTarget = existingLocations.length === 1 && inventoryExists;
+
+  if (isOnlyAtTarget) {
+    // Already at target, no move needed
+    return { shouldMove: false, existingLocations, isOnlyAtTarget: true };
+  }
+
+  // Product has exactly 1 inventory entry elsewhere → move it to target
+  // This handles the common "changed location in sheet" scenario
+  const shouldMove = existingLocations.length === 1 && !inventoryExists;
 
   return { shouldMove, existingLocations, isOnlyAtTarget };
 }
@@ -498,7 +501,6 @@ export const processRow = async (
       productData,
       productWillBeCreated,
       productChanges,
-      dryRun,
       imageImportError,
     );
   }
@@ -595,7 +597,6 @@ export const processRow = async (
     db,
     organizationId,
     productData,
-    resolvedLocationId,
     inventoryCheck.exists,
   );
 
@@ -655,22 +656,18 @@ function handleProductOnlyRow(
   productData: ProductTopLevelOut | null,
   productWillBeCreated: boolean,
   productChanges: ProductChangesPreview,
-  dryRun: boolean,
   imageImportError?: string,
 ): CSVImportResultItem {
   const hasProductChanges_ = hasChanges(productChanges);
-  const shouldSkip = dryRun && !productWillBeCreated && !hasProductChanges_;
+  // Skip if product exists with no changes (regardless of dryRun mode)
+  const shouldSkip = !productWillBeCreated && !hasProductChanges_;
   const fieldChanges = buildFieldChanges(productChanges);
 
   let message = shouldSkip
     ? "Product already exists with no changes"
     : productWillBeCreated
       ? "New product"
-      : fieldChanges
-        ? undefined
-        : dryRun
-          ? "Product already exists"
-          : undefined;
+      : undefined;
 
   // Append image import error if present
   if (imageImportError) {
