@@ -123,15 +123,6 @@ export function getOptionalRecipeId(
 export const amountField = amount;
 
 /**
- * Schema for a single inventory item with product and amount.
- * Used in forms where location is set at the form level (e.g., bulk-inventory-form).
- */
-export const inventoryItemFields = z.object({
-  product: requiredProductField,
-  amount: amountField,
-});
-
-/**
  * Schema for a single inventory item with product, location, and amount.
  * Used in forms where each item has its own location (e.g., quick-capture-form).
  */

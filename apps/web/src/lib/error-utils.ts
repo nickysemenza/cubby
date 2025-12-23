@@ -2,7 +2,7 @@ import type { TRPCClientErrorLike } from "@trpc/client";
 import type { AppRouter } from "~/server/api/root";
 import { type AppErrorReason } from "./app-error-codes";
 
-export function isTRPCClientError(
+function isTRPCClientError(
   err: unknown,
 ): err is TRPCClientErrorLike<AppRouter> {
   if (typeof err !== "object" || err === null) return false;
@@ -40,7 +40,7 @@ export function getAppErrorDetails(error: unknown): AppErrorDetails {
 /**
  * Returns true if an error is not worth retrying (logical/4xx or known reasons).
  */
-export function isNonRetriableError(details: AppErrorDetails): boolean {
+function isNonRetriableError(details: AppErrorDetails): boolean {
   const c = details.code;
   if (!c) return false;
   return (

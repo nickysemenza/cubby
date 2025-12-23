@@ -33,8 +33,3 @@ export function getEntityImage(
   }
   return undefined;
 }
-
-/**
- * Export constants for use elsewhere
- */
-export { TITLE_FIELDS, IMAGE_FIELDS };

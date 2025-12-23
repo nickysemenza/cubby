@@ -14,7 +14,7 @@ export function isUpcImage(url: string): boolean {
  * Filter out UPC-fetched images from an array of image objects.
  * Use this when exporting images to ensure only user-managed images are included.
  */
-export function filterUserManagedImages<T extends { image: { url: string } }>(
+function filterUserManagedImages<T extends { image: { url: string } }>(
   images: T[] | undefined | null,
 ): T[] {
   if (!images || images.length === 0) return [];

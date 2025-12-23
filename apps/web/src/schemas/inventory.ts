@@ -89,14 +89,6 @@ export const inventoryCSVRow = z.object({
 
 export type InventoryCSVRow = z.infer<typeof inventoryCSVRow>;
 
-export const inventoryCSVImportPayload = z.object({
-  rows: z.array(inventoryCSVRow),
-});
-
-export type InventoryCSVImportPayload = z.infer<
-  typeof inventoryCSVImportPayload
->;
-
 // Unit mapping detail for preview display
 export const unitMappingDetail = z.object({
   from: z.string(), // e.g., "1 stick"

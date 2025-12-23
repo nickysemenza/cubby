@@ -78,18 +78,3 @@ export function parseWithContext<T>(
 
   return result.data;
 }
-
-/**
- * Try to parse data with a Zod schema, returning null on failure instead of throwing.
- * Useful when you want to gracefully handle invalid data without stopping execution.
- *
- * @example
- * const food = tryParse(foodLookupSchema, { kind: "upc", gtin_upc: product.upc });
- * if (food) {
- *   // use food
- * }
- */
-export function tryParse<T>(schema: z.ZodType<T>, data: unknown): T | null {
-  const result = schema.safeParse(data);
-  return result.success ? result.data : null;
-}

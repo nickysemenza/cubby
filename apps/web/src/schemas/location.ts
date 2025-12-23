@@ -93,16 +93,6 @@ export const locationUpdateInput = z.object({
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 
-export const collectInfiniteParents = (location: InfLocation) => {
-  const parentHierarchy = [];
-  let parent = location.parent;
-  while (parent) {
-    parentHierarchy.push(parent);
-    parent = parent.parent;
-  }
-  return parentHierarchy;
-};
-
 // ============================================================================
 // Location CSV Import/Export Schemas
 // ============================================================================

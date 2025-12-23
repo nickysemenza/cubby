@@ -58,19 +58,3 @@ export type InventoryCSVAction = (typeof INVENTORY_CSV_ACTIONS)[number];
 export const LOCATION_CSV_ACTIONS = BASE_CSV_ACTIONS;
 
 export type LocationCSVAction = BaseCSVAction;
-
-// =============================================================================
-// Base Result Item Schema
-// =============================================================================
-
-/**
- * Base result item schema that entities can extend
- * Contains fields common to all CSV import/export result items
- */
-export const baseCSVResultItem = z.object({
-  rowIndex: z.number(),
-  message: z.string().optional(),
-  fieldChanges: z.array(fieldChange).optional(),
-});
-
-export type BaseCSVResultItem = z.infer<typeof baseCSVResultItem>;
