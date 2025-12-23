@@ -7,19 +7,71 @@ import { LocationId } from "~/schemas/identifiers";
 import { InfLocation, type LocationType } from "~/schemas/location";
 import { LocationIcon } from "../locations/location-icons";
 import Link from "next/link";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { convertAmountToPrice } from "~/app/_components/units/univ-conversion";
+import { type InventoryItem } from "../locations/calculate-inventory-value";
 
 interface TreemapNode {
   name: string;
   id: LocationId;
   type: LocationType;
-  value: number;
-  directItemCount: number;
+  value: number; // total item count (named "value" for d3 treemap sizing)
+  directCount: number;
+  totalCount: number;
+  directValuation: number; // price value for items directly in this location
+  totalValuation: number; // total price including children
   children?: TreemapNode[];
 }
+
+const currency = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
 
 export default function LocationTreemap() {
   const api = useTRPC();
   const locations = useQuery(api.location.makeTree.queryOptions());
+
+  // Fetch inventory items for price calculation
+  const inventoryQuery = useQuery(
+    api.inventoryItem.list.queryOptions({
+      sort: { orderBy: "createdAt", direction: "desc" },
+      pagination: { pageIndex: 0, pageSize: 5000 },
+      filters: {},
+    }),
+  );
+
+  // Extract items with stable reference
+  const items = useMemo(
+    () => (inventoryQuery.data?.items ?? []) as InventoryItem[],
+    [inventoryQuery.data],
+  );
+
+  // Calculate price values for each location
+  const valuationByLocation = useAsyncMemo(
+    async () => {
+      const valueByLocationId = new Map<string, number>();
+
+      for (const item of items) {
+        const mappings = await getAllUnitMappingsFromProduct(item.product);
+        const priceRes = convertAmountToPrice(item.amount, mappings);
+        if (priceRes.success) {
+          const val = priceRes.value.value || 0;
+          if (val > 0) {
+            const locationId = item.location.id;
+            const current = valueByLocationId.get(locationId) ?? 0;
+            valueByLocationId.set(locationId, current + val);
+          }
+        }
+      }
+
+      return valueByLocationId;
+    },
+    [items],
+    new Map<string, number>(),
+  );
 
   const treemapData = useMemo(() => {
     const data = locations.data;
@@ -27,35 +79,61 @@ export default function LocationTreemap() {
 
     function transformNode(location: InfLocation): TreemapNode {
       const children = location.children?.map(transformNode);
-      const directItemCount = location.directItemCount ?? 0;
-      const childrenItemCount =
-        children?.reduce((sum, c) => sum + c.value, 0) ?? 0;
-      const totalItemCount = directItemCount + childrenItemCount;
+      const directCount = location.directItemCount ?? 0;
+      const directValuation = valuationByLocation.get(location.id) ?? 0;
+
+      const childrenCount =
+        children?.reduce((sum, c) => sum + c.totalCount, 0) ?? 0;
+      const childrenValuation =
+        children?.reduce((sum, c) => sum + c.totalValuation, 0) ?? 0;
+
+      const totalCount = directCount + childrenCount;
+      const totalValuation = directValuation + childrenValuation;
 
       return {
         name: location.name,
         id: location.id as LocationId,
         type: location.type,
-        value: totalItemCount,
-        directItemCount,
+        value: totalCount, // sizing always by count
+        directCount,
+        totalCount,
+        directValuation,
+        totalValuation,
         children: children?.length ? children : undefined,
       };
     }
 
-    const nodesWithItems = data.map(transformNode).filter((n) => n.value > 0);
-    if (nodesWithItems.length === 0) return null;
+    const allNodes = data.map(transformNode);
+    if (allNodes.length === 0) return null;
 
+    // Give empty locations a small value so they show up (but smaller)
+    const nodesWithMinValue = allNodes.map((n) => ({
+      ...n,
+      value: Math.max(n.totalCount, 0.5), // minimum value for visibility
+    }));
+
+    const totalCount = nodesWithMinValue.reduce(
+      (sum, n) => sum + n.totalCount,
+      0,
+    );
+    const totalValuation = nodesWithMinValue.reduce(
+      (sum, n) => sum + n.totalValuation,
+      0,
+    );
     return {
       name: "All Locations",
       id: "_root" as LocationId,
       type: "room" as LocationType,
-      value: nodesWithItems.reduce((sum, n) => sum + n.value, 0),
-      directItemCount: 0,
-      children: nodesWithItems,
+      value: nodesWithMinValue.reduce((sum, n) => sum + n.value, 0),
+      directCount: 0,
+      totalCount,
+      directValuation: 0,
+      totalValuation,
+      children: nodesWithMinValue,
     };
-  }, [locations.data]);
+  }, [locations.data, valuationByLocation]);
 
-  if (locations.isLoading) {
+  if (locations.isLoading || inventoryQuery.isLoading) {
     return (
       <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
         Loading inventory data...
@@ -66,7 +144,7 @@ export default function LocationTreemap() {
   if (!treemapData) {
     return (
       <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
-        No inventory items to display
+        No locations to display
       </div>
     );
   }
@@ -123,8 +201,12 @@ function Treemap({ data }: TreemapProps) {
 
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) => {
+      const isEmpty = node.data.totalCount === 0;
       const lightness = Math.min(75, 35 + node.depth * 15);
-      return `hsl(220, 55%, ${lightness}%)`;
+      // Gray out empty locations
+      const saturation = isEmpty ? 10 : 55;
+      const adjustedLightness = isEmpty ? lightness + 20 : lightness;
+      return `hsl(220, ${saturation}%, ${adjustedLightness}%)`;
     },
     [],
   );
@@ -168,33 +250,33 @@ function Treemap({ data }: TreemapProps) {
                   style={{ pointerEvents: "none" }}
                 >
                   <div className="flex h-full flex-col overflow-hidden">
-                    <Link
-                      href={`/locations/${node.data.id}`}
-                      className="flex items-center gap-1 truncate text-xs font-medium text-white drop-shadow-sm hover:underline"
-                      style={{ pointerEvents: "auto" }}
-                    >
-                      <LocationIcon
-                        type={node.data.type}
-                        size={12}
-                        className="shrink-0"
-                      />
-                      <span className="truncate">{node.data.name}</span>
-                    </Link>
-                    {height > 45 && (
-                      <span className="mt-0.5 text-[10px] text-white/80 drop-shadow-sm">
-                        {node.data.directItemCount > 0 && (
-                          <>{node.data.directItemCount} items</>
-                        )}
-                        {node.data.directItemCount > 0 &&
-                          node.data.value > node.data.directItemCount && (
-                            <> ({node.data.value} total)</>
+                    <div className="flex items-center gap-1 text-xs text-white drop-shadow-sm">
+                      <Link
+                        href={`/locations/${node.data.id}`}
+                        className="flex min-w-0 items-center gap-1 font-medium hover:underline"
+                        style={{ pointerEvents: "auto" }}
+                      >
+                        <LocationIcon
+                          type={node.data.type}
+                          size={12}
+                          className="shrink-0"
+                        />
+                        <span className="truncate">{node.data.name}</span>
+                      </Link>
+                      {width > 140 && node.data.totalCount > 0 && (
+                        <span className="shrink-0 text-[10px] text-white/80">
+                          · {node.data.totalCount}
+                          {width > 200 && node.data.totalValuation > 0 && (
+                            <> · {currency.format(node.data.totalValuation)}</>
                           )}
-                        {node.data.directItemCount === 0 &&
-                          node.data.value > 0 && (
-                            <>{node.data.value} items in children</>
-                          )}
-                      </span>
-                    )}
+                        </span>
+                      )}
+                      {width > 100 && node.data.totalCount === 0 && (
+                        <span className="shrink-0 text-[10px] text-white/60">
+                          · empty
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </foreignObject>
               )}
@@ -233,8 +315,14 @@ function HoverTooltip({
       <div className="text-muted-foreground mt-1 space-y-0.5">
         <div>Type: {node.data.type}</div>
         <div>
-          Items: {node.data.directItemCount} direct / {node.data.value} total
+          Items: {node.data.directCount} direct / {node.data.totalCount} total
         </div>
+        {(node.data.directValuation > 0 || node.data.totalValuation > 0) && (
+          <div>
+            Value: {currency.format(node.data.directValuation)} direct /{" "}
+            {currency.format(node.data.totalValuation)} total
+          </div>
+        )}
       </div>
     </div>
   );
