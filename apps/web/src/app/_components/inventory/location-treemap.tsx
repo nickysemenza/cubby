@@ -12,44 +12,56 @@ interface TreemapNode {
   name: string;
   id: LocationId;
   type: LocationType;
-  value: number; // totalItemCount for sizing
-  directCount: number;
+  value: number;
+  directItemCount: number;
   children?: TreemapNode[];
-}
-
-function transformToTreemapNode(location: InfLocation): TreemapNode {
-  const children = location.children?.map(transformToTreemapNode);
-  return {
-    name: location.name,
-    id: location.id as LocationId,
-    type: location.type,
-    value: location.totalItemCount ?? 0,
-    directCount: location.directItemCount ?? 0,
-    children: children?.length ? children : undefined,
-  };
 }
 
 export default function LocationTreemap() {
   const api = useTRPC();
   const locations = useQuery(api.location.makeTree.queryOptions());
-  const data = locations.data;
 
   const treemapData = useMemo(() => {
+    const data = locations.data;
     if (!data || data.length === 0) return null;
-    // Filter out locations with no items
-    const nodesWithItems = data
-      .map(transformToTreemapNode)
-      .filter((n) => n.value > 0);
+
+    function transformNode(location: InfLocation): TreemapNode {
+      const children = location.children?.map(transformNode);
+      const directItemCount = location.directItemCount ?? 0;
+      const childrenItemCount =
+        children?.reduce((sum, c) => sum + c.value, 0) ?? 0;
+      const totalItemCount = directItemCount + childrenItemCount;
+
+      return {
+        name: location.name,
+        id: location.id as LocationId,
+        type: location.type,
+        value: totalItemCount,
+        directItemCount,
+        children: children?.length ? children : undefined,
+      };
+    }
+
+    const nodesWithItems = data.map(transformNode).filter((n) => n.value > 0);
     if (nodesWithItems.length === 0) return null;
+
     return {
       name: "All Locations",
       id: "_root" as LocationId,
       type: "room" as LocationType,
       value: nodesWithItems.reduce((sum, n) => sum + n.value, 0),
-      directCount: 0,
+      directItemCount: 0,
       children: nodesWithItems,
     };
-  }, [data]);
+  }, [locations.data]);
+
+  if (locations.isLoading) {
+    return (
+      <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
+        Loading inventory data...
+      </div>
+    );
+  }
 
   if (!treemapData) {
     return (
@@ -78,7 +90,6 @@ function Treemap({ data }: TreemapProps) {
     }
   }, []);
 
-  // Resize observer for responsive sizing
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver((entries) => {
@@ -94,7 +105,7 @@ function Treemap({ data }: TreemapProps) {
   const hierarchy = useMemo(() => {
     return d3Hierarchy
       .hierarchy(data)
-      .sum((d) => (d.children ? 0 : d.value)) // Only leaf nodes contribute to size
+      .sum((d) => (d.children ? 0 : d.value))
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
   }, [data]);
 
@@ -110,11 +121,10 @@ function Treemap({ data }: TreemapProps) {
 
   const nodes = useMemo(() => treemapLayout.descendants(), [treemapLayout]);
 
-  // Get color based on depth - darker at root, lighter deeper
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) => {
       const lightness = Math.min(75, 35 + node.depth * 15);
-      return `hsl(220, 60%, ${lightness}%)`;
+      return `hsl(220, 55%, ${lightness}%)`;
     },
     [],
   );
@@ -129,13 +139,9 @@ function Treemap({ data }: TreemapProps) {
           const width = node.x1 - node.x0;
           const height = node.y1 - node.y0;
           const isRoot = node.depth === 0;
-          const _isLeaf = !node.children;
           const isHovered = hoveredNode === node.data.id;
 
-          // Skip root node rendering
           if (isRoot) return null;
-
-          // Skip tiny nodes
           if (width < 20 || height < 20) return null;
 
           return (
@@ -153,7 +159,6 @@ function Treemap({ data }: TreemapProps) {
                 onMouseEnter={() => setHoveredNode(node.data.id)}
                 onMouseLeave={() => setHoveredNode(null)}
               />
-              {/* Label for nodes with enough space */}
               {height > 30 && width > 60 && (
                 <foreignObject
                   x={node.x0 + 4}
@@ -177,16 +182,17 @@ function Treemap({ data }: TreemapProps) {
                     </Link>
                     {height > 45 && (
                       <span className="mt-0.5 text-[10px] text-white/80 drop-shadow-sm">
-                        {node.data.directCount > 0 && (
-                          <>{node.data.directCount} items</>
+                        {node.data.directItemCount > 0 && (
+                          <>{node.data.directItemCount} items</>
                         )}
-                        {node.data.directCount > 0 &&
-                          node.data.value > node.data.directCount && (
+                        {node.data.directItemCount > 0 &&
+                          node.data.value > node.data.directItemCount && (
                             <> ({node.data.value} total)</>
                           )}
-                        {node.data.directCount === 0 && node.data.value > 0 && (
-                          <>{node.data.value} items in children</>
-                        )}
+                        {node.data.directItemCount === 0 &&
+                          node.data.value > 0 && (
+                            <>{node.data.value} items in children</>
+                          )}
                       </span>
                     )}
                   </div>
@@ -197,7 +203,6 @@ function Treemap({ data }: TreemapProps) {
         })}
       </svg>
 
-      {/* Tooltip on hover */}
       {hoveredNode && <HoverTooltip nodes={nodes} hoveredId={hoveredNode} />}
     </div>
   );
@@ -213,7 +218,6 @@ function HoverTooltip({
   const node = nodes.find((n) => n.data.id === hoveredId);
   if (!node) return null;
 
-  // Position tooltip near the hovered node
   const x = Math.min(node.x0 + 10, window.innerWidth - 200);
   const y = node.y0 + 30;
 
@@ -226,10 +230,11 @@ function HoverTooltip({
         <LocationIcon type={node.data.type} size={14} />
         {node.data.name}
       </div>
-      <div className="text-muted-foreground mt-1">
+      <div className="text-muted-foreground mt-1 space-y-0.5">
         <div>Type: {node.data.type}</div>
-        <div>Direct items: {node.data.directCount}</div>
-        <div>Total items: {node.data.value}</div>
+        <div>
+          Items: {node.data.directItemCount} direct / {node.data.value} total
+        </div>
       </div>
     </div>
   );

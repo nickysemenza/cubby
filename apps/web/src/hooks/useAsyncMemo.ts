@@ -12,12 +12,19 @@ function isEquivalent<T>(a: T, b: T): boolean {
   // Same reference
   if (a === b) return true;
 
-  // Both are empty objects
+  // Maps: compare by size (Object.keys doesn't work on Maps)
+  if (a instanceof Map && b instanceof Map) {
+    return a.size === 0 && b.size === 0;
+  }
+
+  // Both are empty objects (but not Maps)
   if (
     typeof a === "object" &&
     a !== null &&
     typeof b === "object" &&
     b !== null &&
+    !(a instanceof Map) &&
+    !(b instanceof Map) &&
     !Array.isArray(a) &&
     !Array.isArray(b) &&
     Object.keys(a).length === 0 &&
