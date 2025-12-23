@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 /**
  * Custom hook for managing localStorage with SSR support and type safety
@@ -11,6 +11,12 @@ export function useLocalStorage<T>(
   key: string,
   initialValue: T,
 ): [T, (value: T | ((prev: T) => T)) => void] {
+  // Cache the parsed value to avoid infinite loops from JSON.parse returning new objects
+  const cache = useRef<{ raw: string | null; parsed: T }>({
+    raw: null,
+    parsed: initialValue,
+  });
+
   const subscribe = useCallback(
     (callback: () => void) => {
       const handleStorageChange = (e: StorageEvent) => {
@@ -28,7 +34,13 @@ export function useLocalStorage<T>(
   const getSnapshot = useCallback(() => {
     try {
       const item = window.localStorage.getItem(key);
-      return item !== null ? (JSON.parse(item) as T) : initialValue;
+      // Only re-parse if the raw string changed
+      if (item !== cache.current.raw) {
+        cache.current.raw = item;
+        cache.current.parsed =
+          item !== null ? (JSON.parse(item) as T) : initialValue;
+      }
+      return cache.current.parsed;
     } catch (error) {
       console.error(`Error loading localStorage key "${key}":`, error);
       return initialValue;

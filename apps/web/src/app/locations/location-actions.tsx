@@ -69,9 +69,6 @@ export function LocationActions() {
         )}
         Export CSV
       </Button>
-      <Link href="/locations/new">
-        <Button variant="outline">Create New</Button>
-      </Link>
     </>
   );
 }

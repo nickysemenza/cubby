@@ -2,7 +2,7 @@ import { LocationList } from "./locationlist";
 import { type Metadata } from "next";
 import LocationTreeGraph from "../_components/inventory/location-tree-graph";
 import LocationTreeView from "../_components/inventory/location-tree-view";
-import { LocationsOverview } from "../_components/locations/locations-overview";
+import { LocationGallery } from "../_components/locations/location-gallery";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Suspense } from "react";
 import { SimpleLoading } from "~/components/ui/loading-skeletons";
@@ -16,16 +16,16 @@ export const metadata: Metadata = {
 export default function Page() {
   return (
     <EntityLayout title="Locations" actions={<LocationActions />}>
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs defaultValue="gallery" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="gallery">Gallery</TabsTrigger>
           <TabsTrigger value="table">Table</TabsTrigger>
           <TabsTrigger value="visualizations">Visualizations</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview">
-          <Suspense fallback={<SimpleLoading text="Loading overview..." />}>
-            <LocationsOverview />
+        <TabsContent value="gallery">
+          <Suspense fallback={<SimpleLoading text="Loading gallery..." />}>
+            <LocationGallery />
           </Suspense>
         </TabsContent>
 

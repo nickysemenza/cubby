@@ -1,0 +1,137 @@
+"use client";
+
+import { cn } from "~/lib/utils";
+import { type InfLocation } from "~/schemas/location";
+import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { type z } from "zod";
+import { LocationGalleryCard } from "./location-gallery-card";
+
+type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+
+interface GalleryUnifiedViewProps {
+  locations: InfLocation[];
+  inventoryByLocation: Map<string, InventoryItem[]>;
+  searchTerm: string;
+  matchingIds: Set<string>;
+  locationRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
+  className?: string;
+}
+
+// Background tints for each depth level
+const depthBackgrounds = [
+  "", // Level 0 - no tint
+  "bg-muted/5",
+  "bg-muted/10",
+  "bg-muted/15",
+  "bg-muted/20",
+];
+
+/**
+ * Unified gallery view combining tree hierarchy with grid-like horizontal rows.
+ * - Siblings at each level flow horizontally (flex-wrap)
+ * - Indentation shows hierarchy depth
+ * - Tree connector lines link parent to children row
+ * - Subtle background tints reinforce depth
+ * - Responsive: horizontal on desktop, stacked on mobile
+ */
+export function GalleryUnifiedView({
+  locations,
+  inventoryByLocation,
+  searchTerm,
+  matchingIds,
+  locationRefs,
+  className,
+}: GalleryUnifiedViewProps) {
+  return (
+    <div className={cn("py-2", className)}>
+      {/* Root level - no indentation */}
+      <LocationRow
+        locations={locations}
+        level={0}
+        inventoryByLocation={inventoryByLocation}
+        searchTerm={searchTerm}
+        matchingIds={matchingIds}
+        locationRefs={locationRefs}
+      />
+    </div>
+  );
+}
+
+interface LocationRowProps {
+  locations: InfLocation[];
+  level: number;
+  inventoryByLocation: Map<string, InventoryItem[]>;
+  searchTerm: string;
+  matchingIds: Set<string>;
+  locationRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
+}
+
+function LocationRow({
+  locations,
+  level,
+  inventoryByLocation,
+  searchTerm,
+  matchingIds,
+  locationRefs,
+}: LocationRowProps) {
+  const bgClass =
+    depthBackgrounds[Math.min(level, depthBackgrounds.length - 1)];
+
+  return (
+    <div className="space-y-2">
+      {locations.map((location) => {
+        const inventoryItems = inventoryByLocation.get(location.id) ?? [];
+        const isHighlighted = Boolean(
+          searchTerm && matchingIds.has(location.id),
+        );
+        const isFaded = Boolean(searchTerm && !matchingIds.has(location.id));
+        const hasChildren = location.children && location.children.length > 0;
+
+        const setRef = (el: HTMLDivElement | null) => {
+          locationRefs.current.set(location.id, el);
+        };
+
+        return (
+          <div key={location.id} className="relative">
+            {/* Card with optional background tint */}
+            <div className={cn("rounded-lg", bgClass && `${bgClass} p-2`)}>
+              <LocationGalleryCard
+                ref={setRef}
+                location={location}
+                inventoryItems={inventoryItems}
+                isHighlighted={isHighlighted}
+                isFaded={isFaded}
+              />
+            </div>
+
+            {/* Children with tree lines */}
+            {hasChildren && (
+              <div className="relative mt-2 ml-6 pl-4">
+                {/* Vertical line spanning all children */}
+                <div className="bg-muted-foreground/25 absolute top-0 bottom-2 left-0 w-0.5" />
+
+                {/* Render each child with horizontal connector */}
+                <div className="space-y-2">
+                  {location.children!.map((child) => (
+                    <div key={child.id} className="relative">
+                      {/* Horizontal connector from vertical line to card */}
+                      <div className="bg-muted-foreground/25 absolute top-5 -left-4 h-0.5 w-4" />
+                      <LocationRow
+                        locations={[child]}
+                        level={level + 1}
+                        inventoryByLocation={inventoryByLocation}
+                        searchTerm={searchTerm}
+                        matchingIds={matchingIds}
+                        locationRefs={locationRefs}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
