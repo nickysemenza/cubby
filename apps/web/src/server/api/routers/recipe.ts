@@ -48,7 +48,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: RecipeId) => {
-      const res = await getRecipeByID(id, services.db, services.organizationId);
+      const res = await getRecipeByID(services.db, id, services.organizationId);
       if (res === null) {
         throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
       }
@@ -58,16 +58,16 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return await recipeList(
         services.db,
         services.organizationId,
-        filters.nameFilter,
+        filters,
         sort,
         pagination,
       );
     },
     create: async (services, data) => {
-      return await createRecipe(data, services.db, services.actorContext);
+      return await createRecipe(services.db, data, services.actorContext);
     },
     update: async (services, id: RecipeId, data) => {
-      return await updateRecipe(id, data, services.db, services.actorContext);
+      return await updateRecipe(services.db, id, data, services.actorContext);
     },
   },
   entityName: "recipe",

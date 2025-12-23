@@ -43,8 +43,8 @@ import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
 
 export const getRecipeByID = async (
-  id: RecipeId,
   db: Database | Transaction,
+  id: RecipeId,
   organizationId: OrganizationId,
 ): Promise<RecipeOut | null> => {
   const res = await unwrapDb(db).query.recipe.findFirst({
@@ -146,10 +146,15 @@ export const insertCompactRecipe = async (
   return await upsertRecipeFromCompact(parsed, db, actor);
 };
 
+/** Filters for recipe list queries */
+export interface RecipeFilters {
+  nameFilter?: string;
+}
+
 export const recipeList = async (
   db: Database,
   organizationId: OrganizationId,
-  name: string | undefined,
+  filters: RecipeFilters,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
@@ -158,7 +163,9 @@ export const recipeList = async (
   // Build where conditions
   const whereConditions = [
     eq(recipe.organizationId, organizationId),
-    name ? formatSearchTerm(recipe.name, name) : undefined,
+    filters.nameFilter
+      ? formatSearchTerm(recipe.name, filters.nameFilter)
+      : undefined,
   ].filter((c): c is NonNullable<typeof c> => c !== undefined);
 
   const whereClause =
@@ -189,8 +196,8 @@ export const recipeList = async (
 };
 
 export const createRecipe = async (
-  recipeInput: RecipeCreateInput,
   db: Database,
+  recipeInput: RecipeCreateInput,
   actor: ActorContext,
 ): Promise<RecipeOut> => {
   const { organizationId } = actor;
@@ -267,8 +274,8 @@ export const createRecipe = async (
     });
 
     const fullRecipe = await getRecipeByID(
-      createdRecipe.id as RecipeId,
       tx,
+      createdRecipe.id as RecipeId,
       organizationId,
     );
     if (!fullRecipe) {
@@ -454,7 +461,7 @@ export const upsertRecipe = async (
     return { id: updatedRecipe.id };
   } else {
     // Recipe doesn't exist - create new one
-    const created = await createRecipe(input, db, actor);
+    const created = await createRecipe(db, input, actor);
     return { id: created.id };
   }
 };
@@ -751,9 +758,9 @@ async function handleSectionUpdates(
 // ============================================================================
 
 export const updateRecipe = async (
+  db: Database,
   id: RecipeId,
   updates: RecipeUpdateInput["data"],
-  db: Database,
   actor: ActorContext,
 ): Promise<RecipeOut> => {
   const { organizationId } = actor;
@@ -798,7 +805,7 @@ export const updateRecipe = async (
       );
     }
 
-    const fullRecipe = await getRecipeByID(id, tx, organizationId);
+    const fullRecipe = await getRecipeByID(tx, id, organizationId);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve updated recipe");
     }

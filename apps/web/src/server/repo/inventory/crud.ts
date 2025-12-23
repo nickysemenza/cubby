@@ -85,14 +85,19 @@ export const getInventoryEntryByID = async (
   return res ? dbInventoryEntryToAPI(res) : null;
 };
 
+/** Filters for inventory list queries */
+export interface InventoryFilters {
+  productNameFilter?: string;
+  locationNameFilter?: string;
+  locationIdFilter?: string;
+}
+
 export const inventoryentryList = async (
   db: Database,
   organizationId: OrganizationId,
+  filters: InventoryFilters,
   sort: SortParams,
   pagination: PaginationParams,
-  productNameFilter?: string,
-  locationNameFilter?: string,
-  locationIdFilter?: string,
 ) => {
   const orderByArray = buildOrderBy(inventoryEntry, sort, [
     "createdAt",
@@ -101,19 +106,19 @@ export const inventoryentryList = async (
   const { take, skip } = buildTakeSkip(pagination);
 
   // Determine if we need joins (name filters require joining related tables)
-  const needsJoins = productNameFilter || locationNameFilter;
+  const needsJoins = filters.productNameFilter || filters.locationNameFilter;
 
   if (needsJoins) {
     // Build conditions for join-based query
     const conditions = [eq(inventoryEntry.organizationId, organizationId)];
-    if (productNameFilter) {
-      conditions.push(ilike(product.name, `%${productNameFilter}%`));
+    if (filters.productNameFilter) {
+      conditions.push(ilike(product.name, `%${filters.productNameFilter}%`));
     }
-    if (locationNameFilter) {
-      conditions.push(ilike(location.name, `%${locationNameFilter}%`));
+    if (filters.locationNameFilter) {
+      conditions.push(ilike(location.name, `%${filters.locationNameFilter}%`));
     }
-    if (locationIdFilter) {
-      conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
+    if (filters.locationIdFilter) {
+      conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
     }
     const whereCondition = and(...conditions);
 
@@ -154,8 +159,8 @@ export const inventoryentryList = async (
 
   // Simple path: no name filters, use relational query
   const conditions = [eq(inventoryEntry.organizationId, organizationId)];
-  if (locationIdFilter) {
-    conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
+  if (filters.locationIdFilter) {
+    conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
   }
   const whereClause =
     conditions.length === 1 ? conditions[0] : and(...conditions);

@@ -4,6 +4,7 @@ import { protectedProcedure } from "./trpc";
 import { type ProductService } from "~/server/services/product.service";
 import { type IngredientService } from "~/server/services/ingredient.service";
 import { type USDAClient } from "~/server/clients/usda";
+import { type UPCLookupClient } from "~/server/clients/upc-lookup";
 import { IDInput } from "~/schemas/common";
 import {
   buildPaginatedResponse,
@@ -33,6 +34,7 @@ export interface CrudServices {
     ingredient: IngredientService;
   };
   usdaClient: USDAClient;
+  upcLookupClient: UPCLookupClient;
   auth?: {
     userId: UserId | null;
     sessionId: string | null;
@@ -50,6 +52,20 @@ export interface ProtectedCrudServices extends CrudServices {
 }
 
 // Reusable procedure builders
+const createDeleteProcedure = <TId extends string = string>(
+  deleteFn: (ctx: ProtectedCrudServices, id: TId) => Promise<void>,
+  idSchema?: z.ZodType<unknown>,
+) =>
+  protectedProcedure
+    .input(idSchema ? z.object({ id: idSchema }) : IDInput)
+    .output(z.void())
+    .mutation(async ({ ctx, input }) => {
+      const id = idSchema
+        ? (idSchema.parse(input.id) as TId)
+        : (input.id as TId);
+      await deleteFn(ctx, id);
+    });
+
 const createGetByIdProcedure = <T, TId extends string = string>(
   outputSchema: ZodSchema<T>,
   getByIdFn: (ctx: ProtectedCrudServices, id: TId) => Promise<T>,
@@ -265,3 +281,9 @@ export function createEntityCrudProcedures<
     update,
   };
 }
+
+/**
+ * Creates a standalone delete procedure
+ * Use this when you need delete functionality but want to keep it separate from CRUD
+ */
+export { createDeleteProcedure };

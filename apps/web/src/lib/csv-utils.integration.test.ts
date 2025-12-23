@@ -108,8 +108,7 @@ describe("config.csv import integration", () => {
     const locations = await locationList(
       db,
       organizationId,
-      undefined,
-      undefined,
+      {},
       { orderBy: "name", direction: "asc" },
       { pageIndex: 0, pageSize: 100 },
     );

@@ -11,8 +11,8 @@ export const seedRealRecipes = async (db: Database, actor: ActorContext) => {
     const parsed = await parseCompactRecipe(recipe);
     const recipeOut = await upsertRecipeFromCompact(parsed, db, actor);
     const res = await getRecipeByID(
-      unsafeRecipeId(recipeOut.id),
       db,
+      unsafeRecipeId(recipeOut.id),
       actor.organizationId,
     );
 

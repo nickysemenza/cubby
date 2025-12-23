@@ -490,25 +490,30 @@ export const buildLocationTree = async (
   return tree;
 };
 
+/** Filters for location list queries */
+export interface LocationFilters {
+  nameFilter?: string;
+  itemTypeFilter?: string;
+}
+
 export const locationList = async (
   db: Database,
   organizationId: OrganizationId,
-  name: string | undefined,
-  itemType: string | undefined,
+  filters: LocationFilters,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
   const conditions = [eq(location.organizationId, organizationId)];
 
-  if (name) {
-    const nameCondition = formatSearchTerm(location.name, name);
+  if (filters.nameFilter) {
+    const nameCondition = formatSearchTerm(location.name, filters.nameFilter);
     if (nameCondition) {
       conditions.push(nameCondition);
     }
   }
 
-  if (itemType) {
-    conditions.push(eq(location.type, itemType));
+  if (filters.itemTypeFilter) {
+    conditions.push(eq(location.type, filters.itemTypeFilter));
   }
 
   const whereClause = and(...conditions);

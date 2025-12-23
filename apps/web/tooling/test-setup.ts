@@ -256,6 +256,7 @@ export async function seedFromCSV(
   const inventoryEntries = await inventoryentryList(
     db,
     organizationId,
+    {},
     { orderBy: "createdAt", direction: "asc" },
     { pageIndex: 0, pageSize: 1000 },
   );

@@ -31,7 +31,17 @@ import {
   createEntityListProcedure,
   createEntityCrudWithoutListProcedures,
 } from "../crud-factory";
+import { createCSVProcedures } from "../csv-factory";
 import { locationId, type LocationId } from "~/schemas/identifiers";
+
+// Schema for location CSV export (without internal location_id field)
+const locationCSVExportRow = z.object({
+  location_name: z.string(),
+  parent_name: z.string().nullable(),
+  location_type: locationType,
+  description: z.string().nullable(),
+  location_image: z.string().nullable(),
+});
 
 // Define filters schema for locations
 const locationFiltersSchema = z.object({
@@ -50,8 +60,7 @@ const { list } = createEntityListProcedure({
       return await locationList(
         services.db,
         services.organizationId,
-        filters.nameFilter,
-        filters.itemTypeFilter,
+        filters,
         sort,
         pagination,
       );
@@ -93,50 +102,23 @@ const makeTree = protectedProcedure
     async ({ ctx }) => await buildLocationTree(ctx.db, ctx.organizationId),
   );
 
-// Export locations to CSV format
-const exportCSV = protectedProcedure
-  .output(
-    z.array(
-      z.object({
-        location_name: z.string(),
-        parent_name: z.string().nullable(),
-        location_type: locationType,
-        description: z.string().nullable(),
-        location_image: z.string().nullable(),
-      }),
-    ),
-  )
-  .query(async ({ ctx }) => {
-    const rows = await exportLocationsToCSV(ctx.db, ctx.organizationId);
-    // Return without internal location_id field
-    return rows.map(({ location_id: _id, ...rest }) => rest);
-  });
-
-// Import locations from CSV data
-const importCSV = protectedProcedure
-  .input(z.object({ rows: z.array(locationCSVRow) }))
-  .output(locationCSVImportResult)
-  .mutation(async ({ ctx, input }) => {
-    return await importLocationsFromCSV(
-      ctx.db,
-      ctx.organizationId,
-      input.rows,
-      { dryRun: false },
-    );
-  });
-
-// Preview what CSV import would do (dry run)
-const previewCSVImport = protectedProcedure
-  .input(z.object({ rows: z.array(locationCSVRow) }))
-  .output(locationCSVImportResult)
-  .mutation(async ({ ctx, input }) => {
-    return await importLocationsFromCSV(
-      ctx.db,
-      ctx.organizationId,
-      input.rows,
-      { dryRun: true },
-    );
-  });
+// CSV import/export procedures using factory
+const { exportCSV, importCSV, previewCSVImport } = createCSVProcedures({
+  schemas: {
+    importRow: locationCSVRow,
+    importResult: locationCSVImportResult,
+    exportRow: locationCSVExportRow,
+  },
+  repo: {
+    import: (ctx, rows, dryRun) =>
+      importLocationsFromCSV(ctx.db, ctx.organizationId, rows, { dryRun }),
+    export: async (ctx) => {
+      const rows = await exportLocationsToCSV(ctx.db, ctx.organizationId);
+      // Strip internal location_id field
+      return rows.map(({ location_id: _id, ...rest }) => rest);
+    },
+  },
+});
 
 export const locationRouter = createTRPCRouter({
   list,

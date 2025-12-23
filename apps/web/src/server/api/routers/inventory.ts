@@ -26,10 +26,15 @@ import {
   inventoryBulkOperationPayload,
   inventoryUpdateInput,
   bulkMovePayload,
-  inventoryCSVImportPayload,
+  inventoryCSVRow,
   csvImportResult,
+  type CSVImportResult,
 } from "~/schemas/inventory";
-import { createEntityCrudProcedures } from "../crud-factory";
+import {
+  createEntityCrudProcedures,
+  createDeleteProcedure,
+} from "../crud-factory";
+import { createCSVProceduresWithExportInput } from "../csv-factory";
 import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import {
   inventoryId,
@@ -38,6 +43,20 @@ import {
   type InventoryId,
 } from "~/schemas/identifiers";
 import { importImageFromUPC } from "~/server/services/image-import";
+
+// Schema for inventory CSV export
+const inventoryCSVExportRow = z.object({
+  product_name: z.string(),
+  manufacturer: z.string(),
+  upc: z.string(),
+  location_name: z.string(),
+  quantity: z.number().nullable(),
+  unit: z.string().nullable(),
+  expected_qty: z.number().nullable(),
+  price: z.number().nullable(),
+  unit_mappings: z.string().nullable(),
+  ingredient_name: z.string().nullable(),
+});
 
 // Define filters schema for inventory entries
 const inventoryFiltersSchema = z.object({
@@ -74,11 +93,9 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return await inventoryentryList(
         services.db,
         services.organizationId,
+        filters,
         sort,
         pagination,
-        filters.productNameFilter,
-        filters.locationNameFilter,
-        filters.locationIdFilter,
       );
     },
     create: async (services, data) => {
@@ -114,6 +131,11 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   entityName: "inventory-item",
 });
 
+// Delete procedure using standalone factory
+const deleteItem = createDeleteProcedure<InventoryId>(async (services, id) => {
+  await deleteInventoryEntry(services.db, id, services.actorContext);
+}, inventoryId);
+
 // Bulk process inventory entries (creates and updates in one call)
 const bulkProcess = protectedProcedure
   .input(inventoryBulkOperationPayload)
@@ -138,14 +160,6 @@ const bulkMove = protectedProcedure
   .output(z.array(inventoryWithLocationAndProductOut))
   .mutation(async ({ ctx, input }) => {
     return await bulkMoveInventoryEntries(ctx.db, input, ctx.actorContext);
-  });
-
-// Delete a single inventory entry
-const deleteItem = protectedProcedure
-  .input(z.object({ id: inventoryId }))
-  .output(z.void())
-  .mutation(async ({ ctx, input }) => {
-    await deleteInventoryEntry(ctx.db, input.id, ctx.actorContext);
   });
 
 // Find products with expectedQuantity=1 in multiple locations
@@ -189,98 +203,55 @@ const findDuplicates = protectedProcedure
     }));
   });
 
-// Export inventory to CSV format
-const exportCSV = protectedProcedure
-  .input(
-    z.object({
-      locationId: locationId.optional(),
-    }),
-  )
-  .output(
-    z.array(
-      z.object({
-        product_name: z.string(),
-        manufacturer: z.string(),
-        upc: z.string(),
-        location_name: z.string(),
-        quantity: z.number().nullable(), // null for product-only rows
-        unit: z.string().nullable(), // null for product-only rows
-        expected_qty: z.number().nullable(),
-        price: z.number().nullable(),
-        unit_mappings: z.string().nullable(),
-        ingredient_name: z.string().nullable(),
-      }),
-    ),
-  )
-  .query(async ({ ctx, input }) => {
-    return await exportInventoryToCSV(
-      ctx.db,
-      ctx.organizationId,
-      input.locationId,
-    );
-  });
+// CSV import/export procedures using factory
+const { exportCSV, importCSV, previewCSVImport } =
+  createCSVProceduresWithExportInput({
+    schemas: {
+      importRow: inventoryCSVRow,
+      importResult: csvImportResult,
+      exportRow: inventoryCSVExportRow,
+      exportInput: z.object({ locationId: locationId.optional() }),
+    },
+    repo: {
+      import: (ctx, rows, dryRun) =>
+        importInventoryFromCSV(ctx.db, ctx.organizationId, rows, {
+          dryRun,
+          actor: { ...ctx.actorContext, source: "csv_import" },
+        }),
+      export: (ctx, input) =>
+        exportInventoryToCSV(ctx.db, ctx.organizationId, input.locationId),
+    },
+    // Import UPC images for newly created products after successful import
+    afterImport: async (ctx, rows, result: CSVImportResult) => {
+      const productsToImportImages = result.items.filter(
+        (item) =>
+          item.productId &&
+          item.upc &&
+          (item.action === "created" || item.action === "product_only"),
+      );
 
-// Import inventory from CSV data
-const importCSV = protectedProcedure
-  .input(inventoryCSVImportPayload)
-  .output(csvImportResult)
-  .mutation(async ({ ctx, input }) => {
-    const result = await importInventoryFromCSV(
-      ctx.db,
-      ctx.actorContext.organizationId,
-      input.rows,
-      {
-        dryRun: false,
-        actor: { ...ctx.actorContext, source: "csv_import" },
-      },
-    );
+      // Process image imports in parallel but don't block on failures
+      await Promise.allSettled(
+        productsToImportImages.map(async (item) => {
+          try {
+            await importImageFromUPC(
+              ctx.db,
+              ctx.organizationId,
+              ctx.upcLookupClient,
+              item.upc!,
+              unsafeProductId(item.productId!),
+            );
+          } catch (error) {
+            console.error(
+              `[importCSV] Image import failed for UPC ${item.upc}:`,
+              error,
+            );
+          }
+        }),
+      );
 
-    // Import images for newly created products with UPC codes (non-blocking)
-    // We do this after the main import to avoid slowing down the CSV import
-    const productsToImportImages = result.items.filter(
-      (item) =>
-        item.productId &&
-        item.upc &&
-        (item.action === "created" || item.action === "product_only"),
-    );
-
-    // Process image imports in parallel but don't block on failures
-    await Promise.allSettled(
-      productsToImportImages.map(async (item) => {
-        try {
-          await importImageFromUPC(
-            ctx.db,
-            ctx.actorContext.organizationId,
-            ctx.upcLookupClient,
-            item.upc!,
-            unsafeProductId(item.productId!),
-          );
-        } catch (error) {
-          console.error(
-            `[importCSV] Image import failed for UPC ${item.upc}:`,
-            error,
-          );
-        }
-      }),
-    );
-
-    return result;
-  });
-
-// Preview what CSV import would do (dry run)
-const previewCSVImport = protectedProcedure
-  .input(inventoryCSVImportPayload)
-  .output(csvImportResult)
-  .mutation(async ({ ctx, input }) => {
-    return await importInventoryFromCSV(
-      ctx.db,
-      ctx.actorContext.organizationId,
-      input.rows,
-      {
-        dryRun: true,
-        actor: { ...ctx.actorContext, source: "csv_import" },
-      },
-    );
+      return result;
+    },
   });
 
 export const inventoryRouter = createTRPCRouter({
