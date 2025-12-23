@@ -2,10 +2,10 @@
 
 import { forwardRef, useMemo } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Package } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
+import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { type InfLocation } from "~/schemas/location";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { type z } from "zod";
@@ -95,33 +95,26 @@ export const LocationGalleryCard = forwardRef<
         >
           {location.name}
         </Link>
+        {inventoryItems.length > 0 && (
+          <InventoryValueSummary items={inventoryItems} variant="compact" />
+        )}
         <Badge variant="outline" className="h-4 px-1 text-[9px] capitalize">
           {location.type}
         </Badge>
-        {(location.directItemCount ?? 0) > 0 && (
-          <Badge variant="secondary" className="h-4 px-1 text-[9px]">
-            {location.directItemCount}
-          </Badge>
-        )}
       </div>
 
       {/* Location Images Strip */}
       {hasLocationImages && (
         <div className="bg-muted/20 flex gap-1 overflow-x-auto border-b p-1.5">
           {location.images.map((image) => (
-            <Link
+            <ImageWithPreview
               key={image.id}
+              src={image.url}
+              alt={`${location.name} photo`}
               href={`/images/${image.id}`}
-              className="group/img bg-background relative h-10 w-10 flex-shrink-0 overflow-hidden rounded border transition-transform hover:scale-105"
-            >
-              <Image
-                src={image.url}
-                alt={`${location.name} photo`}
-                fill
-                sizes="40px"
-                className="object-cover"
-              />
-            </Link>
+              size={40}
+              previewSize={240}
+            />
           ))}
         </div>
       )}
@@ -131,31 +124,30 @@ export const LocationGalleryCard = forwardRef<
         {productImages.length > 0 ? (
           <div className="grid grid-cols-2 gap-1 sm:grid-cols-3">
             {productImages.map((product) => (
-              <Link
-                key={product.id}
-                href={`/products/${product.id}`}
-                className="group/product hover:bg-muted flex items-center gap-1.5 rounded p-1 transition-colors"
-                title={product.name}
-              >
-                <div className="bg-muted/50 relative h-8 w-8 flex-shrink-0 overflow-hidden rounded border">
-                  {product.images[0] ? (
-                    <Image
-                      src={product.images[0].url}
-                      alt={product.name}
-                      fill
-                      sizes="32px"
-                      className="object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Package className="text-muted-foreground/40 h-3 w-3" />
-                    </div>
-                  )}
-                </div>
-                <span className="line-clamp-2 flex-1 text-[10px] leading-tight">
+              <div key={product.id} className="flex items-center gap-1.5">
+                {product.images[0] ? (
+                  <ImageWithPreview
+                    src={product.images[0].url}
+                    alt={product.name}
+                    href={`/products/${product.id}`}
+                    size={32}
+                    previewSize={200}
+                  />
+                ) : (
+                  <Link
+                    href={`/products/${product.id}`}
+                    className="bg-muted/50 flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded border"
+                  >
+                    <Package className="text-muted-foreground/40 h-3 w-3" />
+                  </Link>
+                )}
+                <Link
+                  href={`/products/${product.id}`}
+                  className="hover:text-primary line-clamp-2 flex-1 text-[10px] leading-tight"
+                >
                   {product.name}
-                </span>
-              </Link>
+                </Link>
+              </div>
             ))}
           </div>
         ) : (
@@ -165,13 +157,6 @@ export const LocationGalleryCard = forwardRef<
           </div>
         )}
       </div>
-
-      {/* Footer - Inventory Value */}
-      {inventoryItems.length > 0 && (
-        <div className="bg-muted/10 border-t px-2 py-1">
-          <InventoryValueSummary items={inventoryItems} variant="compact" />
-        </div>
-      )}
     </div>
   );
 });

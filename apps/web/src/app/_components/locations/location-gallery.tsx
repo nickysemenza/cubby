@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useMemo, useCallback, useState, useEffect } from "react";
+import {
+  useRef,
+  useMemo,
+  useCallback,
+  useState,
+  type RefCallback,
+} from "react";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -177,9 +183,82 @@ export function LocationGallery() {
   // Track active location for sidebar highlighting
   const [activeLocationId, setActiveLocationId] = useState<string>();
 
-  // Refs for scroll targeting
+  // Refs for scroll targeting and intersection observation
   const locationRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
-  const mainContentRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  // Callback ref for main content - creates observer when element mounts
+  const mainContentRef = useCallback((element: HTMLDivElement | null) => {
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
+    if (!element) return;
+
+    // Create new observer with this element as root
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        // Find the entry closest to the top of the viewport
+        let topEntry: IntersectionObserverEntry | null = null;
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            if (
+              !topEntry ||
+              entry.boundingClientRect.top < topEntry.boundingClientRect.top
+            ) {
+              topEntry = entry;
+            }
+          }
+        }
+        if (topEntry) {
+          const locationId = (topEntry.target as HTMLElement).dataset
+            .locationId;
+          if (locationId) {
+            setActiveLocationId(locationId);
+          }
+        }
+      },
+      {
+        root: element,
+        rootMargin: "-50px 0px -70% 0px",
+        threshold: 0,
+      },
+    );
+
+    // Observe any elements that were already registered
+    locationRefs.current.forEach((el) => {
+      if (el && observerRef.current) {
+        observerRef.current.observe(el);
+      }
+    });
+  }, []);
+
+  // Callback ref factory - observes elements as they mount
+  const createLocationRef = useCallback(
+    (locationId: string): RefCallback<HTMLDivElement> => {
+      return (element) => {
+        const prevElement = locationRefs.current.get(locationId);
+
+        // Unobserve previous element if it existed
+        if (prevElement && observerRef.current) {
+          observerRef.current.unobserve(prevElement);
+        }
+
+        if (element) {
+          locationRefs.current.set(locationId, element);
+          // Observe new element
+          if (observerRef.current) {
+            observerRef.current.observe(element);
+          }
+        } else {
+          locationRefs.current.delete(locationId);
+        }
+      };
+    },
+    [],
+  );
 
   // Fetch location tree
   const { data: locations, isLoading: locationsLoading } = useQuery(
@@ -255,44 +334,8 @@ export function LocationGallery() {
     const element = locationRefs.current.get(locationId);
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "start" });
-      setActiveLocationId(locationId);
-
-      // Clear active state after a delay
-      setTimeout(() => setActiveLocationId(undefined), 2000);
     }
   }, []);
-
-  // Intersection observer to track which location is in view
-  useEffect(() => {
-    if (!mainContentRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const locationId = (entry.target as HTMLElement).dataset.locationId;
-            if (locationId) {
-              setActiveLocationId(locationId);
-            }
-          }
-        }
-      },
-      {
-        root: mainContentRef.current,
-        rootMargin: "-100px 0px -80% 0px",
-        threshold: 0,
-      },
-    );
-
-    // Observe all location cards
-    locationRefs.current.forEach((element) => {
-      if (element) {
-        observer.observe(element);
-      }
-    });
-
-    return () => observer.disconnect();
-  }, [filteredLocations]);
 
   const isLoading = locationsLoading || inventoryLoading;
 
@@ -354,7 +397,7 @@ export function LocationGallery() {
             inventoryByLocation={inventoryByLocation}
             searchTerm={searchTerm}
             matchingIds={matchingIds}
-            locationRefs={locationRefs}
+            createLocationRef={createLocationRef}
           />
         </div>
       </div>

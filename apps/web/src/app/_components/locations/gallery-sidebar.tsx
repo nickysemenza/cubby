@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
-  ChevronDown,
   ChevronRight,
   PanelLeftClose,
   PanelLeft,
+  ImageIcon,
+  Package,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { type InfLocation } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { ScrollArea } from "~/components/ui/scroll-area";
+import { ImageWithPreview } from "~/components/ui/image-with-preview";
 
 /** Build a map of location id -> parent id by traversing the tree */
 function buildParentMap(
@@ -142,14 +142,32 @@ export function GallerySidebar({
     });
   }, []);
 
+  // Ref for scrolling active item into view
+  const activeItemRef = useRef<HTMLDivElement>(null);
+
+  // Scroll active item into view when it changes
+  useEffect(() => {
+    if (activeLocationId && activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [activeLocationId]);
+
   if (isCollapsed) {
     return (
-      <div className={cn("bg-muted/30 flex flex-col border-r", className)}>
+      <div
+        className={cn(
+          "from-muted/50 to-muted/20 flex flex-col border-r bg-gradient-to-b transition-all duration-300",
+          className,
+        )}
+      >
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleCollapse}
-          className="m-2"
+          className="hover:bg-primary/10 m-2 transition-colors"
           title="Expand sidebar"
         >
           <PanelLeft className="h-4 w-4" />
@@ -161,20 +179,25 @@ export function GallerySidebar({
   return (
     <div
       className={cn(
-        "bg-muted/30 flex w-52 flex-col border-r lg:w-60",
+        "from-muted/40 via-muted/20 to-background flex h-full min-h-0 w-56 flex-col overflow-hidden border-r bg-gradient-to-b shadow-sm transition-all duration-300 lg:w-64",
         className,
       )}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-2 py-1.5">
-        <span className="text-muted-foreground text-xs font-medium">
-          Navigation
-        </span>
+      <div className="from-primary/5 flex items-center justify-between border-b bg-gradient-to-r to-transparent px-3 py-2">
+        <div className="flex items-center gap-2">
+          <div className="bg-primary/10 flex h-6 w-6 items-center justify-center rounded-md">
+            <ImageIcon className="text-primary h-3.5 w-3.5" />
+          </div>
+          <span className="text-foreground text-sm font-semibold tracking-tight">
+            Locations
+          </span>
+        </div>
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggleCollapse}
-          className="h-6 w-6"
+          className="hover:bg-primary/10 h-7 w-7 transition-colors"
           title="Collapse sidebar"
         >
           <PanelLeftClose className="h-4 w-4" />
@@ -182,8 +205,8 @@ export function GallerySidebar({
       </div>
 
       {/* Tree */}
-      <ScrollArea className="flex-1">
-        <div className="p-2">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="space-y-0.5 p-2">
           {locations.map((location) => (
             <SidebarTreeNode
               key={location.id}
@@ -195,10 +218,11 @@ export function GallerySidebar({
               activeLocationId={activeLocationId}
               matchingIds={matchingIds}
               searchTerm={searchTerm}
+              activeItemRef={activeItemRef}
             />
           ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }
@@ -212,6 +236,7 @@ interface SidebarTreeNodeProps {
   activeLocationId?: string;
   matchingIds: Set<string>;
   searchTerm: string;
+  activeItemRef: React.RefObject<HTMLDivElement | null>;
 }
 
 function SidebarTreeNode({
@@ -223,12 +248,17 @@ function SidebarTreeNode({
   activeLocationId,
   matchingIds,
   searchTerm,
+  activeItemRef,
 }: SidebarTreeNodeProps) {
   const hasChildren = location.children && location.children.length > 0;
   const isExpanded = expandedNodes.has(location.id);
   const isActive = activeLocationId === location.id;
   const isMatch = matchingIds.has(location.id);
-  const indent = level * 10;
+  const indent = level * 12;
+
+  // Get first image for thumbnail
+  const thumbnail = location.images[0];
+  const itemCount = location.directItemCount ?? 0;
 
   const handleExpandClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -250,64 +280,117 @@ function SidebarTreeNode({
   return (
     <div>
       <div
+        ref={isActive ? activeItemRef : undefined}
         className={cn(
-          "flex cursor-pointer items-center gap-1 rounded px-1.5 py-1 text-xs transition-colors",
-          "hover:bg-muted",
-          isActive && "bg-primary/10 text-primary",
-          isMatch && !isActive && "bg-yellow-100/50 dark:bg-yellow-900/20",
+          "group relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
+          "transition-all duration-150 ease-out",
+          !isActive && "hover:bg-accent/50",
+          isActive && [
+            "bg-primary/15 text-primary",
+            "ring-primary/30 ring-1 ring-inset",
+            "before:bg-primary before:absolute before:top-1/2 before:left-0 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:transition-all before:duration-150",
+          ],
+          isMatch &&
+            !isActive &&
+            "bg-yellow-100/60 ring-1 ring-yellow-300/50 ring-inset dark:bg-yellow-900/30 dark:ring-yellow-700/50",
         )}
-        style={{ paddingLeft: `${6 + indent}px` }}
+        style={{ paddingLeft: `${8 + indent}px` }}
         onClick={handleLocationClick}
       >
         {/* Expand/Collapse Icon */}
         <button
           onClick={handleExpandClick}
           className={cn(
-            "hover:bg-muted-foreground/20 flex h-4 w-4 items-center justify-center rounded",
+            "hover:bg-muted-foreground/20 flex h-5 w-5 items-center justify-center rounded transition-transform duration-200",
             !hasChildren && "invisible",
+            isExpanded && "rotate-0",
           )}
         >
-          {hasChildren &&
-            (isExpanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            ))}
+          {hasChildren && (
+            <ChevronRight
+              className={cn(
+                "h-3.5 w-3.5 transition-transform duration-200",
+                isExpanded && "rotate-90",
+              )}
+            />
+          )}
         </button>
 
-        {/* Location Icon */}
-        <LocationIcon
-          type={location.type}
-          className="text-muted-foreground h-3 w-3 flex-shrink-0"
-        />
+        {/* Thumbnail or Location Icon */}
+        {thumbnail ? (
+          <ImageWithPreview
+            src={thumbnail.url}
+            alt={location.name}
+            size={28}
+            previewSize={192}
+            className={cn(
+              "rounded-md transition-all duration-200",
+              isActive
+                ? "border-primary/30 bg-primary/10"
+                : "border-border/50 bg-muted/50 group-hover:border-border",
+            )}
+          />
+        ) : (
+          <div
+            className={cn(
+              "relative flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border transition-all duration-200",
+              isActive
+                ? "border-primary/30 bg-primary/10"
+                : "border-border/50 bg-muted/50 group-hover:border-border",
+            )}
+          >
+            <LocationIcon
+              type={location.type}
+              className={cn(
+                "h-3.5 w-3.5 transition-colors",
+                isActive ? "text-primary" : "text-muted-foreground",
+              )}
+            />
+          </div>
+        )}
 
         {/* Location Name */}
-        <span className="flex-1 truncate">{location.name}</span>
+        <span
+          className={cn(
+            "flex-1 truncate font-medium transition-colors",
+            isActive ? "text-primary" : "text-foreground/80",
+          )}
+        >
+          {location.name}
+        </span>
 
         {/* Item Count Badge */}
         {(location.totalItemCount ?? 0) > 0 && (
-          <Badge
-            variant="secondary"
-            className="h-4 min-w-[16px] justify-center px-1 text-[9px]"
+          <div
+            className={cn(
+              "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+              isActive
+                ? "bg-primary/20 text-primary"
+                : "bg-muted text-muted-foreground group-hover:bg-muted/80",
+            )}
           >
+            <Package className="h-2.5 w-2.5" />
             {hasChildren ? (
               <>
-                {location.directItemCount ?? 0}
-                <span className="text-muted-foreground/60 ml-0.5">
-                  ({location.totalItemCount})
-                </span>
+                <span>{itemCount}</span>
+                <span className="opacity-50">/ {location.totalItemCount}</span>
               </>
             ) : (
-              (location.directItemCount ?? 0)
+              <span>{itemCount}</span>
             )}
-          </Badge>
+          </div>
         )}
       </div>
 
-      {/* Children */}
-      {hasChildren && isExpanded && visibleChildren && (
-        <div>
-          {visibleChildren.map((child) => (
+      {/* Children with animation */}
+      {hasChildren && (
+        <div
+          className={cn(
+            "overflow-hidden transition-all duration-200",
+            isExpanded ? "opacity-100" : "h-0 opacity-0",
+          )}
+        >
+          {visibleChildren?.map((child) => (
             <SidebarTreeNode
               key={child.id}
               location={child}
@@ -318,6 +401,7 @@ function SidebarTreeNode({
               activeLocationId={activeLocationId}
               matchingIds={matchingIds}
               searchTerm={searchTerm}
+              activeItemRef={activeItemRef}
             />
           ))}
         </div>

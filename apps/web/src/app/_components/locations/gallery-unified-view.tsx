@@ -1,5 +1,6 @@
 "use client";
 
+import { type RefCallback } from "react";
 import { cn } from "~/lib/utils";
 import { type InfLocation } from "~/schemas/location";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
@@ -13,7 +14,7 @@ interface GalleryUnifiedViewProps {
   inventoryByLocation: Map<string, InventoryItem[]>;
   searchTerm: string;
   matchingIds: Set<string>;
-  locationRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
+  createLocationRef: (locationId: string) => RefCallback<HTMLDivElement>;
   className?: string;
 }
 
@@ -39,7 +40,7 @@ export function GalleryUnifiedView({
   inventoryByLocation,
   searchTerm,
   matchingIds,
-  locationRefs,
+  createLocationRef,
   className,
 }: GalleryUnifiedViewProps) {
   return (
@@ -51,7 +52,7 @@ export function GalleryUnifiedView({
         inventoryByLocation={inventoryByLocation}
         searchTerm={searchTerm}
         matchingIds={matchingIds}
-        locationRefs={locationRefs}
+        createLocationRef={createLocationRef}
       />
     </div>
   );
@@ -63,7 +64,7 @@ interface LocationRowProps {
   inventoryByLocation: Map<string, InventoryItem[]>;
   searchTerm: string;
   matchingIds: Set<string>;
-  locationRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
+  createLocationRef: (locationId: string) => RefCallback<HTMLDivElement>;
 }
 
 function LocationRow({
@@ -72,7 +73,7 @@ function LocationRow({
   inventoryByLocation,
   searchTerm,
   matchingIds,
-  locationRefs,
+  createLocationRef,
 }: LocationRowProps) {
   const bgClass =
     depthBackgrounds[Math.min(level, depthBackgrounds.length - 1)];
@@ -87,16 +88,12 @@ function LocationRow({
         const isFaded = Boolean(searchTerm && !matchingIds.has(location.id));
         const hasChildren = location.children && location.children.length > 0;
 
-        const setRef = (el: HTMLDivElement | null) => {
-          locationRefs.current.set(location.id, el);
-        };
-
         return (
           <div key={location.id} className="relative">
             {/* Card with optional background tint */}
             <div className={cn("rounded-lg", bgClass && `${bgClass} p-2`)}>
               <LocationGalleryCard
-                ref={setRef}
+                ref={createLocationRef(location.id)}
                 location={location}
                 inventoryItems={inventoryItems}
                 isHighlighted={isHighlighted}
@@ -122,7 +119,7 @@ function LocationRow({
                         inventoryByLocation={inventoryByLocation}
                         searchTerm={searchTerm}
                         matchingIds={matchingIds}
-                        locationRefs={locationRefs}
+                        createLocationRef={createLocationRef}
                       />
                     </div>
                   ))}

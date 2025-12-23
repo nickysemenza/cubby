@@ -13,6 +13,7 @@ import Link from "next/link";
 import { cn } from "~/lib/utils";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
+import { Label } from "~/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -62,14 +63,14 @@ export function GalleryHeader({
       <div className="bg-muted/30 flex min-h-[32px] items-center gap-3 border-b px-4 py-1">
         {/* Stats */}
         {stats && (
-          <div className="flex items-center gap-3 border-r pr-3 text-xs">
-            <span className="text-muted-foreground flex items-center gap-1">
+          <div className="text-muted-foreground flex items-center gap-3 border-r pr-3 text-xs">
+            <span className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
-              {stats.locationCount}
+              {stats.locationCount} locations
             </span>
-            <span className="text-muted-foreground flex items-center gap-1">
+            <span className="flex items-center gap-1">
               <Package className="h-3 w-3" />
-              {stats.itemCount}
+              {stats.itemCount} items
             </span>
           </div>
         )}
@@ -125,39 +126,47 @@ export function GalleryHeader({
         </div>
 
         {/* Type Filter */}
-        <Select
-          value={locationTypeFilter ?? "all"}
-          onValueChange={(value) =>
-            onTypeFilterChange(value === "all" ? null : (value as LocationType))
-          }
-        >
-          <SelectTrigger className="h-8 w-[120px] text-xs">
-            <SelectValue placeholder="All types" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            {locationTypeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-muted-foreground">Type:</Label>
+          <Select
+            value={locationTypeFilter ?? "all"}
+            onValueChange={(value) =>
+              onTypeFilterChange(
+                value === "all" ? null : (value as LocationType),
+              )
+            }
+          >
+            <SelectTrigger className="h-8 w-[100px] text-xs">
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              {locationTypeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Empty Filter */}
-        <Select
-          value={emptyFilter}
-          onValueChange={(value) => onEmptyFilterChange(value as EmptyFilter)}
-        >
-          <SelectTrigger className="h-8 w-[110px] text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="withItems">With items</SelectItem>
-            <SelectItem value="empty">Empty</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-muted-foreground">Status:</Label>
+          <Select
+            value={emptyFilter}
+            onValueChange={(value) => onEmptyFilterChange(value as EmptyFilter)}
+          >
+            <SelectTrigger className="h-8 w-[100px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="withItems">With items</SelectItem>
+              <SelectItem value="empty">Empty</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Clear Filters Button */}
         {hasActiveFilters && (
@@ -183,6 +192,7 @@ export function GalleryHeader({
           size="sm"
           className="h-8 gap-1 text-xs"
           render={<Link href="/locations/new" />}
+          nativeButton={false}
         >
           <Plus className="h-3.5 w-3.5" />
           New Location

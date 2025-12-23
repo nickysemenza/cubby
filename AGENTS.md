@@ -98,6 +98,7 @@ The service layer (`/server/services/`) is used selectively for entities that re
 - use SideBySideFields component for two-column form layouts
 - follow shadcn/ui component patterns in src/components/ui
 - use class-variance-authority (CVA) for component variants when there are multiple styling options
+- use `<ImageWithPreview>` for all thumbnails - shows larger preview on hover, supports optional `href` for linking
 
 ## Unit Conversion & WASM Architecture
 
