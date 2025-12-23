@@ -47,11 +47,11 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
       <div
         className={`relative z-10 flex h-full flex-col justify-end p-6 sm:p-8 ${!hasImage ? "items-start" : ""}`}
       >
-        <h1
+        <h2
           className={`text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl ${hasImage ? "text-white" : ""}`}
         >
           {recipe.name}
-        </h1>
+        </h2>
 
         {/* Meta info */}
         <div

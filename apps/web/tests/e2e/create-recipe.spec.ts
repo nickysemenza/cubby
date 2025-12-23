@@ -197,18 +197,22 @@ test.describe("Create Recipe", () => {
       page.getByRole("heading", { name: recipeName, level: 1 }),
     ).toBeVisible();
 
-    // Verify the ingredient appears in the recipe ingredients section
+    // Verify the ingredient appears in the magazine view ingredients sidebar
+    const ingredientsSidebar = page
+      .locator("aside")
+      .filter({ has: page.getByText("Ingredients") });
+    await expect(ingredientsSidebar.getByText(ingredientName)).toBeVisible();
+
+    // Verify the instruction appears in the magazine view (step shown as number circle)
+    const instructionsSection = page
+      .locator("main")
+      .filter({ has: page.getByText("Instructions") });
     await expect(
-      page.getByText("Ingredients").locator("..").getByText(ingredientName),
+      instructionsSection.getByText(new RegExp(ingredientName)),
     ).toBeVisible();
 
-    // Verify the instruction appears (check for part of the instruction)
-    await expect(
-      page
-        .getByText(/Step 1/)
-        .locator("..")
-        .getByText(new RegExp(ingredientName)),
-    ).toBeVisible();
+    // Switch to Table view to check detailed links and cost/weight calculations
+    await page.getByRole("button", { name: "Table" }).click();
 
     // Verify that we have proper entity relationships by checking the ingredient link
     const ingredientLink = page
