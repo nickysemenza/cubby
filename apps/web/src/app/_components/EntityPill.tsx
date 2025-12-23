@@ -2,33 +2,12 @@
 
 import Link from "next/link";
 import type React from "react";
-import { cva } from "class-variance-authority";
 import { entities } from "~/entities/entities";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import type { LocationType } from "~/schemas/location";
 import { isMiscProduct, getMiscDisplayName } from "~/lib/constants";
 import { type Entity } from "~/entities/types";
-
-const pillVariants = cva(
-  "inline-flex items-center truncate rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset transition-colors",
-  {
-    variants: {
-      variant: {
-        default: "bg-muted text-muted-foreground ring-border hover:bg-accent",
-        entity: "bg-primary/10 text-primary ring-primary/20",
-        label: "bg-secondary text-secondary-foreground ring-border",
-      },
-      size: {
-        default: "px-1.5 py-0.5 text-xs",
-        small: "px-1 py-0.5 text-xs",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  },
-);
+import { Badge } from "~/components/ui/badge";
 
 interface PillProps {
   text: string;
@@ -38,34 +17,26 @@ interface PillProps {
 
 export const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
   return (
-    <span
-      className={pillVariants({ variant: "default", className: "max-w-full" })}
-    >
+    <Badge variant="outline" className="max-w-full gap-1 font-medium">
       <span className="min-w-0 truncate">{text}</span>
       {entity && (
-        <span
-          className={pillVariants({
-            variant: "entity",
-            size: "small",
-            className: "ml-1 flex-shrink-0 rounded-sm",
-          })}
+        <Badge
+          variant="default"
+          className="ml-0.5 h-4 shrink-0 gap-0.5 rounded-sm px-1 py-0 text-[10px]"
         >
           {entities[entity].icon}
-          <span className="ml-0.5">{entities[entity].label}</span>
-        </span>
+          <span>{entities[entity].label}</span>
+        </Badge>
       )}
       {label && (
-        <span
-          className={pillVariants({
-            variant: "label",
-            size: "small",
-            className: "ml-1 flex-shrink-0 rounded-sm",
-          })}
+        <Badge
+          variant="secondary"
+          className="ml-0.5 h-4 shrink-0 rounded-sm px-1 py-0 text-[10px]"
         >
           {label}
-        </span>
+        </Badge>
       )}
-    </span>
+    </Badge>
   );
 };
 export const IngredientPillLink: React.FC<{
@@ -104,21 +75,16 @@ export const LocationPillLinkCompact: React.FC<{
     rel={openInNewTab ? "noopener noreferrer" : undefined}
     className="inline-block max-w-full min-w-0"
   >
-    <span
-      className={pillVariants({ variant: "default", className: "max-w-full" })}
-    >
-      <LocationIcon type={type} size={12} className="mr-1 flex-shrink-0" />
+    <Badge variant="outline" className="max-w-full gap-1 font-medium">
+      <LocationIcon type={type} size={12} className="shrink-0" />
       <span className="min-w-0 truncate">{name}</span>
-      <span
-        className={pillVariants({
-          variant: "label",
-          size: "small",
-          className: "ml-1 flex-shrink-0 rounded-sm",
-        })}
+      <Badge
+        variant="secondary"
+        className="ml-0.5 h-4 shrink-0 rounded-sm px-1 py-0 text-[10px]"
       >
         {type}
-      </span>
-    </span>
+      </Badge>
+    </Badge>
   </Link>
 );
 export const InventoryEntryPillLink: React.FC<{

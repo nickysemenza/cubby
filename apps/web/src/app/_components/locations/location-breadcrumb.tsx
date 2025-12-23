@@ -1,11 +1,20 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
-import { ChevronRight, Home } from "lucide-react";
+import { Home } from "lucide-react";
 import { LocationIcon } from "./location-icons";
 import { type LocationType, type InfLocation } from "~/schemas/location";
 import { cn } from "~/lib/utils";
 import { getDefaultLocationType } from "~/lib/location-path";
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb";
 
 export interface LocationSegment {
   id?: string;
@@ -64,62 +73,70 @@ export function LocationBreadcrumb({
   if (segments.length === 0 && !showHome) return null;
 
   return (
-    <nav
-      className={cn("flex flex-wrap items-center gap-1 text-sm", className)}
-      aria-label="Location breadcrumb"
-    >
-      {showHome && (
-        <>
-          <Link
-            href="/"
-            className="hover:bg-muted flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors"
-          >
-            <Home size={14} />
-            <span>Home</span>
-          </Link>
-          {segments.length > 0 && (
-            <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
-          )}
-        </>
-      )}
-      {segments.map((segment, index) => {
-        const isDefault = segment.type === getDefaultLocationType(index);
-        const isLast = index === segments.length - 1;
+    <Breadcrumb className={className}>
+      <BreadcrumbList>
+        {showHome && (
+          <>
+            <BreadcrumbItem>
+              <BreadcrumbLink
+                render={
+                  <Link
+                    href="/"
+                    className="hover:bg-muted flex items-center gap-1.5 rounded-md px-2 py-1"
+                  />
+                }
+              >
+                <Home size={14} />
+                <span>Home</span>
+              </BreadcrumbLink>
+            </BreadcrumbItem>
+            {segments.length > 0 && <BreadcrumbSeparator />}
+          </>
+        )}
+        {segments.map((segment, index) => {
+          const isDefault = segment.type === getDefaultLocationType(index);
+          const isLast = index === segments.length - 1;
 
-        const content = (
-          <span
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors",
-              linkable && !isLast && "hover:bg-muted",
-              highlightNonDefault && !isDefault
-                ? "border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30"
-                : "bg-muted/50",
-              isLast && "font-medium",
-            )}
-          >
-            <LocationIcon type={segment.type} size={14} />
-            <span>{segment.name}</span>
-            {showTypeAnnotations && !isDefault && (
-              <span className="text-muted-foreground text-xs">
-                [{segment.type}]
-              </span>
-            )}
-          </span>
-        );
+          const content = (
+            <span
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2 py-1",
+                highlightNonDefault && !isDefault
+                  ? "border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30"
+                  : "bg-muted/50",
+                isLast && "font-medium",
+              )}
+            >
+              <LocationIcon type={segment.type} size={14} />
+              <span>{segment.name}</span>
+              {showTypeAnnotations && !isDefault && (
+                <span className="text-muted-foreground text-xs">
+                  [{segment.type}]
+                </span>
+              )}
+            </span>
+          );
 
-        return (
-          <div key={segment.id ?? index} className="flex items-center gap-1">
-            {index > 0 && (
-              <ChevronRight className="text-muted-foreground h-4 w-4 shrink-0" />
-            )}
-            {linkable && segment.id && !isLast ? (
-              <Link href={`/locations/${segment.id}`}>{content}</Link>
-            ) : (
-              content
-            )}
-          </div>
-        );
-      })}
-    </nav>
+          return (
+            <React.Fragment key={segment.id ?? index}>
+              {index > 0 && <BreadcrumbSeparator />}
+              <BreadcrumbItem>
+                {linkable && segment.id && !isLast ? (
+                  <BreadcrumbLink
+                    render={<Link href={`/locations/${segment.id}`} />}
+                  >
+                    {content}
+                  </BreadcrumbLink>
+                ) : isLast ? (
+                  <BreadcrumbPage>{content}</BreadcrumbPage>
+                ) : (
+                  content
+                )}
+              </BreadcrumbItem>
+            </React.Fragment>
+          );
+        })}
+      </BreadcrumbList>
+    </Breadcrumb>
   );
 }

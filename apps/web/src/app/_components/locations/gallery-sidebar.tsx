@@ -244,8 +244,6 @@ function SidebarTreeNode({
   // Filter children based on search
   const visibleChildren = useMemo(() => {
     if (!searchTerm || !location.children) return location.children;
-
-    // Show all children when searching
     return location.children;
   }, [location.children, searchTerm]);
 
@@ -286,7 +284,7 @@ function SidebarTreeNode({
         {/* Location Name */}
         <span className="flex-1 truncate">{location.name}</span>
 
-        {/* Item Count Badge - shows direct (total) like enhanced tree */}
+        {/* Item Count Badge */}
         {(location.totalItemCount ?? 0) > 0 && (
           <Badge
             variant="secondary"
