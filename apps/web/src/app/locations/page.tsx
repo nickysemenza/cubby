@@ -2,6 +2,7 @@ import { LocationList } from "./locationlist";
 import { type Metadata } from "next";
 import LocationTreeGraph from "../_components/inventory/location-tree-graph";
 import LocationTreeView from "../_components/inventory/location-tree-view";
+import LocationTreemap from "../_components/inventory/location-treemap";
 import { LocationGallery } from "../_components/locations/location-gallery";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Suspense } from "react";
@@ -35,9 +36,24 @@ export default function Page() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="visualizations" className="space-y-4">
-          <div className="flex flex-row gap-4">
-            <div className="flex-1">
+        <TabsContent value="visualizations" className="space-y-6">
+          {/* Treemap - full width */}
+          <div>
+            <h3 className="mb-2 text-lg font-semibold">
+              Inventory Distribution
+            </h3>
+            <p className="text-muted-foreground mb-3 text-sm">
+              Size represents total inventory items at each location and its
+              children
+            </p>
+            <Suspense fallback={<SimpleLoading text="Loading treemap..." />}>
+              <LocationTreemap />
+            </Suspense>
+          </div>
+
+          {/* Tree views side by side */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div>
               <h3 className="mb-2 text-lg font-semibold">Tree View</h3>
               <Suspense
                 fallback={<SimpleLoading text="Loading tree view..." />}
@@ -45,7 +61,7 @@ export default function Page() {
                 <LocationTreeView />
               </Suspense>
             </div>
-            <div className="flex-1">
+            <div>
               <h3 className="mb-2 text-lg font-semibold">Tree Graph</h3>
               <Suspense
                 fallback={<SimpleLoading text="Loading tree graph..." />}
