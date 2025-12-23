@@ -39,10 +39,20 @@ import {
 import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
 import { type ActorContext, buildActorContext } from "~/schemas/context";
 
+// Expected 4xx errors that shouldn't be logged as failures
+const EXPECTED_ERROR_CODES: Set<string> = new Set([
+  "NOT_FOUND",
+  "UNAUTHORIZED",
+  "FORBIDDEN",
+  "BAD_REQUEST",
+  "CONFLICT",
+  "PRECONDITION_FAILED",
+]);
+
 /**
  * Create a TRPCError with consistent error handling:
  * - Derives tRPC error code from AppErrorReason
- * - Logs to console with [REASON] prefix
+ * - Logs unexpected errors to console (skips expected 4xx responses)
  * - Annotates the active tracing span with error details
  * - Records the original exception if provided
  */
@@ -52,24 +62,29 @@ export function createAppError(
   originalError?: unknown,
 ): TRPCError {
   const code = AppErrors[reason];
+  const isExpectedError = EXPECTED_ERROR_CODES.has(code);
 
-  // Log to console
-  if (originalError) {
-    console.error(`[${reason}] ${message}`, originalError);
-  } else {
-    console.error(`[${reason}] ${message}`);
+  // Only log unexpected errors (5xx, etc.) - expected 4xx are normal business responses
+  if (!isExpectedError) {
+    if (originalError) {
+      console.error(`[${reason}] ${message}`, originalError);
+    } else {
+      console.error(`[${reason}] ${message}`);
+    }
   }
 
-  // Annotate tracing span
+  // Annotate tracing span (but don't mark expected errors as ERROR status)
   const span = trace.getActiveSpan();
   if (span) {
     span.setAttributes({
       "error.reason": reason,
       "error.message": message,
     });
-    span.setStatus({ code: SpanStatusCode.ERROR, message });
-    if (originalError instanceof Error || typeof originalError === "string") {
-      span.recordException(originalError);
+    if (!isExpectedError) {
+      span.setStatus({ code: SpanStatusCode.ERROR, message });
+      if (originalError instanceof Error || typeof originalError === "string") {
+        span.recordException(originalError);
+      }
     }
   }
 

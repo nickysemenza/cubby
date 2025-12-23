@@ -4,9 +4,6 @@
  */
 
 // Entity not found errors
-export const notFoundError = (entity: string, id: string | number) =>
-  `${entity} ${id} not found`;
-
 export const notFoundByNameError = (entity: string, name: string) =>
   `${entity} with name "${name}" not found`;
 

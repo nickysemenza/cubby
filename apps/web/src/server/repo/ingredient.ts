@@ -19,7 +19,7 @@ import {
   addProductSourceMetadata,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import { notFoundError } from "~/lib/error-messages";
+import { createAppError } from "~/server/api/trpc";
 import { type z } from "zod";
 import { ingredientBase } from "~/schemas/ingredient";
 import {
@@ -61,7 +61,10 @@ export const mergeIngredients = async (
     });
 
     if (!targetRec) {
-      throw new Error(notFoundError("Target ingredient", target));
+      throw createAppError(
+        "INGREDIENT_NOT_FOUND",
+        `Target ingredient ${target} not found`,
+      );
     }
 
     const aliasRecs = await tx.query.ingredient.findMany({
@@ -154,7 +157,7 @@ export const getIngredientByID = async (
   });
 
   if (!ingredientData) {
-    throw new Error(notFoundError("Ingredient", id));
+    throw createAppError("INGREDIENT_NOT_FOUND", `Ingredient ${id} not found`);
   }
 
   return await dbIngredientToAPI(db, ingredientData);

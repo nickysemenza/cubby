@@ -42,8 +42,20 @@ const handler = async (req: NextRequest) => {
                 error,
               }: {
                 path?: string;
-                error: { message: string };
+                error: { message: string; code?: string };
               }) => {
+                // Don't log expected 4xx responses as failures
+                const expectedCodes = [
+                  "NOT_FOUND",
+                  "UNAUTHORIZED",
+                  "FORBIDDEN",
+                  "BAD_REQUEST",
+                  "CONFLICT",
+                  "PRECONDITION_FAILED",
+                ];
+                if (error.code && expectedCodes.includes(error.code)) {
+                  return; // Silent - these are expected responses, not failures
+                }
                 console.error(
                   `❌ tRPC failed on ${path ?? "<no-path>"}: ${error.message}`,
                 );

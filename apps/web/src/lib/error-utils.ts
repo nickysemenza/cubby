@@ -48,7 +48,8 @@ function isNonRetriableError(details: AppErrorDetails): boolean {
     c === "FORBIDDEN" ||
     c === "PRECONDITION_FAILED" ||
     c === "BAD_REQUEST" ||
-    c === "CONFLICT"
+    c === "CONFLICT" ||
+    c === "NOT_FOUND"
   );
 }
 

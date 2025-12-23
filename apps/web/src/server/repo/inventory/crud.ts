@@ -12,7 +12,7 @@ import {
   updateAndReturnDb,
   buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
-import { notFoundError } from "~/lib/error-messages";
+import { createAppError } from "~/server/api/trpc";
 import {
   type InventoryId,
   type OrganizationId,
@@ -240,7 +240,10 @@ export const updateInventoryEntry = async (
   });
 
   if (!result) {
-    throw new Error(notFoundError("Inventory entry", id) + " after update");
+    throw createAppError(
+      "INVENTORY_NOT_FOUND",
+      `Inventory entry ${id} not found after update`,
+    );
   }
 
   return dbInventoryEntryToAPI(result);

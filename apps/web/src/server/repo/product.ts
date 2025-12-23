@@ -33,11 +33,8 @@ import {
   associatePendingImages,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import {
-  notFoundByNameError,
-  ambiguousNameError,
-  notFoundError,
-} from "~/lib/error-messages";
+import { notFoundByNameError, ambiguousNameError } from "~/lib/error-messages";
+import { createAppError } from "~/server/api/trpc";
 import {
   type ProductId,
   type OrganizationId,
@@ -197,7 +194,7 @@ export const getProductByID = async (
   });
 
   if (!res) {
-    throw new Error(notFoundError("Product", id));
+    throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
   }
 
   return dbProductToAPI(res);
@@ -371,7 +368,7 @@ export const updateProduct = async (
     });
 
     if (!beforeProduct) {
-      throw new Error(notFoundError("Product", id));
+      throw createAppError("PRODUCT_NOT_FOUND", `Product ${id} not found`);
     }
 
     // Build update data

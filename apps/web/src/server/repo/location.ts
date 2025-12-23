@@ -35,7 +35,7 @@ import {
   buildPartialUpdateValues,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import { notFoundError } from "~/lib/error-messages";
+import { createAppError } from "~/server/api/trpc";
 import {
   location,
   locationImage,
@@ -613,7 +613,7 @@ export const getLocationById = async (
   });
 
   if (!res) {
-    throw new Error(notFoundError("Location", id));
+    throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
   }
 
   // Fetch parent chain recursively (up to 10 levels)

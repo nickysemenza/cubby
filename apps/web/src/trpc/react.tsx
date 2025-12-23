@@ -14,7 +14,7 @@ import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import SuperJSON from "superjson";
 import { createTRPCClient } from "@trpc/client";
-import { shouldRetryQuery } from "~/lib/error-utils";
+import { shouldRetryQuery, getAppErrorDetails } from "~/lib/error-utils";
 import { toast } from "sonner";
 
 import { type AppRouter } from "~/server/api/root";
@@ -43,6 +43,9 @@ function makeQueryClient() {
     },
     queryCache: new QueryCache({
       onError: (error) => {
+        // Don't toast NOT_FOUND errors - these are expected and handled by UI
+        const details = getAppErrorDetails(error);
+        if (details.code === "NOT_FOUND") return;
         toast.error(getErrorMessage(error));
       },
     }),

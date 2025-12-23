@@ -7,7 +7,7 @@ import {
   buildPartialUpdateValues,
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
-import { notFoundError } from "~/lib/error-messages";
+import { createAppError } from "~/server/api/trpc";
 import {
   InventoryBulkOperationItem,
   type BulkMovePayload,
@@ -190,8 +190,9 @@ export const bulkMoveInventoryEntries = async (
       });
 
       if (!sourceEntry) {
-        throw new Error(
-          notFoundError("Inventory entry", item.inventoryEntryId),
+        throw createAppError(
+          "INVENTORY_NOT_FOUND",
+          `Inventory entry ${item.inventoryEntryId} not found`,
         );
       }
 
