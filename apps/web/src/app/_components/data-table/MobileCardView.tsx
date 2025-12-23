@@ -3,10 +3,11 @@
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Empty, EmptyTitle, EmptyDescription } from "~/components/ui/empty";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
 import { type ReactNode } from "react";
-import { EntityPreviewCard } from "~/components/ui/entity-preview-card";
+import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
 
 interface MobileCardViewProps<TItem> {
@@ -177,9 +178,12 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
           );
         })
       ) : (
-        <div className="text-muted-foreground py-8 text-center">
-          No results.
-        </div>
+        <Empty className="py-8">
+          <EmptyTitle>No results</EmptyTitle>
+          <EmptyDescription>
+            Try adjusting your search or filters
+          </EmptyDescription>
+        </Empty>
       )}
     </div>
   );

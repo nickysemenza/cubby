@@ -1,6 +1,6 @@
 import { auth } from "~/lib/auth";
 import { redirect } from "next/navigation";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 import { headers } from "next/headers";
 
 export default async function DashboardPage() {

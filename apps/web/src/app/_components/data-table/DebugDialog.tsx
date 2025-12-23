@@ -12,7 +12,7 @@ import JsonRenderer from "../json-renderer";
 
 interface DebugDialogProps {
   data: unknown;
-  trigger: React.ReactNode;
+  trigger: React.ReactElement;
   title?: string;
 }
 
@@ -23,7 +23,7 @@ export function DebugDialog({
 }: DebugDialogProps) {
   return (
     <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogTrigger render={trigger} />
       <DialogContent className="flex max-h-[80vh] max-w-6xl flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>{title}</DialogTitle>

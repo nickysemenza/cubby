@@ -84,7 +84,7 @@ const SelectFilterInput = <TData extends RowData>({
   }, [debouncedValue, column.id, table]);
 
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={(v) => v && onChange(v)}>
       <SelectTrigger className="h-8 w-[150px] lg:w-[200px]">
         <SelectValue placeholder={column.placeholder} />
       </SelectTrigger>

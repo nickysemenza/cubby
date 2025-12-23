@@ -1,4 +1,4 @@
-import { SimpleLoading } from "~/components/ui/loading-skeletons";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 
 export default function Loading() {
   return <SimpleLoading text="dashboard" />;

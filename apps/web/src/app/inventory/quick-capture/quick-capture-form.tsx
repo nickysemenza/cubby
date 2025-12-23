@@ -41,6 +41,8 @@ import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
 import { ComboboxField } from "~/app/_components/form-utils";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Empty, EmptyTitle } from "~/components/ui/empty";
+import { Kbd } from "~/components/ui/kbd";
 import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { ProductPillLink } from "~/app/_components/EntityPill";
@@ -484,9 +486,9 @@ export default function QuickCaptureForm({
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">
-                  No items at this location yet.
-                </p>
+                <Empty className="border-none py-2">
+                  <EmptyTitle>No items at this location yet</EmptyTitle>
+                </Empty>
               )}
             </CardContent>
           )}
@@ -497,15 +499,13 @@ export default function QuickCaptureForm({
         <p>Keyboard shortcuts:</p>
         <ul className="list-inside list-disc">
           <li>
-            <kbd className="bg-muted rounded px-1">Ctrl+Enter</kbd> - Save all
-            items
+            <Kbd>Ctrl+Enter</Kbd> - Save all items
           </li>
           <li>
-            <kbd className="bg-muted rounded px-1">Ctrl+N</kbd> - Add new item
-            (copies location from above)
+            <Kbd>Ctrl+N</Kbd> - Add new item (copies location from above)
           </li>
           <li>
-            <kbd className="bg-muted rounded px-1">Tab</kbd> - Navigate fields
+            <Kbd>Tab</Kbd> - Navigate fields
           </li>
         </ul>
       </div>

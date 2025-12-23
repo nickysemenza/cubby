@@ -1,4 +1,4 @@
-import { DetailLoadingSkeleton } from "~/components/ui/loading-skeletons";
+import { DetailLoadingSkeleton } from "~/components/feedback/loading-skeletons";
 
 export default function Loading() {
   return <DetailLoadingSkeleton />;

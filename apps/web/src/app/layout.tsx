@@ -11,6 +11,9 @@ import { WasmContextProvider } from "~/hooks/useWasm";
 import { DebugContextProvider } from "~/hooks/useDebug";
 import { ThemeProvider } from "~/components/theme-provider";
 import { AuthUIProvider } from "./_components/AuthUIProvider";
+import { Nunito_Sans } from "next/font/google";
+
+const nunitoSans = Nunito_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "RecipeHub",
@@ -24,7 +27,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={nunitoSans.variable}>
       <body>
         <ThemeProvider
           attribute="class"

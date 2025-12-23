@@ -29,7 +29,7 @@ import {
 import { getOptionalIngredientId } from "~/schemas/form-fields";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
-import { ArrayFieldManager } from "~/components/ui/array-field-manager";
+import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
 import { type ImageOut } from "~/schemas/image";
 import { Button } from "~/components/ui/button";

@@ -18,7 +18,7 @@ import {
   buildUpdateObject,
 } from "../form-utils";
 import { Input } from "~/components/ui/input";
-import { ArrayFieldManager } from "~/components/ui/array-field-manager";
+import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 
 // Form schema for ingredient
 const formSchema = z.object({

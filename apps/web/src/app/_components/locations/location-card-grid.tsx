@@ -9,7 +9,7 @@ import { Package, Calendar, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ProductPillLink } from "../EntityPill";
 import { InventoryValueSummary } from "./inventory-value-summary";
-import { EntityPreviewCard } from "~/components/ui/entity-preview-card";
+import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
 
 interface LocationCardGridProps {
   locations: InfLocation[];

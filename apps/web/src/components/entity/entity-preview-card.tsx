@@ -73,11 +73,9 @@ export function EntityPreviewCard({
       )}
       onClick={onClick}
     >
-      <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex items-start justify-between">
         {/* Image and Content */}
-        <div
-          className={cn("flex min-w-0 items-start gap-3", !image && "flex-1")}
-        >
+        <div className={cn("flex items-start gap-3", !image && "flex-1")}>
           {/* Image */}
           {image && <div className="flex-shrink-0">{image}</div>}
 
@@ -137,7 +135,7 @@ export function EntityPreviewCard({
 
         {/* Actions */}
         {(primaryAction || secondaryActions) && (
-          <div className={cn("flex flex-shrink-0 gap-2", isCompact && "gap-1")}>
+          <div className={cn("flex gap-2", isCompact && "gap-1")}>
             {renderPrimaryAction()}
             {secondaryActions}
           </div>

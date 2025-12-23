@@ -2,7 +2,7 @@ import { z } from "zod";
 import { unitMappingWithMetadata } from "~/schemas/unitmapping";
 import { recipeOut } from "~/schemas/recipe";
 import { infLocation, type LocationType } from "~/schemas/location";
-import { entitySummaryDataSchema } from "~/components/ui/entity-summary-card";
+import { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 import { unsafeLocationId } from "~/schemas/identifiers";
 
 const uuid = () => crypto.randomUUID();

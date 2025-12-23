@@ -109,16 +109,18 @@ export function ConversionCapabilities({
               }`}
             >
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center justify-center gap-1.5 p-0.5">
-                    <span className="sr-only">{label}</span>
-                    <FromIcon className="h-3.5 w-3.5" aria-hidden />
-                    <ArrowLeftRight
-                      className="h-3.5 w-3.5 opacity-60"
-                      aria-hidden
-                    />
-                    <ToIcon className="h-3.5 w-3.5" aria-hidden />
-                  </div>
+                <TooltipTrigger
+                  render={
+                    <div className="flex items-center justify-center gap-1.5 p-0.5" />
+                  }
+                >
+                  <span className="sr-only">{label}</span>
+                  <FromIcon className="h-3.5 w-3.5" aria-hidden />
+                  <ArrowLeftRight
+                    className="h-3.5 w-3.5 opacity-60"
+                    aria-hidden
+                  />
+                  <ToIcon className="h-3.5 w-3.5" aria-hidden />
                 </TooltipTrigger>
                 <TooltipContent sideOffset={6}>{label}</TooltipContent>
               </Tooltip>

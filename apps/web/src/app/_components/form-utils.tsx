@@ -1,16 +1,17 @@
 "use client";
 
 import { ReactNode } from "react";
-import { Button, ButtonVariants } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
+import { Field, FieldLabel, FieldError } from "~/components/ui/field";
 import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
-import { UseFormReturn, FieldValues, Path, PathValue } from "react-hook-form";
+  UseFormReturn,
+  FieldValues,
+  Path,
+  PathValue,
+  Controller,
+  FormProvider,
+} from "react-hook-form";
+import type { VariantProps } from "class-variance-authority";
 import { Input } from "~/components/ui/input";
 import { ComboboxItem } from "./combobox/combobox-types";
 import { DevTool } from "@hookform/devtools";
@@ -79,11 +80,11 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   isPending: boolean;
   onCancel?: () => void;
   submitButtonText: string;
-  submitButtonVariant?: ButtonVariants["variant"];
+  submitButtonVariant?: VariantProps<typeof buttonVariants>["variant"];
   children: ReactNode;
 }) {
   return (
-    <Form {...form}>
+    <FormProvider {...form}>
       {process.env.NODE_ENV !== "production" ? (
         <DevTool control={form.control} />
       ) : null}
@@ -118,7 +119,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           </Button>
         </div>
       </form>
-    </Form>
+    </FormProvider>
   );
 }
 
@@ -139,22 +140,22 @@ export function RequiredTextareaField<
   rows?: number;
 }) {
   return (
-    <FormField
+    <Controller
       control={form.control}
       name={name}
-      render={({ field }) => (
-        <FormItem className="space-y-1">
-          <FormLabel className="text-sm">{label}</FormLabel>
-          <FormControl>
-            <Textarea
-              placeholder={placeholder}
-              {...field}
-              className="min-h-0 px-2 py-1"
-              rows={rows}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
+      render={({ field, fieldState }) => (
+        <Field data-invalid={fieldState.invalid}>
+          <FieldLabel htmlFor={name}>{label}</FieldLabel>
+          <Textarea
+            id={name}
+            placeholder={placeholder}
+            {...field}
+            className="min-h-0 px-2 py-1"
+            rows={rows}
+            aria-invalid={fieldState.invalid}
+          />
+          {fieldState.error && <FieldError errors={[fieldState.error]} />}
+        </Field>
       )}
     />
   );
@@ -179,11 +180,12 @@ export function NullableNumericField<
   prefix?: string;
 }) {
   return (
-    <FormField
+    <Controller
       control={form.control}
       name={name}
-      render={({ field }) => {
+      render={({ field, fieldState }) => {
         const inputProps = {
+          id: name,
           type: "number" as const,
           step,
           placeholder,
@@ -199,25 +201,24 @@ export function NullableNumericField<
               numberValue as PathValue<TFieldValues, Path<TFieldValues>>,
             );
           },
+          "aria-invalid": fieldState.invalid,
         };
 
         return (
-          <FormItem>
-            <FormLabel>{label}</FormLabel>
-            <FormControl>
-              {prefix ? (
-                <div className="relative">
-                  <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">
-                    {prefix}
-                  </span>
-                  <Input {...inputProps} className="pl-7" />
-                </div>
-              ) : (
-                <Input {...inputProps} />
-              )}
-            </FormControl>
-            <FormMessage />
-          </FormItem>
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={name}>{label}</FieldLabel>
+            {prefix ? (
+              <div className="relative">
+                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">
+                  {prefix}
+                </span>
+                <Input {...inputProps} className="pl-7" />
+              </div>
+            ) : (
+              <Input {...inputProps} />
+            )}
+            {fieldState.error && <FieldError errors={[fieldState.error]} />}
+          </Field>
         );
       }}
     />
@@ -243,29 +244,27 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   onCreateNew?: (name: string) => Promise<ComboboxItem>;
 }) {
   return (
-    <FormField
+    <Controller
       control={form.control}
       name={name}
-      render={({ field }) => (
-        <FormItem>
-          {label && <FormLabel>{label}</FormLabel>}
-          <FormControl>
-            <DialogCompatibleCombobox
-              label={label?.toLowerCase() ?? "item"}
-              items={items}
-              onSearchChange={onSearchChange}
-              isLoading={isLoading}
-              value={field.value as ComboboxItem | null}
-              setValue={(value) =>
-                field.onChange(
-                  value as PathValue<TFieldValues, Path<TFieldValues>>,
-                )
-              }
-              onCreateNew={onCreateNew}
-            />
-          </FormControl>
-          <FormMessage />
-        </FormItem>
+      render={({ field, fieldState }) => (
+        <Field data-invalid={fieldState.invalid}>
+          {label && <FieldLabel htmlFor={name}>{label}</FieldLabel>}
+          <DialogCompatibleCombobox
+            label={label?.toLowerCase() ?? "item"}
+            items={items}
+            onSearchChange={onSearchChange}
+            isLoading={isLoading}
+            value={field.value as ComboboxItem | null}
+            setValue={(value) =>
+              field.onChange(
+                value as PathValue<TFieldValues, Path<TFieldValues>>,
+              )
+            }
+            onCreateNew={onCreateNew}
+          />
+          {fieldState.error && <FieldError errors={[fieldState.error]} />}
+        </Field>
       )}
     />
   );
@@ -354,10 +353,10 @@ export function UnifiedTextField<
   getIcon?: (value: string | null) => ReactNode;
 }) {
   return (
-    <FormField
+    <Controller
       control={form.control}
       name={name}
-      render={({ field }) => {
+      render={({ field, fieldState }) => {
         const value = nullable
           ? (field.value as string | null) || ""
           : field.value;
@@ -365,29 +364,29 @@ export function UnifiedTextField<
           ? getIcon(nullable ? (field.value as string | null) : field.value)
           : null;
         return (
-          <FormItem>
-            <FormLabel>{label}</FormLabel>
+          <Field data-invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={name}>{label}</FieldLabel>
             <div className="relative">
-              <FormControl>
-                <Input
-                  placeholder={placeholder}
-                  {...field}
-                  value={value}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    field.onChange(nullable ? (v === "" ? null : v) : v);
-                  }}
-                  className={icon ? "pr-10" : undefined}
-                />
-              </FormControl>
+              <Input
+                id={name}
+                placeholder={placeholder}
+                {...field}
+                value={value}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  field.onChange(nullable ? (v === "" ? null : v) : v);
+                }}
+                className={icon ? "pr-10" : undefined}
+                aria-invalid={fieldState.invalid}
+              />
               {icon && (
                 <span className="absolute inset-y-0 right-3 flex items-center">
                   {icon}
                 </span>
               )}
             </div>
-            <FormMessage />
-          </FormItem>
+            {fieldState.error && <FieldError errors={[fieldState.error]} />}
+          </Field>
         );
       }}
     />
@@ -412,34 +411,32 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   placeholder?: string;
 }) {
   return (
-    <FormField
+    <Controller
       control={form.control}
       name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Select
-              onValueChange={field.onChange}
-              value={field.value}
-              defaultValue={field.value}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={placeholder || `Select ${label.toLowerCase()}`}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FormControl>
-          <FormMessage />
-        </FormItem>
+      render={({ field, fieldState }) => (
+        <Field data-invalid={fieldState.invalid}>
+          <FieldLabel htmlFor={name}>{label}</FieldLabel>
+          <Select
+            onValueChange={(value) => field.onChange(value)}
+            value={field.value}
+            defaultValue={field.value}
+          >
+            <SelectTrigger id={name} aria-invalid={fieldState.invalid}>
+              <SelectValue
+                placeholder={placeholder || `Select ${label.toLowerCase()}`}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {options.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {fieldState.error && <FieldError errors={[fieldState.error]} />}
+        </Field>
       )}
     />
   );

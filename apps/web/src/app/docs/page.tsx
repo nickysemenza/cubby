@@ -9,7 +9,7 @@ import { NYTView } from "~/app/_components/recipe/NYTView";
 import {
   EntitySummaryCard,
   entitySummaryDataSchema,
-} from "~/components/ui/entity-summary-card";
+} from "~/components/entity/entity-summary-card";
 import { formatRichText } from "~/app/_components/recipe/richtext";
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
 import { unitMappingWithMetadata } from "~/schemas/unitmapping";

@@ -25,7 +25,7 @@ import { IngredientPillLink, RecipePillLink } from "../EntityPill";
 import {
   EntitySummaryCard,
   type RecipeSummaryData,
-} from "~/components/ui/entity-summary-card";
+} from "~/components/entity/entity-summary-card";
 import { getIngredientName } from "./recipeutils";
 
 export const RecipeIngredientList: React.FC<{

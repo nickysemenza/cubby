@@ -8,7 +8,7 @@ import { entities } from "~/entities/entities";
 import { type Entity } from "~/entities/types";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { SpacedContainer } from "~/components/ui/spaced-container";
+import { SpacedContainer } from "~/components/layout/spaced-container";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { NoneState } from "../NoneState";
 import { type Amount } from "~/codec/codec";

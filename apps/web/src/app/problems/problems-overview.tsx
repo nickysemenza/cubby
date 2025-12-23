@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { ErrorDisplay } from "~/components/ui/error-display";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 import {
   CheckCircle,
   Package,
@@ -20,7 +20,7 @@ import {
   Zap,
   Calendar,
 } from "lucide-react";
-import { SimpleLoading } from "~/components/ui/loading-skeletons";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { ProblemSection } from "./components/problem-section";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";

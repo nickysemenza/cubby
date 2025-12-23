@@ -18,7 +18,7 @@ import {
 } from "~/components/ui/dialog";
 import Webcam from "react-webcam";
 import { cn } from "~/lib/utils";
-import { ImageGrid } from "~/components/ui/image-grid";
+import { ImageGrid } from "~/components/media/image-grid";
 
 export interface PendingImage {
   id: string;

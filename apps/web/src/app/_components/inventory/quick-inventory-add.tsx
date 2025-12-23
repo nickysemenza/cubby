@@ -26,7 +26,7 @@ import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { ComboboxItem } from "../combobox/combobox-types";
 import { getOptionalProductId } from "~/schemas/form-fields";
 import { AmountFieldGroup } from "./amount-field-group";
-import { Form } from "~/components/ui/form";
+import { FormProvider } from "react-hook-form";
 import { amount } from "~/codec/codec";
 
 interface QuickInventoryAddProps {
@@ -79,7 +79,7 @@ export function QuickInventoryAdd({
   };
 
   return (
-    <Form {...form}>
+    <FormProvider {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <div className="flex items-end gap-2">
           <div className="min-w-[200px] flex-1">
@@ -107,6 +107,6 @@ export function QuickInventoryAdd({
           </Button>
         </div>
       </form>
-    </Form>
+    </FormProvider>
   );
 }

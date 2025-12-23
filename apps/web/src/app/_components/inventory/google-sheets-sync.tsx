@@ -310,16 +310,16 @@ export function GoogleSheetsSync() {
         <Button
           variant="ghost"
           size="sm"
-          asChild
           title={`Open "${status.sheetName}" in Google Sheets`}
+          render={
+            <a
+              href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            />
+          }
         >
-          <a
-            href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <ExternalLink className="h-3 w-3" />
-          </a>
+          <ExternalLink className="h-3 w-3" />
         </Button>
       </div>
 

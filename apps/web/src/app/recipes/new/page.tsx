@@ -1,6 +1,6 @@
 import { type Metadata } from "next";
 import NewRecipeForm from "~/app/_components/recipe/new-recipe";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const metadata: Metadata = {
   title: "New Recipe",

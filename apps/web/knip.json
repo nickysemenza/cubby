@@ -18,7 +18,6 @@
     "eslint-plugin-react-hooks",
     "prisma-dbml-generator",
     "prisma-json-types-generator",
-    "tailwindcss",
-    "tailwindcss-animate"
+    "tailwindcss"
   ]
 }

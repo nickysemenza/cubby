@@ -35,7 +35,7 @@ import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { getOptionalLocationId } from "~/schemas/form-fields";
 import { type BulkMoveItem } from "~/schemas/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { Form } from "~/components/ui/form";
+import { FormProvider } from "react-hook-form";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -132,7 +132,7 @@ export function MoveInventoryDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
+        <FormProvider {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <div className="text-sm font-medium">Items to move:</div>
@@ -167,7 +167,7 @@ export function MoveInventoryDialog({
               </Button>
             </DialogFooter>
           </form>
-        </Form>
+        </FormProvider>
       </DialogContent>
     </Dialog>
   );

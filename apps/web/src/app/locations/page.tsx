@@ -5,7 +5,7 @@ import LocationTreeView from "../_components/inventory/location-tree-view";
 import { LocationGallery } from "../_components/locations/location-gallery";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Suspense } from "react";
-import { SimpleLoading } from "~/components/ui/loading-skeletons";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { LocationActions } from "./location-actions";
 export const dynamic = "force-dynamic";

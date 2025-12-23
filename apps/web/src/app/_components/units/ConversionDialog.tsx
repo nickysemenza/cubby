@@ -128,19 +128,22 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <DialogTrigger asChild>
-            <Button
-              variant="secondary"
-              pop
-              size="sm"
-              className="flex items-center gap-1"
-            >
-              <Scale className="h-4 w-4" />
-              <span>Convert</span>
-            </Button>
-          </DialogTrigger>
-        </TooltipTrigger>
+        <DialogTrigger
+          render={
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="flex items-center gap-1"
+                />
+              }
+            />
+          }
+        >
+          <Scale className="h-4 w-4" />
+          <span>Convert</span>
+        </DialogTrigger>
         <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>
       </Tooltip>
       <DialogContent className="sm:max-w-[900px]">

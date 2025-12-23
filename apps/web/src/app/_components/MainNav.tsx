@@ -11,7 +11,7 @@ import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
 import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
-import { FlexContainer } from "~/components/ui/flex-container";
+import { FlexContainer } from "~/components/layout/flex-container";
 
 type NavItem = {
   href: string;

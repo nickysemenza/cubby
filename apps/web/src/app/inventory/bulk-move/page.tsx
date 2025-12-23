@@ -6,7 +6,7 @@ import {
   CardDescription,
 } from "~/components/ui/card";
 import BulkMoveForm from "./bulk-move-form";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const metadata = {
   title: "Bulk Move Inventory",

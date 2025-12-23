@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm -r dev",
+    "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
     "check": "pnpm -r check",
     "typecheck": "pnpm -r typecheck",
@@ -31,6 +32,13 @@
   "pnpm": {
     "overrides": {
       "vite": "^7.3.0"
+    },
+    "packageExtensions": {
+      "@hookform/resolvers": {
+        "peerDependencies": {
+          "zod": "^4.0.0"
+        }
+      }
     }
   },
   "lint-staged": {

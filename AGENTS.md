@@ -92,6 +92,7 @@ The service layer (`/server/services/`) is used selectively for entities that re
 
 ## UI/UX Patterns
 
+- **prefer shadcn/ui components** over custom implementations - search for existing components before building new ones
 - use cn() utility for merging Tailwind classes with conflict resolution
 - use lucide-react icons consistently
 - use SideBySideFields component for two-column form layouts

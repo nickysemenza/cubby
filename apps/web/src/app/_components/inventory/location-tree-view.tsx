@@ -8,7 +8,7 @@ import { LocationIcon } from "../locations/location-icons";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import Link from "next/link";
-import { FlexContainer } from "~/components/ui/flex-container";
+import { FlexContainer } from "~/components/layout/flex-container";
 
 import { useQuery } from "@tanstack/react-query";
 

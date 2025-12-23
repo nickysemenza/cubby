@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Plus, Trash } from "lucide-react";
 import { type RecipeFormValues } from "./types";
 import { AmountFieldGroup } from "../../inventory/amount-field-group";
-import { FlexContainer } from "~/components/ui/flex-container";
+import { FlexContainer } from "~/components/layout/flex-container";
 
 interface AmountFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;

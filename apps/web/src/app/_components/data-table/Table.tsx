@@ -15,12 +15,13 @@ import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
 import { type ReactNode } from "react";
-import { SpacedContainer } from "~/components/ui/spaced-container";
-import { LoadingContainer } from "~/components/ui/loading-spinner";
+import { SpacedContainer } from "~/components/layout/spaced-container";
+import { Spinner } from "~/components/ui/spinner";
+import { Empty, EmptyTitle, EmptyDescription } from "~/components/ui/empty";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
 import { MobileCardView } from "./MobileCardView";
-import { ErrorDisplay } from "~/components/ui/error-display";
+import { ErrorDisplay } from "~/components/feedback/error-display";
 
 interface FilterOption {
   value: string;
@@ -141,7 +142,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 }
                 className="h-16 text-center"
               >
-                <LoadingContainer />
+                <div className="flex items-center justify-center gap-2">
+                  <Spinner />
+                  <span>Loading...</span>
+                </div>
               </TableCell>
             </TableRow>
           ) : table.getRowModel().rows?.length ? (
@@ -196,9 +200,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 colSpan={
                   table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
                 }
-                className="h-16 text-center"
+                className="h-24"
               >
-                No results.
+                <Empty className="border-none py-4">
+                  <EmptyTitle>No results</EmptyTitle>
+                  <EmptyDescription>
+                    Try adjusting your search or filters
+                  </EmptyDescription>
+                </Empty>
               </TableCell>
             </TableRow>
           )}
@@ -207,8 +216,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
       {/* Mobile Card View */}
       {isLoading ? (
-        <div className="block py-8 lg:hidden">
-          <LoadingContainer />
+        <div className="flex items-center justify-center gap-2 py-8 lg:hidden">
+          <Spinner />
+          <span>Loading...</span>
         </div>
       ) : error ? (
         <div className="block py-8 lg:hidden">

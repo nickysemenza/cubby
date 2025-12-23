@@ -92,10 +92,11 @@ export function IngredientList() {
     <div>
       <div className="mb-4 flex items-center justify-between">
         <IngredientMerger table={table} />
-        <Button asChild variant="default">
-          <Link href={`/${entities.ingredient.basePath}/new`}>
-            Create New Ingredient
-          </Link>
+        <Button
+          variant="default"
+          render={<Link href={`/${entities.ingredient.basePath}/new`} />}
+        >
+          Create New Ingredient
         </Button>
       </div>
       <RTable

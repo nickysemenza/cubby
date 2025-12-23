@@ -1,5 +1,5 @@
 import { NewIngredient } from "~/app/_components/ingredients/new-ingredient";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const metadata = {
   title: "Create New Ingredient",

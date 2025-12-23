@@ -179,11 +179,13 @@ export function GalleryHeader({
         <div className="flex-1" />
 
         {/* New Location Button */}
-        <Button asChild size="sm" className="h-8 gap-1 text-xs">
-          <Link href="/locations/new">
-            <Plus className="h-3.5 w-3.5" />
-            New Location
-          </Link>
+        <Button
+          size="sm"
+          className="h-8 gap-1 text-xs"
+          render={<Link href="/locations/new" />}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New Location
         </Button>
       </div>
     </div>

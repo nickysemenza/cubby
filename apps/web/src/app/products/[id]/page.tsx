@@ -1,6 +1,6 @@
 import { api } from "~/trpc/server";
 import { ProductDetail } from "~/app/_components/products/product-detail";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };

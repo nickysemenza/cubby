@@ -39,15 +39,21 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
       </div>
       <div className="mt-4 flex gap-2">
         <Button onClick={onEdit}>Edit</Button>
-        <Button variant="outline" asChild>
-          <Link href={`/inventory/quick-capture?locationId=${location.id}`}>
-            Quick Capture Here
-          </Link>
+        <Button
+          variant="outline"
+          render={
+            <Link href={`/inventory/quick-capture?locationId=${location.id}`} />
+          }
+        >
+          Quick Capture Here
         </Button>
-        <Button variant="outline" asChild>
-          <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
-            Bulk Edit Inventory
-          </Link>
+        <Button
+          variant="outline"
+          render={
+            <Link href={`/inventory/bulk-edit?locationId=${location.id}`} />
+          }
+        >
+          Bulk Edit Inventory
         </Button>
       </div>
     </div>

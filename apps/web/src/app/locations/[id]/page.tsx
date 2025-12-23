@@ -1,7 +1,7 @@
 import { api } from "~/trpc/server";
 import { LocationDetail } from "~/app/_components/locations/location-detail";
 import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };

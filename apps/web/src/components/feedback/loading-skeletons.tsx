@@ -1,28 +1,20 @@
 import { cn } from "~/lib/utils";
-import { FlexContainer } from "~/components/ui/flex-container";
+import { Skeleton } from "~/components/ui/skeleton";
 
-interface SkeletonProps {
-  className?: string;
-}
-
-export function Skeleton({ className }: SkeletonProps) {
-  return <div className={cn("skeleton-shimmer rounded", className)} />;
-}
-
-// Reusable skeleton patterns
-export function SkeletonText({ className }: SkeletonProps) {
+// Reusable skeleton patterns built on shadcn Skeleton
+export function SkeletonText({ className }: { className?: string }) {
   return <Skeleton className={cn("h-4", className)} />;
 }
 
 export function SkeletonCard() {
   return (
-    <FlexContainer align="center" gap={4}>
+    <div className="flex items-center space-x-4">
       <Skeleton className="h-12 w-12" />
       <div className="flex-1 space-y-2">
         <SkeletonText />
         <SkeletonText className="w-2/3" />
       </div>
-    </FlexContainer>
+    </div>
   );
 }
 
@@ -53,14 +45,14 @@ export function DetailLoadingSkeleton() {
       <Skeleton className="h-10 w-64" />
 
       {/* Hero section */}
-      <FlexContainer gap={6}>
+      <div className="flex space-x-6">
         <Skeleton className="h-48 w-48" />
         <div className="flex-1 space-y-4">
           <SkeletonText />
           <SkeletonText className="w-3/4" />
           <SkeletonText className="w-1/2" />
         </div>
-      </FlexContainer>
+      </div>
 
       {/* Content sections */}
       <div className="space-y-4">
@@ -83,12 +75,11 @@ export function DetailLoadingSkeleton() {
 // Simple loading text for inline use
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <FlexContainer
-      align="center"
-      justify="center"
-      className="text-muted-foreground p-4"
-    >
+    <div className="text-muted-foreground flex items-center justify-center p-4">
       {text}
-    </FlexContainer>
+    </div>
   );
 }
+
+// Re-export shadcn Skeleton for direct use
+export { Skeleton };

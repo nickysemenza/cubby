@@ -13,7 +13,7 @@ import { ImageStatusBadge } from "~/app/_components/table";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { useQuery } from "@tanstack/react-query";
 import { assertNever } from "~/lib/assert";
-import { PageWrapper } from "~/components/ui/page-wrapper";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export default function ImageDetailPage() {
   const params = useParams();

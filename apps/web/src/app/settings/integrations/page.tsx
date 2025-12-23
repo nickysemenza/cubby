@@ -167,21 +167,27 @@ export default function IntegrationsPage() {
                 </p>
               )}
               <div className="mt-2 flex gap-2">
-                <Button variant="outline" size="sm" asChild>
-                  <a
-                    href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink className="h-3 w-3" />
-                    Open Sheet
-                  </a>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={
+                    <a
+                      href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    />
+                  }
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Open Sheet
                 </Button>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/settings/integrations/debug">
-                    <Bug className="h-3 w-3" />
-                    Debug
-                  </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  render={<Link href="/settings/integrations/debug" />}
+                >
+                  <Bug className="h-3 w-3" />
+                  Debug
                 </Button>
                 <Button
                   variant="outline"

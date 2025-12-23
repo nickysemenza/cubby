@@ -14,7 +14,7 @@ import { type z } from "zod";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
-import { SimpleLoading } from "~/components/ui/loading-skeletons";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
