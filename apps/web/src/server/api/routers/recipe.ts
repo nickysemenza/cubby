@@ -28,6 +28,7 @@ import {
   insertCompactRecipe,
   recipeList,
   updateRecipe,
+  getIngredientCooccurrence,
 } from "~/server/repo/recipe";
 import { createEntityCrudProcedures } from "../crud-factory";
 import { recipeId, type RecipeId } from "~/schemas/identifiers";
@@ -87,6 +88,23 @@ const insertCompact = protectedProcedure
     return await insertCompactRecipe(input, ctx.db, ctx.actorContext);
   });
 
+// Import co-occurrence schema and types
+import {
+  ingredientCooccurrenceSchema,
+  type IngredientCooccurrence,
+} from "~/schemas/ingredient-cooccurrence";
+
+const getIngredientCooccurrenceEndpoint = protectedProcedure
+  .input(z.object({ minEdgeWeight: z.number().min(1).default(2) }).optional())
+  .output(ingredientCooccurrenceSchema)
+  .query(async ({ ctx, input }): Promise<IngredientCooccurrence> => {
+    return await getIngredientCooccurrence(
+      ctx.db,
+      ctx.organizationId,
+      input?.minEdgeWeight ?? 2,
+    );
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   scrape,
@@ -95,4 +113,5 @@ export const recipeRouter = createTRPCRouter({
   list,
   create,
   update,
+  getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
 });

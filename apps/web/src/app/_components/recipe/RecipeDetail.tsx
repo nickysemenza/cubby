@@ -12,9 +12,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { NYTView } from "./NYTView";
 import { Button } from "~/components/ui/button";
-import { Table2, BookOpen, Newspaper } from "lucide-react";
+import { Table2, BookOpen, Newspaper, BarChart3 } from "lucide-react";
+import {
+  createIngredientData,
+  calculateTotals,
+  type IngredientDataItem,
+} from "~/app/_components/units/univ-conversion";
+import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
+import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
+import { getIngredientName } from "./recipeutils";
 
-type ViewMode = "magazine" | "nyt" | "table";
+type ViewMode = "magazine" | "nyt" | "table" | "charts";
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
@@ -33,7 +41,7 @@ const RecipeDetail: React.FC<{
   // Get recipe images from the recipe object
   const recipeImages = recipe.images;
 
-  // Load ingredient data asynchronously (for table view)
+  // Load ingredient data asynchronously (for table and charts views)
   const data = useAsyncMemo(
     async () => {
       const ids = ingredients
@@ -54,6 +62,21 @@ const RecipeDetail: React.FC<{
     },
     [ingredients, trpcClient.ingredient.getByID],
     undefined,
+  );
+
+  // Load enriched ingredient data for charts (with price/nutrition info)
+  const ingredientDataItems = useAsyncMemo(
+    async () => (data ? createIngredientData(ingredients, data) : []),
+    [ingredients, data],
+    [] as IngredientDataItem[],
+  );
+
+  // Calculate totals for charts
+  const totals = useAsyncMemo(
+    async () =>
+      data ? calculateTotals(ingredients, data, getIngredientName) : null,
+    [ingredients, data],
+    null,
   );
 
   return (
@@ -84,6 +107,14 @@ const RecipeDetail: React.FC<{
           <Table2 className="mr-2 h-4 w-4" />
           Table
         </Button>
+        <Button
+          variant={viewMode === "charts" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setViewMode("charts")}
+        >
+          <BarChart3 className="mr-2 h-4 w-4" />
+          Charts
+        </Button>
       </div>
 
       {/* View Components */}
@@ -99,6 +130,47 @@ const RecipeDetail: React.FC<{
           )}
           <RecipeIngredientList ingredients={ingredients} ingMap={data} />
         </>
+      )}
+      {viewMode === "charts" && (
+        <div className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="bg-muted/50 px-4 py-3">
+                <CardTitle className="text-base font-medium">
+                  Cost Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {ingredientDataItems.length > 0 ? (
+                  <RecipeCostTreemap
+                    ingredients={ingredientDataItems}
+                    totalCost={totals?.price ?? 0}
+                  />
+                ) : (
+                  <div className="text-muted-foreground flex h-[300px] items-center justify-center">
+                    Loading...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="bg-muted/50 px-4 py-3">
+                <CardTitle className="text-base font-medium">
+                  Nutrition Breakdown
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-4">
+                {ingredientDataItems.length > 0 ? (
+                  <MacroSunburst ingredients={ingredientDataItems} />
+                ) : (
+                  <div className="text-muted-foreground flex h-[300px] items-center justify-center">
+                    Loading...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       )}
 
       {/* Additional Images (for magazine view, if more than hero) */}

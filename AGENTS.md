@@ -11,10 +11,12 @@
 
 - whenever possible, types should be derived from common zod schemas
 - import existing types instead of redefining or casting them
+- **IMPORTANT**: Component interfaces should use `z.infer<typeof schema>` rather than manually defining matching TypeScript interfaces. Define Zod schemas in `~/schemas/` and import them directly where needed.
 - avoid using `any` type - use proper typing with generics, unions, or specific types instead
 - do not add @typescript-eslint/no-explicit-any disable comments - fix the typing instead
 - create base Zod schemas for shared fields using `.extend()` to avoid duplication (e.g., baseProductConfig with common fields extended by input/output variants)
 - use separate input/output schemas when data transformation is needed (e.g., strings -> parsed objects)
+- **minimize re-exports** - consumers should import directly from the source file (e.g., `~/schemas/foo`) rather than through intermediate re-exports; re-exports add indirection and can create circular dependency issues
 
 ## Architecture Patterns
 
