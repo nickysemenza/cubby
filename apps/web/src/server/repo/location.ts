@@ -420,10 +420,10 @@ export const buildLocationTree = async (
   for (const entry of allInventoryEntries) {
     const existing = inventoryByLocationId.get(entry.locationId) ?? [];
     existing.push({
-      id: entry.id,
+      id: unsafeInventoryId(entry.id),
       amount: entry.amount,
       productName: entry.productName,
-      productId: entry.productId,
+      productId: unsafeProductId(entry.productId),
     });
     inventoryByLocationId.set(entry.locationId, existing);
     countsByLocationId.set(

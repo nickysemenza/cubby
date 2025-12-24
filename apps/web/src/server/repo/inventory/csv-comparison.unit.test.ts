@@ -826,14 +826,14 @@ describe("detectRenamesForPull", () => {
         rowIndex: 1,
         action: "created",
         productName: "23 Ga Pin Nailer",
-        productId: "prod-new",
+        productId: unsafeProductId("prod-new"),
         locationName: "nailers",
       },
       {
         rowIndex: -1,
         action: "removed",
         productName: "23 Ga Pin Nailer", // Same name!
-        productId: "prod-old",
+        productId: unsafeProductId("prod-old"),
         locationName: "nailers",
       },
     ];
@@ -873,14 +873,14 @@ describe("detectRenamesForPull", () => {
         rowIndex: 1,
         action: "created",
         productName: "misc: bags", // with colon
-        productId: "prod-new",
+        productId: unsafeProductId("prod-new"),
         locationName: "kitchen",
       },
       {
         rowIndex: -1,
         action: "removed",
         productName: "misc. bags", // with period - normalizes to same
-        productId: "prod-old",
+        productId: unsafeProductId("prod-old"),
         locationName: "kitchen",
       },
     ];
@@ -913,14 +913,14 @@ describe("detectRenamesForPull", () => {
         rowIndex: 1,
         action: "created",
         productName: "Brad Nailer 18 Gauge",
-        productId: "prod-new",
+        productId: unsafeProductId("prod-new"),
         locationName: "tools",
       },
       {
         rowIndex: -1,
         action: "removed",
         productName: "18 Ga Brad Nailer", // Different name
-        productId: "prod-old",
+        productId: unsafeProductId("prod-old"),
         locationName: "tools",
       },
     ];
@@ -959,14 +959,14 @@ describe("detectRenamesForPull", () => {
         rowIndex: 1,
         action: "created",
         productName: "misc: paper bags",
-        productId: "prod-new",
+        productId: unsafeProductId("prod-new"),
         locationName: "storage",
       },
       {
         rowIndex: -1,
         action: "removed",
         productName: "paper bags", // Contained in the new name
-        productId: "prod-old",
+        productId: unsafeProductId("prod-old"),
         locationName: "storage",
       },
     ];

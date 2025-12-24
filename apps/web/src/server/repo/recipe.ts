@@ -29,7 +29,12 @@ import {
   associatePendingImages,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import { type RecipeId, type OrganizationId } from "~/schemas/identifiers";
+import {
+  type RecipeId,
+  type OrganizationId,
+  unsafeIngredientId,
+  unsafeRecipeId,
+} from "~/schemas/identifiers";
 import {
   recipe,
   recipeSection,
@@ -863,10 +868,13 @@ export const getIngredientCooccurrence = async (
     if (data.count >= minEdgeWeight) {
       const [source, target] = key.split("|") as [string, string];
       edges.push({
-        source,
-        target,
+        source: unsafeIngredientId(source),
+        target: unsafeIngredientId(target),
         weight: data.count,
-        recipes: data.recipes,
+        recipes: data.recipes.map((r) => ({
+          id: unsafeRecipeId(r.id),
+          name: r.name,
+        })),
       });
       ingredientsWithEdges.add(source);
       ingredientsWithEdges.add(target);
@@ -876,7 +884,7 @@ export const getIngredientCooccurrence = async (
   const nodes: IngredientNode[] = [];
   for (const id of ingredientsWithEdges) {
     nodes.push({
-      id,
+      id: unsafeIngredientId(id),
       name: ingredientNames.get(id) ?? "Unknown",
       recipeCount: ingredientRecipeCount.get(id) ?? 0,
     });

@@ -4,6 +4,16 @@ import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { cn } from "~/lib/utils";
 
+/**
+ * Generic array field manager for react-hook-form.
+ *
+ * Note on typing: This component uses `as unknown` casts for react-hook-form interop.
+ * react-hook-form's useFieldArray expects ArrayPath<TFieldValues> which requires
+ * compile-time verification that `name` maps to an array field. Since this is a
+ * generic reusable component, we can't enforce that constraint at the type level
+ * without losing flexibility. The runtime behavior is correct - consumers are
+ * responsible for passing valid array field names.
+ */
 export interface ArrayFieldManagerProps<
   T,
   TFieldValues extends FieldValues = FieldValues,
@@ -41,16 +51,17 @@ export const ArrayFieldManager = <
   showRemoveButton = true,
   maxItems,
 }: ArrayFieldManagerProps<T, TFieldValues>) => {
+  // Cast required: useFieldArray expects ArrayPath<TFieldValues> but we accept any string
+  // for flexibility. Consumers must pass valid array field names.
   const { fields, append, remove } = useFieldArray({
     control: form.control,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    name: name as any,
+    name: name as Parameters<typeof useFieldArray<TFieldValues>>["0"]["name"],
   });
 
   const handleAdd = () => {
     if (maxItems && fields.length >= maxItems) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    append(emptyValue as any);
+    // Cast required: append expects the exact array element type which varies per form
+    append(emptyValue as Parameters<typeof append>[0]);
   };
 
   const handleRemove = (index: number) => {

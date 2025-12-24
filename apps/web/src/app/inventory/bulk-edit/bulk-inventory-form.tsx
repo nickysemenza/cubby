@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { InventoryBulkOperationItem } from "~/schemas/inventory";
+import { unsafeInventoryId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery } from "@tanstack/react-query";
@@ -178,7 +179,7 @@ export default function BulkInventoryForm() {
         (item) => {
           const res: InventoryBulkOperationItem = {
             locationId,
-            ...(item.id && { id: item.id }),
+            ...(item.id && { id: unsafeInventoryId(item.id) }),
             productId: getProductId(item.product),
             amount: item.amount,
           };

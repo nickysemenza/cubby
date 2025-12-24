@@ -5,7 +5,11 @@
  */
 
 import { type Database } from "~/server/db";
-import { type OrganizationId, type LocationId } from "~/schemas/identifiers";
+import {
+  type OrganizationId,
+  type LocationId,
+  type ProductId,
+} from "~/schemas/identifiers";
 import {
   type InventoryCSVRow,
   type CSVImportResultItem,
@@ -385,7 +389,7 @@ interface BaseResultFields {
   productName: string;
   locationName?: string;
   locationId?: LocationId;
-  productId?: string;
+  productId?: ProductId;
   upc?: string;
 }
 

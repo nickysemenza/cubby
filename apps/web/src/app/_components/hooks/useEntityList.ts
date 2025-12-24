@@ -121,11 +121,16 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   globalFilter,
   onGlobalFilterChange,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
-  const entityConfig = entities[entity];
-  const listConfig = entityConfig.list;
-  const standardColumns = listConfig?.standardColumns ?? [];
-  const hasUnitMappings = listConfig?.hasUnitMappings ?? false;
-  const defaultSort = listConfig?.defaultSort ?? "createdAt";
+  // Memoize entity config to prevent re-renders when entity doesn't change
+  const { standardColumns, hasUnitMappings, defaultSort } = useMemo(() => {
+    const entityConfig = entities[entity];
+    const listConfig = entityConfig.list;
+    return {
+      standardColumns: listConfig?.standardColumns ?? [],
+      hasUnitMappings: listConfig?.hasUnitMappings ?? false,
+      defaultSort: listConfig?.defaultSort ?? "createdAt",
+    };
+  }, [entity]);
 
   // Use the base table list hook
   const { data, totalCount, isLoading, error, tableState } = useTableList<
@@ -157,9 +162,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     {},
   );
 
+  // Track mappings only when they're actually used to avoid re-renders from useAsyncMemo returning new {} references
+  const shouldUseMappings = hasUnitMappings && getMappings;
+  const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
+
   // Build columns array with standard columns - memoized to prevent infinite re-renders
-  // Note: mappingsMap is only included in deps when actually used (hasUnitMappings && getMappings)
-  // to avoid re-renders from useAsyncMemo returning new {} references
   const allColumns = useMemo(() => {
     const columnHelper = createColumnHelper<TData>() as ColumnHelper<TData>;
     const cols: AnyColumnDef<TData>[] = [];
@@ -176,8 +183,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     cols.push(...customColumns);
 
     // Append unit mappings column if configured
-    if (hasUnitMappings && getMappings) {
-      cols.push(createUnitMappingsColumn(columnHelper, mappingsMap));
+    if (shouldUseMappings && effectiveMappingsMap) {
+      cols.push(createUnitMappingsColumn(columnHelper, effectiveMappingsMap));
     }
 
     // Append createdAt column
@@ -186,14 +193,12 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     }
 
     return cols;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mappingsMap only matters when hasUnitMappings && getMappings
   }, [
     customColumns,
     entity,
-    getMappings,
-    hasUnitMappings,
+    shouldUseMappings,
     standardColumns,
-    hasUnitMappings && getMappings ? mappingsMap : null,
+    effectiveMappingsMap,
   ]);
 
   // Configure the table

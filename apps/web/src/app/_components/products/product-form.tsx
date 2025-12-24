@@ -6,6 +6,7 @@ import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPCClient } from "~/trpc/react";
+import Image from "next/image";
 import {
   type ProductInputPayload,
   type ProductTopLevelOut,
@@ -350,10 +351,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
             </div>
             {lookupImageUrl && (
               <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                <img
+                <Image
                   src={lookupImageUrl}
                   alt="Product from UPC lookup"
-                  className="h-16 w-16 rounded border object-contain"
+                  width={64}
+                  height={64}
+                  className="rounded border object-contain"
+                  unoptimized
                 />
                 <span>Image will be imported on save</span>
               </div>

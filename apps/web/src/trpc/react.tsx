@@ -14,24 +14,17 @@ import { type inferRouterInputs, type inferRouterOutputs } from "@trpc/server";
 import { useState } from "react";
 import SuperJSON from "superjson";
 import { createTRPCClient } from "@trpc/client";
-import { shouldRetryQuery, getAppErrorDetails } from "~/lib/error-utils";
+import {
+  shouldRetryQuery,
+  getAppErrorDetails,
+  getErrorMessage,
+} from "~/lib/error-utils";
 import { toast } from "sonner";
 
 import { type AppRouter } from "~/server/api/root";
 
-/**
- * Extract a user-friendly error message from tRPC/Query errors
- */
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    // tRPC errors often have a message property
-    return error.message;
-  }
-  return "An unexpected error occurred";
-}
-
-function makeQueryClient() {
-  return new QueryClient({
+const makeQueryClient = () =>
+  new QueryClient({
     defaultOptions: {
       queries: {
         // With SSR, we usually want to set some default staleTime
@@ -55,21 +48,21 @@ function makeQueryClient() {
       },
     }),
   });
-}
+
 let browserQueryClient: QueryClient | undefined = undefined;
-function getQueryClient() {
+
+const getQueryClient = () => {
   if (typeof window === "undefined") {
     // Server: always make a new query client
     return makeQueryClient();
-  } else {
-    // Browser: make a new query client if we don't already have one
-    // This is very important, so we don't re-make a new client if React
-    // suspends during the initial render. This may not be needed if we
-    // have a suspense boundary BELOW the creation of the query client
-    if (!browserQueryClient) browserQueryClient = makeQueryClient();
-    return browserQueryClient;
   }
-}
+  // Browser: make a new query client if we don't already have one
+  // This is very important, so we don't re-make a new client if React
+  // suspends during the initial render. This may not be needed if we
+  // have a suspense boundary BELOW the creation of the query client
+  if (!browserQueryClient) browserQueryClient = makeQueryClient();
+  return browserQueryClient;
+};
 
 export const { TRPCProvider, useTRPC, useTRPCClient } =
   createTRPCContext<AppRouter>();
@@ -121,8 +114,8 @@ export function TRPCReactProvider(props: { children: React.ReactNode }) {
   );
 }
 
-function getBaseUrl() {
+const getBaseUrl = () => {
   if (typeof window !== "undefined") return window.location.origin;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
-}
+};

@@ -34,7 +34,7 @@ export const inventoryCreatePayloadData = z.object({
 
 // Schema for bulk inventory operations
 const inventoryBulkOperationItem = z.object({
-  id: z.string().optional(),
+  id: inventoryId.optional(),
   productId: productId,
   locationId: locationId,
   amount: amount,
@@ -152,7 +152,7 @@ export const csvImportResultItem = z.object({
     "renamed", // Product renamed (detected by UPC match, name containment, or location match)
   ]),
   productName: z.string(),
-  productId: z.string().optional(), // Product ID for image import
+  productId: productId.optional(), // Product ID for image import
   inventoryEntryId: inventoryId.optional(), // Inventory entry ID for deletion during pull
   upc: z.string().optional(), // UPC code for image import
   locationName: z.string().optional(), // Optional for product-only rows

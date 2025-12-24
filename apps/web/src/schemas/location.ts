@@ -2,13 +2,14 @@ import { z } from "zod";
 import { dbTimestampsOut } from "./common";
 import { type locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { createInputImages, imageOut, updateInputImages } from "./image";
-import { locationId } from "./identifiers";
+import { inventoryId, locationId, productId } from "./identifiers";
 
 export const locationType = z
   //todo: remove this in the future to make it more flexible?
   .enum([
     "room",
     "bag",
+    "box",
     "shelf",
     "crate",
     "half-crate",
@@ -44,13 +45,13 @@ export type LocationOut = z.infer<typeof locationOut>;
 
 /** Minimal inventory item info for tree display */
 export const inventoryItemForTree = z.object({
-  id: z.string(),
+  id: inventoryId,
   amount: z.object({
     value: z.number(),
     unit: z.string(),
   }),
   productName: z.string(),
-  productId: z.string(),
+  productId: productId,
 });
 export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
 

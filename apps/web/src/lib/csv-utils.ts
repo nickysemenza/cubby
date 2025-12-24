@@ -4,15 +4,7 @@
 
 import Papa from "papaparse";
 import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
-import { locationType, type LocationType } from "~/schemas/location";
-
-/** Row from locations.csv */
-export interface LocationCSVRow {
-  location_name: string;
-  parent_name: string | null;
-  location_type: LocationType | null;
-  description: string | null;
-}
+import { locationType, type LocationCSVRow } from "~/schemas/location";
 
 /**
  * Convert any value to a CSV-safe string.
@@ -96,9 +88,9 @@ export function parseLocationsCSV(csvContent: string): LocationCSVRow[] {
 
     rows.push({
       location_name: row.location_name?.trim() || "",
-      parent_name: row.parent_name?.trim() || null,
-      location_type: parsedType?.success ? parsedType.data : null,
-      description: row.description?.trim() || null,
+      parent_name: row.parent_name?.trim() || undefined,
+      location_type: parsedType?.success ? parsedType.data : undefined,
+      description: row.description?.trim() || undefined,
     });
   }
 

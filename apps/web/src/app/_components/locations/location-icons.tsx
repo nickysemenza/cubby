@@ -32,6 +32,7 @@ export const getLocationIcon = (type: LocationType): LucideIcon => {
     case "cart":
       return ShoppingCart;
     case "cabinet":
+    case "box":
       return Box;
     default:
       assertNever(type);

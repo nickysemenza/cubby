@@ -238,7 +238,7 @@ const backfillUPCImages = protectedProcedure
       skipped: z.number(),
       details: z.array(
         z.object({
-          productId: z.string(),
+          productId: productId,
           productName: z.string(),
           upc: z.string(),
           status: z.enum(["imported", "failed", "skipped"]),

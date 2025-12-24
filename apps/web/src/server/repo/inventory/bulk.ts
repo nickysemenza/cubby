@@ -43,8 +43,10 @@ export const bulkProcessInventoryEntries = async (
       existingItems.map((item) => [item.id, item]),
     );
 
-    // Get IDs of items in the submitted array
-    const submittedIds = items.filter((item) => item.id).map((item) => item.id);
+    // Get IDs of items in the submitted array (as plain strings for DB comparison)
+    const submittedIds = items
+      .filter((item) => item.id)
+      .map((item) => item.id as string);
 
     // Find items to delete (existing items not in the submitted array)
     const itemsToDelete = existingItems.filter(

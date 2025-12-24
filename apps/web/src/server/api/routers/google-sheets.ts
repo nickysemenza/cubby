@@ -18,9 +18,10 @@ import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
 import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
 import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
 import { locationCSVRow, type LocationCSVRow } from "~/schemas/location";
-import { organization } from "~/server/db/auth.schema";
-import { eq } from "drizzle-orm";
-import { getDb } from "~/server/repo/database-helpers";
+import {
+  getOrganizationMetadata,
+  updateOrganizationMetadata,
+} from "~/server/repo/organization";
 import { toCSVString } from "~/lib/csv-utils";
 // Note: csv-comparison is now only used by the sync repo module
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
@@ -128,7 +129,7 @@ type ParseSheetResult = {
 
 // Helper context type for procedures that need sheet access
 type SheetContext = {
-  db: Parameters<typeof getDb>[0];
+  db: Parameters<typeof getOrganizationMetadata>[0];
   organizationId: OrganizationId;
 };
 
@@ -147,10 +148,7 @@ async function getClientAndSheetId(ctx: SheetContext): Promise<{
     });
   }
 
-  const org = await getDb(ctx.db).query.organization.findFirst({
-    where: eq(organization.id, ctx.organizationId),
-    columns: { metadata: true },
-  });
+  const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
 
   const metadata = parseOrgMetadata(org?.metadata ?? null);
   const sheetId = metadata.googleSheetId;
@@ -174,10 +172,7 @@ async function updateLastSyncTimestamp(
     googleSheetLastSync: new Date().toISOString(),
   });
 
-  await getDb(ctx.db)
-    .update(organization)
-    .set({ metadata: newMetadata })
-    .where(eq(organization.id, ctx.organizationId));
+  await updateOrganizationMetadata(ctx.db, ctx.organizationId, newMetadata);
 }
 
 // Convert sheet rows (2D array) to InventoryCSVRow[]
@@ -322,10 +317,7 @@ const getConnectionStatus = protectedProcedure
     const serviceAccountEmail = client.getServiceAccountEmail() ?? null;
 
     // Get org metadata
-    const org = await getDb(ctx.db).query.organization.findFirst({
-      where: eq(organization.id, ctx.organizationId),
-      columns: { metadata: true },
-    });
+    const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
 
     const metadata = parseOrgMetadata(org?.metadata ?? null);
     const sheetId = metadata.googleSheetId ?? null;
@@ -422,10 +414,7 @@ const updateSheetConnection = protectedProcedure
       : null;
 
     // Get current metadata
-    const org = await getDb(ctx.db).query.organization.findFirst({
-      where: eq(organization.id, ctx.organizationId),
-      columns: { metadata: true },
-    });
+    const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
 
     // Update metadata with new sheet ID
     const newMetadata = mergeOrgMetadata(org?.metadata ?? null, {
@@ -433,10 +422,7 @@ const updateSheetConnection = protectedProcedure
       googleSheetLastSync: null, // Reset last sync when changing sheet
     });
 
-    await getDb(ctx.db)
-      .update(organization)
-      .set({ metadata: newMetadata })
-      .where(eq(organization.id, ctx.organizationId));
+    await updateOrganizationMetadata(ctx.db, ctx.organizationId, newMetadata);
 
     return { success: true };
   });
