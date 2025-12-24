@@ -4,11 +4,6 @@
 export const UNSPECIFIED_MANUFACTURER = "(unspecified)";
 
 /**
- * Default expected quantity for new products (1 = unique item)
- */
-export const DEFAULT_EXPECTED_QUANTITY = 1;
-
-/**
  * Prefix for misc/bulk products that skip validation (pricing, UPC, etc.)
  */
 export const MISC_PREFIX = "misc:";

@@ -6,6 +6,7 @@ import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { authClient } from "~/lib/auth-client";
 import { Menu, PackageOpen, Bug, BugOff } from "lucide-react";
+import { SyncStatusBadge } from "./sync/sync-status-badge";
 import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
@@ -127,6 +128,9 @@ export function MainNav({
       </nav>
 
       <FlexContainer align="center" gap={4}>
+        {/* Sync Status Badge */}
+        <SyncStatusBadge />
+
         {/* Theme Toggle */}
         <ThemeToggle />
 

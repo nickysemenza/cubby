@@ -15,10 +15,7 @@ import {
   type ProductInputPayload,
   productTopLevelOut,
 } from "~/schemas/product";
-import {
-  UNSPECIFIED_MANUFACTURER,
-  DEFAULT_EXPECTED_QUANTITY,
-} from "~/lib/constants";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
   formatSearchTerm,
@@ -716,7 +713,7 @@ export const quickCreateProduct = async (
       upc: data.upc ?? null,
       ndb_number: data.ndb_number ?? null,
       model: data.model ?? null,
-      expectedQuantity: data.expectedQuantity ?? DEFAULT_EXPECTED_QUANTITY,
+      expectedQuantity: data.expectedQuantity ?? null,
       ingredientId: data.ingredientId ?? null,
     })
     .returning();

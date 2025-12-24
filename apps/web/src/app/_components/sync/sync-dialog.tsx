@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useTRPC } from "~/trpc/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
@@ -23,15 +23,12 @@ import {
 } from "~/components/ui/select";
 import {
   Loader2,
-  ExternalLink,
-  Settings,
   Plus,
   ArrowRightLeft,
   AlertCircle,
   CheckCircle2,
   Pencil,
   GitCompare,
-  ArrowLeftRight,
   MapPin,
 } from "lucide-react";
 import {
@@ -50,8 +47,8 @@ import { entities } from "~/entities/entities";
 const getSelectedSide = (
   resolution: SyncResolution | undefined,
 ): "from" | "to" | undefined => {
-  if (resolution === "use_app") return "to"; // App is the "to" value
-  if (resolution === "use_sheet") return "from"; // Sheet is the "from" value
+  if (resolution === "use_app") return "to";
+  if (resolution === "use_sheet") return "from";
   return undefined;
 };
 
@@ -103,7 +100,7 @@ const getResolutionOptions = (
 ): { value: SyncResolution; label: string }[] => {
   switch (state) {
     case "matched":
-      return []; // No resolution needed
+      return [];
     case "conflict":
       return [
         { value: "use_app", label: "Use App Version" },
@@ -120,7 +117,7 @@ const getResolutionOptions = (
         { value: "delete_from_sheet", label: "Delete from Sheet" },
       ];
     case "renamed":
-      return []; // Auto-applied, no user choice needed
+      return [];
     case "moved":
       return [
         { value: "apply_move", label: "Apply Move" },
@@ -133,7 +130,6 @@ const getResolutionOptions = (
 type HiddenStates = Set<SyncState>;
 const DEFAULT_HIDDEN_STATES: HiddenStates = new Set(["matched"]);
 
-// State configuration for summary cards
 const LOCATION_STATES: SyncState[] = [
   "matched",
   "conflict",
@@ -143,7 +139,6 @@ const LOCATION_STATES: SyncState[] = [
 ];
 const INVENTORY_STATES: SyncState[] = [...LOCATION_STATES, "moved"];
 
-// Map state to count key in preview result
 type LocationCounts = SyncPreviewResult["locations"];
 type InventoryCounts = SyncPreviewResult["inventory"];
 
@@ -160,7 +155,7 @@ const getLocationCount = (counts: LocationCounts, state: SyncState): number => {
     case "renamed":
       return counts.renamed;
     case "moved":
-      return 0; // Locations don't have moved
+      return 0;
   }
 };
 
@@ -184,65 +179,87 @@ const getInventoryCount = (
   }
 };
 
-export function OmnidirectionalSync() {
+type SyncDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  previewResult: SyncPreviewResult | null;
+  onClose: () => void;
+  onSyncComplete: () => void;
+};
+
+// Helper to extract initial resolutions from preview result
+const extractInitialResolutions = (
+  previewResult: SyncPreviewResult | null,
+): {
+  location: Record<string, SyncResolution>;
+  inventory: Record<string, SyncResolution>;
+} => {
+  if (!previewResult) return { location: {}, inventory: {} };
+
+  const location: Record<string, SyncResolution> = {};
+  for (const item of previewResult.locations.items) {
+    if (item.resolution) {
+      location[item.key] = item.resolution;
+    }
+  }
+
+  const inventory: Record<string, SyncResolution> = {};
+  for (const item of previewResult.inventory.items) {
+    if (item.resolution) {
+      inventory[item.key] = item.resolution;
+    }
+  }
+
+  return { location, inventory };
+};
+
+export const SyncDialog = ({
+  open,
+  onOpenChange,
+  previewResult,
+  onClose,
+  onSyncComplete,
+}: SyncDialogProps) => {
   const api = useTRPC();
   const queryClient = useQueryClient();
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewResult, setPreviewResult] = useState<SyncPreviewResult | null>(
-    null,
-  );
   const [isComplete, setIsComplete] = useState(false);
 
-  // Track resolutions for locations and inventory
+  // Initialize resolutions from preview result defaults
+  const initialResolutions = extractInitialResolutions(previewResult);
   const [locationResolutions, setLocationResolutions] = useState<
     Record<string, SyncResolution>
-  >({});
+  >(initialResolutions.location);
   const [inventoryResolutions, setInventoryResolutions] = useState<
     Record<string, SyncResolution>
-  >({});
-
-  // Track which states are hidden
+  >(initialResolutions.inventory);
   const [hiddenStates, setHiddenStates] = useState<HiddenStates>(
     () => new Set(DEFAULT_HIDDEN_STATES),
   );
 
-  // Get connection status
-  const { data: status, isLoading } = useQuery(
-    api.googleSheets.getConnectionStatus.queryOptions(),
-  );
+  // Reset resolutions when preview result changes (key-based reset)
+  const previewKey = previewResult
+    ? `${previewResult.locations.items.length}-${previewResult.inventory.items.length}`
+    : null;
 
-  // Sync preview mutation
-  const syncPreviewMutation = useMutation(
-    api.googleSheets.syncPreview.mutationOptions({
-      onSuccess: (result) => {
-        setPreviewResult(result);
-        setIsComplete(false);
-        setShowPreview(true);
+  // Use key to detect when we need to reinitialize
+  const [lastPreviewKey, setLastPreviewKey] = useState<string | null>(null);
+  if (previewKey !== lastPreviewKey && previewResult) {
+    setLastPreviewKey(previewKey);
+    const resolutions = extractInitialResolutions(previewResult);
+    setLocationResolutions(resolutions.location);
+    setInventoryResolutions(resolutions.inventory);
+    setIsComplete(false);
+  }
 
-        // Initialize resolutions from defaults
-        const locRes: Record<string, SyncResolution> = {};
-        for (const item of result.locations.items) {
-          if (item.resolution) {
-            locRes[item.key] = item.resolution;
-          }
-        }
-        setLocationResolutions(locRes);
+  // Reset hidden states when dialog closes (using key pattern)
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen && !open) {
+    setWasOpen(false);
+    setHiddenStates(new Set(DEFAULT_HIDDEN_STATES));
+  } else if (!wasOpen && open) {
+    setWasOpen(true);
+  }
 
-        const invRes: Record<string, SyncResolution> = {};
-        for (const item of result.inventory.items) {
-          if (item.resolution) {
-            invRes[item.key] = item.resolution;
-          }
-        }
-        setInventoryResolutions(invRes);
-      },
-      onError: (error) => {
-        toast.error(error.message);
-      },
-    }),
-  );
-
-  // Apply sync mutation
   const applySyncMutation = useMutation(
     api.googleSheets.applySync.mutationOptions({
       onSuccess: (result) => {
@@ -253,9 +270,6 @@ export function OmnidirectionalSync() {
           });
           queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
           queryClient.invalidateQueries({ queryKey: queryKeys.location.list });
-          queryClient.invalidateQueries({
-            queryKey: api.googleSheets.getConnectionStatus.queryKey(),
-          });
 
           const locTotal =
             result.locations.created +
@@ -270,6 +284,7 @@ export function OmnidirectionalSync() {
           toast.success(
             `Sync complete: ${locTotal + invTotal} items processed`,
           );
+          onSyncComplete();
         } else {
           toast.error(
             `Sync failed: ${result.errorMessages.join(", ") || "Unknown error"}`,
@@ -282,10 +297,6 @@ export function OmnidirectionalSync() {
     }),
   );
 
-  const handleSync = () => {
-    syncPreviewMutation.mutate();
-  };
-
   const handleApply = () => {
     applySyncMutation.mutate({
       locationResolutions,
@@ -294,12 +305,8 @@ export function OmnidirectionalSync() {
   };
 
   const handleClose = () => {
-    setShowPreview(false);
-    setPreviewResult(null);
-    setIsComplete(false);
-    setLocationResolutions({});
-    setInventoryResolutions({});
-    setHiddenStates(new Set(DEFAULT_HIDDEN_STATES));
+    onClose();
+    onOpenChange(false);
   };
 
   const toggleStateVisibility = (state: SyncState) => {
@@ -328,7 +335,6 @@ export function OmnidirectionalSync() {
     setInventoryResolutions((prev) => ({ ...prev, [key]: resolution }));
   };
 
-  // Check if all conflicts are resolved (client-side)
   const hasUnresolvedConflicts = previewResult
     ? previewResult.locations.items.some(
         (item) => item.state === "conflict" && !locationResolutions[item.key],
@@ -338,224 +344,177 @@ export function OmnidirectionalSync() {
       )
     : false;
 
-  // Filter validation errors to remove ones that have been resolved
   const activeValidationErrors = previewResult
     ? previewResult.validationErrors.filter((err) => {
-        // If this is a conflict resolution error, check if it's been resolved
         if (err.entityType === "location" && err.itemKey) {
           return !locationResolutions[err.itemKey];
         }
         if (err.entityType === "inventory" && err.itemKey) {
           return !inventoryResolutions[err.itemKey];
         }
-        // Keep other errors
         return true;
       })
     : [];
 
-  // Compute canApply client-side
   const canApply =
     previewResult &&
     !hasUnresolvedConflicts &&
     activeValidationErrors.length === 0;
 
-  // Don't render if not configured or loading
-  if (isLoading || !status?.configured) {
-    return null;
-  }
+  const isApplying = applySyncMutation.isPending;
 
-  // Show connect prompt if not connected
-  if (!status.connected) {
+  // Show loading state if no preview result yet
+  if (!previewResult) {
     return (
-      <Link href="/settings/integrations">
-        <Button variant="outline" size="sm">
-          <Settings className="h-3 w-3" />
-          Connect Google Sheet
-        </Button>
-      </Link>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="flex max-h-[90vh] !w-[95vw] !max-w-[95vw] flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Loading Sync Preview...</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
-  const isSyncing = syncPreviewMutation.isPending;
-  const isApplying = applySyncMutation.isPending;
-
   return (
-    <>
-      {/* Sync button */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSync}
-          disabled={isSyncing}
-          title="Sync with Google Sheet"
-        >
-          {isSyncing ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <ArrowLeftRight className="h-3 w-3" />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] !w-[95vw] !max-w-[95vw] flex-col overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>
+            {isComplete ? "Sync Complete" : "Sync Preview"}
+          </DialogTitle>
+          <DialogDescription>
+            {isComplete
+              ? "Changes have been applied successfully."
+              : "Review and resolve differences between app and Google Sheet."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto">
+          {activeValidationErrors.length > 0 && !isComplete && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
+              <div className="mb-2 flex items-center gap-2 font-medium text-red-700 dark:text-red-300">
+                <AlertCircle className="h-4 w-4" />
+                Validation Errors
+              </div>
+              <ul className="list-inside list-disc space-y-1 text-sm text-red-600 dark:text-red-400">
+                {activeValidationErrors.map((err, i) => (
+                  <li key={i}>{err.message}</li>
+                ))}
+              </ul>
+            </div>
           )}
-          Sync
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          title={`Open "${status.sheetName}" in Google Sheets`}
-          render={
-            <a
-              href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            />
-          }
-        >
-          <ExternalLink className="h-3 w-3" />
-        </Button>
-      </div>
 
-      {/* Sync Preview Dialog */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="flex max-h-[90vh] !w-[95vw] !max-w-[95vw] flex-col overflow-hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {isComplete ? "Sync Complete" : "Sync Preview"}
-            </DialogTitle>
-            <DialogDescription>
-              {isComplete
-                ? "Changes have been applied successfully."
-                : `Review and resolve differences between app and "${status.sheetName}".`}
-            </DialogDescription>
-          </DialogHeader>
+          {isComplete && (
+            <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="font-medium">Sync completed successfully</span>
+              </div>
+            </div>
+          )}
 
-          <div className="flex-1 overflow-y-auto">
-            {/* Validation errors */}
-            {activeValidationErrors.length > 0 && !isComplete && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
-                <div className="mb-2 flex items-center gap-2 font-medium text-red-700 dark:text-red-300">
-                  <AlertCircle className="h-4 w-4" />
-                  Validation Errors
-                </div>
-                <ul className="list-inside list-disc space-y-1 text-sm text-red-600 dark:text-red-400">
-                  {activeValidationErrors.map((err, i) => (
-                    <li key={i}>{err.message}</li>
-                  ))}
-                </ul>
+          {previewResult.locations.items.length > 0 && (
+            <>
+              <h3 className="mb-2 text-sm font-medium">
+                <MapPin className="mr-1 inline h-4 w-4" />
+                Locations
+              </h3>
+              <div className="mb-4 flex flex-wrap gap-1.5 text-sm">
+                {LOCATION_STATES.map((state) => (
+                  <StateSummaryCard
+                    key={state}
+                    count={getLocationCount(previewResult.locations, state)}
+                    state={state}
+                    isHidden={hiddenStates.has(state)}
+                    onClick={() => toggleStateVisibility(state)}
+                  />
+                ))}
+              </div>
+
+              <LocationSyncTable
+                items={previewResult.locations.items}
+                hiddenStates={hiddenStates}
+                resolutions={locationResolutions}
+                onResolutionChange={updateLocationResolution}
+                isComplete={isComplete}
+              />
+            </>
+          )}
+
+          {previewResult.inventory.items.length > 0 && (
+            <>
+              <h3 className="mt-4 mb-2 text-sm font-medium">Inventory</h3>
+              <div className="mb-4 flex flex-wrap gap-1.5 text-sm">
+                {INVENTORY_STATES.map((state) => (
+                  <StateSummaryCard
+                    key={state}
+                    count={getInventoryCount(previewResult.inventory, state)}
+                    state={state}
+                    isHidden={hiddenStates.has(state)}
+                    onClick={() => toggleStateVisibility(state)}
+                  />
+                ))}
+              </div>
+
+              <InventorySyncTable
+                items={previewResult.inventory.items}
+                hiddenStates={hiddenStates}
+                resolutions={inventoryResolutions}
+                onResolutionChange={updateInventoryResolution}
+                isComplete={isComplete}
+              />
+            </>
+          )}
+
+          {previewResult.locations.items.length === 0 &&
+            previewResult.inventory.items.length === 0 && (
+              <div className="text-muted-foreground py-8 text-center">
+                Everything is in sync! No differences found.
               </div>
             )}
+        </div>
 
-            {/* Success message */}
-            {isComplete && (
-              <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
-                <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span className="font-medium">
-                    Sync completed successfully
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Locations section */}
-            {previewResult && previewResult.locations.items.length > 0 && (
-              <>
-                <h3 className="mb-2 text-sm font-medium">
-                  <MapPin className="mr-1 inline h-4 w-4" />
-                  Locations
-                </h3>
-                <div className="mb-4 flex flex-wrap gap-1.5 text-sm">
-                  {LOCATION_STATES.map((state) => (
-                    <StateSummaryCard
-                      key={state}
-                      count={getLocationCount(previewResult.locations, state)}
-                      state={state}
-                      isHidden={hiddenStates.has(state)}
-                      onClick={() => toggleStateVisibility(state)}
-                    />
-                  ))}
-                </div>
-
-                <LocationSyncTable
-                  items={previewResult.locations.items}
-                  hiddenStates={hiddenStates}
-                  resolutions={locationResolutions}
-                  onResolutionChange={updateLocationResolution}
-                  isComplete={isComplete}
-                />
-              </>
-            )}
-
-            {/* Inventory section */}
-            {previewResult && previewResult.inventory.items.length > 0 && (
-              <>
-                <h3 className="mt-4 mb-2 text-sm font-medium">Inventory</h3>
-                <div className="mb-4 flex flex-wrap gap-1.5 text-sm">
-                  {INVENTORY_STATES.map((state) => (
-                    <StateSummaryCard
-                      key={state}
-                      count={getInventoryCount(previewResult.inventory, state)}
-                      state={state}
-                      isHidden={hiddenStates.has(state)}
-                      onClick={() => toggleStateVisibility(state)}
-                    />
-                  ))}
-                </div>
-
-                <InventorySyncTable
-                  items={previewResult.inventory.items}
-                  hiddenStates={hiddenStates}
-                  resolutions={inventoryResolutions}
-                  onResolutionChange={updateInventoryResolution}
-                  isComplete={isComplete}
-                />
-              </>
-            )}
-
-            {/* Empty state */}
-            {previewResult &&
-              previewResult.locations.items.length === 0 &&
-              previewResult.inventory.items.length === 0 && (
-                <div className="text-muted-foreground py-8 text-center">
-                  Everything is in sync! No differences found.
-                </div>
-              )}
-          </div>
-
-          <DialogFooter>
-            {isComplete ? (
-              <Button onClick={handleClose}>Done</Button>
-            ) : (
-              <>
-                <Button variant="outline" onClick={handleClose}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleApply}
-                  disabled={isApplying || !canApply}
-                  title={
-                    hasUnresolvedConflicts
-                      ? "Resolve all conflicts first"
-                      : activeValidationErrors.length > 0
-                        ? "Fix validation errors first"
-                        : undefined
-                  }
-                >
-                  {isApplying ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Applying...
-                    </>
-                  ) : (
-                    "Apply Sync"
-                  )}
-                </Button>
-              </>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+        <DialogFooter>
+          {isComplete ? (
+            <Button onClick={handleClose}>Done</Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={handleClose}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleApply}
+                disabled={isApplying || !canApply}
+                title={
+                  hasUnresolvedConflicts
+                    ? "Resolve all conflicts first"
+                    : activeValidationErrors.length > 0
+                      ? "Fix validation errors first"
+                      : undefined
+                }
+              >
+                {isApplying ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  "Apply Sync"
+                )}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
-}
+};
+
+// Sub-components
 
 function StateSummaryCard({
   count,
@@ -590,11 +549,6 @@ function StateSummaryCard({
   );
 }
 
-// =============================================================================
-// Shared Cell Components
-// =============================================================================
-
-/** State badge cell - displays state with icon and label */
 const StateBadgeCell = ({ state }: { state: SyncState }) => {
   const styles = getSyncStateStyles(state);
   return (
@@ -609,7 +563,6 @@ const StateBadgeCell = ({ state }: { state: SyncState }) => {
   );
 };
 
-/** Details cell content - field diffs or state description */
 const DetailsCellContent = ({
   state,
   fieldDiffs,
@@ -653,7 +606,6 @@ const DetailsCellContent = ({
   return null;
 };
 
-/** Resolution cell - select dropdown for resolution choice */
 const ResolutionCell = ({
   itemKey,
   state,
@@ -692,10 +644,6 @@ const ResolutionCell = ({
     </td>
   );
 };
-
-// =============================================================================
-// Sync Tables
-// =============================================================================
 
 function LocationSyncTable({
   items,

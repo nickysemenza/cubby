@@ -14,7 +14,6 @@ import {
   generateExportFilename,
   toCSVString,
 } from "~/lib/csv-utils";
-import { OmnidirectionalSync } from "~/app/_components/inventory/omnidirectional-sync";
 
 export function InventoryActions() {
   const [isExporting, setIsExporting] = useState(false);
@@ -68,7 +67,6 @@ export function InventoryActions() {
           Quick Capture
         </Button>
       </Link>
-      <OmnidirectionalSync />
       <Link href={`/${entities["inventory-item"].basePath}/import`}>
         <Button variant="outline">
           <Upload className="mr-1 h-4 w-4" />

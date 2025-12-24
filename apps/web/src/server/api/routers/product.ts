@@ -26,10 +26,7 @@ import {
   findProductsWithUPCNoImages,
 } from "~/server/repo/product";
 import { upc } from "@recipehub/usda-schemas";
-import {
-  UNSPECIFIED_MANUFACTURER,
-  DEFAULT_EXPECTED_QUANTITY,
-} from "~/lib/constants";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { importImageFromUPC } from "~/server/services/image-import";
 
 // Define filters schema for products
@@ -122,7 +119,7 @@ const quickCreate = protectedProcedure
         name: input.name,
         manufacturer: input.manufacturer ?? UNSPECIFIED_MANUFACTURER,
         upc: input.upc ?? null,
-        expectedQuantity: input.expectedQuantity ?? DEFAULT_EXPECTED_QUANTITY,
+        expectedQuantity: input.expectedQuantity ?? null,
         model: input.model ?? null,
         price: input.price ?? null,
       },
@@ -168,7 +165,7 @@ const findOrCreateByUPC = protectedProcedure
             food.brandedFoodInfo?.brand_name ??
             UNSPECIFIED_MANUFACTURER,
           upc: input.upc,
-          expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
+          expectedQuantity: null,
           model: null,
         },
         ctx.actorContext,
@@ -189,7 +186,7 @@ const findOrCreateByUPC = protectedProcedure
             upcLookup.brand ??
             UNSPECIFIED_MANUFACTURER,
           upc: input.upc,
-          expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
+          expectedQuantity: null,
           model: null,
           price: upcLookup.priceDollars ?? null,
         },
@@ -221,7 +218,7 @@ const findOrCreateByUPC = protectedProcedure
         name: input.defaultName ?? `Product ${input.upc}`,
         manufacturer: UNSPECIFIED_MANUFACTURER,
         upc: input.upc,
-        expectedQuantity: DEFAULT_EXPECTED_QUANTITY,
+        expectedQuantity: null,
         model: null,
       },
       ctx.actorContext,

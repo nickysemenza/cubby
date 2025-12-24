@@ -4,10 +4,7 @@ import { upc, ndb } from "@recipehub/usda-schemas";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 import { productId, ingredientId } from "./identifiers";
-import {
-  UNSPECIFIED_MANUFACTURER,
-  DEFAULT_EXPECTED_QUANTITY,
-} from "~/lib/constants";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 
 // Base schema for product data (without relationships)
 const productBase = z.object({
@@ -50,12 +47,7 @@ export const productQuickCreatePayload = z.object({
   name: z.string().min(1),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
   upc: upc.nullable().optional(),
-  expectedQuantity: z
-    .number()
-    .int()
-    .positive()
-    .nullable()
-    .default(DEFAULT_EXPECTED_QUANTITY),
+  expectedQuantity: z.number().int().positive().nullable().optional(),
   model: z.string().nullable().optional(),
   price: z.number().positive().nullable().optional(),
 });
