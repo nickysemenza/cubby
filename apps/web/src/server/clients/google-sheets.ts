@@ -1,5 +1,4 @@
-import { google } from "googleapis";
-import type { sheets_v4 } from "googleapis";
+import { auth, sheets, type sheets_v4 } from "googleapis/build/src/apis/sheets";
 
 /**
  * Sheet name constants for the Google Sheets workbook
@@ -28,7 +27,7 @@ export class GoogleSheetsClient {
     const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
 
     if (this.serviceAccountEmail && privateKey) {
-      const auth = new google.auth.GoogleAuth({
+      const googleAuth = new auth.GoogleAuth({
         credentials: {
           client_email: this.serviceAccountEmail,
           // Private key may have escaped newlines from env var
@@ -37,7 +36,7 @@ export class GoogleSheetsClient {
         scopes: ["https://www.googleapis.com/auth/spreadsheets"],
       });
 
-      this.sheets = google.sheets({ version: "v4", auth });
+      this.sheets = sheets({ version: "v4", auth: googleAuth });
     }
   }
 
