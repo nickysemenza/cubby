@@ -109,7 +109,7 @@ export const findOrCreateProductForImport = async (
         name: productName,
         manufacturer,
         upc: upc ?? null,
-        expectedQuantity: expectedQty ?? 1,
+        expectedQuantity: expectedQty ?? null,
         model: model ?? null,
         ndb_number: ndbNumber ?? null,
         ingredientId,

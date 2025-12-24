@@ -19,6 +19,9 @@ export const AppErrors = {
   LOCATION_NOT_FOUND: "NOT_FOUND",
   INGREDIENT_NOT_FOUND: "NOT_FOUND",
 
+  // Constraint violations
+  LOCATION_HAS_INVENTORY: "PRECONDITION_FAILED",
+
   // Conflict/duplicate
   PRODUCT_ALREADY_EXISTS: "CONFLICT",
 

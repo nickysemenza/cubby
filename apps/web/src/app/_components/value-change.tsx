@@ -14,6 +14,10 @@ interface ValueChangeProps {
   to: unknown;
   /** Optional field label to display before the values */
   label?: string;
+  /** Show "Sheet → App" labels for sync context */
+  showSyncLabels?: boolean;
+  /** Which side is selected/will be applied - dims the other side */
+  selectedSide?: "from" | "to";
   /** Size variant */
   size?: "sm" | "md";
   /** Whether to show strikethrough on the "from" value */
@@ -42,6 +46,8 @@ export function ValueChange({
   from,
   to,
   label,
+  showSyncLabels,
+  selectedSide,
   size = "sm",
   strikethrough = true,
   className,
@@ -50,6 +56,10 @@ export function ValueChange({
     sm: "text-xs",
     md: "text-sm",
   };
+
+  // When a side is selected, dim the other side
+  const fromDimmed = selectedSide === "to";
+  const toDimmed = selectedSide === "from";
 
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
@@ -60,18 +70,47 @@ export function ValueChange({
           {label}:
         </span>
       )}
+      {showSyncLabels && (
+        <span
+          className={cn(
+            "font-medium",
+            sizeClasses[size],
+            fromDimmed ? "text-muted-foreground/50" : "text-muted-foreground",
+          )}
+        >
+          Sheet:
+        </span>
+      )}
       <span
         className={cn(
-          "text-red-600 dark:text-red-400",
           strikethrough && "line-through",
           sizeClasses[size],
+          fromDimmed
+            ? "text-red-400/40 dark:text-red-400/30"
+            : "text-red-600 dark:text-red-400",
         )}
       >
         {formatValue(from)}
       </span>
       <span className={cn("text-muted-foreground", sizeClasses[size])}>→</span>
+      {showSyncLabels && (
+        <span
+          className={cn(
+            "font-medium",
+            sizeClasses[size],
+            toDimmed ? "text-muted-foreground/50" : "text-muted-foreground",
+          )}
+        >
+          App:
+        </span>
+      )}
       <span
-        className={cn("text-green-600 dark:text-green-400", sizeClasses[size])}
+        className={cn(
+          sizeClasses[size],
+          toDimmed
+            ? "text-green-400/40 dark:text-green-400/30"
+            : "text-green-600 dark:text-green-400",
+        )}
       >
         {formatValue(to)}
       </span>

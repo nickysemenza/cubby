@@ -1,8 +1,8 @@
 /**
- * Location CSV comparison utilities for push preview
+ * Location CSV comparison utilities for push/pull preview
  *
  * Compares app locations with sheet locations to generate a diff preview
- * showing what changes would be made when pushing to Google Sheets.
+ * showing what changes would be made when pushing to or pulling from Google Sheets.
  */
 
 import {
@@ -16,6 +16,7 @@ import {
   createComparisonFunction,
   normalizeForComparison,
 } from "~/server/repo/csv";
+import { type LocationId } from "~/schemas/identifiers";
 
 /**
  * Compare two location rows and return structured field changes
@@ -147,4 +148,51 @@ export function compareLocationsForPush(
     removed: result.removed > 0 ? result.removed : undefined,
     items: result.items,
   };
+}
+
+/**
+ * Removed location item with location ID for deletion
+ */
+export interface RemovedLocationItem extends LocationCSVImportResultItem {
+  action: "removed";
+  locationIdToDelete: LocationId;
+}
+
+/**
+ * Find locations that exist in app but not in sheet (deleted from sheet)
+ *
+ * Used by pull preview to show what would be deleted, and by apply pull
+ * to actually delete the locations.
+ *
+ * Note: Deletion safety (checking for inventory) is handled at apply time,
+ * not during this comparison.
+ */
+export function findRemovedLocationsForPull(
+  appRows: LocationCSVExportRow[],
+  sheetRows: LocationCSVRow[],
+): RemovedLocationItem[] {
+  const removedItems: RemovedLocationItem[] = [];
+
+  // Build a set of location names from sheet (normalized for comparison)
+  const sheetLocationNames = new Set<string>();
+  for (const row of sheetRows) {
+    sheetLocationNames.add(normalizeForComparison(row.location_name));
+  }
+
+  // Find app locations that don't exist in sheet
+  for (const appRow of appRows) {
+    const normalizedName = normalizeForComparison(appRow.location_name);
+    if (!sheetLocationNames.has(normalizedName)) {
+      removedItems.push({
+        rowIndex: -1,
+        action: "removed",
+        locationName: appRow.location_name,
+        locationId: appRow.location_id,
+        locationIdToDelete: appRow.location_id,
+        message: "Location will be deleted (removed from sheet)",
+      });
+    }
+  }
+
+  return removedItems;
 }

@@ -5,6 +5,7 @@
 - ensure the typechecker and linter is happy with all changes (pnpm run check)
 - todos are kept in docs/todos.md
 - helper functions should not be added without being used
+- prefer arrow functions for simple helpers: `const foo = (x: T) => ({ ... })` over `function foo(x: T) { return { ... } }`
 - **IMPORTANT**: When architecture, routes, schemas, or integration patterns change, always update both AGENTS.md and relevant README.md files to keep documentation current and accurate
 
 ## Type Safety & Schema Patterns
@@ -16,6 +17,7 @@
 - do not add @typescript-eslint/no-explicit-any disable comments - fix the typing instead
 - create base Zod schemas for shared fields using `.extend()` to avoid duplication (e.g., baseProductConfig with common fields extended by input/output variants)
 - use separate input/output schemas when data transformation is needed (e.g., strings -> parsed objects)
+- **use branded ID schemas** from `~/schemas/identifiers` (e.g., `locationId`, `productId`, `inventoryId`) instead of plain `z.string()` for ID fields - this provides type safety and prevents mixing different entity IDs. Note: Drizzle column types don't support branded types directly, so use unsafe ID converters (e.g., `unsafeLocationId()`) at the repo/DB boundary
 - **minimize re-exports** - consumers should import directly from the source file (e.g., `~/schemas/foo`) rather than through intermediate re-exports; re-exports add indirection and can create circular dependency issues
 
 ## Architecture Patterns

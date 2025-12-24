@@ -598,6 +598,65 @@ export const findOrCreateLocationByName = async (
   return { locationId: unsafeLocationId(result[0].id), created: true };
 };
 
+/**
+ * Check if a location has any inventory entries
+ */
+export const locationHasInventory = async (
+  db: Database,
+  locationId: LocationId,
+): Promise<boolean> => {
+  const result = await getDb(db)
+    .select({ count: count() })
+    .from(inventoryEntry)
+    .where(eq(inventoryEntry.locationId, locationId));
+  return (result[0]?.count ?? 0) > 0;
+};
+
+/**
+ * Delete a location by ID
+ * Returns true if deleted, false if not found
+ * Throws if location has inventory (safety check)
+ */
+export const deleteLocation = async (
+  db: Database,
+  id: LocationId,
+  actor: ActorContext,
+): Promise<boolean> => {
+  const { organizationId } = actor;
+
+  // Safety check: don't delete if location has inventory
+  const hasInventory = await locationHasInventory(db, id);
+  if (hasInventory) {
+    throw createAppError(
+      "LOCATION_HAS_INVENTORY",
+      `Cannot delete location ${id}: it still has inventory items`,
+    );
+  }
+
+  // Delete location images first (cascade doesn't handle this)
+  await getDb(db).delete(locationImage).where(eq(locationImage.locationId, id));
+
+  // Delete the location
+  const result = await getDb(db)
+    .delete(location)
+    .where(
+      and(eq(location.id, id), eq(location.organizationId, organizationId)),
+    )
+    .returning();
+
+  if (result.length > 0) {
+    // Log audit entry
+    await logAuditEntry(db, actor, {
+      entityType: "location",
+      entityId: id,
+      action: "delete",
+    });
+    return true;
+  }
+
+  return false;
+};
+
 export const getLocationById = async (
   db: Database | Transaction,
   id: LocationId,
