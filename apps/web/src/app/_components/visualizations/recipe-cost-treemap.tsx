@@ -1,8 +1,11 @@
 "use client";
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
 import { type IngredientDataItem } from "~/app/_components/units/univ-conversion";
+import { formatCurrency } from "~/lib/utils";
+import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 interface CostNode {
   name: string;
@@ -17,12 +20,6 @@ interface TreemapNode {
   value: number;
   children?: CostNode[];
 }
-
-const currency = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 2,
-});
 
 interface RecipeCostTreemapProps {
   ingredients: IngredientDataItem[];
@@ -84,14 +81,11 @@ export default function RecipeCostTreemap({
     treemapData.children?.every((c) => !c.hasPrice)
   ) {
     return (
-      <div className="text-muted-foreground flex h-[300px] items-center justify-center rounded-md border">
-        <div className="text-center">
-          <p>No cost data available</p>
-          <p className="mt-1 text-sm">
-            Add pricing to ingredients to see cost breakdown
-          </p>
-        </div>
-      </div>
+      <VisualizationPlaceholder
+        message="No cost data available"
+        subMessage="Add pricing to ingredients to see cost breakdown"
+        height={300}
+      />
     );
   }
 
@@ -104,27 +98,12 @@ interface TreemapProps {
 
 function Treemap({ data }: TreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 400, height: 300 });
+  const dimensions = useContainerDimensions(containerRef, {
+    minHeight: 250,
+    initialWidth: 400,
+    initialHeight: 300,
+  });
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      setDimensions({ width, height: Math.max(height, 250) });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setDimensions({ width, height: Math.max(height, 250) });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const hierarchy = useMemo(() => {
     return d3Hierarchy
@@ -236,7 +215,7 @@ function Treemap({ data }: TreemapProps) {
                         className="mt-0.5 text-[10px] text-white/80"
                         style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
                       >
-                        {currency.format(node.data.value)} (
+                        {formatCurrency(node.data.value, 2)} (
                         {node.data.percentage.toFixed(0)}%)
                       </div>
                     )}
@@ -274,7 +253,7 @@ function HoverTooltip({
       <div className="text-muted-foreground mt-1">
         {node.data.hasPrice ? (
           <>
-            <div>Cost: {currency.format(node.data.value)}</div>
+            <div>Cost: {formatCurrency(node.data.value, 2)}</div>
             <div>{node.data.percentage.toFixed(1)}% of total</div>
           </>
         ) : (

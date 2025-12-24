@@ -97,7 +97,7 @@ export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 // Location CSV Import/Export Schemas
 // ============================================================================
 
-import { fieldChange, type FieldChange } from "./csv";
+import { fieldChange } from "./csv";
 
 /**
  * CSV row schema for location import/export
@@ -114,14 +114,6 @@ export const locationCSVRow = z.object({
 export type LocationCSVRow = z.infer<typeof locationCSVRow>;
 
 /**
- * Field change for displaying diffs in location sync
- * @deprecated Use FieldChange from schemas/csv.ts instead
- */
-export const locationFieldChange = fieldChange;
-
-export type LocationFieldChange = FieldChange;
-
-/**
  * Individual result item for location CSV import
  */
 export const locationCSVImportResultItem = z.object({
@@ -130,7 +122,7 @@ export const locationCSVImportResultItem = z.object({
   locationName: z.string(),
   locationId: locationId.optional(),
   message: z.string().optional(),
-  fieldChanges: z.array(locationFieldChange).optional(),
+  fieldChanges: z.array(fieldChange).optional(),
   // Preview fields
   locationWillBeCreated: z.boolean().optional(),
   imageWillBeImported: z.string().optional(),

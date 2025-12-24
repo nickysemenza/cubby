@@ -8,6 +8,8 @@ import type {
   IngredientNode,
   IngredientEdge,
 } from "~/schemas/ingredient-cooccurrence";
+import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 interface NetworkNode extends IngredientNode, d3Force.SimulationNodeDatum {}
 
@@ -26,22 +28,20 @@ export default function IngredientNetwork() {
 
   if (isLoading) {
     return (
-      <div className="text-muted-foreground flex h-[400px] items-center justify-center rounded-md border">
-        Loading ingredient data...
-      </div>
+      <VisualizationPlaceholder
+        message="Loading ingredient data..."
+        height={400}
+      />
     );
   }
 
   if (!data || data.nodes.length === 0) {
     return (
-      <div className="text-muted-foreground flex h-[400px] items-center justify-center rounded-md border">
-        <div className="text-center">
-          <p>No ingredient relationships to display</p>
-          <p className="mt-1 text-sm">
-            Add more recipes with shared ingredients to see connections
-          </p>
-        </div>
-      </div>
+      <VisualizationPlaceholder
+        message="No ingredient relationships to display"
+        subMessage="Add more recipes with shared ingredients to see connections"
+        height={400}
+      />
     );
   }
 
@@ -56,7 +56,11 @@ interface NetworkGraphProps {
 function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 400 });
+  const dimensions = useContainerDimensions(containerRef, {
+    minHeight: 400,
+    initialWidth: 800,
+    initialHeight: 400,
+  });
   const [hoveredNode, setHoveredNode] = useState<NetworkNode | null>(null);
   const [selectedLinkKey, setSelectedLinkKey] = useState<string | null>(null);
   const [simulatedNodes, setSimulatedNodes] = useState<NetworkNode[]>([]);
@@ -78,26 +82,6 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
       simulatedLinks.find((l) => getLinkKey(l) === selectedLinkKey) ?? null
     );
   }, [selectedLinkKey, simulatedLinks, getLinkKey]);
-
-  // Resize observer
-  useEffect(() => {
-    if (containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      setDimensions({ width, height: Math.max(height, 400) });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setDimensions({ width, height: Math.max(height, 400) });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   // Calculate node radius based on recipe count (must be before useEffect that uses it)
   const maxRecipeCount = useMemo(

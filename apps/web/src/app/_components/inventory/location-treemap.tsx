@@ -1,206 +1,55 @@
 "use client";
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useMemo, useRef, useCallback, useState } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
-import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
-import { LocationId } from "~/schemas/identifiers";
-import { InfLocation, type LocationType } from "~/schemas/location";
-import { LocationIcon } from "../locations/location-icons";
 import Link from "next/link";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { LocationIcon } from "../locations/location-icons";
+import { formatCurrency } from "~/lib/utils";
+import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
-  type InventoryItem,
-  type PricingStatus,
-  emptyPricingStatus,
-  mergePricingStatus,
-  formatPricingStatusSummary,
-  calculateInventoryValue,
-} from "../locations/calculate-inventory-value";
-
-interface TreemapNode {
-  name: string;
-  id: LocationId;
-  type: LocationType;
-  value: number; // total item count (named "value" for d3 treemap sizing)
-  directCount: number;
-  totalCount: number;
-  directValuation: number;
-  totalValuation: number;
-  directPricingStatus: PricingStatus;
-  totalPricingStatus: PricingStatus;
-  children?: TreemapNode[];
-}
-
-const currency = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
+  useLocationHierarchy,
+  type LocationHierarchyNode,
+} from "~/hooks/useLocationHierarchy";
+import { formatPricingStatusSummary } from "../locations/calculate-inventory-value";
+import { VisualizationPlaceholder } from "../visualizations/visualization-placeholder";
 
 export default function LocationTreemap() {
-  const api = useTRPC();
-  const locations = useQuery(api.location.makeTree.queryOptions());
+  const { data, isLoading } = useLocationHierarchy({
+    valuationMode: "equalWeight",
+  });
 
-  // Fetch inventory items for price calculation
-  const inventoryQuery = useQuery(
-    api.inventoryItem.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 5000 },
-      filters: {},
-    }),
-  );
-
-  // Extract items with stable reference
-  const items = useMemo(
-    () => (inventoryQuery.data?.items ?? []) as InventoryItem[],
-    [inventoryQuery.data],
-  );
-
-  // Group items by location, then calculate pricing for each
-  const valuationByLocation = useAsyncMemo(
-    async () => {
-      // Group items by location
-      const itemsByLocation = new Map<string, InventoryItem[]>();
-      for (const item of items) {
-        const locationId = item.location.id;
-        const existing = itemsByLocation.get(locationId) ?? [];
-        existing.push(item);
-        itemsByLocation.set(locationId, existing);
-      }
-
-      // Calculate inventory value per location using centralized function
-      const resultByLocation = new Map<
-        string,
-        { valuation: number; pricingStatus: PricingStatus }
-      >();
-
-      for (const [locationId, locationItems] of itemsByLocation) {
-        const result = await calculateInventoryValue(locationItems);
-        resultByLocation.set(locationId, {
-          valuation: result.totalValue,
-          pricingStatus: result.pricingStatus,
-        });
-      }
-
-      return resultByLocation;
-    },
-    [items],
-    new Map<string, { valuation: number; pricingStatus: PricingStatus }>(),
-  );
-
-  const treemapData = useMemo(() => {
-    const data = locations.data;
-    if (!data || data.length === 0) return null;
-
-    function transformNode(location: InfLocation): TreemapNode {
-      const children = location.children?.map(transformNode);
-      const directCount = location.directItemCount ?? 0;
-      const locationData = valuationByLocation.get(location.id);
-      const directValuation = locationData?.valuation ?? 0;
-      const directPricingStatus =
-        locationData?.pricingStatus ?? emptyPricingStatus();
-
-      const childrenCount =
-        children?.reduce((sum, c) => sum + c.totalCount, 0) ?? 0;
-      const childrenValuation =
-        children?.reduce((sum, c) => sum + c.totalValuation, 0) ?? 0;
-      const childrenPricingStatuses =
-        children?.map((c) => c.totalPricingStatus) ?? [];
-
-      const totalCount = directCount + childrenCount;
-      const totalValuation = directValuation + childrenValuation;
-      const totalPricingStatus = mergePricingStatus([
-        directPricingStatus,
-        ...childrenPricingStatuses,
-      ]);
-
-      return {
-        name: location.name,
-        id: location.id as LocationId,
-        type: location.type,
-        value: 1, // equal sizing - all locations get same weight
-        directCount,
-        totalCount,
-        directValuation,
-        totalValuation,
-        directPricingStatus,
-        totalPricingStatus,
-        children: children?.length ? children : undefined,
-      };
-    }
-
-    const allNodes = data.map(transformNode);
-    if (allNodes.length === 0) return null;
-
-    const totalCount = allNodes.reduce((sum, n) => sum + n.totalCount, 0);
-    const totalValuation = allNodes.reduce(
-      (sum, n) => sum + n.totalValuation,
-      0,
-    );
-    const totalPricingStatus = mergePricingStatus(
-      allNodes.map((n) => n.totalPricingStatus),
-    );
-    return {
-      name: "All Locations",
-      id: "_root" as LocationId,
-      type: "room" as LocationType,
-      value: allNodes.length, // root value = number of children
-      directCount: 0,
-      totalCount,
-      directValuation: 0,
-      totalValuation,
-      directPricingStatus: emptyPricingStatus(),
-      totalPricingStatus,
-      children: allNodes,
-    };
-  }, [locations.data, valuationByLocation]);
-
-  if (locations.isLoading || inventoryQuery.isLoading) {
+  if (isLoading) {
     return (
-      <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
-        Loading inventory data...
-      </div>
+      <VisualizationPlaceholder
+        message="Loading inventory data..."
+        height={500}
+      />
     );
   }
 
-  if (!treemapData) {
+  if (!data) {
     return (
-      <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
-        No locations to display
-      </div>
+      <VisualizationPlaceholder
+        message="No locations to display"
+        height={500}
+      />
     );
   }
 
-  return <Treemap data={treemapData} />;
+  return <Treemap data={data} />;
 }
 
 interface TreemapProps {
-  data: TreemapNode;
+  data: LocationHierarchyNode;
 }
 
 function Treemap({ data }: TreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 800, height: 500 });
+  const dimensions = useContainerDimensions(containerRef, {
+    minHeight: 400,
+    initialWidth: 800,
+    initialHeight: 500,
+  });
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      setDimensions({ width, height: Math.max(height, 400) });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        setDimensions({ width, height: Math.max(height, 400) });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const hierarchy = useMemo(() => {
     return d3Hierarchy
@@ -211,7 +60,7 @@ function Treemap({ data }: TreemapProps) {
 
   const treemapLayout = useMemo(() => {
     return d3Hierarchy
-      .treemap<TreemapNode>()
+      .treemap<LocationHierarchyNode>()
       .size([dimensions.width, dimensions.height])
       .paddingOuter(4)
       .paddingTop(24)
@@ -222,10 +71,9 @@ function Treemap({ data }: TreemapProps) {
   const nodes = useMemo(() => treemapLayout.descendants(), [treemapLayout]);
 
   const getNodeColor = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<TreemapNode>) => {
+    (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const isEmpty = node.data.totalCount === 0;
       const lightness = Math.min(75, 35 + node.depth * 15);
-      // Gray out empty locations
       const saturation = isEmpty ? 10 : 55;
       const adjustedLightness = isEmpty ? lightness + 20 : lightness;
       return `hsl(220, ${saturation}%, ${adjustedLightness}%)`;
@@ -298,7 +146,7 @@ function Treemap({ data }: TreemapProps) {
                       )}
                       {width > 220 && node.data.totalValuation > 0 && (
                         <span className="shrink-0 text-[10px] text-white/80">
-                          · {currency.format(node.data.totalValuation)}
+                          · {formatCurrency(node.data.totalValuation)}
                           {(node.data.totalPricingStatus.missingPricing.count >
                             0 ||
                             node.data.totalPricingStatus.miscNoPrice.count >
@@ -338,7 +186,7 @@ function HoverTooltip({
   nodes,
   hoveredId,
 }: {
-  nodes: d3Hierarchy.HierarchyRectangularNode<TreemapNode>[];
+  nodes: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>[];
   hoveredId: string;
 }) {
   const node = nodes.find((n) => n.data.id === hoveredId);
@@ -363,8 +211,8 @@ function HoverTooltip({
         </div>
         {(node.data.directValuation > 0 || node.data.totalValuation > 0) && (
           <div>
-            Value: {currency.format(node.data.directValuation)} direct /{" "}
-            {currency.format(node.data.totalValuation)} total
+            Value: {formatCurrency(node.data.directValuation)} direct /{" "}
+            {formatCurrency(node.data.totalValuation)} total
           </div>
         )}
         {(() => {

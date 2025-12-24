@@ -1,9 +1,11 @@
 "use client";
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useMemo, useRef, useState, useCallback } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
 import { type IngredientDataItem } from "~/app/_components/units/univ-conversion";
 import { TIER1_NUTRIENTS } from "@recipehub/usda-schemas";
+import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 // Define which macros to show and their display properties
 type MacroKey = "kcal" | "protein" | "fat" | "carbs";
@@ -110,14 +112,11 @@ export default function MacroSunburst({ ingredients }: MacroSunburstProps) {
 
   if (!hasData) {
     return (
-      <div className="text-muted-foreground flex h-[300px] items-center justify-center rounded-md border">
-        <div className="text-center">
-          <p>No nutrition data available</p>
-          <p className="mt-1 text-sm">
-            Link ingredients to USDA foods to see nutrition breakdown
-          </p>
-        </div>
-      </div>
+      <VisualizationPlaceholder
+        message="No nutrition data available"
+        subMessage="Link ingredients to USDA foods to see nutrition breakdown"
+        height={300}
+      />
     );
   }
 
@@ -130,30 +129,13 @@ interface SunburstProps {
 
 function Sunburst({ data }: SunburstProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 400, height: 300 });
+  const dimensions = useContainerDimensions(containerRef, {
+    minHeight: 300,
+    initialWidth: 400,
+    initialHeight: 300,
+  });
   const [hoveredNode, setHoveredNode] =
     useState<d3Hierarchy.HierarchyRectangularNode<MacroNode> | null>(null);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      const size = Math.min(width, Math.max(height, 300));
-      setDimensions({ width, height: size });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const size = Math.min(width, Math.max(height, 300));
-        setDimensions({ width, height: size });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   const radius = Math.min(dimensions.width, dimensions.height) / 2;
 

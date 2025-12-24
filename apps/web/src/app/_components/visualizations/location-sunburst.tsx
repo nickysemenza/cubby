@@ -1,205 +1,58 @@
 "use client";
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
+import { useMemo, useRef, useCallback, useState } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
-import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
-import { LocationId } from "~/schemas/identifiers";
-import { InfLocation, type LocationType } from "~/schemas/location";
-import { LocationIcon } from "../locations/location-icons";
 import Link from "next/link";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { LocationIcon } from "../locations/location-icons";
+import { formatCurrency } from "~/lib/utils";
+import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
-  type InventoryItem,
-  type PricingStatus,
-  emptyPricingStatus,
-  mergePricingStatus,
-  formatPricingStatusSummary,
-  calculateInventoryValue,
-} from "../locations/calculate-inventory-value";
-
-interface SunburstNode {
-  name: string;
-  id: LocationId;
-  type: LocationType;
-  value: number;
-  directCount: number;
-  totalCount: number;
-  directValuation: number;
-  totalValuation: number;
-  directPricingStatus: PricingStatus;
-  totalPricingStatus: PricingStatus;
-  children?: SunburstNode[];
-}
-
-const currency = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
+  useLocationHierarchy,
+  type LocationHierarchyNode,
+} from "~/hooks/useLocationHierarchy";
+import { formatPricingStatusSummary } from "../locations/calculate-inventory-value";
+import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 export default function LocationSunburst() {
-  const api = useTRPC();
-  const locations = useQuery(api.location.makeTree.queryOptions());
+  const { data, isLoading } = useLocationHierarchy({
+    valuationMode: "itemCount",
+  });
 
-  const inventoryQuery = useQuery(
-    api.inventoryItem.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 5000 },
-      filters: {},
-    }),
-  );
-
-  const items = useMemo(
-    () => (inventoryQuery.data?.items ?? []) as InventoryItem[],
-    [inventoryQuery.data],
-  );
-
-  const valuationByLocation = useAsyncMemo(
-    async () => {
-      const itemsByLocation = new Map<string, InventoryItem[]>();
-      for (const item of items) {
-        const locationId = item.location.id;
-        const existing = itemsByLocation.get(locationId) ?? [];
-        existing.push(item);
-        itemsByLocation.set(locationId, existing);
-      }
-
-      const resultByLocation = new Map<
-        string,
-        { valuation: number; pricingStatus: PricingStatus }
-      >();
-
-      for (const [locationId, locationItems] of itemsByLocation) {
-        const result = await calculateInventoryValue(locationItems);
-        resultByLocation.set(locationId, {
-          valuation: result.totalValue,
-          pricingStatus: result.pricingStatus,
-        });
-      }
-
-      return resultByLocation;
-    },
-    [items],
-    new Map<string, { valuation: number; pricingStatus: PricingStatus }>(),
-  );
-
-  const sunburstData = useMemo(() => {
-    const data = locations.data;
-    if (!data || data.length === 0) return null;
-
-    function transformNode(location: InfLocation): SunburstNode {
-      const children = location.children?.map(transformNode);
-      const directCount = location.directItemCount ?? 0;
-      const locationData = valuationByLocation.get(location.id);
-      const directValuation = locationData?.valuation ?? 0;
-      const directPricingStatus =
-        locationData?.pricingStatus ?? emptyPricingStatus();
-
-      const childrenCount =
-        children?.reduce((sum, c) => sum + c.totalCount, 0) ?? 0;
-      const childrenValuation =
-        children?.reduce((sum, c) => sum + c.totalValuation, 0) ?? 0;
-      const childrenPricingStatuses =
-        children?.map((c) => c.totalPricingStatus) ?? [];
-
-      const totalCount = directCount + childrenCount;
-      const totalValuation = directValuation + childrenValuation;
-      const totalPricingStatus = mergePricingStatus([
-        directPricingStatus,
-        ...childrenPricingStatuses,
-      ]);
-
-      return {
-        name: location.name,
-        id: location.id as LocationId,
-        type: location.type,
-        value: Math.max(1, totalCount), // Use totalCount for sizing, minimum 1
-        directCount,
-        totalCount,
-        directValuation,
-        totalValuation,
-        directPricingStatus,
-        totalPricingStatus,
-        children: children?.length ? children : undefined,
-      };
-    }
-
-    const allNodes = data.map(transformNode);
-    if (allNodes.length === 0) return null;
-
-    const totalCount = allNodes.reduce((sum, n) => sum + n.totalCount, 0);
-    const totalValuation = allNodes.reduce(
-      (sum, n) => sum + n.totalValuation,
-      0,
-    );
-    const totalPricingStatus = mergePricingStatus(
-      allNodes.map((n) => n.totalPricingStatus),
-    );
-
-    return {
-      name: "All Locations",
-      id: "_root" as LocationId,
-      type: "room" as LocationType,
-      value: totalCount || 1,
-      directCount: 0,
-      totalCount,
-      directValuation: 0,
-      totalValuation,
-      directPricingStatus: emptyPricingStatus(),
-      totalPricingStatus,
-      children: allNodes,
-    };
-  }, [locations.data, valuationByLocation]);
-
-  if (locations.isLoading || inventoryQuery.isLoading) {
+  if (isLoading) {
     return (
-      <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
-        Loading inventory data...
-      </div>
+      <VisualizationPlaceholder
+        message="Loading inventory data..."
+        height={500}
+      />
     );
   }
 
-  if (!sunburstData) {
+  if (!data) {
     return (
-      <div className="text-muted-foreground flex h-[500px] items-center justify-center rounded-md border">
-        No locations to display
-      </div>
+      <VisualizationPlaceholder
+        message="No locations to display"
+        height={500}
+      />
     );
   }
 
-  return <Sunburst data={sunburstData} />;
+  return <Sunburst data={data} />;
 }
 
 interface SunburstProps {
-  data: SunburstNode;
+  data: LocationHierarchyNode;
 }
 
 function Sunburst({ data }: SunburstProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 500, height: 500 });
+  const dimensions = useContainerDimensions(containerRef, {
+    minHeight: 400,
+    initialWidth: 500,
+    initialHeight: 500,
+  });
   const [hoveredNode, setHoveredNode] =
-    useState<d3Hierarchy.HierarchyRectangularNode<SunburstNode> | null>(null);
-
-  useEffect(() => {
-    if (containerRef.current) {
-      const { width, height } = containerRef.current.getBoundingClientRect();
-      const size = Math.min(width, Math.max(height, 400));
-      setDimensions({ width, height: size });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const { width, height } = entry.contentRect;
-        const size = Math.min(width, Math.max(height, 400));
-        setDimensions({ width, height: size });
-      }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
+    useState<d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode> | null>(
+      null,
+    );
 
   const radius = Math.min(dimensions.width, dimensions.height) / 2;
 
@@ -211,9 +64,9 @@ function Sunburst({ data }: SunburstProps) {
   }, [data]);
 
   const partitionLayout = useMemo(() => {
-    return d3Hierarchy.partition<SunburstNode>().size([2 * Math.PI, radius])(
-      hierarchy,
-    );
+    return d3Hierarchy
+      .partition<LocationHierarchyNode>()
+      .size([2 * Math.PI, radius])(hierarchy);
   }, [hierarchy, radius]);
 
   const nodes = useMemo(
@@ -222,13 +75,12 @@ function Sunburst({ data }: SunburstProps) {
   );
 
   const arc = useCallback(
-    (d: d3Hierarchy.HierarchyRectangularNode<SunburstNode>) => {
+    (d: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const innerRadius = d.y0;
       const outerRadius = d.y1;
       const startAngle = d.x0;
       const endAngle = d.x1;
 
-      // Create arc path
       const x0 = Math.cos(startAngle - Math.PI / 2);
       const y0 = Math.sin(startAngle - Math.PI / 2);
       const x1 = Math.cos(endAngle - Math.PI / 2);
@@ -248,7 +100,7 @@ function Sunburst({ data }: SunburstProps) {
   );
 
   const getNodeColor = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<SunburstNode>) => {
+    (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const isEmpty = node.data.totalCount === 0;
       const lightness = Math.min(75, 35 + node.depth * 12);
       const saturation = isEmpty ? 10 : 55;
@@ -259,7 +111,7 @@ function Sunburst({ data }: SunburstProps) {
   );
 
   const getLabelPosition = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<SunburstNode>) => {
+    (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const angle = (node.x0 + node.x1) / 2;
       const r = (node.y0 + node.y1) / 2;
       const x = Math.cos(angle - Math.PI / 2) * r;
@@ -276,7 +128,7 @@ function Sunburst({ data }: SunburstProps) {
   );
 
   const shouldShowLabel = useCallback(
-    (node: d3Hierarchy.HierarchyRectangularNode<SunburstNode>) => {
+    (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const arcLength = (node.x1 - node.x0) * ((node.y0 + node.y1) / 2);
       const arcWidth = node.y1 - node.y0;
       return arcLength > 40 && arcWidth > 20;
@@ -361,7 +213,7 @@ function Sunburst({ data }: SunburstProps) {
 function HoverTooltip({
   node,
 }: {
-  node: d3Hierarchy.HierarchyRectangularNode<SunburstNode>;
+  node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>;
 }) {
   return (
     <div className="bg-popover pointer-events-none absolute top-4 left-4 z-50 rounded-md px-3 py-2 text-sm shadow-lg">
@@ -382,8 +234,8 @@ function HoverTooltip({
         </div>
         {(node.data.directValuation > 0 || node.data.totalValuation > 0) && (
           <div>
-            Value: {currency.format(node.data.directValuation)} direct /{" "}
-            {currency.format(node.data.totalValuation)} total
+            Value: {formatCurrency(node.data.directValuation)} direct /{" "}
+            {formatCurrency(node.data.totalValuation)} total
           </div>
         )}
         {(() => {

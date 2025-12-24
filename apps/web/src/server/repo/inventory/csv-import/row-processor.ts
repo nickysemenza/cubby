@@ -10,8 +10,8 @@ import {
   type InventoryCSVRow,
   type CSVImportResultItem,
   type ProductChangesPreview,
-  type FieldChange,
 } from "~/schemas/inventory";
+import { type FieldChange } from "~/schemas/csv";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import {
   findLocationByName,
