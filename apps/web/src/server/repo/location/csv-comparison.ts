@@ -1,22 +1,12 @@
 /**
- * Location CSV comparison utilities for push/pull preview
+ * Location CSV comparison utilities
  *
- * Compares app locations with sheet locations to generate a diff preview
- * showing what changes would be made when pushing to or pulling from Google Sheets.
+ * Compares app locations with sheet locations to detect field changes.
  */
 
-import {
-  type LocationCSVRow,
-  type LocationCSVImportResult,
-  type LocationCSVImportResultItem,
-} from "~/schemas/location";
-import { type FieldChange, LOCATION_CSV_ACTIONS } from "~/schemas/csv";
+import { type LocationCSVRow } from "~/schemas/location";
+import { type FieldChange } from "~/schemas/csv";
 import { type LocationCSVExportRow } from "./types";
-import {
-  createComparisonFunction,
-  normalizeForComparison,
-} from "~/server/repo/csv";
-import { type LocationId } from "~/schemas/identifiers";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 
@@ -113,126 +103,4 @@ export function getLocationRowDifferences(
   }
 
   return changes;
-}
-
-/**
- * Internal comparison function using shared framework
- */
-const compareLocationsInternal = createComparisonFunction<
-  LocationCSVExportRow,
-  LocationCSVRow,
-  LocationCSVImportResultItem,
-  (typeof LOCATION_CSV_ACTIONS)[number]
->({
-  actions: LOCATION_CSV_ACTIONS,
-
-  getSheetKey: (row) => normalizeForComparison(row.location_name),
-  getAppKey: (row) => normalizeForComparison(row.location_name),
-
-  getDifferences: getLocationRowDifferences,
-
-  buildCreatedItem: (rowIndex, appRow) => ({
-    rowIndex,
-    action: "created",
-    locationName: appRow.location_name,
-    locationId: appRow.location_id,
-    message: "Will be added to sheet",
-  }),
-
-  buildUpdatedItem: (rowIndex, appRow, fieldChanges) => ({
-    rowIndex,
-    action: "updated",
-    locationName: appRow.location_name,
-    locationId: appRow.location_id,
-    fieldChanges,
-  }),
-
-  buildSkippedItem: (rowIndex, appRow) => ({
-    rowIndex,
-    action: "skipped",
-    locationName: appRow.location_name,
-    locationId: appRow.location_id,
-  }),
-
-  buildRemovedItem: (sheetRow) => ({
-    rowIndex: -1,
-    action: "removed",
-    locationName: sheetRow.location_name,
-    message: "Will be removed from sheet",
-  }),
-
-  createdAction: "created",
-  updatedAction: "updated",
-  skippedAction: "skipped",
-  removedAction: "removed",
-});
-
-/**
- * Compare app location rows with sheet rows to generate a diff preview
- *
- * Used by push preview to show what changes would be made to the Locations sheet.
- * Compares by unique location_name.
- */
-export function compareLocationsForPush(
-  appRows: LocationCSVExportRow[],
-  sheetRows: LocationCSVRow[],
-): LocationCSVImportResult {
-  const result = compareLocationsInternal(appRows, sheetRows);
-
-  // Map to LocationCSVImportResult format
-  return {
-    created: result.created,
-    updated: result.updated,
-    skipped: result.skipped,
-    errors: result.error,
-    removed: result.removed > 0 ? result.removed : undefined,
-    items: result.items,
-  };
-}
-
-/**
- * Removed location item with location ID for deletion
- */
-export interface RemovedLocationItem extends LocationCSVImportResultItem {
-  action: "removed";
-  locationIdToDelete: LocationId;
-}
-
-/**
- * Find locations that exist in app but not in sheet (deleted from sheet)
- *
- * Used by pull preview to show what would be deleted, and by apply pull
- * to actually delete the locations.
- *
- * Note: Deletion safety (checking for inventory) is handled at apply time,
- * not during this comparison.
- */
-export function findRemovedLocationsForPull(
-  appRows: LocationCSVExportRow[],
-  sheetRows: LocationCSVRow[],
-): RemovedLocationItem[] {
-  const removedItems: RemovedLocationItem[] = [];
-
-  // Build a set of location names from sheet (normalized for comparison)
-  const sheetLocationNames = new Set<string>();
-  for (const row of sheetRows) {
-    sheetLocationNames.add(normalizeForComparison(row.location_name));
-  }
-
-  // Find app locations that don't exist in sheet
-  for (const appRow of appRows) {
-    const normalizedName = normalizeForComparison(appRow.location_name);
-    if (!sheetLocationNames.has(normalizedName)) {
-      removedItems.push({
-        rowIndex: -1,
-        action: "removed",
-        locationName: appRow.location_name,
-        locationId: appRow.location_id,
-        locationIdToDelete: appRow.location_id,
-        message: "Location will be deleted (removed from sheet)",
-      });
-    }
-  }
-
-  return removedItems;
 }
