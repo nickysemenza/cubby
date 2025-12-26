@@ -1,6 +1,6 @@
 "use client";
 
-import { type RecipeOut } from "~/schemas/recipe";
+import type { RecipeOut } from "~/schemas/recipe";
 import Image from "next/image";
 import { Clock, Users, ExternalLink } from "lucide-react";
 import Link from "next/link";
@@ -48,7 +48,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         className={`relative z-10 flex h-full flex-col justify-end p-6 sm:p-8 ${!hasImage ? "items-start" : ""}`}
       >
         <h2
-          className={`text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl ${hasImage ? "text-white" : ""}`}
+          className={`font-bold text-3xl tracking-tight sm:text-4xl md:text-5xl ${hasImage ? "text-white" : ""}`}
         >
           {recipe.name}
         </h2>

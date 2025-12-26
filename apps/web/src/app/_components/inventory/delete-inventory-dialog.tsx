@@ -1,6 +1,6 @@
 "use client";
 
-import { z } from "zod";
+import type { z } from "zod";
 import { useTRPC } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import {
@@ -13,7 +13,7 @@ import {
 } from "~/components/ui/dialog";
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -72,7 +72,7 @@ export function DeleteInventoryDialog({
         </DialogHeader>
 
         <div className="space-y-2">
-          <ul className="text-muted-foreground max-h-32 space-y-1 overflow-y-auto text-sm">
+          <ul className="max-h-32 space-y-1 overflow-y-auto text-muted-foreground text-sm">
             {items.map((item) => (
               <li key={item.id}>
                 {item.product.name} - {item.amount.value} {item.amount.unit}

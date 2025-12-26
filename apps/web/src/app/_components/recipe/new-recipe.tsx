@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { RecipeForm } from "./recipe-form";
 import { useTRPC } from "~/trpc/react";
-import { type RecipeCreateInput } from "~/schemas/recipe";
+import type { RecipeCreateInput } from "~/schemas/recipe";
 import { toast } from "sonner";
 import { useEntityCreateMode } from "../hooks/useEntityMode";
 

@@ -23,10 +23,10 @@ import { useTRPC } from "~/trpc/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Papa from "papaparse";
-import {
-  type InventoryCSVRow,
-  type CSVImportResult,
-  type CSVImportResultItem,
+import type {
+  InventoryCSVRow,
+  CSVImportResult,
+  CSVImportResultItem,
 } from "~/schemas/inventory";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { queryKeys } from "~/lib/query-keys";
@@ -130,11 +130,11 @@ const ProductChangesPreview = ({ item }: { item: CSVImportResultItem }) => {
   if (changes.length === 0) return null;
 
   return (
-    <div className="text-muted-foreground mt-1 flex flex-wrap gap-1 text-xs">
+    <div className="mt-1 flex flex-wrap gap-1 text-muted-foreground text-xs">
       {changes.map((change, i) => (
         <span
           key={i}
-          className="bg-muted inline-flex items-center gap-1 rounded px-1.5 py-0.5"
+          className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"
         >
           {change.startsWith("New product") && <Package className="h-3 w-3" />}
           {change.startsWith("New location") && <MapPin className="h-3 w-3" />}
@@ -184,7 +184,7 @@ export default function CSVImportForm() {
       setPreviewResult(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedRows, importResult]);
+  }, [debouncedRows, importResult, previewMutation.mutate]);
 
   const importMutation = useMutation(
     api.inventoryItem.importCSV.mutationOptions({
@@ -365,24 +365,24 @@ export default function CSVImportForm() {
         return;
       }
       // location_name is now optional - empty means product-only row
-      if (locationPath && (isNaN(quantity) || quantity <= 0)) {
+      if (locationPath && (Number.isNaN(quantity) || quantity <= 0)) {
         errors.push(`Row ${index + 1}: Invalid quantity`);
         return;
       }
       if (
         expected_qty !== undefined &&
-        (isNaN(expected_qty) || expected_qty <= 0)
+        (Number.isNaN(expected_qty) || expected_qty <= 0)
       ) {
         errors.push(
           `Row ${index + 1}: Invalid expected_qty (must be positive integer)`,
         );
         return;
       }
-      if (ndb_number !== undefined && isNaN(ndb_number)) {
+      if (ndb_number !== undefined && Number.isNaN(ndb_number)) {
         errors.push(`Row ${index + 1}: Invalid ndb_number (must be a number)`);
         return;
       }
-      if (price !== undefined && (isNaN(price) || price <= 0)) {
+      if (price !== undefined && (Number.isNaN(price) || price <= 0)) {
         errors.push(
           `Row ${index + 1}: Invalid price (must be positive number)`,
         );
@@ -481,37 +481,37 @@ export default function CSVImportForm() {
               <span className="font-medium text-green-600">
                 {importResult.created}
               </span>
-              <span className="text-muted-foreground ml-1">created</span>
+              <span className="ml-1 text-muted-foreground">created</span>
             </div>
             <div>
               <span className="font-medium text-yellow-600">
                 {importResult.moved}
               </span>
-              <span className="text-muted-foreground ml-1">moved</span>
+              <span className="ml-1 text-muted-foreground">moved</span>
             </div>
             <div>
               <span className="font-medium text-blue-600">
                 {importResult.updated}
               </span>
-              <span className="text-muted-foreground ml-1">updated</span>
+              <span className="ml-1 text-muted-foreground">updated</span>
             </div>
             <div>
               <span className="font-medium text-purple-600">
                 {importResult.productOnly}
               </span>
-              <span className="text-muted-foreground ml-1">product only</span>
+              <span className="ml-1 text-muted-foreground">product only</span>
             </div>
             <div>
               <span className="font-medium text-gray-600">
                 {importResult.skipped}
               </span>
-              <span className="text-muted-foreground ml-1">skipped</span>
+              <span className="ml-1 text-muted-foreground">skipped</span>
             </div>
             <div>
               <span className="font-medium text-red-600 dark:text-red-400">
                 {importResult.errors}
               </span>
-              <span className="text-muted-foreground ml-1">errors</span>
+              <span className="ml-1 text-muted-foreground">errors</span>
             </div>
           </div>
         </div>
@@ -519,7 +519,7 @@ export default function CSVImportForm() {
         {importResult.items.length > 0 && (
           <div className="max-h-96 overflow-y-auto rounded border">
             <table className="w-full text-sm">
-              <thead className="bg-muted sticky top-0">
+              <thead className="sticky top-0 bg-muted">
                 <tr>
                   <th className="w-20 p-2 text-left">Status</th>
                   <th className="p-2 text-left">Product</th>
@@ -629,7 +629,7 @@ export default function CSVImportForm() {
 
       {/* Parse Error */}
       {parseError && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700 text-sm dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <pre className="whitespace-pre-wrap">{parseError}</pre>
@@ -643,37 +643,37 @@ export default function CSVImportForm() {
           {/* Summary counts */}
           <div className="grid grid-cols-6 gap-2 text-sm">
             <div className="rounded border bg-green-50 p-2 text-center">
-              <div className="text-lg font-bold text-green-600">
+              <div className="font-bold text-green-600 text-lg">
                 {previewResult.created}
               </div>
               <div className="text-muted-foreground text-xs">Create</div>
             </div>
             <div className="rounded border bg-yellow-50 p-2 text-center">
-              <div className="text-lg font-bold text-yellow-600">
+              <div className="font-bold text-lg text-yellow-600">
                 {previewResult.moved}
               </div>
               <div className="text-muted-foreground text-xs">Move</div>
             </div>
             <div className="rounded border bg-blue-50 p-2 text-center">
-              <div className="text-lg font-bold text-blue-600">
+              <div className="font-bold text-blue-600 text-lg">
                 {previewResult.updated}
               </div>
               <div className="text-muted-foreground text-xs">Update</div>
             </div>
             <div className="rounded border bg-purple-50 p-2 text-center">
-              <div className="text-lg font-bold text-purple-600">
+              <div className="font-bold text-lg text-purple-600">
                 {previewResult.productOnly}
               </div>
               <div className="text-muted-foreground text-xs">Product</div>
             </div>
             <div className="rounded border bg-gray-50 p-2 text-center">
-              <div className="text-lg font-bold text-gray-600">
+              <div className="font-bold text-gray-600 text-lg">
                 {previewResult.skipped}
               </div>
               <div className="text-muted-foreground text-xs">Skip</div>
             </div>
             <div className="rounded border bg-red-50 p-2 text-center dark:bg-red-950">
-              <div className="text-lg font-bold text-red-600 dark:text-red-400">
+              <div className="font-bold text-lg text-red-600 dark:text-red-400">
                 {previewResult.errors}
               </div>
               <div className="text-muted-foreground text-xs">Error</div>
@@ -683,7 +683,7 @@ export default function CSVImportForm() {
           {/* Preview table */}
           <div className="max-h-96 overflow-y-auto rounded border">
             <table className="w-full text-sm">
-              <thead className="bg-muted sticky top-0">
+              <thead className="sticky top-0 bg-muted">
                 <tr>
                   <th className="w-20 p-2 text-left">Action</th>
                   <th className="p-2 text-left">Product</th>
@@ -736,7 +736,7 @@ export default function CSVImportForm() {
                       </td>
                       <td className="p-2">
                         {mappings && mappings.length > 0 ? (
-                          <div className="text-muted-foreground max-w-48 truncate text-xs">
+                          <div className="max-w-48 truncate text-muted-foreground text-xs">
                             {mappings
                               .map((m) => `${m.from}=${m.to}`)
                               .join(", ")}

@@ -105,7 +105,7 @@ export default function IntegrationsPage() {
   return (
     <div className="container mx-auto py-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Integrations</h1>
+        <h1 className="font-bold text-2xl">Integrations</h1>
         <p className="text-muted-foreground">
           Connect external services to sync your inventory data.
         </p>
@@ -151,18 +151,18 @@ export default function IntegrationsPage() {
 
           {/* Current connection status */}
           {statusLoading ? (
-            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
               <Loader2 className="h-4 w-4 animate-spin" />
               Checking connection...
             </div>
           ) : status?.connected ? (
             <div className="rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
-              <div className="flex items-center gap-2 text-sm font-medium text-green-800 dark:text-green-200">
+              <div className="flex items-center gap-2 font-medium text-green-800 text-sm dark:text-green-200">
                 <CheckCircle className="h-4 w-4" />
                 Connected to &ldquo;{status.sheetName}&rdquo;
               </div>
               {status.lastSync && (
-                <p className="mt-1 text-xs text-green-700 dark:text-green-300">
+                <p className="mt-1 text-green-700 text-xs dark:text-green-300">
                   Last synced: {new Date(status.lastSync).toLocaleString()}
                 </p>
               )}
@@ -171,6 +171,7 @@ export default function IntegrationsPage() {
                   variant="outline"
                   size="sm"
                   render={
+                    // biome-ignore lint/a11y/useAnchorContent: content provided via Button children
                     <a
                       href={`https://docs.google.com/spreadsheets/d/${status.sheetId}`}
                       target="_blank"
@@ -202,11 +203,11 @@ export default function IntegrationsPage() {
             </div>
           ) : status?.sheetId ? (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
-              <div className="flex items-center gap-2 text-sm font-medium text-red-800 dark:text-red-200">
+              <div className="flex items-center gap-2 font-medium text-red-800 text-sm dark:text-red-200">
                 <XCircle className="h-4 w-4" />
                 Cannot access connected sheet
               </div>
-              <p className="mt-1 text-xs text-red-700 dark:text-red-300">
+              <p className="mt-1 text-red-700 text-xs dark:text-red-300">
                 The previously connected sheet is no longer accessible. It may
                 have been deleted or the sharing was removed.
               </p>
@@ -238,13 +239,13 @@ export default function IntegrationsPage() {
               </div>
 
               {status.serviceAccountEmail && (
-                <div className="bg-muted/50 rounded-md border p-3 text-xs">
+                <div className="rounded-md border bg-muted/50 p-3 text-xs">
                   <p className="font-medium">Setup instructions:</p>
-                  <ol className="text-muted-foreground mt-1.5 list-inside list-decimal space-y-1">
+                  <ol className="mt-1.5 list-inside list-decimal space-y-1 text-muted-foreground">
                     <li>Create or open a Google Sheet</li>
                     <li>
                       Click Share and add:{" "}
-                      <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+                      <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
                         {status.serviceAccountEmail}
                       </code>
                     </li>
@@ -341,7 +342,7 @@ function UPCImageSyncCard() {
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-sm font-medium">
+            <p className="font-medium text-sm">
               Products with UPC but no image
             </p>
             <p className="text-muted-foreground text-xs">
@@ -376,9 +377,9 @@ function UPCImageSyncCard() {
         )}
 
         {backfillMutation.data && (
-          <div className="bg-muted/50 rounded-md border p-3 text-xs">
+          <div className="rounded-md border bg-muted/50 p-3 text-xs">
             <p className="font-medium">Last run results:</p>
-            <ul className="text-muted-foreground mt-1 space-y-0.5">
+            <ul className="mt-1 space-y-0.5 text-muted-foreground">
               <li>Found: {backfillMutation.data.found} products</li>
               <li>Imported: {backfillMutation.data.imported} images</li>
               {backfillMutation.data.skipped > 0 && (

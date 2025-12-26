@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import {
   createProduct,
@@ -16,7 +16,7 @@ import {
   unsafeUserId,
   unsafeOrganizationId,
 } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),

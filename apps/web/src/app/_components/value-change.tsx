@@ -37,7 +37,7 @@ function formatValue(value: unknown, maxLength = 500): string {
   }
   // Truncate long values
   if (str.length > maxLength) {
-    return str.slice(0, maxLength) + "...";
+    return `${str.slice(0, maxLength)}...`;
   }
   return str;
 }
@@ -65,7 +65,7 @@ export function ValueChange({
     <span className={cn("inline-flex items-center gap-1", className)}>
       {label && (
         <span
-          className={cn("text-muted-foreground font-medium", sizeClasses[size])}
+          className={cn("font-medium text-muted-foreground", sizeClasses[size])}
         >
           {label}:
         </span>

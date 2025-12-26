@@ -238,44 +238,47 @@ describe("compareInventoryForSync - rename detection", () => {
   ];
 
   describe("SHOULD detect renames", () => {
-    it.each(shouldDetectRename)(
-      "$name",
-      ({ app, sheet, expectedCounts, renamedFrom, renamedTo }) => {
-        const appRows = [
-          makeAppRow({
-            ...app,
-            location_id: app.location_name
-              ? unsafeLocationId("loc-1")
-              : undefined,
-            inventory_entry_id: app.location_name
-              ? unsafeInventoryId("inv-1")
-              : undefined,
-          }),
-        ];
-        const sheetRows = [makeSheetRow(sheet)];
+    it.each(shouldDetectRename)("$name", ({
+      app,
+      sheet,
+      expectedCounts,
+      renamedFrom,
+      renamedTo,
+    }) => {
+      const appRows = [
+        makeAppRow({
+          ...app,
+          location_id: app.location_name
+            ? unsafeLocationId("loc-1")
+            : undefined,
+          inventory_entry_id: app.location_name
+            ? unsafeInventoryId("inv-1")
+            : undefined,
+        }),
+      ];
+      const sheetRows = [makeSheetRow(sheet)];
 
-        const result = compareInventoryForSync(appRows, sheetRows);
-        const counts = countByState(result);
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
 
-        // Assert exact counts for all states
-        expect(counts).toEqual({
-          matched: expectedCounts.matched ?? 0,
-          conflict: expectedCounts.conflict ?? 0,
-          app_only: expectedCounts.app_only ?? 0,
-          sheet_only: expectedCounts.sheet_only ?? 0,
-          renamed: expectedCounts.renamed ?? 0,
-          moved: expectedCounts.moved ?? 0,
-        });
+      // Assert exact counts for all states
+      expect(counts).toEqual({
+        matched: expectedCounts.matched ?? 0,
+        conflict: expectedCounts.conflict ?? 0,
+        app_only: expectedCounts.app_only ?? 0,
+        sheet_only: expectedCounts.sheet_only ?? 0,
+        renamed: expectedCounts.renamed ?? 0,
+        moved: expectedCounts.moved ?? 0,
+      });
 
-        // Assert rename details if provided
-        if (renamedFrom || renamedTo) {
-          const renamed = result.find((i) => i.state === "renamed");
-          expect(renamed).toBeDefined();
-          if (renamedFrom) expect(renamed?.renamedFrom).toBe(renamedFrom);
-          if (renamedTo) expect(renamed?.renamedTo).toBe(renamedTo);
-        }
-      },
-    );
+      // Assert rename details if provided
+      if (renamedFrom || renamedTo) {
+        const renamed = result.find((i) => i.state === "renamed");
+        expect(renamed).toBeDefined();
+        if (renamedFrom) expect(renamed?.renamedFrom).toBe(renamedFrom);
+        if (renamedTo) expect(renamed?.renamedTo).toBe(renamedTo);
+      }
+    });
   });
 
   // ============================================================================
@@ -327,31 +330,32 @@ describe("compareInventoryForSync - rename detection", () => {
   ];
 
   describe("should NOT detect renames (false positives)", () => {
-    it.each(shouldNotDetectRename)(
-      "$name",
-      ({ app, sheet, expectedCounts }) => {
-        const appRows = [
-          makeAppRow({
-            ...app,
-            location_id: unsafeLocationId("loc-1"),
-            inventory_entry_id: unsafeInventoryId("inv-1"),
-          }),
-        ];
-        const sheetRows = [makeSheetRow(sheet)];
+    it.each(shouldNotDetectRename)("$name", ({
+      app,
+      sheet,
+      expectedCounts,
+    }) => {
+      const appRows = [
+        makeAppRow({
+          ...app,
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [makeSheetRow(sheet)];
 
-        const result = compareInventoryForSync(appRows, sheetRows);
-        const counts = countByState(result);
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
 
-        expect(counts).toEqual({
-          matched: expectedCounts.matched ?? 0,
-          conflict: expectedCounts.conflict ?? 0,
-          app_only: expectedCounts.app_only ?? 0,
-          sheet_only: expectedCounts.sheet_only ?? 0,
-          renamed: expectedCounts.renamed ?? 0,
-          moved: expectedCounts.moved ?? 0,
-        });
-      },
-    );
+      expect(counts).toEqual({
+        matched: expectedCounts.matched ?? 0,
+        conflict: expectedCounts.conflict ?? 0,
+        app_only: expectedCounts.app_only ?? 0,
+        sheet_only: expectedCounts.sheet_only ?? 0,
+        renamed: expectedCounts.renamed ?? 0,
+        moved: expectedCounts.moved ?? 0,
+      });
+    });
 
     it("may detect false positive for unrelated products at same location+manufacturer (known limitation)", () => {
       // Trade-off: we catch real typo fixes like "wrenches" -> "rwrenches"
@@ -462,38 +466,41 @@ describe("compareInventoryForSync - rename detection", () => {
   ];
 
   describe("move detection", () => {
-    it.each(moveTests)(
-      "$name",
-      ({ app, sheet, expectedCounts, movedFrom, movedTo }) => {
-        const appRows = [
-          makeAppRow({
-            ...app,
-            location_id: unsafeLocationId("loc-1"),
-            inventory_entry_id: unsafeInventoryId("inv-1"),
-          }),
-        ];
-        const sheetRows = [makeSheetRow(sheet)];
+    it.each(moveTests)("$name", ({
+      app,
+      sheet,
+      expectedCounts,
+      movedFrom,
+      movedTo,
+    }) => {
+      const appRows = [
+        makeAppRow({
+          ...app,
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [makeSheetRow(sheet)];
 
-        const result = compareInventoryForSync(appRows, sheetRows);
-        const counts = countByState(result);
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
 
-        expect(counts).toEqual({
-          matched: expectedCounts.matched ?? 0,
-          conflict: expectedCounts.conflict ?? 0,
-          app_only: expectedCounts.app_only ?? 0,
-          sheet_only: expectedCounts.sheet_only ?? 0,
-          renamed: expectedCounts.renamed ?? 0,
-          moved: expectedCounts.moved ?? 0,
-        });
+      expect(counts).toEqual({
+        matched: expectedCounts.matched ?? 0,
+        conflict: expectedCounts.conflict ?? 0,
+        app_only: expectedCounts.app_only ?? 0,
+        sheet_only: expectedCounts.sheet_only ?? 0,
+        renamed: expectedCounts.renamed ?? 0,
+        moved: expectedCounts.moved ?? 0,
+      });
 
-        if (movedFrom || movedTo) {
-          const moved = result.find((i) => i.state === "moved");
-          expect(moved).toBeDefined();
-          if (movedFrom) expect(moved?.movedFrom).toBe(movedFrom);
-          if (movedTo) expect(moved?.movedTo).toBe(movedTo);
-        }
-      },
-    );
+      if (movedFrom || movedTo) {
+        const moved = result.find((i) => i.state === "moved");
+        expect(moved).toBeDefined();
+        if (movedFrom) expect(moved?.movedFrom).toBe(movedFrom);
+        if (movedTo) expect(moved?.movedTo).toBe(movedTo);
+      }
+    });
   });
 
   // ============================================================================

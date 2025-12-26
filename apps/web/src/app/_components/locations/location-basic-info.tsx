@@ -1,12 +1,12 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { NoneState } from "../NoneState";
 import { LocationPillLink } from "../EntityPill";
 import { LocationIconWithLabel } from "./location-icons";
-import { type InfLocation } from "~/schemas/location";
+import type { InfLocation } from "~/schemas/location";
 
 interface LocationBasicInfoProps {
   location: InfLocation;

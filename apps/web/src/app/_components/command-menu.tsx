@@ -37,31 +37,29 @@ export function GlobalCommandMenu() {
     setOpen(false);
   };
   return (
-    <>
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Type a command or search..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Entities">
-            {Object.values(entities).map((entity) => (
-              <CommandItem
-                key={entity.basePath}
-                onSelect={() => goToPage(`/${entity.basePath}`)}
-              >
-                {entity.icon}
-                <span>{entity.pluralLabel}</span>
-              </CommandItem>
-            ))}
-          </CommandGroup>
-          <CommandSeparator />
-          <CommandGroup heading="Settings">
-            <CommandItem onSelect={() => goToPage(`/api/panel`)}>
-              <Settings />
-              <span>API Panel</span>
+    <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandInput placeholder="Type a command or search..." />
+      <CommandList>
+        <CommandEmpty>No results found.</CommandEmpty>
+        <CommandGroup heading="Entities">
+          {Object.values(entities).map((entity) => (
+            <CommandItem
+              key={entity.basePath}
+              onSelect={() => goToPage(`/${entity.basePath}`)}
+            >
+              {entity.icon}
+              <span>{entity.pluralLabel}</span>
             </CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
-    </>
+          ))}
+        </CommandGroup>
+        <CommandSeparator />
+        <CommandGroup heading="Settings">
+          <CommandItem onSelect={() => goToPage(`/api/panel`)}>
+            <Settings />
+            <span>API Panel</span>
+          </CommandItem>
+        </CommandGroup>
+      </CommandList>
+    </CommandDialog>
   );
 }

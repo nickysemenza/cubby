@@ -1,4 +1,4 @@
-import { type Database, type DrizzleTransaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { dedupe } from "~/misc/array-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
 import {
@@ -6,7 +6,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "~/schemas/pagination";
-import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import {
   formatSearchTerm,
   getDb,
@@ -20,8 +20,8 @@ import {
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
 import { createAppError } from "~/server/api/trpc";
-import { type z } from "zod";
-import { ingredientBase } from "~/schemas/ingredient";
+import type { z } from "zod";
+import type { ingredientBase } from "~/schemas/ingredient";
 import {
   type IngredientId,
   type OrganizationId,
@@ -32,10 +32,10 @@ import {
   ingredient,
   recipeSectionIngredient,
   product,
-  productUnitMappings,
-  recipe,
-  recipeSection,
-  image,
+  type productUnitMappings,
+  type recipe,
+  type recipeSection,
+  type image,
 } from "~/server/db/schema";
 import {
   eq,
@@ -48,7 +48,7 @@ import {
   arrayOverlaps,
 } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 export const mergeIngredients = async (
   db: Database,
@@ -116,7 +116,7 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
 };
 
 const dbIngredientToAPI = async (
-  db: Database | DrizzleTransaction,
+  _db: Database | DrizzleTransaction,
   ingredientData: IngredientDeepDB,
 ): Promise<IngredientWithRecipesAndProductOut> => {
   const { Product, Recipe, RecipeSectionIngredient, ...restOfIngredient } =

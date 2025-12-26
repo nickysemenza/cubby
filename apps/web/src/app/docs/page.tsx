@@ -111,7 +111,7 @@ export default function DocsPage() {
 
       <div className="my-8">
         <div className="mb-3 font-medium">Entity Relationships</div>
-        <div className="bg-card overflow-hidden rounded-lg border p-4">
+        <div className="overflow-hidden rounded-lg border bg-card p-4">
           <Graphviz
             dot={entityRelationshipsDot}
             options={{

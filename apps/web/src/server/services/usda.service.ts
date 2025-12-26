@@ -1,14 +1,14 @@
-import { USDAClient } from "../clients/usda";
-import { type ProductTopLevelOut } from "~/schemas/product";
-import {
-  type FoodSummary,
-  type FoodLookupParam,
-  type DataType,
+import type { USDAClient } from "../clients/usda";
+import type { ProductTopLevelOut } from "~/schemas/product";
+import type {
+  FoodSummary,
+  FoodLookupParam,
+  DataType,
 } from "@recipehub/usda-schemas";
-import { type SortParams, type PaginationParams } from "~/schemas/pagination";
+import type { SortParams, PaginationParams } from "~/schemas/pagination";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
-import { type FoodSummaryWithLinkedProducts } from "~/schemas/combo";
-import { type Span } from "@opentelemetry/api";
+import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
+import type { Span } from "@opentelemetry/api";
 import { getTracer, TraceNames } from "~/server/tracing";
 
 export class USDAService {

@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { NoneState } from "../NoneState";
@@ -10,7 +10,7 @@ import {
   FoodPillLink,
 } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
-import { type ProductWithFoodOut } from "~/server/services/product.service";
+import type { ProductWithFoodOut } from "~/server/services/product.service";
 
 interface ProductBasicInfoProps {
   product: ProductWithFoodOut;

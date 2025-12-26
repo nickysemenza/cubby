@@ -31,7 +31,7 @@ export default function ImageDetailPage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="border-foreground h-4 w-4 animate-spin rounded-full border-t-2 border-b-2"></div>
+          <div className="h-4 w-4 animate-spin rounded-full border-foreground border-t-2 border-b-2"></div>
           <span>Loading image details...</span>
         </div>
       </div>
@@ -42,8 +42,8 @@ export default function ImageDetailPage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold">Image Not Found</h2>
-          <p className="text-muted-foreground mt-2">
+          <h2 className="font-semibold text-xl">Image Not Found</h2>
+          <p className="mt-2 text-muted-foreground">
             The image you are looking for does not exist.
           </p>
         </div>
@@ -61,7 +61,7 @@ export default function ImageDetailPage() {
 
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+    return `${parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
   };
 
   // Render entity link if associated with an entity
@@ -117,7 +117,7 @@ export default function ImageDetailPage() {
     <PageWrapper>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold tracking-tight">Image Details</h1>
+          <h1 className="font-bold text-3xl tracking-tight">Image Details</h1>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -143,28 +143,28 @@ export default function ImageDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Filename
                 </h3>
                 <p className="mt-1">{imageDetails.filename}</p>
               </div>
 
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Content Type
                 </h3>
                 <p className="mt-1">{imageDetails.contentType}</p>
               </div>
 
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Size
                 </h3>
                 <p className="mt-1">{formatBytes(imageDetails.size)}</p>
               </div>
 
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Status
                 </h3>
                 <div className="mt-1">
@@ -173,14 +173,14 @@ export default function ImageDetailPage() {
               </div>
 
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Associated Entity
                 </h3>
                 <div className="mt-1">{renderEntityLink()}</div>
               </div>
 
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Created
                 </h3>
                 <p className="mt-1">
@@ -189,7 +189,7 @@ export default function ImageDetailPage() {
               </div>
 
               <div>
-                <h3 className="text-muted-foreground text-sm font-medium">
+                <h3 className="font-medium text-muted-foreground text-sm">
                   Last Updated
                 </h3>
                 <p className="mt-1">

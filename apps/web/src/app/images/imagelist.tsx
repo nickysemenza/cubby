@@ -17,7 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTableState } from "~/app/_components/data-table/useTableState";
 import { useTableConfig } from "~/app/_components/data-table/useTableConfig";
 import Link from "next/link";
-import { type ImageWithEntity } from "~/schemas/image";
+import type { ImageWithEntity } from "~/schemas/image";
 import { assertNever } from "~/lib/assert";
 import { ImageThumbnail, ImageStatusBadge } from "~/app/_components/table";
 import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
@@ -40,7 +40,7 @@ export default function ImageList() {
       return;
     }
     tableState.setPagination({ ...tableState.pagination, pageIndex: 0 });
-  }, [debouncedSearchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tableState.pagination, tableState.setPagination]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Query for images using the new list endpoint
   const {
@@ -81,7 +81,7 @@ export default function ImageList() {
             {row.original.status === "UPLOADED" ? (
               <ImageThumbnail images={[image]} alt={image.filename} size="md" />
             ) : (
-              <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-md border">
+              <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-muted">
                 <NoneState />
               </div>
             )}
@@ -218,5 +218,5 @@ function formatBytes(bytes: number, decimals = 2) {
 
   const i = Math.floor(Math.log(bytes) / Math.log(k));
 
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+  return `${parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import { NoneState } from "./NoneState";
 
 interface EntityPillLinkListProps<T, P extends { [K in keyof P]: unknown }> {
@@ -12,6 +12,7 @@ export function EntityPillLinkList<T, P extends { [K in keyof P]: unknown }>({
   items,
   Pill,
   pillPropName,
+  getKey,
 }: EntityPillLinkListProps<T, P>) {
   if (!items || items.length === 0) {
     return <NoneState />;
@@ -19,8 +20,8 @@ export function EntityPillLinkList<T, P extends { [K in keyof P]: unknown }>({
 
   return (
     <div className="space-y-2">
-      {items.map((item, x) => (
-        <div key={x}>
+      {items.map((item, index) => (
+        <div key={getKey ? getKey(item) : index}>
           <Pill {...({ [pillPropName]: item } as P)} />
         </div>
       ))}

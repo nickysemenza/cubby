@@ -1,4 +1,4 @@
-import { type TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
+import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 
 /**
  * App error definitions: key = reason, value = tRPC code.

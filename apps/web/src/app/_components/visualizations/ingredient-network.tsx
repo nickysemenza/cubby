@@ -282,7 +282,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             const showInnerLabel = maxChars >= 5;
             const truncatedName =
               node.name.length > maxChars
-                ? node.name.slice(0, Math.max(2, maxChars - 2)) + "..."
+                ? `${node.name.slice(0, Math.max(2, maxChars - 2))}...`
                 : node.name;
 
             return (
@@ -307,7 +307,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                   <text
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-white text-[9px] font-semibold"
+                    className="pointer-events-none fill-white font-semibold text-[9px]"
                     style={{ textShadow: "0 1px 3px rgba(0,0,0,0.7)" }}
                   >
                     {truncatedName}
@@ -322,7 +322,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
       {/* Tooltip for selected link */}
       {selectedLink && !hoveredNode && (
         <div
-          className="bg-popover absolute top-4 left-4 z-50 max-w-xs rounded-md border px-3 py-2 text-sm shadow-lg"
+          className="absolute top-4 left-4 z-50 max-w-xs rounded-md border bg-popover px-3 py-2 text-sm shadow-lg"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-start justify-between gap-2">
@@ -332,12 +332,12 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             </div>
             <button
               onClick={() => setSelectedLinkKey(null)}
-              className="text-muted-foreground hover:text-foreground -mt-0.5 text-lg leading-none"
+              className="-mt-0.5 text-lg text-muted-foreground leading-none hover:text-foreground"
             >
               ×
             </button>
           </div>
-          <div className="text-muted-foreground mt-1.5 text-xs">
+          <div className="mt-1.5 text-muted-foreground text-xs">
             Together in {selectedLink.weight} recipe
             {selectedLink.weight !== 1 ? "s" : ""}:
           </div>
@@ -346,7 +346,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               <Link
                 key={recipe.id}
                 href={`/recipes/${recipe.id}`}
-                className="text-primary block text-xs hover:underline"
+                className="block text-primary text-xs hover:underline"
               >
                 {recipe.name}
               </Link>
@@ -357,7 +357,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
 
       {/* Tooltip for hovered node */}
       {hoveredNode && (
-        <div className="bg-popover absolute top-4 left-4 z-50 max-w-xs rounded-md px-3 py-2 text-sm shadow-lg">
+        <div className="absolute top-4 left-4 z-50 max-w-xs rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
           <div className="font-medium">
             <Link
               href={`/ingredients/${hoveredNode.id}`}
@@ -367,7 +367,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               {hoveredNode.name}
             </Link>
           </div>
-          <div className="text-muted-foreground mt-1">
+          <div className="mt-1 text-muted-foreground">
             Used in {hoveredNode.recipeCount} recipe
             {hoveredNode.recipeCount !== 1 ? "s" : ""}
           </div>
@@ -389,7 +389,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
       )}
 
       {/* Legend */}
-      <div className="bg-background/80 absolute right-2 bottom-2 rounded px-2 py-1 text-xs backdrop-blur">
+      <div className="absolute right-2 bottom-2 rounded bg-background/80 px-2 py-1 text-xs backdrop-blur">
         <div className="text-muted-foreground">
           Node size = recipe count • Line thickness = co-occurrence
         </div>

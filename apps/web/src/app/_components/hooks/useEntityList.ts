@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { type ColumnDef, type Table } from "@tanstack/react-table";
-import { type Entity } from "~/entities/types";
+import type { ColumnDef, Table } from "@tanstack/react-table";
+import type { Entity } from "~/entities/types";
 import { entities } from "~/entities/entities";
 import { useTableList, type UseTableListOptions } from "./useTableList";
 import { useTableConfig } from "../data-table/useTableConfig";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { type FilterableColumn } from "../data-table/Table";
-import { type UnitMapping } from "~/schemas/unitmapping";
+import type { FilterableColumn } from "../data-table/Table";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import {
   createImageColumn,
   createNameColumn,
@@ -28,7 +28,7 @@ interface BaseListRow {
 /** Simple filter definition - string expands to text filter with placeholder */
 type FilterDef = string | FilterableColumn;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData> = ColumnDef<TData, any>;
 
 interface UseEntityListOptions<TData extends BaseListRow, TFilters> {

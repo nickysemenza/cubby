@@ -29,12 +29,12 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { toast } from "sonner";
-import { type LocationId, type InventoryId } from "~/schemas/identifiers";
+import type { LocationId, InventoryId } from "~/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { getOptionalLocationId } from "~/schemas/form-fields";
-import { type BulkMoveItem } from "~/schemas/inventory";
-import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { BulkMoveItem } from "~/schemas/inventory";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { FormProvider } from "react-hook-form";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -135,8 +135,8 @@ export function MoveInventoryDialog({
         <FormProvider {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <div className="text-sm font-medium">Items to move:</div>
-              <ul className="text-muted-foreground max-h-32 space-y-1 overflow-y-auto text-sm">
+              <div className="font-medium text-sm">Items to move:</div>
+              <ul className="max-h-32 space-y-1 overflow-y-auto text-muted-foreground text-sm">
                 {items.map((item) => (
                   <li key={item.id}>
                     {item.product.name} - {item.amount.value} {item.amount.unit}

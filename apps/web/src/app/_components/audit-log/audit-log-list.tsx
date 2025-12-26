@@ -5,7 +5,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 import { Button } from "~/components/ui/button";
 import { Loader2 } from "lucide-react";
-import { type AuditEntityType } from "~/server/repo/audit-log";
+import type { AuditEntityType } from "~/server/repo/audit-log";
 
 interface AuditLogListProps {
   entityType?: AuditEntityType;
@@ -36,7 +36,7 @@ export function AuditLogList({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -45,7 +45,7 @@ export function AuditLogList({
 
   if (entries.length === 0) {
     return (
-      <div className="text-muted-foreground py-8 text-center">
+      <div className="py-8 text-center text-muted-foreground">
         No activity yet
       </div>
     );

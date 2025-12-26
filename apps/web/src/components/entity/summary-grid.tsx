@@ -16,8 +16,7 @@ const summaryGridVariants = cva("grid", {
 });
 
 interface SummaryGridProps
-  extends
-    React.HTMLAttributes<HTMLDivElement>,
+  extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof summaryGridVariants> {}
 
 export const SummaryGrid = React.forwardRef<HTMLDivElement, SummaryGridProps>(

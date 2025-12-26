@@ -8,14 +8,14 @@ import {
   useReactTable,
   type Table,
 } from "@tanstack/react-table";
-import { type TableStateReturn } from "./useTableState";
+import type { TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   data: TData[];
   // Note: ColumnDef is invariant in TValue; columns often mix TValue types across accessors.
   // Using `any` here intentionally erases TValue to allow heterogeneous columns while keeping TData strict.
   // This mirrors TanStack's guidance for consumer-facing helpers that don't operate on TValue.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: intentional
   columns: ColumnDef<TData, any>[];
   tableState: TableStateReturn;
   totalCount: number;

@@ -1,19 +1,19 @@
 "use client";
 
-import { ReactNode } from "react";
-import { Button, buttonVariants } from "~/components/ui/button";
+import type { ReactNode } from "react";
+import { Button, type buttonVariants } from "~/components/ui/button";
 import { Field, FieldLabel, FieldError } from "~/components/ui/field";
 import {
-  UseFormReturn,
-  FieldValues,
-  Path,
-  PathValue,
+  type UseFormReturn,
+  type FieldValues,
+  type Path,
+  type PathValue,
   Controller,
   FormProvider,
 } from "react-hook-form";
 import type { VariantProps } from "class-variance-authority";
 import { Input } from "~/components/ui/input";
-import { ComboboxItem } from "./combobox/combobox-types";
+import type { ComboboxItem } from "./combobox/combobox-types";
 import { DevTool } from "@hookform/devtools";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import { Textarea } from "~/components/ui/textarea";
@@ -209,7 +209,7 @@ export function NullableNumericField<
             <FieldLabel htmlFor={name}>{label}</FieldLabel>
             {prefix ? (
               <div className="relative">
-                <span className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2">
+                <span className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground">
                   {prefix}
                 </span>
                 <Input {...inputProps} className="pl-7" />

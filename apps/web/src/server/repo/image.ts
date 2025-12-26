@@ -7,11 +7,11 @@ import {
   fetchAndStoreImage,
   contentTypeToExtension,
 } from "../utils/s3";
-import {
-  type InitiateUploadWithoutEntityInput,
-  type ImageWithEntity,
+import type {
+  InitiateUploadWithoutEntityInput,
+  ImageWithEntity,
 } from "~/schemas/image";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   getDb,
   buildOrderBy,

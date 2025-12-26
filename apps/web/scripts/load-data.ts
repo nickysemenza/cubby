@@ -1,9 +1,9 @@
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { program } from "commander";
-import fs from "fs";
+import fs from "node:fs";
 import SuperJSON from "superjson";
-import { type AppRouter } from "~/server/api/root";
 import { parseInventoryCSV } from "~/lib/csv-utils";
+import type { AppRouter } from "~/server/api/root";
 
 // Configure CLI options with env var fallbacks
 program

@@ -112,7 +112,7 @@ function parseCurrency(value: string | undefined): number | undefined {
   // Strip currency symbols, commas, and whitespace
   const cleaned = value.replace(/[$,\s]/g, "");
   const num = parseFloat(cleaned);
-  return isNaN(num) ? undefined : num;
+  return Number.isNaN(num) ? undefined : num;
 }
 
 // Parse error for a sheet row

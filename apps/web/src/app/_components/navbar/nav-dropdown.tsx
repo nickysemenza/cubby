@@ -32,7 +32,7 @@ export const NavDropdown = ({ label, items }: NavDropdownProps) => {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "hover:text-primary flex items-center gap-1 text-sm font-medium transition-colors focus:outline-none",
+          "flex items-center gap-1 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
           isGroupActive ? "text-foreground" : "text-muted-foreground",
         )}
       >

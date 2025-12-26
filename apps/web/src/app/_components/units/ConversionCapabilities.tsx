@@ -1,9 +1,8 @@
 "use client";
 
-import * as React from "react";
 import { useMemo } from "react";
-import { AmountKind } from "@recipehub/recipebridge";
-import { UnitMapping } from "~/schemas/unitmapping";
+import type { AmountKind } from "@recipehub/recipebridge";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { safeConvertAmount } from "./univ-conversion";
 import { ConversionDialog } from "./ConversionDialog";
 import {
@@ -85,7 +84,7 @@ export function ConversionCapabilities({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-medium">Unit Mappings</h4>
+        <h4 className="font-medium text-xs">Unit Mappings</h4>
         <div className="flex items-center gap-2">
           {!hideConvertButton && <ConversionDialog mappings={mappings} />}
           <Badge variant="outline" className="text-muted-foreground">
@@ -105,7 +104,7 @@ export function ConversionCapabilities({
               className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
                 capability.success
                   ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                  : "text-muted-foreground/60 border border-red-100 bg-red-50/50"
+                  : "border border-red-100 bg-red-50/50 text-muted-foreground/60"
               }`}
             >
               <Tooltip>

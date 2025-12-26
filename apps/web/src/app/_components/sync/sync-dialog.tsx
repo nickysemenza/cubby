@@ -31,12 +31,12 @@ import {
   GitCompare,
   MapPin,
 } from "lucide-react";
-import {
-  type SyncState,
-  type SyncResolution,
-  type LocationSyncItem,
-  type InventorySyncItem,
-  type SyncPreviewResult,
+import type {
+  SyncState,
+  SyncResolution,
+  LocationSyncItem,
+  InventorySyncItem,
+  SyncPreviewResult,
 } from "~/schemas/sync";
 import { queryKeys } from "~/lib/query-keys";
 import { ValueChange } from "../value-change";
@@ -367,12 +367,12 @@ export const SyncDialog = ({
   if (!previewResult) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[90vh] !w-[95vw] !max-w-[95vw] flex-col overflow-hidden">
+        <DialogContent className="!w-[95vw] !max-w-[95vw] flex max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Loading Sync Preview...</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         </DialogContent>
       </Dialog>
@@ -381,7 +381,7 @@ export const SyncDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] !w-[95vw] !max-w-[95vw] flex-col overflow-hidden">
+      <DialogContent className="!w-[95vw] !max-w-[95vw] flex max-h-[90vh] flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isComplete ? "Sync Complete" : "Sync Preview"}
@@ -400,7 +400,7 @@ export const SyncDialog = ({
                 <AlertCircle className="h-4 w-4" />
                 Validation Errors
               </div>
-              <ul className="list-inside list-disc space-y-1 text-sm text-red-600 dark:text-red-400">
+              <ul className="list-inside list-disc space-y-1 text-red-600 text-sm dark:text-red-400">
                 {activeValidationErrors.map((err, i) => (
                   <li key={i}>{err.message}</li>
                 ))}
@@ -419,7 +419,7 @@ export const SyncDialog = ({
 
           {previewResult.locations.items.length > 0 && (
             <>
-              <h3 className="mb-2 text-sm font-medium">
+              <h3 className="mb-2 font-medium text-sm">
                 <MapPin className="mr-1 inline h-4 w-4" />
                 Locations
               </h3>
@@ -447,7 +447,7 @@ export const SyncDialog = ({
 
           {previewResult.inventory.items.length > 0 && (
             <>
-              <h3 className="mt-4 mb-2 text-sm font-medium">Inventory</h3>
+              <h3 className="mt-4 mb-2 font-medium text-sm">Inventory</h3>
               <div className="mb-4 flex flex-wrap gap-1.5 text-sm">
                 {INVENTORY_STATES.map((state) => (
                   <StateSummaryCard
@@ -472,7 +472,7 @@ export const SyncDialog = ({
 
           {previewResult.locations.items.length === 0 &&
             previewResult.inventory.items.length === 0 && (
-              <div className="text-muted-foreground py-8 text-center">
+              <div className="py-8 text-center text-muted-foreground">
                 Everything is in sync! No differences found.
               </div>
             )}
@@ -540,7 +540,7 @@ function StateSummaryCard({
         isHidden ? `Show ${styles.label} items` : `Hide ${styles.label} items`
       }
     >
-      <div className="flex items-center justify-center gap-1 text-base font-bold">
+      <div className="flex items-center justify-center gap-1 font-bold text-base">
         {styles.icon}
         {count}
       </div>
@@ -667,7 +667,7 @@ function LocationSyncTable({
   return (
     <div className="mb-4 rounded border">
       <table className="w-full text-sm">
-        <thead className="bg-muted sticky top-0">
+        <thead className="sticky top-0 bg-muted">
           <tr>
             <th className="w-28 p-2 text-left">State</th>
             <th className="p-2 text-left">Location</th>
@@ -745,7 +745,7 @@ function InventorySyncTable({
   return (
     <div className="rounded border">
       <table className="w-full text-sm">
-        <thead className="bg-muted sticky top-0">
+        <thead className="sticky top-0 bg-muted">
           <tr>
             <th className="w-28 p-2 text-left">State</th>
             <th className="p-2 text-left">Product</th>

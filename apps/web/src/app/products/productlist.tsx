@@ -14,7 +14,7 @@ import { NoneState } from "../_components/NoneState";
 import { createInventoryEntriesColumn } from "../_components/data-table/columnHelpers";
 import { TableLink } from "../_components/table";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { type ProductWithFoodOut } from "~/server/services/product.service";
+import type { ProductWithFoodOut } from "~/server/services/product.service";
 
 export function ProductList() {
   const api = useTRPC();

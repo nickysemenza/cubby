@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
 
+// biome-ignore lint/suspicious/noShadowRestrictedNames: Next.js error boundary convention
 export default function Error({
   error,
   reset,

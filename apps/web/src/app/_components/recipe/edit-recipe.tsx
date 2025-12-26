@@ -3,7 +3,7 @@
 import { toast } from "sonner";
 import { RecipeForm } from "./recipe-form";
 import { useTRPC } from "~/trpc/react";
-import { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
+import type { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
 import { useEntityEditMode } from "../hooks/useEntityMode";
 
 interface EditRecipeFormProps {

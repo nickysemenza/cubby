@@ -2,8 +2,9 @@
  * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially useful
  * for Docker builds.
  */
-import { NextConfig } from "next";
+
 import CopyPlugin from "copy-webpack-plugin";
+import type { NextConfig } from "next";
 import "./src/env.js";
 
 const nextConfig: NextConfig = {
@@ -13,7 +14,7 @@ const nextConfig: NextConfig = {
 
   webpack(config, { isServer, dev }) {
     // cf github.com/vercel/next.js/issues/29362#issuecomment-1973553746
-    https: if (!dev && isServer) {
+    if (!dev && isServer) {
       const patterns = [];
 
       const destinations = [

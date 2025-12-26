@@ -1,6 +1,6 @@
-import { type Database, type Transaction } from "~/server/db";
+import type { Database, Transaction } from "~/server/db";
 import { createOrUpdatePriceMapping } from "./inventory";
-import { type z } from "zod";
+import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
 import {
   type SortParams,
@@ -9,7 +9,7 @@ import {
 } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
-import { foodLookupParam, FoodLookupParam } from "@recipehub/usda-schemas";
+import { foodLookupParam, type FoodLookupParam } from "@recipehub/usda-schemas";
 import {
   type ProductTopLevelOut,
   type ProductInputPayload,
@@ -39,15 +39,15 @@ import {
 import {
   product,
   productUnitMappings,
-  ingredient,
-  inventoryEntry,
-  location,
+  type ingredient,
+  type inventoryEntry,
+  type location,
   image,
   productImage,
 } from "~/server/db/schema";
 import { eq, and, count, ilike, inArray, isNotNull, isNull } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 // Type for deeply nested product query
 type ProductDeepDB = typeof product.$inferSelect & {

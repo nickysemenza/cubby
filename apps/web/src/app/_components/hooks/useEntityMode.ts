@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import { entities } from "~/entities/entities";
-import { type Entity } from "~/entities/types";
+import type { Entity } from "~/entities/types";
 import { getErrorMessage } from "~/lib/error-utils";
 
 type EntityMutationCallbacks<TResult> = {

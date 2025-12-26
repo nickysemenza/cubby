@@ -4,9 +4,9 @@
  * This service combines UPC lookup + image import + association in a single operation.
  */
 
-import { type Database } from "~/server/db";
-import { type ProductId, type OrganizationId } from "~/schemas/identifiers";
-import { type UPCLookupClient } from "~/server/clients/upc-lookup";
+import type { Database } from "~/server/db";
+import type { ProductId, OrganizationId } from "~/schemas/identifiers";
+import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import {
   importImageFromUrl,
   associateImagesWithProduct,

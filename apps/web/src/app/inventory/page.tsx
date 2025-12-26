@@ -1,5 +1,5 @@
 import { InventoryItemList } from "./inventoryitemlist";
-import { type Metadata } from "next";
+import type { Metadata } from "next";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { InventoryActions } from "./inventory-actions";
 

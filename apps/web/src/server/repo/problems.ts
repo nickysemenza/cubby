@@ -1,4 +1,4 @@
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import {
   product,

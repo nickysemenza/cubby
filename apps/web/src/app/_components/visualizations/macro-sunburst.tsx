@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
-import { type IngredientDataItem } from "~/app/_components/units/univ-conversion";
+import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
 import { TIER1_NUTRIENTS } from "@recipehub/usda-schemas";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
@@ -290,7 +290,7 @@ function Sunburst({ data }: SunburstProps) {
                     transform={`rotate(${labelPos.rotation}, ${labelPos.x}, ${labelPos.y})`}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-white text-[10px] font-medium"
+                    className="pointer-events-none fill-white font-medium text-[10px]"
                     style={{ textShadow: "0 1px 2px rgba(0,0,0,0.4)" }}
                   >
                     {node.data.name}
@@ -305,7 +305,7 @@ function Sunburst({ data }: SunburstProps) {
           <text
             textAnchor="middle"
             y={-6}
-            className="fill-foreground text-xs font-medium"
+            className="fill-foreground font-medium text-xs"
           >
             {centerText.primary}
           </text>
@@ -321,7 +321,7 @@ function Sunburst({ data }: SunburstProps) {
 
       {/* Tooltip */}
       {hoveredNode && hoveredNode.depth === 2 && (
-        <div className="bg-popover pointer-events-none absolute top-4 left-4 z-50 rounded-md px-3 py-2 text-sm shadow-lg">
+        <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
           <div className="font-medium">
             {hoveredNode.data.ingredientId ? (
               <Link
@@ -335,7 +335,7 @@ function Sunburst({ data }: SunburstProps) {
               hoveredNode.data.name
             )}
           </div>
-          <div className="text-muted-foreground mt-1">
+          <div className="mt-1 text-muted-foreground">
             {hoveredNode.data.value.toFixed(1)} {hoveredNode.data.unit}{" "}
             {hoveredNode.parent?.data.name.toLowerCase()}
           </div>
@@ -343,7 +343,7 @@ function Sunburst({ data }: SunburstProps) {
       )}
 
       {/* Legend with totals */}
-      <div className="bg-background/80 absolute right-2 bottom-2 flex gap-4 rounded px-2 py-1.5 text-[10px] backdrop-blur">
+      <div className="absolute right-2 bottom-2 flex gap-4 rounded bg-background/80 px-2 py-1.5 text-[10px] backdrop-blur">
         {(Object.keys(MACRO_DISPLAY) as MacroKey[]).map((macro) => (
           <div key={macro} className="flex items-center gap-1.5">
             <div
@@ -353,12 +353,12 @@ function Sunburst({ data }: SunburstProps) {
               }}
             />
             <div className="flex flex-col leading-tight">
-              <span className="text-foreground font-medium">
+              <span className="font-medium text-foreground">
                 {macroTotals[macro] > 0
                   ? `${macroTotals[macro].toFixed(0)}${getMacroUnit(macro)}`
                   : "-"}
               </span>
-              <span className="text-muted-foreground text-[9px]">
+              <span className="text-[9px] text-muted-foreground">
                 {MACRO_DISPLAY[macro].label}
               </span>
             </div>

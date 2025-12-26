@@ -1,13 +1,13 @@
 import { getTracer, TraceNames } from "~/server/tracing";
-import {
+import type {
   BrandedFoodInfo,
   FoodLookupParam,
   FoodSummary,
-  type DataType,
+  DataType,
 } from "@recipehub/usda-schemas";
 import { usdaContract } from "@recipehub/usda-contract";
 import { initClient } from "@ts-rest/core";
-import { type SortParams, type PaginationParams } from "~/schemas/pagination";
+import type { SortParams, PaginationParams } from "~/schemas/pagination";
 import { context, propagation } from "@opentelemetry/api";
 
 export class USDAClient {
@@ -26,8 +26,8 @@ export class USDAClient {
       baseHeaders: {
         "user-agent": "recipehub",
         // Inject OpenTelemetry trace context for distributed tracing
-        traceparent: () => getTraceHeaders()["traceparent"] ?? "",
-        tracestate: () => getTraceHeaders()["tracestate"] ?? "",
+        traceparent: () => getTraceHeaders().traceparent ?? "",
+        tracestate: () => getTraceHeaders().tracestate ?? "",
       },
     });
   }

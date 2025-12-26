@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, type ReactNode } from "react";
-import { type ComboboxItem } from "./combobox-types";
+import type { ComboboxItem } from "./combobox-types";
 import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -10,12 +10,12 @@ import {
   buildRecipeComboboxItem,
 } from "./combobox-builders";
 import { toast } from "sonner";
-import { type LocationOut, type LocationCreateInput } from "~/schemas/location";
-import {
-  type ProductTopLevelOut,
-  type ProductInputPayload,
+import type { LocationOut, LocationCreateInput } from "~/schemas/location";
+import type {
+  ProductTopLevelOut,
+  ProductInputPayload,
 } from "~/schemas/product";
-import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "~/lib/query-keys";
 import {

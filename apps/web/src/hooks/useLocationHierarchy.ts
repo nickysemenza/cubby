@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import { LocationId } from "~/schemas/identifiers";
-import { InfLocation, type LocationType } from "~/schemas/location";
+import type { LocationId } from "~/schemas/identifiers";
+import type { InfLocation, LocationType } from "~/schemas/location";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import {
   type InventoryItem,

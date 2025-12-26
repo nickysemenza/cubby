@@ -5,9 +5,9 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { AmountKind, WAmount } from "@recipehub/recipebridge";
-import { amount, Amount } from "~/codec/codec";
-import { UnitMapping } from "~/schemas/unitmapping";
+import type { AmountKind, WAmount } from "@recipehub/recipebridge";
+import { amount, type Amount } from "~/codec/codec";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { wasm } from "~/lib/wasm";
 import { safeConvertAmount } from "./univ-conversion";
 import {
@@ -28,7 +28,7 @@ import { Scale } from "lucide-react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { kindIconMap } from "./kind-icons";
-import { Result } from "~/misc/result-types";
+import type { Result } from "~/misc/result-types";
 import { FormWrapper } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { ConversionCapabilities } from "./ConversionCapabilities";
@@ -177,13 +177,13 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
             />
 
             <div className="space-y-2">
-              <h4 className="text-sm font-medium">Conversion Graph</h4>
+              <h4 className="font-medium text-sm">Conversion Graph</h4>
               <UnitMappingGraph unitMapping={filteredMappings} />
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <h4 className="text-sm font-medium">Available Unit Mappings</h4>
+              <h4 className="font-medium text-sm">Available Unit Mappings</h4>
               <div className="max-h-60 overflow-y-auto rounded-md border">
                 <UnitMappingsTable mappings={filteredMappings} />
               </div>
@@ -208,7 +208,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
 
               {Object.keys(conversions).length > 0 && (
                 <div className="mt-6 space-y-4">
-                  <h4 className="text-sm font-medium">Conversion Results</h4>
+                  <h4 className="font-medium text-sm">Conversion Results</h4>
                   <div className="space-y-2">
                     {amountKinds.map((kind) => {
                       const result = conversions[kind];

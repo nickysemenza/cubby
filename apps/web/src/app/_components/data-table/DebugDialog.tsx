@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import type React from "react";
 import {
   Dialog,
   DialogContent,
@@ -29,7 +29,7 @@ export function DebugDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-auto">
-          <div className="bg-muted overflow-auto rounded-md p-4">
+          <div className="overflow-auto rounded-md bg-muted p-4">
             <JsonRenderer input={data} pretty />
           </div>
         </div>

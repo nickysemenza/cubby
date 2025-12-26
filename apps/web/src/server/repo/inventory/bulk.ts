@@ -1,4 +1,4 @@
-import { type Database, type Transaction } from "~/server/db";
+import type { Database, Transaction } from "~/server/db";
 import {
   withTransaction,
   insertAndReturn,
@@ -8,17 +8,17 @@ import {
   parseInventoryAmount,
 } from "~/server/repo/database-helpers";
 import { createAppError } from "~/server/api/trpc";
-import {
+import type {
   InventoryBulkOperationItem,
-  type BulkMovePayload,
+  BulkMovePayload,
 } from "~/schemas/inventory";
-import { type LocationId } from "~/schemas/identifiers";
+import type { LocationId } from "~/schemas/identifiers";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { eq, and } from "drizzle-orm";
 import { dbInventoryEntryToAPI } from "./helpers";
-import { type InventoryEntryDeepDB } from "./types";
+import type { InventoryEntryDeepDB } from "./types";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 export const bulkProcessInventoryEntries = async (
   db: Database,

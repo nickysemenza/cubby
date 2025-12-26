@@ -1,9 +1,9 @@
-import { type Database, type Transaction } from "~/server/db";
+import type { Database, Transaction } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { auditLog } from "~/server/db/schema";
 import { and, eq, desc, lt } from "drizzle-orm";
-import { type OrganizationId } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
+import type { OrganizationId } from "~/schemas/identifiers";
+import type { ActorContext } from "~/schemas/context";
 
 // Entity types that can be audited
 export type AuditEntityType =

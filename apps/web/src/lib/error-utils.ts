@@ -1,14 +1,14 @@
 import type { TRPCClientErrorLike } from "@trpc/client";
 import type { AppRouter } from "~/server/api/root";
-import { type AppErrorReason } from "./app-error-codes";
+import type { AppErrorReason } from "./app-error-codes";
 
 function isTRPCClientError(
   err: unknown,
 ): err is TRPCClientErrorLike<AppRouter> {
   if (typeof err !== "object" || err === null) return false;
   const obj = err as Record<string, unknown>;
-  const messageOk = typeof obj["message"] === "string";
-  const dataOk = typeof obj["data"] === "object" && obj["data"] !== null;
+  const messageOk = typeof obj.message === "string";
+  const dataOk = typeof obj.data === "object" && obj.data !== null;
   return messageOk && dataOk;
 }
 
@@ -23,7 +23,7 @@ export function getAppErrorDetails(error: unknown): AppErrorDetails {
     const code = error.data?.code as string | undefined;
     const reason = (() => {
       const d = error.data as Record<string, unknown> | undefined;
-      const r = d?.["reason"];
+      const r = d?.reason;
       return typeof r === "string" ? (r as AppErrorReason) : undefined;
     })();
     return {

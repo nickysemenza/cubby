@@ -1,8 +1,5 @@
-import {
-  type FoodLookupParam,
-  type FoodSummary,
-} from "@recipehub/usda-schemas";
-import { type USDAClient } from "../clients/usda";
+import type { FoodLookupParam, FoodSummary } from "@recipehub/usda-schemas";
+import type { USDAClient } from "../clients/usda";
 
 /**
  * Generic helper to enrich an array of items with USDA food data.

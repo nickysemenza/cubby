@@ -52,11 +52,8 @@ export function createLocationCounters(): ResultCounters<LocationCSVAction> {
 // Inventory-specific Result Helpers (for backward compatibility)
 // =============================================================================
 
-import { type LocationId, type ProductId } from "~/schemas/identifiers";
-import {
-  type CSVImportResult,
-  type CSVImportResultItem,
-} from "~/schemas/inventory";
+import type { LocationId, ProductId } from "~/schemas/identifiers";
+import type { CSVImportResult, CSVImportResultItem } from "~/schemas/inventory";
 
 /**
  * Legacy result counters interface for inventory

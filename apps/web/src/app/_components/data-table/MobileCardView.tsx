@@ -6,7 +6,7 @@ import { Button } from "~/components/ui/button";
 import { Empty, EmptyTitle, EmptyDescription } from "~/components/ui/empty";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
 
@@ -132,7 +132,7 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
           // Create details from medium and compact fields
           const details = [...mediumFields, ...compactFields].map((field) => (
             <div key={field.id} className="flex items-center justify-between">
-              <span className="text-muted-foreground text-xs font-medium">
+              <span className="font-medium text-muted-foreground text-xs">
                 {field.displayHeader}:
               </span>
               <span className="text-sm">{field.content}</span>
@@ -148,7 +148,7 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
 
           const footer = isDebugEnabled ? (
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground text-sm font-medium">
+              <span className="font-medium text-muted-foreground text-sm">
                 Debug
               </span>
               <DebugDialog

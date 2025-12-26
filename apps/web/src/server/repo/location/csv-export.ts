@@ -2,7 +2,7 @@
  * Location CSV export
  */
 
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   type OrganizationId,
   locationId as locationIdSchema,
@@ -10,8 +10,8 @@ import {
 import { getDb } from "~/server/repo/database-helpers";
 import { location } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
-import { type LocationCSVExportRow } from "./types";
-import { type LocationType } from "~/schemas/location";
+import type { LocationCSVExportRow } from "./types";
+import type { LocationType } from "~/schemas/location";
 import { joinImageUrls } from "~/lib/image-utils";
 import dayjs from "dayjs";
 

@@ -10,7 +10,7 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { type Amount } from "~/codec/codec";
+import type { Amount } from "~/codec/codec";
 import {
   user,
   organization,
@@ -54,9 +54,7 @@ export const imageStatusEnum = pgEnum("ImageStatus", [
 export const recipe = pgTable(
   "Recipe",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
@@ -93,9 +91,7 @@ export const recipe = pgTable(
 export const recipeSection = pgTable(
   "RecipeSection",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     recipeId: uuid("recipeId")
       .notNull()
       .references(() => recipe.id),
@@ -121,17 +117,12 @@ export const recipeSection = pgTable(
 export const ingredient = pgTable(
   "Ingredient",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
     name: text("name").notNull(),
-    aliases: text("aliases")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
+    aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()
@@ -167,9 +158,7 @@ export const ingredient = pgTable(
 export const recipeSectionIngredient = pgTable(
   "RecipeSectionIngredient",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     recipeSectionId: uuid("recipeSectionId")
       .notNull()
       .references(() => recipeSection.id),
@@ -201,9 +190,7 @@ export const recipeSectionIngredient = pgTable(
 export const product = pgTable(
   "Product",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
@@ -251,9 +238,7 @@ export const product = pgTable(
 export const productUnitMappings = pgTable(
   "ProductUnitMappings",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     productId: uuid("productId")
       .notNull()
       .references(() => product.id),
@@ -278,9 +263,7 @@ export const productUnitMappings = pgTable(
 export const location = pgTable(
   "Location",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
@@ -321,9 +304,7 @@ export const location = pgTable(
 export const inventoryEntry = pgTable(
   "InventoryEntry",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
@@ -358,9 +339,7 @@ export const inventoryEntry = pgTable(
 export const image = pgTable(
   "Image",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
@@ -388,9 +367,7 @@ export const image = pgTable(
 export const productImage = pgTable(
   "ProductImage",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     productId: uuid("productId")
       .notNull()
       .references(() => product.id),
@@ -418,9 +395,7 @@ export const productImage = pgTable(
 export const locationImage = pgTable(
   "LocationImage",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     locationId: uuid("locationId")
       .notNull()
       .references(() => location.id),
@@ -448,9 +423,7 @@ export const locationImage = pgTable(
 export const recipeImage = pgTable(
   "RecipeImage",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     recipeId: uuid("recipeId")
       .notNull()
       .references(() => recipe.id),
@@ -639,9 +612,7 @@ export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
 export const auditLog = pgTable(
   "AuditLog",
   {
-    id: uuid("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()`),
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),

@@ -11,9 +11,9 @@ import { ImageThumbnail, TableLink } from "../_components/table";
 import Link from "next/link";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
-import { type InventoryItem } from "../_components/locations/calculate-inventory-value";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { type z } from "zod";
+import type { InventoryItem } from "../_components/locations/calculate-inventory-value";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { z } from "zod";
 
 type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

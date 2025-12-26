@@ -1,6 +1,6 @@
 "use client";
 
-import { UnitMapping } from "~/schemas/unitmapping";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 
 interface UnitMappingDisplayProps {

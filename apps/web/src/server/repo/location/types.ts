@@ -1,5 +1,5 @@
-import { type LocationId } from "~/schemas/identifiers";
-import { type LocationType } from "~/schemas/location";
+import type { LocationId } from "~/schemas/identifiers";
+import type { LocationType } from "~/schemas/location";
 
 /**
  * Location row for CSV export

@@ -9,14 +9,14 @@ export default async function DashboardPage() {
 
   return (
     <PageWrapper>
-      <h1 className="mb-6 text-3xl font-bold">Dashboard</h1>
+      <h1 className="mb-6 font-bold text-3xl">Dashboard</h1>
       <p className="text-lg">
         Welcome to your protected dashboard! This page is only visible to
         authenticated users.
       </p>
-      <div className="bg-muted mt-8 rounded-lg p-6">
-        <h2 className="mb-3 text-xl font-semibold">User</h2>
-        <p className="bg-accent rounded p-2 font-mono">
+      <div className="mt-8 rounded-lg bg-muted p-6">
+        <h2 className="mb-3 font-semibold text-xl">User</h2>
+        <p className="rounded bg-accent p-2 font-mono">
           {session.user.id} — {session.user.name ?? session.user.email}
         </p>
       </div>

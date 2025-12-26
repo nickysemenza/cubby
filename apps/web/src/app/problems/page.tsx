@@ -1,4 +1,4 @@
-import { type Metadata } from "next";
+import type { Metadata } from "next";
 import { ProblemsOverview } from "./problems-overview";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 

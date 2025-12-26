@@ -80,8 +80,8 @@ export function InventoryValueSummary({
   // full variant
   return (
     <div className={className}>
-      <div className="mb-2 text-sm font-medium">Inventory Value</div>
-      <div className="text-lg font-semibold">
+      <div className="mb-2 font-medium text-sm">Inventory Value</div>
+      <div className="font-semibold text-lg">
         {currency.format(result.totalValue)}
       </div>
       {pricingSummary && (
@@ -90,7 +90,7 @@ export function InventoryValueSummary({
 
       {result.breakdown.length > 0 && (
         <div className="mt-3">
-          <div className="text-muted-foreground mb-1 text-xs font-medium">
+          <div className="mb-1 font-medium text-muted-foreground text-xs">
             By manufacturer
           </div>
           <ul className="space-y-1">

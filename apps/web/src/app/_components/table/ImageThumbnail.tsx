@@ -26,7 +26,7 @@ interface ImageThumbnailProps extends VariantProps<typeof containerVariants> {
 }
 
 const ImageBadge = ({ count }: { count: number }) => (
-  <div className="absolute right-0 bottom-0 flex h-3 w-3 items-center justify-center rounded-tl-md bg-black/70 text-xs text-white">
+  <div className="absolute right-0 bottom-0 flex h-3 w-3 items-center justify-center rounded-tl-md bg-black/70 text-white text-xs">
     +{count}
   </div>
 );

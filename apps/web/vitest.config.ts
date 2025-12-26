@@ -1,8 +1,8 @@
-import { defineConfig } from "vitest/config";
-import wasm from "vite-plugin-wasm";
-import topLevelAwait from "vite-plugin-top-level-await";
-import { join } from "path";
 import react from "@vitejs/plugin-react";
+import { join } from "node:path";
+import topLevelAwait from "vite-plugin-top-level-await";
+import wasm from "vite-plugin-wasm";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   // https://github.com/Menci/vite-plugin-wasm#usage

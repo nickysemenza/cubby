@@ -18,10 +18,10 @@ import { useTRPC } from "~/trpc/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import Papa from "papaparse";
-import {
-  type LocationCSVRow,
-  type LocationCSVImportResult,
-  type LocationCSVImportResultItem,
+import type {
+  LocationCSVRow,
+  LocationCSVImportResult,
+  LocationCSVImportResultItem,
 } from "~/schemas/location";
 import { queryKeys } from "~/lib/query-keys";
 import useDebounce from "~/hooks/useDebounce";
@@ -83,11 +83,11 @@ const LocationChangesPreview = ({
   if (changes.length === 0) return null;
 
   return (
-    <div className="text-muted-foreground mt-1 flex flex-wrap gap-1 text-xs">
+    <div className="mt-1 flex flex-wrap gap-1 text-muted-foreground text-xs">
       {changes.map((change, i) => (
         <span
           key={i}
-          className="bg-muted inline-flex items-center gap-1 rounded px-1.5 py-0.5"
+          className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"
         >
           {change.includes("image") && <ImageIcon className="h-3 w-3" />}
           {change}
@@ -182,7 +182,7 @@ export default function LocationCSVImportForm() {
       setPreviewResult(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedRows, importResult]);
+  }, [debouncedRows, importResult, previewMutation.mutate]);
 
   // Handle file upload
   const handleFileUpload = useCallback(
@@ -293,7 +293,7 @@ Fridge,Kitchen,cabinet,,`}
               <h3 className="font-semibold">
                 {importResult ? "Import Result" : "Preview"}
               </h3>
-              <div className="text-muted-foreground flex gap-3 text-sm">
+              <div className="flex gap-3 text-muted-foreground text-sm">
                 <span className="text-green-600">
                   {displayResult.created} create
                 </span>
@@ -355,7 +355,7 @@ Fridge,Kitchen,cabinet,,`}
           <div className="rounded-md border">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-muted/50 border-b">
+                <tr className="border-b bg-muted/50">
                   <th className="px-3 py-2 text-left font-medium">Action</th>
                   <th className="px-3 py-2 text-left font-medium">
                     Location Name
@@ -373,11 +373,11 @@ Fridge,Kitchen,cabinet,,`}
                   return (
                     <tr
                       key={idx}
-                      className="hover:bg-muted/30 border-b last:border-b-0"
+                      className="border-b last:border-b-0 hover:bg-muted/30"
                     >
                       <td className="px-3 py-2">
                         <span
-                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${style.bg}`}
+                          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 font-medium text-xs ${style.bg}`}
                         >
                           {style.icon}
                           {style.label}
@@ -387,13 +387,13 @@ Fridge,Kitchen,cabinet,,`}
                         <div>{item.locationName}</div>
                         <LocationChangesPreview item={item} />
                       </td>
-                      <td className="text-muted-foreground px-3 py-2">
+                      <td className="px-3 py-2 text-muted-foreground">
                         {row?.parent_name || "-"}
                       </td>
-                      <td className="text-muted-foreground px-3 py-2">
+                      <td className="px-3 py-2 text-muted-foreground">
                         {row?.location_type || "-"}
                       </td>
-                      <td className="text-muted-foreground px-3 py-2">
+                      <td className="px-3 py-2 text-muted-foreground">
                         {item.message || "-"}
                       </td>
                     </tr>
@@ -407,7 +407,7 @@ Fridge,Kitchen,cabinet,,`}
 
       {/* Loading state */}
       {previewMutation.isPending && (
-        <div className="text-muted-foreground flex items-center gap-2">
+        <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Previewing changes...
         </div>
@@ -415,7 +415,7 @@ Fridge,Kitchen,cabinet,,`}
 
       {/* Empty state */}
       {parsedRows.length === 0 && !parseError && pastedData.trim() === "" && (
-        <div className="text-muted-foreground rounded-md border border-dashed p-8 text-center">
+        <div className="rounded-md border border-dashed p-8 text-center text-muted-foreground">
           <p>Paste CSV data above to preview the import.</p>
           <p className="mt-1 text-sm">
             Required column: <code>location_name</code>

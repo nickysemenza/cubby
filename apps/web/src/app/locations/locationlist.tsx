@@ -16,9 +16,9 @@ import { type LocationType, locationTypeOptions } from "~/schemas/location";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
-import {
-  type InfLocation,
-  type LocationOutWithParentChildren,
+import type {
+  InfLocation,
+  LocationOutWithParentChildren,
 } from "~/schemas/location";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
@@ -100,7 +100,7 @@ export function LocationList() {
     <div className="space-y-4">
       {/* View Toggle */}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">All Locations</h2>
+        <h2 className="font-semibold text-lg">All Locations</h2>
         <div className="flex items-center rounded-md border">
           <Button
             variant={viewMode === "table" ? "default" : "ghost"}

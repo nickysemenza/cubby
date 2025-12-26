@@ -1,11 +1,11 @@
-import { type Database, type Transaction } from "~/server/db";
+import type { Database, Transaction } from "~/server/db";
 import {
   type LocationOutWithParentChildren,
   type LocationOut,
   type InfLocation,
   locationType,
-  LocationCreateInput,
-  LocationUpdateInput,
+  type LocationCreateInput,
+  type LocationUpdateInput,
   type LocationType,
   type InventoryItemForTree,
 } from "~/schemas/location";
@@ -39,13 +39,13 @@ import { createAppError } from "~/server/api/trpc";
 import {
   location,
   locationImage,
-  image,
+  type image,
   inventoryEntry,
   product,
 } from "~/server/db/schema";
 import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 import { parseWithContext } from "~/lib/zod-utils";
 
 // Create a new location

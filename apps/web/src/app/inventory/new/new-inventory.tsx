@@ -1,8 +1,8 @@
 "use client";
-import { type FC } from "react";
+import type { FC } from "react";
 import { InventoryForm } from "~/app/_components/inventory/inventory-form";
-import { type z } from "zod";
-import { type inventoryCreatePayloadData } from "~/schemas/inventory";
+import type { z } from "zod";
+import type { inventoryCreatePayloadData } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 
@@ -16,7 +16,7 @@ const CreateInventoryItem: FC = () => {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Create New Inventory Item</h1>
+      <h1 className="mb-6 font-bold text-2xl">Create New Inventory Item</h1>
       <InventoryForm
         mode="create"
         onCreate={handleCreate}

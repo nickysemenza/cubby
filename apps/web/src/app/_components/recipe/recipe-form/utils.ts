@@ -1,4 +1,4 @@
-import { type IngItem } from "./types";
+import type { IngItem } from "./types";
 
 /**
  * Normalize an ingredient for comparison by extracting the comparable properties.

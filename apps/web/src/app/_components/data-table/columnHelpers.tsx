@@ -1,21 +1,21 @@
 "use client";
 
-import { type ColumnHelper, type CellContext } from "@tanstack/react-table";
-import { type ComponentType } from "react";
+import type { ColumnHelper, CellContext } from "@tanstack/react-table";
+import type { ComponentType } from "react";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { TableLink, ImageThumbnail } from "../table";
 import { entities } from "~/entities/entities";
-import { type Entity } from "~/entities/types";
+import type { Entity } from "~/entities/types";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { SpacedContainer } from "~/components/layout/spaced-container";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { NoneState } from "../NoneState";
-import { type Amount } from "~/codec/codec";
+import type { Amount } from "~/codec/codec";
 
 // Extend TanStack Table's meta type to include our custom properties
 declare module "@tanstack/react-table" {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // biome-ignore lint/correctness/noUnusedVariables: required for module augmentation
   interface ColumnMeta<TData, TValue> {
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
     className?: string;
@@ -125,7 +125,7 @@ export function createEntityPillColumn<
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: intentional
   Pill: ComponentType<any>,
   pillPropName: string,
   options?: {
@@ -225,10 +225,10 @@ export function createInventoryEntriesColumn<
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: intentional
   Pill: ComponentType<any>,
   pillPropName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: intentional
   getRelatedEntity: (entry: any) => TRelated,
   options?: {
     header?: string;
@@ -239,7 +239,7 @@ export function createInventoryEntriesColumn<
 ) {
   const layout = options?.layout ?? "stacked";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: intentional
   return columnHelper.accessor((row) => row[accessor] as any[], {
     id: String(accessor),
     header: options?.header,

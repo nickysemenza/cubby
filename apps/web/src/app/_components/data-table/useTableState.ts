@@ -1,17 +1,17 @@
 "use client";
 
 import { useState, useTransition, useCallback } from "react";
-import {
-  type SortingState,
-  type ColumnFiltersState,
-  type PaginationState,
+import type {
+  SortingState,
+  ColumnFiltersState,
+  PaginationState,
 } from "@tanstack/react-table";
 import {
   defaultPagination,
   defaultSortState,
   buildSortParams,
 } from "./tableUtils";
-import { type SortParams } from "~/schemas/pagination";
+import type { SortParams } from "~/schemas/pagination";
 
 interface TableStateOptions {
   initialSort?: string;

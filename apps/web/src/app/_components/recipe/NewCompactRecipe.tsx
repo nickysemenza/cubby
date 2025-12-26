@@ -1,8 +1,8 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { type WIngredient } from "@recipehub/recipebridge";
+import type { WIngredient } from "@recipehub/recipebridge";
 import { useTRPC } from "~/trpc/react";
-import { type CompactRecipe } from "~/codec/codec";
+import type { CompactRecipe } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
 import { formatRichText } from "./richtext";
 import useDebounce from "~/hooks/useDebounce";
@@ -239,7 +239,7 @@ const RichTextInstructions = React.memo(function RichTextInstructions({
   return (
     <>
       {parsedInstructions.map((content, idx) => (
-        <li key={idx + "2"}>{content}</li>
+        <li key={`${idx}2`}>{content}</li>
       ))}
     </>
   );
@@ -318,11 +318,11 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
         initialName={selectedIngredient}
       />
 
-      <div className="border-border bg-muted mt-4 rounded border p-3">
-        <h3 className="text-foreground mb-2 font-medium">
+      <div className="mt-4 rounded border border-border bg-muted p-3">
+        <h3 className="mb-2 font-medium text-foreground">
           Missing Ingredients
         </h3>
-        <div className="text-muted-foreground mb-2 text-sm">
+        <div className="mb-2 text-muted-foreground text-sm">
           These ingredients don&apos;t exist in your database yet:
         </div>
         <ul className="space-y-1">
@@ -363,21 +363,21 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
       <div className="inline">
         {amounts.map((a, x) => (
           <div key={x} className="inline">
-            <div className="text-primary inline pr-1">
+            <div className="inline pr-1 text-primary">
               {formattedAmounts[x]}
             </div>
-            <div className="text-accent-foreground inline">{a.unit}</div>
+            <div className="inline text-accent-foreground">{a.unit}</div>
             {x < amounts.length - 1 && <div className="inline"> / </div>}
           </div>
         ))}
       </div>
-      <div className="text-foreground inline pl-2">
+      <div className="inline pl-2 text-foreground">
         <IngredientByName name={amount.name} />
       </div>
       {amount.modifier && (
         <div className="inline">
           {", "}
-          <div className="text-muted-foreground inline italic">
+          <div className="inline text-muted-foreground italic">
             {amount.modifier}
           </div>
         </div>

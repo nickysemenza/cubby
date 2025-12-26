@@ -47,7 +47,7 @@ export default function GoogleSheetsDebugPage() {
     <div className="container mx-auto py-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Google Sheets Debug</h1>
+          <h1 className="font-bold text-2xl">Google Sheets Debug</h1>
           <p className="text-muted-foreground text-sm">
             Raw data from connected sheet for troubleshooting
           </p>
@@ -62,7 +62,7 @@ export default function GoogleSheetsDebugPage() {
       {/* Parse Errors */}
       {data?.parseErrors && data.parseErrors.length > 0 && (
         <div className="mb-6">
-          <h2 className="mb-2 text-lg font-semibold text-red-600">
+          <h2 className="mb-2 font-semibold text-lg text-red-600">
             Parse Errors ({data.parseErrors.length})
           </h2>
           <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
@@ -73,30 +73,30 @@ export default function GoogleSheetsDebugPage() {
 
       {/* Headers */}
       <div className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold">
+        <h2 className="mb-2 font-semibold text-lg">
           Headers ({data?.headers.length ?? 0} columns)
         </h2>
-        <div className="bg-muted rounded-md border p-4">
+        <div className="rounded-md border bg-muted p-4">
           <JsonRenderer input={data?.headers} pretty />
         </div>
       </div>
 
       {/* Raw Rows */}
       <div className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold">
+        <h2 className="mb-2 font-semibold text-lg">
           Raw Rows ({data?.rawRows.length ?? 0} rows)
         </h2>
-        <div className="bg-muted max-h-[500px] overflow-auto rounded-md border p-4">
+        <div className="max-h-[500px] overflow-auto rounded-md border bg-muted p-4">
           <JsonRenderer input={data?.rawRows} pretty />
         </div>
       </div>
 
       {/* Parsed Rows */}
       <div className="mb-6">
-        <h2 className="mb-2 text-lg font-semibold">
+        <h2 className="mb-2 font-semibold text-lg">
           Parsed Rows ({data?.parsedRows.length ?? 0} rows)
         </h2>
-        <div className="bg-muted max-h-[500px] overflow-auto rounded-md border p-4">
+        <div className="max-h-[500px] overflow-auto rounded-md border bg-muted p-4">
           <JsonRenderer input={data?.parsedRows} pretty />
         </div>
       </div>

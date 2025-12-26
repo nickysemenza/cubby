@@ -1,4 +1,4 @@
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   type SortParams,
   type PaginationParams,
@@ -13,21 +13,21 @@ import {
   buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
 import { createAppError } from "~/server/api/trpc";
-import {
-  type InventoryId,
-  type OrganizationId,
-  type ProductId,
-  type LocationId,
+import type {
+  InventoryId,
+  OrganizationId,
+  ProductId,
+  LocationId,
 } from "~/schemas/identifiers";
 import { inventoryEntry, product, location } from "~/server/db/schema";
 import { eq, and, count, not, ilike } from "drizzle-orm";
 import { dbInventoryEntryToAPI } from "./helpers";
-import {
-  type UpdateInventoryEntryData,
-  type CreateInventoryEntryData,
+import type {
+  UpdateInventoryEntryData,
+  CreateInventoryEntryData,
 } from "./types";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 /**
  * Check if a product with expectedQuantity=1 already exists in a different location.

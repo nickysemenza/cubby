@@ -1,7 +1,7 @@
-import { type WCompactRecipe } from "@recipehub/recipebridge";
-import { type Span } from "@opentelemetry/api";
+import type { WCompactRecipe } from "@recipehub/recipebridge";
+import type { Span } from "@opentelemetry/api";
 import { getTracer, TraceNames } from "~/server/tracing";
-import { type CompactRecipe } from "~/codec/codec";
+import type { CompactRecipe } from "~/codec/codec";
 import { wasmServer } from "~/lib/wasm";
 
 const scrapeRecipe = async (url: string) => {

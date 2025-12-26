@@ -222,7 +222,7 @@ const { exportCSV, importCSV, previewCSVImport } =
         exportInventoryToCSV(ctx.db, ctx.organizationId, input.locationId),
     },
     // Import UPC images for newly created products after successful import
-    afterImport: async (ctx, rows, result: CSVImportResult) => {
+    afterImport: async (ctx, _rows, result: CSVImportResult) => {
       const productsToImportImages = result.items.filter(
         (item) =>
           item.productId &&

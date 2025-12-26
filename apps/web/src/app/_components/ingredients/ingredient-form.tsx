@@ -1,13 +1,13 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { type IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import {
+import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import type {
   ingredientBase,
-  type IngredientUpdateInput,
+  IngredientUpdateInput,
 } from "~/schemas/ingredient";
 import {
   type CreateModeProps,
@@ -29,18 +29,18 @@ const formSchema = z.object({
 type IngredientFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
-interface CreateIngredientFormProps extends CreateModeProps<
-  z.infer<typeof ingredientBase>
-> {
+interface CreateIngredientFormProps
+  extends CreateModeProps<z.infer<typeof ingredientBase>> {
   ingredient?: never;
   initialName?: string;
 }
 
 // Props for edit mode
-interface EditIngredientFormProps extends EditModeProps<
-  IngredientUpdateInput,
-  IngredientWithRecipesAndProductOut
-> {
+interface EditIngredientFormProps
+  extends EditModeProps<
+    IngredientUpdateInput,
+    IngredientWithRecipesAndProductOut
+  > {
   entity: IngredientWithRecipesAndProductOut;
 }
 
@@ -127,7 +127,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
         addButtonText="Add Alias"
         emptyValue=""
       >
-        {(field, index) => (
+        {(_field, index) => (
           <Controller
             control={form.control}
             name={`aliases.${index}`}

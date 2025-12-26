@@ -4,13 +4,13 @@
  * Handles product creation, updates, and preview logic.
  */
 
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   type OrganizationId,
   type IngredientId,
   unsafeIngredientId,
 } from "~/schemas/identifiers";
-import { type ProductChangesPreview } from "~/schemas/inventory";
+import type { ProductChangesPreview } from "~/schemas/inventory";
 import { getDb } from "~/server/repo/database-helpers";
 import { product } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -19,11 +19,11 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import { getManufacturerUpdate } from "~/lib/manufacturer-utils";
-import { type ProductTopLevelOut } from "~/schemas/product";
+import type { ProductTopLevelOut } from "~/schemas/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import { type ProductPreviewResult } from "./types";
+import type { ProductPreviewResult } from "./types";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 /**
  * Parse semicolon-separated aliases string into array

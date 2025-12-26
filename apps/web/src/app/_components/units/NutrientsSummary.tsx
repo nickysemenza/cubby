@@ -56,8 +56,8 @@ export function NutrientsSummary({
         const displayName = getNutrientDisplayName(code).toUpperCase();
 
         return (
-          <div key={code} className="border-muted border px-2 py-1">
-            <span className="text-chart-2 font-medium">{displayName}:</span>{" "}
+          <div key={code} className="border border-muted px-2 py-1">
+            <span className="font-medium text-chart-2">{displayName}:</span>{" "}
             <span className="text-chart-1">{value.toFixed(1)}</span>{" "}
             <span className="text-muted-foreground">{unit}</span>
           </div>

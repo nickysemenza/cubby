@@ -1,9 +1,9 @@
-import { type FC } from "react";
-import { useFieldArray, UseFormReturn } from "react-hook-form";
+import type { FC } from "react";
+import { useFieldArray, type UseFormReturn } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
 import { RequiredTextareaField } from "../../form-utils";
-import { type RecipeFormValues } from "./types";
+import type { RecipeFormValues } from "./types";
 import { FieldArrayItemControls } from "./field-array-item-controls";
 
 interface InstructionFieldArrayProps {

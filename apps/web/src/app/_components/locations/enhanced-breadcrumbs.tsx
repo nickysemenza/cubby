@@ -1,6 +1,6 @@
 "use client";
 
-import { type InfLocation } from "~/schemas/location";
+import type { InfLocation } from "~/schemas/location";
 import { LocationBreadcrumb, locationToSegments } from "./location-breadcrumb";
 
 interface EnhancedBreadcrumbsProps {

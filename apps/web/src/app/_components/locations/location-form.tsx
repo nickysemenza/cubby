@@ -1,5 +1,5 @@
 "use client";
-import { type FC } from "react";
+import type { FC } from "react";
 import { useForm } from "react-hook-form";
 import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +12,7 @@ import {
   type LocationCreateInput,
   type LocationUpdateInput,
 } from "~/schemas/location";
-import { type LocationId } from "~/schemas/identifiers";
+import type { LocationId } from "~/schemas/identifiers";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -26,7 +26,7 @@ import {
   SelectField,
 } from "../form-utils";
 import { PendingImageUpload } from "../PendingImageUpload";
-import { type ImageOut } from "~/schemas/image";
+import type { ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../combobox/combobox-types";
 import { getOptionalLocationId } from "~/schemas/form-fields";
 
@@ -47,10 +47,8 @@ interface CreateLocationFormProps extends CreateModeProps<LocationCreateInput> {
 }
 
 // Props for edit mode
-interface EditLocationFormProps extends EditModeProps<
-  LocationUpdateInput,
-  LocationOut
-> {
+interface EditLocationFormProps
+  extends EditModeProps<LocationUpdateInput, LocationOut> {
   entity: LocationOut & {
     parent?: LocationOut | null;
     images?: ImageOut[]; // Images from DB
@@ -78,10 +76,9 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
     defaultValues: {
       name: location ? location.name : (initialName ?? ""),
       type: location ? location.type : "room",
-      parent:
-        location && location.parent
-          ? buildLocationComboboxItem(location.parent)
-          : null,
+      parent: location?.parent
+        ? buildLocationComboboxItem(location.parent)
+        : null,
     },
   });
 

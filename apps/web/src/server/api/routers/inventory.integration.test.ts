@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { buildTestDB, seedFromCSV } from "tooling/test-setup";
 import { inventoryRouter } from "./inventory";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
@@ -8,7 +8,7 @@ import {
   unsafeUserId,
   unsafeOrganizationId,
 } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import { createInventoryEntry } from "~/server/repo/inventory";

@@ -81,7 +81,7 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
         details: [
           <div
             key="created"
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-gray-500 text-sm"
           >
             <Calendar className="h-3 w-3" />
             Created {formatDistanceToNow(product.createdAt)} ago
@@ -155,7 +155,7 @@ function ProductsWithoutMappingsList({
         details: [
           <div
             key="created"
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-gray-500 text-sm"
           >
             <Calendar className="h-3 w-3" />
             Created {formatDistanceToNow(product.createdAt)} ago
@@ -203,7 +203,7 @@ function InvalidInventoryAmountsList({
         details: [
           <div
             key="location"
-            className="flex items-center gap-2 text-sm text-gray-600"
+            className="flex items-center gap-2 text-gray-600 text-sm"
           >
             <MapPin className="h-3 w-3" />
             {entry.locationName}
@@ -237,7 +237,7 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
         const details = [
           <div
             key="created"
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-gray-500 text-sm"
           >
             <Calendar className="h-3 w-3" />
             Created {formatDistanceToNow(location.createdAt)} ago
@@ -248,12 +248,10 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
           details.push(
             <div
               key="last-inventory"
-              className="flex items-center gap-1 text-sm text-gray-500"
+              className="flex items-center gap-1 text-gray-500 text-sm"
             >
               <Calendar className="h-3 w-3" />
-              Last inventory {formatDistanceToNow(
-                location.lastBulkInventory,
-              )}{" "}
+              Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
               ago
             </div>,
           );

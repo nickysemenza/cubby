@@ -9,7 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { assertNever } from "~/lib/assert";
-import { type LocationType } from "~/schemas/location";
+import type { LocationType } from "~/schemas/location";
 
 // Helper to get icon for a location type
 export const getLocationIcon = (type: LocationType): LucideIcon => {

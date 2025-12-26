@@ -1,6 +1,6 @@
 "use client";
 
-import { FC } from "react";
+import type { FC } from "react";
 import Link from "next/link";
 import { NoneState } from "./NoneState";
 import { Button } from "~/components/ui/button";
@@ -28,7 +28,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
 }) => {
   return (
     <div>
-      {title && <h2 className="mb-3 text-xl font-semibold">{title}</h2>}
+      {title && <h2 className="mb-3 font-semibold text-xl">{title}</h2>}
 
       {images.length === 0 ? (
         <NoneState />

@@ -1,10 +1,10 @@
 "use client";
 
-import { type RefCallback } from "react";
+import type { RefCallback } from "react";
 import { cn } from "~/lib/utils";
-import { type InfLocation } from "~/schemas/location";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { type z } from "zod";
+import type { InfLocation } from "~/schemas/location";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { z } from "zod";
 import { LocationGalleryCard } from "./location-gallery-card";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -105,14 +105,14 @@ function LocationRow({
             {hasChildren && (
               <div className="relative mt-2 ml-6 pl-4">
                 {/* Vertical line spanning all children */}
-                <div className="bg-muted-foreground/25 absolute top-0 bottom-2 left-0 w-0.5" />
+                <div className="absolute top-0 bottom-2 left-0 w-0.5 bg-muted-foreground/25" />
 
                 {/* Render each child with horizontal connector */}
                 <div className="space-y-2">
                   {location.children!.map((child) => (
                     <div key={child.id} className="relative">
                       {/* Horizontal connector from vertical line to card */}
-                      <div className="bg-muted-foreground/25 absolute top-5 -left-4 h-0.5 w-4" />
+                      <div className="absolute top-5 -left-4 h-0.5 w-4 bg-muted-foreground/25" />
                       <LocationRow
                         locations={[child]}
                         level={level + 1}

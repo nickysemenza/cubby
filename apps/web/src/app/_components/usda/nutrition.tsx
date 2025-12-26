@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { NutritionInfo } from "@recipehub/usda-schemas";
+import type { NutritionInfo } from "@recipehub/usda-schemas";
 
 export const NutritionInfoTable: React.FC<{
   n: NutritionInfo;

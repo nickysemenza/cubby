@@ -8,10 +8,10 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { type OrganizationId } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
+import type { OrganizationId } from "~/schemas/identifiers";
+import type { ActorContext } from "~/schemas/context";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
 import {
@@ -19,8 +19,8 @@ import {
   importInventoryFromCSV,
 } from "~/server/repo/inventory";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
-import { type InventoryCSVRow } from "~/schemas/inventory";
-import { type InventoryCSVExportRow } from "~/server/repo/inventory/types";
+import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
 
 /**
  * Convert an export row to an import row format (test helper)

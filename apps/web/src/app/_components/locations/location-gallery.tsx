@@ -13,9 +13,9 @@ import {
   useGalleryViewState,
   type EmptyFilter,
 } from "~/hooks/useGalleryViewState";
-import { type InfLocation, type LocationType } from "~/schemas/location";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { type z } from "zod";
+import type { InfLocation, LocationType } from "~/schemas/location";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { z } from "zod";
 
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
@@ -349,12 +349,12 @@ export function LocationGallery() {
 
   if (!filteredLocations.length) {
     return (
-      <div className="text-muted-foreground flex h-[400px] flex-col items-center justify-center">
+      <div className="flex h-[400px] flex-col items-center justify-center text-muted-foreground">
         <span className="text-lg">No locations found</span>
         {locationTypeFilter && (
           <button
             onClick={() => setLocationTypeFilter(null)}
-            className="text-primary mt-2 text-sm hover:underline"
+            className="mt-2 text-primary text-sm hover:underline"
           >
             Clear type filter
           </button>
@@ -364,7 +364,7 @@ export function LocationGallery() {
   }
 
   return (
-    <div className="bg-background flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border">
+    <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border bg-background">
       {/* Sidebar */}
       <GallerySidebar
         locations={filteredLocations}

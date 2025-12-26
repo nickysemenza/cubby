@@ -1,6 +1,6 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,22 +16,22 @@ import {
 import { IngredientFieldArray } from "./ingredient-field-array";
 import { InstructionFieldArray } from "./instruction-field-array";
 import {
-  IngItem,
+  type IngItem,
   type RecipeFormProps,
   type RecipeFormValues,
   formSchema,
 } from "./types";
 import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
-import {
+import type {
   RecipeIngredientInput,
   recipeInstructionInput,
   recipeSectionInput,
-  type RecipeCreateInput,
-  type RecipeUpdateInput,
+  RecipeCreateInput,
+  RecipeUpdateInput,
 } from "~/schemas/recipe";
 import { PendingImageUpload } from "../../PendingImageUpload";
-import { z } from "zod";
-import { type RecipeId } from "~/schemas/identifiers";
+import type { z } from "zod";
+import type { RecipeId } from "~/schemas/identifiers";
 import {
   getOptionalIngredientId,
   getOptionalRecipeId,
@@ -274,13 +274,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium">Recipe Sections</h3>
+          <h3 className="font-medium text-lg">Recipe Sections</h3>
         </div>
 
         {sectionFields.map((sectionField, sectionIndex) => (
           <div
             key={sectionField.id}
-            className="border-border space-y-3 rounded border p-3"
+            className="space-y-3 rounded border border-border p-3"
           >
             <div className="flex items-center justify-between">
               <h4 className="font-medium">
@@ -326,10 +326,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
             </div>
 
             {/* Ingredients and Instructions side by side */}
-            <div className="flex flex-col space-y-3 md:flex-row md:space-y-0 md:space-x-3">
+            <div className="flex flex-col space-y-3 md:flex-row md:space-x-3 md:space-y-0">
               {/* Ingredients */}
               <div className="md:w-1/2">
-                <h5 className="mb-2 text-sm font-medium">Ingredients</h5>
+                <h5 className="mb-2 font-medium text-sm">Ingredients</h5>
                 <IngredientFieldArray form={form} sectionIndex={sectionIndex} />
               </div>
 
@@ -342,7 +342,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
                   placeholder="E.g., 'Main Course', 'Sauce', etc."
                   nullable={true}
                 />
-                <h5 className="mb-2 text-sm font-medium">Instructions</h5>
+                <h5 className="mb-2 font-medium text-sm">Instructions</h5>
                 <InstructionFieldArray
                   form={form}
                   sectionIndex={sectionIndex}

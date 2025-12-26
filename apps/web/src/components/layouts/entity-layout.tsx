@@ -1,4 +1,4 @@
-import { ReactNode, Suspense } from "react";
+import { type ReactNode, Suspense } from "react";
 import { HydrateClient } from "~/trpc/server";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { ListLoadingSkeleton } from "~/components/feedback/loading-skeletons";
@@ -15,7 +15,7 @@ export function EntityLayout({ children, title, actions }: EntityLayoutProps) {
       <PageWrapper>
         {(title || actions) && (
           <div className="mb-6 flex items-center justify-between">
-            {title && <h1 className="text-2xl font-bold">{title}</h1>}
+            {title && <h1 className="font-bold text-2xl">{title}</h1>}
             {actions && <div className="flex gap-2">{actions}</div>}
           </div>
         )}

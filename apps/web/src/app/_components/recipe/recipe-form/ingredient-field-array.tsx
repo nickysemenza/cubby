@@ -1,5 +1,5 @@
-import { type FC } from "react";
-import { useFieldArray, UseFormReturn } from "react-hook-form";
+import type { FC } from "react";
+import { useFieldArray, type UseFormReturn } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
 import {
@@ -7,12 +7,12 @@ import {
   WithRecipeSearch,
 } from "../../combobox/with-search-hook";
 import { ComboboxField } from "../../form-utils";
-import { type RecipeFormValues } from "./types";
+import type { RecipeFormValues } from "./types";
 import { AmountFieldArray } from "./amount-field-array";
 import { FieldArrayItemControls } from "./field-array-item-controls";
 import { IngredientPillLink, RecipePillLink } from "../../EntityPill";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { sectionIngredientType } from "~/schemas/recipe";
+import type { sectionIngredientType } from "~/schemas/recipe";
 
 interface IngredientFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;
@@ -39,11 +39,11 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
           {fields.map((field, ingredientIndex) => (
             <div
               key={field.id}
-              className="border-opacity-50 border-border space-y-2 rounded border px-2 py-2"
+              className="space-y-2 rounded border border-border border-opacity-50 px-2 py-2"
             >
               <div className="flex flex-row items-center">
                 <div className="flex w-8 flex-col items-center justify-center">
-                  <h6 className="rotate-[-90deg] text-sm font-medium whitespace-nowrap">
+                  <h6 className="rotate-[-90deg] whitespace-nowrap font-medium text-sm">
                     Ingredient #{ingredientIndex + 1}
                   </h6>
                 </div>

@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { unitMappingWithMetadata } from "~/schemas/unitmapping";
-import { recipeOut } from "~/schemas/recipe";
-import { infLocation, type LocationType } from "~/schemas/location";
-import { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
+import type { unitMappingWithMetadata } from "~/schemas/unitmapping";
+import type { recipeOut } from "~/schemas/recipe";
+import type { infLocation, LocationType } from "~/schemas/location";
+import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 import { unsafeLocationId } from "~/schemas/identifiers";
 
 const uuid = () => crypto.randomUUID();

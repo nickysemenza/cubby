@@ -75,7 +75,7 @@ export function DetailLoadingSkeleton() {
 // Simple loading text for inline use
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <div className="text-muted-foreground flex items-center justify-center p-4">
+    <div className="flex items-center justify-center p-4 text-muted-foreground">
       {text}
     </div>
   );

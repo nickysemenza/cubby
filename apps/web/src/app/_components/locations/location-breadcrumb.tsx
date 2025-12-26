@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { Home } from "lucide-react";
 import { LocationIcon } from "./location-icons";
-import { type LocationType, type InfLocation } from "~/schemas/location";
+import type { LocationType, InfLocation } from "~/schemas/location";
 import { cn } from "~/lib/utils";
 import { getDefaultLocationType } from "~/lib/location-path";
 import {
@@ -82,7 +82,7 @@ export function LocationBreadcrumb({
                 render={
                   <Link
                     href="/"
-                    className="hover:bg-muted flex items-center gap-1.5 rounded-md px-2 py-1"
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted"
                   />
                 }
               >

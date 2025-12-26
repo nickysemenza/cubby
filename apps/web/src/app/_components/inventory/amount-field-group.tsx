@@ -1,7 +1,7 @@
 "use client";
 
-import { UseFormReturn, FieldValues, Path } from "react-hook-form";
-import { ReactNode } from "react";
+import type { UseFormReturn, FieldValues, Path } from "react-hook-form";
+import type { ReactNode } from "react";
 import {
   SideBySideFields,
   NullableNumericField,

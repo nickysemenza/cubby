@@ -1,8 +1,8 @@
 "use client";
 
-import { type FC } from "react";
-import { type z } from "zod";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { FC } from "react";
+import type { z } from "zod";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { showAmountAndPrice } from "./format-amount";
 import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { UnitMappingGraph } from "../units/UnitMappingGraph";
@@ -29,7 +29,7 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
       </div>
       <LocationPillLink location={inventoryitem.location} />
       <ProductPillLink product={inventoryitem.product} />
-      <div className="bg-muted rounded-md p-4">
+      <div className="rounded-md bg-muted p-4">
         <UnitMappingGraph unitMapping={inventoryitem.product.unitMappings} />
       </div>
       <Button variant="outline" onClick={onEdit}>

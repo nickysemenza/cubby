@@ -1,9 +1,9 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import { Button } from "~/components/ui/button";
 import { NoneState } from "../NoneState";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 interface IngredientBasicInfoProps {
   ingredient: IngredientWithFoodOut;

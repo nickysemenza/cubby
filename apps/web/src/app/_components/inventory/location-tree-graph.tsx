@@ -4,8 +4,8 @@ import * as d3Hierarchy from "d3-hierarchy";
 import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import { LocationPillLinkCompact } from "~/app/_components/EntityPill";
-import { LocationId } from "~/schemas/identifiers";
-import { InfLocation, LocationType } from "~/schemas/location";
+import type { LocationId } from "~/schemas/identifiers";
+import type { InfLocation, LocationType } from "~/schemas/location";
 
 interface TreeNode {
   name: string;

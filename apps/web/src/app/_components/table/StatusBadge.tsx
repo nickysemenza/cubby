@@ -1,6 +1,6 @@
 import { cva } from "class-variance-authority";
 import { Badge } from "~/components/ui/badge";
-import { type ImageStatus } from "~/schemas/image";
+import type { ImageStatus } from "~/schemas/image";
 
 const statusBadgeVariants = cva("", {
   variants: {

@@ -1,10 +1,10 @@
 import { z, type ZodSchema } from "zod";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { protectedProcedure } from "./trpc";
-import { type ProductService } from "~/server/services/product.service";
-import { type IngredientService } from "~/server/services/ingredient.service";
-import { type USDAClient } from "~/server/clients/usda";
-import { type UPCLookupClient } from "~/server/clients/upc-lookup";
+import type { ProductService } from "~/server/services/product.service";
+import type { IngredientService } from "~/server/services/ingredient.service";
+import type { USDAClient } from "~/server/clients/usda";
+import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import { IDInput } from "~/schemas/common";
 import {
   buildPaginatedResponse,
@@ -13,9 +13,9 @@ import {
   type SortParams,
   type PaginationParams,
 } from "~/schemas/pagination";
-import { UserId, type OrganizationId } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
-import { type Entity } from "~/entities/types";
+import type { UserId, OrganizationId } from "~/schemas/identifiers";
+import type { ActorContext } from "~/schemas/context";
+import type { Entity } from "~/entities/types";
 
 // Common input schema for update operations
 const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>

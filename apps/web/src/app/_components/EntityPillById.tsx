@@ -9,7 +9,7 @@ import {
   IngredientPillLink,
 } from "./EntityPill";
 import { Loader2 } from "lucide-react";
-import { type AuditEntityType } from "~/server/repo/audit-log";
+import type { AuditEntityType } from "~/server/repo/audit-log";
 
 interface EntityPillByIdProps {
   entityType: AuditEntityType;
@@ -50,7 +50,7 @@ export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
     return (
       <a
         href={`/inventory/${entityId}`}
-        className="text-sm font-medium hover:underline"
+        className="font-medium text-sm hover:underline"
       >
         Inventory Entry
       </a>
@@ -65,7 +65,7 @@ export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
     (entityType === "ingredient" && ingredientQuery.isLoading);
 
   if (isLoading) {
-    return <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />;
+    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
   }
 
   // Render the appropriate pill based on entity type

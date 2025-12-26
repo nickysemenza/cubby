@@ -1,5 +1,5 @@
-import { expect, test } from "@playwright/test";
 import { faker } from "@faker-js/faker";
+import { expect, test } from "@playwright/test";
 
 test.describe("Create Recipe", () => {
   test("can create an ingredient, link it to a product, then create a recipe", async ({

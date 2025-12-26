@@ -1,18 +1,14 @@
 import { ilike, type SQL, asc, desc, inArray } from "drizzle-orm";
-import {
-  type AnyColumn,
-  type InferInsertModel,
-  type InferSelectModel,
+import type {
+  AnyColumn,
+  InferInsertModel,
+  InferSelectModel,
 } from "drizzle-orm";
-import { type PgTable } from "drizzle-orm/pg-core";
-import { type z } from "zod";
-import { type SortParams } from "~/schemas/pagination";
-import {
-  type Database,
-  type DrizzleClient,
-  type DrizzleTransaction,
-} from "~/server/db";
-import { productUnitMappings, image } from "~/server/db/schema";
+import type { PgTable } from "drizzle-orm/pg-core";
+import type { z } from "zod";
+import type { SortParams } from "~/schemas/pagination";
+import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { type productUnitMappings, image } from "~/server/db/schema";
 import { unsafeProductId } from "~/schemas/identifiers";
 import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
 import { amount } from "~/codec/codec";

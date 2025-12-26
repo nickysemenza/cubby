@@ -1,12 +1,12 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import { type DetailSection, DetailPage } from "../data-table/detail-page";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { type ProductWithFoodOut } from "~/server/services/product.service";
+import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductForm } from "./product-form";
-import { type ProductInputPayload } from "~/schemas/product";
+import type { ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { ProductBasicInfo } from "./product-basic-info";
@@ -33,7 +33,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Basic Information",
       content: editMode.isEditing ? (
         <div className="container mx-auto py-10">
-          <h1 className="mb-6 text-2xl font-bold">Edit Product</h1>
+          <h1 className="mb-6 font-bold text-2xl">Edit Product</h1>
           <ProductForm
             mode="edit"
             entity={product}
@@ -53,7 +53,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           {
             title: "Nutrition Information",
             content: (
-              <div className="bg-muted rounded-md p-4">
+              <div className="rounded-md bg-muted p-4">
                 <NutritionInfoTable n={product.food.nutritionInfo} limit={10} />
               </div>
             ),

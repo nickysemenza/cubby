@@ -13,7 +13,7 @@ export function VisualizationPlaceholder({
 }) {
   return (
     <div
-      className="text-muted-foreground flex items-center justify-center rounded-md border"
+      className="flex items-center justify-center rounded-md border text-muted-foreground"
       style={{ height }}
     >
       <div className="text-center">

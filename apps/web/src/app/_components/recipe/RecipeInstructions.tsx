@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { type RecipeOut } from "~/schemas/recipe";
+import type { RecipeOut } from "~/schemas/recipe";
 import { wasm } from "~/lib/wasm";
 import { formatRichText } from "./richtext";
 
@@ -25,7 +25,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
         <div key={section.id} className="animate-slide-up">
           {/* Section header - only show if there are multiple sections or section has a name */}
           {(recipe.sections.length > 1 || section.name) && (
-            <h3 className="mb-4 text-xl font-semibold">
+            <h3 className="mb-4 font-semibold text-xl">
               {section.name || `Part ${sectionIndex + 1}`}
             </h3>
           )}
@@ -35,11 +35,11 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
             {section.instructions.map((instruction, stepIndex) => (
               <li key={stepIndex} className="flex gap-4">
                 {/* Step number */}
-                <div className="bg-primary text-primary-foreground flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground text-sm">
                   {stepIndex + 1}
                 </div>
                 {/* Instruction text with highlighted ingredients and measurements */}
-                <p className="text-foreground/90 flex-1 pt-1 leading-relaxed">
+                <p className="flex-1 pt-1 text-foreground/90 leading-relaxed">
                   {formatRichText(
                     wasm.parse_rich_text(
                       instruction.instruction,

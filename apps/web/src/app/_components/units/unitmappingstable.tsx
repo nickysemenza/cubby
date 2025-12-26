@@ -6,7 +6,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { UnitMapping } from "~/schemas/unitmapping";
+import type { UnitMapping } from "~/schemas/unitmapping";
 
 import { wasm } from "~/lib/wasm";
 import { NoneState } from "../NoneState";

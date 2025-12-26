@@ -1,4 +1,4 @@
-import { FC } from "react";
+import type { FC } from "react";
 import { Button } from "~/components/ui/button";
 import { ChevronUp, ChevronDown, Trash } from "lucide-react";
 

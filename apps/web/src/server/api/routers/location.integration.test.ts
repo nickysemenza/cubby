@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { locationRouter } from "./location";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";

@@ -63,7 +63,7 @@ export const SyncStatusBadge = () => {
             />
           }
         >
-          <AlertTriangle className="text-muted-foreground h-4 w-4" />
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Google Sheet not connected</p>
@@ -95,7 +95,7 @@ export const SyncStatusBadge = () => {
             />
           }
         >
-          <AlertTriangle className="text-muted-foreground h-4 w-4" />
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Could not check sync status. Click to retry.</p>
@@ -113,7 +113,7 @@ export const SyncStatusBadge = () => {
         className="h-8 px-2"
         onClick={fetchPreview}
       >
-        <RefreshCw className="text-muted-foreground h-4 w-4" />
+        <RefreshCw className="h-4 w-4 text-muted-foreground" />
       </Button>
     );
   }

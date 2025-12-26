@@ -1,11 +1,11 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import { type DetailSection, DetailPage } from "../data-table/detail-page";
-import { type InfLocation } from "~/schemas/location";
+import type { InfLocation } from "~/schemas/location";
 import { NoneState } from "../NoneState";
 import { LocationForm } from "./location-form";
-import { type LocationUpdateInput } from "~/schemas/location";
+import type { LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import EntityImageList from "../EntityImageList";
 import { LocationCardGrid } from "./location-card-grid";
@@ -45,7 +45,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Basic Information",
       content: editMode.isEditing ? (
         <div className="container mx-auto py-10">
-          <h1 className="mb-6 text-2xl font-bold">Edit Location</h1>
+          <h1 className="mb-6 font-bold text-2xl">Edit Location</h1>
           <LocationForm
             mode="edit"
             entity={location}

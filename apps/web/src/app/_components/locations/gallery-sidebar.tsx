@@ -9,7 +9,7 @@ import {
   Package,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
-import { type InfLocation } from "~/schemas/location";
+import type { InfLocation } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
 import { Button } from "~/components/ui/button";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
@@ -24,7 +24,9 @@ function buildParentMap(
     map.set(loc.id, parentId);
     if (loc.children) {
       const childMap = buildParentMap(loc.children, loc.id);
-      childMap.forEach((v, k) => map.set(k, v));
+      childMap.forEach((v, k) => {
+        map.set(k, v);
+      });
     }
   }
   return map;
@@ -110,14 +112,18 @@ export function GallerySidebar({
     // Expand ancestors of active location
     if (activeLocationId) {
       const ancestors = getAncestorIds(activeLocationId, parentMap);
-      ancestors.forEach((id) => nodes.add(id));
+      ancestors.forEach((id) => {
+        nodes.add(id);
+      });
     }
 
     // When searching, expand ancestors of all matching locations
     if (searchTerm) {
       for (const matchId of matchingIds) {
         const ancestors = getAncestorIds(matchId, parentMap);
-        ancestors.forEach((id) => nodes.add(id));
+        ancestors.forEach((id) => {
+          nodes.add(id);
+        });
       }
     }
 
@@ -159,7 +165,7 @@ export function GallerySidebar({
     return (
       <div
         className={cn(
-          "from-muted/50 to-muted/20 flex flex-col border-r bg-gradient-to-b transition-all duration-300",
+          "flex flex-col border-r bg-gradient-to-b from-muted/50 to-muted/20 transition-all duration-300",
           className,
         )}
       >
@@ -167,7 +173,7 @@ export function GallerySidebar({
           variant="ghost"
           size="icon"
           onClick={onToggleCollapse}
-          className="hover:bg-primary/10 m-2 transition-colors"
+          className="m-2 transition-colors hover:bg-primary/10"
           title="Expand sidebar"
         >
           <PanelLeft className="h-4 w-4" />
@@ -179,17 +185,17 @@ export function GallerySidebar({
   return (
     <div
       className={cn(
-        "from-muted/40 via-muted/20 to-background flex h-full min-h-0 w-56 flex-col overflow-hidden border-r bg-gradient-to-b shadow-sm transition-all duration-300 lg:w-64",
+        "flex h-full min-h-0 w-56 flex-col overflow-hidden border-r bg-gradient-to-b from-muted/40 via-muted/20 to-background shadow-sm transition-all duration-300 lg:w-64",
         className,
       )}
     >
       {/* Header */}
-      <div className="from-primary/5 flex items-center justify-between border-b bg-gradient-to-r to-transparent px-3 py-2">
+      <div className="flex items-center justify-between border-b bg-gradient-to-r from-primary/5 to-transparent px-3 py-2">
         <div className="flex items-center gap-2">
-          <div className="bg-primary/10 flex h-6 w-6 items-center justify-center rounded-md">
-            <ImageIcon className="text-primary h-3.5 w-3.5" />
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+            <ImageIcon className="h-3.5 w-3.5 text-primary" />
           </div>
-          <span className="text-foreground text-sm font-semibold tracking-tight">
+          <span className="font-semibold text-foreground text-sm tracking-tight">
             Locations
           </span>
         </div>
@@ -197,7 +203,7 @@ export function GallerySidebar({
           variant="ghost"
           size="icon"
           onClick={onToggleCollapse}
-          className="hover:bg-primary/10 h-7 w-7 transition-colors"
+          className="h-7 w-7 transition-colors hover:bg-primary/10"
           title="Collapse sidebar"
         >
           <PanelLeftClose className="h-4 w-4" />
@@ -287,8 +293,8 @@ function SidebarTreeNode({
           !isActive && "hover:bg-accent/50",
           isActive && [
             "bg-primary/15 text-primary",
-            "ring-primary/30 ring-1 ring-inset",
-            "before:bg-primary before:absolute before:top-1/2 before:left-0 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:transition-all before:duration-150",
+            "ring-1 ring-primary/30 ring-inset",
+            "before:absolute before:top-1/2 before:left-0 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-primary before:transition-all before:duration-150",
           ],
           isMatch &&
             !isActive &&
@@ -301,7 +307,7 @@ function SidebarTreeNode({
         <button
           onClick={handleExpandClick}
           className={cn(
-            "hover:bg-muted-foreground/20 flex h-5 w-5 items-center justify-center rounded transition-transform duration-200",
+            "flex h-5 w-5 items-center justify-center rounded transition-transform duration-200 hover:bg-muted-foreground/20",
             !hasChildren && "invisible",
             isExpanded && "rotate-0",
           )}
@@ -363,7 +369,7 @@ function SidebarTreeNode({
         {(location.totalItemCount ?? 0) > 0 && (
           <div
             className={cn(
-              "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium transition-colors",
+              "flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-[10px] transition-colors",
               isActive
                 ? "bg-primary/20 text-primary"
                 : "bg-muted text-muted-foreground group-hover:bg-muted/80",

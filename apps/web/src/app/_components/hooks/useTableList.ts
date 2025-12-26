@@ -2,8 +2,8 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useTableState } from "../data-table/useTableState";
-import { type PaginationState } from "@tanstack/react-table";
-import { type ColumnFiltersState } from "@tanstack/react-table";
+import type { PaginationState } from "@tanstack/react-table";
+import type { ColumnFiltersState } from "@tanstack/react-table";
 
 interface TableStateOptions {
   initialSort?: string;
@@ -24,7 +24,7 @@ type TRPCQueryOptionsFn<TFilters> = (params: {
   sort: { orderBy: string; direction: "asc" | "desc" };
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: intentional
 }) => any;
 
 export interface UseTableListOptions<TFilters> {

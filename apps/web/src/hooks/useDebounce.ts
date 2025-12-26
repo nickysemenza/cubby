@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 
 // Exclude function types - useDebounce is for values, not callbacks
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+// biome-ignore lint/complexity/noBannedTypes: intentional use of Function type for exclusion
 type NonFunction<T> = T extends Function ? never : T;
 
 /**

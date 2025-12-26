@@ -7,11 +7,11 @@
 import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { amount } from "~/codec/codec";
-import {
-  type ProductId,
-  type LocationId,
-  type IngredientId,
-  type RecipeId,
+import type {
+  ProductId,
+  LocationId,
+  IngredientId,
+  RecipeId,
 } from "./identifiers";
 
 /**

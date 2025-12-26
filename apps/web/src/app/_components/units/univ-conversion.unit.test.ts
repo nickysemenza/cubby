@@ -6,10 +6,10 @@ import {
   createEmptyNutrients,
   calculateTotals,
 } from "./univ-conversion";
-import { type Amount } from "~/codec/codec";
-import { type UnitMapping } from "~/schemas/unitmapping";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { SectionIngredientOut } from "~/schemas/recipe";
+import type { Amount } from "~/codec/codec";
+import type { UnitMapping } from "~/schemas/unitmapping";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { SectionIngredientOut } from "~/schemas/recipe";
 import { unsafeProductId, unsafeIngredientId } from "~/schemas/identifiers";
 import { ensureWasm } from "~/lib/wasm";
 

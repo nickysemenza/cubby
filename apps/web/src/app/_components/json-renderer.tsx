@@ -1,6 +1,6 @@
 "use client";
 
-import { JSX } from "react";
+import type { JSX } from "react";
 import { JsonEditor } from "json-edit-react";
 
 const JsonRenderer = ({

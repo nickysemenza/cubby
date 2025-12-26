@@ -2,7 +2,7 @@
  * Location path utilities.
  */
 
-import { type LocationType } from "~/schemas/location";
+import type { LocationType } from "~/schemas/location";
 
 /**
  * Get the default location type for a given depth in the hierarchy.

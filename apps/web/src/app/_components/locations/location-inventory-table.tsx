@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { z } from "zod";
+import type { z } from "zod";
 import { useTRPC } from "~/trpc/react";
 import {
   createColumnHelper,
@@ -12,7 +12,7 @@ import {
 } from "@tanstack/react-table";
 import { ProductPillLink } from "../EntityPill";
 import { showAmountAndPrice } from "../inventory/format-amount";
-import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { buildSelectColumn } from "../data-table/row-selection";
 import { Button } from "~/components/ui/button";
 import {
@@ -43,7 +43,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
-import { type LocationId } from "~/schemas/identifiers";
+import type { LocationId } from "~/schemas/identifiers";
 import { NoneState } from "../NoneState";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -165,14 +165,14 @@ export function LocationInventoryTable({
 
           return (
             <button
-              className="hover:bg-muted flex items-center gap-1 rounded px-2 py-1 text-left"
+              className="flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
               onClick={() => {
                 setEditingRowId(item.id);
                 setEditingAmount(item.amount);
               }}
             >
               {showAmountAndPrice(info.getValue(), item.product.unitMappings)}
-              <Pencil className="text-muted-foreground ml-1 h-3 w-3 opacity-0 group-hover:opacity-100" />
+              <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
             </button>
           );
         },
@@ -262,8 +262,8 @@ export function LocationInventoryTable({
     <div className="space-y-2">
       {/* Bulk actions bar */}
       {selectedItems.length > 0 && (
-        <div className="bg-muted flex items-center justify-between rounded-lg p-3">
-          <span className="text-sm font-medium">
+        <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+          <span className="font-medium text-sm">
             {selectedItems.length} item{selectedItems.length !== 1 ? "s" : ""}{" "}
             selected
           </span>

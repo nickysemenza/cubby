@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import type React from "react";
+import { useMemo, useState } from "react";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { SectionIngredientOut, type RecipeOut } from "~/schemas/recipe";
+import type { SectionIngredientOut, RecipeOut } from "~/schemas/recipe";
 import { RecipeIngredientList } from "./recipeingredientlist";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import EntityImageList from "../EntityImageList";
 import { useTRPCClient } from "~/trpc/react";
 import { AuditLogList } from "../audit-log/audit-log-list";
@@ -31,10 +32,7 @@ const RecipeDetail: React.FC<{
   const [viewMode, setViewMode] = useState<ViewMode>("magazine");
 
   const ingredients: SectionIngredientOut[] = useMemo(
-    () =>
-      recipe.sections.flatMap((section) =>
-        section.ingredients.flatMap((i) => i),
-      ),
+    () => recipe.sections.flatMap((section) => section.ingredients.flat()),
     [recipe.sections],
   );
 
@@ -136,7 +134,7 @@ const RecipeDetail: React.FC<{
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
               <CardHeader className="bg-muted/50 px-4 py-3">
-                <CardTitle className="text-base font-medium">
+                <CardTitle className="font-medium text-base">
                   Cost Breakdown
                 </CardTitle>
               </CardHeader>
@@ -147,7 +145,7 @@ const RecipeDetail: React.FC<{
                     totalCost={totals?.price ?? 0}
                   />
                 ) : (
-                  <div className="text-muted-foreground flex h-[300px] items-center justify-center">
+                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">
                     Loading...
                   </div>
                 )}
@@ -155,7 +153,7 @@ const RecipeDetail: React.FC<{
             </Card>
             <Card>
               <CardHeader className="bg-muted/50 px-4 py-3">
-                <CardTitle className="text-base font-medium">
+                <CardTitle className="font-medium text-base">
                   Nutrition Breakdown
                 </CardTitle>
               </CardHeader>
@@ -163,7 +161,7 @@ const RecipeDetail: React.FC<{
                 {ingredientDataItems.length > 0 ? (
                   <MacroSunburst ingredients={ingredientDataItems} />
                 ) : (
-                  <div className="text-muted-foreground flex h-[300px] items-center justify-center">
+                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">
                     Loading...
                   </div>
                 )}
@@ -177,7 +175,7 @@ const RecipeDetail: React.FC<{
       {viewMode === "magazine" && recipeImages.length > 1 && (
         <Card>
           <CardHeader className="bg-muted/50 px-4 py-3">
-            <CardTitle className="text-base font-medium">More Images</CardTitle>
+            <CardTitle className="font-medium text-base">More Images</CardTitle>
           </CardHeader>
           <CardContent className="p-4">
             <EntityImageList images={recipeImages.slice(1)} />
@@ -188,7 +186,7 @@ const RecipeDetail: React.FC<{
       {/* History Section */}
       <Card>
         <CardHeader className="bg-muted/50 px-4 py-3">
-          <CardTitle className="text-base font-medium">History</CardTitle>
+          <CardTitle className="font-medium text-base">History</CardTitle>
         </CardHeader>
         <CardContent className="p-4">
           <AuditLogList

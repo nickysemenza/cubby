@@ -19,7 +19,7 @@ import {
 import Link from "next/link";
 import { entities } from "~/entities/entities";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 /** Aggregate unit mappings from all products for an ingredient */
 async function getIngredientMappings(
@@ -116,7 +116,7 @@ export function IngredientList() {
             />
             <label
               htmlFor="missingProductsOnly"
-              className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              className="font-medium text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
               Missing Products Only
             </label>

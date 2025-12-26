@@ -1,6 +1,6 @@
 "use client";
 
-import { type RecipeOut } from "~/schemas/recipe";
+import type { RecipeOut } from "~/schemas/recipe";
 import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
 import { wasm } from "~/lib/wasm";
 
@@ -11,14 +11,14 @@ export const NYTView: React.FC<{
     <div className="container mx-auto">
       <div className="flex flex-col pt-2 md:flex-row">
         <div className="md:w-5/12">
-          <hr className="border-t-4 border-black" />
-          <div className="text-m justify-end font-serif font-bold text-black uppercase">
+          <hr className="border-black border-t-4" />
+          <div className="justify-end font-bold font-serif text-black text-m uppercase">
             Ingredients
           </div>
           {recipe.sections.map((section) =>
             section.ingredients.map((i) => (
               <div key={i.id} className="flex flex-row justify-center py-1">
-                <div className="text-muted-foreground flex w-1/2 justify-end pr-1 font-light">
+                <div className="flex w-1/2 justify-end pr-1 font-light text-muted-foreground">
                   {i.amounts
                     .filter(
                       (a) =>
@@ -33,14 +33,14 @@ export const NYTView: React.FC<{
           )}
         </div>
         <div className="pl-8 md:w-9/12">
-          <hr className="border-t-4 border-black" />
-          <div className="text-m font-serif font-bold text-black uppercase">
+          <hr className="border-black border-t-4" />
+          <div className="font-bold font-serif text-black text-m uppercase">
             Instructions
           </div>
           {recipe.sections.map((section, x) =>
             section.instructions.map((i, y) => (
               <div key={y} className="py-2">
-                <div className="text-l font-bold">
+                <div className="font-bold text-l">
                   Step {getGlobalInstructionNumber(recipe, x, y)}
                 </div>
                 {i.instruction}

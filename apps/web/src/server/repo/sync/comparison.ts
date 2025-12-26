@@ -15,10 +15,10 @@ import {
   type InventorySyncItem,
   getDefaultResolution,
 } from "~/schemas/sync";
-import { type LocationCSVExportRow } from "~/server/repo/location/types";
-import { type LocationCSVRow } from "~/schemas/location";
-import { type InventoryCSVExportRow } from "~/server/repo/inventory/types";
-import { type InventoryCSVRow } from "~/schemas/inventory";
+import type { LocationCSVExportRow } from "~/server/repo/location/types";
+import type { LocationCSVRow } from "~/schemas/location";
+import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
+import type { InventoryCSVRow } from "~/schemas/inventory";
 
 /**
  * Common inventory row fields (snake_case → camelCase)
@@ -427,7 +427,6 @@ export function compareInventoryForSync(
 
         processedKeys.add(key);
         processedKeys.add(sheetKey);
-        continue;
       }
     }
   }
@@ -738,9 +737,7 @@ export const syncItemsToInventoryCSVRows = (
   useAppData = false,
 ): InventoryCSVRow[] =>
   items
-    .filter((i) =>
-      useAppData ? i.appData : i.sheetData && i.sheetData.productName,
-    )
+    .filter((i) => (useAppData ? i.appData : i.sheetData?.productName))
     .map((i) =>
       useAppData
         ? inventoryAppDataToCSVRow(i.appData!)

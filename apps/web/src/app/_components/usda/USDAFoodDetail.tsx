@@ -3,9 +3,9 @@
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { NutritionInfoTable } from "./nutrition";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
-import { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
+import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { ProductPillLink } from "../EntityPill";
-import { DetailPage, DetailSection } from "../data-table/detail-page";
+import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { NutrientsSummary } from "../units/NutrientsSummary";
@@ -60,7 +60,7 @@ export const USDAFoodDetail: React.FC<{
   const ingredientsSection = brandedFoodInfo?.ingredients ? (
     <div>
       <h3 className="mb-3">Ingredients</h3>
-      <div className="text-sm whitespace-pre-wrap">
+      <div className="whitespace-pre-wrap text-sm">
         {brandedFoodInfo.ingredients}
       </div>
     </div>

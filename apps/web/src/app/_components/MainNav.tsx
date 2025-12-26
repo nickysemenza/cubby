@@ -126,7 +126,7 @@ export function MainNav({
       <Link href="/">
         <FlexContainer align="center" gap={3}>
           <PackageOpen />
-          <span className="self-center text-2xl font-semibold whitespace-nowrap dark:text-white">
+          <span className="self-center whitespace-nowrap font-semibold text-2xl dark:text-white">
             recipehub
           </span>
         </FlexContainer>
@@ -143,7 +143,7 @@ export function MainNav({
         <Link
           href="/"
           className={cn(
-            "hover:text-primary text-sm font-medium transition-colors",
+            "font-medium text-sm transition-colors hover:text-primary",
             pathName !== "/" && "text-muted-foreground",
           )}
           aria-current={pathName === "/" ? "page" : undefined}
@@ -154,7 +154,7 @@ export function MainNav({
         <Link
           href="/products"
           className={cn(
-            "hover:text-primary text-sm font-medium transition-colors",
+            "font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/products") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/products") ? "page" : undefined}
@@ -167,7 +167,7 @@ export function MainNav({
         <Link
           href="/locations"
           className={cn(
-            "hover:text-primary text-sm font-medium transition-colors",
+            "font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/locations") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/locations") ? "page" : undefined}
@@ -178,7 +178,7 @@ export function MainNav({
         <Link
           href="/inventory"
           className={cn(
-            "hover:text-primary text-sm font-medium transition-colors",
+            "font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/inventory") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/inventory") ? "page" : undefined}
@@ -227,7 +227,7 @@ export function MainNav({
         </Button>
 
         {!session.data?.user ? (
-          <Link href="/auth/sign-in" className="text-sm font-medium">
+          <Link href="/auth/sign-in" className="font-medium text-sm">
             Sign In
           </Link>
         ) : (
@@ -253,7 +253,7 @@ export function MainNav({
             <nav className="flex flex-col space-y-4 p-4">
               {/* Theme Toggle for Mobile */}
               <div className="flex items-center justify-between p-2">
-                <span className="text-base font-medium">Theme</span>
+                <span className="font-medium text-base">Theme</span>
                 <ThemeToggle />
               </div>
 
@@ -293,9 +293,9 @@ export function MainNav({
                       <Link
                         href={item.href}
                         className={cn(
-                          "hover:text-primary p-2 text-base font-medium transition-colors",
+                          "p-2 font-medium text-base transition-colors hover:text-primary",
                           !active && "text-muted-foreground",
-                          active && "bg-muted rounded",
+                          active && "rounded bg-muted",
                         )}
                         aria-current={active ? "page" : undefined}
                       />

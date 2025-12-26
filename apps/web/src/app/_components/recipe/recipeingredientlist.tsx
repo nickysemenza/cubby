@@ -6,10 +6,10 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { SectionIngredientOut } from "~/schemas/recipe";
+import type { SectionIngredientOut } from "~/schemas/recipe";
 import RTable from "../data-table/Table";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { renderValueOrError } from "~/misc/result";
@@ -153,7 +153,7 @@ export const RecipeIngredientList: React.FC<{
         }
 
         const row = props.row.original;
-        let id: string | undefined = undefined;
+        let id: string | undefined;
 
         if (row.type === "ingredient") {
           id = row.ingredient.id;

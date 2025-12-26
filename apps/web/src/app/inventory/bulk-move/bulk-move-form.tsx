@@ -25,7 +25,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { ArrowRight, Package } from "lucide-react";
 import { toast } from "sonner";
-import { type InventoryId } from "~/schemas/identifiers";
+import type { InventoryId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -34,8 +34,8 @@ import {
   FormWrapper,
 } from "~/app/_components/form-utils";
 import { getLocationId } from "~/schemas/form-fields";
-import { type BulkMoveItem } from "~/schemas/inventory";
-import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { BulkMoveItem } from "~/schemas/inventory";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 
 type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut
@@ -260,7 +260,7 @@ export default function BulkMoveForm() {
             searchType="location"
           />
         </div>
-        <ArrowRight className="text-muted-foreground mb-2 h-6 w-6" />
+        <ArrowRight className="mb-2 h-6 w-6 text-muted-foreground" />
         <div className="flex-1">
           <ComboboxFieldWithSearch
             form={form}
@@ -275,7 +275,7 @@ export default function BulkMoveForm() {
       {sourceLocation && (
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-medium">
+            <h3 className="font-medium text-lg">
               Items at {sourceLocation.name}
             </h3>
             {moveItems.length > 0 && (
@@ -295,7 +295,7 @@ export default function BulkMoveForm() {
           {moveItems.length > 0 ? (
             <div className="space-y-2">
               {/* Header */}
-              <div className="text-muted-foreground flex items-center gap-4 border-b pb-2 text-sm font-medium">
+              <div className="flex items-center gap-4 border-b pb-2 font-medium text-muted-foreground text-sm">
                 <div className="w-8"></div>
                 <div className="flex-1">Product</div>
                 <div className="w-32 text-right">Available</div>
@@ -315,10 +315,10 @@ export default function BulkMoveForm() {
                     onCheckedChange={() => toggleItemSelection(index)}
                   />
                   <div className="flex flex-1 items-center gap-2">
-                    <Package className="text-muted-foreground h-4 w-4" />
+                    <Package className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">{item.productName}</span>
                   </div>
-                  <div className="text-muted-foreground w-32 text-right">
+                  <div className="w-32 text-right text-muted-foreground">
                     {item.currentQuantity} {item.unit}
                   </div>
                   <div className="flex w-40 items-center gap-2">
@@ -345,14 +345,14 @@ export default function BulkMoveForm() {
               ))}
             </div>
           ) : (
-            <div className="text-muted-foreground py-8 text-center">
+            <div className="py-8 text-center text-muted-foreground">
               No inventory items at this location.
             </div>
           )}
 
           {/* Selection summary */}
           {selectedItems.length > 0 && (
-            <div className="bg-muted mt-4 rounded-lg p-4">
+            <div className="mt-4 rounded-lg bg-muted p-4">
               <h4 className="mb-2 font-medium">Move Summary</h4>
               <p className="text-muted-foreground text-sm">
                 {selectedItems.length} item

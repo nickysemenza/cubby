@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { findOrCreateIngredient, mergeIngredients } from "./ingredient";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
 import { insertCompactRecipe } from "~/server/repo/recipe";
 import {
@@ -9,7 +9,7 @@ import {
   unsafeUserId,
   unsafeOrganizationId,
 } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 import { getDb, withTransaction } from "./database-helpers";
 import { ingredient } from "~/server/db/schema";
 import { eq, count } from "drizzle-orm";

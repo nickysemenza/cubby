@@ -14,7 +14,7 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { DataTablePagination } from "./data-table-pagination";
 import { Button } from "~/components/ui/button";
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { SpacedContainer } from "~/components/layout/spaced-container";
 import { Spinner } from "~/components/ui/spinner";
 import { Empty, EmptyTitle, EmptyDescription } from "~/components/ui/empty";

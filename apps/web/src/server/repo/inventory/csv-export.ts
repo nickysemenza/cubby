@@ -1,4 +1,4 @@
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import {
   type OrganizationId,
   type LocationId,
@@ -14,7 +14,7 @@ import {
   serializeUnitMappings,
 } from "~/schemas/price-mapping-utils";
 import { joinImageUrls } from "~/lib/image-utils";
-import { type InventoryCSVExportRow, type ProductExportFields } from "./types";
+import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 
 /**
  * Build common product export fields from a product with unit mappings and ingredient

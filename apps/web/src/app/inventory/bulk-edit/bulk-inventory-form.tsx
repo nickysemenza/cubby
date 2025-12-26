@@ -11,7 +11,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { X, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { InventoryBulkOperationItem } from "~/schemas/inventory";
+import type { InventoryBulkOperationItem } from "~/schemas/inventory";
 import { unsafeInventoryId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -219,7 +219,7 @@ export default function BulkInventoryForm() {
       {selectedLocation && (
         <>
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-medium">
+            <h3 className="font-medium text-lg">
               Inventory for {selectedLocation.name}
             </h3>
             <Button type="button" onClick={addInventoryItem} size="sm">
@@ -264,7 +264,7 @@ export default function BulkInventoryForm() {
                 </div>
               ))
             ) : (
-              <div className="text-muted-foreground py-4 text-center">
+              <div className="py-4 text-center text-muted-foreground">
                 No inventory items yet.
               </div>
             )}

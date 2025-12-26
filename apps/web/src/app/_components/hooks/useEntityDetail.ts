@@ -1,12 +1,12 @@
 "use client";
 
-import { type Entity } from "~/entities/types";
+import type { Entity } from "~/entities/types";
 import { entities } from "~/entities/entities";
 import { useEditMode, type UseEditModeReturn } from "./useEditMode";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { type DetailSection } from "../data-table/detail-page";
-import { type UnitMapping } from "~/schemas/unitmapping";
-import { type AuditEntityType } from "~/server/repo/audit-log";
+import type { DetailSection } from "../data-table/detail-page";
+import type { UnitMapping } from "~/schemas/unitmapping";
+import type { AuditEntityType } from "~/server/repo/audit-log";
 import EntityImageList from "../EntityImageList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { AuditLogList } from "../audit-log/audit-log-list";

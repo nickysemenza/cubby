@@ -1,5 +1,5 @@
-import { type z } from "zod";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { z } from "zod";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 import { parseWithContext } from "~/lib/zod-utils";
 import {
@@ -12,7 +12,7 @@ import {
   unsafeProductId,
   unsafeLocationId,
 } from "~/schemas/identifiers";
-import { type InventoryEntryDeepDB } from "./types";
+import type { InventoryEntryDeepDB } from "./types";
 
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,

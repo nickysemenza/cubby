@@ -1,6 +1,6 @@
 "use client";
 import { Badge } from "~/components/ui/badge";
-import { type InfLocation } from "~/schemas/location";
+import type { InfLocation } from "~/schemas/location";
 import { getLocationIcon, LocationIcon } from "./location-icons";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
@@ -131,13 +131,13 @@ function LocationCard({
   if (hasInventory && inventoryData?.items) {
     details.push(
       <div key="recent-items" className="space-y-1">
-        <div className="text-muted-foreground text-xs font-medium">
+        <div className="font-medium text-muted-foreground text-xs">
           Recent items:
         </div>
         <div className="space-y-1">
           {inventoryData.items.slice(0, 2).map((item) => (
             <div key={item.id} className="flex items-center gap-1 text-xs">
-              <div className="bg-primary h-1 w-1 rounded-full" />
+              <div className="h-1 w-1 rounded-full bg-primary" />
               <ProductPillLink product={item.product} />
             </div>
           ))}
@@ -155,7 +155,7 @@ function LocationCard({
   if (hasChildren && location.children) {
     details.push(
       <div key="children-preview" className="space-y-1">
-        <div className="text-muted-foreground text-xs font-medium">
+        <div className="font-medium text-muted-foreground text-xs">
           Contains:
         </div>
         <div className="flex flex-wrap gap-1">
@@ -179,7 +179,7 @@ function LocationCard({
 
   // Create footer with timestamp
   const footer = location.lastBulkInventory ? (
-    <div className="text-muted-foreground flex items-center gap-1 text-xs">
+    <div className="flex items-center gap-1 text-muted-foreground text-xs">
       <Calendar size={10} />
       <span>
         Updated{" "}

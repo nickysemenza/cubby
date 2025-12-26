@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState, useCallback } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
-import { type IngredientDataItem } from "~/app/_components/units/univ-conversion";
+import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
 import { formatCurrency } from "~/lib/utils";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
@@ -183,7 +183,7 @@ function Treemap({ data }: TreemapProps) {
                 >
                   <div className="flex h-full flex-col overflow-hidden">
                     <div
-                      className={`text-xs font-medium ${
+                      className={`font-medium text-xs ${
                         node.data.hasPrice ? "text-white" : "text-slate-600"
                       }`}
                       style={{
@@ -199,13 +199,13 @@ function Treemap({ data }: TreemapProps) {
                           style={{ pointerEvents: "auto" }}
                         >
                           {node.data.name.length > 20
-                            ? node.data.name.slice(0, 18) + "..."
+                            ? `${node.data.name.slice(0, 18)}...`
                             : node.data.name}
                         </Link>
                       ) : (
                         <span>
                           {node.data.name.length > 20
-                            ? node.data.name.slice(0, 18) + "..."
+                            ? `${node.data.name.slice(0, 18)}...`
                             : node.data.name}
                         </span>
                       )}
@@ -248,9 +248,9 @@ function HoverTooltip({
   if (!node) return null;
 
   return (
-    <div className="bg-popover pointer-events-none absolute top-4 left-4 z-50 rounded-md px-3 py-2 text-sm shadow-lg">
+    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
       <div className="font-medium">{node.data.name}</div>
-      <div className="text-muted-foreground mt-1">
+      <div className="mt-1 text-muted-foreground">
         {node.data.hasPrice ? (
           <>
             <div>Cost: {formatCurrency(node.data.value, 2)}</div>

@@ -167,7 +167,7 @@ function Sunburst({ data }: SunburstProps) {
                     transform={`rotate(${labelPos.rotation}, ${labelPos.x}, ${labelPos.y})`}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className={`pointer-events-none text-[10px] font-medium ${
+                    className={`pointer-events-none font-medium text-[10px] ${
                       node.data.totalCount === 0
                         ? "fill-slate-600"
                         : "fill-white"
@@ -175,7 +175,7 @@ function Sunburst({ data }: SunburstProps) {
                     style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
                   >
                     {node.data.name.length > 12
-                      ? node.data.name.slice(0, 10) + "..."
+                      ? `${node.data.name.slice(0, 10)}...`
                       : node.data.name}
                   </text>
                 )}
@@ -188,7 +188,7 @@ function Sunburst({ data }: SunburstProps) {
           <text
             textAnchor="middle"
             dominantBaseline="middle"
-            className="fill-foreground text-sm font-medium"
+            className="fill-foreground font-medium text-sm"
           >
             {hoveredNode ? hoveredNode.data.name : `${data.totalCount} items`}
           </text>
@@ -216,7 +216,7 @@ function HoverTooltip({
   node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>;
 }) {
   return (
-    <div className="bg-popover pointer-events-none absolute top-4 left-4 z-50 rounded-md px-3 py-2 text-sm shadow-lg">
+    <div className="pointer-events-none absolute top-4 left-4 z-50 rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
         <Link
@@ -227,7 +227,7 @@ function HoverTooltip({
           {node.data.name}
         </Link>
       </div>
-      <div className="text-muted-foreground mt-1 space-y-0.5">
+      <div className="mt-1 space-y-0.5 text-muted-foreground">
         <div>Type: {node.data.type}</div>
         <div>
           Items: {node.data.directCount} direct / {node.data.totalCount} total

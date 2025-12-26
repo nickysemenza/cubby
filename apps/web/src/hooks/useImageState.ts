@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { PendingImage } from "~/app/_components/PendingImageUpload";
-import { type UpdateInputImages } from "~/schemas/image";
+import type { PendingImage } from "~/app/_components/PendingImageUpload";
+import type { UpdateInputImages } from "~/schemas/image";
 
 /**
  * Custom hook for managing image state in forms (both pending uploads and removed images).

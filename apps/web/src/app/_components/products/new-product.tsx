@@ -1,6 +1,6 @@
 "use client";
 import { ProductForm } from "./product-form";
-import { type ProductInputPayload } from "~/schemas/product";
+import type { ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useEntityCreateMode } from "../hooks/useEntityMode";

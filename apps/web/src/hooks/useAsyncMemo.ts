@@ -85,7 +85,7 @@ export function useAsyncMemo<T>(
     return () => {
       signal.cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // biome-ignore lint/correctness/useExhaustiveDependencies: deps intentionally passed as variable for dynamic dependency list
   }, deps);
 
   return value;

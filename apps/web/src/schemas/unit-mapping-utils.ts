@@ -1,6 +1,6 @@
-import { UnitMapping } from "./unitmapping";
+import type { UnitMapping } from "./unitmapping";
 import {
-  FoodSummary,
+  type FoodSummary,
   branded_food_serving_size_unit,
   type BrandedFoodServingSizeUnit,
   getNutrientUnit,
@@ -26,10 +26,11 @@ const normalizeBrandedFoodServingSizeUnit = (
     case "MG":
     case "ml":
       return unit;
-    default:
+    default: {
       // Use assertNever for exhaustive checking
       const _exhaustive: never = unit;
       return _exhaustive;
+    }
   }
 };
 

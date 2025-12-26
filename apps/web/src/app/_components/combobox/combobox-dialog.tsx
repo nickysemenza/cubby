@@ -4,7 +4,7 @@ import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
-import { type ComboboxItem } from "./combobox-types";
+import type { ComboboxItem } from "./combobox-types";
 import useDebounce from "~/hooks/useDebounce";
 
 /**
@@ -132,7 +132,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
       </Button>
 
       {open && (
-        <div className="bg-popover animate-in fade-in-0 zoom-in-95 absolute z-[200] mt-1 w-full max-w-[400px] min-w-[200px] rounded-md border shadow-md">
+        <div className="fade-in-0 zoom-in-95 absolute z-[200] mt-1 w-full min-w-[200px] max-w-[400px] animate-in rounded-md border bg-popover shadow-md">
           <div className="flex h-9 items-center gap-2 border-b px-3">
             <input
               ref={inputRef}
@@ -149,7 +149,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
 
           <div className="max-h-[300px] overflow-y-auto">
             {isLoading ? (
-              <div className="text-muted-foreground px-3 py-6 text-center text-sm">
+              <div className="px-3 py-6 text-center text-muted-foreground text-sm">
                 Loading...
               </div>
             ) : items.length === 0 ? (
@@ -185,7 +185,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                     variant="ghost"
                     type="button" // Explicitly mark as a button type to prevent form submission
                     className={cn(
-                      "hover:bg-accent hover:text-accent-foreground relative flex w-full cursor-default items-center justify-start rounded-sm px-2 py-1.5 text-left text-sm outline-none",
+                      "relative flex w-full cursor-default items-center justify-start rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                       value?.id === result.id &&
                         "bg-accent text-accent-foreground",
                     )}

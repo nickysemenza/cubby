@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { amount } from "~/codec/codec";
 import { recipeTopLevel } from "~/schemas/recipe";
-import { type PendingImage } from "../../PendingImageUpload";
-import { type ImageOut } from "~/schemas/image";
+import type { PendingImage } from "../../PendingImageUpload";
+import type { ImageOut } from "~/schemas/image";
 import { ComboboxItem } from "../../combobox/combobox-types";
 
 const ingItem = z.discriminatedUnion("type", [
@@ -70,7 +70,7 @@ interface EditRecipeFormProps {
 export type RecipeFormProps = CreateRecipeFormProps | EditRecipeFormProps;
 
 // Import types from schema
-import {
+import type {
   RecipeCreateInput,
   RecipeUpdateInput,
   RecipeOut,

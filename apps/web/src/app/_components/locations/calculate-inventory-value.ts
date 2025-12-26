@@ -1,7 +1,7 @@
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import { convertAmountToPrice } from "~/app/_components/units/univ-conversion";
-import { type z } from "zod";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { z } from "zod";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { isMiscProduct } from "~/lib/constants";
 
 export type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;

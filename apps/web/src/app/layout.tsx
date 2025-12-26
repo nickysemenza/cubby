@@ -1,7 +1,7 @@
 import "~/styles/globals.css";
 import "@daveyplate/better-auth-ui/css";
 
-import { type Metadata } from "next";
+import type { Metadata } from "next";
 import { TRPCReactProvider } from "~/trpc/react";
 import { MainNav } from "./_components/MainNav";
 import { GlobalCommandMenu } from "./_components/command-menu";

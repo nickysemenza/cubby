@@ -1,4 +1,4 @@
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 // Field names that typically contain the entity title
 const TITLE_FIELDS = ["name", "filename"] as const;

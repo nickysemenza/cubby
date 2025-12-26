@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
-import { type locationOutWithParentChildrenAndInventoryOut } from "./combo";
+import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 import { inventoryId, locationId, productId } from "./identifiers";
 

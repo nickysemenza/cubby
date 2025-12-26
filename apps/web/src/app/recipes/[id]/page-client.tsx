@@ -1,6 +1,6 @@
 "use client";
 
-import { RecipeOut } from "~/schemas/recipe";
+import type { RecipeOut } from "~/schemas/recipe";
 import { useSearchParams } from "next/navigation";
 import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
@@ -32,7 +32,7 @@ export default function RecipePageClient({ recipe }: RecipePageClientProps) {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">{recipe.name}</h1>
+        <h1 className="font-bold text-2xl">{recipe.name}</h1>
         {!isEditing ? (
           <Button onClick={startEditing} variant="outline" size="sm">
             <Edit className="mr-2 h-4 w-4" />

@@ -5,13 +5,13 @@ import {
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
+import type { ActorContext } from "../src/schemas/context";
 import {
+  type OrganizationId,
   unsafeOrganizationId,
   unsafeUserId,
-  type OrganizationId,
 } from "../src/schemas/identifiers";
-import { type Database } from "../src/server/db/database";
-import { type ActorContext } from "../src/schemas/context";
+import type { Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
 
 const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
@@ -121,20 +121,20 @@ const remapDBConfig = (
 // CSV Seed Helper
 // ============================================================================
 
+import {
+  type InventoryId,
+  inventoryId as inventoryIdSchema,
+  type LocationId,
+  locationId as locationIdSchema,
+  type ProductId,
+  productId as productIdSchema,
+} from "../src/schemas/identifiers";
 // NOTE: We use dynamic imports for repo modules to avoid loading env.js
 // during vitest globalSetup phase (before test.env variables are applied)
-import {
-  type InventoryCSVRow,
-  type CSVImportResult,
+import type {
+  CSVImportResult,
+  InventoryCSVRow,
 } from "../src/schemas/inventory";
-import {
-  type ProductId,
-  type LocationId,
-  type InventoryId,
-  productId as productIdSchema,
-  locationId as locationIdSchema,
-  inventoryId as inventoryIdSchema,
-} from "../src/schemas/identifiers";
 
 export interface SeedResult {
   /** Import result with counts and per-row details */
@@ -173,10 +173,12 @@ export async function seedFromCSV(
   actor: ActorContext,
 ): Promise<SeedResult> {
   // Dynamic import to avoid loading env.js during globalSetup
-  const { importInventoryFromCSV, inventoryentryList } =
-    await import("../src/server/repo/inventory");
-  const { findOrCreateLocationByName } =
-    await import("../src/server/repo/location");
+  const { importInventoryFromCSV, inventoryentryList } = await import(
+    "../src/server/repo/inventory"
+  );
+  const { findOrCreateLocationByName } = await import(
+    "../src/server/repo/location"
+  );
 
   // Auto-create any locations referenced in the rows
   const uniqueLocationNames = [
@@ -271,6 +273,6 @@ export async function seedFromCSV(
   return { result, productIds, locationIds, inventoryIds };
 }
 
+export type { OrganizationId } from "../src/schemas/identifiers";
 // Re-export types for convenience
 export type { InventoryCSVRow } from "../src/schemas/inventory";
-export type { OrganizationId } from "../src/schemas/identifiers";

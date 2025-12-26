@@ -1,4 +1,4 @@
-import { type Entity, type EntityDefinition } from "./types";
+import type { Entity, EntityDefinition } from "./types";
 
 export const entities: Record<Entity, EntityDefinition> = {
   ingredient: {

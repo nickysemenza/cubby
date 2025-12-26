@@ -4,24 +4,24 @@
  * Handles processing a single CSV row, both for dry-run preview and actual execution.
  */
 
-import { type Database } from "~/server/db";
-import {
-  type OrganizationId,
-  type LocationId,
-  type ProductId,
+import type { Database } from "~/server/db";
+import type {
+  OrganizationId,
+  LocationId,
+  ProductId,
 } from "~/schemas/identifiers";
-import {
-  type InventoryCSVRow,
-  type CSVImportResultItem,
-  type ProductChangesPreview,
+import type {
+  InventoryCSVRow,
+  CSVImportResultItem,
+  ProductChangesPreview,
 } from "~/schemas/inventory";
-import { type FieldChange } from "~/schemas/csv";
+import type { FieldChange } from "~/schemas/csv";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import {
   findLocationByName,
   findOrCreateLocationByName,
 } from "~/server/repo/location";
-import { type ProductTopLevelOut } from "~/schemas/product";
+import type { ProductTopLevelOut } from "~/schemas/product";
 import {
   findOrCreateProductForImport,
   previewProductForImport,
@@ -40,7 +40,7 @@ import {
   getExistingInventoryLocations,
   checkInventoryMatch,
 } from "./inventory-handler";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 interface RowProcessorContext {
   db: Database;

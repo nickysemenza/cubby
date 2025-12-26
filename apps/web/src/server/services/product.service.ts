@@ -1,5 +1,5 @@
-import { type Database } from "~/server/db";
-import { USDAClient } from "../clients/usda";
+import type { Database } from "~/server/db";
+import type { USDAClient } from "../clients/usda";
 import {
   getProductByID as getProductByIDRepo,
   productList as productListRepo,
@@ -7,14 +7,14 @@ import {
   updateProduct as updateProductRepo,
   foodLookupParamFromProduct,
 } from "../repo/product";
-import { type ProductInputPayload } from "~/schemas/product";
-import { type SortParams, type PaginationParams } from "~/schemas/pagination";
+import type { ProductInputPayload } from "~/schemas/product";
+import type { SortParams, PaginationParams } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
-import { z } from "zod";
-import { type ProductId, type OrganizationId } from "~/schemas/identifiers";
+import type { z } from "zod";
+import type { ProductId, OrganizationId } from "~/schemas/identifiers";
 import { batchEnrichWithFood } from "./usda-helpers";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 // Extended schema that includes food data
 export const productWithFoodOut =

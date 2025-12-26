@@ -1,13 +1,13 @@
 "use client";
 
-import { type FC } from "react";
+import type { FC } from "react";
 import { type DetailSection, DetailPage } from "../data-table/detail-page";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { NutritionInfoTable } from "../usda/nutrition";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { IngredientForm } from "./ingredient-form";
-import { type IngredientUpdateInput } from "~/schemas/ingredient";
+import type { IngredientUpdateInput } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent } from "~/components/ui/card";
 import { UnitMappingsTable } from "../units/unitmappingstable";
@@ -75,7 +75,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
           {
             title: "Nutrition Information",
             content: (
-              <div className="bg-muted rounded-md p-4">
+              <div className="rounded-md bg-muted p-4">
                 <NutritionInfoTable n={nutritionInfo} limit={10} />
               </div>
             ),

@@ -1,6 +1,6 @@
 "use client";
 import { LocationForm } from "./location-form";
-import { type LocationCreateInput, type LocationOut } from "~/schemas/location";
+import type { LocationCreateInput, LocationOut } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useEntityCreateMode } from "../hooks/useEntityMode";

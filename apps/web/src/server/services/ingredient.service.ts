@@ -1,5 +1,5 @@
-import { type Database } from "~/server/db";
-import { USDAClient } from "../clients/usda";
+import type { Database } from "~/server/db";
+import type { USDAClient } from "../clients/usda";
 import {
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
@@ -8,17 +8,17 @@ import {
   updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
 import { foodLookupParamFromProduct } from "../repo/product";
-import { ingredientBase } from "~/schemas/ingredient";
-import { type SortParams, type PaginationParams } from "~/schemas/pagination";
+import type { ingredientBase } from "~/schemas/ingredient";
+import type { SortParams, PaginationParams } from "~/schemas/pagination";
 import {
   ingredientWithRecipesAndProductOut,
   type ProductWithMappingsOut,
 } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import { type IngredientId, type OrganizationId } from "~/schemas/identifiers";
+import type { IngredientId, OrganizationId } from "~/schemas/identifiers";
 import { batchEnrichWithFood, batchEnrichNestedItems } from "./usda-helpers";
-import { type ActorContext } from "~/schemas/context";
+import type { ActorContext } from "~/schemas/context";
 
 // Extended schemas that include food data
 import { productTopLevelOut } from "~/schemas/product";

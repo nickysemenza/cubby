@@ -1,6 +1,6 @@
 "use client";
 
-import { type RouterOutputs } from "~/trpc/react";
+import type { RouterOutputs } from "~/trpc/react";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { Badge } from "~/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
@@ -21,7 +21,7 @@ import {
 import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { EntityPillById } from "../EntityPillById";
-import { type AuditEntityType } from "~/server/repo/audit-log";
+import type { AuditEntityType } from "~/server/repo/audit-log";
 import { ChangesList } from "../value-change";
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
@@ -120,8 +120,8 @@ export function AuditLogEntryComponent({
               />
             ) : (
               <>
-                <EntityIcon className="text-muted-foreground h-4 w-4 flex-shrink-0" />
-                <span className="text-sm font-medium">{entity.label}</span>
+                <EntityIcon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <span className="font-medium text-sm">{entity.label}</span>
               </>
             )}
 
@@ -145,13 +145,13 @@ export function AuditLogEntryComponent({
           </div>
 
           {/* Timestamp */}
-          <div className="text-muted-foreground mt-1 text-xs">
+          <div className="mt-1 text-muted-foreground text-xs">
             <HoverableTimestamp timestamp={entry.createdAt} />
           </div>
 
           {/* Changes (if any) */}
           {hasChanges && (
-            <CollapsibleTrigger className="text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1 text-xs transition-colors">
+            <CollapsibleTrigger className="mt-2 flex items-center gap-1 text-muted-foreground text-xs transition-colors hover:text-foreground">
               {isOpen ? (
                 <ChevronDown className="h-3 w-3" />
               ) : (
@@ -164,7 +164,7 @@ export function AuditLogEntryComponent({
 
           <CollapsibleContent className="mt-2">
             {entry.changes && (
-              <div className="bg-muted rounded-md p-2">
+              <div className="rounded-md bg-muted p-2">
                 <ChangesList
                   changes={
                     entry.changes as Record<

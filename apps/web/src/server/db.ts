@@ -4,7 +4,7 @@ import { neon } from "@neondatabase/serverless";
 import { Pool } from "pg";
 import { env } from "~/env";
 import * as schema from "./db/schema";
-import { type Database } from "./db/database";
+import type { Database } from "./db/database";
 import { instrumentDrizzle } from "@kubiks/otel-drizzle";
 
 // Re-export Database type for use throughout the application

@@ -26,7 +26,7 @@ import {
   type LocationType,
   type InfLocation,
 } from "~/schemas/location";
-import { type EmptyFilter } from "~/hooks/useGalleryViewState";
+import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { LocationIcon } from "./location-icons";
 
 interface GalleryHeaderProps {
@@ -60,10 +60,10 @@ export function GalleryHeader({
   return (
     <div className={cn("sticky top-0 z-10 border-b", className)}>
       {/* Stats + Breadcrumb row */}
-      <div className="bg-muted/30 flex min-h-[32px] items-center gap-3 border-b px-4 py-1">
+      <div className="flex min-h-[32px] items-center gap-3 border-b bg-muted/30 px-4 py-1">
         {/* Stats */}
         {stats && (
-          <div className="text-muted-foreground flex items-center gap-3 border-r pr-3 text-xs">
+          <div className="flex items-center gap-3 border-r pr-3 text-muted-foreground text-xs">
             <span className="flex items-center gap-1">
               <MapPin className="h-3 w-3" />
               {stats.locationCount} locations
@@ -77,17 +77,17 @@ export function GalleryHeader({
 
         {/* Breadcrumb */}
         <div className="flex flex-1 items-center gap-1 overflow-hidden">
-          <Home className="text-muted-foreground h-3 w-3 flex-shrink-0" />
+          <Home className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
           {breadcrumbPath.length > 0 ? (
             breadcrumbPath.map((loc, idx) => (
               <div key={loc.id} className="flex items-center gap-1">
-                <ChevronRight className="text-muted-foreground/50 h-3 w-3 flex-shrink-0" />
+                <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
                 <button
                   onClick={() => onBreadcrumbClick?.(loc.id)}
                   className={cn(
                     "flex items-center gap-1 rounded px-1 py-0.5 text-xs transition-colors",
                     idx === breadcrumbPath.length - 1
-                      ? "bg-primary/10 text-primary font-medium"
+                      ? "bg-primary/10 font-medium text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
@@ -97,7 +97,7 @@ export function GalleryHeader({
               </div>
             ))
           ) : (
-            <span className="text-muted-foreground ml-1 text-xs">
+            <span className="ml-1 text-muted-foreground text-xs">
               Scroll to see path
             </span>
           )}
@@ -105,10 +105,10 @@ export function GalleryHeader({
       </div>
 
       {/* Controls row */}
-      <div className="bg-background/95 supports-[backdrop-filter]:bg-background/60 flex flex-wrap items-center gap-2 px-4 py-2 backdrop-blur">
+      <div className="flex flex-wrap items-center gap-2 bg-background/95 px-4 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         {/* Search Input */}
         <div className="relative min-w-[180px] flex-1 md:max-w-xs">
-          <Search className="text-muted-foreground absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2" />
+          <Search className="absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search..."
             value={searchTerm}
@@ -118,7 +118,7 @@ export function GalleryHeader({
           {searchTerm && (
             <button
               onClick={() => onSearchChange("")}
-              className="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5"
+              className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -178,7 +178,7 @@ export function GalleryHeader({
               onTypeFilterChange(null);
               onEmptyFilterChange("all");
             }}
-            className="text-muted-foreground h-8 px-2 text-xs"
+            className="h-8 px-2 text-muted-foreground text-xs"
           >
             Clear
           </Button>

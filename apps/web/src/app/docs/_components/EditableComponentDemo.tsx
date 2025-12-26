@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import { JsonEditor } from "json-edit-react";
-import { z } from "zod";
+import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -36,7 +36,7 @@ export function EditableComponentDemo<T>({
   // Convert Zod schema to JSON Schema for validation hints
   const jsonSchema = useMemo(() => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // biome-ignore lint/suspicious/noExplicitAny: intentional
       return zodToJsonSchema(schema as any, { target: "jsonSchema7" });
     } catch {
       return undefined;
@@ -66,7 +66,7 @@ export function EditableComponentDemo<T>({
     <div className={cn("my-8", className)}>
       {/* Header */}
       <div className="mb-3 flex items-center gap-3">
-        <span className="inline-flex items-center rounded bg-green-100 px-2 py-1 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-400">
+        <span className="inline-flex items-center rounded bg-green-100 px-2 py-1 font-medium text-green-800 text-xs dark:bg-green-900/30 dark:text-green-400">
           Interactive
         </span>
         {title && <span className="font-medium">{title}</span>}
@@ -95,13 +95,13 @@ export function EditableComponentDemo<T>({
       </div>
 
       {description && (
-        <p className="text-muted-foreground mb-3 text-sm">{description}</p>
+        <p className="mb-3 text-muted-foreground text-sm">{description}</p>
       )}
 
       {/* JSON Editor (collapsible) */}
       {isEditing && (
         <div className="mb-4 overflow-hidden rounded-lg border">
-          <div className="bg-muted/50 border-b px-3 py-2 text-xs font-medium">
+          <div className="border-b bg-muted/50 px-3 py-2 font-medium text-xs">
             Sample Data (editable)
           </div>
           <div className="max-h-80 overflow-auto p-2">
@@ -118,7 +118,7 @@ export function EditableComponentDemo<T>({
             />
           </div>
           {error && (
-            <div className="border-t bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">
+            <div className="border-t bg-red-50 px-3 py-2 text-red-600 text-xs dark:bg-red-950/30 dark:text-red-400">
               Validation error: {error}
             </div>
           )}
@@ -126,7 +126,7 @@ export function EditableComponentDemo<T>({
       )}
 
       {/* Demo content */}
-      <div className="bg-card overflow-hidden rounded-lg border">
+      <div className="overflow-hidden rounded-lg border bg-card">
         <div className="p-6">{children(data)}</div>
       </div>
     </div>

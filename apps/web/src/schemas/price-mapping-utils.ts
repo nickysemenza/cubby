@@ -1,4 +1,4 @@
-import { type Amount } from "~/codec/codec";
+import type { Amount } from "~/codec/codec";
 import { wasmServer } from "~/lib/wasm";
 
 /**

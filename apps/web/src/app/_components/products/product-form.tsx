@@ -7,14 +7,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPCClient } from "~/trpc/react";
 import Image from "next/image";
-import {
-  type ProductInputPayload,
-  type ProductTopLevelOut,
+import type {
+  ProductInputPayload,
+  ProductTopLevelOut,
 } from "~/schemas/product";
 import { upc } from "@recipehub/usda-schemas";
 
 import { ndb } from "@recipehub/usda-schemas";
-import { type IngredientId } from "~/schemas/identifiers";
+import type { IngredientId } from "~/schemas/identifiers";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -32,7 +32,7 @@ import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
-import { type ImageOut } from "~/schemas/image";
+import type { ImageOut } from "~/schemas/image";
 import { Button } from "~/components/ui/button";
 import { Search, Loader2 } from "lucide-react";
 import { ComboboxItem } from "../combobox/combobox-types";
@@ -81,13 +81,14 @@ interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
 }
 
 // Props for edit mode
-interface EditProductFormProps extends EditModeProps<
-  {
-    id: string;
-    data: Partial<ProductInputPayload>;
-  },
-  ProductWithIngredient
-> {
+interface EditProductFormProps
+  extends EditModeProps<
+    {
+      id: string;
+      data: Partial<ProductInputPayload>;
+    },
+    ProductWithIngredient
+  > {
   entity: ProductWithIngredient;
 }
 
@@ -350,7 +351,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               </Button>
             </div>
             {lookupImageUrl && (
-              <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
                 <Image
                   src={lookupImageUrl}
                   alt="Product from UPC lookup"
@@ -408,7 +409,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <h5 className="text-sm font-medium">From</h5>
+                  <h5 className="font-medium text-sm">From</h5>
                   <AmountFieldGroup
                     form={form}
                     valuePath={`unitMappings.${index}.a.value`}
@@ -417,7 +418,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                 </div>
 
                 <div className="space-y-2">
-                  <h5 className="text-sm font-medium">To</h5>
+                  <h5 className="font-medium text-sm">To</h5>
                   <AmountFieldGroup
                     form={form}
                     valuePath={`unitMappings.${index}.b.value`}

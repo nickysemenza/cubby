@@ -18,16 +18,12 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
+    "@biomejs/biome": "^2.3.10",
     "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "4.0.15",
-    "eslint": "^9.39.2",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "prettier": "^3.7.4",
-    "prettier-plugin-tailwindcss": "^0.7.2",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0"
+    "typescript": "^5.9.3"
   },
   "pnpm": {
     "overrides": {
@@ -42,9 +38,8 @@
     }
   },
   "lint-staged": {
-    "apps/web/**/*.{ts,tsx,js,jsx,mdx}": [
-      "bash -c 'cd apps/web && eslint --fix \"$@\"' --",
-      "prettier --write"
+    "apps/web/**/*.{ts,tsx,js,jsx,mdx,json,css}": [
+      "bash -c 'cd apps/web && pnpm exec biome check --write --no-errors-on-unmatched \"$@\"' --"
     ],
     "apps/web/**/*.{ts,tsx}": [
       "bash -c 'cd apps/web && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"

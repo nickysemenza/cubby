@@ -1,10 +1,9 @@
 "use client";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { type Flatten } from "~/misc/array-helpers";
+import type { Flatten } from "~/misc/array-helpers";
 import { dataTypeEnum, type DataType } from "@recipehub/usda-schemas";
 import RTable from "../_components/data-table/Table";
-import React from "react";
 import { NoneState } from "../_components/NoneState";
 import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
@@ -77,7 +76,7 @@ export function USDAFoodList() {
               {brandedFood.brand_owner || <NoneState />}
             </div>
             {brandedFood.branded_food_category && (
-              <div className="text-muted-foreground truncate text-xs">
+              <div className="truncate text-muted-foreground text-xs">
                 {brandedFood.branded_food_category}
               </div>
             )}

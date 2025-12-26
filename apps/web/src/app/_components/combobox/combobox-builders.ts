@@ -1,13 +1,13 @@
-import { type ProductTopLevelOut } from "~/schemas/product";
-import { type LocationOut } from "~/schemas/location";
-import { type ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import { RecipeOut } from "~/schemas/recipe";
-import {
-  type ProductId,
-  type LocationId,
-  type IngredientId,
-  type RecipeId,
+import type { ProductTopLevelOut } from "~/schemas/product";
+import type { LocationOut } from "~/schemas/location";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import type { RecipeOut } from "~/schemas/recipe";
+import type {
+  ProductId,
+  LocationId,
+  IngredientId,
+  RecipeId,
 } from "~/schemas/identifiers";
 
 export const buildProductComboboxItem = (

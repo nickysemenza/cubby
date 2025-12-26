@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import fs from "fs";
-import path from "path";
-import { type Database } from "~/server/db";
+import fs from "node:fs";
+import path from "node:path";
+import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { type OrganizationId } from "~/schemas/identifiers";
-import { type ActorContext } from "~/schemas/context";
+import type { OrganizationId } from "~/schemas/identifiers";
+import type { ActorContext } from "~/schemas/context";
 import { parseInventoryCSV, parseLocationsCSV } from "./csv-utils";
 import { importInventoryFromCSV } from "~/server/repo/inventory";
 import {

@@ -1,7 +1,7 @@
 "use client";
 import { IngredientForm } from "./ingredient-form";
-import { z } from "zod";
-import { ingredientBase } from "~/schemas/ingredient";
+import type { z } from "zod";
+import type { ingredientBase } from "~/schemas/ingredient";
 import { useTRPC } from "~/trpc/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useEntityCreateMode } from "../hooks/useEntityMode";

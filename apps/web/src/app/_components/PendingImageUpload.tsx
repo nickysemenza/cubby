@@ -8,7 +8,7 @@ import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
 import { useTRPC } from "~/trpc/react";
-import { EntityImage } from "~/entities/types";
+import type { EntityImage } from "~/entities/types";
 import { X, Camera } from "lucide-react";
 import {
   Dialog,
@@ -182,7 +182,7 @@ export function PendingImageUpload({
       const blob = new Blob(byteArrays, { type: "image/jpeg" });
 
       // Create a File object from the blob
-      const filename = `camera-capture-${new Date().getTime()}.jpg`;
+      const filename = `camera-capture-${Date.now()}.jpg`;
       const file = new File([blob], filename, { type: "image/jpeg" });
 
       // Upload the captured image
@@ -194,7 +194,7 @@ export function PendingImageUpload({
       console.error("Error capturing photo:", error);
       toast.error("Failed to capture photo");
     }
-  }, [webcamRef, uploadFile, closeCamera]);
+  }, [uploadFile, closeCamera]);
 
   // Handle file upload from input
   const handleFileUpload = useCallback(
@@ -298,9 +298,9 @@ export function PendingImageUpload({
       {uploading && (
         <div className="py-2 text-center">
           <div className="mb-2">Uploading...</div>
-          <div className="bg-muted mx-auto h-1 w-full max-w-md rounded-full">
+          <div className="mx-auto h-1 w-full max-w-md rounded-full bg-muted">
             <div
-              className="bg-primary h-1 animate-pulse rounded-full"
+              className="h-1 animate-pulse rounded-full bg-primary"
               style={{ width: "100%" }}
             ></div>
           </div>

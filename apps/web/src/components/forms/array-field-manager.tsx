@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { useFieldArray, type FieldValues, type Control } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Plus, X } from "lucide-react";
@@ -73,7 +73,7 @@ export const ArrayFieldManager = <
   return (
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">{title}</h3>
+        <h3 className="font-medium text-lg">{title}</h3>
         <Button
           type="button"
           variant="outline"

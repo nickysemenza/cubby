@@ -1,8 +1,8 @@
 "use client";
 import { useState, useMemo } from "react";
-import { NodeRendererProps, Tree } from "react-arborist";
+import { type NodeRendererProps, Tree } from "react-arborist";
 import { Package } from "lucide-react";
-import { InfLocation, LocationType } from "~/schemas/location";
+import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { LocationIcon } from "../locations/location-icons";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -129,7 +129,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
       <FlexContainer style={style} ref={dragHandle} align="center">
         <Link
           href={`/inventory/${data.id.replace("inv-", "")}`}
-          className="text-muted-foreground hover:text-foreground flex min-w-0 items-center gap-2 text-sm"
+          className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm hover:text-foreground"
         >
           <Package size={14} className="shrink-0" />
           <span className="shrink-0">
@@ -158,7 +158,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
       {hasLocationChildren && totalItemCount > directItemCount && (
         <Badge
           variant="outline"
-          className="text-muted-foreground h-5 px-1.5 text-xs"
+          className="h-5 px-1.5 text-muted-foreground text-xs"
         >
           {totalItemCount} total
         </Badge>

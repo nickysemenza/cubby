@@ -5,8 +5,8 @@
  * to detect field-level differences.
  */
 
-import { type InventoryCSVRow } from "~/schemas/inventory";
-import { type FieldChange } from "~/schemas/csv";
+import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { FieldChange } from "~/schemas/csv";
 import type { InventoryCSVExportRow } from "./types";
 import { normalizeForComparison } from "~/server/repo/csv/normalize";
 

@@ -13,9 +13,9 @@ export async function generateMetadata({ params }: PageParams) {
 
 export default async function Page({ params }: PageParams) {
   const code = (await params).code;
-  const ndbNumber = parseInt(code);
+  const ndbNumber = parseInt(code, 10);
 
-  if (isNaN(ndbNumber)) {
+  if (Number.isNaN(ndbNumber)) {
     return <div>Invalid NDB number: {code}</div>;
   }
 

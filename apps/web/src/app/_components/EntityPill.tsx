@@ -6,7 +6,7 @@ import { entities } from "~/entities/entities";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import type { LocationType } from "~/schemas/location";
 import { isMiscProduct, getMiscDisplayName } from "~/lib/constants";
-import { type Entity } from "~/entities/types";
+import type { Entity } from "~/entities/types";
 import { Badge } from "~/components/ui/badge";
 
 interface PillProps {
@@ -73,7 +73,7 @@ export const LocationPillLinkCompact: React.FC<{
     href={`/${entities.location.basePath}/${id}`}
     target={openInNewTab ? "_blank" : undefined}
     rel={openInNewTab ? "noopener noreferrer" : undefined}
-    className="inline-block max-w-full min-w-0"
+    className="inline-block min-w-0 max-w-full"
   >
     <Badge variant="outline" className="max-w-full gap-1 font-medium">
       <LocationIcon type={type} size={12} className="shrink-0" />
@@ -132,7 +132,7 @@ const PillLink: React.FC<
     href={href}
     target={openInNewTab ? "_blank" : undefined}
     rel={openInNewTab ? "noopener noreferrer" : undefined}
-    className="inline-block max-w-full min-w-0"
+    className="inline-block min-w-0 max-w-full"
   >
     <EntityPill {...pillProps} />
   </Link>

@@ -9,7 +9,7 @@
 
 import { z, type ZodSchema } from "zod";
 import { protectedProcedure } from "./trpc";
-import { type ProtectedCrudServices } from "./crud-factory";
+import type { ProtectedCrudServices } from "./crud-factory";
 
 /**
  * Configuration for CSV procedures (simple case without export input)

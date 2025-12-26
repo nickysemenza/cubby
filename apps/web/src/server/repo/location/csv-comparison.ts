@@ -4,9 +4,9 @@
  * Compares app locations with sheet locations to detect field changes.
  */
 
-import { type LocationCSVRow } from "~/schemas/location";
-import { type FieldChange } from "~/schemas/csv";
-import { type LocationCSVExportRow } from "./types";
+import type { LocationCSVRow } from "~/schemas/location";
+import type { FieldChange } from "~/schemas/csv";
+import type { LocationCSVExportRow } from "./types";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 

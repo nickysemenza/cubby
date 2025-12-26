@@ -1,5 +1,5 @@
 import { IngredientList } from "./ingredientlist";
-import { type Metadata } from "next";
+import type { Metadata } from "next";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 
 export const dynamic = "force-dynamic";

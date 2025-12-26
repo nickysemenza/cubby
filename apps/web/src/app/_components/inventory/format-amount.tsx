@@ -1,11 +1,11 @@
 "use client";
 
-import { Amount } from "~/codec/codec";
+import type { Amount } from "~/codec/codec";
 import { renderValueOrError } from "~/misc/result";
-import { UnitMapping } from "~/schemas/unitmapping";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { wasm } from "~/lib/wasm";
 import { convertAmountToPrice } from "../units/univ-conversion";
-import { WAmount } from "@recipehub/recipebridge";
+import type { WAmount } from "@recipehub/recipebridge";
 import {
   Tooltip,
   TooltipContent,

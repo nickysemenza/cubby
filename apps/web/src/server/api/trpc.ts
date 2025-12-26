@@ -27,14 +27,14 @@ import { ProductService } from "~/server/services/product.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { USDAService } from "~/server/services/usda.service";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
-import { type Database } from "~/server/db";
+import type { Database } from "~/server/db";
 import { env } from "~/env";
 import {
   unsafeProductId,
   unsafeOrganizationId,
   unsafeUserId,
   type OrganizationId,
-  UserId,
+  type UserId,
 } from "~/schemas/identifiers";
 import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
 import { buildActorContext } from "~/schemas/context";
@@ -258,10 +258,10 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
     }
 
     // Pull a structured reason out of error.cause if present
-    let reason: string | undefined = undefined;
+    let reason: string | undefined;
     const cause = (error as { cause?: unknown }).cause;
     if (cause && typeof cause === "object") {
-      const r = (cause as Record<string, unknown>)["reason"];
+      const r = (cause as Record<string, unknown>).reason;
       if (typeof r === "string") reason = r;
     }
 

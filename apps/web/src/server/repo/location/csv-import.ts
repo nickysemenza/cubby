@@ -2,13 +2,13 @@
  * Location CSV import
  */
 
-import { type Database } from "~/server/db";
-import { type OrganizationId, type LocationId } from "~/schemas/identifiers";
-import {
-  type LocationCSVRow,
-  type LocationCSVImportResult,
-  type LocationCSVImportResultItem,
-  type LocationType,
+import type { Database } from "~/server/db";
+import type { OrganizationId, LocationId } from "~/schemas/identifiers";
+import type {
+  LocationCSVRow,
+  LocationCSVImportResult,
+  LocationCSVImportResultItem,
+  LocationType,
 } from "~/schemas/location";
 import {
   findLocationByName,

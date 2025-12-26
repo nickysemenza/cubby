@@ -1,5 +1,5 @@
 import { assertNever } from "~/lib/assert";
-import { type RecipeOut, type SectionIngredient } from "~/schemas/recipe";
+import type { RecipeOut, SectionIngredient } from "~/schemas/recipe";
 
 // returns the 1-indexed count of the instruction, across all sections.
 export const getGlobalInstructionNumber = (

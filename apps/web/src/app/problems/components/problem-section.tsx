@@ -9,7 +9,7 @@ import {
 } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { ExternalLink, type LucideIcon } from "lucide-react";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
 
 interface ProblemSectionProps<T> {

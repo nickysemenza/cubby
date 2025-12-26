@@ -5,11 +5,11 @@
  * Supports multiple images as semicolon-separated URLs.
  */
 
-import { type Database } from "~/server/db";
-import {
-  type ProductId,
-  type OrganizationId,
-  type LocationId,
+import type { Database } from "~/server/db";
+import type {
+  ProductId,
+  OrganizationId,
+  LocationId,
 } from "~/schemas/identifiers";
 import { importImageFromUrl } from "~/server/repo/image";
 import { getDb, associatePendingImages } from "~/server/repo/database-helpers";

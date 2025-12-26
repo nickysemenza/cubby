@@ -28,7 +28,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { X, Plus, ChevronDown, ChevronUp, Package } from "lucide-react";
 import { toast } from "sonner";
-import { type ProductId } from "~/schemas/identifiers";
+import type { ProductId } from "~/schemas/identifiers";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   ComboboxFieldWithSearch,
@@ -46,7 +46,7 @@ import { Kbd } from "~/components/ui/kbd";
 import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { ProductPillLink } from "~/app/_components/EntityPill";
-import { type InfLocation } from "~/schemas/location";
+import type { InfLocation } from "~/schemas/location";
 import {
   inventoryItemWithLocationFields,
   getProductId,
@@ -322,7 +322,7 @@ export default function QuickCaptureForm({
       {focusedLocation && (
         <Card className="mb-4">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
+            <CardTitle className="font-medium text-sm">
               Current Location Context
             </CardTitle>
           </CardHeader>
@@ -363,7 +363,7 @@ export default function QuickCaptureForm({
       )}
 
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-lg font-medium">Quick Inventory Capture</h3>
+        <h3 className="font-medium text-lg">Quick Inventory Capture</h3>
         <Button type="button" onClick={addInventoryItem} size="sm">
           <Plus className="mr-1 h-4 w-4" />
           Add Item (Ctrl+N)
@@ -459,7 +459,7 @@ export default function QuickCaptureForm({
               className="flex w-full items-center justify-between text-left"
               onClick={() => setShowInventory(!showInventory)}
             >
-              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+              <CardTitle className="flex items-center gap-2 font-medium text-sm">
                 <Package className="h-4 w-4" />
                 Items at {focusedItem?.location?.name ?? "this location"} (
                 {inventoryAtLocation?.meta?.totalCount ?? 0})
@@ -495,7 +495,7 @@ export default function QuickCaptureForm({
         </Card>
       )}
 
-      <div className="text-muted-foreground mt-4 text-sm">
+      <div className="mt-4 text-muted-foreground text-sm">
         <p>Keyboard shortcuts:</p>
         <ul className="list-inside list-disc">
           <li>

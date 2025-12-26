@@ -1,6 +1,6 @@
 "use client";
 
-import { type RecipeOut, type SectionIngredientOut } from "~/schemas/recipe";
+import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { Checkbox } from "~/components/ui/checkbox";
 import { useState } from "react";
@@ -45,7 +45,7 @@ export function RecipeIngredientsSidebar({
         <div key={section.id}>
           {/* Section header - only show if there are multiple sections or section has a name */}
           {(recipe.sections.length > 1 || section.name) && (
-            <h4 className="text-muted-foreground mb-3 text-sm font-medium tracking-wide uppercase">
+            <h4 className="mb-3 font-medium text-muted-foreground text-sm uppercase tracking-wide">
               {section.name || `Part ${sectionIndex + 1}`}
             </h4>
           )}

@@ -1,7 +1,7 @@
 // https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
 import React, { useMemo } from "react";
 import dynamic from "next/dynamic";
-import { WUnitMapping } from "@recipehub/recipebridge";
+import type { WUnitMapping } from "@recipehub/recipebridge";
 import { wasm } from "~/lib/wasm";
 import { getErrorMessage } from "~/lib/error-utils";
 

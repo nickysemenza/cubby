@@ -1,4 +1,0 @@
-# Ignore generated WASM package files
-wasm/
-.next/
-

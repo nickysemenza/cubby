@@ -4,7 +4,7 @@ import {
   buildUpdateObject,
   detectComboboxIdChange,
 } from "./form-utils";
-import { type ComboboxItem } from "./combobox/combobox-types";
+import type { ComboboxItem } from "./combobox/combobox-types";
 
 describe("form-utils", () => {
   describe("getSubmitButtonText", () => {

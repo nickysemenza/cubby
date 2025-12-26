@@ -1,5 +1,5 @@
 "use client";
-import { type FC } from "react";
+import type { FC } from "react";
 import {
   buildProductComboboxItem,
   buildLocationComboboxItem,
@@ -7,13 +7,13 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import {
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type {
   inventoryCreatePayloadData,
-  type InventoryUpdateInput,
+  InventoryUpdateInput,
   inventoryUpdatePayloadData,
 } from "~/schemas/inventory";
-import { type ProductId, type LocationId } from "~/schemas/identifiers";
+import type { ProductId, LocationId } from "~/schemas/identifiers";
 import {
   type CreateModeProps,
   type EditModeProps,
@@ -41,17 +41,17 @@ const formSchema = z.object({
 type InventoryFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
-interface CreateInventoryFormProps extends CreateModeProps<
-  z.infer<typeof inventoryCreatePayloadData>
-> {
+interface CreateInventoryFormProps
+  extends CreateModeProps<z.infer<typeof inventoryCreatePayloadData>> {
   inventoryItem?: never;
 }
 
 // Props for edit mode
-interface EditInventoryFormProps extends EditModeProps<
-  InventoryUpdateInput,
-  z.infer<typeof inventoryWithLocationAndProductOut>
-> {
+interface EditInventoryFormProps
+  extends EditModeProps<
+    InventoryUpdateInput,
+    z.infer<typeof inventoryWithLocationAndProductOut>
+  > {
   entity: z.infer<typeof inventoryWithLocationAndProductOut>;
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { type RecipeOut } from "~/schemas/recipe";
+import type { RecipeOut } from "~/schemas/recipe";
 import { RecipeHero } from "./RecipeHero";
 import { RecipeInstructions } from "./RecipeInstructions";
 import { RecipeIngredientsSidebar } from "./RecipeIngredientsSidebar";
@@ -22,7 +22,7 @@ export function RecipeMagazineView({ recipe }: RecipeMagazineViewProps) {
         <aside className="lg:sticky lg:top-20 lg:h-fit">
           <Card>
             <CardHeader className="bg-muted/50 px-4 py-3">
-              <CardTitle className="text-base font-medium">
+              <CardTitle className="font-medium text-base">
                 Ingredients
               </CardTitle>
             </CardHeader>
@@ -36,7 +36,7 @@ export function RecipeMagazineView({ recipe }: RecipeMagazineViewProps) {
         <main>
           <Card>
             <CardHeader className="bg-muted/50 px-4 py-3">
-              <CardTitle className="text-base font-medium">
+              <CardTitle className="font-medium text-base">
                 Instructions
               </CardTitle>
             </CardHeader>

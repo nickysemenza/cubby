@@ -1,10 +1,10 @@
-import { type Table } from "@tanstack/react-table";
+import type { Table } from "@tanstack/react-table";
 
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { toast } from "sonner";
 import { IngredientPillLink } from "../_components/EntityPill";
-import { type IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 import { useMutation } from "@tanstack/react-query";
 
@@ -38,7 +38,7 @@ export function IngredientMerger({ table }: IngredientMergerProps) {
   };
 
   return (
-    <div className="border-border border-1 border-dashed p-2">
+    <div className="border-1 border-border border-dashed p-2">
       <h3>target</h3>
       <IngredientPillLink name={target.name} id={target.id} />
       <h3>aliases to create</h3>

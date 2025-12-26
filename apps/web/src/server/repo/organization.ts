@@ -4,8 +4,8 @@
  */
 
 import { eq } from "drizzle-orm";
-import { type OrganizationId } from "~/schemas/identifiers";
-import { type Database } from "~/server/db";
+import type { OrganizationId } from "~/schemas/identifiers";
+import type { Database } from "~/server/db";
 import { organization } from "~/server/db/auth.schema";
 import { getDb } from "./database-helpers";
 

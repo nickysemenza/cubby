@@ -3,7 +3,7 @@ import { AuthUIProvider as Provider } from "@daveyplate/better-auth-ui";
 import { authClient } from "~/lib/auth-client";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ReactNode } from "react";
+import type { ReactNode } from "react";
 
 export function AuthUIProvider({ children }: { children: ReactNode }) {
   const router = useRouter();

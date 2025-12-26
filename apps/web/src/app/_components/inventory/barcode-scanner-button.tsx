@@ -118,7 +118,7 @@ export function BarcodeScannerButton({
               </div>
             )}
 
-            <p className="text-muted-foreground text-center text-sm">
+            <p className="text-center text-muted-foreground text-sm">
               Point your camera at a barcode to scan
             </p>
           </div>

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useLocalStorage } from "./useLocalStorage";
-import { type LocationType } from "~/schemas/location";
+import type { LocationType } from "~/schemas/location";
 
 export type EmptyFilter = "all" | "withItems" | "empty";
 

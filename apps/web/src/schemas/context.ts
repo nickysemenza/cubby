@@ -1,4 +1,4 @@
-import { type UserId, type OrganizationId } from "./identifiers";
+import type { UserId, OrganizationId } from "./identifiers";
 
 /**
  * Source of an action for audit logging

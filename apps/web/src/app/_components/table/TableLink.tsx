@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
-const tableLinkVariants = cva("hover:underline transition-colors", {
+const tableLinkVariants = cva("transition-colors hover:underline", {
   variants: {
     variant: {
       default: "font-medium text-primary",
