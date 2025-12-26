@@ -103,6 +103,7 @@ const LOCATION_CSV_HEADERS = [
   "location_type",
   "description",
   "location_image",
+  "last_inventory_date",
 ];
 
 // Parse currency string to number (handles $, commas, etc.)
@@ -279,6 +280,7 @@ function parseLocationSheetRows(rows: string[][]): ParseLocationSheetResult {
       location_type: rowObj.location_type || rowObj.type || undefined,
       description: rowObj.description || undefined,
       location_image: rowObj.location_image || rowObj.image || undefined,
+      last_inventory_date: rowObj.last_inventory_date || undefined,
     });
 
     if (result.success) {
@@ -975,6 +977,18 @@ const syncPreview = protectedProcedure
       locationItems.some((i) => i.state === "conflict" && !i.resolution) ||
       inventoryItems.some((i) => i.state === "conflict" && !i.resolution);
 
+    // Check if there are any changes to apply (anything not matched)
+    const hasChangesToApply =
+      locationCounts.conflict > 0 ||
+      locationCounts.app_only > 0 ||
+      locationCounts.sheet_only > 0 ||
+      locationCounts.renamed > 0 ||
+      inventoryCounts.conflict > 0 ||
+      inventoryCounts.app_only > 0 ||
+      inventoryCounts.sheet_only > 0 ||
+      inventoryCounts.renamed > 0 ||
+      inventoryCounts.moved > 0;
+
     return {
       locations: {
         items: locationItems,
@@ -994,7 +1008,10 @@ const syncPreview = protectedProcedure
         moved: inventoryCounts.moved,
       },
       validationErrors,
-      canApply: !hasUnresolvedConflicts && validationErrors.length === 0,
+      canApply:
+        hasChangesToApply &&
+        !hasUnresolvedConflicts &&
+        validationErrors.length === 0,
     };
   });
 

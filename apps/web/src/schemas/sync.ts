@@ -62,6 +62,7 @@ export const locationSyncItem = baseSyncItem.extend({
       locationType: z.string(),
       description: z.string().nullable(),
       locationImage: z.string().nullable(),
+      lastInventoryDate: z.string().nullable(),
     })
     .nullable(),
   sheetData: z
@@ -71,6 +72,7 @@ export const locationSyncItem = baseSyncItem.extend({
       locationType: z.string().optional(),
       description: z.string().nullable().optional(),
       locationImage: z.string().nullable().optional(),
+      lastInventoryDate: z.string().nullable().optional(),
     })
     .nullable(),
   // For renames

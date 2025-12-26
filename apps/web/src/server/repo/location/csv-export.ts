@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { type LocationCSVExportRow } from "./types";
 import { type LocationType } from "~/schemas/location";
 import { joinImageUrls } from "~/lib/image-utils";
+import dayjs from "dayjs";
 
 /**
  * Query all locations with their images and immediate parent
@@ -55,6 +56,10 @@ export const exportLocationsToCSV = async (
     location_type: loc.type as LocationType,
     description: null, // Location doesn't have a description field currently
     location_image: joinImageUrls(loc.images),
+    // Format as "YYYY-MM-DD HH:mm:ss" for Google Sheets compatibility (ISO format with T/Z not supported)
+    last_inventory_date: loc.lastBulkInventory
+      ? dayjs(loc.lastBulkInventory).format("YYYY-MM-DD HH:mm:ss")
+      : null,
     location_id: locationIdSchema.parse(loc.id),
   }));
 };

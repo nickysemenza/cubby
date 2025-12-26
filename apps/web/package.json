@@ -25,7 +25,8 @@
     "load-data": "tsx scripts/load-data.ts",
     "regenerate": "pnpm run db:rebuild && pnpm run wasm",
     "test:e2e": " NODE_ENV=test playwright test",
-    "knip": "knip"
+    "knip": "knip",
+    "knip:production": "knip --production"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.952.0",

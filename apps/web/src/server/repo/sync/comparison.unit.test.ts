@@ -1,0 +1,611 @@
+import { describe, it, expect } from "vitest";
+import { compareInventoryForSync } from "./comparison";
+import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
+import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { SyncState } from "~/schemas/sync";
+import {
+  unsafeLocationId,
+  unsafeProductId,
+  unsafeInventoryId,
+} from "~/schemas/identifiers";
+
+// Helper to create a minimal app row (from database)
+const makeAppRow = (
+  overrides: Partial<InventoryCSVExportRow> & {
+    product_name: string;
+    manufacturer: string;
+  },
+): InventoryCSVExportRow => {
+  const { product_name, manufacturer, ...rest } = overrides;
+  return {
+    product_name,
+    manufacturer,
+    upc: "",
+    model: null,
+    ndb_number: null,
+    location_name: "",
+    location_id: null,
+    inventory_entry_id: null,
+    product_id: unsafeProductId("prod-1"),
+    quantity: null,
+    unit: null,
+    expected_qty: null,
+    price: null,
+    unit_mappings: null,
+    ingredient_name: null,
+    aliases: null,
+    product_image: null,
+    ...rest,
+  };
+};
+
+// Helper to create a minimal sheet row (from Google Sheet)
+const makeSheetRow = (
+  overrides: Partial<InventoryCSVRow> & { product_name: string },
+): InventoryCSVRow => {
+  const { product_name, ...rest } = overrides;
+  return {
+    product_name,
+    quantity: 1,
+    unit: "each",
+    ...rest,
+  };
+};
+
+// Count items by state for easy assertion
+const countByState = (
+  result: ReturnType<typeof compareInventoryForSync>,
+): Record<SyncState, number> => {
+  const counts: Record<SyncState, number> = {
+    matched: 0,
+    conflict: 0,
+    app_only: 0,
+    sheet_only: 0,
+    renamed: 0,
+    moved: 0,
+  };
+  for (const item of result) {
+    counts[item.state]++;
+  }
+  return counts;
+};
+
+// Test case definition for table-driven tests
+interface RenameTestCase {
+  name: string;
+  app: {
+    product_name: string;
+    manufacturer: string;
+    location_name?: string;
+    upc?: string;
+    model?: string;
+  };
+  sheet: {
+    product_name: string;
+    manufacturer?: string;
+    location_name?: string;
+    upc?: string;
+    model?: string;
+  };
+  expectedCounts: Partial<Record<SyncState, number>>;
+  // For renamed items
+  renamedFrom?: string;
+  renamedTo?: string;
+  // For moved items
+  movedFrom?: string;
+  movedTo?: string;
+}
+
+describe("compareInventoryForSync - rename detection", () => {
+  // ============================================================================
+  // SHOULD detect renames
+  // ============================================================================
+  const shouldDetectRename: RenameTestCase[] = [
+    {
+      name: "typo fix with same location + manufacturer",
+      app: {
+        product_name: "misc: rwrenches, pliers, knives",
+        manufacturer: "misc",
+        location_name: "packout 2 drawer",
+      },
+      sheet: {
+        product_name: "misc: wrenches, pliers, knives",
+        manufacturer: "misc",
+        location_name: "packout 2 drawer",
+      },
+      expectedCounts: { renamed: 1 },
+      renamedFrom: "misc: rwrenches, pliers, knives",
+      renamedTo: "misc: wrenches, pliers, knives",
+    },
+    {
+      name: "matching UPC",
+      app: {
+        product_name: "18 Ga Brad Nailer",
+        manufacturer: "DeWalt",
+        location_name: "tool shelf",
+        upc: "885911548793",
+      },
+      sheet: {
+        product_name: "Brad Nailer 18 Gauge",
+        manufacturer: "DeWalt",
+        location_name: "tool shelf",
+        upc: "885911548793",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "matching model number",
+      app: {
+        product_name: "Cordless Drill",
+        manufacturer: "Milwaukee",
+        location_name: "garage",
+        model: "2804-20",
+      },
+      sheet: {
+        product_name: "M18 FUEL 1/2 in. Hammer Drill",
+        manufacturer: "Milwaukee",
+        location_name: "garage",
+        model: "2804-20",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "one name contains the other (adding misc: prefix)",
+      app: {
+        product_name: "misc: paper bags",
+        manufacturer: "(unspecified)",
+        location_name: "kitchen pantry",
+      },
+      sheet: {
+        product_name: "paper bags",
+        manufacturer: "(unspecified)",
+        location_name: "kitchen pantry",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "name shortened",
+      app: {
+        product_name: "3M Command Hooks",
+        manufacturer: "3M",
+        location_name: "closet",
+      },
+      sheet: {
+        product_name: "3M Command Hooks Large",
+        manufacturer: "3M",
+        location_name: "closet",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "same location with (unspecified) manufacturers",
+      app: {
+        product_name: "screws, assorted",
+        manufacturer: "(unspecified)",
+        location_name: "hardware drawer",
+      },
+      sheet: {
+        product_name: "assorted screws",
+        manufacturer: "(unspecified)",
+        location_name: "hardware drawer",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "misc: prefix pattern - reordered items",
+      app: {
+        product_name: "misc: nails, screws, bolts",
+        manufacturer: "misc",
+        location_name: "hardware bin",
+      },
+      sheet: {
+        product_name: "misc: nails, bolts, screws",
+        manufacturer: "misc",
+        location_name: "hardware bin",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "brand name in product name removed",
+      app: {
+        product_name: "DeWalt 20V MAX Drill",
+        manufacturer: "DeWalt",
+        location_name: "tool wall",
+      },
+      sheet: {
+        product_name: "20V MAX Drill",
+        manufacturer: "DeWalt",
+        location_name: "tool wall",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+    {
+      name: "UPC match overrides location+manufacturer mismatch",
+      app: {
+        product_name: "Old Name",
+        manufacturer: "Brand A",
+        location_name: "shelf 1",
+        upc: "123456789012",
+      },
+      sheet: {
+        product_name: "New Name",
+        manufacturer: "Brand B",
+        location_name: "shelf 2",
+        upc: "123456789012",
+      },
+      expectedCounts: { renamed: 1 },
+    },
+  ];
+
+  describe("SHOULD detect renames", () => {
+    it.each(shouldDetectRename)(
+      "$name",
+      ({ app, sheet, expectedCounts, renamedFrom, renamedTo }) => {
+        const appRows = [
+          makeAppRow({
+            ...app,
+            location_id: app.location_name
+              ? unsafeLocationId("loc-1")
+              : undefined,
+            inventory_entry_id: app.location_name
+              ? unsafeInventoryId("inv-1")
+              : undefined,
+          }),
+        ];
+        const sheetRows = [makeSheetRow(sheet)];
+
+        const result = compareInventoryForSync(appRows, sheetRows);
+        const counts = countByState(result);
+
+        // Assert exact counts for all states
+        expect(counts).toEqual({
+          matched: expectedCounts.matched ?? 0,
+          conflict: expectedCounts.conflict ?? 0,
+          app_only: expectedCounts.app_only ?? 0,
+          sheet_only: expectedCounts.sheet_only ?? 0,
+          renamed: expectedCounts.renamed ?? 0,
+          moved: expectedCounts.moved ?? 0,
+        });
+
+        // Assert rename details if provided
+        if (renamedFrom || renamedTo) {
+          const renamed = result.find((i) => i.state === "renamed");
+          expect(renamed).toBeDefined();
+          if (renamedFrom) expect(renamed?.renamedFrom).toBe(renamedFrom);
+          if (renamedTo) expect(renamed?.renamedTo).toBe(renamedTo);
+        }
+      },
+    );
+  });
+
+  // ============================================================================
+  // Should NOT detect renames (avoid false positives)
+  // ============================================================================
+  const shouldNotDetectRename: RenameTestCase[] = [
+    {
+      name: "completely different products at DIFFERENT locations",
+      app: {
+        product_name: "Hammer",
+        manufacturer: "Stanley",
+        location_name: "garage toolbox",
+      },
+      sheet: {
+        product_name: "Screwdriver",
+        manufacturer: "Stanley",
+        location_name: "workshop drawer",
+      },
+      expectedCounts: { app_only: 1, sheet_only: 1 },
+    },
+    {
+      name: "different specific manufacturers (even with name containment)",
+      app: {
+        product_name: "Circular Saw",
+        manufacturer: "DeWalt",
+        location_name: "workshop",
+      },
+      sheet: {
+        product_name: "Circular Saw 7-1/4 inch",
+        manufacturer: "Makita",
+        location_name: "workshop",
+      },
+      expectedCounts: { app_only: 1, sheet_only: 1 },
+    },
+    {
+      name: "completely unrelated names",
+      app: {
+        product_name: "Flour, all purpose",
+        manufacturer: "King Arthur",
+        location_name: "pantry",
+      },
+      sheet: {
+        product_name: "Sugar, white",
+        manufacturer: "Domino",
+        location_name: "pantry",
+      },
+      expectedCounts: { app_only: 1, sheet_only: 1 },
+    },
+  ];
+
+  describe("should NOT detect renames (false positives)", () => {
+    it.each(shouldNotDetectRename)(
+      "$name",
+      ({ app, sheet, expectedCounts }) => {
+        const appRows = [
+          makeAppRow({
+            ...app,
+            location_id: unsafeLocationId("loc-1"),
+            inventory_entry_id: unsafeInventoryId("inv-1"),
+          }),
+        ];
+        const sheetRows = [makeSheetRow(sheet)];
+
+        const result = compareInventoryForSync(appRows, sheetRows);
+        const counts = countByState(result);
+
+        expect(counts).toEqual({
+          matched: expectedCounts.matched ?? 0,
+          conflict: expectedCounts.conflict ?? 0,
+          app_only: expectedCounts.app_only ?? 0,
+          sheet_only: expectedCounts.sheet_only ?? 0,
+          renamed: expectedCounts.renamed ?? 0,
+          moved: expectedCounts.moved ?? 0,
+        });
+      },
+    );
+
+    it("may detect false positive for unrelated products at same location+manufacturer (known limitation)", () => {
+      // Trade-off: we catch real typo fixes like "wrenches" -> "rwrenches"
+      // but may also match completely different items at same location
+      const appRows = [
+        makeAppRow({
+          product_name: "Hammer",
+          manufacturer: "Stanley",
+          location_name: "toolbox",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Screwdriver",
+          manufacturer: "Stanley",
+          location_name: "toolbox",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // Accept either outcome - users can resolve in sync preview
+      expect(counts.renamed).toBeLessThanOrEqual(1);
+      expect(result).toHaveLength(counts.renamed === 1 ? 1 : 2);
+    });
+
+    it("should NOT detect rename when identical product exists at multiple locations", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "WD-40",
+          manufacturer: "WD-40 Company",
+          location_name: "garage",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+        makeAppRow({
+          product_name: "WD-40",
+          manufacturer: "WD-40 Company",
+          location_name: "workshop",
+          location_id: unsafeLocationId("loc-2"),
+          inventory_entry_id: unsafeInventoryId("inv-2"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "WD-40",
+          manufacturer: "WD-40 Company",
+          location_name: "garage",
+        }),
+        makeSheetRow({
+          product_name: "WD-40",
+          manufacturer: "WD-40 Company",
+          location_name: "workshop",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 2,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+    });
+  });
+
+  // ============================================================================
+  // Move detection
+  // ============================================================================
+  const moveTests: RenameTestCase[] = [
+    {
+      name: "same product changes location",
+      app: {
+        product_name: "Drill Press",
+        manufacturer: "DeWalt",
+        location_name: "garage corner",
+      },
+      sheet: {
+        product_name: "Drill Press",
+        manufacturer: "DeWalt",
+        location_name: "workshop bench",
+      },
+      expectedCounts: { moved: 1 },
+      movedFrom: "garage corner",
+      movedTo: "workshop bench",
+    },
+    {
+      name: "case insensitive product name",
+      app: {
+        product_name: "drill press",
+        manufacturer: "DeWalt",
+        location_name: "garage",
+      },
+      sheet: {
+        product_name: "Drill Press",
+        manufacturer: "DeWalt",
+        location_name: "workshop",
+      },
+      expectedCounts: { moved: 1 },
+    },
+  ];
+
+  describe("move detection", () => {
+    it.each(moveTests)(
+      "$name",
+      ({ app, sheet, expectedCounts, movedFrom, movedTo }) => {
+        const appRows = [
+          makeAppRow({
+            ...app,
+            location_id: unsafeLocationId("loc-1"),
+            inventory_entry_id: unsafeInventoryId("inv-1"),
+          }),
+        ];
+        const sheetRows = [makeSheetRow(sheet)];
+
+        const result = compareInventoryForSync(appRows, sheetRows);
+        const counts = countByState(result);
+
+        expect(counts).toEqual({
+          matched: expectedCounts.matched ?? 0,
+          conflict: expectedCounts.conflict ?? 0,
+          app_only: expectedCounts.app_only ?? 0,
+          sheet_only: expectedCounts.sheet_only ?? 0,
+          renamed: expectedCounts.renamed ?? 0,
+          moved: expectedCounts.moved ?? 0,
+        });
+
+        if (movedFrom || movedTo) {
+          const moved = result.find((i) => i.state === "moved");
+          expect(moved).toBeDefined();
+          if (movedFrom) expect(moved?.movedFrom).toBe(movedFrom);
+          if (movedTo) expect(moved?.movedTo).toBe(movedTo);
+        }
+      },
+    );
+  });
+
+  // ============================================================================
+  // Edge cases
+  // ============================================================================
+  describe("edge cases", () => {
+    it("should handle empty manufacturer matching with (unspecified)", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Zip Ties",
+          manufacturer: "(unspecified)",
+          location_name: "drawer",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Zip Ties",
+          manufacturer: undefined,
+          location_name: "drawer",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 1,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+    });
+
+    it("should handle product-only rows (no location)", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Widget",
+          manufacturer: "Acme",
+          location_name: "",
+          location_id: null,
+          inventory_entry_id: null,
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Widget",
+          manufacturer: "Acme",
+          location_name: "",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 1,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+    });
+
+    it("should pick best match when multiple potential rename candidates exist", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Screwdriver Set",
+          manufacturer: "Stanley",
+          location_name: "toolbox",
+          upc: "111111111111",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "6-Piece Screwdriver Set", // Name containment
+          manufacturer: "Stanley",
+          location_name: "toolbox",
+          upc: "",
+        }),
+        makeSheetRow({
+          product_name: "Phillips Screwdriver", // No containment but has UPC
+          manufacturer: "Stanley",
+          location_name: "toolbox",
+          upc: "111111111111",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // UPC match wins, other sheet row becomes sheet_only
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 1,
+        renamed: 1,
+        moved: 0,
+      });
+
+      const renamed = result.find((i) => i.state === "renamed");
+      expect(renamed?.renamedTo).toBe("Phillips Screwdriver");
+
+      const sheetOnly = result.find((i) => i.state === "sheet_only");
+      expect(sheetOnly?.sheetData?.productName).toBe("6-Piece Screwdriver Set");
+    });
+  });
+});

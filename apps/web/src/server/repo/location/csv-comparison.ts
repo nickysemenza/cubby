@@ -17,6 +17,35 @@ import {
   normalizeForComparison,
 } from "~/server/repo/csv";
 import { type LocationId } from "~/schemas/identifiers";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+dayjs.extend(customParseFormat);
+
+/**
+ * Normalize date strings for comparison.
+ * Handles both app format (YYYY-MM-DD HH:mm:ss) and Sheets format (MM/DD/YYYY HH:mm:ss)
+ */
+const normalizeDateForComparison = (
+  dateStr: string | null | undefined,
+): number | null => {
+  if (!dateStr) return null;
+  // Try parsing with common formats
+  const formats = [
+    "YYYY-MM-DD HH:mm:ss", // App format
+    "M/D/YYYY H:mm:ss", // Sheets format (single digits)
+    "MM/DD/YYYY HH:mm:ss", // Sheets format (padded)
+  ];
+  for (const fmt of formats) {
+    const parsed = dayjs(dateStr, fmt, true);
+    if (parsed.isValid()) {
+      return parsed.unix();
+    }
+  }
+  // Fallback: try native parsing
+  const fallback = dayjs(dateStr);
+  return fallback.isValid() ? fallback.unix() : null;
+};
 
 /**
  * Compare two location rows and return structured field changes
@@ -69,6 +98,17 @@ export function getLocationRowDifferences(
       field: "location_image",
       from: sheetRow.location_image ?? null,
       to: appRow.location_image ?? null,
+    });
+  }
+
+  // Compare last_inventory_date (normalize to handle different date formats)
+  const appDate = normalizeDateForComparison(appRow.last_inventory_date);
+  const sheetDate = normalizeDateForComparison(sheetRow.last_inventory_date);
+  if (appDate !== sheetDate) {
+    changes.push({
+      field: "last_inventory_date",
+      from: sheetRow.last_inventory_date ?? null,
+      to: appRow.last_inventory_date ?? null,
     });
   }
 

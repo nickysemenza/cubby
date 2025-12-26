@@ -78,6 +78,7 @@ type LocationRowLike = {
   location_type?: string;
   description?: string | null;
   location_image?: string | null;
+  last_inventory_date?: string | null;
 };
 
 const buildLocationSyncFields = (row: LocationRowLike) => ({
@@ -86,6 +87,7 @@ const buildLocationSyncFields = (row: LocationRowLike) => ({
   locationType: row.location_type ?? "other",
   description: row.description ?? null,
   locationImage: row.location_image ?? null,
+  lastInventoryDate: row.last_inventory_date ?? null,
 });
 
 /** Build appData object from a location export row (adds ID) */
@@ -462,21 +464,26 @@ export function compareInventoryForSync(
       const sheetName = normalizeForComparison(sheetRow.product_name);
       if (appName === sheetName) continue;
 
-      // Heuristic 1: UPC match (highest weight)
+      // Heuristic 1: UPC match (highest weight - definitive identifier)
       const appUpc = appRow.upc?.trim();
       const sheetUpc = sheetRow.upc?.trim();
-      if (appUpc && sheetUpc && appUpc === sheetUpc) {
+      const upcMatch = appUpc && sheetUpc && appUpc === sheetUpc;
+      if (upcMatch) {
         score += 100;
         reasons.push("UPC");
       }
 
-      // Heuristic 2: Model match
+      // Heuristic 2: Model match (strong identifier)
       const appModel = appRow.model?.trim();
       const sheetModel = sheetRow.model?.trim();
-      if (appModel && sheetModel && appModel === sheetModel) {
+      const modelMatch = appModel && sheetModel && appModel === sheetModel;
+      if (modelMatch) {
         score += 80;
         reasons.push("model");
       }
+
+      // Track if we have a definitive identifier match
+      const hasDefinitiveIdentifier = upcMatch || modelMatch;
 
       // Heuristic 3: Name containment
       const appNameLower = appRow.product_name.toLowerCase();
@@ -492,24 +499,45 @@ export function compareInventoryForSync(
       // Heuristic 4: Same location
       const appLoc = normalizeForComparison(appRow.location_name ?? "");
       const sheetLoc = normalizeForComparison(sheetRow.location_name ?? "");
-      if (appLoc && sheetLoc && appLoc === sheetLoc) {
+      const sameLocation = appLoc && sheetLoc && appLoc === sheetLoc;
+      if (sameLocation) {
         score += 25;
         reasons.push("location");
       }
 
-      // Heuristic 5: Same manufacturer (non-unspecified)
-      if (
-        appRow.manufacturer &&
-        sheetRow.manufacturer &&
-        normalizeManufacturer(appRow.manufacturer).toLowerCase() ===
-          normalizeManufacturer(sheetRow.manufacturer).toLowerCase() &&
-        appRow.manufacturer !== "(unspecified)"
-      ) {
+      // Heuristic 5: Manufacturer matching
+      const appMfr = normalizeManufacturer(appRow.manufacturer).toLowerCase();
+      const sheetMfr = normalizeManufacturer(
+        sheetRow.manufacturer,
+      ).toLowerCase();
+      const manufacturersMatch = appMfr === sheetMfr;
+      const appHasSpecificMfr = appMfr !== "(unspecified)";
+      const sheetHasSpecificMfr = sheetMfr !== "(unspecified)";
+
+      if (manufacturersMatch && appHasSpecificMfr) {
+        // Both have same specific manufacturer - bonus
         score += 10;
         reasons.push("manufacturer");
+      } else if (
+        appHasSpecificMfr &&
+        sheetHasSpecificMfr &&
+        !manufacturersMatch &&
+        !hasDefinitiveIdentifier
+      ) {
+        // Both have DIFFERENT specific manufacturers - strong signal against rename
+        // BUT: skip penalty if UPC/model matches (those are definitive)
+        score -= 60;
+        reasons.push("different-manufacturers");
       }
 
-      // Require at least one strong signal (UPC, model, or name containment)
+      // Heuristic 6: Same location + same manufacturer is a strong signal
+      // (likely a rename if both match - even if both are unspecified)
+      if (sameLocation && manufacturersMatch) {
+        score += 30;
+        reasons.push("location+manufacturer");
+      }
+
+      // Require at least one strong signal (UPC, model, name containment, or location+manufacturer)
       if (score >= 50) {
         potentialPairs.push({
           appKey,
@@ -627,6 +655,7 @@ export const locationSheetDataToCSVRow = (
   location_type: sheetData.locationType as LocationCSVRow["location_type"],
   description: sheetData.description ?? undefined,
   location_image: sheetData.locationImage ?? undefined,
+  last_inventory_date: sheetData.lastInventoryDate ?? undefined,
 });
 
 /**
@@ -640,6 +669,7 @@ export const locationAppDataToCSVRow = (
   location_type: appData.locationType as LocationCSVRow["location_type"],
   description: appData.description ?? undefined,
   location_image: appData.locationImage ?? undefined,
+  last_inventory_date: appData.lastInventoryDate ?? undefined,
 });
 
 /**

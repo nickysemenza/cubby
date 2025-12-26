@@ -11,6 +11,7 @@ export interface LocationCSVExportRow {
   location_type: LocationType;
   description: string | null;
   location_image: string | null; // Semicolon-separated image URLs
+  last_inventory_date: string | null; // ISO timestamp of when location was last inventoried
   // Internal ID (not exported to sheet, used for comparison)
   location_id: LocationId;
 }

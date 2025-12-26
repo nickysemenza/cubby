@@ -420,16 +420,10 @@ describe("CSV round-trip tests", () => {
       const appRows = await exportInventoryToCSV(db, organizationId);
       expect(appRows.length).toBe(2);
 
-      // Simulate sheet with only one row
-      const sheetRows: InventoryCSVRow[] = [
-        {
-          product_name: "Pen",
-          manufacturer: "Pilot",
-          location_name: "Desk",
-          quantity: 5,
-          unit: "each",
-        },
-      ];
+      // Simulate sheet with only one row (Pen - find and convert from app export)
+      const penRow = appRows.find((r) => r.product_name === "Pen");
+      expect(penRow).toBeDefined();
+      const sheetRows: InventoryCSVRow[] = [exportRowToImportRow(penRow!)];
 
       const result = compareInventoryForPush(appRows, sheetRows);
 
@@ -474,15 +468,10 @@ describe("CSV round-trip tests", () => {
       // Export app data
       const appRows = await exportInventoryToCSV(db, organizationId);
 
-      // Simulate sheet with extra row
+      // Simulate sheet: Scissors matches app (use exportRowToImportRow for matching fields),
+      // plus Tape which only exists in sheet
       const sheetRows: InventoryCSVRow[] = [
-        {
-          product_name: "Scissors",
-          manufacturer: "Fiskars",
-          location_name: "Drawer",
-          quantity: 1,
-          unit: "each",
-        },
+        exportRowToImportRow(appRows[0]!), // Scissors - matches app exactly
         {
           product_name: "Tape",
           manufacturer: "3M",
@@ -533,14 +522,12 @@ describe("CSV round-trip tests", () => {
       // Export app data
       const appRows = await exportInventoryToCSV(db, organizationId);
 
-      // Simulate sheet with different quantity
+      // Simulate sheet with different quantity (use exportRowToImportRow as base, then modify)
+      const baseRow = exportRowToImportRow(appRows[0]!);
       const sheetRows: InventoryCSVRow[] = [
         {
-          product_name: "Notebook",
-          manufacturer: "Moleskine",
-          location_name: "Cabinet",
+          ...baseRow,
           quantity: 5, // Different from app's 3
-          unit: "each",
         },
       ];
 
@@ -643,7 +630,7 @@ describe("CSV round-trip tests", () => {
       // Export app data
       const appRows = await exportInventoryToCSV(db, organizationId);
 
-      // Sheet with different case
+      // Sheet with different case but same data
       const sheetRows: InventoryCSVRow[] = [
         {
           product_name: "TEST PRODUCT",
@@ -654,7 +641,7 @@ describe("CSV round-trip tests", () => {
         },
       ];
 
-      // Compare should find a match (case-insensitive key)
+      // Compare should find a match (case-insensitive key matching)
       const result = compareInventoryForPush(appRows, sheetRows);
 
       // Should be skipped (matched), not created (different case but same item)

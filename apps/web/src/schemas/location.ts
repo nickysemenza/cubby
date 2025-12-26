@@ -110,6 +110,7 @@ export const locationCSVRow = z.object({
   location_type: locationType.optional(), // Optional: defaults to "room" for root, "shelf" for children
   description: z.string().nullable().optional(),
   location_image: z.string().optional(), // Semicolon-separated image URLs
+  last_inventory_date: z.string().nullable().optional(), // ISO timestamp of when location was last inventoried
 });
 
 export type LocationCSVRow = z.infer<typeof locationCSVRow>;
