@@ -7,7 +7,7 @@
     "dev:log": "pnpm -r --reporter append-only dev",
     "build": "pnpm -r build",
     "check": "pnpm -r check",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm -r --parallel typecheck",
     "lint": "pnpm -r lint",
     "format:check": "pnpm -r format:check",
     "format:write": "pnpm -r format:write",
@@ -22,7 +22,6 @@
     "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "4.0.15",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
     "typescript": "^5.9.3"
   },
   "pnpm": {
@@ -36,19 +35,5 @@
         }
       }
     }
-  },
-  "lint-staged": {
-    "apps/web/**/*.{ts,tsx}": [
-      "bash -c 'cd apps/web && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
-    ],
-    "apps/usda-api/**/*.ts": [
-      "bash -c 'cd apps/usda-api && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
-    ],
-    "packages/usda-contract/**/*.ts": [
-      "bash -c 'cd packages/usda-contract && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
-    ],
-    "packages/usda-schemas/**/*.ts": [
-      "bash -c 'cd packages/usda-schemas && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
-    ]
   }
 }

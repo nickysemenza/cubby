@@ -4,5 +4,5 @@ set -e
 # Run Biome on staged files (auto-fixes and formats)
 pnpm exec biome check --staged --write --no-errors-on-unmatched
 
-# Run TypeScript checks via lint-staged
-pnpm exec lint-staged
+# Run TypeScript checks across all packages
+pnpm typecheck
