@@ -3,7 +3,7 @@ import { type UserId, type OrganizationId } from "./identifiers";
 /**
  * Source of an action for audit logging
  */
-export type AuditSource = "ui" | "csv_import" | "sheets_import" | "api";
+type AuditSource = "ui" | "csv_import" | "sheets_import" | "api";
 
 /**
  * Context representing who is performing an action.

@@ -28,7 +28,7 @@ export const locationTypeOptions = locationType.options.map((type) => ({
   value: type,
   label: type,
 }));
-export const locationBase = z.object({
+const locationBase = z.object({
   name: z.string().describe("name of location"),
   type: locationType,
 });
@@ -44,7 +44,7 @@ export const locationOut = z
 export type LocationOut = z.infer<typeof locationOut>;
 
 /** Minimal inventory item info for tree display */
-export const inventoryItemForTree = z.object({
+const inventoryItemForTree = z.object({
   id: inventoryId,
   amount: z.object({
     value: z.number(),
@@ -118,7 +118,7 @@ export type LocationCSVRow = z.infer<typeof locationCSVRow>;
 /**
  * Individual result item for location CSV import
  */
-export const locationCSVImportResultItem = z.object({
+const locationCSVImportResultItem = z.object({
   rowIndex: z.number(),
   action: z.enum(["created", "updated", "skipped", "error", "removed"]),
   locationName: z.string(),

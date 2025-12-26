@@ -13,7 +13,7 @@ import { getErrorMessage } from "~/lib/error-utils";
  */
 type TRPCMutationOptions = object;
 
-export interface UseEditModeOptions<TResult = unknown> {
+interface UseEditModeOptions<TResult = unknown> {
   mutationOptions: TRPCMutationOptions;
   onSuccess?: (result?: TResult) => void;
   useRouterRefresh?: boolean;

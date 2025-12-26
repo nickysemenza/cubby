@@ -37,8 +37,10 @@ export function isUnspecifiedManufacturer(
  * "(unspecified)" acts as a wildcard and matches any manufacturer.
  * This enables fuzzy matching where a sheet row with "(unspecified)"
  * can match an existing product with a specific manufacturer.
+ *
+ * Note: Currently unused but kept for potential future use in matching logic.
  */
-export function manufacturersMatch(
+function _manufacturersMatch(
   mfr1: string | null | undefined,
   mfr2: string | null | undefined,
 ): boolean {

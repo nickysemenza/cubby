@@ -87,17 +87,6 @@ export const LocationPillLinkCompact: React.FC<{
     </Badge>
   </Link>
 );
-export const InventoryEntryPillLink: React.FC<{
-  entry: { product: { name: string }; id: string };
-  openInNewTab?: boolean;
-}> = ({ entry, openInNewTab }) => (
-  <PillLink
-    href={`/${entities["inventory-item"].basePath}/${entry.id}`}
-    text={entry.product.name}
-    entity={"inventory-item"}
-    openInNewTab={openInNewTab}
-  />
-);
 export const RecipePillLink: React.FC<{
   recipe: { name: string; id: string };
   openInNewTab?: boolean;

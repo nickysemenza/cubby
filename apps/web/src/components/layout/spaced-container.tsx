@@ -5,7 +5,7 @@ import {
   type SpacedContainerVariants,
 } from "~/styles/layouts";
 
-export interface SpacedContainerProps
+interface SpacedContainerProps
   extends React.HTMLAttributes<HTMLDivElement>, SpacedContainerVariants {}
 
 export const SpacedContainer = React.forwardRef<

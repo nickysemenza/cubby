@@ -152,7 +152,7 @@ export const insertCompactRecipe = async (
 };
 
 /** Filters for recipe list queries */
-export interface RecipeFilters {
+interface RecipeFilters {
   nameFilter?: string;
 }
 

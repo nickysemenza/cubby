@@ -16,7 +16,7 @@ const imageGridVariants = cva("grid", {
   },
 });
 
-export interface ImageGridProps
+interface ImageGridProps
   extends
     React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof imageGridVariants> {}

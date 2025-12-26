@@ -5,7 +5,7 @@ import {
   type FlexContainerVariants,
 } from "~/styles/layouts";
 
-export interface FlexContainerProps
+interface FlexContainerProps
   extends React.HTMLAttributes<HTMLDivElement>, FlexContainerVariants {}
 
 export const FlexContainer = React.forwardRef<

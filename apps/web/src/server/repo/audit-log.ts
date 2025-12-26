@@ -14,10 +14,10 @@ export type AuditEntityType =
   | "ingredient";
 
 // Action types for audit entries
-export type AuditAction = "create" | "update" | "delete";
+type AuditAction = "create" | "update" | "delete";
 
 // Input for the audit entry (without actor context)
-export interface AuditEntryInput {
+interface AuditEntryInput {
   entityType: AuditEntityType;
   entityId: string;
   action: AuditAction;
@@ -33,7 +33,7 @@ type AuditLogUser = {
 } | null;
 
 // Output type for audit log entries with user relation
-export type AuditLogRow = typeof auditLog.$inferSelect & {
+type AuditLogRow = typeof auditLog.$inferSelect & {
   user: AuditLogUser;
 };
 

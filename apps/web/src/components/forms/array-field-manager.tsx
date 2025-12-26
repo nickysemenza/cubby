@@ -14,7 +14,7 @@ import { cn } from "~/lib/utils";
  * without losing flexibility. The runtime behavior is correct - consumers are
  * responsible for passing valid array field names.
  */
-export interface ArrayFieldManagerProps<
+interface ArrayFieldManagerProps<
   T,
   TFieldValues extends FieldValues = FieldValues,
 > {

@@ -30,7 +30,7 @@ export type FieldChange = z.infer<typeof fieldChange>;
 /**
  * Base actions all CSV-enabled entities share
  */
-export const BASE_CSV_ACTIONS = [
+const BASE_CSV_ACTIONS = [
   "created",
   "updated",
   "skipped",
@@ -38,19 +38,7 @@ export const BASE_CSV_ACTIONS = [
   "removed",
 ] as const;
 
-export type BaseCSVAction = (typeof BASE_CSV_ACTIONS)[number];
-
-/**
- * Inventory extends base with domain-specific actions
- */
-export const INVENTORY_CSV_ACTIONS = [
-  ...BASE_CSV_ACTIONS,
-  "moved",
-  "product_only",
-  "renamed",
-] as const;
-
-export type InventoryCSVAction = (typeof INVENTORY_CSV_ACTIONS)[number];
+type BaseCSVAction = (typeof BASE_CSV_ACTIONS)[number];
 
 /**
  * Location uses base actions only

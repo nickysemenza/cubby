@@ -491,7 +491,7 @@ export const buildLocationTree = async (
 };
 
 /** Filters for location list queries */
-export interface LocationFilters {
+interface LocationFilters {
   nameFilter?: string;
   itemTypeFilter?: string;
 }
@@ -599,9 +599,9 @@ export const findOrCreateLocationByName = async (
 };
 
 /**
- * Check if a location has any inventory entries
+ * Check if a location has any inventory entries (internal helper)
  */
-export const locationHasInventory = async (
+const locationHasInventory = async (
   db: Database,
   locationId: LocationId,
 ): Promise<boolean> => {

@@ -13,9 +13,8 @@ import {
 } from "~/schemas/identifiers";
 import { importImageFromUrl } from "~/server/repo/image";
 import { getDb, associatePendingImages } from "~/server/repo/database-helpers";
-import { productImage, locationImage, image } from "~/server/db/schema";
+import { productImage, locationImage } from "~/server/db/schema";
 import { eq, count } from "drizzle-orm";
-import { isUpcImage } from "~/lib/image-utils";
 
 /**
  * Parse semicolon-separated image URLs into an array
@@ -29,9 +28,9 @@ function parseImageUrls(imageUrlString: string | undefined | null): string[] {
 }
 
 /**
- * Check if a product already has images
+ * Check if a product already has images (internal helper)
  */
-export async function productHasImages(
+async function productHasImages(
   db: Database,
   productId: ProductId,
 ): Promise<boolean> {
@@ -40,27 +39,6 @@ export async function productHasImages(
     .from(productImage)
     .where(eq(productImage.productId, productId));
   return (result[0]?.count ?? 0) > 0;
-}
-
-/**
- * Check if a product already has a UPC-fetched image.
- * UPC images have URLs containing "/upc-" in the path.
- */
-export async function productHasUPCImage(
-  db: Database,
-  productId: ProductId,
-): Promise<boolean> {
-  const dbClient = getDb(db);
-
-  // Join productImage with image to check the URL pattern
-  const result = await dbClient
-    .select({ url: image.url })
-    .from(productImage)
-    .innerJoin(image, eq(productImage.imageId, image.id))
-    .where(eq(productImage.productId, productId));
-
-  // Check if any image URL matches the UPC pattern
-  return result.some((r) => isUpcImage(r.url));
 }
 
 /**

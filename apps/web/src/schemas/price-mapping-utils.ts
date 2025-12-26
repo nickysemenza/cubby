@@ -15,10 +15,10 @@ export const isMoneyUnit = async (unit: string): Promise<boolean> => {
 /**
  * Checks if an amount represents a single unit (1 each)
  */
-export const isSingleEach = (amount: Amount): boolean =>
+const isSingleEach = (amount: Amount): boolean =>
   amount.value === 1 && amount.unit === "each";
 
-export interface PriceMappingMatch<T> {
+interface PriceMappingMatch<T> {
   /** The matched mapping object */
   match: T;
   /** Index in the original array */

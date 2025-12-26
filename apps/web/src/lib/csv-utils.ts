@@ -21,6 +21,7 @@ export const toCSVString = (value: unknown): string => {
 /**
  * Parse inventory CSV content into validated rows.
  * Handles header normalization and field mapping.
+ * @lintignore exported for testing
  */
 export function parseInventoryCSV(csvContent: string): InventoryCSVRow[] {
   const result = Papa.parse<Record<string, string>>(csvContent, {
@@ -67,6 +68,7 @@ export function parseInventoryCSV(csvContent: string): InventoryCSVRow[] {
 /**
  * Parse locations CSV content into rows.
  * Handles header normalization and field mapping.
+ * @lintignore exported for testing
  */
 export function parseLocationsCSV(csvContent: string): LocationCSVRow[] {
   const result = Papa.parse<Record<string, string>>(csvContent, {

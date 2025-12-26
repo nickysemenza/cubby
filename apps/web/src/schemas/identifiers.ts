@@ -4,8 +4,9 @@ import { z } from "zod";
 export const id = z.uuid().describe("entity identifier");
 
 // Branded ID types for type safety
-export const organizationId = z.uuid().brand("OrganizationId");
-export const userId = z.string().brand("UserId");
+// Not exported - used only for type inference
+const _organizationId = z.uuid().brand("OrganizationId");
+const _userId = z.string().brand("UserId");
 export const recipeId = z.uuid().brand("RecipeId");
 export const ingredientId = z.uuid().brand("IngredientId");
 export const productId = z.uuid().brand("ProductId");
@@ -13,8 +14,8 @@ export const locationId = z.uuid().brand("LocationId");
 export const inventoryId = z.uuid().brand("InventoryId");
 
 // Type exports
-export type OrganizationId = z.infer<typeof organizationId>;
-export type UserId = z.infer<typeof userId>;
+export type OrganizationId = z.infer<typeof _organizationId>;
+export type UserId = z.infer<typeof _userId>;
 export type RecipeId = z.infer<typeof recipeId>;
 export type IngredientId = z.infer<typeof ingredientId>;
 export type ProductId = z.infer<typeof productId>;

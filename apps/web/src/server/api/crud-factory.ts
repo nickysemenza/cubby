@@ -24,7 +24,10 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
     data: dataSchema,
   });
 
-// Base interface for services - used in public procedures where org may be null
+/**
+ * Base interface for services - used in public procedures where org may be null
+ * @lintignore base interface extended by ProtectedCrudServices
+ */
 export interface CrudServices {
   db: Database;
   organizationId: OrganizationId | null;

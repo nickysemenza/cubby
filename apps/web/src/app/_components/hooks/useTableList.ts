@@ -34,7 +34,7 @@ export interface UseTableListOptions<TFilters> {
   tableStateOptions?: TableStateOptions;
 }
 
-export interface UseTableListReturn<TData = unknown> {
+interface UseTableListReturn<TData = unknown> {
   data: TData[];
   totalCount: number;
   isLoading: boolean;

@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Context information for enhanced error messages when parsing fails.
  */
-export type ParseContext = {
+type ParseContext = {
   /** Entity type name (e.g., "Product", "Location") */
   entityType: string;
   /** Identifying information - can be a string or key-value pairs */

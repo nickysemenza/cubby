@@ -19,7 +19,7 @@ const sourceMetadata = z.discriminatedUnion("type", [
 ]);
 
 // Base unit mapping without sourceMetadata (for input)
-export const unitMappingBase = z.object({
+const unitMappingBase = z.object({
   a: amount.describe("first of pair"),
   b: amount.describe("second of pair"),
   source: z.string().nullable(),
@@ -59,37 +59,6 @@ export async function parseUnitMappingString(
     a: result.a,
     b: result.b,
     source: result.source ?? null,
-  };
-}
-
-/**
- * Validate a unit mapping string (async).
- * Returns true if valid, false if invalid.
- */
-export async function isValidUnitMappingString(
-  input: string,
-): Promise<boolean> {
-  try {
-    await parseUnitMappingString(input);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Shorthand string format like "4 lb = $5 @ whole foods" - basic string validation
-// Note: Full format validation happens async via parseUnitMappingString
-export const unitMappingFlexible = z.string().min(1);
-
-// Transform function to convert strings to objects (async)
-export async function transformUnitMapping(
-  val: string,
-): Promise<z.infer<typeof unitMappingBase>> {
-  const parsed = await parseUnitMappingString(val);
-  return {
-    a: parsed.a,
-    b: parsed.b,
-    source: parsed.source,
   };
 }
 

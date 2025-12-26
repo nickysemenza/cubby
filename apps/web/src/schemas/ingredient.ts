@@ -13,7 +13,10 @@ export const ingredientOut = z
   .extend(ingredientBase.shape)
   .extend(dbTimestampsOut.shape);
 
-// Input schema for updating ingredients
+/**
+ * Input schema for updating ingredients
+ * @lintignore knip false positive - used in ingredient-form.tsx
+ */
 export const ingredientUpdateInput = z.object({
   id: ingredientId,
   data: ingredientBase.partial(),

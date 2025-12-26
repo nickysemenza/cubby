@@ -33,12 +33,12 @@ import {
   incrementLegacyCounter,
   buildImportResult,
   pushErrorItem,
-} from "~/server/repo/csv";
+} from "~/server/repo/csv/result-helpers";
 
 // Re-export utilities that may be used externally
 export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
 
-export interface ImportOptions {
+interface ImportOptions {
   dryRun?: boolean;
   actor: ActorContext;
 }

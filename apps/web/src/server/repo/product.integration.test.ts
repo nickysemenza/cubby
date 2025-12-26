@@ -6,13 +6,9 @@ import {
   getProductByID,
   productList,
   updateProduct,
-  findProductByName,
   findProductByNameFuzzyManufacturer,
-  deleteProduct,
 } from "./product";
 import { createIngredient } from "./ingredient";
-import { createLocation } from "./location";
-import { createInventoryEntry } from "./inventory";
 import {
   unsafeIngredientId,
   unsafeProductId,
@@ -21,9 +17,6 @@ import {
   unsafeOrganizationId,
 } from "~/schemas/identifiers";
 import { type ActorContext } from "~/schemas/context";
-import { getDb } from "./database-helpers";
-import { productUnitMappings, inventoryEntry } from "../db/schema";
-import { eq } from "drizzle-orm";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
@@ -76,77 +69,6 @@ describe("product repository", () => {
     expect(retrievedProduct.manufacturer).toEqual(productData.manufacturer);
     expect(retrievedProduct.unitMappings).toEqual([]);
     expect(retrievedProduct.ingredient).toBeNull();
-  });
-
-  it("should find a product by name", async () => {
-    const productName = "Unique Product Name";
-
-    // Create a test product
-    await createProduct(
-      db,
-      {
-        name: productName,
-        manufacturer: "Test Manufacturer",
-        model: "MODEL-123",
-        upc: "123456789012",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    // Test finding the product by name
-    const foundProduct = await findProductByName(db, productName);
-
-    // Verify the product was found correctly
-    expect(foundProduct).toBeDefined();
-    expect(foundProduct.name).toEqual(productName);
-  });
-
-  it("should throw error when finding a non-existent product by name", async () => {
-    await expect(findProductByName(db, "Non-existent Product")).rejects.toThrow(
-      'Product with name "Non-existent Product" not found',
-    );
-  });
-
-  it("should throw error when finding an ambiguous product by name", async () => {
-    const ambiguousName = "Ambiguous Product";
-
-    // Create two products with the same name
-    await createProduct(
-      db,
-      {
-        name: ambiguousName,
-        manufacturer: "Manufacturer 1",
-        model: "MODEL-1",
-        upc: "111111111111",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-    await createProduct(
-      db,
-      {
-        name: ambiguousName,
-        manufacturer: "Manufacturer 2",
-        model: "MODEL-2",
-        upc: "222222222222",
-        ndb_number: null,
-        expectedQuantity: null,
-        ingredientId: null,
-        unitMappings: [],
-      },
-      TEST_ACTOR,
-    );
-
-    await expect(findProductByName(db, ambiguousName)).rejects.toThrow(
-      `Multiple products found with name "${ambiguousName}", please use ID`,
-    );
   });
 
   it("should list products with pagination and sorting", async () => {
@@ -675,205 +597,6 @@ describe("product repository", () => {
 
       expect(found).not.toBeNull();
       expect(found!.name).toEqual("Power Drill PRO");
-    });
-  });
-
-  describe("deleteProduct cascade", () => {
-    let actor: ActorContext;
-
-    beforeEach(() => {
-      actor = {
-        userId: unsafeUserId("test-user-id"),
-        organizationId,
-        source: "ui",
-      };
-    });
-
-    it("should delete product with unit mappings", async () => {
-      // Create a product with unit mappings
-      const product = await createProduct(
-        db,
-        {
-          name: "Product With Mappings",
-          manufacturer: "Brand",
-          model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [
-            {
-              a: { value: 1, unit: "each" },
-              b: { value: 5.99, unit: "dollar" },
-              source: "test",
-            },
-            {
-              a: { value: 1, unit: "lb" },
-              b: { value: 454, unit: "g" },
-              source: "test",
-            },
-          ],
-        },
-        actor,
-      );
-
-      // Verify mappings were created
-      const mappingsBefore = await getDb(db).query.productUnitMappings.findMany(
-        {
-          where: eq(productUnitMappings.productId, product.id),
-        },
-      );
-      expect(mappingsBefore.length).toBe(2);
-
-      // Delete the product
-      await deleteProduct(db, unsafeProductId(product.id), actor);
-
-      // Verify product is deleted
-      await expect(
-        getProductByID(db, unsafeProductId(product.id), organizationId),
-      ).rejects.toThrow();
-
-      // Verify unit mappings are deleted
-      const mappingsAfter = await getDb(db).query.productUnitMappings.findMany({
-        where: eq(productUnitMappings.productId, product.id),
-      });
-      expect(mappingsAfter.length).toBe(0);
-    });
-
-    it("should delete product with inventory entries", async () => {
-      // Create a product
-      const product = await createProduct(
-        db,
-        {
-          name: "Product With Inventory",
-          manufacturer: "Brand",
-          model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [],
-        },
-        actor,
-      );
-
-      // Create a location
-      const location = await createLocation(
-        db,
-        { name: "Test Location", type: "room", parentId: null },
-        actor,
-      );
-
-      // Create inventory entry
-      await createInventoryEntry(
-        db,
-        {
-          productId: unsafeProductId(product.id),
-          locationId: location.id,
-          amount: { value: 5, unit: "each" },
-        },
-        actor,
-      );
-
-      // Verify inventory entry was created
-      const entriesBefore = await getDb(db).query.inventoryEntry.findMany({
-        where: eq(inventoryEntry.productId, product.id),
-      });
-      expect(entriesBefore.length).toBe(1);
-
-      // Delete the product
-      await deleteProduct(db, unsafeProductId(product.id), actor);
-
-      // Verify product is deleted
-      await expect(
-        getProductByID(db, unsafeProductId(product.id), organizationId),
-      ).rejects.toThrow();
-
-      // Verify inventory entry is deleted
-      const entriesAfter = await getDb(db).query.inventoryEntry.findMany({
-        where: eq(inventoryEntry.productId, product.id),
-      });
-      expect(entriesAfter.length).toBe(0);
-    });
-
-    it("should delete product with both unit mappings and inventory entries", async () => {
-      // Create a product with unit mappings
-      const product = await createProduct(
-        db,
-        {
-          name: "Product With Everything",
-          manufacturer: "Brand",
-          model: null,
-          upc: null,
-          ndb_number: null,
-          expectedQuantity: null,
-          ingredientId: null,
-          unitMappings: [
-            {
-              a: { value: 1, unit: "each" },
-              b: { value: 9.99, unit: "dollar" },
-              source: "test",
-            },
-          ],
-        },
-        actor,
-      );
-
-      // Create locations and inventory entries
-      const location1 = await createLocation(
-        db,
-        { name: "Location 1", type: "room", parentId: null },
-        actor,
-      );
-      const location2 = await createLocation(
-        db,
-        { name: "Location 2", type: "room", parentId: null },
-        actor,
-      );
-
-      await createInventoryEntry(
-        db,
-        {
-          productId: unsafeProductId(product.id),
-          locationId: location1.id,
-          amount: { value: 3, unit: "each" },
-        },
-        actor,
-      );
-      await createInventoryEntry(
-        db,
-        {
-          productId: unsafeProductId(product.id),
-          locationId: location2.id,
-          amount: { value: 7, unit: "each" },
-        },
-        actor,
-      );
-
-      // Verify everything was created
-      const mappingsBefore = await getDb(db).query.productUnitMappings.findMany(
-        {
-          where: eq(productUnitMappings.productId, product.id),
-        },
-      );
-      const entriesBefore = await getDb(db).query.inventoryEntry.findMany({
-        where: eq(inventoryEntry.productId, product.id),
-      });
-      expect(mappingsBefore.length).toBe(1);
-      expect(entriesBefore.length).toBe(2);
-
-      // Delete the product
-      await deleteProduct(db, unsafeProductId(product.id), actor);
-
-      // Verify all related records are deleted
-      const mappingsAfter = await getDb(db).query.productUnitMappings.findMany({
-        where: eq(productUnitMappings.productId, product.id),
-      });
-      const entriesAfter = await getDb(db).query.inventoryEntry.findMany({
-        where: eq(inventoryEntry.productId, product.id),
-      });
-      expect(mappingsAfter.length).toBe(0);
-      expect(entriesAfter.length).toBe(0);
     });
   });
 });

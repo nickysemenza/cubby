@@ -1,4 +1,4 @@
-import { type Database, type Transaction } from "~/server/db";
+import { type Database } from "~/server/db";
 import {
   type SortParams,
   type PaginationParams,
@@ -86,7 +86,7 @@ export const getInventoryEntryByID = async (
 };
 
 /** Filters for inventory list queries */
-export interface InventoryFilters {
+interface InventoryFilters {
   productNameFilter?: string;
   locationNameFilter?: string;
   locationIdFilter?: string;
@@ -281,26 +281,6 @@ export const createInventoryEntry = async (
   }
 
   return dbInventoryEntryToAPI(result);
-};
-
-/**
- * Find inventory entry by product and location
- */
-export const findInventoryByProductAndLocation = async (
-  db: Database | Transaction,
-  organizationId: OrganizationId,
-  productId: ProductId,
-  targetLocationId: LocationId,
-) => {
-  const dbClient = "query" in db ? db : getDb(db);
-  return await dbClient.query.inventoryEntry.findFirst({
-    where: and(
-      eq(inventoryEntry.productId, productId),
-      eq(inventoryEntry.locationId, targetLocationId),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
-    ...relations.inventory.full,
-  });
 };
 
 /**

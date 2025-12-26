@@ -80,7 +80,7 @@ const createServingMapping = async (
 /**
  * Converts a raw food portion to a unit mapping
  */
-export const unitMappingFromPortionInfo = (
+const unitMappingFromPortionInfo = (
   portionInfo: {
     amount: number;
     modifier: string | null;

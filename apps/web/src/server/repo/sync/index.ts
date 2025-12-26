@@ -9,6 +9,4 @@ export {
   // Converters
   syncItemsToLocationCSVRows,
   syncItemsToInventoryCSVRows,
-  locationAppDataToCSVRow,
-  inventoryAppDataToCSVRow,
 } from "./comparison";

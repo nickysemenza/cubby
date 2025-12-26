@@ -6,7 +6,7 @@
  * Check if an image URL is from a UPC lookup service.
  * These images are managed separately and should be excluded from exports.
  */
-export function isUpcImage(url: string): boolean {
+function isUpcImage(url: string): boolean {
   return url.includes("/upc-");
 }
 

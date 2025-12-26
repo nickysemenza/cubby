@@ -66,21 +66,3 @@ export function NutrientsSummary({
     </div>
   );
 }
-
-/**
- * Compact summary showing just kcal and protein in a single line
- */
-export function NutrientsSummaryCompact({
-  nutrients,
-}: {
-  nutrients: NutrientsPer100;
-}) {
-  const kcal = nutrients["208"] ?? 0;
-  const protein = nutrients["203"] ?? 0;
-
-  return (
-    <span className="text-muted-foreground text-xs">
-      {kcal.toFixed(0)} kcal, {protein.toFixed(1)}g protein
-    </span>
-  );
-}

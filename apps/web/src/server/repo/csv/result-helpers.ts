@@ -7,9 +7,7 @@
 
 import {
   type FieldChange,
-  INVENTORY_CSV_ACTIONS,
   LOCATION_CSV_ACTIONS,
-  type InventoryCSVAction,
   type LocationCSVAction,
 } from "~/schemas/csv";
 
@@ -20,12 +18,12 @@ import {
 /**
  * Generic counter type - keys are the action names
  */
-export type ResultCounters<TAction extends string> = Record<TAction, number>;
+type ResultCounters<TAction extends string> = Record<TAction, number>;
 
 /**
  * Create counters initialized to zero for any action set
  */
-export function createCounters<TAction extends string>(
+function createCounters<TAction extends string>(
   actions: readonly TAction[],
 ): ResultCounters<TAction> {
   return Object.fromEntries(
@@ -41,27 +39,6 @@ export function incrementCounter<TAction extends string>(
   action: TAction,
 ): void {
   counters[action]++;
-}
-
-/**
- * Build a result object from counters and items
- */
-export function buildResult<TAction extends string, TItem>(
-  counters: ResultCounters<TAction>,
-  items: TItem[],
-): { items: TItem[] } & ResultCounters<TAction> {
-  return { ...counters, items };
-}
-
-// =============================================================================
-// Pre-configured Counter Factories
-// =============================================================================
-
-/**
- * Create counters for inventory CSV operations
- */
-export function createInventoryCounters(): ResultCounters<InventoryCSVAction> {
-  return createCounters(INVENTORY_CSV_ACTIONS);
 }
 
 /**
@@ -85,7 +62,7 @@ import {
  * Legacy result counters interface for inventory
  * @deprecated Use createInventoryCounters() instead
  */
-export interface LegacyResultCounters {
+interface LegacyResultCounters {
   created: number;
   moved: number;
   updated: number;
@@ -179,7 +156,7 @@ interface ResultItemBase {
 /**
  * Build a result item and increment the counter
  */
-export function pushResultItem(
+function pushResultItem(
   items: CSVImportResultItem[],
   counters: LegacyResultCounters,
   action: CSVImportResultItem["action"],

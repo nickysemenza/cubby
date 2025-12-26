@@ -16,7 +16,7 @@ import {
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
 
-export interface LocationSegment {
+interface LocationSegment {
   id?: string;
   name: string;
   type: LocationType;

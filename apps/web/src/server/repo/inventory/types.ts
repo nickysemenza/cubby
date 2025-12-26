@@ -73,6 +73,3 @@ export interface ProductExportFields {
   Ingredient: { name: string; aliases: string[] } | null;
   images: Array<{ image: { url: string } }>;
 }
-
-// Re-export Amount for convenience
-export type { Amount };

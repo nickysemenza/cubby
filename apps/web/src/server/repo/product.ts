@@ -20,7 +20,6 @@ import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import {
   formatSearchTerm,
   getDb,
-  unwrapDb,
   relations,
   buildOrderBy,
   updateAndReturn,
@@ -30,7 +29,6 @@ import {
   associatePendingImages,
   executeListQueryWithCount,
 } from "~/server/repo/database-helpers";
-import { notFoundByNameError, ambiguousNameError } from "~/lib/error-messages";
 import { createAppError } from "~/server/api/trpc";
 import {
   type ProductId,
@@ -50,24 +48,6 @@ import {
 import { eq, and, count, ilike, inArray, isNotNull, isNull } from "drizzle-orm";
 import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 import { type ActorContext } from "~/schemas/context";
-
-export const findProductByName = async (
-  db: Database | Transaction,
-  name: string,
-): Promise<typeof product.$inferSelect> => {
-  const p = await unwrapDb(db).query.product.findMany({
-    where: ilike(product.name, name),
-  });
-
-  switch (p.length) {
-    case 0:
-      throw new Error(notFoundByNameError("Product", name));
-    case 1:
-      return p[0];
-    default:
-      throw new Error(ambiguousNameError("product", name));
-  }
-};
 
 // Type for deeply nested product query
 type ProductDeepDB = typeof product.$inferSelect & {
@@ -553,8 +533,8 @@ export const findProductByUPC = async (
   );
 };
 
-// Find a product by name and manufacturer within an organization
-export const findProductByNameAndManufacturer = async (
+// Find a product by name and manufacturer within an organization (internal helper)
+const findProductByNameAndManufacturer = async (
   db: Database,
   name: string,
   manufacturer: string,
@@ -772,55 +752,6 @@ export const findDuplicateUniqueProducts = async (
   });
 
   return duplicates.filter((prod) => prod.InventoryEntry.length > 1);
-};
-
-/**
- * Delete a product by ID
- *
- * This will also delete:
- * - Associated inventory entries
- * - Associated unit mappings
- * - Associated images (product_image join table)
- */
-export const deleteProduct = async (
-  db: Database,
-  id: ProductId,
-  actor: ActorContext,
-): Promise<void> => {
-  const { organizationId } = actor;
-
-  // Delete related records first (no ON DELETE CASCADE in schema)
-  // Order matters due to potential dependencies
-
-  // Delete inventory entries for this product
-  await getDb(db)
-    .delete(inventoryEntry)
-    .where(
-      and(
-        eq(inventoryEntry.productId, id),
-        eq(inventoryEntry.organizationId, organizationId),
-      ),
-    );
-
-  // Delete unit mappings for this product
-  await getDb(db)
-    .delete(productUnitMappings)
-    .where(eq(productUnitMappings.productId, id));
-
-  // Delete product image associations
-  await getDb(db).delete(productImage).where(eq(productImage.productId, id));
-
-  // Finally delete the product itself
-  await getDb(db)
-    .delete(product)
-    .where(and(eq(product.id, id), eq(product.organizationId, organizationId)));
-
-  // Log audit entry
-  await logAuditEntry(db, actor, {
-    entityType: "product",
-    entityId: id,
-    action: "delete",
-  });
 };
 
 /**

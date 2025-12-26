@@ -154,14 +154,14 @@ export const checkPriceMappingChanges = async (
   return undefined;
 };
 
-export interface UnitMappingPreviewDetail {
+interface UnitMappingPreviewDetail {
   from: string;
   to: string;
   source?: string;
   error?: string;
 }
 
-export interface UnitMappingsPreviewResult {
+interface UnitMappingsPreviewResult {
   count: number;
   details: UnitMappingPreviewDetail[];
   errors: string[];

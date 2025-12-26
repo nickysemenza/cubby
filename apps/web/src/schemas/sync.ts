@@ -11,7 +11,7 @@ import { locationId, productId, inventoryId } from "./identifiers";
 /**
  * Sync states for items
  */
-export const syncState = z.enum([
+const syncState = z.enum([
   "matched", // Identical in both app and sheet
   "conflict", // Different in both app and sheet
   "app_only", // Exists in app but not in sheet
@@ -25,7 +25,7 @@ export type SyncState = z.infer<typeof syncState>;
 /**
  * Resolution actions for sync items
  */
-export const syncResolution = z.enum([
+const syncResolution = z.enum([
   "use_app", // Use app version (for conflicts)
   "use_sheet", // Use sheet version (for conflicts)
   "add_to_app", // Add to app (for sheet_only, default)
@@ -39,9 +39,9 @@ export const syncResolution = z.enum([
 export type SyncResolution = z.infer<typeof syncResolution>;
 
 /**
- * Base sync item - common fields for all sync items
+ * Base sync item - common fields for all sync items (internal, used by locationSyncItem/inventorySyncItem)
  */
-export const baseSyncItem = z.object({
+const baseSyncItem = z.object({
   state: syncState,
   defaultResolution: syncResolution.nullable(),
   resolution: syncResolution.nullable(), // User's choice, null if not yet resolved
@@ -51,7 +51,7 @@ export const baseSyncItem = z.object({
 /**
  * Location sync item
  */
-export const locationSyncItem = baseSyncItem.extend({
+const locationSyncItem = baseSyncItem.extend({
   entityType: z.literal("location"),
   key: z.string(), // Normalized location name
   appData: z
@@ -105,7 +105,7 @@ const inventorySyncFields = z.object({
 /**
  * Inventory sync item
  */
-export const inventorySyncItem = baseSyncItem.extend({
+const inventorySyncItem = baseSyncItem.extend({
   entityType: z.literal("inventory"),
   key: z.string(), // Normalized product|manufacturer|location
   appData: inventorySyncFields
@@ -169,8 +169,6 @@ export const applySyncInput = z.object({
   inventoryResolutions: z.record(z.string(), syncResolution), // key -> resolution
 });
 
-export type ApplySyncInput = z.infer<typeof applySyncInput>;
-
 /**
  * Result of applying sync
  */
@@ -192,8 +190,6 @@ export const applySyncResult = z.object({
   errorMessages: z.array(z.string()),
 });
 
-export type ApplySyncResult = z.infer<typeof applySyncResult>;
-
 /**
  * Check if a value is empty (null, undefined, or empty string)
  */
@@ -204,8 +200,9 @@ function isEmpty(value: unknown): boolean {
 /**
  * Get smart default resolution for conflicts based on field diffs.
  * If all changes are additive (empty → value), default to using the side with values.
+ * Internal helper - used only by getDefaultResolution.
  */
-export function getSmartConflictResolution(
+function getSmartConflictResolution(
   fieldDiffs: Array<{ from: unknown; to: unknown }>,
 ): SyncResolution | null {
   if (fieldDiffs.length === 0) return null;

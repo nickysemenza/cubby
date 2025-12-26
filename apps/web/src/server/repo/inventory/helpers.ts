@@ -1,10 +1,8 @@
 import { type z } from "zod";
-import { type Database } from "~/server/db";
 import { type inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { locationType } from "~/schemas/location";
 import { parseWithContext } from "~/lib/zod-utils";
 import {
-  getDb,
   extractImagesFromJoinTable,
   addProductSourceMetadata,
   parseInventoryAmount,
@@ -13,19 +11,8 @@ import {
   unsafeInventoryId,
   unsafeProductId,
   unsafeLocationId,
-  type OrganizationId,
-  type ProductId,
 } from "~/schemas/identifiers";
-import { inventoryEntry } from "~/server/db/schema";
-import { eq, and } from "drizzle-orm";
 import { type InventoryEntryDeepDB } from "./types";
-
-// Re-export price mapping utilities for backward compatibility
-export {
-  isMoneyUnit,
-  extractPriceFromMappings,
-  serializeUnitMappings,
-} from "~/schemas/price-mapping-utils";
 
 export const dbInventoryEntryToAPI: (
   inventoryentry: InventoryEntryDeepDB,
@@ -62,23 +49,4 @@ export const dbInventoryEntryToAPI: (
       images: extractImagesFromJoinTable(Product.images),
     },
   };
-};
-
-// Get total quantity of a product across all locations
-export const getTotalProductQuantity = async (
-  db: Database,
-  productId: ProductId,
-  organizationId: OrganizationId,
-): Promise<number> => {
-  const entries = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.productId, productId),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
-  });
-
-  return entries.reduce((total, entry) => {
-    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
-    return total + parsedAmount.value;
-  }, 0);
 };

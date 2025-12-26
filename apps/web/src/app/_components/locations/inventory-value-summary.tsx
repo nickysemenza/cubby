@@ -14,7 +14,7 @@ import {
 
 type Variant = "compact" | "full";
 
-export interface InventoryValueSummaryProps {
+interface InventoryValueSummaryProps {
   locationId?: string;
   items?: InventoryItem[];
   variant?: Variant;

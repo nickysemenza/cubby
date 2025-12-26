@@ -6,14 +6,14 @@ import { isMiscProduct } from "~/lib/constants";
 
 export type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
-export type InventoryValueBreakdown = {
+type InventoryValueBreakdown = {
   key: string;
   label: string;
   value: number;
 };
 
 /** Per-category breakdown with counts and item names */
-export type PricingCategorySummary = {
+type PricingCategorySummary = {
   count: number;
   itemNames: string[];
 };

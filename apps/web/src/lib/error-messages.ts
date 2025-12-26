@@ -3,13 +3,6 @@
  * Using template functions ensures consistency and prevents typos.
  */
 
-// Entity not found errors
-export const notFoundByNameError = (entity: string, name: string) =>
-  `${entity} with name "${name}" not found`;
-
-export const ambiguousNameError = (entity: string, name: string) =>
-  `Multiple ${entity}s found with name "${name}", please use ID`;
-
 // Database operation errors
 export const FAILED_TO_INSERT = "Failed to insert record";
 export const FAILED_TO_UPDATE = "Failed to update record";

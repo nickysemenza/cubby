@@ -8,7 +8,7 @@
 import { type InventoryCSVRow } from "~/schemas/inventory";
 import { type FieldChange } from "~/schemas/csv";
 import type { InventoryCSVExportRow } from "./types";
-import { normalizeForComparison } from "~/server/repo/csv";
+import { normalizeForComparison } from "~/server/repo/csv/normalize";
 
 /**
  * Compare two row values and return structured field changes

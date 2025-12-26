@@ -9,7 +9,7 @@ import {
 } from "@recipehub/usda-schemas";
 
 // Zod schemas for summary data types
-export const recipeSummaryDataSchema = z.object({
+const recipeSummaryDataSchema = z.object({
   price: z.number(),
   weight: z.number(),
   nutrients: z.record(z.string(), z.number()),
@@ -21,7 +21,7 @@ export const recipeSummaryDataSchema = z.object({
   }),
 });
 
-export const nutritionSummaryDataSchema = z.object({
+const nutritionSummaryDataSchema = z.object({
   calories: z.number(),
   protein: z.number(),
   carbs: z.number(),
@@ -30,7 +30,7 @@ export const nutritionSummaryDataSchema = z.object({
   sugar: z.number().optional(),
 });
 
-export const inventorySummaryDataSchema = z.object({
+const inventorySummaryDataSchema = z.object({
   totalValue: z.number(),
   itemCount: z.number(),
   locationCount: z.number(),
@@ -38,12 +38,12 @@ export const inventorySummaryDataSchema = z.object({
 });
 
 // Schema for serializable summary items (without formatter function)
-export const summaryItemSchema = z.object({
+const summaryItemSchema = z.object({
   label: z.string(),
   value: z.union([z.string(), z.number()]),
 });
 
-export const customSummaryDataSchema = z.object({
+const customSummaryDataSchema = z.object({
   items: z.array(summaryItemSchema),
 });
 
@@ -56,23 +56,23 @@ export const entitySummaryDataSchema = z.discriminatedUnion("type", [
 
 // Derived types from Zod schemas
 export type RecipeSummaryData = z.infer<typeof recipeSummaryDataSchema>;
-export type NutritionSummaryData = z.infer<typeof nutritionSummaryDataSchema>;
-export type InventorySummaryData = z.infer<typeof inventorySummaryDataSchema>;
+type NutritionSummaryData = z.infer<typeof nutritionSummaryDataSchema>;
+type InventorySummaryData = z.infer<typeof inventorySummaryDataSchema>;
 
 // CustomSummaryData uses SummaryItem which includes optional formatter function
 // (formatter is not in Zod schema since functions aren't serializable)
-export interface CustomSummaryData {
+interface CustomSummaryData {
   items: SummaryItem[];
 }
 
 // EntitySummaryData type - extends Zod schema with formatter support for custom type
-export type EntitySummaryData =
+type EntitySummaryData =
   | { type: "recipe"; data: RecipeSummaryData }
   | { type: "nutrition"; data: NutritionSummaryData }
   | { type: "inventory"; data: InventorySummaryData }
   | { type: "custom"; data: CustomSummaryData };
 
-export interface EntitySummaryCardProps {
+interface EntitySummaryCardProps {
   title?: string;
   description?: string;
   className?: string;

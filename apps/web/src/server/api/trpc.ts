@@ -37,7 +37,7 @@ import {
   UserId,
 } from "~/schemas/identifiers";
 import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
-import { type ActorContext, buildActorContext } from "~/schemas/context";
+import { buildActorContext } from "~/schemas/context";
 
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([
@@ -93,44 +93,6 @@ export function createAppError(
     message,
     cause: { reason, originalError },
   });
-}
-
-/**
- * Extract userId from auth context, converting null to undefined for optional parameters.
- * Use this when passing userId to repo/service functions that expect `userId?: string`.
- * @deprecated Use requireUserId instead for functions that require userId
- */
-export function getUserId(
-  auth: { userId: UserId | null; sessionId: string | null } | undefined,
-): string | undefined {
-  return auth?.userId ?? undefined;
-}
-
-/**
- * Extract userId from auth context, throwing if not authenticated.
- * Use this in protected procedures where a user is required.
- */
-export function requireUserId(
-  auth: { userId: UserId | null; sessionId: string | null } | undefined,
-): UserId {
-  const userId = auth?.userId;
-  if (!userId) {
-    throw createAppError("UNAUTHORIZED", "User authentication required");
-  }
-  return userId;
-}
-
-/**
- * Extract ActorContext from tRPC context, throwing if not authenticated.
- * Use this in protected procedures that modify data.
- */
-export function requireActorContext(ctx: {
-  actorContext: ActorContext | null;
-}): ActorContext {
-  if (!ctx.actorContext) {
-    throw createAppError("UNAUTHORIZED", "Authentication required");
-  }
-  return ctx.actorContext;
 }
 
 /**
@@ -458,6 +420,7 @@ const createTestAuth = (userId: UserId) => ({
 
 /**
  * Test helper to create a TRPC context for testing purposes
+ * @lintignore exported for testing
  */
 export const createTestTRPCContext = (
   db: Database,

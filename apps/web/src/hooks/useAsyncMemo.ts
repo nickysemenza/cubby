@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, type DependencyList } from "react";
 
-export interface CancellationSignal {
+interface CancellationSignal {
   cancelled: boolean;
 }
 

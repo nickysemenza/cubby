@@ -5,10 +5,8 @@
  * Used by the omnidirectional sync feature.
  */
 
-import {
-  normalizeForComparison,
-  normalizeManufacturer,
-} from "~/server/repo/csv";
+import { normalizeForComparison } from "~/server/repo/csv/normalize";
+import { normalizeManufacturer } from "~/lib/manufacturer-utils";
 import { getLocationRowDifferences } from "~/server/repo/location/csv-comparison";
 import { getRowDifferences as getInventoryRowDifferences } from "~/server/repo/inventory/csv-comparison";
 import {
@@ -647,7 +645,7 @@ export function countByState<T extends { state: SyncState }>(
 /**
  * Convert location sync item sheetData to LocationCSVRow format
  */
-export const locationSheetDataToCSVRow = (
+const locationSheetDataToCSVRow = (
   sheetData: NonNullable<LocationSyncItem["sheetData"]>,
 ): LocationCSVRow => ({
   location_name: sheetData.locationName,
@@ -661,7 +659,7 @@ export const locationSheetDataToCSVRow = (
 /**
  * Convert location sync item appData to LocationCSVRow format
  */
-export const locationAppDataToCSVRow = (
+const locationAppDataToCSVRow = (
   appData: NonNullable<LocationSyncItem["appData"]>,
 ): LocationCSVRow => ({
   location_name: appData.locationName,
@@ -675,7 +673,7 @@ export const locationAppDataToCSVRow = (
 /**
  * Convert inventory sync item sheetData to InventoryCSVRow format
  */
-export const inventorySheetDataToCSVRow = (
+const inventorySheetDataToCSVRow = (
   sheetData: NonNullable<InventorySyncItem["sheetData"]>,
 ): InventoryCSVRow => ({
   product_name: sheetData.productName ?? "",
@@ -697,7 +695,7 @@ export const inventorySheetDataToCSVRow = (
 /**
  * Convert inventory sync item appData to InventoryCSVRow format
  */
-export const inventoryAppDataToCSVRow = (
+const inventoryAppDataToCSVRow = (
   appData: NonNullable<InventorySyncItem["appData"]>,
 ): InventoryCSVRow => ({
   product_name: appData.productName,

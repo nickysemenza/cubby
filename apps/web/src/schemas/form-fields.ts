@@ -32,24 +32,6 @@ export const requiredLocationField = ComboboxItem.nullable().refine(
   { message: "Please select a location" },
 );
 
-/**
- * Type alias for product combobox items with branded IDs.
- * Use this when you need the typed version of the combobox value.
- */
-export type ProductComboboxItem = ComboboxItem<ProductId>;
-
-/**
- * Type alias for location combobox items with branded IDs.
- * Use this when you need the typed version of the combobox value.
- */
-export type LocationComboboxItem = ComboboxItem<LocationId>;
-
-/**
- * Type alias for ingredient combobox items with branded IDs.
- * Use this when you need the typed version of the combobox value.
- */
-export type IngredientComboboxItem = ComboboxItem<IngredientId>;
-
 // -----------------------------------------------------------------------------
 // ID Extraction Helpers
 // -----------------------------------------------------------------------------

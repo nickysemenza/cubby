@@ -6,7 +6,7 @@ export const UNSPECIFIED_MANUFACTURER = "(unspecified)";
 /**
  * Prefix for misc/bulk products that skip validation (pricing, UPC, etc.)
  */
-export const MISC_PREFIX = "misc:";
+const MISC_PREFIX = "misc:";
 
 /**
  * Check if a product name indicates it's a misc/bulk item

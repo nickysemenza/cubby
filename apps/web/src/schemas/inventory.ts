@@ -51,7 +51,7 @@ export const inventoryBulkOperationPayload = z.object({
 });
 
 // Schema for bulk move operations (moving items between locations)
-export const bulkMoveItem = z.object({
+const bulkMoveItem = z.object({
   inventoryEntryId: inventoryId,
   quantity: amount, // How much to move (can be less than total for partial moves)
 });
@@ -89,17 +89,15 @@ export const inventoryCSVRow = z.object({
 
 export type InventoryCSVRow = z.infer<typeof inventoryCSVRow>;
 
-// Unit mapping detail for preview display
-export const unitMappingDetail = z.object({
+// Unit mapping detail for preview display (internal, used by productChangesPreview)
+const unitMappingDetail = z.object({
   from: z.string(), // e.g., "1 stick"
   to: z.string(), // e.g., "113.4g"
 });
 
-export type UnitMappingDetail = z.infer<typeof unitMappingDetail>;
-
 // Product metadata changes for preview
 // Each field has optional "current" value for showing from→to changes
-export const productChangesPreview = z.object({
+const productChangesPreview = z.object({
   // Manufacturer update (from "(unspecified)" to specific)
   manufacturerWillBeSet: z.string().optional(),
   manufacturerCurrent: z.string().nullable().optional(),
@@ -139,7 +137,7 @@ export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
 import { fieldChange } from "./csv";
 
 // Result types for CSV import (and push preview)
-export const csvImportResultItem = z.object({
+const csvImportResultItem = z.object({
   rowIndex: z.number(),
   action: z.enum([
     "created",

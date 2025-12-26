@@ -19,7 +19,10 @@ import {
   previewLocationImages,
   locationHasImages,
 } from "~/server/repo/inventory/csv-import/image-handler";
-import { createLocationCounters, incrementCounter } from "~/server/repo/csv";
+import {
+  createLocationCounters,
+  incrementCounter,
+} from "~/server/repo/csv/result-helpers";
 
 interface ImportOptions {
   dryRun: boolean;

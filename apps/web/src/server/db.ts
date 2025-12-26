@@ -36,7 +36,7 @@ if (env.NODE_ENV !== "production") globalForDb.db = dbInstance;
  * This brands the client to enforce that direct database access only happens in repo files.
  * Use this when creating Database instances (e.g., in test setup).
  */
-export const toBrandedDatabase = (
+const toBrandedDatabase = (
   client: ReturnType<typeof createDBClient>,
 ): Database => {
   return client as unknown as Database;

@@ -2,11 +2,11 @@ import { cn } from "~/lib/utils";
 import { Skeleton } from "~/components/ui/skeleton";
 
 // Reusable skeleton patterns built on shadcn Skeleton
-export function SkeletonText({ className }: { className?: string }) {
+function SkeletonText({ className }: { className?: string }) {
   return <Skeleton className={cn("h-4", className)} />;
 }
 
-export function SkeletonCard() {
+function SkeletonCard() {
   return (
     <div className="flex items-center space-x-4">
       <Skeleton className="h-12 w-12" />
@@ -18,7 +18,7 @@ export function SkeletonCard() {
   );
 }
 
-export function SkeletonGrid({ count = 6 }: { count?: number }) {
+function SkeletonGrid({ count = 6 }: { count?: number }) {
   return (
     <div className="space-y-3">
       {Array.from({ length: count }, (_, i) => (
@@ -80,6 +80,3 @@ export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
     </div>
   );
 }
-
-// Re-export shadcn Skeleton for direct use
-export { Skeleton };

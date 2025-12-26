@@ -3,21 +3,23 @@
     "wasm/**",
     "types.ts",
     "src/components/ui/**",
-    "src/trpc/react.tsx"
+    "src/trpc/react.tsx",
+    "scripts/**",
+    "tests/**",
+    "tooling/**"
   ],
-  "ignoreBinaries": ["wasm-pack"],
   "ignoreDependencies": [
-    "@eslint/compat",
-    "@eslint/js",
-    "@testing-library/jest-dom",
+    "@devoxa/integresql-client",
+    "@eslint/.+",
+    "@recipehub/.+",
+    "@testing-library/.+",
     "@types/eslint",
-    "@typescript-eslint/eslint-plugin",
-    "@typescript-eslint/parser",
-    "@vitest/coverage-v8",
-    "eslint-config-next",
-    "eslint-plugin-react-hooks",
-    "prisma-dbml-generator",
-    "prisma-json-types-generator",
-    "tailwindcss"
-  ]
+    "@typescript-eslint/.+",
+    "@vitest/.+",
+    "commander",
+    "copy-webpack-plugin",
+    "eslint-plugin-.+",
+    "vite-plugin-wasm"
+  ],
+  "tags": ["-lintignore"]
 }

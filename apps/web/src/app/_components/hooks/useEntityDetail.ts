@@ -31,7 +31,7 @@ interface WithId {
   id: string;
 }
 
-export interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
+interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   /** The entity type */
   entity: Entity;
   /** The entity data */
@@ -44,7 +44,7 @@ export interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   onSuccess?: () => void;
 }
 
-export interface UseEntityDetailReturn<TUpdateInput> {
+interface UseEntityDetailReturn<TUpdateInput> {
   /** Common sections based on entity config (images, unit-mappings, history) */
   commonSections: DetailSection[];
   /** Edit mode state and handlers */

@@ -31,7 +31,7 @@ type FilterDef = string | FilterableColumn;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyColumnDef<TData> = ColumnDef<TData, any>;
 
-export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
+interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   /** The entity type */
   entity: Entity;
   /** tRPC queryOptions function */
@@ -52,7 +52,7 @@ export interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   onGlobalFilterChange?: (value: unknown) => void;
 }
 
-export interface UseEntityListReturn<TData> {
+interface UseEntityListReturn<TData> {
   /** Configured table instance */
   table: Table<TData>;
   /** Expanded filterable columns config */

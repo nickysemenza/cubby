@@ -11,7 +11,7 @@ import { upc as upcSchema } from "@recipehub/usda-schemas";
 import { isMiscProduct } from "~/lib/constants";
 
 // Interface for the complete problems result
-export interface AllProblems {
+interface AllProblems {
   duplicateUniqueProducts: DuplicateUniqueProduct[];
   orphanedProducts: OrphanedProduct[];
   invalidUPCs: InvalidUPC[];
@@ -75,7 +75,7 @@ export interface EmptyLocation {
 }
 
 // Find products with expectedQuantity=1 that appear in multiple locations
-export const findDuplicateUniqueProducts = async (
+const findDuplicateUniqueProducts = async (
   db: Database,
   organizationId: string,
 ): Promise<DuplicateUniqueProduct[]> => {
@@ -122,7 +122,7 @@ export const findDuplicateUniqueProducts = async (
 };
 
 // Find products that have no inventory entries
-export const findOrphanedProducts = async (
+const findOrphanedProducts = async (
   db: Database,
   organizationId: string,
 ): Promise<OrphanedProduct[]> => {
@@ -152,7 +152,7 @@ export const findOrphanedProducts = async (
 };
 
 // Find products with invalid or duplicate UPC codes
-export const findInvalidUPCs = async (
+const findInvalidUPCs = async (
   db: Database,
   organizationId: string,
 ): Promise<InvalidUPC[]> => {
@@ -210,7 +210,7 @@ export const findInvalidUPCs = async (
 
 // Find products without any unit mappings (no pricing information)
 // Excludes misc products since they don't need pricing
-export const findProductsWithoutMappings = async (
+const findProductsWithoutMappings = async (
   db: Database,
   organizationId: string,
 ): Promise<ProductWithoutMappings[]> => {
@@ -241,7 +241,7 @@ export const findProductsWithoutMappings = async (
 };
 
 // Find inventory entries with zero or negative amounts
-export const findInvalidInventoryAmounts = async (
+const findInvalidInventoryAmounts = async (
   db: Database,
   organizationId: string,
 ): Promise<InvalidInventoryAmount[]> => {
@@ -286,7 +286,7 @@ export const findInvalidInventoryAmounts = async (
 };
 
 // Find leaf locations with no inventory entries (excludes parent locations)
-export const findEmptyLocations = async (
+const findEmptyLocations = async (
   db: Database,
   organizationId: string,
 ): Promise<EmptyLocation[]> => {

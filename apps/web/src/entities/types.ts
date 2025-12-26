@@ -13,19 +13,19 @@ export type Entity =
   | "image";
 
 /** Common section types that can be auto-generated for detail pages */
-export type CommonSectionType = "images" | "history" | "unit-mappings";
+type CommonSectionType = "images" | "history" | "unit-mappings";
 
 /** Standard column types that can be auto-included in list pages */
-export type StandardColumnType = "image" | "name" | "createdAt";
+type StandardColumnType = "image" | "name" | "createdAt";
 
 /** Detail page conventions for an entity */
-export interface EntityDetailConfig {
+interface EntityDetailConfig {
   /** Auto-include these common section types */
   commonSections?: CommonSectionType[];
 }
 
 /** List page conventions for an entity */
-export interface EntityListConfig {
+interface EntityListConfig {
   /** Include unit mappings column (triggers async loading) */
   hasUnitMappings?: boolean;
   /** Default sort column */

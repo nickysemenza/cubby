@@ -12,7 +12,7 @@ function isTRPCClientError(
   return messageOk && dataOk;
 }
 
-export type AppErrorDetails = {
+type AppErrorDetails = {
   message: string;
   code?: string;
   reason?: AppErrorReason;
@@ -64,8 +64,6 @@ export function shouldRetryQuery(
   if (isNonRetriableError(details)) return false;
   return failureCount < 3;
 }
-
-export type { AppErrorReason };
 
 /**
  * Safely extract error message from unknown error type.

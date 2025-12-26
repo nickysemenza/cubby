@@ -1,10 +1,5 @@
 import { beforeAll, describe, expect, test } from "vitest";
-import {
-  unitMappingFlexible,
-  transformUnitMapping,
-  parseUnitMappingString,
-  isValidUnitMappingString,
-} from "./unitmapping";
+import { parseUnitMappingString } from "./unitmapping";
 import { ensureWasm } from "~/lib/wasm";
 
 // Initialize WASM before all tests
@@ -95,47 +90,5 @@ describe("parseUnitMappingString", () => {
     await expect(parseUnitMappingString("invalid")).rejects.toThrow();
     await expect(parseUnitMappingString("4 lb")).rejects.toThrow();
     await expect(parseUnitMappingString("")).rejects.toThrow();
-  });
-});
-
-describe("isValidUnitMappingString", () => {
-  test("returns true for valid inputs", async () => {
-    expect(await isValidUnitMappingString("4 lb = $5")).toBe(true);
-    expect(await isValidUnitMappingString("$5/4lb")).toBe(true);
-    expect(await isValidUnitMappingString("1 cup = 120g @ store")).toBe(true);
-  });
-
-  test("returns false for invalid inputs", async () => {
-    expect(await isValidUnitMappingString("invalid")).toBe(false);
-    expect(await isValidUnitMappingString("4 lb")).toBe(false);
-    expect(await isValidUnitMappingString("")).toBe(false);
-  });
-});
-
-describe("unitMappingFlexible", () => {
-  test("validates non-empty string", () => {
-    expect(unitMappingFlexible.parse("4 lb = $5")).toBe("4 lb = $5");
-    expect(unitMappingFlexible.parse("$5/4lb")).toBe("$5/4lb");
-    expect(() => unitMappingFlexible.parse("")).toThrow();
-  });
-});
-
-describe("transformUnitMapping", () => {
-  test("transforms conversion format", async () => {
-    const result = await transformUnitMapping("4 lb = $5 @ store");
-    expect(result.a.value).toBe(4);
-    expect(result.a.unit).toBe("lb");
-    expect(result.b.value).toBe(5);
-    expect(result.b.unit).toBe("$");
-    expect(result.source).toBe("store");
-  });
-
-  test("transforms price-per format", async () => {
-    const result = await transformUnitMapping("$5/4lb");
-    expect(result.a.value).toBe(4);
-    expect(result.a.unit).toBe("lb");
-    expect(result.b.value).toBe(5);
-    expect(result.b.unit).toBe("$");
-    expect(result.source).toBeNull();
   });
 });
