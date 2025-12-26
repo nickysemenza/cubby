@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import { authClient } from "~/lib/auth-client";
 import { Menu, PackageOpen, Bug, BugOff } from "lucide-react";
 import { SyncStatusBadge } from "./sync/sync-status-badge";
+import { ProblemsBadge } from "./navbar/problems-badge";
+import { QuickActionsMenu } from "./navbar/quick-actions-menu";
+import { UserAvatarDropdown } from "./navbar/user-avatar-dropdown";
+import { NavDropdown } from "./navbar/nav-dropdown";
 import { useDebug } from "~/hooks/useDebug";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/ui/theme-toggle";
@@ -26,19 +29,27 @@ type NavItem = {
   label: string;
   isActive(pathName: string): boolean;
 };
-const NavItems: NavItem[] = [
+
+// Grouped navigation for desktop
+const kitchenItems: NavItem[] = [
   {
-    href: "/",
-    label: "Home",
-    isActive: (pathname) => pathname === "/",
+    href: "/ingredients",
+    label: "Ingredients",
+    isActive: (pathname) => pathname.startsWith("/ingredients"),
   },
-  ...Object.values(entities).map(
-    (item): NavItem => ({
-      href: `/${item.basePath}`,
-      label: item.pluralLabel,
-      isActive: (pathname) => pathname.startsWith(`/${item.basePath}`),
-    }),
-  ),
+  {
+    href: "/recipes",
+    label: "Recipes",
+    isActive: (pathname) => pathname.startsWith("/recipes"),
+  },
+  {
+    href: "/usda",
+    label: "USDA Foods",
+    isActive: (pathname) => pathname.startsWith("/usda"),
+  },
+];
+
+const reportsItems: NavItem[] = [
   {
     href: "/dashboard",
     label: "Dashboard",
@@ -50,16 +61,55 @@ const NavItems: NavItem[] = [
     isActive: (pathname) => pathname.startsWith("/activity"),
   },
   {
-    href: "/problems",
-    label: "Problems",
-    isActive: (pathname) => pathname.startsWith("/problems"),
-  },
-  {
     href: "/insights",
     label: "Insights",
     isActive: (pathname) => pathname.startsWith("/insights"),
   },
-  { href: "/api/panel", label: "API Panel", isActive: () => false },
+  {
+    href: "/problems",
+    label: "Problems",
+    isActive: (pathname) => pathname.startsWith("/problems"),
+  },
+];
+
+const moreItems: NavItem[] = [
+  {
+    href: "/images",
+    label: "Images",
+    isActive: (pathname) => pathname.startsWith("/images"),
+  },
+  {
+    href: "/api/panel",
+    label: "API Panel",
+    isActive: () => false,
+  },
+];
+
+// All items for mobile menu
+const allNavItems: NavItem[] = [
+  {
+    href: "/",
+    label: "Home",
+    isActive: (pathname) => pathname === "/",
+  },
+  {
+    href: "/products",
+    label: "Products",
+    isActive: (pathname) => pathname.startsWith("/products"),
+  },
+  ...kitchenItems,
+  {
+    href: "/locations",
+    label: "Locations",
+    isActive: (pathname) => pathname.startsWith("/locations"),
+  },
+  {
+    href: "/inventory",
+    label: "Inventory",
+    isActive: (pathname) => pathname.startsWith("/inventory"),
+  },
+  ...reportsItems,
+  ...moreItems,
 ];
 
 // cf https://github.com/shadcn-ui/ui/blob/main/apps/www/app/(app)/examples/dashboard/components/main-nav.tsx
@@ -90,44 +140,66 @@ export function MainNav({
         )}
         {...props}
       >
-        {NavItems.map((item) => {
-          const active = item.isActive(pathName);
+        <Link
+          href="/"
+          className={cn(
+            "hover:text-primary text-sm font-medium transition-colors",
+            pathName !== "/" && "text-muted-foreground",
+          )}
+          aria-current={pathName === "/" ? "page" : undefined}
+        >
+          Home
+        </Link>
 
-          // Only show Dashboard link if it's not the Dashboard link or user is signed in
-          if (item.href === "/dashboard") {
-            if (!session.data?.user) return null;
-            return (
-              <Link
-                href={item.href}
-                key={item.href}
-                className={cn(
-                  "hover:text-primary text-sm font-medium transition-colors",
-                  !active && "text-muted-foreground",
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                {item.label}
-              </Link>
-            );
-          }
+        <Link
+          href="/products"
+          className={cn(
+            "hover:text-primary text-sm font-medium transition-colors",
+            !pathName.startsWith("/products") && "text-muted-foreground",
+          )}
+          aria-current={pathName.startsWith("/products") ? "page" : undefined}
+        >
+          Products
+        </Link>
 
-          return (
-            <Link
-              href={item.href}
-              key={item.href}
-              className={cn(
-                "hover:text-primary text-sm font-medium transition-colors",
-                !active && "text-muted-foreground",
-              )}
-              aria-current={active ? "page" : undefined}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
+        <NavDropdown label="Kitchen" items={kitchenItems} />
+
+        <Link
+          href="/locations"
+          className={cn(
+            "hover:text-primary text-sm font-medium transition-colors",
+            !pathName.startsWith("/locations") && "text-muted-foreground",
+          )}
+          aria-current={pathName.startsWith("/locations") ? "page" : undefined}
+        >
+          Locations
+        </Link>
+
+        <Link
+          href="/inventory"
+          className={cn(
+            "hover:text-primary text-sm font-medium transition-colors",
+            !pathName.startsWith("/inventory") && "text-muted-foreground",
+          )}
+          aria-current={pathName.startsWith("/inventory") ? "page" : undefined}
+        >
+          Inventory
+        </Link>
+
+        {session.data?.user && (
+          <NavDropdown label="Reports" items={reportsItems} />
+        )}
+
+        <NavDropdown label="More" items={moreItems} />
       </nav>
 
-      <FlexContainer align="center" gap={4}>
+      <FlexContainer align="center" gap={2}>
+        {/* Quick Actions */}
+        {session.data?.user && <QuickActionsMenu />}
+
+        {/* Problems Badge */}
+        {session.data?.user && <ProblemsBadge />}
+
         {/* Sync Status Badge */}
         <SyncStatusBadge />
 
@@ -140,7 +212,7 @@ export function MainNav({
           size="sm"
           onClick={toggleDebug}
           className={cn(
-            "hidden md:flex",
+            "hidden h-8 px-2 md:flex",
             isDebugEnabled &&
               "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
           )}
@@ -161,13 +233,7 @@ export function MainNav({
         ) : (
           <>
             <OrganizationSwitcher />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => authClient.signOut()}
-            >
-              Sign Out
-            </Button>
+            <UserAvatarDropdown />
           </>
         )}
 
@@ -212,7 +278,7 @@ export function MainNav({
                 )}
                 {isDebugEnabled ? "Disable Debug Mode" : "Enable Debug Mode"}
               </SheetClose>
-              {NavItems.map((item) => {
+              {allNavItems.map((item) => {
                 const active = item.isActive(pathName);
 
                 // Only show Dashboard link if user is signed in
