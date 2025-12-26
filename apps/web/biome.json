@@ -1,12 +1,8 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
-  "vcs": {
-    "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
-  },
+  "root": false,
+  "extends": "//",
   "files": {
-    "ignoreUnknown": true,
     "includes": [
       "**",
       "!.next",
@@ -24,33 +20,20 @@
       "tailwindDirectives": true
     }
   },
-  "formatter": {
-    "enabled": true,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineEnding": "lf",
-    "lineWidth": 80
-  },
   "linter": {
-    "enabled": true,
     "domains": {
       "next": "all",
       "react": "all"
     },
     "rules": {
-      "recommended": true,
       "correctness": {
-        "noUnusedVariables": "error",
-        "noUnusedImports": "error",
         "useUniqueElementIds": "warn"
       },
       "style": {
-        "noNonNullAssertion": "off",
         "useBlockStatements": "off",
         "useComponentExportOnlyModules": "off"
       },
       "suspicious": {
-        "noExplicitAny": "error",
         "noArrayIndexKey": "warn"
       },
       "a11y": {
@@ -72,10 +55,7 @@
   },
   "javascript": {
     "formatter": {
-      "quoteStyle": "double",
-      "jsxQuoteStyle": "double",
-      "trailingCommas": "all",
-      "semicolons": "always"
+      "jsxQuoteStyle": "double"
     }
   },
   "overrides": [
@@ -117,13 +97,5 @@
         }
       }
     }
-  ],
-  "assist": {
-    "enabled": true,
-    "actions": {
-      "source": {
-        "organizeImports": "off"
-      }
-    }
-  }
+  ]
 }

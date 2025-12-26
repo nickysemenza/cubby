@@ -6,11 +6,11 @@
   "main": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix .",
-    "check": "eslint --cache --cache-location .eslintcache . && tsc --noEmit",
-    "format:check": "prettier --check \"**/*.{ts,js}\" --cache",
-    "format:write": "prettier --write \"**/*.{ts,js}\" --cache",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
+    "check": "biome check && tsc --noEmit",
+    "format:check": "biome check",
+    "format:write": "biome check --write",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -20,11 +20,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "eslint": "^9.39.2",
-    "prettier": "^3.7.4",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0",
     "vitest": "^4.0.15"
   }
 }

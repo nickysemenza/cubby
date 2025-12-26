@@ -59,17 +59,8 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: 'true'
-      - name: Cache ESLint results
-        uses: actions/cache@v5
-        with:
-          path: |
-            apps/**/.eslintcache
-            packages/**/.eslintcache
-          key: eslint-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            eslint-${{ runner.os }}-
       - run: pnpm run format:check
-        name: 'check prettier formatting'
+        name: 'check formatting with Biome'
       - run: pnpm run check
         name: 'lint and type check'
       - run: cd apps/web && npx knip --no-exit-code

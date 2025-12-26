@@ -12,12 +12,12 @@
     "import:usda": "tsx src/db/import-usda.ts",
     "upload:db": "tsx scripts/upload-db-to-r2.ts",
     "generate:openapi": "tsx -e \"import('./src/openapi.js').then(m => console.log(JSON.stringify(m.openApiDocument, null, 2)))\" > openapi.json",
-    "lint": "eslint .",
-    "lint:fix": "eslint --fix .",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
     "typecheck": "tsc --noEmit",
-    "check": "eslint --cache --cache-location .eslintcache . && tsc --noEmit",
-    "format:check": "prettier --check \"**/*.{ts,js}\" --cache",
-    "format:write": "prettier --write \"**/*.{ts,js}\" --cache",
+    "check": "biome check && tsc --noEmit",
+    "format:check": "biome check",
+    "format:write": "biome check --write",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -48,16 +48,12 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.0.2",
     "@vitest/coverage-v8": "^4.0.15",
     "drizzle-kit": "^0.31.8",
-    "eslint": "^9.39.2",
-    "prettier": "^3.7.4",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0",
     "vitest": "^4.0.15"
   }
 }

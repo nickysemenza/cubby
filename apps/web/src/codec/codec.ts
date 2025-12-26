@@ -22,7 +22,7 @@ const parsedIngredient = z.object({
   amounts: z.array(amount),
   modifier: z.string().optional(),
 });
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Used only for type inference
 const parsedCompactRecipeSchema = z.object({
   name: z.string(),
   meta: compactMeta,

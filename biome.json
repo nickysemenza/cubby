@@ -4,10 +4,11 @@
     "enabled": true,
     "clientKind": "git",
     "useIgnoreFile": true,
-    "root": "."
+    "defaultBranch": "main"
   },
   "files": {
-    "ignoreUnknown": true
+    "ignoreUnknown": true,
+    "includes": ["apps/**", "packages/**"]
   },
   "formatter": {
     "enabled": true,
@@ -17,6 +18,34 @@
     "lineWidth": 80
   },
   "linter": {
-    "enabled": true
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedVariables": "error",
+        "noUnusedImports": "error"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
   }
 }

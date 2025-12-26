@@ -8,7 +8,7 @@ export type { ExternalProductData } from "./types";
  * Free tier: 100 requests/day (cached results don't count against limit)
  */
 export async function lookupExternalProduct(
-  upc: string
+  upc: string,
 ): Promise<ExternalProductData | null> {
   return lookupUPCitemdb(upc);
 }

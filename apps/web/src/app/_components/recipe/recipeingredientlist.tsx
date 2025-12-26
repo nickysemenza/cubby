@@ -165,7 +165,6 @@ export const RecipeIngredientList: React.FC<{
     }),
   ];
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API limitation
   const table = useReactTable({
     data: data,
     columns,

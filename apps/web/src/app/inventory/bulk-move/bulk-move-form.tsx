@@ -77,7 +77,6 @@ export default function BulkMoveForm() {
   });
 
   // Watch the location fields
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form API limitation
   const sourceLocation = form.watch("sourceLocation");
   const targetLocation = form.watch("targetLocation");
 

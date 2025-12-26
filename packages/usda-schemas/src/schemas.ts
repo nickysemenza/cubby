@@ -1,53 +1,53 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const upc = z
   .string()
   .min(12)
   .max(14)
-  .describe('UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode');
+  .describe("UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode");
 // NDB (Nutrient Data Bank) number - USDA-specific identifier
-export const ndb = z.number().max(99999).min(1000).describe('NDB number');
+export const ndb = z.number().max(99999).min(1000).describe("NDB number");
 
 // select distinct unit_name from nutrient;
 export const nutrient_unit_name = z.enum([
-  'MG_ATE',
-  'kJ',
-  'MCG_RE',
-  'KCAL',
-  'SP_GR',
-  'PH',
-  'UG',
-  'MG_GAE',
-  'UMOL_TE',
-  'G',
-  'MG',
-  'IU',
+  "MG_ATE",
+  "kJ",
+  "MCG_RE",
+  "KCAL",
+  "SP_GR",
+  "PH",
+  "UG",
+  "MG_GAE",
+  "UMOL_TE",
+  "G",
+  "MG",
+  "IU",
 ]);
 
 // select distinct data_type from usda_food;
 export const dataTypeEnum = z.enum([
-  'agricultural_acquisition',
-  'branded_food',
-  'experimental_food',
-  'foundation_food',
-  'market_acquisition',
-  'sample_food',
-  'sr_legacy_food',
-  'sub_sample_food',
-  'survey_fndds_food',
+  "agricultural_acquisition",
+  "branded_food",
+  "experimental_food",
+  "foundation_food",
+  "market_acquisition",
+  "sample_food",
+  "sr_legacy_food",
+  "sub_sample_food",
+  "survey_fndds_food",
 ]);
 export type DataType = z.infer<typeof dataTypeEnum>;
 
 //select distinct serving_size_unit from branded_food;
 export const branded_food_serving_size_unit = z.enum([
-  'g',
-  'GM',
-  'GRM',
-  'IU',
-  'MC',
-  'MG',
-  'ml',
-  'MLT',
+  "g",
+  "GM",
+  "GRM",
+  "IU",
+  "MC",
+  "MG",
+  "ml",
+  "MLT",
 ]);
 export type BrandedFoodServingSizeUnit = z.infer<
   typeof branded_food_serving_size_unit
@@ -59,13 +59,13 @@ export const nutrientSummary = z
     name: z.string(),
     unit: nutrient_unit_name,
   })
-  .describe('usda food_nutrient and nutrient tables');
+  .describe("usda food_nutrient and nutrient tables");
 export const foodInfo = z
   .object({
     data_type: dataTypeEnum,
     description: z.string(),
   })
-  .describe('usda food table');
+  .describe("usda food table");
 
 // Generic nutrients record - maps nutrient codes (e.g., "203" for protein) to amounts
 // Keys are USDA nutrient_nbr values (e.g., "203" for protein, "208" for kcal)
@@ -124,9 +124,9 @@ export type FoodInfo = z.infer<typeof foodInfo>;
 export type FoodSummary = z.infer<typeof foodSummary>;
 export type FoodPortion = z.infer<typeof foodPortion>;
 
-export const foodLookupParam = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('upc'), gtin_upc: upc }),
-  z.object({ kind: z.literal('ndb'), ndb_number: ndb }),
+export const foodLookupParam = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("upc"), gtin_upc: upc }),
+  z.object({ kind: z.literal("ndb"), ndb_number: ndb }),
 ]);
 
 export type FoodLookupParam = z.infer<typeof foodLookupParam>;

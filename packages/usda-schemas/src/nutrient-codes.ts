@@ -1,4 +1,4 @@
-import type { NutrientsPer100 } from './schemas';
+import type { NutrientsPer100 } from "./schemas";
 
 /**
  * Tier 1 nutrients - essential nutrients with 95%+ food coverage in USDA database.
@@ -6,34 +6,34 @@ import type { NutrientsPer100 } from './schemas';
  */
 export const TIER1_NUTRIENTS = {
   // Macronutrients
-  protein: { code: '203', unit: 'G', displayName: 'Protein' },
-  fat: { code: '204', unit: 'G', displayName: 'Total Fat' },
-  carbs: { code: '205', unit: 'G', displayName: 'Carbohydrates' },
-  fiber: { code: '291', unit: 'G', displayName: 'Fiber' },
-  kcal: { code: '208', unit: 'KCAL', displayName: 'Calories' },
+  protein: { code: "203", unit: "G", displayName: "Protein" },
+  fat: { code: "204", unit: "G", displayName: "Total Fat" },
+  carbs: { code: "205", unit: "G", displayName: "Carbohydrates" },
+  fiber: { code: "291", unit: "G", displayName: "Fiber" },
+  kcal: { code: "208", unit: "KCAL", displayName: "Calories" },
 
   // Minerals
-  calcium: { code: '301', unit: 'MG', displayName: 'Calcium' },
-  iron: { code: '303', unit: 'MG', displayName: 'Iron' },
-  magnesium: { code: '304', unit: 'MG', displayName: 'Magnesium' },
-  potassium: { code: '306', unit: 'MG', displayName: 'Potassium' },
-  sodium: { code: '307', unit: 'MG', displayName: 'Sodium' },
-  zinc: { code: '309', unit: 'MG', displayName: 'Zinc' },
-  selenium: { code: '317', unit: 'UG', displayName: 'Selenium' },
+  calcium: { code: "301", unit: "MG", displayName: "Calcium" },
+  iron: { code: "303", unit: "MG", displayName: "Iron" },
+  magnesium: { code: "304", unit: "MG", displayName: "Magnesium" },
+  potassium: { code: "306", unit: "MG", displayName: "Potassium" },
+  sodium: { code: "307", unit: "MG", displayName: "Sodium" },
+  zinc: { code: "309", unit: "MG", displayName: "Zinc" },
+  selenium: { code: "317", unit: "UG", displayName: "Selenium" },
 
   // Vitamins
-  vitamin_a: { code: '320', unit: 'UG', displayName: 'Vitamin A' },
-  vitamin_d: { code: '328', unit: 'UG', displayName: 'Vitamin D' },
-  vitamin_e: { code: '323', unit: 'MG', displayName: 'Vitamin E' },
-  vitamin_k: { code: '430', unit: 'UG', displayName: 'Vitamin K' },
-  vitamin_c: { code: '401', unit: 'MG', displayName: 'Vitamin C' },
-  vitamin_b6: { code: '415', unit: 'MG', displayName: 'Vitamin B6' },
-  vitamin_b12: { code: '418', unit: 'UG', displayName: 'Vitamin B12' },
-  folate: { code: '417', unit: 'UG', displayName: 'Folate' },
+  vitamin_a: { code: "320", unit: "UG", displayName: "Vitamin A" },
+  vitamin_d: { code: "328", unit: "UG", displayName: "Vitamin D" },
+  vitamin_e: { code: "323", unit: "MG", displayName: "Vitamin E" },
+  vitamin_k: { code: "430", unit: "UG", displayName: "Vitamin K" },
+  vitamin_c: { code: "401", unit: "MG", displayName: "Vitamin C" },
+  vitamin_b6: { code: "415", unit: "MG", displayName: "Vitamin B6" },
+  vitamin_b12: { code: "418", unit: "UG", displayName: "Vitamin B12" },
+  folate: { code: "417", unit: "UG", displayName: "Folate" },
 
   // Health indicators
-  cholesterol: { code: '601', unit: 'MG', displayName: 'Cholesterol' },
-  saturated_fat: { code: '606', unit: 'G', displayName: 'Saturated Fat' },
+  cholesterol: { code: "601", unit: "MG", displayName: "Cholesterol" },
+  saturated_fat: { code: "606", unit: "G", displayName: "Saturated Fat" },
 } as const;
 
 export type NutrientKey = keyof typeof TIER1_NUTRIENTS;
@@ -44,14 +44,14 @@ export type NutrientInfo = (typeof TIER1_NUTRIENTS)[NutrientKey];
  * Array of all tier 1 nutrient codes for filtering database queries.
  */
 export const TIER1_CODES = Object.values(TIER1_NUTRIENTS).map(
-  (n) => n.code
+  (n) => n.code,
 ) as string[];
 
 /**
  * Lookup map from nutrient code to nutrient info.
  */
 const CODE_TO_NUTRIENT: Record<string, NutrientInfo> = Object.fromEntries(
-  Object.values(TIER1_NUTRIENTS).map((n) => [n.code, n])
+  Object.values(TIER1_NUTRIENTS).map((n) => [n.code, n]),
 );
 
 /**
@@ -61,7 +61,7 @@ const CODE_TO_KEY: Record<string, NutrientKey> = Object.fromEntries(
   Object.entries(TIER1_NUTRIENTS).map(([key, n]) => [
     n.code,
     key as NutrientKey,
-  ])
+  ]),
 );
 
 /**
@@ -69,7 +69,7 @@ const CODE_TO_KEY: Record<string, NutrientKey> = Object.fromEntries(
  * Returns "G" as fallback for unknown codes.
  */
 export function getNutrientUnit(code: string): string {
-  return CODE_TO_NUTRIENT[code]?.unit ?? 'G';
+  return CODE_TO_NUTRIENT[code]?.unit ?? "G";
 }
 
 /**
@@ -103,7 +103,7 @@ export function isTier1Nutrient(code: string): boolean {
 }
 
 // Re-export from schemas for convenience
-export type { NutrientsPer100 } from './schemas';
+export type { NutrientsPer100 } from "./schemas";
 
 /**
  * Create an empty nutrients record.
@@ -118,7 +118,7 @@ export function createEmptyNutrients(): NutrientsPer100 {
  */
 export function getNutrientValue(
   nutrients: NutrientsPer100,
-  code: string
+  code: string,
 ): number {
   return nutrients[code] ?? 0;
 }
@@ -129,7 +129,7 @@ export function getNutrientValue(
  */
 export function getNutrientValueByKey(
   nutrients: NutrientsPer100,
-  key: NutrientKey
+  key: NutrientKey,
 ): number {
   const code = TIER1_NUTRIENTS[key].code;
   return getNutrientValue(nutrients, code);

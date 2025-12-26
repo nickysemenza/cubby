@@ -1,17 +1,16 @@
-import { generateOpenApi } from '@ts-rest/open-api';
-import type { SchemaTransformerSync } from '@ts-rest/open-api';
-import { z } from 'zod';
-import { usdaContract } from '@recipehub/usda-contract';
+import { generateOpenApi } from "@ts-rest/open-api";
+import type { SchemaTransformerSync } from "@ts-rest/open-api";
+import { z } from "zod";
+import { usdaContract } from "@recipehub/usda-contract";
 
 // Zod 4 synchronous transformer implementation
 export const ZOD_4_TRANSFORMER: SchemaTransformerSync = ({ schema }) => {
   if (schema instanceof z.ZodType) {
     try {
-      const jsonSchema = z.toJSONSchema(schema, { unrepresentable: 'any' });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return jsonSchema as any;
+      const jsonSchema = z.toJSONSchema(schema, { unrepresentable: "any" });
+      return jsonSchema as ReturnType<SchemaTransformerSync>;
     } catch (error) {
-      console.warn('Failed to transform Zod schema:', error);
+      console.warn("Failed to transform Zod schema:", error);
       return null;
     }
   }
@@ -21,10 +20,10 @@ export const ZOD_4_TRANSFORMER: SchemaTransformerSync = ({ schema }) => {
 export const openApiDocument = generateOpenApi(
   usdaContract,
   {
-    openapi: '3.0.0',
+    openapi: "3.0.0",
     info: {
-      title: 'USDA Food Data Central API',
-      version: '1.0.0',
+      title: "USDA Food Data Central API",
+      version: "1.0.0",
       description: `
 A comprehensive REST API for accessing USDA Food Data Central database information.
 This API provides access to detailed nutrition data, food portions, and branded food information.
@@ -42,8 +41,8 @@ nutrition information for thousands of foods.
     },
     servers: [
       {
-        url: process.env.API_BASE_URL || 'http://localhost:8080',
-        description: 'USDA API Server',
+        url: process.env.API_BASE_URL || "http://localhost:8080",
+        description: "USDA API Server",
       },
     ],
   },
@@ -53,5 +52,5 @@ nutrition information for thousands of foods.
     operationMapper: (operation, _appRoute) => ({
       ...operation,
     }),
-  }
+  },
 );

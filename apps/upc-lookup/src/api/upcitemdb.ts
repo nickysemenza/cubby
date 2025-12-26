@@ -5,7 +5,7 @@ const UPCITEMDB_API_URL = "https://api.upcitemdb.com/prod/trial/lookup";
 const TIMEOUT_MS = 5000;
 
 export async function lookupUPCitemdb(
-  upc: string
+  upc: string,
 ): Promise<ExternalProductData | null> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -39,7 +39,11 @@ export async function lookupUPCitemdb(
       priceDollars = extractBestPrice(item.offers);
     }
     // Fallback to lowest_recorded_price if no valid offers
-    if (priceDollars === null && item.lowest_recorded_price && item.lowest_recorded_price > 0) {
+    if (
+      priceDollars === null &&
+      item.lowest_recorded_price &&
+      item.lowest_recorded_price > 0
+    ) {
       priceDollars = item.lowest_recorded_price;
     }
 

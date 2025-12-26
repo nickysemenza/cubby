@@ -4,7 +4,9 @@ import type { UPCitemdbOffer } from "./types";
 
 describe("isMultiPack", () => {
   it("detects 'Pack of 4'", () => {
-    expect(isMultiPack("BOBS RED MILL, FLOUR WHT UNBLCH, 5 LB, (Pack of 4)")).toBe(true);
+    expect(
+      isMultiPack("BOBS RED MILL, FLOUR WHT UNBLCH, 5 LB, (Pack of 4)"),
+    ).toBe(true);
   });
 
   it("detects 'Pack of4' without space", () => {
@@ -12,11 +14,17 @@ describe("isMultiPack", () => {
   });
 
   it("detects 'Case of 4'", () => {
-    expect(isMultiPack("Bob s Red Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4")).toBe(true);
+    expect(
+      isMultiPack(
+        "Bob s Red Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4",
+      ),
+    ).toBe(true);
   });
 
   it("detects '(4x5lb)' format", () => {
-    expect(isMultiPack("Bob's Red Mill Unbleached White Flour (4x5lb)")).toBe(true);
+    expect(isMultiPack("Bob's Red Mill Unbleached White Flour (4x5lb)")).toBe(
+      true,
+    );
   });
 
   it("detects 'Pack Of 4' case insensitive", () => {
@@ -32,7 +40,9 @@ describe("isMultiPack", () => {
   });
 
   it("does not flag single items", () => {
-    expect(isMultiPack("Bobs Red Mill, Unbleached White All-Purpose Flour, 5 Lb")).toBe(false);
+    expect(
+      isMultiPack("Bobs Red Mill, Unbleached White All-Purpose Flour, 5 Lb"),
+    ).toBe(false);
   });
 
   it("does not flag items with numbers in weight", () => {
@@ -87,7 +97,8 @@ describe("extractBestPrice", () => {
     {
       merchant: "Wal-Mart.com",
       domain: "walmart.com",
-      title: "Bob s Red Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4",
+      title:
+        "Bob s Red Mill Unbleached White All-Purpose Baking Flour - 5 lb - Case of 4",
       currency: "",
       price: 43.77,
       link: "",
@@ -96,7 +107,8 @@ describe("extractBestPrice", () => {
     {
       merchant: "Newegg Business",
       domain: "neweggbusiness.com",
-      title: "Bob's Red Mill Flour Unbleached White Pastry, 5-pounds (Pack of4)",
+      title:
+        "Bob's Red Mill Flour Unbleached White Pastry, 5-pounds (Pack of4)",
       currency: "",
       price: 44.71,
       link: "",
@@ -146,44 +158,124 @@ describe("extractBestPrice", () => {
 
   it("returns null when all prices are zero", () => {
     const offers: UPCitemdbOffer[] = [
-      { merchant: "A", domain: "a.com", title: "Product", currency: "", price: 0, link: "", updated_t: 0 },
-      { merchant: "B", domain: "b.com", title: "Product", currency: "", price: 0, link: "", updated_t: 0 },
+      {
+        merchant: "A",
+        domain: "a.com",
+        title: "Product",
+        currency: "",
+        price: 0,
+        link: "",
+        updated_t: 0,
+      },
+      {
+        merchant: "B",
+        domain: "b.com",
+        title: "Product",
+        currency: "",
+        price: 0,
+        link: "",
+        updated_t: 0,
+      },
     ];
     expect(extractBestPrice(offers)).toBe(null);
   });
 
   it("falls back to multi-pack price when no single-item prices exist", () => {
     const offers: UPCitemdbOffer[] = [
-      { merchant: "A", domain: "a.com", title: "Product (Pack of 4)", currency: "", price: 40.00, link: "", updated_t: 0 },
-      { merchant: "B", domain: "b.com", title: "Product Case of 6", currency: "", price: 60.00, link: "", updated_t: 0 },
+      {
+        merchant: "A",
+        domain: "a.com",
+        title: "Product (Pack of 4)",
+        currency: "",
+        price: 40.0,
+        link: "",
+        updated_t: 0,
+      },
+      {
+        merchant: "B",
+        domain: "b.com",
+        title: "Product Case of 6",
+        currency: "",
+        price: 60.0,
+        link: "",
+        updated_t: 0,
+      },
     ];
     // Falls back to first non-zero price since no single-item offers
-    expect(extractBestPrice(offers)).toBe(40.00);
+    expect(extractBestPrice(offers)).toBe(40.0);
   });
 
   it("handles single valid offer", () => {
     const offers: UPCitemdbOffer[] = [
-      { merchant: "A", domain: "a.com", title: "Single Product 5lb", currency: "", price: 12.99, link: "", updated_t: 0 },
+      {
+        merchant: "A",
+        domain: "a.com",
+        title: "Single Product 5lb",
+        currency: "",
+        price: 12.99,
+        link: "",
+        updated_t: 0,
+      },
     ];
     expect(extractBestPrice(offers)).toBe(12.99);
   });
 
   it("calculates average for even number of prices", () => {
     const offers: UPCitemdbOffer[] = [
-      { merchant: "A", domain: "a.com", title: "Product A", currency: "", price: 10.00, link: "", updated_t: 0 },
-      { merchant: "B", domain: "b.com", title: "Product B", currency: "", price: 20.00, link: "", updated_t: 0 },
+      {
+        merchant: "A",
+        domain: "a.com",
+        title: "Product A",
+        currency: "",
+        price: 10.0,
+        link: "",
+        updated_t: 0,
+      },
+      {
+        merchant: "B",
+        domain: "b.com",
+        title: "Product B",
+        currency: "",
+        price: 20.0,
+        link: "",
+        updated_t: 0,
+      },
     ];
     // Median of [10, 20] = (10 + 20) / 2 = 15
-    expect(extractBestPrice(offers)).toBe(15.00);
+    expect(extractBestPrice(offers)).toBe(15.0);
   });
 
   it("ignores outlier high prices via median", () => {
     const offers: UPCitemdbOffer[] = [
-      { merchant: "A", domain: "a.com", title: "Product", currency: "", price: 5.00, link: "", updated_t: 0 },
-      { merchant: "B", domain: "b.com", title: "Product", currency: "", price: 6.00, link: "", updated_t: 0 },
-      { merchant: "C", domain: "c.com", title: "Product", currency: "", price: 100.00, link: "", updated_t: 0 }, // outlier
+      {
+        merchant: "A",
+        domain: "a.com",
+        title: "Product",
+        currency: "",
+        price: 5.0,
+        link: "",
+        updated_t: 0,
+      },
+      {
+        merchant: "B",
+        domain: "b.com",
+        title: "Product",
+        currency: "",
+        price: 6.0,
+        link: "",
+        updated_t: 0,
+      },
+      {
+        merchant: "C",
+        domain: "c.com",
+        title: "Product",
+        currency: "",
+        price: 100.0,
+        link: "",
+        updated_t: 0,
+      }, // outlier
     ];
     // Sorted: [5, 6, 100], median = 6
-    expect(extractBestPrice(offers)).toBe(6.00);
+    expect(extractBestPrice(offers)).toBe(6.0);
   });
 });

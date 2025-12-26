@@ -10,15 +10,11 @@
   ],
   "ignoreDependencies": [
     "@devoxa/integresql-client",
-    "@eslint/.+",
     "@recipehub/.+",
     "@testing-library/.+",
-    "@types/eslint",
-    "@typescript-eslint/.+",
     "@vitest/.+",
     "commander",
     "copy-webpack-plugin",
-    "eslint-plugin-.+",
     "vite-plugin-wasm"
   ],
   "tags": ["-lintignore"]

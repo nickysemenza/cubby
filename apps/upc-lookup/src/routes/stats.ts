@@ -7,7 +7,9 @@ import type { StatsResponse } from "../schemas/product";
 const stats = new Hono<{ Bindings: Env }>();
 
 /** Get stats data - exported for use by admin UI */
-export async function getStats(db: ReturnType<typeof createDb>): Promise<StatsResponse> {
+export async function getStats(
+  db: ReturnType<typeof createDb>,
+): Promise<StatsResponse> {
   // Get total product count
   const totalResult = await db
     .select({ count: sql<number>`count(*)` })

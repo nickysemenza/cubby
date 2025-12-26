@@ -25,7 +25,6 @@
     "isolatedModules": true
   },
   "include": [
-    "eslintrc.config.mjs",
     "next-env.d.ts",
     "**/*.ts",
     "types.ts",

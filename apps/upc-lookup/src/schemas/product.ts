@@ -1,7 +1,7 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // Product source enum
-export const productSourceSchema = z.enum(['upcitemdb']);
+export const productSourceSchema = z.enum(["upcitemdb"]);
 export type ProductSource = z.infer<typeof productSourceSchema>;
 
 // Successful lookup response

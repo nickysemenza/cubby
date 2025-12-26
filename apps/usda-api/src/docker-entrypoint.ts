@@ -1,9 +1,9 @@
 #!/usr/bin/env tsx
 
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import fs from "node:fs/promises";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 interface Config {
   dbPath: string;
@@ -35,33 +35,33 @@ class DatabaseManager {
 
   private async readFile(filePath: string): Promise<string> {
     try {
-      return await fs.readFile(filePath, 'utf-8');
+      return await fs.readFile(filePath, "utf-8");
     } catch {
-      return '';
+      return "";
     }
   }
 
   private async downloadDatabaseWithScript(
     url: string,
-    destPath: string
+    destPath: string,
   ): Promise<void> {
     console.log(`[entrypoint] Running optimized download script...`);
 
     return new Promise((resolve, reject) => {
       const currentDir = path.dirname(fileURLToPath(import.meta.url));
-      const scriptPath = path.join(currentDir, 'download-database.sh');
-      const child = spawn('bash', [scriptPath, url, destPath], {
-        stdio: 'inherit', // Show script output directly
+      const scriptPath = path.join(currentDir, "download-database.sh");
+      const child = spawn("bash", [scriptPath, url, destPath], {
+        stdio: "inherit", // Show script output directly
       });
 
-      child.on('error', (error) => {
+      child.on("error", (error) => {
         reject(new Error(`Download script failed: ${error.message}`));
       });
 
-      child.on('exit', (code) => {
+      child.on("exit", (code) => {
         if (code === 0) {
           console.log(
-            `[entrypoint] Database download pipeline completed successfully`
+            `[entrypoint] Database download pipeline completed successfully`,
           );
           resolve();
         } else {
@@ -72,15 +72,15 @@ class DatabaseManager {
   }
 
   private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 B';
+    if (bytes === 0) return "0 B";
     const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+    return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
   }
 
   private formatDuration(seconds: number): string {
-    if (!isFinite(seconds) || seconds < 0) return 'calculating...';
+    if (!isFinite(seconds) || seconds < 0) return "calculating...";
 
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -97,30 +97,32 @@ class DatabaseManager {
 
   private getVersionKey(): string | null {
     if (!this.config.r2ObjectKey) return null;
-    return this.config.r2ObjectKey.replace(/\.sqlite\.zst$/, '.version');
+    return this.config.r2ObjectKey.replace(/\.sqlite\.zst$/, ".version");
   }
 
   private async fetchRemoteVersion(): Promise<string | null> {
     try {
-      const versionUrl = 'https://usda-sqlite.nickysemenza.com/usda.version';
+      const versionUrl = "https://usda-sqlite.nickysemenza.com/usda.version";
 
       const child = spawn(
-        'curl',
-        ['-s', '--connect-timeout', '2', '--max-time', '3', versionUrl],
+        "curl",
+        ["-s", "--connect-timeout", "2", "--max-time", "3", versionUrl],
         {
-          stdio: ['ignore', 'pipe', 'pipe'],
-        }
+          stdio: ["ignore", "pipe", "pipe"],
+        },
       );
 
-      let stdout = '';
-      let stderr = '';
-      child.stdout.setEncoding('utf8');
-      child.stdout.on('data', (d) => (stdout += d));
-      child.stderr.setEncoding('utf8');
-      child.stderr.on('data', (d) => (stderr += d));
+      let stdout = "";
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (d) => {
+        stdout += d;
+      });
+      // Drain stderr to prevent blocking
+      child.stderr.setEncoding("utf8");
+      child.stderr.resume();
 
       const code: number = await new Promise((resolve) =>
-        child.on('exit', (c) => resolve(c || 0))
+        child.on("exit", (c) => resolve(c || 0)),
       );
       if (code !== 0) return null;
       return stdout.trim() || null;
@@ -130,7 +132,7 @@ class DatabaseManager {
   }
 
   private async getLocalVersion(): Promise<string | null> {
-    const localVersionFile = path.join(this.config.dataDir, '.usda.version');
+    const localVersionFile = path.join(this.config.dataDir, ".usda.version");
     const version = await this.readFile(localVersionFile);
     return version.trim() || null;
   }
@@ -139,7 +141,7 @@ class DatabaseManager {
     // Force refresh if environment variable is set
     if (this.config.forceRefresh) {
       console.log(
-        '[entrypoint] FORCE_DB_REFRESH=1, will download fresh database'
+        "[entrypoint] FORCE_DB_REFRESH=1, will download fresh database",
       );
       return true;
     }
@@ -147,14 +149,14 @@ class DatabaseManager {
     // If database doesn't exist, we need to download
     if (!(await this.fileExists(this.config.dbPath))) {
       console.log(
-        '[entrypoint] Database file does not exist, need to download'
+        "[entrypoint] Database file does not exist, need to download",
       );
       return true;
     }
 
     // Check for version updates
     if (this.config.r2Bucket && this.config.r2ObjectKey) {
-      console.log('[entrypoint] Checking for database updates...');
+      console.log("[entrypoint] Checking for database updates...");
 
       const [localVersion, remoteVersion] = await Promise.all([
         this.getLocalVersion(),
@@ -163,20 +165,20 @@ class DatabaseManager {
 
       if (!remoteVersion) {
         console.log(
-          '[entrypoint] Could not check for updates (version endpoint unavailable)'
+          "[entrypoint] Could not check for updates (version endpoint unavailable)",
         );
         return false;
       }
 
       if (localVersion !== remoteVersion) {
         console.log(
-          `[entrypoint] Database update available (local: ${localVersion || 'none'}, remote: ${remoteVersion})`
+          `[entrypoint] Database update available (local: ${localVersion || "none"}, remote: ${remoteVersion})`,
         );
         return true;
       }
 
       console.log(
-        `[entrypoint] Database is up to date (version: ${localVersion})`
+        `[entrypoint] Database is up to date (version: ${localVersion})`,
       );
     }
 
@@ -187,15 +189,15 @@ class DatabaseManager {
     const version = await this.fetchRemoteVersion();
     if (!version) return;
 
-    const localVersionFile = path.join(this.config.dataDir, '.usda.version');
+    const localVersionFile = path.join(this.config.dataDir, ".usda.version");
     try {
       await fs.writeFile(localVersionFile, version);
       console.log(
-        `[entrypoint] Database downloaded successfully (version: ${version})`
+        `[entrypoint] Database downloaded successfully (version: ${version})`,
       );
     } catch (error) {
       console.log(
-        `[entrypoint] Database downloaded successfully (could not save version: ${error})`
+        `[entrypoint] Database downloaded successfully (could not save version: ${error})`,
       );
     }
   }
@@ -204,16 +206,16 @@ class DatabaseManager {
     if (!this.config.r2Bucket || !this.config.r2ObjectKey) {
       throw new Error(
         `Database not found at ${this.config.dbPath} and R2 bucket/object key not set. ` +
-          'Set R2_BUCKET, R2_OBJECT_KEY, R2_ACCOUNT_ID, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY.'
+          "Set R2_BUCKET, R2_OBJECT_KEY, R2_ACCOUNT_ID, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY.",
       );
     }
 
     console.log(
-      `[entrypoint] Database missing/outdated; downloading from r2:${this.config.r2Bucket}/${this.config.r2ObjectKey}`
+      `[entrypoint] Database missing/outdated; downloading from r2:${this.config.r2Bucket}/${this.config.r2ObjectKey}`,
     );
 
     // Use the optimized bash script for the entire pipeline
-    await this.downloadDatabaseWithScript('r2', this.config.dbPath);
+    await this.downloadDatabaseWithScript("r2", this.config.dbPath);
 
     // Save version information
     await this.saveVersionInfo();
@@ -234,7 +236,7 @@ async function ensureDataDirOwnership(dataDir: string): Promise<void> {
     try {
       await fs.chown(dataDir, 1001, 1001);
       console.log(
-        `[entrypoint] Changed ownership of ${dataDir} to nodejs user`
+        `[entrypoint] Changed ownership of ${dataDir} to nodejs user`,
       );
     } catch (error) {
       console.log(`[entrypoint] Warning: Could not change ownership: ${error}`);
@@ -247,14 +249,14 @@ function dropPrivileges(args: string[]): Promise<void> {
     // Only drop privileges if running as root
     if (process.getuid && process.getuid() === 0) {
       console.log(
-        '[entrypoint] Dropping privileges to nodejs user (1001:1001)'
+        "[entrypoint] Dropping privileges to nodejs user (1001:1001)",
       );
 
-      const child = spawn('su-exec', ['1001:1001', ...args], {
-        stdio: 'inherit',
+      const child = spawn("su-exec", ["1001:1001", ...args], {
+        stdio: "inherit",
       });
 
-      child.on('exit', (code, signal) => {
+      child.on("exit", (code, signal) => {
         if (signal) {
           process.kill(process.pid, signal);
         } else {
@@ -262,14 +264,14 @@ function dropPrivileges(args: string[]): Promise<void> {
         }
       });
 
-      child.on('error', reject);
+      child.on("error", reject);
     } else {
       // Not running as root, just exec the command directly
       const child = spawn(args[0], args.slice(1), {
-        stdio: 'inherit',
+        stdio: "inherit",
       });
 
-      child.on('exit', (code, signal) => {
+      child.on("exit", (code, signal) => {
         if (signal) {
           process.kill(process.pid, signal);
         } else {
@@ -277,22 +279,22 @@ function dropPrivileges(args: string[]): Promise<void> {
         }
       });
 
-      child.on('error', reject);
+      child.on("error", reject);
     }
   });
 }
 
 async function main(): Promise<void> {
   const config: Config = {
-    dbPath: process.env.DATABASE_PATH || '/data/usda.sqlite',
-    dataDir: '',
+    dbPath: process.env.DATABASE_PATH || "/data/usda.sqlite",
+    dataDir: "",
     r2Bucket: process.env.R2_BUCKET,
     r2ObjectKey: process.env.R2_OBJECT_KEY,
     r2AccountId: process.env.R2_ACCOUNT_ID,
     awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
     awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    forceRefresh: process.env.FORCE_DB_REFRESH === '1',
-    downloadQuiet: process.env.DOWNLOAD_QUIET === '1',
+    forceRefresh: process.env.FORCE_DB_REFRESH === "1",
+    downloadQuiet: process.env.DOWNLOAD_QUIET === "1",
   };
 
   config.dataDir = path.dirname(config.dbPath);
@@ -313,7 +315,7 @@ async function main(): Promise<void> {
     // Get command line arguments (skip node and script name)
     const args = process.argv.slice(2);
     if (args.length === 0) {
-      console.error('[entrypoint] ERROR: No command specified');
+      console.error("[entrypoint] ERROR: No command specified");
       process.exit(1);
     }
 
@@ -326,13 +328,13 @@ async function main(): Promise<void> {
 }
 
 // Handle signals gracefully
-process.on('SIGTERM', () => {
-  console.log('[entrypoint] Received SIGTERM, exiting gracefully...');
+process.on("SIGTERM", () => {
+  console.log("[entrypoint] Received SIGTERM, exiting gracefully...");
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
-  console.log('[entrypoint] Received SIGINT, exiting gracefully...');
+process.on("SIGINT", () => {
+  console.log("[entrypoint] Received SIGINT, exiting gracefully...");
   process.exit(0);
 });
 

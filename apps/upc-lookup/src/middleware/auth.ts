@@ -21,7 +21,7 @@ export const apiKeyAuth = createMiddleware<{ Bindings: Env }>(
     }
 
     await next();
-  }
+  },
 );
 
 /**
@@ -38,7 +38,7 @@ export const adminAuth = createMiddleware<{ Bindings: Env }>(
     }
 
     await next();
-  }
+  },
 );
 
 export { ADMIN_COOKIE_NAME };

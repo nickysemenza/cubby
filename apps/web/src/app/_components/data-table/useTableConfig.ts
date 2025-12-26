@@ -46,7 +46,6 @@ export function useTableConfig<TData, GlobalFilterData>({
     setPagination,
   } = tableState;
 
-  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table API limitation
   return useReactTable({
     data,
     columns,

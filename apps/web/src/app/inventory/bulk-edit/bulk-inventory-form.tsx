@@ -69,7 +69,6 @@ export default function BulkInventoryForm() {
   });
 
   // Watch the location field to load items when changed
-  // eslint-disable-next-line react-hooks/incompatible-library -- React Hook Form API limitation
   const selectedLocation = form.watch("location");
 
   // Fetch locations for the location selector

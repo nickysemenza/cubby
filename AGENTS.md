@@ -1,7 +1,7 @@
 ## General Guidelines
 
 - read the readme.md to understand project structure
-- after touching files, format them with prettier
+- after touching files, format them with Biome (`pnpm run format:write`)
 - ensure the typechecker and linter is happy with all changes (pnpm run check)
 - todos are kept in docs/todos.md
 - helper functions should not be added without being used
@@ -14,7 +14,7 @@
 - import existing types instead of redefining or casting them
 - **IMPORTANT**: Component interfaces should use `z.infer<typeof schema>` rather than manually defining matching TypeScript interfaces. Define Zod schemas in `~/schemas/` and import them directly where needed.
 - avoid using `any` type - use proper typing with generics, unions, or specific types instead
-- do not add @typescript-eslint/no-explicit-any disable comments - fix the typing instead
+- do not add biome-ignore or lint disable comments - fix the typing instead
 - create base Zod schemas for shared fields using `.extend()` to avoid duplication (e.g., baseProductConfig with common fields extended by input/output variants)
 - use separate input/output schemas when data transformation is needed (e.g., strings -> parsed objects)
 - **use branded ID schemas** from `~/schemas/identifiers` (e.g., `locationId`, `productId`, `inventoryId`) instead of plain `z.string()` for ID fields - this provides type safety and prevents mixing different entity IDs. Note: Drizzle column types don't support branded types directly, so use unsafe ID converters (e.g., `unsafeLocationId()`) at the repo/DB boundary

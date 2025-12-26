@@ -40,7 +40,7 @@ export default function ImageList() {
       return;
     }
     tableState.setPagination({ ...tableState.pagination, pageIndex: 0 });
-  }, [tableState.pagination, tableState.setPagination]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tableState.pagination, tableState.setPagination]);
 
   // Query for images using the new list endpoint
   const {

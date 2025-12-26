@@ -61,5 +61,3 @@ certificates
 # better-auth configuration (can include secrets)
 /.auth/
 
-# ESLint cache files
-**/.eslintcache

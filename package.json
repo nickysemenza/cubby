@@ -38,29 +38,14 @@
     }
   },
   "lint-staged": {
-    "apps/web/**/*.{ts,tsx,js,jsx,mdx,json,css}": [
-      "bash -c 'cd apps/web && pnpm exec biome check --write --no-errors-on-unmatched \"$@\"' --"
-    ],
     "apps/web/**/*.{ts,tsx}": [
       "bash -c 'cd apps/web && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
-    ],
-    "apps/usda-api/**/*.{ts,js}": [
-      "bash -c 'cd apps/usda-api && eslint --fix \"$@\"' --",
-      "prettier --write"
     ],
     "apps/usda-api/**/*.ts": [
       "bash -c 'cd apps/usda-api && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
     ],
-    "packages/usda-contract/**/*.{ts,js}": [
-      "bash -c 'cd packages/usda-contract && eslint --fix \"$@\"' --",
-      "prettier --write"
-    ],
     "packages/usda-contract/**/*.ts": [
       "bash -c 'cd packages/usda-contract && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"
-    ],
-    "packages/usda-schemas/**/*.{ts,js}": [
-      "bash -c 'cd packages/usda-schemas && eslint --fix \"$@\"' --",
-      "prettier --write"
     ],
     "packages/usda-schemas/**/*.ts": [
       "bash -c 'cd packages/usda-schemas && NODE_OPTIONS=--max-old-space-size=8192 tsc --noEmit'"

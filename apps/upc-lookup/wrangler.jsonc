@@ -14,8 +14,8 @@
     "head_sampling_rate": 1,
     "traces": {
       "enabled": true,
-      "head_sampling_rate": 1,
-    },
+      "head_sampling_rate": 1
+    }
   },
 
   // D1 Database for product cache
@@ -24,17 +24,17 @@
       "binding": "DB",
       "database_name": "upc-lookup-db",
       "database_id": "6c1f2074-2017-48d1-ae37-bc7002d47c64",
-      "migrations_dir": "drizzle",
-    },
+      "migrations_dir": "drizzle"
+    }
   ],
 
   // R2 Bucket for product images
   "r2_buckets": [
     {
       "binding": "IMAGES",
-      "bucket_name": "upc-images",
-    },
-  ],
+      "bucket_name": "upc-images"
+    }
+  ]
 
   // API_KEY should be set via: wrangler secret put API_KEY
 }

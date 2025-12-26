@@ -1,10 +1,10 @@
 /**
  * Unified tracing utilities for consistent span naming and tracer instances
  */
-import { trace, Span, SpanStatusCode } from '@opentelemetry/api';
+import { trace, type Span, SpanStatusCode } from "@opentelemetry/api";
 
 // Single tracer instance for the entire application
-const tracer = trace.getTracer('usda-api');
+const tracer = trace.getTracer("usda-api");
 
 /**
  * Unified trace naming conventions
@@ -35,7 +35,7 @@ export const getTracer = () => tracer;
 export const withTrace = async <T>(
   name: string,
   fn: (span: Span) => Promise<T>,
-  attributes?: Record<string, string | number | boolean>
+  attributes?: Record<string, string | number | boolean>,
 ): Promise<T> => {
   return tracer.startActiveSpan(name, async (span) => {
     if (attributes) {
@@ -51,7 +51,7 @@ export const withTrace = async <T>(
         message: error instanceof Error ? error.message : String(error),
       });
       span.recordException(
-        error instanceof Error ? error : new Error(String(error))
+        error instanceof Error ? error : new Error(String(error)),
       );
       throw error;
     } finally {
@@ -66,7 +66,7 @@ export const withTrace = async <T>(
 export const withTraceSync = <T>(
   name: string,
   fn: (span: Span) => T,
-  attributes?: Record<string, string | number | boolean>
+  attributes?: Record<string, string | number | boolean>,
 ): T => {
   return tracer.startActiveSpan(name, (span) => {
     if (attributes) {
@@ -82,7 +82,7 @@ export const withTraceSync = <T>(
         message: error instanceof Error ? error.message : String(error),
       });
       span.recordException(
-        error instanceof Error ? error : new Error(String(error))
+        error instanceof Error ? error : new Error(String(error)),
       );
       throw error;
     } finally {

@@ -1,4 +1,4 @@
-import { sqlite } from './client';
+import { sqlite } from "./client";
 
 // Create a virtual FTS5 table to accelerate name/description search.
 // We index core text fields that users might search by.
@@ -6,17 +6,17 @@ export function ensureFoodSearchFts(): void {
   // FTS5 is included with modern SQLite builds used by better-sqlite3.
   // Create the virtual table if it doesn't exist.
   sqlite.exec(
-    '' +
-      'CREATE VIRTUAL TABLE IF NOT EXISTS food_search ' +
-      'USING fts5(' +
+    "" +
+      "CREATE VIRTUAL TABLE IF NOT EXISTS food_search " +
+      "USING fts5(" +
       // fdc_id and data_type are stored alongside but not indexed for full-text
-      'fdc_id UNINDEXED, ' +
-      'data_type UNINDEXED, ' +
+      "fdc_id UNINDEXED, " +
+      "data_type UNINDEXED, " +
       // Core fields
-      'description, short_description, brand_name, brand_owner, ' +
+      "description, short_description, brand_name, brand_owner, " +
       // Tokenizer: unicode with diacritics removed; porter can be added if desired
       "tokenize='unicode61 remove_diacritics 1'" +
-      ');'
+      ");",
   );
 }
 
@@ -26,7 +26,7 @@ export function rebuildFoodSearchFts(): void {
 
   const trx = sqlite.transaction(() => {
     // Clear any existing rows to avoid duplicates
-    sqlite.exec('DELETE FROM food_search;');
+    sqlite.exec("DELETE FROM food_search;");
 
     // Populate from foods + branded fields (if present)
     const insertSql = `
@@ -55,20 +55,20 @@ export function rebuildFoodSearchFts(): void {
 
 // Convert a raw user search string into an FTS5 query that supports prefix on the last term.
 export function toFtsQuery(raw: string): string {
-  const s = (raw || '').trim();
-  if (!s) return '';
+  const s = (raw || "").trim();
+  if (!s) return "";
 
   // Split by whitespace; basic escaping of quotes
   const parts = s
     .split(/\s+/)
     .filter(Boolean)
     .map((p, i, arr) => {
-      const term = p.replace(/["']/g, ' ').trim();
+      const term = p.replace(/["']/g, " ").trim();
       // Add prefix wildcard to last term for responsive incremental search
       if (i === arr.length - 1) return `${term}*`;
       return term;
     });
 
   // Join with AND to require all terms
-  return parts.join(' ');
+  return parts.join(" ");
 }

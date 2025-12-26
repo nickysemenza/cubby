@@ -60,14 +60,15 @@ app.get("/admin/login", (c) => {
     <div class="max-w-md mx-auto mt-24 p-6">
       <h1 class="text-2xl font-bold mb-6">Admin Login</h1>
       {error && (
-        <p class="text-red-700 bg-red-100 p-3 rounded mb-4">
-          Invalid API key
-        </p>
+        <p class="text-red-700 bg-red-100 p-3 rounded mb-4">Invalid API key</p>
       )}
       <form method="post" action="/admin/login">
         <div class="mb-4">
-          <label class="block mb-1 font-medium">API Key</label>
+          <label for="apiKey" class="block mb-1 font-medium">
+            API Key
+          </label>
           <input
+            id="apiKey"
             type="password"
             name="apiKey"
             required
@@ -81,7 +82,7 @@ app.get("/admin/login", (c) => {
           Login
         </button>
       </form>
-    </div>
+    </div>,
   );
 });
 
@@ -119,11 +120,17 @@ app.get("/admin", async (c) => {
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-4">UPC Lookup Admin</h1>
       <nav class="flex gap-4">
-        <a href="/admin/products" class="text-blue-600 hover:underline">Browse Products</a>
-        <a href="/admin/stats" class="text-blue-600 hover:underline">View Stats</a>
-        <a href="/admin/logout" class="text-red-600 hover:underline">Logout</a>
+        <a href="/admin/products" class="text-blue-600 hover:underline">
+          Browse Products
+        </a>
+        <a href="/admin/stats" class="text-blue-600 hover:underline">
+          View Stats
+        </a>
+        <a href="/admin/logout" class="text-red-600 hover:underline">
+          Logout
+        </a>
       </nav>
-    </div>
+    </div>,
   );
 });
 
@@ -155,7 +162,9 @@ app.get("/admin/products", async (c) => {
   return c.render(
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-2">Product Browser</h1>
-      <p class="text-gray-600 mb-4">Showing {products.length} most recent products</p>
+      <p class="text-gray-600 mb-4">
+        Showing {products.length} most recent products
+      </p>
       <div class="overflow-x-auto">
         <table class="w-full border-collapse">
           <thead>
@@ -189,9 +198,15 @@ app.get("/admin/products", async (c) => {
                 </td>
                 <td class="p-2 align-top font-mono text-sm">{p.upc}</td>
                 <td class="p-2 align-top">{p.name}</td>
-                <td class="p-2 align-top">{p.brand || <span class="text-gray-400">-</span>}</td>
-                <td class="p-2 align-top">{p.manufacturer || <span class="text-gray-400">-</span>}</td>
-                <td class="p-2 align-top">{p.category || <span class="text-gray-400">-</span>}</td>
+                <td class="p-2 align-top">
+                  {p.brand || <span class="text-gray-400">-</span>}
+                </td>
+                <td class="p-2 align-top">
+                  {p.manufacturer || <span class="text-gray-400">-</span>}
+                </td>
+                <td class="p-2 align-top">
+                  {p.category || <span class="text-gray-400">-</span>}
+                </td>
                 <td class="p-2 align-top">{formatUSD(p.priceDollars)}</td>
                 <td class="p-2 align-top">{p.source}</td>
                 <td class="p-2 align-top max-w-xs truncate">
@@ -200,7 +215,9 @@ app.get("/admin/products", async (c) => {
                 <td class="p-2 align-top">
                   {p.sourceData ? (
                     <details>
-                      <summary class="cursor-pointer text-blue-600 hover:underline text-sm">View JSON</summary>
+                      <summary class="cursor-pointer text-blue-600 hover:underline text-sm">
+                        View JSON
+                      </summary>
                       <pre class="text-xs max-w-md overflow-auto bg-gray-100 p-2 rounded mt-1">
                         {JSON.stringify(JSON.parse(p.sourceData), null, 2)}
                       </pre>
@@ -210,7 +227,10 @@ app.get("/admin/products", async (c) => {
                   )}
                 </td>
                 <td class="p-2 align-top">
-                  <form method="post" action={`/admin/products/${p.upc}/delete`}>
+                  <form
+                    method="post"
+                    action={`/admin/products/${p.upc}/delete`}
+                  >
                     <button
                       type="submit"
                       class="px-2 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 cursor-pointer"
@@ -226,9 +246,11 @@ app.get("/admin/products", async (c) => {
         </table>
       </div>
       <p class="mt-4">
-        <a href="/admin" class="text-blue-600 hover:underline">Back to Admin</a>
+        <a href="/admin" class="text-blue-600 hover:underline">
+          Back to Admin
+        </a>
       </p>
-    </div>
+    </div>,
   );
 });
 
@@ -239,11 +261,15 @@ app.get("/admin/stats", async (c) => {
   return c.render(
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-4">Cache Statistics</h1>
-      <pre class="bg-gray-100 p-4 rounded overflow-auto text-sm">{JSON.stringify(statsData, null, 2)}</pre>
+      <pre class="bg-gray-100 p-4 rounded overflow-auto text-sm">
+        {JSON.stringify(statsData, null, 2)}
+      </pre>
       <p class="mt-4">
-        <a href="/admin" class="text-blue-600 hover:underline">Back to Admin</a>
+        <a href="/admin" class="text-blue-600 hover:underline">
+          Back to Admin
+        </a>
       </p>
-    </div>
+    </div>,
   );
 });
 
@@ -260,7 +286,7 @@ app.get(
     theme: "default",
     layout: "modern",
     darkMode: true,
-  })
+  }),
 );
 
 export default app;
