@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useId } from "react";
 import { useTRPC } from "~/trpc/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ import Link from "next/link";
 import { Badge } from "~/components/ui/badge";
 
 export default function IntegrationsPage() {
+  const sheetUrlId = useId();
   const api = useTRPC();
   const queryClient = useQueryClient();
   const [sheetUrl, setSheetUrl] = useState("");
@@ -115,6 +116,7 @@ export default function IntegrationsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <svg
+              aria-hidden="true"
               className="h-5 w-5"
               viewBox="0 0 24 24"
               fill="none"
@@ -228,9 +230,9 @@ export default function IntegrationsPage() {
           {status?.configured && !status?.connected && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="sheet-url">Google Sheet URL</Label>
+                <Label htmlFor={sheetUrlId}>Google Sheet URL</Label>
                 <Input
-                  id="sheet-url"
+                  id={sheetUrlId}
                   type="url"
                   placeholder="https://docs.google.com/spreadsheets/d/..."
                   value={sheetUrl}

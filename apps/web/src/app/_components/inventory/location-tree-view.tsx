@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useId } from "react";
 import { type NodeRendererProps, Tree } from "react-arborist";
 import { Package } from "lucide-react";
 import type { InfLocation, LocationType } from "~/schemas/location";
@@ -78,6 +78,7 @@ function transformTreeData(
 
 /** Presentational component - renders location tree from provided data */
 export const LocationTree = ({ data }: LocationTreeProps) => {
+  const showInventoryId = useId();
   const [showInventory, setShowInventory] = useState(false);
 
   const treeData = useMemo(
@@ -89,11 +90,11 @@ export const LocationTree = ({ data }: LocationTreeProps) => {
     <div className="space-y-2">
       <FlexContainer align="center" gap={2}>
         <Checkbox
-          id="show-inventory"
+          id={showInventoryId}
           checked={showInventory}
           onCheckedChange={(checked) => setShowInventory(checked === true)}
         />
-        <Label htmlFor="show-inventory" className="cursor-pointer text-sm">
+        <Label htmlFor={showInventoryId} className="cursor-pointer text-sm">
           Show inventory items
         </Label>
       </FlexContainer>

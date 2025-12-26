@@ -271,8 +271,8 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
       </CardHeader>
       <CardContent>
         <SummaryGrid>
-          {items.map((item, index) => (
-            <div key={index}>
+          {items.map((item) => (
+            <div key={item.label}>
               <div className="text-muted-foreground text-sm">{item.label}</div>
               <div className="font-medium">
                 {item.formatter ? item.formatter(item.value) : item.value}

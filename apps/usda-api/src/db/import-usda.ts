@@ -168,7 +168,6 @@ function transformField(
       return parseInteger(value);
     case "number":
       return parseNumber(value);
-    case "string":
     default:
       return value;
   }
@@ -420,17 +419,17 @@ function convertEmptyToNull<T extends Record<string, unknown>>(obj: T): T {
 function parseNumber(value: string | null): number | null {
   if (!value || value.trim() === "") return null;
   const parsed = parseFloat(value);
-  return isNaN(parsed) ? null : parsed;
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function parseInteger(value: string | null): number | null {
   if (!value || value.trim() === "") return null;
-  const parsed = parseInt(value);
-  return isNaN(parsed) ? null : parsed;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 function formatDuration(totalSeconds: number): string {
-  if (!isFinite(totalSeconds) || totalSeconds < 0) return "--:--:--";
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "--:--:--";
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = Math.floor(totalSeconds % 60);

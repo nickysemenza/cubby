@@ -108,6 +108,7 @@ function TidyTree({ data }: TidyTreeProps) {
   const links = useMemo(() => root.links(), [root]);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: D3 visualization pan/zoom interaction
     <div
       ref={containerRef}
       className="h-[600px] w-full cursor-grab overflow-hidden rounded-md border active:cursor-grabbing"
@@ -118,6 +119,7 @@ function TidyTree({ data }: TidyTreeProps) {
       onMouseLeave={handleMouseUp}
     >
       <svg
+        aria-hidden="true"
         width={dimensions.width}
         height={dimensions.height}
         style={{ overflow: "visible" }}
@@ -137,6 +139,7 @@ function TidyTree({ data }: TidyTreeProps) {
 
             return (
               <path
+                // biome-ignore lint/suspicious/noArrayIndexKey: d3 links don't have stable IDs
                 key={i}
                 d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
                 fill="none"
@@ -147,12 +150,15 @@ function TidyTree({ data }: TidyTreeProps) {
           })}
 
           {/* Nodes positioned using swapped x/y coordinates */}
-          {nodes.map((node, i) => {
+          {nodes.map((node) => {
             const isRoot = node.data.name === "_root";
             const hasChildren = !!node.children?.length;
 
             return (
-              <g key={i} transform={`translate(${node.y}, ${node.x})`}>
+              <g
+                key={node.data.id}
+                transform={`translate(${node.y}, ${node.x})`}
+              >
                 <circle r={isRoot ? 6 : 4} className="fill-primary" />
                 {!isRoot && (
                   <foreignObject

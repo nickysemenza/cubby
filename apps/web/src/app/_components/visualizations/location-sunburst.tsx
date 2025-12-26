@@ -141,16 +141,21 @@ function Sunburst({ data }: SunburstProps) {
       ref={containerRef}
       className="relative h-[500px] w-full overflow-hidden rounded-md border"
     >
-      <svg width={dimensions.width} height={dimensions.height}>
+      <svg
+        aria-hidden="true"
+        width={dimensions.width}
+        height={dimensions.height}
+      >
         <g
           transform={`translate(${dimensions.width / 2}, ${dimensions.height / 2})`}
         >
-          {nodes.map((node, i) => {
+          {nodes.map((node) => {
             const isHovered = hoveredNode?.data.id === node.data.id;
             const labelPos = getLabelPosition(node);
 
             return (
-              <g key={i}>
+              <g key={node.data.id}>
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 sunburst visualization hover interaction */}
                 <path
                   d={arc(node)}
                   fill={getNodeColor(node)}

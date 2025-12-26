@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useId } from "react";
 import Image from "next/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -42,6 +42,7 @@ export function PendingImageUpload({
   onExistingImagesRemove,
   className = "",
 }: PendingImageUploadProps) {
+  const imageInputId = useId();
   const [uploading, setUploading] = useState(false);
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const [currentExistingImages, setCurrentExistingImages] = useState<
@@ -253,11 +254,11 @@ export function PendingImageUpload({
   return (
     <div className={cn("space-y-4", className)}>
       <div className="space-y-2">
-        <Label htmlFor="image">Upload images</Label>
+        <Label htmlFor={imageInputId}>Upload images</Label>
         <div className="flex gap-2">
           <Input
             ref={fileInputRef}
-            id="image"
+            id={imageInputId}
             type="file"
             accept="image/*"
             onChange={handleFileUpload}

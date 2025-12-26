@@ -111,6 +111,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: Container handles keyboard events for combobox dropdown
     <div ref={containerRef} className="relative" onKeyDown={handleKeyDown}>
       <Button
         variant="outline"

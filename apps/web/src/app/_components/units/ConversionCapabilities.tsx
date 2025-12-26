@@ -94,13 +94,13 @@ export function ConversionCapabilities({
       </div>
 
       <div className="grid grid-cols-3 gap-1 text-[11px]">
-        {capabilities.map((capability, index) => {
+        {capabilities.map((capability) => {
           const label = formatKindsLabel(capability.from, capability.to);
           const FromIcon = kindIconMap[capability.from].Icon;
           const ToIcon = kindIconMap[capability.to].Icon;
           return (
             <div
-              key={index}
+              key={`${capability.from}-${capability.to}`}
               className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
                 capability.success
                   ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"

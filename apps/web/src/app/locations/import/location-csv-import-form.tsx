@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useId } from "react";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -84,9 +84,9 @@ const LocationChangesPreview = ({
 
   return (
     <div className="mt-1 flex flex-wrap gap-1 text-muted-foreground text-xs">
-      {changes.map((change, i) => (
+      {changes.map((change) => (
         <span
-          key={i}
+          key={change}
           className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"
         >
           {change.includes("image") && <ImageIcon className="h-3 w-3" />}
@@ -98,6 +98,7 @@ const LocationChangesPreview = ({
 };
 
 export default function LocationCSVImportForm() {
+  const csvDataId = useId();
   const [pastedData, setPastedData] = useState("");
   const [parsedRows, setParsedRows] = useState<LocationCSVRow[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -239,9 +240,9 @@ export default function LocationCSVImportForm() {
       {/* Input section */}
       <div className="space-y-4">
         <div>
-          <Label htmlFor="csv-data">Paste CSV Data</Label>
+          <Label htmlFor={csvDataId}>Paste CSV Data</Label>
           <Textarea
-            id="csv-data"
+            id={csvDataId}
             placeholder={`location_name,parent_name,location_type,description,location_image
 Kitchen,,room,,
 Pantry,Kitchen,shelf,,
@@ -365,13 +366,13 @@ Fridge,Kitchen,cabinet,,`}
                 </tr>
               </thead>
               <tbody>
-                {displayResult.items.map((item, idx) => {
+                {displayResult.items.map((item) => {
                   const style = getActionStyles(item.action);
                   const row = parsedRows[item.rowIndex];
 
                   return (
                     <tr
-                      key={idx}
+                      key={`${item.locationName}-${item.rowIndex}`}
                       className="border-b last:border-b-0 hover:bg-muted/30"
                     >
                       <td className="px-3 py-2">

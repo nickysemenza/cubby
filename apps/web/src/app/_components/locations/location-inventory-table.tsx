@@ -165,6 +165,7 @@ export function LocationInventoryTable({
 
           return (
             <button
+              type="button"
               className="flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
               onClick={() => {
                 setEditingRowId(item.id);

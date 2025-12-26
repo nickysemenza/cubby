@@ -85,6 +85,7 @@ export const RecipeIngredientList: React.FC<{
         return (
           <div className="space-y-0.5 text-sm">
             {amounts.map((amount, index) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: amounts are positional without stable IDs
               <div key={index}>{tryFormatAmount(amount)}</div>
             ))}
           </div>

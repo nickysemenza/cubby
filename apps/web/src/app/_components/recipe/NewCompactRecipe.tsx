@@ -238,7 +238,8 @@ const RichTextInstructions = React.memo(function RichTextInstructions({
   return (
     <>
       {parsedInstructions.map((content, idx) => (
-        <li key={`${idx}2`}>{content}</li>
+        // biome-ignore lint/suspicious/noArrayIndexKey: instructionLines are plain strings without stable IDs
+        <li key={idx}>{content}</li>
       ))}
     </>
   );
@@ -325,9 +326,9 @@ const MissingIngredientsList: React.FC<{ missingIngredients: string[] }> = ({
           These ingredients don&apos;t exist in your database yet:
         </div>
         <ul className="space-y-1">
-          {missingIngredients.map((name, index) => (
+          {missingIngredients.map((name) => (
             <li
-              key={`missing-${index}`}
+              key={`missing-${name}`}
               className="flex items-center justify-between"
             >
               <span>{name}</span>
@@ -361,6 +362,7 @@ const RenderWIngredient: React.FC<{ amount: WIngredient }> = ({ amount }) => {
     <div className="inline">
       <div className="inline">
         {amounts.map((a, x) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: amounts array items don't have stable IDs
           <div key={x} className="inline">
             <div className="inline pr-1 text-primary">
               {formattedAmounts[x]}

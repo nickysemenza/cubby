@@ -283,10 +283,21 @@ function SidebarTreeNode({
     return location.children;
   }, [location.children, searchTerm]);
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleLocationClick();
+    }
+  };
+
   return (
     <div>
+      {/* biome-ignore lint/a11y/useSemanticElements: Using div with role="button" to allow nested button for expand/collapse */}
       <div
         ref={isActive ? activeItemRef : undefined}
+        role="button"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
         className={cn(
           "group relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
           "transition-all duration-150 ease-out",
@@ -305,6 +316,7 @@ function SidebarTreeNode({
       >
         {/* Expand/Collapse Icon */}
         <button
+          type="button"
           onClick={handleExpandClick}
           className={cn(
             "flex h-5 w-5 items-center justify-center rounded transition-transform duration-200 hover:bg-muted-foreground/20",

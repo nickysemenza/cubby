@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useState, useId } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -59,6 +59,7 @@ const amountKinds: AmountKind[] = [
 const isNutrientMapping = (m: UnitMapping) => m.source === "USDA nutrition";
 
 export function ConversionDialog({ mappings }: ConversionDialogProps) {
+  const showNutrientsId = useId();
   const [open, setOpen] = useState(false);
   const [showNutrients, setShowNutrients] = useState(false);
   const [conversions, setConversions] = useState<
@@ -157,13 +158,13 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
           {nutrientCount > 0 && (
             <div className="flex items-center gap-2">
               <Checkbox
-                id="show-nutrients"
+                id={showNutrientsId}
                 checked={showNutrients}
                 onCheckedChange={(checked) =>
                   setShowNutrients(checked === true)
                 }
               />
-              <Label htmlFor="show-nutrients" className="text-sm">
+              <Label htmlFor={showNutrientsId} className="text-sm">
                 Show nutrient mappings ({nutrientCount})
               </Label>
             </div>

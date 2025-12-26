@@ -375,6 +375,7 @@ export default function QuickCaptureForm({
           const isFocused = index === focusedRowIndex;
 
           return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: Form row focus tracking for visual feedback
             <div
               key={field.id}
               className={`flex flex-col gap-2 rounded border p-2 transition-colors md:flex-row md:items-start ${

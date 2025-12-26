@@ -22,6 +22,7 @@ function SkeletonGrid({ count = 6 }: { count?: number }) {
   return (
     <div className="space-y-3">
       {Array.from({ length: count }, (_, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: static list that never reorders
         <SkeletonCard key={i} />
       ))}
     </div>
@@ -58,10 +59,12 @@ export function DetailLoadingSkeleton() {
       <div className="space-y-4">
         <SkeletonText className="h-6 w-32" />
         {Array.from({ length: 3 }, (_, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static list that never reorders
           <div key={i} className="space-y-2">
             <SkeletonText className="w-40" />
             <div className="ml-4 space-y-1">
               {Array.from({ length: 4 }, (_, j) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: static list that never reorders
                 <SkeletonText key={j} className="h-3 w-48" />
               ))}
             </div>

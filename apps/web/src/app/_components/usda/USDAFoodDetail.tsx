@@ -100,8 +100,11 @@ export const USDAFoodDetail: React.FC<{
               </tr>
             </thead>
             <tbody>
-              {portionInfoRaw.map((portion, idx) => (
-                <tr key={idx} className="border-b">
+              {portionInfoRaw.map((portion) => (
+                <tr
+                  key={`${portion.amount}-${portion.modifier ?? "default"}-${portion.gram_weight}`}
+                  className="border-b"
+                >
                   <td className="border p-2">{portion.amount}</td>
                   <td className="border p-2">
                     {portion.modifier || "portion"}

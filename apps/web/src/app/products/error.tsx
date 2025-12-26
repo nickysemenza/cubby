@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import JsonRenderer from "~/app/_components/json-renderer";
+import { Button } from "~/components/ui/button";
 
 // biome-ignore lint/suspicious/noShadowRestrictedNames: Next.js error boundary convention
 export default function Error({
@@ -20,14 +21,7 @@ export default function Error({
     <div>
       <h2>Something went wrong!</h2>
       <JsonRenderer input={error} />
-      <button
-        onClick={
-          // Attempt to recover by trying to re-render the segment
-          () => reset()
-        }
-      >
-        Try again
-      </button>
+      <Button onClick={() => reset()}>Try again</Button>
     </div>
   );
 }

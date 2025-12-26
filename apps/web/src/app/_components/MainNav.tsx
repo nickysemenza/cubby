@@ -241,7 +241,11 @@ export function MainNav({
         <Sheet>
           <SheetTrigger
             render={
-              <button className="p-2 md:hidden" aria-label="Toggle menu" />
+              <button
+                type="button"
+                className="p-2 md:hidden"
+                aria-label="Toggle menu"
+              />
             }
           >
             <Menu size={24} />

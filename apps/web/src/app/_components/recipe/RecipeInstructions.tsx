@@ -33,7 +33,7 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
           {/* Instructions list */}
           <ol className="my-0 ml-0 list-none space-y-4">
             {section.instructions.map((instruction, stepIndex) => (
-              <li key={stepIndex} className="flex gap-4">
+              <li key={`${section.id}-${stepIndex}`} className="flex gap-4">
                 {/* Step number */}
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary font-semibold text-primary-foreground text-sm">
                   {stepIndex + 1}

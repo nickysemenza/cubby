@@ -353,6 +353,7 @@ export function LocationGallery() {
         <span className="text-lg">No locations found</span>
         {locationTypeFilter && (
           <button
+            type="button"
             onClick={() => setLocationTypeFilter(null)}
             className="mt-2 text-primary text-sm hover:underline"
           >

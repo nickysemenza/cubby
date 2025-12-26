@@ -71,35 +71,6 @@ class DatabaseManager {
     });
   }
 
-  private formatBytes(bytes: number): string {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
-  }
-
-  private formatDuration(seconds: number): string {
-    if (!isFinite(seconds) || seconds < 0) return "calculating...";
-
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}h ${minutes}m ${secs}s`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${secs}s`;
-    } else {
-      return `${secs}s`;
-    }
-  }
-
-  private getVersionKey(): string | null {
-    if (!this.config.r2ObjectKey) return null;
-    return this.config.r2ObjectKey.replace(/\.sqlite\.zst$/, ".version");
-  }
-
   private async fetchRemoteVersion(): Promise<string | null> {
     try {
       const versionUrl = "https://usda-sqlite.nickysemenza.com/usda.version";
@@ -245,7 +216,7 @@ async function ensureDataDirOwnership(dataDir: string): Promise<void> {
 }
 
 function dropPrivileges(args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return new Promise((_resolve, reject) => {
     // Only drop privileges if running as root
     if (process.getuid && process.getuid() === 0) {
       console.log(

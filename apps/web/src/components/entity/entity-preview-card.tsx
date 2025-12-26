@@ -63,6 +63,23 @@ export function EntityPreviewCard({
     ) : null;
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.key === "Enter" || e.key === " ") && onClick) {
+      e.preventDefault();
+      onClick();
+    }
+  };
+
+  // Only add interactive attributes when onClick is provided
+  const interactiveProps = onClick
+    ? {
+        role: "button" as const,
+        tabIndex: 0,
+        onKeyDown: handleKeyDown,
+        onClick: onClick,
+      }
+    : {};
+
   return (
     <div
       className={cn(
@@ -71,7 +88,7 @@ export function EntityPreviewCard({
         onClick && "cursor-pointer hover:bg-gray-50",
         className,
       )}
-      onClick={onClick}
+      {...interactiveProps}
     >
       <div className="flex items-start justify-between">
         {/* Image and Content */}

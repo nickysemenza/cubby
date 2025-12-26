@@ -208,12 +208,18 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
   );
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: D3 force-directed graph visualization interaction
     <div
       ref={containerRef}
       className="relative h-[400px] w-full overflow-hidden rounded-md border"
       onClick={() => setSelectedLinkKey(null)}
     >
-      <svg ref={svgRef} width={dimensions.width} height={dimensions.height}>
+      <svg
+        ref={svgRef}
+        aria-hidden="true"
+        width={dimensions.width}
+        height={dimensions.height}
+      >
         {/* Links */}
         <g>
           {simulatedLinks.map((link, i) => {
@@ -233,8 +239,11 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                 : 0.4;
 
             return (
-              <g key={i}>
-                {/* Invisible wider line for easier click */}
+              <g
+                // biome-ignore lint/suspicious/noArrayIndexKey: d3 simulation links don't have stable IDs
+                key={i}
+              >
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 graph link click interaction */}
                 <line
                   x1={source.x}
                   y1={source.y}
@@ -286,6 +295,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                 : node.name;
 
             return (
+              // biome-ignore lint/a11y/noStaticElementInteractions: D3 graph node hover interaction
               <g
                 key={node.id}
                 transform={`translate(${node.x ?? 0}, ${node.y ?? 0})`}
@@ -321,6 +331,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
 
       {/* Tooltip for selected link */}
       {selectedLink && !hoveredNode && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: Tooltip click prevention
         <div
           className="absolute top-4 left-4 z-50 max-w-xs rounded-md border bg-popover px-3 py-2 text-sm shadow-lg"
           onClick={(e) => e.stopPropagation()}
@@ -331,6 +342,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               {(selectedLink.target as NetworkNode).name}
             </div>
             <button
+              type="button"
               onClick={() => setSelectedLinkKey(null)}
               className="-mt-0.5 text-lg text-muted-foreground leading-none hover:text-foreground"
             >

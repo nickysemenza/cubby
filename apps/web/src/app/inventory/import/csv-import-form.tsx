@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useId } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "~/components/ui/button";
@@ -131,9 +131,9 @@ const ProductChangesPreview = ({ item }: { item: CSVImportResultItem }) => {
 
   return (
     <div className="mt-1 flex flex-wrap gap-1 text-muted-foreground text-xs">
-      {changes.map((change, i) => (
+      {changes.map((change) => (
         <span
-          key={i}
+          key={change}
           className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5"
         >
           {change.startsWith("New product") && <Package className="h-3 w-3" />}
@@ -146,6 +146,7 @@ const ProductChangesPreview = ({ item }: { item: CSVImportResultItem }) => {
 };
 
 export default function CSVImportForm() {
+  const csvPasteId = useId();
   const router = useRouter();
   const [pastedData, setPastedData] = useState("");
   const [parsedRows, setParsedRows] = useState<InventoryCSVRow[]>([]);
@@ -529,6 +530,7 @@ export default function CSVImportForm() {
                 {importResult.items.map((item, i) => {
                   const styles = getActionStyles(item.action);
                   return (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: import result items are positional without stable IDs
                     <tr key={i} className="border-t">
                       <td className="p-2">
                         <span
@@ -587,9 +589,9 @@ export default function CSVImportForm() {
     <div className="space-y-4">
       {/* CSV Input */}
       <div>
-        <Label htmlFor="csv-paste">Paste CSV/TSV data</Label>
+        <Label htmlFor={csvPasteId}>Paste CSV/TSV data</Label>
         <Textarea
-          id="csv-paste"
+          id={csvPasteId}
           placeholder={`Hammer,Milwaukee,,HMR-1,,15.99,,,,,,Garage > Tools > Shelf 1,1,each\nNails (box),,,,,4.99,,,,,,Garage > Tools > Bin 3,2,box\n\nOr with headers:\nproduct_name,manufacturer,upc,model,ndb_number,price,unit_mappings,aliases,ingredient,ingredient_name,expected_qty,location_name,quantity,unit`}
           value={pastedData}
           onChange={handlePaste}
@@ -695,6 +697,7 @@ export default function CSVImportForm() {
                   const styles = getActionStyles(item.action);
                   const mappings = item.productChanges?.unitMappingsDetail;
                   return (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: preview result items are positional without stable IDs
                     <tr key={i} className="border-t">
                       <td className="p-2">
                         <span

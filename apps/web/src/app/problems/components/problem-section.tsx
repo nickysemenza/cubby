@@ -82,7 +82,7 @@ export function ProblemSection<T>({
                 </h4>
               )}
               <div className="space-y-3">
-                {groupItems.map((item, index) => {
+                {groupItems.map((item) => {
                   const {
                     title: itemTitle,
                     subtitle,
@@ -95,7 +95,7 @@ export function ProblemSection<T>({
 
                   return (
                     <EntityPreviewCard
-                      key={index}
+                      key={`${itemTitle}-${editUrl}`}
                       title={itemTitle}
                       subtitle={subtitle}
                       badges={badges}

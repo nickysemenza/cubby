@@ -2,7 +2,7 @@
 
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useState } from "react";
+import { useState, useId } from "react";
 import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import RTable from "../_components/data-table/Table";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
@@ -32,6 +32,7 @@ async function getIngredientMappings(
 }
 
 export function IngredientList() {
+  const missingProductsId = useId();
   const api = useTRPC();
   const columnHelper = createColumnHelper<IngredientWithFoodOut>();
 
@@ -108,14 +109,14 @@ export function IngredientList() {
         additionalFilters={
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="missingProductsOnly"
+              id={missingProductsId}
               checked={table.getState().globalFilter.missingProductsOnly}
               onCheckedChange={(checked) =>
                 table.setGlobalFilter({ missingProductsOnly: checked })
               }
             />
             <label
-              htmlFor="missingProductsOnly"
+              htmlFor={missingProductsId}
               className="font-medium text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
             >
               Missing Products Only

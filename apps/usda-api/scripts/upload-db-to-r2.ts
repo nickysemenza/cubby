@@ -274,7 +274,7 @@ class R2Uploader {
         /\.sqlite\.zst$/,
         ".version",
       );
-      const shaKey = this.config.objectKey + ".sha256";
+      const shaKey = `${this.config.objectKey}.sha256`;
 
       await Promise.all([
         this.uploadFileWithRclone(

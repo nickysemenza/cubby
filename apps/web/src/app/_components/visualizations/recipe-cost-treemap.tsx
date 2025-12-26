@@ -150,8 +150,12 @@ function Treemap({ data }: TreemapProps) {
       ref={containerRef}
       className="relative h-[300px] w-full overflow-hidden rounded-md border"
     >
-      <svg width={dimensions.width} height={dimensions.height}>
-        {nodes.map((node, i) => {
+      <svg
+        aria-hidden="true"
+        width={dimensions.width}
+        height={dimensions.height}
+      >
+        {nodes.map((node) => {
           const width = node.x1 - node.x0;
           const height = node.y1 - node.y0;
           const isHovered = hoveredNode === node.data.name;
@@ -159,7 +163,8 @@ function Treemap({ data }: TreemapProps) {
           if (width < 4 || height < 4) return null;
 
           return (
-            <g key={i}>
+            <g key={`${node.data.name}-${node.data.id ?? "no-id"}`}>
+              {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 treemap visualization hover interaction */}
               <rect
                 x={node.x0}
                 y={node.y0}

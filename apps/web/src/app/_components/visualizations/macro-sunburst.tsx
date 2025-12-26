@@ -262,7 +262,11 @@ function Sunburst({ data }: SunburstProps) {
       ref={containerRef}
       className="relative h-[300px] w-full overflow-hidden rounded-md border"
     >
-      <svg width={dimensions.width} height={dimensions.height}>
+      <svg
+        aria-hidden="true"
+        width={dimensions.width}
+        height={dimensions.height}
+      >
         <g
           transform={`translate(${dimensions.width / 2}, ${dimensions.height / 2})`}
         >
@@ -273,7 +277,9 @@ function Sunburst({ data }: SunburstProps) {
             const labelPos = getLabelPosition(node);
 
             return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: d3 hierarchy nodes may share names across macros
               <g key={i}>
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 sunburst visualization hover interaction */}
                 <path
                   d={arc(node)}
                   fill={getNodeColor(node)}

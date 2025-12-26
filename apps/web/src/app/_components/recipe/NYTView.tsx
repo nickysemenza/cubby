@@ -39,7 +39,7 @@ export const NYTView: React.FC<{
           </div>
           {recipe.sections.map((section, x) =>
             section.instructions.map((i, y) => (
-              <div key={y} className="py-2">
+              <div key={`${section.id}-${y}`} className="py-2">
                 <div className="font-bold text-l">
                   Step {getGlobalInstructionNumber(recipe, x, y)}
                 </div>

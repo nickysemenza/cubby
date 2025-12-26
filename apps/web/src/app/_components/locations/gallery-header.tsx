@@ -83,6 +83,7 @@ export function GalleryHeader({
               <div key={loc.id} className="flex items-center gap-1">
                 <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
                 <button
+                  type="button"
                   onClick={() => onBreadcrumbClick?.(loc.id)}
                   className={cn(
                     "flex items-center gap-1 rounded px-1 py-0.5 text-xs transition-colors",
@@ -117,6 +118,7 @@ export function GalleryHeader({
           />
           {searchTerm && (
             <button
+              type="button"
               onClick={() => onSearchChange("")}
               className="absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
             >

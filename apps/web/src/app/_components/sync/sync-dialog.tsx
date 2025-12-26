@@ -401,8 +401,12 @@ export const SyncDialog = ({
                 Validation Errors
               </div>
               <ul className="list-inside list-disc space-y-1 text-red-600 text-sm dark:text-red-400">
-                {activeValidationErrors.map((err, i) => (
-                  <li key={i}>{err.message}</li>
+                {activeValidationErrors.map((err) => (
+                  <li
+                    key={`${err.entityType}-${err.itemKey ?? ""}-${err.message}`}
+                  >
+                    {err.message}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -575,8 +579,8 @@ const DetailsCellContent = ({
   if (state === "conflict" && fieldDiffs) {
     return (
       <div className="space-y-0.5">
-        {fieldDiffs.map((diff, j) => (
-          <div key={j}>
+        {fieldDiffs.map((diff) => (
+          <div key={diff.field}>
             <ValueChange
               label={diff.field}
               from={diff.from}
