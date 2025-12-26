@@ -53,15 +53,17 @@ export const SyncStatusBadge = () => {
   if (!isConnected) {
     return (
       <Tooltip>
-        <TooltipTrigger>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2"
-            render={<Link href="/settings/integrations" />}
-          >
-            <AlertTriangle className="text-muted-foreground h-4 w-4" />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              render={<Link href="/settings/integrations" />}
+            />
+          }
+        >
+          <AlertTriangle className="text-muted-foreground h-4 w-4" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Google Sheet not connected</p>
@@ -83,15 +85,17 @@ export const SyncStatusBadge = () => {
   if (previewError) {
     return (
       <Tooltip>
-        <TooltipTrigger>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 px-2"
-            onClick={fetchPreview}
-          >
-            <AlertTriangle className="text-muted-foreground h-4 w-4" />
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={fetchPreview}
+            />
+          }
+        >
+          <AlertTriangle className="text-muted-foreground h-4 w-4" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Could not check sync status. Click to retry.</p>
@@ -162,32 +166,34 @@ export const SyncStatusBadge = () => {
   return (
     <>
       <Tooltip>
-        <TooltipTrigger>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "h-8 px-2 font-medium",
-              inSync && "text-muted-foreground",
-              !inSync &&
-                !hasActionNeeded &&
-                "text-green-600 dark:text-green-400",
-              hasActionNeeded && "text-orange-600 dark:text-orange-400",
-            )}
-            onClick={handleClick}
-          >
-            {inSync ? (
-              <Check className="h-4 w-4" />
-            ) : hasActionNeeded ? (
-              <span className="flex items-center gap-1 text-sm">
-                {status.total}
-                <span className="text-muted-foreground">·</span>
-                {status.actionNeeded}
-              </span>
-            ) : (
-              <span className="text-sm">{status.total}</span>
-            )}
-          </Button>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-8 px-2 font-medium",
+                inSync && "text-muted-foreground",
+                !inSync &&
+                  !hasActionNeeded &&
+                  "text-green-600 dark:text-green-400",
+                hasActionNeeded && "text-orange-600 dark:text-orange-400",
+              )}
+              onClick={handleClick}
+            />
+          }
+        >
+          {inSync ? (
+            <Check className="h-4 w-4" />
+          ) : hasActionNeeded ? (
+            <span className="flex items-center gap-1 text-sm">
+              {status.total}
+              <span className="text-muted-foreground">·</span>
+              {status.actionNeeded}
+            </span>
+          ) : (
+            <span className="text-sm">{status.total}</span>
+          )}
         </TooltipTrigger>
         <TooltipContent>
           <p>{tooltipText}</p>

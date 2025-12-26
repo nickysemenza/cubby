@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      // Disable slow rule (takes ~4s, 80%+ of lint time)
+      "react-hooks/static-components": "off",
     },
   },
   {

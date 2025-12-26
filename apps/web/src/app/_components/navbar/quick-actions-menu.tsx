@@ -45,12 +45,14 @@ export const QuickActionsMenu = () => {
   return (
     <DropdownMenu>
       <Tooltip>
-        <TooltipTrigger>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="sm" className="h-8 px-2" />}
-          >
-            <Plus className="h-4 w-4" />
-          </DropdownMenuTrigger>
+        <TooltipTrigger
+          render={
+            <DropdownMenuTrigger
+              render={<Button variant="ghost" size="sm" className="h-8 px-2" />}
+            />
+          }
+        >
+          <Plus className="h-4 w-4" />
         </TooltipTrigger>
         <TooltipContent>
           <p>Quick actions</p>

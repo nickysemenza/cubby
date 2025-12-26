@@ -67,26 +67,28 @@ export const ProblemsBadge = () => {
 
   return (
     <Tooltip>
-      <TooltipTrigger>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "h-8 px-2 font-medium",
-            !hasProblems && "text-muted-foreground",
-            hasProblems && "text-orange-600 dark:text-orange-400",
-          )}
-          render={<Link href="/problems" />}
-        >
-          {hasProblems ? (
-            <span className="flex items-center gap-1 text-sm">
-              <AlertTriangle className="h-4 w-4" />
-              {totalProblems}
-            </span>
-          ) : (
-            <Check className="h-4 w-4" />
-          )}
-        </Button>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-8 px-2 font-medium",
+              !hasProblems && "text-muted-foreground",
+              hasProblems && "text-orange-600 dark:text-orange-400",
+            )}
+            render={<Link href="/problems" />}
+          />
+        }
+      >
+        {hasProblems ? (
+          <span className="flex items-center gap-1 text-sm">
+            <AlertTriangle className="h-4 w-4" />
+            {totalProblems}
+          </span>
+        ) : (
+          <Check className="h-4 w-4" />
+        )}
       </TooltipTrigger>
       <TooltipContent>
         <p>{tooltipText}</p>

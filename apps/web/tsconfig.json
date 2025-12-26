@@ -22,14 +22,9 @@
         "name": "next"
       }
     ],
-    "baseUrl": ".",
     "paths": {
-      "~/*": [
-        "./src/*"
-      ],
-      "tooling/*": [
-        "./tooling/*"
-      ]
+      "~/*": ["./src/*"],
+      "tooling/*": ["./tooling/*"]
     },
     "isolatedModules": true
   },
