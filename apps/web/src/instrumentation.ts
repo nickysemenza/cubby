@@ -30,6 +30,11 @@ export const initOpenTelemetry = async () => {
     return;
   }
 
+  // Skip on Vercel - OTel packages aren't bundled for serverless
+  if (process.env.VERCEL) {
+    return;
+  }
+
   initialized = true;
 
   try {

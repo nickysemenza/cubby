@@ -1,0 +1,14 @@
+# Large database files
+apps/usda-api/data/
+
+# Build outputs (regenerated during deploy)
+.output/
+apps/web/.output/
+dist/
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Rust build artifacts
+recipebridge/target/

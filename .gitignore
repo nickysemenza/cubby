@@ -45,6 +45,9 @@ yarn-error.log*
 # idea files
 .idea
 
+# USDA database (large files)
+apps/usda-api/data/
+
 tsconfig.vitest-temp.json
 
 # Playwright

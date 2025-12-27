@@ -3,5 +3,8 @@
     "deploymentEnabled": false
   },
   "regions": ["pdx1"],
-  "buildCommand": "pnpm db:migrate && pnpm build"
+  "framework": null,
+  "installCommand": "corepack enable && corepack prepare pnpm@10.17.1 --activate && pnpm install",
+  "buildCommand": "pnpm db:migrate && pnpm build",
+  "outputDirectory": "apps/web/.vercel/output"
 }

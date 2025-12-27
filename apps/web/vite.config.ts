@@ -1,18 +1,16 @@
-import { cloudflare } from "@cloudflare/vite-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
+import { nitro } from "nitro/vite";
 import { defineConfig } from "vite";
 import wasm from "vite-plugin-wasm";
 import viteTsConfigPaths from "vite-tsconfig-paths";
 
-const isDev = process.env.NODE_ENV !== "production";
-
 export default defineConfig({
   envDir: ".", // Explicitly load .env from this directory
-  // Externalize OpenTelemetry packages to avoid ESM/CJS compatibility issues
   ssr: {
+    // Externalize OpenTelemetry packages to avoid ESM/CJS compatibility issues
     external: [
       "@opentelemetry/sdk-node",
       "@opentelemetry/resources",
@@ -22,15 +20,29 @@ export default defineConfig({
     ],
   },
   plugins: [
-    // Only use Cloudflare plugin in production - allows Node.js pg driver in dev
-    !isDev && cloudflare({ viteEnvironment: { name: "ssr" } }),
     wasm(),
     devtools(),
     viteTsConfigPaths({
       projects: ["./tsconfig.json"],
     }),
     tailwindcss(),
+    // tanstackStart must come BEFORE viteReact per TanStack Router plugin
     tanstackStart(),
     viteReact(),
-  ].filter(Boolean),
+    nitro({
+      preset: "vercel",
+      // Force bundle captcha packages from better-auth-ui (unused but cause ESM/CJS issues)
+      externals: {
+        inline: [
+          "@hcaptcha/react-hcaptcha",
+          "@hcaptcha/loader",
+          "@captchafox/react",
+          "@marsidev/react-turnstile",
+          "@wojtekmaj/react-recaptcha-v3",
+          "react-google-recaptcha",
+          "@daveyplate/better-auth-ui",
+        ],
+      },
+    }),
+  ],
 });
