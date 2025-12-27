@@ -631,11 +631,13 @@ export const wouldCreateParentCycle = async (
     if (currentId === locationId) {
       return true; // Found a cycle
     }
-    const parent = await getDb(db).query.location.findFirst({
+    const parentLocation: { parentId: string | null } | undefined = await getDb(
+      db,
+    ).query.location.findFirst({
       where: eq(location.id, currentId),
       columns: { parentId: true },
     });
-    currentId = parent?.parentId ?? null;
+    currentId = parentLocation?.parentId ?? null;
   }
 
   return false;
@@ -763,7 +765,7 @@ export const deleteLocation = async (
 };
 
 export const getLocationById = async (
-  db: Database | Transaction,
+  db: Database | DrizzleTransaction,
   id: LocationId,
   organizationId: OrganizationId,
 ) => {

@@ -78,6 +78,7 @@ export const ProblemsBadge = () => {
               hasProblems && "text-orange-600 dark:text-orange-400",
             )}
             render={<Link href="/problems" />}
+            nativeButton={false}
           />
         }
       >

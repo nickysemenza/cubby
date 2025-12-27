@@ -26,6 +26,7 @@ export function ErrorDisplay({ error, className }: ErrorDisplayProps) {
               variant="link"
               size="sm"
               render={<Link href="/auth/sign-in" />}
+              nativeButton={false}
             >
               Sign in
             </Button>

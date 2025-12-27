@@ -60,6 +60,7 @@ export const SyncStatusBadge = () => {
               size="sm"
               className="h-8 px-2"
               render={<Link href="/settings/integrations" />}
+              nativeButton={false}
             />
           }
         >

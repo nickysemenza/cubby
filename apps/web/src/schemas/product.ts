@@ -6,16 +6,21 @@ import { unitMappingInput } from "./unitmapping";
 import { productId, ingredientId } from "./identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 
-// Product category enum for filtering/organization
-export const productCategory = z.enum([
+// Product category values - single source of truth for both Zod and Drizzle
+export const productCategoryValues = [
   "food", // flour, olive oil, canned tomatoes
-  "tools", // angle grinder, drill, screwdriver
+  "tools", // angle grinder, drill, screwdriver, hand tools
   "tool-consumables", // grinding discs, drill bits, sandpaper
+  "tool-accessories", // jigs, fixtures, router table accessories
+  "storage", // packout, systainers, toolboxes, bags
   "hardware", // screws, nails, bolts
   "electronics", // raspberry pi, cables, monitors
   "household", // furniture, cookware, appliances
-  "supplies", // cleaning products, tape, batteries
-]);
+  "supplies", // cleaning products, tape, batteries, cables
+] as const;
+
+// Product category enum for filtering/organization
+export const productCategory = z.enum(productCategoryValues);
 
 export type ProductCategory = z.infer<typeof productCategory>;
 

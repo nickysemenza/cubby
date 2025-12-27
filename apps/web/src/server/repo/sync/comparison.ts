@@ -392,7 +392,7 @@ export function compareInventoryForSync(
     }
   }
 
-  // Second pass: detect moves (same product, different location)
+  // Second pass: detect moves (same product, different location) or manufacturer changes
   for (const [key, appRow] of appByKey) {
     if (processedKeys.has(key)) continue;
 
@@ -400,23 +400,27 @@ export function compareInventoryForSync(
     const appEntriesForProduct = appByProduct.get(productKey) ?? [];
     const sheetEntriesForProduct = sheetByProduct.get(productKey) ?? [];
 
-    // Check for move: 1 entry in app, 1 entry in sheet, different locations
+    // Check for move or manufacturer change: 1 entry in app, 1 entry in sheet
     if (
       appEntriesForProduct.length === 1 &&
       sheetEntriesForProduct.length === 1
     ) {
-      const sheetRow = sheetEntriesForProduct[0];
+      const sheetRow = sheetEntriesForProduct[0]!;
       const sheetKey = makeInventoryKey(
         sheetRow.product_name,
         sheetRow.manufacturer,
         sheetRow.location_name,
       );
 
+      const sameLocation =
+        normalizeForComparison(appRow.location_name ?? "") ===
+        normalizeForComparison(sheetRow.location_name ?? "");
+      const sameManufacturer =
+        normalizeManufacturer(appRow.manufacturer).toLowerCase() ===
+        normalizeManufacturer(sheetRow.manufacturer).toLowerCase();
+
       // Different locations = move
-      if (
-        normalizeForComparison(appRow.location_name ?? "") !==
-        normalizeForComparison(sheetRow.location_name ?? "")
-      ) {
+      if (!sameLocation) {
         const defaultResolution = getDefaultResolution("moved");
 
         items.push({
@@ -429,6 +433,24 @@ export function compareInventoryForSync(
           sheetData: buildInventorySheetData(sheetRow),
           movedFrom: appRow.location_name ?? undefined,
           movedTo: sheetRow.location_name ?? undefined,
+        });
+
+        processedKeys.add(key);
+        processedKeys.add(sheetKey);
+      } else if (!sameManufacturer) {
+        // Same location, different manufacturer = conflict on manufacturer field
+        const fieldDiffs = getInventoryRowDifferences(appRow, sheetRow);
+        const defaultResolution = getDefaultResolution("conflict", fieldDiffs);
+
+        items.push({
+          entityType: "inventory",
+          key, // Use app key
+          state: "conflict",
+          defaultResolution,
+          resolution: defaultResolution,
+          fieldDiffs: fieldDiffs.length > 0 ? fieldDiffs : undefined,
+          appData: buildInventoryAppData(appRow),
+          sheetData: buildInventorySheetData(sheetRow),
         });
 
         processedKeys.add(key);

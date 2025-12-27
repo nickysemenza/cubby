@@ -194,6 +194,7 @@ export default function IntegrationsPage() {
                       rel="noopener noreferrer"
                     />
                   }
+                  nativeButton={false}
                 >
                   <ExternalLink className="h-3 w-3" />
                   Open Sheet
@@ -215,6 +216,7 @@ export default function IntegrationsPage() {
                   variant="outline"
                   size="sm"
                   render={<Link href="/settings/integrations/debug" />}
+                  nativeButton={false}
                 >
                   <Bug className="h-3 w-3" />
                   Debug

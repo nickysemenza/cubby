@@ -11,6 +11,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import type { Amount } from "~/codec/codec";
+import { imageStatusValues } from "~/schemas/image";
+import { productCategoryValues } from "~/schemas/product";
+import { recipeSourceValues } from "~/schemas/recipe";
 import {
   user,
   organization,
@@ -38,17 +41,9 @@ export {
   apikey,
 };
 
-// Enums
-export const recipeSourceEnum = pgEnum("RecipeSource", [
-  "Book",
-  "Website",
-  "Other",
-]);
-export const imageStatusEnum = pgEnum("ImageStatus", [
-  "PENDING",
-  "UPLOADED",
-  "FAILED",
-]);
+// Enums - values derived from Zod schemas
+export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
+export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
 
 // Recipe table
 export const recipe = pgTable(
@@ -208,15 +203,7 @@ export const product = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     ingredientId: uuid("ingredientId").references(() => ingredient.id),
     category: text("category", {
-      enum: [
-        "food",
-        "tools",
-        "tool-consumables",
-        "hardware",
-        "electronics",
-        "household",
-        "supplies",
-      ],
+      enum: productCategoryValues,
     }), // product category for filtering
   },
   (table) => ({

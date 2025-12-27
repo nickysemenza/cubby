@@ -16,10 +16,12 @@ test.describe("Create Recipe", () => {
 
     // Step 1: Create an ingredient first
     await page.goto("/ingredients");
-    await expect(
-      page.getByRole("link", { name: "Create New Ingredient" }),
-    ).toBeVisible({ timeout: 10000 });
-    await page.getByRole("link", { name: "Create New Ingredient" }).click();
+    // The "Create New Ingredient" is a Button that renders as Link
+    const createIngredientBtn = page.getByRole("button", {
+      name: "Create New Ingredient",
+    });
+    await expect(createIngredientBtn).toBeVisible({ timeout: 10000 });
+    await createIngredientBtn.click();
     await page.waitForURL(/\/ingredients\/new/, { timeout: 10000 });
 
     // Fill in the ingredient form

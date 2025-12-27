@@ -1,9 +1,6 @@
 import { api } from "~/trpc/server";
 import { LocationDetail } from "~/app/_components/locations/location-detail";
-import {
-  LocationBreadcrumb,
-  locationToSegments,
-} from "~/app/_components/locations/location-breadcrumb";
+import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 
 type DetailParams = { id: string };
@@ -24,7 +21,7 @@ export default async function Page({ params }: PageParams) {
   return (
     <PageWrapper>
       <LocationBreadcrumb
-        segments={locationToSegments(location)}
+        location={location}
         linkable
         showHome
         className="mb-4"

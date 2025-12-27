@@ -246,6 +246,7 @@ async function previewProduct(
  */
 interface ProductOperationsResult {
   productData: ProductTopLevelOut;
+  productWasCreated: boolean;
   imageImportError?: string;
 }
 
@@ -259,7 +260,7 @@ async function executeProductOperations(
   manufacturer: string,
   actor: ActorContext,
 ): Promise<ProductOperationsResult> {
-  const productData = await processProductForImport(
+  const { productData, productWasCreated } = await processProductForImport(
     db,
     organizationId,
     row.product_name,
@@ -301,7 +302,7 @@ async function executeProductOperations(
     }
   }
 
-  return { productData, imageImportError };
+  return { productData, productWasCreated, imageImportError };
 }
 
 // ============================================================================
@@ -494,6 +495,7 @@ export const processRow = async (
       actor,
     );
     productData = result.productData;
+    productWillBeCreated = result.productWasCreated;
     imageImportError = result.imageImportError;
   }
 

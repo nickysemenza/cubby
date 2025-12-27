@@ -36,6 +36,13 @@ vi.mock("~/components/project/OrganizationSwitcher", () => {
   };
 });
 
+// Mock SyncStatusBadge to avoid TRPC provider requirement
+vi.mock("./_components/sync/sync-status-badge", () => {
+  return {
+    SyncStatusBadge: () => <div />,
+  };
+});
+
 // Mock next/navigation
 vi.mock("next/navigation", () => {
   return {
@@ -59,8 +66,11 @@ describe("App Router: Works with Client Components", () => {
     );
 
     render(<LayoutContent />);
-    // expect it to render recipes
-    expect(screen.getByText("Recipes")).toBeTruthy();
-    expect(screen.getByText("Ingredients")).toBeTruthy();
+    // expect it to render visible nav items (Recipes and Ingredients are in Kitchen dropdown)
+    expect(screen.getByText("Home")).toBeTruthy();
+    expect(screen.getByText("Products")).toBeTruthy();
+    expect(screen.getByText("Kitchen")).toBeTruthy(); // Dropdown containing Recipes & Ingredients
+    expect(screen.getByText("Locations")).toBeTruthy();
+    expect(screen.getByText("Inventory")).toBeTruthy();
   });
 });

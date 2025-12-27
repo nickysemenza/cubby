@@ -7,8 +7,11 @@ import {
 } from "./pagination";
 import { entityImage } from "~/entities/types";
 
+// Image status values - single source of truth for both Zod and Drizzle
+export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
+
 // Image status enum
-export const ImageStatus = z.enum(["PENDING", "UPLOADED", "FAILED"]);
+export const ImageStatus = z.enum(imageStatusValues);
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
 // Base schema for image data

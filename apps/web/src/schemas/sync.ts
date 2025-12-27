@@ -8,6 +8,7 @@ import { z } from "zod";
 import { fieldChange } from "./csv";
 import { locationId, productId, inventoryId } from "./identifiers";
 import { productCategory } from "./product";
+import { parseCSVDateToUnix } from "~/server/repo/csv/date-utils";
 
 /**
  * Sync states for items
@@ -202,12 +203,28 @@ function isEmpty(value: unknown): boolean {
 /**
  * Get smart default resolution for conflicts based on field diffs.
  * If all changes are additive (empty → value), default to using the side with values.
+ * For last_inventory_date, prefer the newer date when both sides have values.
  * Internal helper - used only by getDefaultResolution.
  */
 function getSmartConflictResolution(
-  fieldDiffs: Array<{ from: unknown; to: unknown }>,
+  fieldDiffs: Array<{ field: string; from: unknown; to: unknown }>,
 ): SyncResolution | null {
   if (fieldDiffs.length === 0) return null;
+
+  // Special case: last_inventory_date conflict - prefer newer date
+  if (
+    fieldDiffs.length === 1 &&
+    fieldDiffs[0]!.field === "last_inventory_date"
+  ) {
+    const { from, to } = fieldDiffs[0]!;
+    if (!isEmpty(from) && !isEmpty(to)) {
+      const sheetTs = parseCSVDateToUnix(from as string);
+      const appTs = parseCSVDateToUnix(to as string);
+      if (sheetTs !== null && appTs !== null) {
+        return appTs >= sheetTs ? "use_app" : "use_sheet";
+      }
+    }
+  }
 
   // Check if all diffs are "app adding data" (sheet empty, app has value)
   const allAppAdding = fieldDiffs.every(
@@ -230,7 +247,7 @@ function getSmartConflictResolution(
  */
 export function getDefaultResolution(
   state: SyncState,
-  fieldDiffs?: Array<{ from: unknown; to: unknown }>,
+  fieldDiffs?: Array<{ field: string; from: unknown; to: unknown }>,
 ): SyncResolution | null {
   switch (state) {
     case "matched":

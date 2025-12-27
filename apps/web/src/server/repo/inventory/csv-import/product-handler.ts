@@ -61,6 +61,14 @@ export const findNewAliases = (
 };
 
 /**
+ * Result of processing a product for import
+ */
+export interface ProcessProductResult {
+  productData: ProductTopLevelOut;
+  productWasCreated: boolean;
+}
+
+/**
  * Process a product for CSV import (find, create, or update)
  *
  * Handles:
@@ -83,7 +91,7 @@ export const processProductForImport = async (
   aliasesStr: string | null | undefined,
   category: ProductCategory | null | undefined,
   actor: ActorContext,
-): Promise<ProductTopLevelOut> => {
+): Promise<ProcessProductResult> => {
   // Parse aliases from semicolon-separated string
   const aliases = parseAliasesString(aliasesStr);
 
@@ -105,15 +113,19 @@ export const processProductForImport = async (
 
   // Try to find existing product by name with fuzzy manufacturer matching
   // This allows sheet rows with "(unspecified)" to match existing products
-  let productData = await findProductByNameFuzzyManufacturer(
+  const existingProductData = await findProductByNameFuzzyManufacturer(
     db,
     productName,
     manufacturer,
     organizationId,
   );
 
-  if (!productData) {
+  let productData: ProductTopLevelOut;
+  let productWasCreated = false;
+
+  if (!existingProductData) {
     // Create new product with all fields from CSV
+    productWasCreated = true;
     productData = await quickCreateProduct(
       db,
       {
@@ -129,6 +141,8 @@ export const processProductForImport = async (
       actor,
     );
   } else {
+    productData = existingProductData;
+
     // Query existing ingredient link for update computation
     const existingProduct = await getDb(db).query.product.findFirst({
       where: eq(product.id, productData.id),
@@ -158,7 +172,7 @@ export const processProductForImport = async (
     // Auto-correct category to "food" if the resulting product will have food indicators
     const resultingProduct = {
       ndb_number: updates.ndb_number ?? productData.ndb_number,
-      ingredientId: updates.ingredientId ?? productData.ingredientId,
+      ingredientId: updates.ingredientId ?? existingIngredientId,
     };
     if (
       hasFoodIndicators(resultingProduct) &&
@@ -201,7 +215,7 @@ export const processProductForImport = async (
     }
   }
 
-  return productData;
+  return { productData, productWasCreated };
 };
 
 /**

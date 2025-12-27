@@ -44,8 +44,10 @@ export function locationToSegments(location: InfLocation): LocationSegment[] {
 }
 
 interface LocationBreadcrumbProps {
-  /** Array of location segments from root to leaf */
-  segments: LocationSegment[];
+  /** Array of location segments from root to leaf (alternative to location prop) */
+  segments?: LocationSegment[];
+  /** Location object to derive segments from (alternative to segments prop) */
+  location?: InfLocation;
   /** Show [type] annotation for non-default types */
   showTypeAnnotations?: boolean;
   /** Highlight segments with non-default types */
@@ -61,15 +63,20 @@ interface LocationBreadcrumbProps {
 /**
  * Unified location breadcrumb component.
  * Can be used for navigation (with links) or display (showing type annotations).
+ * Accepts either segments array or a location object.
  */
 export function LocationBreadcrumb({
-  segments,
+  segments: segmentsProp,
+  location,
   showTypeAnnotations = false,
   highlightNonDefault = false,
   linkable = false,
   showHome = false,
   className,
 }: LocationBreadcrumbProps) {
+  // Derive segments from location if not provided directly
+  const segments =
+    segmentsProp ?? (location ? locationToSegments(location) : []);
   if (segments.length === 0 && !showHome) return null;
 
   return (

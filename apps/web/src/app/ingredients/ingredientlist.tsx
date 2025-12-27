@@ -96,6 +96,7 @@ export function IngredientList() {
         <Button
           variant="default"
           render={<Link href={`/${entities.ingredient.basePath}/new`} />}
+          nativeButton={false}
         >
           Create New Ingredient
         </Button>

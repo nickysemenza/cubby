@@ -10,6 +10,7 @@ test("has title", async ({ page }) => {
 test("get started link", async ({ page }) => {
   await page.goto("/");
 
-  // Click the get started link.
-  await page.getByRole("link", { name: "recipes" }).click();
+  // Click a visible nav link (Recipes is now inside Kitchen dropdown)
+  await page.getByRole("link", { name: "Products" }).click();
+  await expect(page).toHaveURL(/\/products/);
 });

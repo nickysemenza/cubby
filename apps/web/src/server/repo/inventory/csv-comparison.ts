@@ -20,6 +20,7 @@ const INVENTORY_FIELD_SPECS: readonly ComparisonFieldSpec<
   InventoryCSVExportRow,
   InventoryCSVRow
 >[] = [
+  { field: "manufacturer", appKey: "manufacturer", sheetKey: "manufacturer" },
   { field: "upc", appKey: "upc", sheetKey: "upc" },
   { field: "model", appKey: "model", sheetKey: "model" },
   { field: "category", appKey: "category", sheetKey: "category" },

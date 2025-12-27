@@ -1,4 +1,4 @@
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { auditLog } from "~/server/db/schema";
 import { and, eq, desc, lt } from "drizzle-orm";
@@ -68,7 +68,7 @@ export function computeChanges<T extends Record<string, unknown>>(
  * Insert an audit log entry.
  */
 export async function logAuditEntry(
-  db: Database | Transaction,
+  db: Database | DrizzleTransaction,
   actor: ActorContext,
   entry: AuditEntryInput,
 ): Promise<void> {

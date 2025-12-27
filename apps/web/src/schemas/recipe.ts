@@ -4,6 +4,13 @@ import { id, recipeId, ingredientId } from "./identifiers";
 import { amount } from "~/codec/codec";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
+// Recipe source values - single source of truth for both Zod and Drizzle
+export const recipeSourceValues = ["Book", "Website", "Other"] as const;
+
+// Recipe source enum
+export const recipeSource = z.enum(recipeSourceValues);
+export type RecipeSource = z.infer<typeof recipeSource>;
+
 const ingredientOut = baseEntitySchema;
 
 export const recipeTopLevel = baseEntitySchema.extend({

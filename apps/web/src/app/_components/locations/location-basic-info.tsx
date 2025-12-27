@@ -44,6 +44,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           render={
             <Link href={`/inventory/quick-capture?locationId=${location.id}`} />
           }
+          nativeButton={false}
         >
           Quick Capture Here
         </Button>
@@ -52,6 +53,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           render={
             <Link href={`/inventory/bulk-edit?locationId=${location.id}`} />
           }
+          nativeButton={false}
         >
           Bulk Edit Inventory
         </Button>

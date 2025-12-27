@@ -48,7 +48,7 @@ import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
 import type { ActorContext } from "~/schemas/context";
 
 export const getRecipeByID = async (
-  db: Database | Transaction,
+  db: Database | DrizzleTransaction,
   id: RecipeId,
   organizationId: OrganizationId,
 ): Promise<RecipeOut | null> => {
