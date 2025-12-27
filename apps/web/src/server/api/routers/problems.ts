@@ -57,6 +57,21 @@ const emptyLocationSchema = z.object({
   lastBulkInventory: z.date().nullable(),
 });
 
+const productWithoutUPCImageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+  upc: z.string(),
+});
+
+const productWithWrongCategorySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+  category: z.string().nullable(),
+  indicator: z.enum(["ndb", "ingredient"]),
+});
+
 // Combined output schema for all problems
 const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
@@ -65,6 +80,8 @@ const allProblemsSchema = z.object({
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
+  productsWithoutUPCImages: z.array(productWithoutUPCImageSchema),
+  productsWithWrongCategory: z.array(productWithWrongCategorySchema),
   totalProblems: z.number(),
 });
 

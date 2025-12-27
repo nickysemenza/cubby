@@ -1,7 +1,7 @@
 "use client";
 
 import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,11 +19,15 @@ import {
   DollarSign,
   Zap,
   Calendar,
+  ImageOff,
+  Utensils,
+  Loader2,
 } from "lucide-react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { ProblemSection } from "./components/problem-section";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
+import { toast } from "sonner";
 import type {
   DuplicateUniqueProduct,
   OrphanedProduct,
@@ -31,6 +35,8 @@ import type {
   ProductWithoutMappings,
   InvalidInventoryAmount,
   EmptyLocation,
+  ProductWithoutUPCImage,
+  ProductWithWrongCategory,
 } from "~/server/repo/problems";
 
 // Inline problem list components
@@ -278,6 +284,162 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
   );
 }
 
+function ProductsWithoutUPCImagesList({
+  products,
+}: {
+  products: ProductWithoutUPCImage[];
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const backfillMutation = useMutation(
+    api.product.backfillUPCImages.mutationOptions({
+      onSuccess: (result) => {
+        if (result.imported > 0) {
+          toast.success(
+            `Imported ${result.imported} image${result.imported !== 1 ? "s" : ""}`,
+          );
+        } else if (result.found === 0) {
+          toast.info("No products need UPC images");
+        } else {
+          toast.info(`No images found for ${result.skipped} product(s)`);
+        }
+        queryClient.invalidateQueries({
+          queryKey: api.problems.getAllProblems.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: api.product.list.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  return (
+    <ProblemSection
+      title="Missing UPC Images"
+      description="Products with UPC codes that don't have images fetched from the product database."
+      icon={ImageOff}
+      iconColor={products.length > 0 ? "text-orange-500" : "text-green-500"}
+      items={products}
+      emptyMessage="All products with UPC codes have images."
+      headerAction={
+        products.length > 0 ? (
+          <Button
+            size="sm"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fetching...
+              </>
+            ) : (
+              "Fetch All Images"
+            )}
+          </Button>
+        ) : undefined
+      }
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        badges: [
+          <code key="upc" className="rounded bg-gray-100 px-2 py-1 text-sm">
+            {product.upc}
+          </code>,
+        ],
+        editUrl: `/products/${product.id}`,
+      })}
+    />
+  );
+}
+
+function ProductsWithWrongCategoryList({
+  products,
+}: {
+  products: ProductWithWrongCategory[];
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const backfillMutation = useMutation(
+    api.product.backfillFoodCategories.mutationOptions({
+      onSuccess: (result) => {
+        if (result.updated > 0) {
+          toast.success(
+            `Updated ${result.updated} product${result.updated !== 1 ? "s" : ""} to food category`,
+          );
+        } else {
+          toast.info("No products need category update");
+        }
+        queryClient.invalidateQueries({
+          queryKey: api.problems.getAllProblems.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: api.product.list.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  const indicatorLabel = (indicator: "ndb" | "ingredient") => {
+    switch (indicator) {
+      case "ndb":
+        return "Has NDB";
+      case "ingredient":
+        return "Has Ingredient";
+    }
+  };
+
+  return (
+    <ProblemSection
+      title="Wrong Category"
+      description="Products with food indicators (UPC, NDB, or ingredient link) but category is not set to 'food'."
+      icon={Utensils}
+      iconColor={products.length > 0 ? "text-orange-500" : "text-green-500"}
+      items={products}
+      emptyMessage="All products with food indicators have correct categories."
+      headerAction={
+        products.length > 0 ? (
+          <Button
+            size="sm"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Fixing...
+              </>
+            ) : (
+              "Fix All Categories"
+            )}
+          </Button>
+        ) : undefined
+      }
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        badges: [
+          <Badge key="category" variant="outline">
+            {product.category ?? "No category"}
+          </Badge>,
+          <Badge key="indicator" variant="secondary">
+            {indicatorLabel(product.indicator)}
+          </Badge>,
+        ],
+        editUrl: `/products/${product.id}`,
+      })}
+    />
+  );
+}
+
 export function ProblemsOverview() {
   const api = useTRPC();
 
@@ -310,7 +472,7 @@ export function ProblemsOverview() {
     <div className="space-y-6">
       {hasProblems ? (
         <Tabs defaultValue="duplicates" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
             <TabsTrigger value="duplicates" className="flex items-center gap-1">
               Duplicates
               {problems.duplicateUniqueProducts.length > 0 && (
@@ -359,6 +521,22 @@ export function ProblemsOverview() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="images" className="flex items-center gap-1">
+              Images
+              {problems.productsWithoutUPCImages.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.productsWithoutUPCImages.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="categories" className="flex items-center gap-1">
+              Categories
+              {problems.productsWithWrongCategory.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.productsWithWrongCategory.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="duplicates">
@@ -389,6 +567,18 @@ export function ProblemsOverview() {
 
           <TabsContent value="locations">
             <EmptyLocationsList locations={problems.emptyLocations} />
+          </TabsContent>
+
+          <TabsContent value="images">
+            <ProductsWithoutUPCImagesList
+              products={problems.productsWithoutUPCImages}
+            />
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <ProductsWithWrongCategoryList
+              products={problems.productsWithWrongCategory}
+            />
           </TabsContent>
         </Tabs>
       ) : (

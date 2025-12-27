@@ -786,7 +786,9 @@ export const findDuplicateUniqueProducts = async (
 export const findProductsWithUPCNoImages = async (
   db: Database,
   organizationId: OrganizationId,
-): Promise<Array<{ id: string; name: string; upc: string }>> => {
+): Promise<
+  Array<{ id: string; name: string; manufacturer: string; upc: string }>
+> => {
   const dbClient = getDb(db);
 
   // Get all products with UPCs and their images in a single query
@@ -794,6 +796,7 @@ export const findProductsWithUPCNoImages = async (
     .select({
       id: product.id,
       name: product.name,
+      manufacturer: product.manufacturer,
       upc: product.upc,
       imageUrl: image.url,
     })
@@ -811,7 +814,7 @@ export const findProductsWithUPCNoImages = async (
   // Group by product and check for UPC images
   const productMap = new Map<
     string,
-    { name: string; upc: string; hasUPCImage: boolean }
+    { name: string; manufacturer: string; upc: string; hasUPCImage: boolean }
   >();
 
   for (const row of productsWithImages) {
@@ -828,6 +831,7 @@ export const findProductsWithUPCNoImages = async (
     } else {
       productMap.set(row.id, {
         name: row.name,
+        manufacturer: row.manufacturer,
         upc: row.upc,
         hasUPCImage: isUPCImage,
       });
@@ -835,10 +839,20 @@ export const findProductsWithUPCNoImages = async (
   }
 
   // Return products without UPC images
-  const results: Array<{ id: string; name: string; upc: string }> = [];
+  const results: Array<{
+    id: string;
+    name: string;
+    manufacturer: string;
+    upc: string;
+  }> = [];
   for (const [id, data] of productMap) {
     if (!data.hasUPCImage) {
-      results.push({ id, name: data.name, upc: data.upc });
+      results.push({
+        id,
+        name: data.name,
+        manufacturer: data.manufacturer,
+        upc: data.upc,
+      });
     }
   }
 
@@ -856,6 +870,7 @@ export const findProductsNeedingFoodCategory = async (
   Array<{
     id: string;
     name: string;
+    manufacturer: string;
     category: string | null;
     upc: string | null;
     ndb_number: number | null;
@@ -875,6 +890,7 @@ export const findProductsNeedingFoodCategory = async (
     columns: {
       id: true,
       name: true,
+      manufacturer: true,
       category: true,
       upc: true,
       ndb_number: true,

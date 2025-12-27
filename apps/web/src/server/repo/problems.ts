@@ -9,6 +9,10 @@ import {
 import { eq, sql, notExists, and } from "drizzle-orm";
 import { upc as upcSchema } from "@recipehub/usda-schemas";
 import { isMiscProduct } from "~/lib/constants";
+import {
+  findProductsWithUPCNoImages,
+  findProductsNeedingFoodCategory,
+} from "~/server/repo/product";
 
 // Interface for the complete problems result
 interface AllProblems {
@@ -18,6 +22,8 @@ interface AllProblems {
   productsWithoutMappings: ProductWithoutMappings[];
   invalidInventoryAmounts: InvalidInventoryAmount[];
   emptyLocations: EmptyLocation[];
+  productsWithoutUPCImages: ProductWithoutUPCImage[];
+  productsWithWrongCategory: ProductWithWrongCategory[];
   totalProblems: number;
 }
 
@@ -72,6 +78,21 @@ export interface EmptyLocation {
   type: string;
   createdAt: Date;
   lastBulkInventory: Date | null;
+}
+
+export interface ProductWithoutUPCImage {
+  id: string;
+  name: string;
+  manufacturer: string;
+  upc: string;
+}
+
+export interface ProductWithWrongCategory {
+  id: string;
+  name: string;
+  manufacturer: string;
+  category: string | null;
+  indicator: "ndb" | "ingredient";
 }
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -330,6 +351,16 @@ const findEmptyLocations = async (
   return emptyLocations;
 };
 
+// Helper to determine the primary food indicator for a product
+// Note: hasFoodIndicators only checks NDB and ingredient, not UPC
+const getFoodIndicator = (product: {
+  ndb_number: number | null;
+  ingredientId: string | null;
+}): "ndb" | "ingredient" => {
+  if (product.ndb_number != null && product.ndb_number > 0) return "ndb";
+  return "ingredient";
+};
+
 // Main function to get all problems
 export const findAllProblems = async (
   db: Database,
@@ -343,6 +374,8 @@ export const findAllProblems = async (
     productsWithoutMappings,
     invalidInventoryAmounts,
     emptyLocations,
+    productsWithUPCNoImages,
+    productsNeedingFoodCategory,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db, organizationId),
     findOrphanedProducts(db, organizationId),
@@ -350,7 +383,22 @@ export const findAllProblems = async (
     findProductsWithoutMappings(db, organizationId),
     findInvalidInventoryAmounts(db, organizationId),
     findEmptyLocations(db, organizationId),
+    findProductsWithUPCNoImages(db, organizationId as never),
+    findProductsNeedingFoodCategory(db, organizationId as never),
   ]);
+
+  // Transform to problem types
+  const productsWithoutUPCImages: ProductWithoutUPCImage[] =
+    productsWithUPCNoImages;
+
+  const productsWithWrongCategory: ProductWithWrongCategory[] =
+    productsNeedingFoodCategory.map((p) => ({
+      id: p.id,
+      name: p.name,
+      manufacturer: p.manufacturer,
+      category: p.category,
+      indicator: getFoodIndicator(p),
+    }));
 
   const totalProblems =
     duplicateUniqueProducts.length +
@@ -358,7 +406,9 @@ export const findAllProblems = async (
     invalidUPCs.length +
     productsWithoutMappings.length +
     invalidInventoryAmounts.length +
-    emptyLocations.length;
+    emptyLocations.length +
+    productsWithoutUPCImages.length +
+    productsWithWrongCategory.length;
 
   return {
     duplicateUniqueProducts,
@@ -367,6 +417,8 @@ export const findAllProblems = async (
     productsWithoutMappings,
     invalidInventoryAmounts,
     emptyLocations,
+    productsWithoutUPCImages,
+    productsWithWrongCategory,
     totalProblems,
   };
 };

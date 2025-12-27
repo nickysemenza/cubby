@@ -29,6 +29,7 @@ interface ProblemSectionProps<T> {
     customActions?: ReactNode;
   };
   groupBy?: (items: T[]) => { [key: string]: T[] };
+  headerAction?: ReactNode;
 }
 
 export function ProblemSection<T>({
@@ -40,6 +41,7 @@ export function ProblemSection<T>({
   emptyMessage,
   renderItem,
   groupBy,
+  headerAction,
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
 
@@ -64,11 +66,14 @@ export function ProblemSection<T>({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon className={`h-5 w-5 ${iconColor}`} />
-          {title}
-          <Badge variant="destructive">{items.length}</Badge>
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Icon className={`h-5 w-5 ${iconColor}`} />
+            {title}
+            <Badge variant="destructive">{items.length}</Badge>
+          </CardTitle>
+          {headerAction}
+        </div>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent>
