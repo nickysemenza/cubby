@@ -148,13 +148,18 @@ async function processLocationRow(
       locationType,
     );
 
-    // If location exists, update fields from CSV (description, last_inventory_date)
+    // If location exists, update all sync fields from CSV
     let updated = false;
+    let cycleSkipped = false;
     if (!created) {
-      updated = await updateLocationFromImport(db, locationId, {
+      const updateResult = await updateLocationFromImport(db, locationId, {
         description: row.description,
         lastInventoryDate: parseCSVDate(row.last_inventory_date),
+        locationType: row.location_type,
+        parentId, // Already resolved from row.parent_name above
       });
+      updated = updateResult.updated;
+      cycleSkipped = updateResult.cycleSkipped ?? false;
     }
 
     // Import images if provided and location doesn't already have any
@@ -175,9 +180,16 @@ async function processLocationRow(
       }
     }
 
-    const message = imageImportError
-      ? `(image import failed: ${imageImportError})`
-      : undefined;
+    // Build message with any warnings
+    const warnings: string[] = [];
+    if (cycleSkipped) {
+      warnings.push("parent change skipped (would create cycle)");
+    }
+    if (imageImportError) {
+      warnings.push(`image import failed: ${imageImportError}`);
+    }
+    const message =
+      warnings.length > 0 ? `(${warnings.join("; ")})` : undefined;
 
     // Determine action: created > updated > skipped
     let action: "created" | "updated" | "skipped";

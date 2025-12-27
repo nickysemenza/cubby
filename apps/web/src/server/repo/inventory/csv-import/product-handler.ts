@@ -10,7 +10,6 @@ import {
   type IngredientId,
   unsafeIngredientId,
 } from "~/schemas/identifiers";
-import type { ProductChangesPreview } from "~/schemas/inventory";
 import { getDb } from "~/server/repo/database-helpers";
 import { product } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
@@ -18,7 +17,6 @@ import {
   findProductByNameFuzzyManufacturer,
   quickCreateProduct,
 } from "~/server/repo/product";
-import { getManufacturerUpdate } from "~/lib/manufacturer-utils";
 import {
   type ProductTopLevelOut,
   type ProductCategory,
@@ -29,6 +27,11 @@ import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import type { ProductPreviewResult } from "./types";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import type { ActorContext } from "~/schemas/context";
+import {
+  computeProductUpdates,
+  computeNewProductChanges,
+  type ProductUpdateInput,
+} from "./product-updates";
 
 /**
  * Parse semicolon-separated aliases string into array
@@ -126,70 +129,46 @@ export const processProductForImport = async (
       actor,
     );
   } else {
-    // Update existing product if CSV provides values
-    const updates: {
-      manufacturer?: string;
-      upc?: string | null;
-      expectedQuantity?: number;
-      ingredientId?: IngredientId | null;
-      model?: string | null;
-      ndb_number?: number | null;
-      category?: ProductCategory | null;
-    } = {};
+    // Query existing ingredient link for update computation
+    const existingProduct = await getDb(db).query.product.findFirst({
+      where: eq(product.id, productData.id),
+      columns: { ingredientId: true },
+    });
+    const existingIngredientId = existingProduct?.ingredientId ?? null;
 
-    // Update manufacturer if going from "(unspecified)" to a specific value
-    const manufacturerUpdate = getManufacturerUpdate(
-      productData.manufacturer,
+    // Build input for shared update computation
+    const updateInput: ProductUpdateInput = {
       manufacturer,
+      upc,
+      expectedQty,
+      model,
+      ndbNumber,
+      category,
+      ingredientId,
+      ingredientName: effectiveIngredientName,
+    };
+
+    // Compute updates using shared logic
+    const { updates, hasUpdates } = computeProductUpdates(
+      productData,
+      updateInput,
+      existingIngredientId,
     );
-    if (manufacturerUpdate) {
-      updates.manufacturer = manufacturerUpdate;
-    }
-    // Update UPC if provided and different
-    if (upc != null && productData.upc !== upc) {
-      updates.upc = upc;
-    }
-    if (expectedQty != null) {
-      updates.expectedQuantity = expectedQty;
-    }
-    if (model != null) {
-      updates.model = model;
-    }
-    if (ndbNumber != null) {
-      updates.ndb_number = ndbNumber;
-    }
-    // Update category if provided and different (allow setting to any value including null)
-    if (category !== undefined && productData.category !== category) {
-      updates.category = category;
-    }
 
     // Auto-correct category to "food" if the resulting product will have food indicators
     const resultingProduct = {
       ndb_number: updates.ndb_number ?? productData.ndb_number,
-      ingredientId: ingredientId ?? productData.ingredientId,
+      ingredientId: updates.ingredientId ?? productData.ingredientId,
     };
     if (
       hasFoodIndicators(resultingProduct) &&
-      productData.category !== "food"
+      productData.category !== "food" &&
+      updates.category === undefined
     ) {
       updates.category = "food";
     }
 
-    // Query existing ingredient link (needed for both updates and audit logging)
-    let existingIngredientId: string | null = null;
-    if (ingredientId != null) {
-      // Check if product already has an ingredient linked (need to query DB)
-      const existingProduct = await getDb(db).query.product.findFirst({
-        where: eq(product.id, productData.id),
-        columns: { ingredientId: true },
-      });
-      existingIngredientId = existingProduct?.ingredientId ?? null;
-      if (existingIngredientId == null) {
-        updates.ingredientId = ingredientId;
-      }
-    }
-
-    if (Object.keys(updates).length > 0) {
+    if (hasUpdates || updates.category !== undefined) {
       // Capture before state for audit log
       const beforeState = {
         manufacturer: productData.manufacturer,
@@ -230,6 +209,9 @@ export const processProductForImport = async (
  *
  * Used for dry-run mode to show users what changes will occur.
  * Captures both current values and proposed values for from→to display.
+ *
+ * Uses the same shared update logic as processProductForImport to ensure
+ * preview accurately reflects what execution would do.
  */
 export const previewProductForImport = async (
   db: Database,
@@ -245,7 +227,6 @@ export const previewProductForImport = async (
   aliasesStr: string | null | undefined,
   category: ProductCategory | null | undefined,
 ): Promise<ProductPreviewResult> => {
-  const productChanges: ProductChangesPreview = {};
   const aliases = parseAliasesString(aliasesStr);
   const effectiveIngredientName =
     ingredientName ?? (ingredientFlag ? productName : null);
@@ -259,28 +240,25 @@ export const previewProductForImport = async (
   );
 
   if (!existingProduct) {
-    // Product will be created - show what will be set (no current values)
-    if (upc) {
-      productChanges.upcWillBeSet = upc;
-    }
-    if (expectedQty != null) {
-      productChanges.expectedQuantityWillBeSet = expectedQty;
-    }
-    if (effectiveIngredientName) {
-      productChanges.ingredientWillBeLinked = effectiveIngredientName;
-    }
-    if (model) {
-      productChanges.modelWillBeSet = model;
-    }
-    if (ndbNumber != null) {
-      productChanges.ndbNumberWillBeSet = ndbNumber;
-    }
+    // Product will be created - use shared logic for new product preview
+    const updateInput: ProductUpdateInput = {
+      manufacturer,
+      upc,
+      expectedQty,
+      model,
+      ndbNumber,
+      category,
+      ingredientId: null, // Will be created during execution
+      ingredientName: effectiveIngredientName,
+    };
+
+    const productChanges = computeNewProductChanges(updateInput);
+
+    // Add aliases preview (handled separately from core updates)
     if (aliases.length > 0) {
       productChanges.aliasesWillBeAdded = aliases;
     }
-    if (category) {
-      productChanges.categoryWillBeSet = category;
-    }
+
     return {
       existingProduct: null,
       productWillBeCreated: true,
@@ -288,69 +266,46 @@ export const previewProductForImport = async (
     };
   }
 
-  // Product exists - check what would be updated, capture current values
+  // Product exists - query ingredient link for update computation
+  const productWithIngredient = await getDb(db).query.product.findFirst({
+    where: eq(product.id, existingProduct.id),
+    columns: { ingredientId: true },
+    with: { Ingredient: { columns: { name: true, aliases: true } } },
+  });
+  const existingIngredientId = productWithIngredient?.ingredientId ?? null;
 
-  // Check manufacturer update (from "(unspecified)" to specific)
-  const manufacturerUpdate = getManufacturerUpdate(
-    existingProduct.manufacturer,
+  // Build input for shared update computation
+  // Note: ingredientId is null here since we don't resolve it in preview,
+  // but ingredientName is set so the shared function can compute the change
+  const updateInput: ProductUpdateInput = {
     manufacturer,
+    upc,
+    expectedQty,
+    model,
+    ndbNumber,
+    category,
+    ingredientId: effectiveIngredientName
+      ? unsafeIngredientId("preview-placeholder")
+      : null,
+    ingredientName: effectiveIngredientName,
+  };
+
+  // Compute changes using shared logic
+  const { changes: productChanges } = computeProductUpdates(
+    existingProduct,
+    updateInput,
+    existingIngredientId,
   );
-  if (manufacturerUpdate) {
-    productChanges.manufacturerWillBeSet = manufacturerUpdate;
-    productChanges.manufacturerCurrent = existingProduct.manufacturer;
-  }
 
-  if (upc && existingProduct.upc !== upc) {
-    productChanges.upcWillBeSet = upc;
-    productChanges.upcCurrent = existingProduct.upc;
-  }
+  // Check for new aliases - only show aliases that don't already exist
+  if (aliases.length > 0) {
+    const existingAliases = productWithIngredient?.Ingredient?.aliases ?? [];
+    const newAliases = findNewAliases(aliases, existingAliases);
 
-  if (expectedQty != null && existingProduct.expectedQuantity !== expectedQty) {
-    productChanges.expectedQuantityWillBeSet = expectedQty;
-    productChanges.expectedQuantityCurrent = existingProduct.expectedQuantity;
-  }
-
-  if (model && existingProduct.model !== model) {
-    productChanges.modelWillBeSet = model;
-    productChanges.modelCurrent = existingProduct.model;
-  }
-
-  if (ndbNumber != null && existingProduct.ndb_number !== ndbNumber) {
-    productChanges.ndbNumberWillBeSet = ndbNumber;
-    productChanges.ndbNumberCurrent = existingProduct.ndb_number;
-  }
-
-  // Check category update
-  if (category !== undefined && existingProduct.category !== category) {
-    productChanges.categoryWillBeSet = category ?? undefined;
-    productChanges.categoryCurrent = existingProduct.category;
-  }
-
-  // Check ingredient linking and aliases
-  if (effectiveIngredientName) {
-    const productWithIngredient = await getDb(db).query.product.findFirst({
-      where: eq(product.id, existingProduct.id),
-      columns: { ingredientId: true },
-      with: { Ingredient: { columns: { name: true, aliases: true } } },
-    });
-
-    // Only set ingredient change if it's not already linked
-    if (productWithIngredient?.ingredientId == null) {
-      productChanges.ingredientWillBeLinked = effectiveIngredientName;
-      // Only set current when there's a change to show
-      productChanges.ingredientCurrent = null;
-    }
-
-    // Check for new aliases - only show aliases that don't already exist
-    if (aliases.length > 0) {
-      const existingAliases = productWithIngredient?.Ingredient?.aliases ?? [];
-      const newAliases = findNewAliases(aliases, existingAliases);
-
-      if (newAliases.length > 0) {
-        productChanges.aliasesWillBeAdded = newAliases;
-        productChanges.aliasesCurrent =
-          existingAliases.length > 0 ? existingAliases : undefined;
-      }
+    if (newAliases.length > 0) {
+      productChanges.aliasesWillBeAdded = newAliases;
+      productChanges.aliasesCurrent =
+        existingAliases.length > 0 ? existingAliases : undefined;
     }
   }
 

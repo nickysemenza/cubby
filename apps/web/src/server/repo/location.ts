@@ -587,21 +587,109 @@ export const findOrCreateLocationByName = async (
 };
 
 /**
+ * Fields that can be synced via CSV/sheet import
+ * Single source of truth for what fields are compared and updated during sync.
+ *
+ * Note: These must align with fields compared in location/csv-comparison.ts:
+ * - locationType ↔ location_type
+ * - parentId ↔ parent_name (resolved by name)
+ * - description ↔ description
+ * - lastInventoryDate ↔ last_inventory_date
+ *
+ * location_image is handled separately via image import logic.
+ */
+export const LOCATION_SYNC_FIELDS = [
+  "locationType",
+  "parentId",
+  "description",
+  "lastInventoryDate",
+] as const;
+
+export type LocationSyncField = (typeof LOCATION_SYNC_FIELDS)[number];
+
+/**
+ * Check if setting a new parent would create a circular reference
+ *
+ * Walks up the parent chain from the proposed parent to check if we'd
+ * encounter the location being updated (which would create a cycle).
+ *
+ * @returns true if the change would create a cycle, false if safe
+ */
+export const wouldCreateParentCycle = async (
+  db: Database,
+  locationId: LocationId,
+  newParentId: LocationId,
+): Promise<boolean> => {
+  // Can't be your own parent
+  if (locationId === newParentId) {
+    return true;
+  }
+
+  // Walk up the parent chain from the proposed parent
+  let currentId: string | null = newParentId;
+  while (currentId) {
+    if (currentId === locationId) {
+      return true; // Found a cycle
+    }
+    const parent = await getDb(db).query.location.findFirst({
+      where: eq(location.id, currentId),
+      columns: { parentId: true },
+    });
+    currentId = parent?.parentId ?? null;
+  }
+
+  return false;
+};
+
+/**
+ * Input data for location import updates
+ * Matches LOCATION_SYNC_FIELDS for consistency
+ */
+export interface LocationImportData {
+  lastInventoryDate?: Date | null;
+  description?: string | null;
+  locationType?: LocationType;
+  parentId?: LocationId | null;
+}
+
+/**
  * Update location fields from CSV/sync import data
  * Used by importLocationsFromCSV when updating existing locations.
  * Returns true if any fields were updated.
+ *
+ * Handles all LOCATION_SYNC_FIELDS:
+ * - locationType: updates if provided and different
+ * - parentId: updates if provided and different (with cycle detection)
+ * - description: updates if provided
+ * - lastInventoryDate: updates if provided
  */
 export const updateLocationFromImport = async (
   db: Database,
   locationId: LocationId,
-  data: {
-    lastInventoryDate?: Date | null;
-    description?: string | null;
-  },
-): Promise<boolean> => {
+  data: LocationImportData,
+): Promise<{ updated: boolean; cycleSkipped?: boolean }> => {
+  // Check for parent cycle if parentId is being changed
+  let cycleSkipped = false;
+  let safeParentId = data.parentId;
+
+  if (data.parentId !== undefined && data.parentId !== null) {
+    const wouldCycle = await wouldCreateParentCycle(
+      db,
+      locationId,
+      data.parentId,
+    );
+    if (wouldCycle) {
+      // Skip parent update to prevent cycle, but continue with other updates
+      safeParentId = undefined;
+      cycleSkipped = true;
+    }
+  }
+
   const updateValues = buildPartialUpdateValues({
     lastBulkInventory: data.lastInventoryDate,
     description: data.description,
+    type: data.locationType,
+    parentId: safeParentId,
   });
 
   // Only update if there are values to update
@@ -610,9 +698,9 @@ export const updateLocationFromImport = async (
       .update(location)
       .set(updateValues)
       .where(eq(location.id, locationId));
-    return true;
+    return { updated: true, cycleSkipped };
   }
-  return false;
+  return { updated: false, cycleSkipped };
 };
 
 /**
