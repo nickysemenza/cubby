@@ -1,4 +1,4 @@
-import type { Database, Transaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/repo/database-helpers";
 import { auditLog } from "~/server/db/schema";
 import { and, eq, desc, lt } from "drizzle-orm";

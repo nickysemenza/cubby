@@ -1,6 +1,9 @@
 import { api } from "~/trpc/server";
 import { LocationDetail } from "~/app/_components/locations/location-detail";
-import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
+import {
+  LocationBreadcrumb,
+  locationToSegments,
+} from "~/app/_components/locations/location-breadcrumb";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 
 type DetailParams = { id: string };
@@ -20,7 +23,12 @@ export default async function Page({ params }: PageParams) {
 
   return (
     <PageWrapper>
-      <EnhancedBreadcrumbs location={location} className="mb-4" />
+      <LocationBreadcrumb
+        segments={locationToSegments(location)}
+        linkable
+        showHome
+        className="mb-4"
+      />
       <LocationDetail location={location} />
     </PageWrapper>
   );

@@ -54,4 +54,3 @@ export type DrizzleClient = ReturnType<typeof createDBClient>;
 export type DrizzleTransaction = Parameters<
   Parameters<DrizzleClient["transaction"]>[0]
 >[0];
-export type Transaction = DrizzleTransaction; // Alias for backwards compatibility

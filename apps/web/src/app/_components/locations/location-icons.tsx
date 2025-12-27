@@ -39,7 +39,6 @@ export const getLocationIcon = (type: LocationType): LucideIcon => {
   }
 };
 
-// Keep LocationIcon for backward compatibility
 interface LocationIconProps {
   type: LocationType;
   className?: string;

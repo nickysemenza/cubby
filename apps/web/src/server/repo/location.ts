@@ -1,4 +1,4 @@
-import type { Database, Transaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type LocationOutWithParentChildren,
   type LocationOut,
@@ -134,7 +134,7 @@ export const updateLocation = async (
     ),
   });
 
-  return await getDb(db).transaction(async (tx: Transaction) => {
+  return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
     // Build update values using helper to filter undefined
     const updateValues = buildPartialUpdateValues({
       name: data.name,

@@ -43,7 +43,10 @@ import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanne
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Empty, EmptyTitle } from "~/components/ui/empty";
 import { Kbd } from "~/components/ui/kbd";
-import { EnhancedBreadcrumbs } from "~/app/_components/locations/enhanced-breadcrumbs";
+import {
+  LocationBreadcrumb,
+  locationToSegments,
+} from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { ProductPillLink } from "~/app/_components/EntityPill";
 import type { InfLocation } from "~/schemas/location";
@@ -328,7 +331,11 @@ export default function QuickCaptureForm({
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Breadcrumb navigation */}
-            <EnhancedBreadcrumbs location={focusedLocation} />
+            <LocationBreadcrumb
+              segments={locationToSegments(focusedLocation)}
+              linkable
+              showHome
+            />
 
             {/* Children quick navigation */}
             {focusedLocation.children &&

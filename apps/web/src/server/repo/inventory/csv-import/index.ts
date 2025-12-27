@@ -29,9 +29,9 @@ import { processRow } from "./row-processor";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import type { ActorContext } from "~/schemas/context";
 import {
-  createResultCounters,
-  incrementLegacyCounter,
-  buildImportResult,
+  createInventoryCounters,
+  incrementCounter,
+  buildInventoryResult,
   pushErrorItem,
 } from "~/server/repo/csv/result-helpers";
 
@@ -60,7 +60,7 @@ export const importInventoryFromCSV = async (
 ): Promise<CSVImportResult> => {
   const { dryRun = false, actor } = options;
   const items: CSVImportResultItem[] = [];
-  const counters = createResultCounters();
+  const counters = createInventoryCounters();
 
   // Process each row
   for (let i = 0; i < rows.length; i++) {
@@ -73,7 +73,7 @@ export const importInventoryFromCSV = async (
       );
 
       items.push(result);
-      incrementLegacyCounter(counters, result.action);
+      incrementCounter(counters, result.action);
 
       // Log audit entries for actual changes (not dry run)
       if (!dryRun && result.productId) {
@@ -144,5 +144,5 @@ export const importInventoryFromCSV = async (
     }
   }
 
-  return buildImportResult(counters, items);
+  return buildInventoryResult(counters, items);
 };

@@ -1,4 +1,4 @@
-import type { Database, Transaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { createOrUpdatePriceMapping } from "./inventory";
 import type { z } from "zod";
 import { parseWithContext } from "~/lib/zod-utils";
@@ -266,7 +266,7 @@ export const createProduct = async (
     : (data.category ?? null);
 
   // Use a transaction to ensure atomicity
-  return await getDb(db).transaction(async (tx: Transaction) => {
+  return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
     // Create the product first
     const [newProduct] = await tx
       .insert(product)
@@ -349,7 +349,7 @@ export const updateProduct = async (
   } = data;
 
   // Use a transaction to ensure atomicity
-  return await getDb(db).transaction(async (tx: Transaction) => {
+  return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
     // Fetch current state for audit logging
     const beforeProduct = await tx.query.product.findFirst({
       where: and(

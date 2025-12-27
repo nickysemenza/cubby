@@ -1,4 +1,4 @@
-import type { Database, Transaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   withTransaction,
   insertAndReturn,
@@ -29,135 +29,138 @@ export const bulkProcessInventoryEntries = async (
   const { organizationId } = actor;
 
   // Use a transaction to ensure all operations are processed atomically
-  const processedItems = await withTransaction(db, async (tx: Transaction) => {
-    const results: InventoryEntryDeepDB[] = [];
+  const processedItems = await withTransaction(
+    db,
+    async (tx: DrizzleTransaction) => {
+      const results: InventoryEntryDeepDB[] = [];
 
-    // First, get all existing inventory entries for this location
-    const existingItems = await tx.query.inventoryEntry.findMany({
-      where: eq(inventoryEntry.locationId, locationId),
-      ...relations.inventory.full,
-    });
-
-    // Create a map of existing items for change tracking
-    const existingItemsMap = new Map(
-      existingItems.map((item) => [item.id, item]),
-    );
-
-    // Get IDs of items in the submitted array (as plain strings for DB comparison)
-    const submittedIds = items
-      .filter((item) => item.id)
-      .map((item) => item.id as string);
-
-    // Find items to delete (existing items not in the submitted array)
-    const itemsToDelete = existingItems.filter(
-      (item) => !submittedIds.includes(item.id),
-    );
-
-    // Delete items that are not in the submitted array
-    for (const item of itemsToDelete) {
-      await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, item.id));
-      // Log delete audit entry
-      await logAuditEntry(tx, actor, {
-        entityType: "inventory",
-        entityId: item.id,
-        action: "delete",
+      // First, get all existing inventory entries for this location
+      const existingItems = await tx.query.inventoryEntry.findMany({
+        where: eq(inventoryEntry.locationId, locationId),
+        ...relations.inventory.full,
       });
-    }
 
-    // Process submitted items - create new or update existing
-    for (const item of items) {
-      if (!item.id) {
-        // Create new inventory entry - productId and amount are required
-        if (!item.productId || !item.amount) {
-          throw new Error("productId and amount are required for new items");
-        }
-        const created = await insertAndReturn(tx, inventoryEntry, {
-          organizationId: organizationId,
-          productId: item.productId,
-          locationId: locationId,
-          amount: item.amount,
-        });
+      // Create a map of existing items for change tracking
+      const existingItemsMap = new Map(
+        existingItems.map((item) => [item.id, item]),
+      );
 
-        // Log create audit entry
+      // Get IDs of items in the submitted array (as plain strings for DB comparison)
+      const submittedIds = items
+        .filter((item) => item.id)
+        .map((item) => item.id as string);
+
+      // Find items to delete (existing items not in the submitted array)
+      const itemsToDelete = existingItems.filter(
+        (item) => !submittedIds.includes(item.id),
+      );
+
+      // Delete items that are not in the submitted array
+      for (const item of itemsToDelete) {
+        await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, item.id));
+        // Log delete audit entry
         await logAuditEntry(tx, actor, {
           entityType: "inventory",
-          entityId: created.id,
-          action: "create",
+          entityId: item.id,
+          action: "delete",
         });
+      }
 
-        // Fetch with relations
-        const fullCreated = await tx.query.inventoryEntry.findFirst({
-          where: eq(inventoryEntry.id, created.id),
-          ...relations.inventory.full,
-        });
-
-        if (fullCreated) {
-          results.push(fullCreated);
-        }
-      } else {
-        // Update existing inventory entry using helper to filter undefined
-        const updateValues = buildPartialUpdateValues({
-          amount: item.amount,
-          productId: item.productId,
-        });
-
-        // Only process if there are actual updates
-        if (Object.keys(updateValues).length > 0) {
-          const before = existingItemsMap.get(item.id);
-          const updated = await updateAndReturn(
-            tx,
-            inventoryEntry,
-            updateValues,
-            eq(inventoryEntry.id, item.id),
-          );
-
-          // Log update audit entry with changes
-          if (before) {
-            const changes = computeChanges(before, updated, [
-              "amount",
-              "productId",
-            ]);
-            if (changes) {
-              await logAuditEntry(tx, actor, {
-                entityType: "inventory",
-                entityId: item.id,
-                action: "update",
-                changes,
-              });
-            }
+      // Process submitted items - create new or update existing
+      for (const item of items) {
+        if (!item.id) {
+          // Create new inventory entry - productId and amount are required
+          if (!item.productId || !item.amount) {
+            throw new Error("productId and amount are required for new items");
           }
+          const created = await insertAndReturn(tx, inventoryEntry, {
+            organizationId: organizationId,
+            productId: item.productId,
+            locationId: locationId,
+            amount: item.amount,
+          });
+
+          // Log create audit entry
+          await logAuditEntry(tx, actor, {
+            entityType: "inventory",
+            entityId: created.id,
+            action: "create",
+          });
 
           // Fetch with relations
-          const fullUpdated = await tx.query.inventoryEntry.findFirst({
-            where: eq(inventoryEntry.id, updated.id),
+          const fullCreated = await tx.query.inventoryEntry.findFirst({
+            where: eq(inventoryEntry.id, created.id),
             ...relations.inventory.full,
           });
 
-          if (fullUpdated) {
-            results.push(fullUpdated);
+          if (fullCreated) {
+            results.push(fullCreated);
           }
         } else {
-          // If no updates, just fetch the current item
-          const current = await tx.query.inventoryEntry.findFirst({
-            where: eq(inventoryEntry.id, item.id),
-            ...relations.inventory.full,
+          // Update existing inventory entry using helper to filter undefined
+          const updateValues = buildPartialUpdateValues({
+            amount: item.amount,
+            productId: item.productId,
           });
 
-          if (current) {
-            results.push(current);
+          // Only process if there are actual updates
+          if (Object.keys(updateValues).length > 0) {
+            const before = existingItemsMap.get(item.id);
+            const updated = await updateAndReturn(
+              tx,
+              inventoryEntry,
+              updateValues,
+              eq(inventoryEntry.id, item.id),
+            );
+
+            // Log update audit entry with changes
+            if (before) {
+              const changes = computeChanges(before, updated, [
+                "amount",
+                "productId",
+              ]);
+              if (changes) {
+                await logAuditEntry(tx, actor, {
+                  entityType: "inventory",
+                  entityId: item.id,
+                  action: "update",
+                  changes,
+                });
+              }
+            }
+
+            // Fetch with relations
+            const fullUpdated = await tx.query.inventoryEntry.findFirst({
+              where: eq(inventoryEntry.id, updated.id),
+              ...relations.inventory.full,
+            });
+
+            if (fullUpdated) {
+              results.push(fullUpdated);
+            }
+          } else {
+            // If no updates, just fetch the current item
+            const current = await tx.query.inventoryEntry.findFirst({
+              where: eq(inventoryEntry.id, item.id),
+              ...relations.inventory.full,
+            });
+
+            if (current) {
+              results.push(current);
+            }
           }
         }
       }
-    }
 
-    // Update the location's lastBulkInventory timestamp
-    await tx
-      .update(location)
-      .set({ lastBulkInventory: new Date() })
-      .where(eq(location.id, locationId));
+      // Update the location's lastBulkInventory timestamp
+      await tx
+        .update(location)
+        .set({ lastBulkInventory: new Date() })
+        .where(eq(location.id, locationId));
 
-    return results;
-  });
+      return results;
+    },
+  );
 
   return processedItems.map(dbInventoryEntryToAPI);
 };
@@ -178,237 +181,240 @@ export const bulkMoveInventoryEntries = async (
     throw new Error("Source and target locations must be different");
   }
 
-  const processedItems = await withTransaction(db, async (tx: Transaction) => {
-    const results: InventoryEntryDeepDB[] = [];
+  const processedItems = await withTransaction(
+    db,
+    async (tx: DrizzleTransaction) => {
+      const results: InventoryEntryDeepDB[] = [];
 
-    for (const item of payload.items) {
-      // 1. Get source entry
-      const sourceEntry = await tx.query.inventoryEntry.findFirst({
-        where: and(
-          eq(inventoryEntry.id, item.inventoryEntryId),
-          eq(inventoryEntry.organizationId, organizationId),
-        ),
-        ...relations.inventory.full,
-      });
+      for (const item of payload.items) {
+        // 1. Get source entry
+        const sourceEntry = await tx.query.inventoryEntry.findFirst({
+          where: and(
+            eq(inventoryEntry.id, item.inventoryEntryId),
+            eq(inventoryEntry.organizationId, organizationId),
+          ),
+          ...relations.inventory.full,
+        });
 
-      if (!sourceEntry) {
-        throw createAppError(
-          "INVENTORY_NOT_FOUND",
-          `Inventory entry ${item.inventoryEntryId} not found`,
+        if (!sourceEntry) {
+          throw createAppError(
+            "INVENTORY_NOT_FOUND",
+            `Inventory entry ${item.inventoryEntryId} not found`,
+          );
+        }
+
+        // 2. Parse quantities (amount.value is already a number)
+        const parsedSourceAmount = parseInventoryAmount(
+          sourceEntry.amount,
+          sourceEntry.id,
         );
-      }
+        const sourceQuantity = parsedSourceAmount.value;
+        const moveQuantity = item.quantity.value;
 
-      // 2. Parse quantities (amount.value is already a number)
-      const parsedSourceAmount = parseInventoryAmount(
-        sourceEntry.amount,
-        sourceEntry.id,
-      );
-      const sourceQuantity = parsedSourceAmount.value;
-      const moveQuantity = item.quantity.value;
-
-      if (moveQuantity > sourceQuantity) {
-        throw new Error(
-          `Cannot move ${moveQuantity} ${item.quantity.unit} - only ${sourceQuantity} available`,
-        );
-      }
-
-      // 3. Check if product already exists at target location
-      const existingAtTarget = await tx.query.inventoryEntry.findFirst({
-        where: and(
-          eq(inventoryEntry.productId, sourceEntry.productId),
-          eq(inventoryEntry.locationId, payload.targetLocationId),
-          eq(inventoryEntry.organizationId, organizationId),
-        ),
-        ...relations.inventory.full,
-      });
-
-      if (moveQuantity >= sourceQuantity) {
-        // Full move
-        if (existingAtTarget) {
-          // Merge with existing entry at target
-          const existingAmount = parseInventoryAmount(
-            existingAtTarget.amount,
-            existingAtTarget.id,
+        if (moveQuantity > sourceQuantity) {
+          throw new Error(
+            `Cannot move ${moveQuantity} ${item.quantity.unit} - only ${sourceQuantity} available`,
           );
-          const existingQuantity = existingAmount.value;
-          const newQuantity = existingQuantity + moveQuantity;
+        }
 
-          // Update target entry with combined quantity
-          const updatedTargetEntry = await updateAndReturn(
-            tx,
-            inventoryEntry,
-            { amount: { value: newQuantity, unit: item.quantity.unit } },
-            eq(inventoryEntry.id, existingAtTarget.id),
-          );
+        // 3. Check if product already exists at target location
+        const existingAtTarget = await tx.query.inventoryEntry.findFirst({
+          where: and(
+            eq(inventoryEntry.productId, sourceEntry.productId),
+            eq(inventoryEntry.locationId, payload.targetLocationId),
+            eq(inventoryEntry.organizationId, organizationId),
+          ),
+          ...relations.inventory.full,
+        });
 
-          // Log update audit for target
-          const targetChanges = computeChanges(
-            existingAtTarget,
-            updatedTargetEntry,
-            ["amount"],
-          );
-          if (targetChanges) {
+        if (moveQuantity >= sourceQuantity) {
+          // Full move
+          if (existingAtTarget) {
+            // Merge with existing entry at target
+            const existingAmount = parseInventoryAmount(
+              existingAtTarget.amount,
+              existingAtTarget.id,
+            );
+            const existingQuantity = existingAmount.value;
+            const newQuantity = existingQuantity + moveQuantity;
+
+            // Update target entry with combined quantity
+            const updatedTargetEntry = await updateAndReturn(
+              tx,
+              inventoryEntry,
+              { amount: { value: newQuantity, unit: item.quantity.unit } },
+              eq(inventoryEntry.id, existingAtTarget.id),
+            );
+
+            // Log update audit for target
+            const targetChanges = computeChanges(
+              existingAtTarget,
+              updatedTargetEntry,
+              ["amount"],
+            );
+            if (targetChanges) {
+              await logAuditEntry(tx, actor, {
+                entityType: "inventory",
+                entityId: existingAtTarget.id,
+                action: "update",
+                changes: targetChanges,
+              });
+            }
+
+            // Delete source entry since we moved everything
+            await tx
+              .delete(inventoryEntry)
+              .where(eq(inventoryEntry.id, item.inventoryEntryId));
+
+            // Log delete audit for source
             await logAuditEntry(tx, actor, {
               entityType: "inventory",
-              entityId: existingAtTarget.id,
-              action: "update",
-              changes: targetChanges,
+              entityId: item.inventoryEntryId,
+              action: "delete",
             });
+
+            // Fetch updated target entry
+            const updatedTarget = await tx.query.inventoryEntry.findFirst({
+              where: eq(inventoryEntry.id, existingAtTarget.id),
+              ...relations.inventory.full,
+            });
+            if (updatedTarget) results.push(updatedTarget);
+          } else {
+            // Just update location of existing entry
+            const updatedEntry = await updateAndReturn(
+              tx,
+              inventoryEntry,
+              { locationId: payload.targetLocationId },
+              eq(inventoryEntry.id, item.inventoryEntryId),
+            );
+
+            // Log update audit for location change
+            const locationChanges = computeChanges(sourceEntry, updatedEntry, [
+              "locationId",
+            ]);
+            if (locationChanges) {
+              await logAuditEntry(tx, actor, {
+                entityType: "inventory",
+                entityId: item.inventoryEntryId,
+                action: "update",
+                changes: locationChanges,
+              });
+            }
+
+            // Fetch updated entry
+            const updated = await tx.query.inventoryEntry.findFirst({
+              where: eq(inventoryEntry.id, item.inventoryEntryId),
+              ...relations.inventory.full,
+            });
+            if (updated) results.push(updated);
           }
-
-          // Delete source entry since we moved everything
-          await tx
-            .delete(inventoryEntry)
-            .where(eq(inventoryEntry.id, item.inventoryEntryId));
-
-          // Log delete audit for source
-          await logAuditEntry(tx, actor, {
-            entityType: "inventory",
-            entityId: item.inventoryEntryId,
-            action: "delete",
-          });
-
-          // Fetch updated target entry
-          const updatedTarget = await tx.query.inventoryEntry.findFirst({
-            where: eq(inventoryEntry.id, existingAtTarget.id),
-            ...relations.inventory.full,
-          });
-          if (updatedTarget) results.push(updatedTarget);
         } else {
-          // Just update location of existing entry
-          const updatedEntry = await updateAndReturn(
+          // Partial move - reduce source and create/update target
+          const remainingQuantity = sourceQuantity - moveQuantity;
+
+          // Reduce source quantity
+          const updatedSource = await updateAndReturn(
             tx,
             inventoryEntry,
-            { locationId: payload.targetLocationId },
+            {
+              amount: {
+                value: remainingQuantity,
+                unit: parsedSourceAmount.unit,
+              },
+            },
             eq(inventoryEntry.id, item.inventoryEntryId),
           );
 
-          // Log update audit for location change
-          const locationChanges = computeChanges(sourceEntry, updatedEntry, [
-            "locationId",
+          // Log update audit for source reduction
+          const sourceChanges = computeChanges(sourceEntry, updatedSource, [
+            "amount",
           ]);
-          if (locationChanges) {
+          if (sourceChanges) {
             await logAuditEntry(tx, actor, {
               entityType: "inventory",
               entityId: item.inventoryEntryId,
               action: "update",
-              changes: locationChanges,
+              changes: sourceChanges,
             });
           }
 
-          // Fetch updated entry
-          const updated = await tx.query.inventoryEntry.findFirst({
-            where: eq(inventoryEntry.id, item.inventoryEntryId),
-            ...relations.inventory.full,
-          });
-          if (updated) results.push(updated);
-        }
-      } else {
-        // Partial move - reduce source and create/update target
-        const remainingQuantity = sourceQuantity - moveQuantity;
+          if (existingAtTarget) {
+            // Add to existing entry at target
+            const existingAmount = parseInventoryAmount(
+              existingAtTarget.amount,
+              existingAtTarget.id,
+            );
+            const existingQuantity = existingAmount.value;
+            const newQuantity = existingQuantity + moveQuantity;
 
-        // Reduce source quantity
-        const updatedSource = await updateAndReturn(
-          tx,
-          inventoryEntry,
-          {
-            amount: {
-              value: remainingQuantity,
-              unit: parsedSourceAmount.unit,
-            },
-          },
-          eq(inventoryEntry.id, item.inventoryEntryId),
-        );
+            const updatedTargetEntry = await updateAndReturn(
+              tx,
+              inventoryEntry,
+              { amount: { value: newQuantity, unit: item.quantity.unit } },
+              eq(inventoryEntry.id, existingAtTarget.id),
+            );
 
-        // Log update audit for source reduction
-        const sourceChanges = computeChanges(sourceEntry, updatedSource, [
-          "amount",
-        ]);
-        if (sourceChanges) {
-          await logAuditEntry(tx, actor, {
-            entityType: "inventory",
-            entityId: item.inventoryEntryId,
-            action: "update",
-            changes: sourceChanges,
-          });
-        }
+            // Log update audit for target
+            const targetChanges2 = computeChanges(
+              existingAtTarget,
+              updatedTargetEntry,
+              ["amount"],
+            );
+            if (targetChanges2) {
+              await logAuditEntry(tx, actor, {
+                entityType: "inventory",
+                entityId: existingAtTarget.id,
+                action: "update",
+                changes: targetChanges2,
+              });
+            }
 
-        if (existingAtTarget) {
-          // Add to existing entry at target
-          const existingAmount = parseInventoryAmount(
-            existingAtTarget.amount,
-            existingAtTarget.id,
-          );
-          const existingQuantity = existingAmount.value;
-          const newQuantity = existingQuantity + moveQuantity;
+            // Fetch updated target entry
+            const updatedTarget = await tx.query.inventoryEntry.findFirst({
+              where: eq(inventoryEntry.id, existingAtTarget.id),
+              ...relations.inventory.full,
+            });
+            if (updatedTarget) results.push(updatedTarget);
+          } else {
+            // Create new entry at target
+            const created = await insertAndReturn(tx, inventoryEntry, {
+              organizationId: organizationId,
+              productId: sourceEntry.productId,
+              locationId: payload.targetLocationId,
+              amount: item.quantity,
+            });
 
-          const updatedTargetEntry = await updateAndReturn(
-            tx,
-            inventoryEntry,
-            { amount: { value: newQuantity, unit: item.quantity.unit } },
-            eq(inventoryEntry.id, existingAtTarget.id),
-          );
-
-          // Log update audit for target
-          const targetChanges2 = computeChanges(
-            existingAtTarget,
-            updatedTargetEntry,
-            ["amount"],
-          );
-          if (targetChanges2) {
+            // Log create audit for new target entry
             await logAuditEntry(tx, actor, {
               entityType: "inventory",
-              entityId: existingAtTarget.id,
-              action: "update",
-              changes: targetChanges2,
+              entityId: created.id,
+              action: "create",
             });
+
+            // Fetch with relations
+            const fullCreated = await tx.query.inventoryEntry.findFirst({
+              where: eq(inventoryEntry.id, created.id),
+              ...relations.inventory.full,
+            });
+            if (fullCreated) results.push(fullCreated);
           }
-
-          // Fetch updated target entry
-          const updatedTarget = await tx.query.inventoryEntry.findFirst({
-            where: eq(inventoryEntry.id, existingAtTarget.id),
-            ...relations.inventory.full,
-          });
-          if (updatedTarget) results.push(updatedTarget);
-        } else {
-          // Create new entry at target
-          const created = await insertAndReturn(tx, inventoryEntry, {
-            organizationId: organizationId,
-            productId: sourceEntry.productId,
-            locationId: payload.targetLocationId,
-            amount: item.quantity,
-          });
-
-          // Log create audit for new target entry
-          await logAuditEntry(tx, actor, {
-            entityType: "inventory",
-            entityId: created.id,
-            action: "create",
-          });
-
-          // Fetch with relations
-          const fullCreated = await tx.query.inventoryEntry.findFirst({
-            where: eq(inventoryEntry.id, created.id),
-            ...relations.inventory.full,
-          });
-          if (fullCreated) results.push(fullCreated);
         }
       }
-    }
 
-    // Update lastBulkInventory for both source and target locations
-    const now = new Date();
-    await tx
-      .update(location)
-      .set({ lastBulkInventory: now })
-      .where(eq(location.id, payload.sourceLocationId));
-    await tx
-      .update(location)
-      .set({ lastBulkInventory: now })
-      .where(eq(location.id, payload.targetLocationId));
+      // Update lastBulkInventory for both source and target locations
+      const now = new Date();
+      await tx
+        .update(location)
+        .set({ lastBulkInventory: now })
+        .where(eq(location.id, payload.sourceLocationId));
+      await tx
+        .update(location)
+        .set({ lastBulkInventory: now })
+        .where(eq(location.id, payload.targetLocationId));
 
-    return results;
-  });
+      return results;
+    },
+  );
 
   return processedItems.map(dbInventoryEntryToAPI);
 };

@@ -9,6 +9,8 @@ import {
   type FieldChange,
   LOCATION_CSV_ACTIONS,
   type LocationCSVAction,
+  INVENTORY_CSV_ACTIONS,
+  type InventoryCSVAction,
 } from "~/schemas/csv";
 
 // =============================================================================
@@ -49,80 +51,28 @@ export function createLocationCounters(): ResultCounters<LocationCSVAction> {
 }
 
 // =============================================================================
-// Inventory-specific Result Helpers (for backward compatibility)
+// Inventory-specific Result Helpers
 // =============================================================================
 
 import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { CSVImportResult, CSVImportResultItem } from "~/schemas/inventory";
 
+/** Type alias for inventory counters */
+export type InventoryCounters = ResultCounters<InventoryCSVAction>;
+
 /**
- * Legacy result counters interface for inventory
- * @deprecated Use createInventoryCounters() instead
+ * Create counters for inventory CSV operations
  */
-interface LegacyResultCounters {
-  created: number;
-  moved: number;
-  updated: number;
-  skipped: number;
-  errors: number;
-  productOnly: number;
-  removed: number;
+export function createInventoryCounters(): InventoryCounters {
+  return createCounters(INVENTORY_CSV_ACTIONS);
 }
 
 /**
- * Create a fresh set of counters initialized to zero (legacy format)
- * @deprecated Use createInventoryCounters() instead
+ * Build a CSVImportResult from counters and items
+ * Transforms action names to result schema keys (e.g., "error" → "errors")
  */
-export function createResultCounters(): LegacyResultCounters {
-  return {
-    created: 0,
-    moved: 0,
-    updated: 0,
-    skipped: 0,
-    errors: 0,
-    productOnly: 0,
-    removed: 0,
-  };
-}
-
-/**
- * Increment counter (legacy format)
- * Maps action names to counter property names
- */
-export function incrementLegacyCounter(
-  counters: LegacyResultCounters,
-  action: CSVImportResultItem["action"],
-): void {
-  switch (action) {
-    case "created":
-      counters.created++;
-      break;
-    case "moved":
-      counters.moved++;
-      break;
-    case "updated":
-      counters.updated++;
-      break;
-    case "skipped":
-      counters.skipped++;
-      break;
-    case "error":
-      counters.errors++;
-      break;
-    case "product_only":
-      counters.productOnly++;
-      break;
-    case "removed":
-      counters.removed++;
-      break;
-  }
-}
-
-/**
- * Build a CSVImportResult from counters and items (legacy format)
- */
-export function buildImportResult(
-  counters: LegacyResultCounters,
+export function buildInventoryResult(
+  counters: InventoryCounters,
   items: CSVImportResultItem[],
 ): CSVImportResult {
   return {
@@ -130,9 +80,10 @@ export function buildImportResult(
     moved: counters.moved,
     updated: counters.updated,
     skipped: counters.skipped,
-    errors: counters.errors,
-    productOnly: counters.productOnly,
+    errors: counters.error, // action "error" → result key "errors"
+    productOnly: counters.product_only, // action "product_only" → result key "productOnly"
     removed: counters.removed > 0 ? counters.removed : undefined,
+    renamed: counters.renamed > 0 ? counters.renamed : undefined,
     items,
   };
 }
@@ -155,8 +106,8 @@ interface ResultItemBase {
  */
 function pushResultItem(
   items: CSVImportResultItem[],
-  counters: LegacyResultCounters,
-  action: CSVImportResultItem["action"],
+  counters: InventoryCounters,
+  action: InventoryCSVAction,
   base: ResultItemBase,
 ): void {
   items.push({
@@ -169,7 +120,7 @@ function pushResultItem(
     message: base.message,
     fieldChanges: base.fieldChanges,
   });
-  incrementLegacyCounter(counters, action);
+  incrementCounter(counters, action);
 }
 
 /**
@@ -177,7 +128,7 @@ function pushResultItem(
  */
 export function pushErrorItem(
   items: CSVImportResultItem[],
-  counters: LegacyResultCounters,
+  counters: InventoryCounters,
   rowIndex: number,
   productName: string,
   message: string,

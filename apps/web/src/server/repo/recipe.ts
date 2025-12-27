@@ -1,4 +1,4 @@
-import type { Database, Transaction } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import type { z } from "zod";
 import type { CompactRecipe, amount } from "~/codec/codec";
 import { parseCompactRecipe } from "~/codec/parser";
@@ -292,7 +292,7 @@ export const createRecipe = async (
 
 // Helper function to process ingredients
 const processIngredient = async (
-  tx: Transaction,
+  tx: DrizzleTransaction,
   ingredientInput: z.infer<typeof recipeIngredientInput>,
   organizationId: OrganizationId,
 ): Promise<{
@@ -355,7 +355,7 @@ const processIngredient = async (
 
 // Helper function to process multiple ingredients
 const processIngredients = async (
-  tx: Transaction,
+  tx: DrizzleTransaction,
   ingredients: z.infer<typeof recipeIngredientInput>[],
   organizationId: OrganizationId,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
@@ -485,7 +485,7 @@ type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
 
 /** Update recipe name and source metadata */
 async function updateRecipeBasicProperties(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   recipeId: RecipeId,
   organizationId: OrganizationId,
   updates: RecipeUpdateInput["data"],
@@ -525,7 +525,7 @@ async function updateRecipeBasicProperties(
 
 /** Add new images and remove requested images */
 async function updateRecipeImages(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   recipeId: RecipeId,
   updates: RecipeUpdateInput["data"],
 ): Promise<void> {
@@ -558,7 +558,7 @@ async function updateRecipeImages(
 
 /** Delete all sections and their ingredients for a recipe */
 async function deleteAllSections(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   sectionIds: string[],
 ): Promise<void> {
   if (sectionIds.length === 0) return;
@@ -571,7 +571,7 @@ async function deleteAllSections(
 
 /** Create a new recipe section with ingredients */
 async function createSectionWithIngredients(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   recipeId: RecipeId,
   sectionInput: NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
   organizationId: OrganizationId,
@@ -608,7 +608,7 @@ async function createSectionWithIngredients(
 
 /** Update an existing section's ingredients */
 async function updateSectionIngredients(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   sectionId: string,
   ingredientUpdates: NonNullable<
     NonNullable<RecipeUpdateInput["data"]["sections"]>[number]["ingredients"]
@@ -661,7 +661,7 @@ async function updateSectionIngredients(
 
 /** Update an existing recipe section */
 async function updateExistingSection(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   sectionUpdate: NonNullable<RecipeUpdateInput["data"]["sections"]>[number] & {
     id: string;
   },
@@ -701,7 +701,7 @@ async function updateExistingSection(
 
 /** Handle all section updates (create, update, delete) */
 async function handleSectionUpdates(
-  tx: Transaction,
+  tx: DrizzleTransaction,
   recipeId: RecipeId,
   sectionUpdates: NonNullable<RecipeUpdateInput["data"]["sections"]>,
   existingRecipe: ExistingRecipeWithSections,
