@@ -256,7 +256,7 @@ export default function BulkInventoryForm() {
                     variant="ghost"
                     size="icon"
                     onClick={() => remove(index)}
-                    className="flex-shrink-0"
+                    className="shrink-0"
                   >
                     <X className="h-4 w-4" />
                   </Button>

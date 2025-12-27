@@ -631,7 +631,7 @@ export default function CSVImportForm() {
       {parseError && (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700 text-sm dark:border-red-800 dark:bg-red-950 dark:text-red-300">
           <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <pre className="whitespace-pre-wrap">{parseError}</pre>
           </div>
         </div>

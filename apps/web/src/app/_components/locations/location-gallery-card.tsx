@@ -85,7 +85,7 @@ export const LocationGalleryCard = forwardRef<
       <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
         <LocationIcon
           type={location.type}
-          className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
         />
         <Link
           to="/locations/$id"
@@ -138,7 +138,7 @@ export const LocationGalleryCard = forwardRef<
                   <Link
                     to="/products/$id"
                     params={{ id: product.id }}
-                    className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
                   >
                     <Package className="h-3 w-3 text-muted-foreground/40" />
                   </Link>
