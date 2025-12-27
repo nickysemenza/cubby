@@ -500,6 +500,94 @@ const updateSheetConnection = protectedProcedure
     return { success: true };
   });
 
+/** Ensure table schema is applied to a sheet (shared by sync + repair) */
+async function ensureTableSchema(
+  client: ReturnType<typeof getGoogleSheetsClient>,
+  sheetId: string,
+  sheetName: string,
+  tableName: string,
+  columnSchema: ColumnSchema[],
+  headers: string[],
+  rowCount: number,
+): Promise<void> {
+  // Write headers if sheet is empty
+  if (rowCount === 0) {
+    await client.writeSheet(sheetId, [headers], sheetName);
+    return; // Can't create table without data rows
+  }
+  // Create or update table with column types
+  await client.createOrUpdateTable(
+    sheetId,
+    sheetName,
+    tableName,
+    columnSchema,
+    rowCount,
+  );
+}
+
+// Repair sheet schema - ensures tables exist with proper column types
+const repairSheetSchema = protectedProcedure
+  .output(
+    z.object({
+      success: z.boolean(),
+      inventoryRowCount: z.number(),
+      locationsRowCount: z.number(),
+      message: z.string(),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    const { client, sheetId } = await getClientAndSheetId(ctx);
+
+    // Ensure both sheets exist
+    await client.ensureSheetExists(sheetId, SHEET_NAMES.INVENTORY);
+    await client.ensureSheetExists(sheetId, SHEET_NAMES.LOCATIONS);
+
+    // Read current data from both sheets to get row counts
+    const inventoryData = await client.readSheet(
+      sheetId,
+      SHEET_NAMES.INVENTORY,
+    );
+    const locationsData = await client.readSheet(
+      sheetId,
+      SHEET_NAMES.LOCATIONS,
+    );
+
+    const inventoryRowCount = Math.max(0, inventoryData.length - 1);
+    const locationsRowCount = Math.max(0, locationsData.length - 1);
+
+    // Apply table schemas
+    await ensureTableSchema(
+      client,
+      sheetId,
+      SHEET_NAMES.INVENTORY,
+      "inventory",
+      INVENTORY_COLUMN_SCHEMA,
+      INVENTORY_CSV_HEADERS,
+      inventoryRowCount,
+    );
+    await ensureTableSchema(
+      client,
+      sheetId,
+      SHEET_NAMES.LOCATIONS,
+      "locations",
+      LOCATION_COLUMN_SCHEMA,
+      LOCATION_CSV_HEADERS,
+      locationsRowCount,
+    );
+
+    const parts = [];
+    if (inventoryRowCount > 0)
+      parts.push(`Inventory: ${inventoryRowCount} rows`);
+    if (locationsRowCount > 0)
+      parts.push(`Locations: ${locationsRowCount} rows`);
+    const message =
+      parts.length > 0
+        ? `Schema repaired. ${parts.join(", ")}`
+        : "Schema repaired. Both sheets are empty - headers written.";
+
+    return { success: true, inventoryRowCount, locationsRowCount, message };
+  });
+
 // Debug endpoint - returns raw sheet data for troubleshooting
 const debugSheetData = protectedProcedure
   .output(
@@ -934,15 +1022,16 @@ async function pushLocationsToSheet(
     SHEET_NAMES.LOCATIONS,
   );
 
-  // Apply column formatting (dropdowns, number formats, etc.)
-  if (dataRows.length > 0) {
-    await client.applyColumnFormatting(
-      sheetId,
-      SHEET_NAMES.LOCATIONS,
-      LOCATION_COLUMN_SCHEMA,
-      dataRows.length,
-    );
-  }
+  // Apply table schema
+  await ensureTableSchema(
+    client,
+    sheetId,
+    SHEET_NAMES.LOCATIONS,
+    "locations",
+    LOCATION_COLUMN_SCHEMA,
+    LOCATION_CSV_HEADERS,
+    dataRows.length,
+  );
 }
 
 /** Push inventory changes to Google Sheet */
@@ -1024,15 +1113,16 @@ async function pushInventoryToSheet(
     SHEET_NAMES.INVENTORY,
   );
 
-  // Apply column formatting (dropdowns, number formats, etc.)
-  if (dataRows.length > 0) {
-    await client.applyColumnFormatting(
-      sheetId,
-      SHEET_NAMES.INVENTORY,
-      INVENTORY_COLUMN_SCHEMA,
-      dataRows.length,
-    );
-  }
+  // Apply table schema
+  await ensureTableSchema(
+    client,
+    sheetId,
+    SHEET_NAMES.INVENTORY,
+    "inventory",
+    INVENTORY_COLUMN_SCHEMA,
+    INVENTORY_CSV_HEADERS,
+    dataRows.length,
+  );
 }
 
 // Sync preview - unified comparison of app and sheet
@@ -1218,6 +1308,7 @@ export const googleSheetsRouter = createTRPCRouter({
   getConnectionStatus,
   testConnection,
   updateSheetConnection,
+  repairSheetSchema,
   // Unified sync
   syncPreview,
   applySync,

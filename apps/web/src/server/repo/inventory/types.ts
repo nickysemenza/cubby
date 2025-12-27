@@ -8,6 +8,7 @@ import type {
 } from "~/server/db/schema";
 import type { Amount } from "~/codec/codec";
 import type { ProductId, LocationId, InventoryId } from "~/schemas/identifiers";
+import type { ProductCategory } from "~/schemas/product";
 
 export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   Product: typeof product.$inferSelect & {
@@ -38,7 +39,7 @@ export interface CreateInventoryEntryData {
 export interface InventoryCSVExportRow {
   product_name: string;
   manufacturer: string;
-  category: string | null;
+  category: ProductCategory | null;
   upc: string;
   model: string | null;
   ndb_number: number | null;
@@ -62,7 +63,7 @@ export interface InventoryCSVExportRow {
 export interface ProductExportFields {
   name: string;
   manufacturer: string;
-  category: string | null;
+  category: ProductCategory | null;
   upc: string | null;
   model: string | null;
   ndb_number: number | null;

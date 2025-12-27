@@ -183,6 +183,7 @@ async function previewProduct(
     row.model,
     row.ndb_number,
     row.aliases,
+    row.category,
   );
 
   const productData = preview.existingProduct;
@@ -270,6 +271,7 @@ async function executeProductOperations(
     row.model,
     row.ndb_number,
     row.aliases,
+    row.category,
     actor,
   );
 

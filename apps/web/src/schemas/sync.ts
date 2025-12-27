@@ -7,6 +7,7 @@
 import { z } from "zod";
 import { fieldChange } from "./csv";
 import { locationId, productId, inventoryId } from "./identifiers";
+import { productCategory } from "./product";
 
 /**
  * Sync states for items
@@ -88,7 +89,7 @@ export type LocationSyncItem = z.infer<typeof locationSyncItem>;
 const inventorySyncFields = z.object({
   productName: z.string(),
   manufacturer: z.string().nullable(),
-  category: z.string().nullable(),
+  category: productCategory.nullable(),
   locationName: z.string().nullable(),
   quantity: z.number().nullable(),
   unit: z.string().nullable(),

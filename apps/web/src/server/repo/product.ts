@@ -689,6 +689,7 @@ export const quickCreateProduct = async (
     ndb_number?: number | null;
     ingredientId?: string | null;
     price?: number | null;
+    category?: ProductCategory | null;
   },
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
@@ -704,6 +705,7 @@ export const quickCreateProduct = async (
       model: data.model ?? null,
       expectedQuantity: data.expectedQuantity ?? null,
       ingredientId: data.ingredientId ?? null,
+      category: data.category ?? null,
     })
     .returning();
 

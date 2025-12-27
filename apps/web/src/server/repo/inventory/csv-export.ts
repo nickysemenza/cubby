@@ -15,6 +15,7 @@ import {
 } from "~/schemas/price-mapping-utils";
 import { joinImageUrls } from "~/lib/image-utils";
 import type { InventoryCSVExportRow, ProductExportFields } from "./types";
+import type { ProductCategory } from "~/schemas/product";
 
 /**
  * Build common product export fields from a product with unit mappings and ingredient
@@ -22,7 +23,7 @@ import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 async function buildProductExportFields(p: ProductExportFields): Promise<{
   product_name: string;
   manufacturer: string;
-  category: string | null;
+  category: ProductCategory | null;
   upc: string;
   model: string | null;
   ndb_number: number | null;

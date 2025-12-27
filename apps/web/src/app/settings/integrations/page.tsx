@@ -23,6 +23,7 @@ import {
   Bug,
   ImagePlus,
   Barcode,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "~/components/ui/badge";
@@ -100,6 +101,22 @@ export default function IntegrationsPage() {
     updateConnectionMutation.mutate({ sheetUrl: null });
   };
 
+  // Repair schema mutation
+  const repairSchemaMutation = useMutation(
+    api.googleSheets.repairSheetSchema.mutationOptions({
+      onSuccess: (result) => {
+        toast.success(result.message);
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  const handleRepairSchema = () => {
+    repairSchemaMutation.mutate();
+  };
+
   const isConnecting =
     testConnectionMutation.isPending || updateConnectionMutation.isPending;
 
@@ -168,7 +185,7 @@ export default function IntegrationsPage() {
                   Last synced: {new Date(status.lastSync).toLocaleString()}
                 </p>
               )}
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <Button
                   variant="outline"
                   size="sm"
@@ -183,6 +200,19 @@ export default function IntegrationsPage() {
                 >
                   <ExternalLink className="h-3 w-3" />
                   Open Sheet
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRepairSchema}
+                  disabled={repairSchemaMutation.isPending}
+                >
+                  {repairSchemaMutation.isPending ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Wrench className="h-3 w-3" />
+                  )}
+                  Repair Schema
                 </Button>
                 <Button
                   variant="outline"

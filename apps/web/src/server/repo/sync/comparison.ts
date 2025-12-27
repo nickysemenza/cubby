@@ -19,6 +19,7 @@ import type { LocationCSVExportRow } from "~/server/repo/location/types";
 import type { LocationCSVRow } from "~/schemas/location";
 import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
 import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { ProductCategory } from "~/schemas/product";
 
 /**
  * Common inventory row fields (snake_case → camelCase)
@@ -26,7 +27,7 @@ import type { InventoryCSVRow } from "~/schemas/inventory";
 type InventoryRowLike = {
   product_name: string;
   manufacturer?: string | null;
-  category?: string | null;
+  category?: ProductCategory | null;
   location_name?: string | null;
   quantity?: number | null;
   unit?: string | null;

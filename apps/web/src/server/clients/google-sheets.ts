@@ -24,6 +24,42 @@ export type ColumnSchema = {
   type: ColumnType;
 };
 
+// Google Sheets API Table ColumnType enum values
+type TableColumnType =
+  | "COLUMN_TYPE_UNSPECIFIED"
+  | "DOUBLE"
+  | "CURRENCY"
+  | "PERCENT"
+  | "DATE"
+  | "TIME"
+  | "DATE_TIME"
+  | "TEXT"
+  | "BOOLEAN"
+  | "DROPDOWN"
+  | "FILES_CHIP"
+  | "PEOPLE_CHIP"
+  | "FINANCE_CHIP"
+  | "PLACE_CHIP"
+  | "RATINGS_CHIP";
+
+// Map our ColumnType to Google Sheets Table ColumnType
+const mapToTableColumnType = (col: ColumnType): TableColumnType => {
+  switch (col.kind) {
+    case "text":
+      return "TEXT";
+    case "number":
+      return "DOUBLE";
+    case "currency":
+      return "CURRENCY";
+    case "dropdown":
+      return "DROPDOWN";
+    case "checkbox":
+      return "BOOLEAN";
+    case "date":
+      return "DATE";
+  }
+};
+
 /**
  * Google Sheets client using service account authentication.
  *
@@ -283,7 +319,147 @@ export class GoogleSheetsClient {
   }
 
   /**
+   * Get sheet ID and check if a table exists on the sheet
+   */
+  private async getSheetInfo(
+    spreadsheetId: string,
+    sheetName: string,
+  ): Promise<{ sheetId: number; tableId: string | null }> {
+    if (!this.sheets) {
+      throw new Error("Google Sheets client is not configured");
+    }
+
+    const response = await this.sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "sheets(properties,tables)",
+    });
+
+    const sheet = response.data.sheets?.find(
+      (s) => s.properties?.title === sheetName,
+    );
+    if (!sheet?.properties?.sheetId) {
+      throw new Error(`Sheet "${sheetName}" not found`);
+    }
+
+    // Check if there's already a table on this sheet
+    // The tables array contains Table objects with tableId
+    const tables = (sheet as { tables?: Array<{ tableId?: string }> }).tables;
+    const tableId = tables?.[0]?.tableId ?? null;
+
+    return { sheetId: sheet.properties.sheetId, tableId };
+  }
+
+  /**
+   * Create or update a Table on a sheet with proper column types
+   * Tables provide column type dropdowns (Number, Text, Currency, etc.)
+   *
+   * @param spreadsheetId - The Google Sheet ID
+   * @param sheetName - Sheet name containing the data
+   * @param tableName - Name for the table (must be unique in spreadsheet)
+   * @param columns - Column schema definitions
+   * @param rowCount - Number of data rows (excluding header)
+   */
+  async createOrUpdateTable(
+    spreadsheetId: string,
+    sheetName: string,
+    tableName: string,
+    columns: ColumnSchema[],
+    rowCount: number,
+  ): Promise<void> {
+    if (!this.sheets) {
+      throw new Error("Google Sheets client is not configured");
+    }
+
+    const { sheetId, tableId } = await this.getSheetInfo(
+      spreadsheetId,
+      sheetName,
+    );
+
+    // Build column properties for the table
+    const columnProperties = columns.map((col, index) => {
+      const colType = mapToTableColumnType(col.type);
+      const prop: {
+        columnIndex: number;
+        columnName: string;
+        columnType: string;
+        dataValidationRule?: {
+          condition: {
+            type: string;
+            values: Array<{ userEnteredValue: string }>;
+          };
+        };
+      } = {
+        columnIndex: index,
+        columnName: col.header,
+        columnType: colType,
+      };
+
+      // Dropdown columns require dataValidationRule
+      if (col.type.kind === "dropdown") {
+        prop.dataValidationRule = {
+          condition: {
+            type: "ONE_OF_LIST",
+            values: col.type.options.map((opt) => ({
+              userEnteredValue: opt,
+            })),
+          },
+        };
+      }
+
+      return prop;
+    });
+
+    const tableRange = {
+      sheetId,
+      startRowIndex: 0,
+      endRowIndex: rowCount + 1, // +1 for header
+      startColumnIndex: 0,
+      endColumnIndex: columns.length,
+    };
+
+    if (tableId) {
+      // Update existing table
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              updateTable: {
+                table: {
+                  tableId,
+                  range: tableRange,
+                  columnProperties,
+                },
+                fields: "range,columnProperties",
+              },
+            },
+          ],
+        },
+      });
+    } else {
+      // Create new table
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: [
+            {
+              addTable: {
+                table: {
+                  name: tableName,
+                  range: tableRange,
+                  columnProperties,
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
+  }
+
+  /**
    * Apply column formatting (types, dropdowns, etc.) to a sheet
+   * This is the legacy method for non-Table sheets
    * @param spreadsheetId - The Google Sheet ID
    * @param sheetName - Sheet name to format
    * @param columns - Column schema definitions

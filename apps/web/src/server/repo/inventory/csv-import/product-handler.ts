@@ -19,7 +19,7 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import { getManufacturerUpdate } from "~/lib/manufacturer-utils";
-import type { ProductTopLevelOut } from "~/schemas/product";
+import type { ProductTopLevelOut, ProductCategory } from "~/schemas/product";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import type { ProductPreviewResult } from "./types";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -73,6 +73,7 @@ export const findOrCreateProductForImport = async (
   model: string | undefined,
   ndbNumber: number | undefined,
   aliasesStr: string | null | undefined,
+  category: ProductCategory | null | undefined,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   // Parse aliases from semicolon-separated string
@@ -115,6 +116,7 @@ export const findOrCreateProductForImport = async (
         model: model ?? null,
         ndb_number: ndbNumber ?? null,
         ingredientId,
+        category: category ?? null,
       },
       actor,
     );
@@ -127,6 +129,7 @@ export const findOrCreateProductForImport = async (
       ingredientId?: IngredientId | null;
       model?: string | null;
       ndb_number?: number | null;
+      category?: ProductCategory | null;
     } = {};
 
     // Update manufacturer if going from "(unspecified)" to a specific value
@@ -149,6 +152,10 @@ export const findOrCreateProductForImport = async (
     }
     if (ndbNumber != null) {
       updates.ndb_number = ndbNumber;
+    }
+    // Update category if provided and different (allow setting to any value including null)
+    if (category !== undefined && productData.category !== category) {
+      updates.category = category;
     }
     // Query existing ingredient link (needed for both updates and audit logging)
     let existingIngredientId: string | null = null;
@@ -173,6 +180,7 @@ export const findOrCreateProductForImport = async (
         model: productData.model,
         ndb_number: productData.ndb_number,
         ingredientId: existingIngredientId,
+        category: productData.category,
       };
 
       await getDb(db)
@@ -224,6 +232,15 @@ export const findOrCreateProductForImport = async (
           to: updates.ingredientId,
         };
       }
+      if (
+        updates.category !== undefined &&
+        beforeState.category !== updates.category
+      ) {
+        changes.category = {
+          from: beforeState.category,
+          to: updates.category,
+        };
+      }
 
       // Log audit entry if there are changes
       if (Object.keys(changes).length > 0) {
@@ -266,6 +283,12 @@ export const findOrCreateProductForImport = async (
           ndb_number: updates.ndb_number,
         };
       }
+      if (updates.category !== undefined) {
+        productData = {
+          ...productData,
+          category: updates.category,
+        };
+      }
     }
   }
 
@@ -290,6 +313,7 @@ export const previewProductForImport = async (
   model: string | undefined,
   ndbNumber: number | undefined,
   aliasesStr: string | null | undefined,
+  category: ProductCategory | null | undefined,
 ): Promise<ProductPreviewResult> => {
   const productChanges: ProductChangesPreview = {};
   const aliases = parseAliasesString(aliasesStr);
@@ -323,6 +347,9 @@ export const previewProductForImport = async (
     }
     if (aliases.length > 0) {
       productChanges.aliasesWillBeAdded = aliases;
+    }
+    if (category) {
+      productChanges.categoryWillBeSet = category;
     }
     return {
       existingProduct: null,
@@ -361,6 +388,12 @@ export const previewProductForImport = async (
   if (ndbNumber != null && existingProduct.ndb_number !== ndbNumber) {
     productChanges.ndbNumberWillBeSet = ndbNumber;
     productChanges.ndbNumberCurrent = existingProduct.ndb_number;
+  }
+
+  // Check category update
+  if (category !== undefined && existingProduct.category !== category) {
+    productChanges.categoryWillBeSet = category ?? undefined;
+    productChanges.categoryCurrent = existingProduct.category;
   }
 
   // Check ingredient linking and aliases
