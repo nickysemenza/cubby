@@ -36,7 +36,15 @@ import {
   unsafeProductId,
 } from "~/schemas/identifiers";
 import { deleteInventoryEntry } from "~/server/repo/inventory";
-import { deleteLocation, updateLocation } from "~/server/repo/location";
+import {
+  deleteLocation,
+  updateLocation,
+  updateLocationFromSync,
+} from "~/server/repo/location";
+import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
+
+dayjs.extend(customParseFormat);
 import { updateProduct } from "~/server/repo/product";
 import {
   compareLocationsForSync,
@@ -80,6 +88,28 @@ function mergeOrgMetadata(
   const current = existing ? JSON.parse(existing) : {};
   return JSON.stringify({ ...current, ...updates });
 }
+
+/**
+ * Parse date string from Google Sheet into Date object.
+ * Handles both app format (YYYY-MM-DD HH:mm:ss) and Sheets format (M/D/YYYY H:mm:ss)
+ */
+const parseSheetDate = (dateStr: string | null | undefined): Date | null => {
+  if (!dateStr) return null;
+  const formats = [
+    "YYYY-MM-DD HH:mm:ss", // App format
+    "M/D/YYYY H:mm:ss", // Sheets format (single digits)
+    "MM/DD/YYYY HH:mm:ss", // Sheets format (padded)
+  ];
+  for (const fmt of formats) {
+    const parsed = dayjs(dateStr, fmt, true);
+    if (parsed.isValid()) {
+      return parsed.toDate();
+    }
+  }
+  // Fallback: try native parsing
+  const fallback = dayjs(dateStr);
+  return fallback.isValid() ? fallback.toDate() : null;
+};
 
 // CSV column headers for Inventory sheet
 const INVENTORY_CSV_HEADERS = [
@@ -645,22 +675,29 @@ async function processImportsToApp(
     }
   }
 
-  // Locations with conflicts resolved to use_sheet
+  // Locations with conflicts resolved to use_sheet - update existing locations
   const locationsToUpdateFromSheet = locationItems.filter(
     (i) => i.state === "conflict" && i.resolution === "use_sheet",
   );
 
-  if (locationsToUpdateFromSheet.length > 0) {
-    const rows = syncItemsToLocationCSVRows(locationsToUpdateFromSheet);
-    if (rows.length > 0) {
-      const result = await importLocationsFromCSV(
+  for (const item of locationsToUpdateFromSheet) {
+    if (!item.appData?.locationId || !item.sheetData) {
+      results.locations.errors++;
+      continue;
+    }
+
+    try {
+      await updateLocationFromSync(
         ctx.db,
-        ctx.organizationId,
-        rows,
-        { dryRun: false },
+        unsafeLocationId(item.appData.locationId),
+        {
+          lastInventoryDate: parseSheetDate(item.sheetData.lastInventoryDate),
+          description: item.sheetData.description,
+        },
       );
-      results.locations.updated += result.updated;
-      results.locations.errors += result.errors;
+      results.locations.updated++;
+    } catch {
+      results.locations.errors++;
     }
   }
 

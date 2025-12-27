@@ -600,6 +600,34 @@ export const findOrCreateLocationByName = async (
 };
 
 /**
+ * Update location fields from sync data
+ * Used when resolving sync conflicts with "use_sheet"
+ */
+export const updateLocationFromSync = async (
+  db: Database,
+  locationId: LocationId,
+  data: {
+    lastInventoryDate?: Date | null;
+    description?: string | null;
+    locationType?: LocationType;
+  },
+): Promise<void> => {
+  const updateValues = buildPartialUpdateValues({
+    lastBulkInventory: data.lastInventoryDate,
+    description: data.description,
+    type: data.locationType,
+  });
+
+  // Only update if there are values to update
+  if (Object.keys(updateValues).length > 0) {
+    await getDb(db)
+      .update(location)
+      .set(updateValues)
+      .where(eq(location.id, locationId));
+  }
+};
+
+/**
  * Check if a location has any inventory entries (internal helper)
  */
 const locationHasInventory = async (
