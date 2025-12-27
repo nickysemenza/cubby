@@ -30,18 +30,6 @@ export const productCategoryOptions = productCategory.options.map((cat) => ({
   label: cat.replace("-", " "),
 }));
 
-// Categories where items are typically consumed/used up
-const consumableCategories: ReadonlySet<ProductCategory> = new Set([
-  "food",
-  "tool-consumables",
-  "hardware",
-  "supplies",
-]);
-
-/** Check if a category represents consumable items */
-export const isConsumableCategory = (cat: ProductCategory): boolean =>
-  consumableCategories.has(cat);
-
 /**
  * Check if a product has USDA food data indicators that should force category to "food"
  *

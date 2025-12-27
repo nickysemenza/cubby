@@ -587,27 +587,6 @@ export const findOrCreateLocationByName = async (
 };
 
 /**
- * Fields that can be synced via CSV/sheet import
- * Single source of truth for what fields are compared and updated during sync.
- *
- * Note: These must align with fields compared in location/csv-comparison.ts:
- * - locationType ↔ location_type
- * - parentId ↔ parent_name (resolved by name)
- * - description ↔ description
- * - lastInventoryDate ↔ last_inventory_date
- *
- * location_image is handled separately via image import logic.
- */
-export const LOCATION_SYNC_FIELDS = [
-  "locationType",
-  "parentId",
-  "description",
-  "lastInventoryDate",
-] as const;
-
-export type LocationSyncField = (typeof LOCATION_SYNC_FIELDS)[number];
-
-/**
  * Check if setting a new parent would create a circular reference
  *
  * Walks up the parent chain from the proposed parent to check if we'd
@@ -615,7 +594,7 @@ export type LocationSyncField = (typeof LOCATION_SYNC_FIELDS)[number];
  *
  * @returns true if the change would create a cycle, false if safe
  */
-export const wouldCreateParentCycle = async (
+const wouldCreateParentCycle = async (
   db: Database,
   locationId: LocationId,
   newParentId: LocationId,
@@ -645,7 +624,7 @@ export const wouldCreateParentCycle = async (
 
 /**
  * Input data for location import updates
- * Matches LOCATION_SYNC_FIELDS for consistency
+ * Matches location sync fields for consistency
  */
 export interface LocationImportData {
   lastInventoryDate?: Date | null;
@@ -659,7 +638,7 @@ export interface LocationImportData {
  * Used by importLocationsFromCSV when updating existing locations.
  * Returns true if any fields were updated.
  *
- * Handles all LOCATION_SYNC_FIELDS:
+ * Handles all location sync fields:
  * - locationType: updates if provided and different
  * - parentId: updates if provided and different (with cycle detection)
  * - description: updates if provided

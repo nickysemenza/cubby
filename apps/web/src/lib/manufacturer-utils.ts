@@ -30,23 +30,3 @@ export function isUnspecifiedManufacturer(
   const trimmed = manufacturer.trim().toLowerCase();
   return trimmed === "" || trimmed === UNSPECIFIED_MANUFACTURER.toLowerCase();
 }
-
-/**
- * Check if updating manufacturer from current to new value is a meaningful change.
- * Returns the new manufacturer value if it should be updated, undefined otherwise.
- *
- * Logic: Only update if going from "(unspecified)" to a specific value.
- * Don't update if both are specific (even if different) or if new is unspecified.
- */
-export function getManufacturerUpdate(
-  currentManufacturer: string,
-  newManufacturer: string | null | undefined,
-): string | undefined {
-  const isCurrentUnspecified = isUnspecifiedManufacturer(currentManufacturer);
-  const isNewSpecific = !isUnspecifiedManufacturer(newManufacturer);
-
-  if (isCurrentUnspecified && isNewSpecific) {
-    return normalizeManufacturer(newManufacturer);
-  }
-  return undefined;
-}

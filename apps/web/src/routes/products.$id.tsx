@@ -5,46 +5,37 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/products/$id")({
-  component: ProductDetailPage,
+  ssr: false,
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(
+      context.trpc.product.getByID.queryOptions({ id: params.id }),
+    ),
+  pendingComponent: ProductDetailPending,
   errorComponent: RouteErrorComponent,
+  component: ProductDetailPage,
 });
+
+function ProductDetailPending() {
+  return (
+    <PageWrapper>
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    </PageWrapper>
+  );
+}
 
 function ProductDetailPage() {
   const { id } = Route.useParams();
-  const api = useTRPC();
-
-  const {
-    data: product,
-    isLoading,
-    error,
-  } = useQuery(api.product.getByID.queryOptions({ id }));
+  const { trpc } = Route.useRouteContext();
+  const { data: product } = useQuery(trpc.product.getByID.queryOptions({ id }));
 
   useDocumentTitle(product?.name);
 
-  if (isLoading) {
-    return (
-      <PageWrapper>
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-32 w-full" />
-        </div>
-      </PageWrapper>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageWrapper>
-        <div className="text-destructive">
-          Error loading product: {error.message}
-        </div>
-      </PageWrapper>
-    );
-  }
-
+  // Loader guarantees data exists, but handle edge case for type safety
   if (!product) {
     return (
       <PageWrapper>

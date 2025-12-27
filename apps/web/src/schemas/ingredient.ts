@@ -15,7 +15,7 @@ export const ingredientOut = z
 
 /**
  * Input schema for updating ingredients
- * @lintignore knip false positive - used in ingredient-form.tsx
+ *
  */
 export const ingredientUpdateInput = z.object({
   id: ingredientId,

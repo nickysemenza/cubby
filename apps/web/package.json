@@ -117,7 +117,6 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
-    "@types/commander": "^2.12.5",
     "@types/node": "^25.0.2",
     "@types/papaparse": "^5.5.2",
     "@types/pg": "^8.16.0",
@@ -136,7 +135,6 @@
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.5.0",
     "vitest": "^4.0.15",
-    "web-vitals": "^5.1.0",
     "wrangler": "^4.56.0"
   }
 }

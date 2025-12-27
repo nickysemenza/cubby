@@ -1,5 +1,4 @@
 import {
-  ErrorComponent,
   type ErrorComponentProps,
   Link,
   useRouter,
@@ -56,18 +55,6 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
           <Button variant="ghost">Go Home</Button>
         </Link>
       </div>
-    </div>
-  );
-}
-
-/**
- * Default error fallback - delegates to TanStack's built-in ErrorComponent
- * with our custom styling wrapper.
- */
-export function DefaultRouteError(props: ErrorComponentProps) {
-  return (
-    <div className="p-8">
-      <ErrorComponent {...props} />
     </div>
   );
 }

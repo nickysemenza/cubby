@@ -1,4 +1,12 @@
 {
+  "entry": [
+    "src/start.ts",
+    "src/router.tsx",
+    "src/routes/**/*.tsx",
+    "src/routes/**/*.ts",
+    "src/styles.css",
+    "src/instrumentation.ts"
+  ],
   "ignore": [
     "wasm/**",
     "types.ts",
@@ -10,16 +18,13 @@
     "src/routeTree.gen.ts"
   ],
   "ignoreDependencies": [
-    "@devoxa/integresql-client",
     "@recipehub/.+",
     "@testing-library/.+",
     "@vitest/.+",
-    "commander",
-    "vite-plugin-wasm",
-    "vite-plugin-top-level-await",
-    "@cloudflare/vite-plugin",
-    "@tanstack/devtools-vite",
-    "@fontsource-variable/.+"
+    "@tailwindcss/postcss",
+    "postcss",
+    "@opentelemetry/.+",
+    "@tanstack/router-plugin"
   ],
   "tags": ["-lintignore"]
 }

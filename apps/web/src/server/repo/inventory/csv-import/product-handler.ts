@@ -35,7 +35,7 @@ import type { ProductPreviewResult } from "./types";
 
 /**
  * Parse semicolon-separated aliases string into array
- * @lintignore exported for testing
+ *
  */
 export const parseAliasesString = (
   aliasesStr: string | null | undefined,
@@ -50,7 +50,7 @@ export const parseAliasesString = (
 /**
  * Find aliases that are new (don't exist in current set)
  * Comparison is case-insensitive
- * @lintignore exported for testing
+ *
  */
 export const findNewAliases = (
   newAliases: string[],

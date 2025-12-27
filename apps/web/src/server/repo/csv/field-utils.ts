@@ -29,17 +29,11 @@ export type ComparisonFieldSpec<TApp, TSheet> = {
 // Normalizers
 // =============================================================================
 
-/** Normalize null/undefined to empty string */
-export const nullToEmpty = (v: unknown): string => (v as string) ?? "";
+/** Normalize null/undefined to empty string (used as default in compareFields) */
+const nullToEmpty = (v: unknown): string => (v as string) ?? "";
 
 /** Pass through null, normalize undefined to null */
 export const nullToNull = (v: unknown): unknown => v ?? null;
-
-/** Create a normalizer that defaults to a specific value */
-export const defaultTo =
-  <T>(defaultVal: T) =>
-  (v: unknown): T =>
-    (v as T) ?? defaultVal;
 
 // =============================================================================
 // Generic Comparison
@@ -78,56 +72,8 @@ export const compareFields = <TApp, TSheet>(
 };
 
 // =============================================================================
-// Update Building (for product/entity updates)
+// Audit Helpers
 // =============================================================================
-
-/** Predicate to determine if a field should be updated */
-export type ShouldUpdateFn<TCurrent, TNext> = (
-  current: TCurrent,
-  next: TNext,
-) => boolean;
-
-/** Field spec for building update objects */
-export type UpdateFieldSpec<TKey extends string, TCurrent, TNext> = {
-  /** Key in the update object and existing entity */
-  key: TKey;
-  /** Key in the input data (defaults to same as key) */
-  inputKey?: string;
-  /** Predicate to determine if this field should be updated */
-  shouldUpdate: ShouldUpdateFn<TCurrent, TNext>;
-};
-
-/**
- * Build an updates object from field specs
- *
- * @param specs - Field specifications with update predicates
- * @param existing - Existing entity values
- * @param input - Input values from CSV/form
- * @returns Partial update object with only changed fields
- */
-export const buildUpdates = <
-  TKey extends string,
-  TExisting extends Record<TKey, unknown>,
-  TInput extends Record<string, unknown>,
->(
-  specs: readonly UpdateFieldSpec<TKey, unknown, unknown>[],
-  existing: TExisting,
-  input: TInput,
-): Partial<Record<TKey, unknown>> => {
-  const updates: Partial<Record<TKey, unknown>> = {};
-
-  for (const spec of specs) {
-    const inputKey = spec.inputKey ?? spec.key;
-    const current = existing[spec.key];
-    const next = input[inputKey];
-
-    if (spec.shouldUpdate(current, next)) {
-      updates[spec.key] = next;
-    }
-  }
-
-  return updates;
-};
 
 /**
  * Build audit changes from before state and updates

@@ -40,8 +40,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   columns: AnyColumnDef<TData>[];
   /** Filter definitions - string shorthand or full FilterableColumn config */
   filters: FilterDef[];
-  /** For unit mappings - async function to extract mappings from each row */
-  getMappings?: (item: TData) => Promise<UnitMapping[]>;
+  /** For unit mappings - function to extract mappings from each row (sync or async) */
+  getMappings?: (item: TData) => UnitMapping[] | Promise<UnitMapping[]>;
   /** Override table state options */
   tableStateOptions?: UseTableListOptions<TFilters>["tableStateOptions"];
   /** Global filter state (for custom global filters like IngredientList) */

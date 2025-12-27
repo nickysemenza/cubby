@@ -210,7 +210,7 @@ importers:
         version: 5.2.2(react-hook-form@7.69.0(react@19.2.3))(zod@4.2.1)
       '@kubiks/otel-drizzle':
         specifier: ^2.1.0
-        version: 2.1.0(@opentelemetry/api@1.9.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3)))
+        version: 2.1.0(@opentelemetry/api@1.9.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3))
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
@@ -342,7 +342,7 @@ importers:
         version: 0.31.8
       drizzle-orm:
         specifier: ^0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))
+        version: 0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)
       flat:
         specifier: ^6.0.1
         version: 6.0.1
@@ -440,9 +440,6 @@ importers:
       '@testing-library/react':
         specifier: ^16.3.1
         version: 16.3.1(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      '@types/commander':
-        specifier: ^2.12.5
-        version: 2.12.5
       '@types/node':
         specifier: ^25.0.2
         version: 25.0.2
@@ -496,10 +493,7 @@ importers:
         version: 3.5.0(vite@7.3.0(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@opentelemetry/api@1.9.0)(@types/node@25.0.2)(@vitest/ui@4.0.15)(jiti@2.6.1)(jsdom@27.3.0)(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.0.2)(typescript@5.9.3))(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-      web-vitals:
-        specifier: ^5.1.0
-        version: 5.1.0
+        version: 4.0.15(@opentelemetry/api@1.9.0)(@types/node@25.0.2)(@vitest/ui@4.0.15)(jiti@2.6.1)(jsdom@27.3.0(postcss@8.5.6))(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.0.2)(typescript@5.9.3))(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
       wrangler:
         specifier: ^4.56.0
         version: 4.56.0(@cloudflare/workers-types@4.20251223.0)
@@ -4614,10 +4608,6 @@ packages:
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
-  '@types/commander@2.12.5':
-    resolution: {integrity: sha512-YXGZ/rz+s57VbzcvEV9fUoXeJlBt5HaKu5iUheiIWNsJs23bz6AnRuRiZBRVBLYyPnixNvVnuzM5pSaxr8Yp/g==}
-    deprecated: This is a stub types definition. commander provides its own type definitions, so you do not need this installed.
-
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
 
@@ -7983,9 +7973,6 @@ packages:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
 
-  web-vitals@5.1.0:
-    resolution: {integrity: sha512-ArI3kx5jI0atlTtmV0fWU3fjpLmq/nD3Zr1iFFlJLaqa5wLBkUSzINwBPySCX/8jRyjlmy1Volw1kz1g9XE4Jg==}
-
   web-worker@1.5.0:
     resolution: {integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==}
 
@@ -10004,6 +9991,11 @@ snapshots:
     dependencies:
       '@opentelemetry/api': 1.9.0
       drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))
+
+  '@kubiks/otel-drizzle@2.1.0(@opentelemetry/api@1.9.0)(drizzle-orm@0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3))':
+    dependencies:
+      '@opentelemetry/api': 1.9.0
+      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)
 
   '@levischuck/tiny-cbor@0.2.11': {}
 
@@ -12700,10 +12692,6 @@ snapshots:
       '@types/deep-eql': 4.0.2
       assertion-error: 2.0.1
 
-  '@types/commander@2.12.5':
-    dependencies:
-      commander: 14.0.2
-
   '@types/connect@3.4.38':
     dependencies:
       '@types/node': 25.0.3
@@ -13189,7 +13177,7 @@ snapshots:
       '@tanstack/react-start': 1.143.12(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(vite@7.3.0(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))(webpack@5.101.3(esbuild@0.25.12))
       better-sqlite3: 12.5.0
       drizzle-kit: 0.31.8
-      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@prisma/client@6.17.0(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)(prisma@6.17.0(magicast@0.3.5)(typescript@5.9.3))
+      drizzle-orm: 0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3)
       next: 16.1.0(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-macros@3.1.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       pg: 8.16.3
       react: 19.2.3
@@ -13699,6 +13687,17 @@ snapshots:
       kysely: 0.28.9
       pg: 8.16.3
       prisma: 6.17.0(magicast@0.3.5)(typescript@5.9.3)
+
+  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20251223.0)(@neondatabase/serverless@1.0.2)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(kysely@0.28.9)(pg@8.16.3):
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20251223.0
+      '@neondatabase/serverless': 1.0.2
+      '@opentelemetry/api': 1.9.0
+      '@types/better-sqlite3': 7.6.13
+      '@types/pg': 8.16.0
+      better-sqlite3: 12.5.0
+      kysely: 0.28.9
+      pg: 8.16.3
 
   dunder-proto@1.0.1:
     dependencies:
@@ -16366,8 +16365,6 @@ snapshots:
     optional: true
 
   web-streams-polyfill@3.3.3: {}
-
-  web-vitals@5.1.0: {}
 
   web-worker@1.5.0: {}
 

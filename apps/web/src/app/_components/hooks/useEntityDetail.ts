@@ -36,8 +36,8 @@ interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   data: TData;
   /** tRPC mutation options for updates */
   mutationOptions: object;
-  /** For entities with unit mappings - async function to extract mappings */
-  getMappings?: (data: TData) => Promise<UnitMapping[]>;
+  /** For entities with unit mappings - function to extract mappings (sync or async) */
+  getMappings?: (data: TData) => UnitMapping[] | Promise<UnitMapping[]>;
   /** Custom callback on successful update */
   onSuccess?: () => void;
 }

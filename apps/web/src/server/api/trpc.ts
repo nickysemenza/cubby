@@ -435,7 +435,7 @@ const createTestAuth = (userId: UserId) => ({
 
 /**
  * Test helper to create a TRPC context for testing purposes
- * @lintignore exported for testing
+ *
  */
 export const createTestTRPCContext = (
   db: Database,

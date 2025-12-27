@@ -34,7 +34,7 @@ const getNutrientTargets = (): { key: NutrientKey; target: string }[] => {
 /**
  * Convert an amount directly to all nutrients via WASM graph traversal
  * This replaces the old TypeScript-based scaling approach
- * @lintignore exported for testing
+ *
  */
 export const convertAmountToNutrients = (
   amount: Amount,
@@ -74,7 +74,7 @@ export const convertAmountToNutrients = (
 
 /**
  * Creates an empty nutrients record
- * @lintignore exported for testing
+ *
  */
 export const createEmptyNutrients = (): NutrientsPer100 =>
   ({}) as NutrientsPer100;
@@ -108,7 +108,7 @@ export const convertAmountToPrice = (
 /**
  * Extracts gram and nutrient results separately using WASM for both conversions.
  * Weight and nutrient conversions are now independent - both use the graph.
- * @lintignore exported for testing
+ *
  */
 export const getGramAndNutrient = (
   amount: Amount,
