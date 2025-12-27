@@ -20,6 +20,7 @@ import {
 } from "~/server/repo/product";
 import { getManufacturerUpdate } from "~/lib/manufacturer-utils";
 import type { ProductTopLevelOut, ProductCategory } from "~/schemas/product";
+import { buildAuditChanges, applyUpdates } from "~/server/repo/csv/field-utils";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import type { ProductPreviewResult } from "./types";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -188,61 +189,8 @@ export const findOrCreateProductForImport = async (
         .set(updates)
         .where(eq(product.id, productData.id));
 
-      // Build changes for audit log
-      const changes: Record<string, { from: unknown; to: unknown }> = {};
-      if (
-        updates.manufacturer != null &&
-        beforeState.manufacturer !== updates.manufacturer
-      ) {
-        changes.manufacturer = {
-          from: beforeState.manufacturer,
-          to: updates.manufacturer,
-        };
-      }
-      if (updates.upc !== undefined && beforeState.upc !== updates.upc) {
-        changes.upc = { from: beforeState.upc, to: updates.upc };
-      }
-      if (
-        updates.expectedQuantity != null &&
-        beforeState.expectedQuantity !== updates.expectedQuantity
-      ) {
-        changes.expectedQuantity = {
-          from: beforeState.expectedQuantity,
-          to: updates.expectedQuantity,
-        };
-      }
-      if (updates.model != null && beforeState.model !== updates.model) {
-        changes.model = { from: beforeState.model, to: updates.model };
-      }
-      if (
-        updates.ndb_number != null &&
-        beforeState.ndb_number !== updates.ndb_number
-      ) {
-        changes.ndb_number = {
-          from: beforeState.ndb_number,
-          to: updates.ndb_number,
-        };
-      }
-      if (
-        updates.ingredientId != null &&
-        beforeState.ingredientId !== updates.ingredientId
-      ) {
-        changes.ingredientId = {
-          from: beforeState.ingredientId,
-          to: updates.ingredientId,
-        };
-      }
-      if (
-        updates.category !== undefined &&
-        beforeState.category !== updates.category
-      ) {
-        changes.category = {
-          from: beforeState.category,
-          to: updates.category,
-        };
-      }
-
-      // Log audit entry if there are changes
+      // Build and log audit entry
+      const changes = buildAuditChanges(beforeState, updates);
       if (Object.keys(changes).length > 0) {
         await logAuditEntry(db, actor, {
           entityType: "product",
@@ -252,43 +200,8 @@ export const findOrCreateProductForImport = async (
         });
       }
 
-      // Update local copy for fields that might have changed
-      if (updates.manufacturer != null) {
-        productData = {
-          ...productData,
-          manufacturer: updates.manufacturer,
-        };
-      }
-      if (updates.upc !== undefined) {
-        productData = {
-          ...productData,
-          upc: updates.upc,
-        };
-      }
-      if (updates.expectedQuantity != null) {
-        productData = {
-          ...productData,
-          expectedQuantity: updates.expectedQuantity,
-        };
-      }
-      if (updates.model != null) {
-        productData = {
-          ...productData,
-          model: updates.model,
-        };
-      }
-      if (updates.ndb_number != null) {
-        productData = {
-          ...productData,
-          ndb_number: updates.ndb_number,
-        };
-      }
-      if (updates.category !== undefined) {
-        productData = {
-          ...productData,
-          category: updates.category,
-        };
-      }
+      // Update local copy with changes
+      productData = applyUpdates(productData, updates);
     }
   }
 

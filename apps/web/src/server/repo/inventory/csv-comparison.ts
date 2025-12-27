@@ -9,6 +9,50 @@ import type { InventoryCSVRow } from "~/schemas/inventory";
 import type { FieldChange } from "~/schemas/csv";
 import type { InventoryCSVExportRow } from "./types";
 import { normalizeForComparison } from "~/server/repo/csv/normalize";
+import {
+  compareFields,
+  nullToNull,
+  type ComparisonFieldSpec,
+} from "~/server/repo/csv/field-utils";
+
+/** Field specs for standard inventory fields (no special normalization needed) */
+const INVENTORY_FIELD_SPECS: readonly ComparisonFieldSpec<
+  InventoryCSVExportRow,
+  InventoryCSVRow
+>[] = [
+  { field: "upc", appKey: "upc", sheetKey: "upc" },
+  { field: "model", appKey: "model", sheetKey: "model" },
+  { field: "category", appKey: "category", sheetKey: "category" },
+  {
+    field: "ndb",
+    appKey: "ndb_number",
+    sheetKey: "ndb_number",
+    normalize: nullToNull,
+  },
+  {
+    field: "expected",
+    appKey: "expected_qty",
+    sheetKey: "expected_qty",
+    normalize: nullToNull,
+  },
+  { field: "price", appKey: "price", sheetKey: "price", normalize: nullToNull },
+  {
+    field: "unit_mappings",
+    appKey: "unit_mappings",
+    sheetKey: "unit_mappings",
+  },
+  {
+    field: "ingredient",
+    appKey: "ingredient_name",
+    sheetKey: "ingredient_name",
+  },
+  { field: "aliases", appKey: "aliases", sheetKey: "aliases" },
+  {
+    field: "product_image",
+    appKey: "product_image",
+    sheetKey: "product_image",
+  },
+];
 
 /**
  * Compare two row values and return structured field changes
@@ -22,7 +66,7 @@ export function getRowDifferences(
 ): FieldChange[] {
   const changes: FieldChange[] = [];
 
-  // Compare location_name using normalized comparison (lowercase, trimmed)
+  // Special case: location_name needs normalized comparison (lowercase, trimmed)
   const normalizedAppName = normalizeForComparison(appRow.location_name);
   const normalizedSheetName = normalizeForComparison(
     sheetRow.location_name ?? "",
@@ -35,8 +79,7 @@ export function getRowDifferences(
     });
   }
 
-  // For quantity/unit, treat null (product-only rows) as equivalent to defaults (1/each)
-  // since the sheet schema applies these defaults when parsing empty cells
+  // Special case: quantity/unit have defaults (1/each) for product-only rows
   const appQty = appRow.quantity ?? 1;
   const appUnit = appRow.unit ?? "each";
   if (appQty !== sheetRow.quantity) {
@@ -49,76 +92,9 @@ export function getRowDifferences(
   if (appUnit !== sheetRow.unit) {
     changes.push({ field: "unit", from: sheetRow.unit, to: appRow.unit });
   }
-  if ((appRow.upc ?? "") !== (sheetRow.upc ?? "")) {
-    changes.push({
-      field: "upc",
-      from: sheetRow.upc ?? null,
-      to: appRow.upc ?? null,
-    });
-  }
-  if ((appRow.model ?? "") !== (sheetRow.model ?? "")) {
-    changes.push({
-      field: "model",
-      from: sheetRow.model ?? null,
-      to: appRow.model ?? null,
-    });
-  }
-  if ((appRow.category ?? "") !== (sheetRow.category ?? "")) {
-    changes.push({
-      field: "category",
-      from: sheetRow.category ?? null,
-      to: appRow.category ?? null,
-    });
-  }
-  if ((appRow.ndb_number ?? null) !== (sheetRow.ndb_number ?? null)) {
-    changes.push({
-      field: "ndb",
-      from: sheetRow.ndb_number ?? null,
-      to: appRow.ndb_number ?? null,
-    });
-  }
-  if ((appRow.expected_qty ?? null) !== (sheetRow.expected_qty ?? null)) {
-    changes.push({
-      field: "expected",
-      from: sheetRow.expected_qty ?? null,
-      to: appRow.expected_qty ?? null,
-    });
-  }
-  if ((appRow.price ?? null) !== (sheetRow.price ?? null)) {
-    changes.push({
-      field: "price",
-      from: sheetRow.price ?? null,
-      to: appRow.price ?? null,
-    });
-  }
-  if ((appRow.unit_mappings ?? "") !== (sheetRow.unit_mappings ?? "")) {
-    changes.push({
-      field: "unit_mappings",
-      from: sheetRow.unit_mappings ?? null,
-      to: appRow.unit_mappings ?? null,
-    });
-  }
-  if ((appRow.ingredient_name ?? "") !== (sheetRow.ingredient_name ?? "")) {
-    changes.push({
-      field: "ingredient",
-      from: sheetRow.ingredient_name ?? null,
-      to: appRow.ingredient_name ?? null,
-    });
-  }
-  if ((appRow.aliases ?? "") !== (sheetRow.aliases ?? "")) {
-    changes.push({
-      field: "aliases",
-      from: sheetRow.aliases ?? null,
-      to: appRow.aliases ?? null,
-    });
-  }
-  if ((appRow.product_image ?? "") !== (sheetRow.product_image ?? "")) {
-    changes.push({
-      field: "product_image",
-      from: sheetRow.product_image ?? null,
-      to: appRow.product_image ?? null,
-    });
-  }
+
+  // All other fields use generic comparison
+  changes.push(...compareFields(INVENTORY_FIELD_SPECS, appRow, sheetRow));
 
   return changes;
 }

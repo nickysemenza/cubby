@@ -9,6 +9,10 @@ import type { FieldChange } from "~/schemas/csv";
 import type { LocationCSVExportRow } from "./types";
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import {
+  compareFields,
+  type ComparisonFieldSpec,
+} from "~/server/repo/csv/field-utils";
 
 dayjs.extend(customParseFormat);
 
@@ -16,11 +20,9 @@ dayjs.extend(customParseFormat);
  * Normalize date strings for comparison.
  * Handles both app format (YYYY-MM-DD HH:mm:ss) and Sheets format (MM/DD/YYYY HH:mm:ss)
  */
-const normalizeDateForComparison = (
-  dateStr: string | null | undefined,
-): number | null => {
+const normalizeDateForComparison = (val: unknown): number | null => {
+  const dateStr = val as string | null | undefined;
   if (!dateStr) return null;
-  // Try parsing with common formats
   const formats = [
     "YYYY-MM-DD HH:mm:ss", // App format
     "M/D/YYYY H:mm:ss", // Sheets format (single digits)
@@ -32,10 +34,37 @@ const normalizeDateForComparison = (
       return parsed.unix();
     }
   }
-  // Fallback: try native parsing
   const fallback = dayjs(dateStr);
   return fallback.isValid() ? fallback.unix() : null;
 };
+
+/** Normalize parent name for comparison (lowercase, trimmed) */
+const normalizeParentName = (v: unknown): string | null =>
+  (v as string)?.toLowerCase().trim() ?? null;
+
+/** Field specs for standard location fields */
+const LOCATION_FIELD_SPECS: readonly ComparisonFieldSpec<
+  LocationCSVExportRow,
+  LocationCSVRow
+>[] = [
+  {
+    field: "parent_name",
+    appKey: "parent_name",
+    sheetKey: "parent_name",
+    normalize: normalizeParentName,
+  },
+  {
+    field: "location_image",
+    appKey: "location_image",
+    sheetKey: "location_image",
+  },
+  {
+    field: "last_inventory_date",
+    appKey: "last_inventory_date",
+    sheetKey: "last_inventory_date",
+    normalize: normalizeDateForComparison,
+  },
+];
 
 /**
  * Compare two location rows and return structured field changes
@@ -46,18 +75,7 @@ export function getLocationRowDifferences(
 ): FieldChange[] {
   const changes: FieldChange[] = [];
 
-  // Compare parent_name
-  const appParent = appRow.parent_name?.toLowerCase().trim() ?? null;
-  const sheetParent = sheetRow.parent_name?.toLowerCase().trim() ?? null;
-  if (appParent !== sheetParent) {
-    changes.push({
-      field: "parent_name",
-      from: sheetRow.parent_name ?? null,
-      to: appRow.parent_name,
-    });
-  }
-
-  // Compare location_type
+  // Special case: location_type - only compare if sheet has a value
   if (
     sheetRow.location_type &&
     appRow.location_type !== sheetRow.location_type
@@ -69,7 +87,7 @@ export function getLocationRowDifferences(
     });
   }
 
-  // Compare description
+  // Special case: description - only compare if sheet has the field defined
   if (sheetRow.description !== undefined) {
     const appDesc = appRow.description ?? "";
     const sheetDesc = sheetRow.description ?? "";
@@ -82,25 +100,8 @@ export function getLocationRowDifferences(
     }
   }
 
-  // Compare location_image
-  if ((appRow.location_image ?? "") !== (sheetRow.location_image ?? "")) {
-    changes.push({
-      field: "location_image",
-      from: sheetRow.location_image ?? null,
-      to: appRow.location_image ?? null,
-    });
-  }
-
-  // Compare last_inventory_date (normalize to handle different date formats)
-  const appDate = normalizeDateForComparison(appRow.last_inventory_date);
-  const sheetDate = normalizeDateForComparison(sheetRow.last_inventory_date);
-  if (appDate !== sheetDate) {
-    changes.push({
-      field: "last_inventory_date",
-      from: sheetRow.last_inventory_date ?? null,
-      to: appRow.last_inventory_date ?? null,
-    });
-  }
+  // All other fields use generic comparison
+  changes.push(...compareFields(LOCATION_FIELD_SPECS, appRow, sheetRow));
 
   return changes;
 }
