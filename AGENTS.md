@@ -8,6 +8,18 @@
 - prefer arrow functions for simple helpers: `const foo = (x: T) => ({ ... })` over `function foo(x: T) { return { ... } }`
 - **IMPORTANT**: When architecture, routes, schemas, or integration patterns change, always update both AGENTS.md and relevant README.md files to keep documentation current and accurate
 
+## Avoiding Backwards Compatibility Debt
+
+When refactoring, **do not create backwards compatibility shims**. Instead:
+
+- **Delete, don't deprecate**: Remove old code entirely rather than marking it `@deprecated` or adding "for backwards compatibility" comments
+- **Update all call sites**: When renaming types/functions, update all usages in the same PR rather than creating aliases
+- **No wrapper components**: Don't create thin wrappers "for backwards compatibility" - inline the usage directly
+- **No type aliases for renames**: If renaming `Transaction` → `DrizzleTransaction`, update all imports rather than `export type Transaction = DrizzleTransaction`
+- **Use generic patterns from the start**: When adding entity-specific helpers (e.g., CSV counters), check if a generic pattern exists first (e.g., `createCounters<TAction>`) rather than creating one-off implementations that later need consolidation
+
+**Why**: Backwards compatibility code accumulates silently and creates confusion about which pattern to use. It's easier to update all call sites in one pass than to maintain parallel code paths.
+
 ## Type Safety & Schema Patterns
 
 - whenever possible, types should be derived from common zod schemas
@@ -26,6 +38,25 @@
 - maintain entity-based organization (recipes, products, ingredients, locations, etc.)
 - since many of the forms / routers / repos / etc are the same between entities (recipes, locations, products, etc), try to use common helper functions as much as possible
 - use common helper functions across similar entities instead of duplicating logic
+
+### Required Helper Functions
+
+Use these shared helpers instead of writing inline patterns. **Check for existing helpers before writing new code.**
+
+| Pattern to avoid | Use instead | Import from |
+|-----------------|-------------|-------------|
+| `error instanceof Error ? error.message : "Unknown error"` | `getErrorMessage(error)` | `~/lib/error-utils` |
+| Manual `.insert().values().returning()` + null check | `insertAndReturn(tx, table, values)` | `~/server/repo/database-helpers` |
+| Same for `Database` type (not transaction) | `insertAndReturnDb(db, table, values)` | `~/server/repo/database-helpers` |
+| Manual `.update().set().where().returning()` + null check | `updateAndReturn(tx, table, values, where)` | `~/server/repo/database-helpers` |
+| `getDb(db).transaction(async (tx) => {...})` | `withTransaction(db, async (tx) => {...})` | `~/server/repo/database-helpers` |
+| `ilike(column, \`%${term}%\`)` | `formatSearchTerm(column, term)` | `~/server/repo/database-helpers` |
+| `ComboboxItem.refine()` for required product | `requiredProductField` | `~/schemas/form-fields` |
+| `ComboboxItem.refine()` for required location | `requiredLocationField` | `~/schemas/form-fields` |
+| `as ProductId`, `as LocationId`, etc. | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers` |
+| Inline `["inventoryItem"]` query keys | `queryKeys.inventoryItem.list` | `~/lib/query-keys` |
+| `Array.from(new Set(arr))` or `[...new Set(arr)]` | `dedupe(arr)` | `~/misc/array-helpers` |
+| `value === "(unspecified)"` | `isUnspecifiedManufacturer(value)` | `~/lib/manufacturer-utils` |
 
 ### Authentication (Better‑Auth)
 
