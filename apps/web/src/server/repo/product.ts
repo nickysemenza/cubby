@@ -15,6 +15,7 @@ import {
   type ProductInputPayload,
   type ProductCategory,
   productTopLevelOut,
+  hasFoodIndicators,
 } from "~/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
@@ -259,6 +260,11 @@ export const createProduct = async (
   const { organizationId } = actor;
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
+  // Auto-correct category to "food" if product has food indicators
+  const category = hasFoodIndicators({ ...data, ingredientId })
+    ? "food"
+    : (data.category ?? null);
+
   // Use a transaction to ensure atomicity
   return await getDb(db).transaction(async (tx: Transaction) => {
     // Create the product first
@@ -267,6 +273,7 @@ export const createProduct = async (
       .values({
         organizationId: organizationId,
         ...productData,
+        category,
         ingredientId: ingredientId ?? null,
       })
       .returning();
@@ -370,6 +377,19 @@ export const updateProduct = async (
     // Handle ingredient relationship
     if (ingredientId !== undefined) {
       updateData.ingredientId = ingredientId;
+    }
+
+    // Auto-correct category to "food" if the resulting product will have food indicators
+    const resultingProduct = {
+      upc: updateData.upc ?? beforeProduct.upc,
+      ndb_number: updateData.ndb_number ?? beforeProduct.ndb_number,
+      ingredientId: updateData.ingredientId ?? beforeProduct.ingredientId,
+    };
+    if (
+      hasFoodIndicators(resultingProduct) &&
+      beforeProduct.category !== "food"
+    ) {
+      updateData.category = "food";
     }
 
     // Update the product (updateAndReturn handles empty values gracefully)
@@ -694,6 +714,10 @@ export const quickCreateProduct = async (
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   const { organizationId } = actor;
+
+  // Auto-correct category to "food" if product has food indicators
+  const category = hasFoodIndicators(data) ? "food" : (data.category ?? null);
+
   const [newProduct] = await getDb(db)
     .insert(product)
     .values({
@@ -705,7 +729,7 @@ export const quickCreateProduct = async (
       model: data.model ?? null,
       expectedQuantity: data.expectedQuantity ?? null,
       ingredientId: data.ingredientId ?? null,
-      category: data.category ?? null,
+      category,
     })
     .returning();
 
@@ -830,4 +854,93 @@ export const findProductsWithUPCNoImages = async (
   }
 
   return results;
+};
+
+/**
+ * Find all products that have food indicators (UPC, NDB, or ingredient) but category is not "food".
+ * Used for food category backfill functionality.
+ */
+export const findProductsNeedingFoodCategory = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    category: string | null;
+    upc: string | null;
+    ndb_number: number | null;
+    ingredientId: string | null;
+  }>
+> => {
+  const dbClient = getDb(db);
+
+  // Find products with food indicators but wrong category
+  const products = await dbClient.query.product.findMany({
+    where: and(
+      eq(product.organizationId, organizationId),
+      isNull(product.deletedAt),
+      // Has at least one food indicator: UPC, NDB, or ingredient
+      // AND category is not "food" (either null or something else)
+    ),
+    columns: {
+      id: true,
+      name: true,
+      category: true,
+      upc: true,
+      ndb_number: true,
+      ingredientId: true,
+    },
+  });
+
+  // Filter to products with food indicators but wrong category
+  return products.filter((p) => hasFoodIndicators(p) && p.category !== "food");
+};
+
+/**
+ * Backfill food category for all products with food indicators.
+ * Returns the count of products updated.
+ */
+export const backfillFoodCategories = async (
+  db: Database,
+  organizationId: OrganizationId,
+  actor: ActorContext,
+): Promise<{
+  updated: number;
+  products: Array<{ id: string; name: string }>;
+}> => {
+  const productsToUpdate = await findProductsNeedingFoodCategory(
+    db,
+    organizationId,
+  );
+
+  if (productsToUpdate.length === 0) {
+    return { updated: 0, products: [] };
+  }
+
+  const dbClient = getDb(db);
+  const productIds = productsToUpdate.map((p) => p.id);
+
+  // Batch update all products to category = "food"
+  await dbClient
+    .update(product)
+    .set({ category: "food" })
+    .where(inArray(product.id, productIds));
+
+  // Log audit entries for each update
+  for (const p of productsToUpdate) {
+    await logAuditEntry(db, actor, {
+      entityType: "product",
+      entityId: p.id,
+      action: "update",
+      changes: {
+        category: { from: p.category, to: "food" },
+      },
+    });
+  }
+
+  return {
+    updated: productsToUpdate.length,
+    products: productsToUpdate.map((p) => ({ id: p.id, name: p.name })),
+  };
 };

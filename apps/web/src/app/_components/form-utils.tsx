@@ -407,6 +407,8 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   options,
   placeholder,
   nullable = false,
+  disabled = false,
+  description,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
@@ -414,6 +416,8 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   options: { value: string; label: string }[];
   placeholder?: string;
   nullable?: boolean;
+  disabled?: boolean;
+  description?: string;
 }) {
   return (
     <Controller
@@ -430,6 +434,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
             defaultValue={
               field.value ?? (nullable ? SELECT_NONE_VALUE : undefined)
             }
+            disabled={disabled}
           >
             <SelectTrigger id={name} aria-invalid={fieldState.invalid}>
               <SelectValue
@@ -449,6 +454,9 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
               ))}
             </SelectContent>
           </Select>
+          {description && (
+            <p className="text-muted-foreground text-xs">{description}</p>
+          )}
           {fieldState.error && <FieldError errors={[fieldState.error]} />}
         </Field>
       )}

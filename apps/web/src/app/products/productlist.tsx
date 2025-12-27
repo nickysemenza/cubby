@@ -16,6 +16,7 @@ import { TableLink } from "../_components/table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { Badge } from "~/components/ui/badge";
+import { productCategoryOptions } from "~/schemas/product";
 
 export function ProductList() {
   const api = useTRPC();
@@ -111,7 +112,20 @@ export function ProductList() {
         (e) => e.location,
       ),
     ],
-    filters: ["name", "manufacturer", "upc", "category"],
+    filters: [
+      "name",
+      "manufacturer",
+      "upc",
+      {
+        id: "category",
+        placeholder: "Filter by category...",
+        filterType: "select",
+        options: [
+          { value: "", label: "All categories" },
+          ...productCategoryOptions,
+        ],
+      },
+    ],
   });
 
   return (

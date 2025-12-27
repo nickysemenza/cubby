@@ -19,7 +19,11 @@ import {
   quickCreateProduct,
 } from "~/server/repo/product";
 import { getManufacturerUpdate } from "~/lib/manufacturer-utils";
-import type { ProductTopLevelOut, ProductCategory } from "~/schemas/product";
+import {
+  type ProductTopLevelOut,
+  type ProductCategory,
+  hasFoodIndicators,
+} from "~/schemas/product";
 import { buildAuditChanges, applyUpdates } from "~/server/repo/csv/field-utils";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import type { ProductPreviewResult } from "./types";
@@ -158,6 +162,19 @@ export const processProductForImport = async (
     if (category !== undefined && productData.category !== category) {
       updates.category = category;
     }
+
+    // Auto-correct category to "food" if the resulting product will have food indicators
+    const resultingProduct = {
+      ndb_number: updates.ndb_number ?? productData.ndb_number,
+      ingredientId: ingredientId ?? productData.ingredientId,
+    };
+    if (
+      hasFoodIndicators(resultingProduct) &&
+      productData.category !== "food"
+    ) {
+      updates.category = "food";
+    }
+
     // Query existing ingredient link (needed for both updates and audit logging)
     let existingIngredientId: string | null = null;
     if (ingredientId != null) {

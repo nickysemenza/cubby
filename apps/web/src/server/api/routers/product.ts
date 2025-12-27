@@ -25,6 +25,8 @@ import {
   findProductByUPC,
   quickCreateProduct,
   findProductsWithUPCNoImages,
+  findProductsNeedingFoodCategory,
+  backfillFoodCategories,
 } from "~/server/repo/product";
 import { upc } from "@recipehub/usda-schemas";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
@@ -338,6 +340,38 @@ const getUPCImageBackfillCount = protectedProcedure
     return { count: products.length };
   });
 
+// Get count of products with food indicators but wrong category
+const getFoodCategoryBackfillCount = protectedProcedure
+  .output(z.object({ count: z.number() }))
+  .query(async ({ ctx }) => {
+    const products = await findProductsNeedingFoodCategory(
+      ctx.db,
+      ctx.organizationId,
+    );
+    return { count: products.length };
+  });
+
+// Backfill food category for products with UPC/NDB/ingredient
+const backfillFoodCategoriesEndpoint = protectedProcedure
+  .output(
+    z.object({
+      updated: z.number(),
+      products: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+        }),
+      ),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    return await backfillFoodCategories(
+      ctx.db,
+      ctx.organizationId,
+      ctx.actorContext,
+    );
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   list,
@@ -347,4 +381,6 @@ export const productRouter = createTRPCRouter({
   findOrCreateByUPC,
   backfillUPCImages,
   getUPCImageBackfillCount,
+  getFoodCategoryBackfillCount,
+  backfillFoodCategories: backfillFoodCategoriesEndpoint,
 });

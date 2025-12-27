@@ -37,6 +37,22 @@ const consumableCategories: ReadonlySet<ProductCategory> = new Set([
 export const isConsumableCategory = (cat: ProductCategory): boolean =>
   consumableCategories.has(cat);
 
+/**
+ * Check if a product has USDA food data indicators that should force category to "food"
+ *
+ * A product is considered to have food data if it has:
+ * - A valid NDB number (USDA National Nutrient Database)
+ * - An associated ingredient (used in recipes)
+ *
+ * Note: UPC is intentionally NOT included - barcodes are on all products, not just food
+ */
+export const hasFoodIndicators = (product: {
+  ndb_number?: number | null;
+  ingredientId?: string | null;
+}): boolean =>
+  (product.ndb_number != null && product.ndb_number > 0) ||
+  (product.ingredientId != null && product.ingredientId.length > 0);
+
 // Base schema for product data (without relationships)
 const productBase = z.object({
   name: z.string(),

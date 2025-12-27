@@ -12,6 +12,7 @@ import {
   type ProductTopLevelOut,
   productCategory,
   productCategoryOptions,
+  hasFoodIndicators,
 } from "~/schemas/product";
 import { upc } from "@recipehub/usda-schemas";
 
@@ -271,6 +272,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const nameValue = form.watch("name");
   const isMisc = isMiscProduct(nameValue);
 
+  // Watch food indicator fields to determine if category should be forced to "food"
+  const ndbValue = form.watch("ndb_number");
+  const ingredientValue = form.watch("ingredient");
+  const isFoodForced = hasFoodIndicators({
+    ndb_number: ndbValue,
+    ingredientId: ingredientValue?.id,
+  });
+
   return (
     <FormWrapper
       form={form}
@@ -317,6 +326,12 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               options={productCategoryOptions}
               placeholder="Select category"
               nullable={true}
+              disabled={isFoodForced}
+              description={
+                isFoodForced
+                  ? "Forced to 'food' (has NDB number or ingredient)"
+                  : undefined
+              }
             />
           </SideBySideFields>
 

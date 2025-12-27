@@ -24,6 +24,7 @@ import {
   ImagePlus,
   Barcode,
   Wrench,
+  Utensils,
 } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "~/components/ui/badge";
@@ -315,6 +316,9 @@ export default function IntegrationsPage() {
 
       {/* UPC Image Sync Card */}
       <UPCImageSyncCard />
+
+      {/* Food Category Backfill Card */}
+      <FoodCategoryBackfillCard />
     </div>
   );
 }
@@ -425,6 +429,108 @@ function UPCImageSyncCard() {
                 </li>
               )}
             </ul>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function FoodCategoryBackfillCard() {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  // Get count of products needing food category
+  const { data: countData, isLoading: countLoading } = useQuery(
+    api.product.getFoodCategoryBackfillCount.queryOptions(),
+  );
+
+  // Backfill mutation
+  const backfillMutation = useMutation(
+    api.product.backfillFoodCategories.mutationOptions({
+      onSuccess: (result) => {
+        if (result.updated > 0) {
+          toast.success(
+            `Updated ${result.updated} product${result.updated !== 1 ? "s" : ""} to food category`,
+          );
+        } else {
+          toast.info("No products need category update");
+        }
+        // Refresh the count
+        queryClient.invalidateQueries({
+          queryKey: api.product.getFoodCategoryBackfillCount.queryKey(),
+        });
+        // Also refresh product list
+        queryClient.invalidateQueries({
+          queryKey: api.product.list.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  const count = countData?.count ?? 0;
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Utensils className="h-5 w-5" />
+          Food Category Sync
+        </CardTitle>
+        <CardDescription>
+          Products with UPC codes, NDB numbers, or ingredient links should have
+          their category set to &ldquo;food&rdquo;.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-1">
+            <p className="font-medium text-sm">
+              Products with food data but wrong category
+            </p>
+            <p className="text-muted-foreground text-xs">
+              These products have UPC, NDB, or ingredient but category is not
+              &ldquo;food&rdquo;
+            </p>
+          </div>
+          {countLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Badge variant={count > 0 ? "default" : "secondary"}>{count}</Badge>
+          )}
+        </div>
+
+        {count > 0 && (
+          <Button
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+            className="w-full"
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Updating categories...
+              </>
+            ) : (
+              <>
+                <Utensils className="mr-2 h-4 w-4" />
+                Fix Food Categories
+              </>
+            )}
+          </Button>
+        )}
+
+        {backfillMutation.data && backfillMutation.data.updated > 0 && (
+          <div className="rounded-md border bg-muted/50 p-3 text-xs">
+            <p className="font-medium">Last run results:</p>
+            <p className="mt-1 text-muted-foreground">
+              Updated {backfillMutation.data.updated} product
+              {backfillMutation.data.updated !== 1 ? "s" : ""} to food category
+            </p>
           </div>
         )}
       </CardContent>
