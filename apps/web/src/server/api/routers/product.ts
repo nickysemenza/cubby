@@ -13,6 +13,7 @@ import {
   productInputPayload,
   productQuickCreatePayload,
   productTopLevelOut,
+  productCategory,
 } from "~/schemas/product";
 import { createEntityCrudProcedures } from "../crud-factory";
 import {
@@ -34,6 +35,7 @@ const productFiltersSchema = z.object({
   nameFilter: z.string().optional(),
   manufacturerFilter: z.string().optional(),
   upcFilter: z.string().optional(),
+  categoryFilter: productCategory.optional(),
 });
 
 // Create standardized CRUD procedures using factory (except create, which we customize)
@@ -58,6 +60,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
         filters.nameFilter,
         filters.manufacturerFilter,
         filters.upcFilter,
+        filters.categoryFilter,
         sort,
         pagination,
       );

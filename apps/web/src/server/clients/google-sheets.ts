@@ -9,6 +9,22 @@ export const SHEET_NAMES = {
 } as const;
 
 /**
+ * Column type definitions for Google Sheets formatting
+ */
+export type ColumnType =
+  | { kind: "text" }
+  | { kind: "number"; decimals?: number }
+  | { kind: "currency"; decimals?: number }
+  | { kind: "dropdown"; options: string[] }
+  | { kind: "checkbox" }
+  | { kind: "date" };
+
+export type ColumnSchema = {
+  header: string;
+  type: ColumnType;
+};
+
+/**
  * Google Sheets client using service account authentication.
  *
  * Setup:
@@ -264,6 +280,163 @@ export class GoogleSheetsClient {
         values: rows,
       },
     });
+  }
+
+  /**
+   * Apply column formatting (types, dropdowns, etc.) to a sheet
+   * @param spreadsheetId - The Google Sheet ID
+   * @param sheetName - Sheet name to format
+   * @param columns - Column schema definitions
+   * @param rowCount - Number of data rows (excluding header)
+   */
+  async applyColumnFormatting(
+    spreadsheetId: string,
+    sheetName: string,
+    columns: ColumnSchema[],
+    rowCount: number,
+  ): Promise<void> {
+    if (!this.sheets) {
+      throw new Error("Google Sheets client is not configured");
+    }
+
+    // Get sheet ID
+    const response = await this.sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: "sheets.properties",
+    });
+
+    const sheet = response.data.sheets?.find(
+      (s) => s.properties?.title === sheetName,
+    );
+    if (!sheet?.properties?.sheetId) {
+      throw new Error(`Sheet "${sheetName}" not found`);
+    }
+    const sheetId = sheet.properties.sheetId;
+
+    const requests: sheets_v4.Schema$Request[] = [];
+
+    // Build formatting requests for each column
+    for (let colIndex = 0; colIndex < columns.length; colIndex++) {
+      const col = columns[colIndex];
+      const range: sheets_v4.Schema$GridRange = {
+        sheetId,
+        startColumnIndex: colIndex,
+        endColumnIndex: colIndex + 1,
+        startRowIndex: 1, // Skip header row
+        endRowIndex: rowCount + 1,
+      };
+
+      switch (col.type.kind) {
+        case "number":
+          requests.push({
+            repeatCell: {
+              range,
+              cell: {
+                userEnteredFormat: {
+                  numberFormat: {
+                    type: "NUMBER",
+                    pattern: col.type.decimals
+                      ? `0.${"0".repeat(col.type.decimals)}`
+                      : "0",
+                  },
+                },
+              },
+              fields: "userEnteredFormat.numberFormat",
+            },
+          });
+          break;
+
+        case "currency":
+          requests.push({
+            repeatCell: {
+              range,
+              cell: {
+                userEnteredFormat: {
+                  numberFormat: {
+                    type: "CURRENCY",
+                    pattern: `"$"#,##0${col.type.decimals ? `.${"0".repeat(col.type.decimals)}` : ""}`,
+                  },
+                },
+              },
+              fields: "userEnteredFormat.numberFormat",
+            },
+          });
+          break;
+
+        case "dropdown":
+          requests.push({
+            setDataValidation: {
+              range,
+              rule: {
+                condition: {
+                  type: "ONE_OF_LIST",
+                  values: col.type.options.map((opt) => ({
+                    userEnteredValue: opt,
+                  })),
+                },
+                showCustomUi: true,
+                strict: false, // Allow other values
+              },
+            },
+          });
+          break;
+
+        case "checkbox":
+          requests.push({
+            setDataValidation: {
+              range,
+              rule: {
+                condition: {
+                  type: "BOOLEAN",
+                },
+                showCustomUi: true,
+              },
+            },
+          });
+          break;
+
+        case "date":
+          requests.push({
+            repeatCell: {
+              range,
+              cell: {
+                userEnteredFormat: {
+                  numberFormat: {
+                    type: "DATE",
+                    pattern: "yyyy-mm-dd",
+                  },
+                },
+              },
+              fields: "userEnteredFormat.numberFormat",
+            },
+          });
+          break;
+
+        case "text":
+          // Text is the default, but we can explicitly set it
+          requests.push({
+            repeatCell: {
+              range,
+              cell: {
+                userEnteredFormat: {
+                  numberFormat: {
+                    type: "TEXT",
+                  },
+                },
+              },
+              fields: "userEnteredFormat.numberFormat",
+            },
+          });
+          break;
+      }
+    }
+
+    if (requests.length > 0) {
+      await this.sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests },
+      });
+    }
   }
 }
 

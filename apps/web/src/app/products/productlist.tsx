@@ -15,6 +15,7 @@ import { createInventoryEntriesColumn } from "../_components/data-table/columnHe
 import { TableLink } from "../_components/table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
+import { Badge } from "~/components/ui/badge";
 
 export function ProductList() {
   const api = useTRPC();
@@ -27,10 +28,22 @@ export function ProductList() {
       nameFilter: ts.getColumnFilter("name"),
       manufacturerFilter: ts.getColumnFilter("manufacturer"),
       upcFilter: ts.getColumnFilter("upc"),
+      categoryFilter: ts.getColumnFilter("category"),
     }),
     getMappings: getAllUnitMappingsFromProduct,
     columns: [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
+      columnHelper.accessor("category", {
+        header: "Category",
+        cell: (info) => {
+          const category = info.getValue();
+          return category ? (
+            <Badge variant="secondary">{category.replace("-", " ")}</Badge>
+          ) : (
+            <NoneState />
+          );
+        },
+      }),
       columnHelper.accessor("ingredient", {
         cell: (info) => {
           const ingredient = info.getValue();
@@ -98,7 +111,7 @@ export function ProductList() {
         (e) => e.location,
       ),
     ],
-    filters: ["name", "manufacturer", "upc"],
+    filters: ["name", "manufacturer", "upc", "category"],
   });
 
   return (

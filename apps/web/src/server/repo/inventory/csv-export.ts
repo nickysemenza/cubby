@@ -22,6 +22,7 @@ import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 async function buildProductExportFields(p: ProductExportFields): Promise<{
   product_name: string;
   manufacturer: string;
+  category: string | null;
   upc: string;
   model: string | null;
   ndb_number: number | null;
@@ -36,6 +37,7 @@ async function buildProductExportFields(p: ProductExportFields): Promise<{
   return {
     product_name: p.name,
     manufacturer: p.manufacturer,
+    category: p.category,
     upc: p.upc ?? "",
     model: p.model ?? null,
     ndb_number: p.ndb_number ?? null,

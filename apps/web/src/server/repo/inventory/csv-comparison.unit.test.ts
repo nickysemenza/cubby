@@ -15,6 +15,7 @@ function makeAppRow(
   return {
     product_name,
     manufacturer,
+    category: null,
     upc: "",
     model: null,
     ndb_number: null,

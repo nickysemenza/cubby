@@ -396,6 +396,9 @@ export function UnifiedTextField<
 // Re-export ComboboxFieldWithSearch from its dedicated file
 export { ComboboxFieldWithSearch } from "./form-utils/combobox-field-with-search";
 
+// Sentinel value for "none" in select (Radix doesn't support empty string values)
+const SELECT_NONE_VALUE = "__none__";
+
 // Helper for handling select fields
 export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form,
@@ -403,12 +406,14 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   label,
   options,
   placeholder,
+  nullable = false,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
   options: { value: string; label: string }[];
   placeholder?: string;
+  nullable?: boolean;
 }) {
   return (
     <Controller
@@ -418,9 +423,13 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
         <Field data-invalid={fieldState.invalid}>
           <FieldLabel htmlFor={name}>{label}</FieldLabel>
           <Select
-            onValueChange={(value) => field.onChange(value)}
-            value={field.value}
-            defaultValue={field.value}
+            onValueChange={(value) =>
+              field.onChange(value === SELECT_NONE_VALUE ? null : value)
+            }
+            value={field.value ?? (nullable ? SELECT_NONE_VALUE : undefined)}
+            defaultValue={
+              field.value ?? (nullable ? SELECT_NONE_VALUE : undefined)
+            }
           >
             <SelectTrigger id={name} aria-invalid={fieldState.invalid}>
               <SelectValue
@@ -428,6 +437,11 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
               />
             </SelectTrigger>
             <SelectContent>
+              {nullable && (
+                <SelectItem value={SELECT_NONE_VALUE}>
+                  <span className="text-muted-foreground">None</span>
+                </SelectItem>
+              )}
               {options.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}

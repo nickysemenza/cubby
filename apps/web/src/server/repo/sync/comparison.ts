@@ -26,6 +26,7 @@ import type { InventoryCSVRow } from "~/schemas/inventory";
 type InventoryRowLike = {
   product_name: string;
   manufacturer?: string | null;
+  category?: string | null;
   location_name?: string | null;
   quantity?: number | null;
   unit?: string | null;
@@ -43,6 +44,7 @@ type InventoryRowLike = {
 const buildInventorySyncFields = (row: InventoryRowLike) => ({
   productName: row.product_name,
   manufacturer: row.manufacturer ?? null,
+  category: row.category ?? null,
   locationName: row.location_name ?? null,
   quantity: row.quantity ?? null,
   unit: row.unit ?? null,
@@ -677,6 +679,7 @@ const inventorySheetDataToCSVRow = (
 ): InventoryCSVRow => ({
   product_name: sheetData.productName ?? "",
   manufacturer: sheetData.manufacturer ?? undefined,
+  category: sheetData.category ?? undefined,
   location_name: sheetData.locationName ?? undefined,
   quantity: sheetData.quantity ?? 1,
   unit: sheetData.unit ?? "each",
@@ -699,6 +702,7 @@ const inventoryAppDataToCSVRow = (
 ): InventoryCSVRow => ({
   product_name: appData.productName,
   manufacturer: appData.manufacturer ?? undefined,
+  category: appData.category ?? undefined,
   location_name: appData.locationName ?? undefined,
   quantity: appData.quantity ?? 1,
   unit: appData.unit ?? "each",

@@ -207,8 +207,20 @@ export const product = pgTable(
       .$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     ingredientId: uuid("ingredientId").references(() => ingredient.id),
+    category: text("category", {
+      enum: [
+        "food",
+        "tools",
+        "tool-consumables",
+        "hardware",
+        "electronics",
+        "household",
+        "supplies",
+      ],
+    }), // product category for filtering
   },
   (table) => ({
+    categoryIdx: index("Product_category_idx").on(table.category),
     projectNameMfgUnique: uniqueIndex(
       "Product_organizationId_name_manufacturer_key",
     ).on(table.organizationId, table.name, table.manufacturer),

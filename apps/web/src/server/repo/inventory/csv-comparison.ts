@@ -63,6 +63,13 @@ export function getRowDifferences(
       to: appRow.model ?? null,
     });
   }
+  if ((appRow.category ?? "") !== (sheetRow.category ?? "")) {
+    changes.push({
+      field: "category",
+      from: sheetRow.category ?? null,
+      to: appRow.category ?? null,
+    });
+  }
   if ((appRow.ndb_number ?? null) !== (sheetRow.ndb_number ?? null)) {
     changes.push({
       field: "ndb",

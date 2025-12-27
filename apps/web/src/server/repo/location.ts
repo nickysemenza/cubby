@@ -228,6 +228,7 @@ const dbLocationToAPIWithChildren = (
           id: unsafeProductId(Product.id),
           name: Product.name,
           manufacturer: Product.manufacturer,
+          category: Product.category,
           upc: Product.upc,
           ndb_number: Product.ndb_number,
           model: Product.model,

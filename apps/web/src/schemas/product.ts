@@ -6,6 +6,37 @@ import { unitMappingInput } from "./unitmapping";
 import { productId, ingredientId } from "./identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 
+// Product category enum for filtering/organization
+export const productCategory = z.enum([
+  "food", // flour, olive oil, canned tomatoes
+  "tools", // angle grinder, drill, screwdriver
+  "tool-consumables", // grinding discs, drill bits, sandpaper
+  "hardware", // screws, nails, bolts
+  "electronics", // raspberry pi, cables, monitors
+  "household", // furniture, cookware, appliances
+  "supplies", // cleaning products, tape, batteries
+]);
+
+export type ProductCategory = z.infer<typeof productCategory>;
+
+/** Pre-built options for product category select fields */
+export const productCategoryOptions = productCategory.options.map((cat) => ({
+  value: cat,
+  label: cat.replace("-", " "),
+}));
+
+// Categories where items are typically consumed/used up
+const consumableCategories: ReadonlySet<ProductCategory> = new Set([
+  "food",
+  "tool-consumables",
+  "hardware",
+  "supplies",
+]);
+
+/** Check if a category represents consumable items */
+export const isConsumableCategory = (cat: ProductCategory): boolean =>
+  consumableCategories.has(cat);
+
 // Base schema for product data (without relationships)
 const productBase = z.object({
   name: z.string(),
@@ -19,11 +50,17 @@ const productBase = z.object({
     .positive()
     .nullable()
     .describe("null means unlimited, 1 for unique items"),
+  category: productCategory
+    .nullable()
+    .describe("product category for filtering"),
 });
 
 // Input payload for creating/updating products (includes relationships)
+// Note: category is optional in input (defaults to null) but required in output
 export const productInputPayload = productBase
+  .omit({ category: true })
   .extend({
+    category: productCategory.nullable().optional(),
     ingredientId: ingredientId.nullable(),
     unitMappings: z.array(unitMappingInput).default([]),
   })

@@ -70,6 +70,7 @@ export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 export const inventoryCSVRow = z.object({
   product_name: z.string().min(1),
   manufacturer: z.string().optional(), // defaults to "(unspecified)"
+  category: z.string().nullable().optional(), // product category (food, tools, etc.)
   upc: upc.optional(),
   model: z.string().optional(), // product model number
   ndb_number: z.coerce.number().pipe(ndb).optional(), // USDA NDB number (1000-99999)
@@ -101,6 +102,9 @@ const productChangesPreview = z.object({
   // Manufacturer update (from "(unspecified)" to specific)
   manufacturerWillBeSet: z.string().optional(),
   manufacturerCurrent: z.string().nullable().optional(),
+  // Category update
+  categoryWillBeSet: z.string().optional(),
+  categoryCurrent: z.string().nullable().optional(),
   // Price: "1 each → $X" mapping
   priceWillBeSet: z.number().optional(),
   priceCurrent: z.number().nullable().optional(),

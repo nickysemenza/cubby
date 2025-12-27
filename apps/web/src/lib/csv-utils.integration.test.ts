@@ -93,6 +93,7 @@ describe("config.csv import integration", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       { orderBy: "name", direction: "asc" },
       { pageIndex: 0, pageSize: 100 },
     );

@@ -13,7 +13,10 @@ import {
   getGoogleSheetsClient,
   GoogleSheetsClient,
   SHEET_NAMES,
+  type ColumnSchema,
 } from "~/server/clients/google-sheets";
+import { productCategory } from "~/schemas/product";
+import { locationType } from "~/schemas/location";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
 import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
 import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
@@ -82,6 +85,7 @@ function mergeOrgMetadata(
 const INVENTORY_CSV_HEADERS = [
   "product_name",
   "manufacturer",
+  "category",
   "upc",
   "model",
   "ndb_number",
@@ -104,6 +108,42 @@ const LOCATION_CSV_HEADERS = [
   "description",
   "location_image",
   "last_inventory_date",
+];
+
+// Column type schemas for Google Sheets formatting
+// These define dropdowns, number formats, etc. for each column
+// Order must match INVENTORY_CSV_HEADERS
+const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
+  { header: "product_name", type: { kind: "text" } },
+  { header: "manufacturer", type: { kind: "text" } },
+  {
+    header: "category",
+    type: { kind: "dropdown", options: ["", ...productCategory.options] },
+  },
+  { header: "upc", type: { kind: "text" } },
+  { header: "model", type: { kind: "text" } },
+  { header: "ndb_number", type: { kind: "number" } },
+  { header: "location_name", type: { kind: "text" } },
+  { header: "quantity", type: { kind: "number", decimals: 2 } },
+  { header: "unit", type: { kind: "text" } },
+  { header: "expected_qty", type: { kind: "number" } },
+  { header: "price", type: { kind: "currency", decimals: 2 } },
+  { header: "unit_mappings", type: { kind: "text" } },
+  { header: "ingredient_name", type: { kind: "text" } },
+  { header: "aliases", type: { kind: "text" } },
+  { header: "product_image", type: { kind: "text" } },
+];
+
+const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
+  { header: "location_name", type: { kind: "text" } },
+  { header: "parent_name", type: { kind: "text" } },
+  {
+    header: "location_type",
+    type: { kind: "dropdown", options: ["", ...locationType.options] },
+  },
+  { header: "description", type: { kind: "text" } },
+  { header: "location_image", type: { kind: "text" } },
+  { header: "last_inventory_date", type: { kind: "date" } },
 ];
 
 // Parse currency string to number (handles $, commas, etc.)
@@ -206,6 +246,7 @@ function parseSheetRows(rows: string[][]): ParseSheetResult {
     const result = inventoryCSVRow.safeParse({
       product_name: productName,
       manufacturer: rowObj.manufacturer || undefined,
+      category: rowObj.category || undefined,
       upc: rowObj.upc || rowObj.barcode || undefined,
       model: rowObj.model || undefined,
       ndb_number: rowObj.ndb_number || rowObj.ndbnumber || undefined,
@@ -855,6 +896,16 @@ async function pushLocationsToSheet(
     [LOCATION_CSV_HEADERS, ...dataRows],
     SHEET_NAMES.LOCATIONS,
   );
+
+  // Apply column formatting (dropdowns, number formats, etc.)
+  if (dataRows.length > 0) {
+    await client.applyColumnFormatting(
+      sheetId,
+      SHEET_NAMES.LOCATIONS,
+      LOCATION_COLUMN_SCHEMA,
+      dataRows.length,
+    );
+  }
 }
 
 /** Push inventory changes to Google Sheet */
@@ -935,6 +986,16 @@ async function pushInventoryToSheet(
     [INVENTORY_CSV_HEADERS, ...dataRows],
     SHEET_NAMES.INVENTORY,
   );
+
+  // Apply column formatting (dropdowns, number formats, etc.)
+  if (dataRows.length > 0) {
+    await client.applyColumnFormatting(
+      sheetId,
+      SHEET_NAMES.INVENTORY,
+      INVENTORY_COLUMN_SCHEMA,
+      dataRows.length,
+    );
+  }
 }
 
 // Sync preview - unified comparison of app and sheet

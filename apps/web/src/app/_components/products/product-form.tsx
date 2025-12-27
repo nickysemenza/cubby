@@ -7,9 +7,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useTRPCClient } from "~/trpc/react";
 import Image from "next/image";
-import type {
-  ProductInputPayload,
-  ProductTopLevelOut,
+import {
+  type ProductInputPayload,
+  type ProductTopLevelOut,
+  productCategory,
+  productCategoryOptions,
 } from "~/schemas/product";
 import { upc } from "@recipehub/usda-schemas";
 
@@ -26,6 +28,7 @@ import {
   ComboboxFieldWithSearch,
   detectComboboxIdChange,
   NullableNumericField,
+  SelectField,
 } from "../form-utils";
 import { getOptionalIngredientId } from "~/schemas/form-fields";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
@@ -48,6 +51,7 @@ const formSchema = z
     name: z.string().min(1, "Name is required"),
     manufacturer: z.string().min(1, "Manufacturer is required"),
     model: z.string().nullable(),
+    category: productCategory.nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
     expectedQuantity: z.number().int().positive().nullable(),
@@ -122,6 +126,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       name: product ? product.name : (initialName ?? ""),
       manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
       model: product ? product.model : null,
+      category: product?.category ?? null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
       expectedQuantity: product
@@ -192,6 +197,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         name: values.name,
         manufacturer: values.manufacturer,
         model: values.model,
+        category: values.category,
         upc: values.upc,
         ndb_number: values.ndb_number,
         expectedQuantity: values.expectedQuantity,
@@ -212,6 +218,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           "name",
           "manufacturer",
           "model",
+          "category",
           "upc",
           "ndb_number",
           "expectedQuantity",
@@ -295,13 +302,23 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       {/* Hide manufacturer, pricing, UPC, NDB, ingredient for misc products */}
       {!isMisc && (
         <>
-          <UnifiedTextField
-            form={form}
-            name="manufacturer"
-            label="Manufacturer"
-            placeholder="Enter manufacturer"
-            nullable={false}
-          />
+          <SideBySideFields>
+            <UnifiedTextField
+              form={form}
+              name="manufacturer"
+              label="Manufacturer"
+              placeholder="Enter manufacturer"
+              nullable={false}
+            />
+            <SelectField
+              form={form}
+              name="category"
+              label="Category"
+              options={productCategoryOptions}
+              placeholder="Select category"
+              nullable={true}
+            />
+          </SideBySideFields>
 
           {/* Inventory-specific fields */}
           <SideBySideFields>

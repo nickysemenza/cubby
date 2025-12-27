@@ -117,6 +117,7 @@ describe("product repository", () => {
       undefined,
       undefined,
       undefined,
+      undefined,
       { orderBy: "name", direction: "asc" },
       { pageIndex: 0, pageSize: 2 },
     );
@@ -131,6 +132,7 @@ describe("product repository", () => {
     const secondPage = await productList(
       db,
       organizationId,
+      undefined,
       undefined,
       undefined,
       undefined,
@@ -149,6 +151,7 @@ describe("product repository", () => {
       organizationId,
       undefined,
       "Manufacturer X",
+      undefined,
       undefined,
       { orderBy: "name", direction: "asc" },
       { pageIndex: 0, pageSize: 10 },

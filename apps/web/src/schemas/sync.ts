@@ -88,6 +88,7 @@ export type LocationSyncItem = z.infer<typeof locationSyncItem>;
 const inventorySyncFields = z.object({
   productName: z.string(),
   manufacturer: z.string().nullable(),
+  category: z.string().nullable(),
   locationName: z.string().nullable(),
   quantity: z.number().nullable(),
   unit: z.string().nullable(),

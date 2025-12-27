@@ -51,6 +51,7 @@ function makeInventoryItem(params: {
       id: unsafeProductId(params.product.id),
       name: params.product.name,
       manufacturer: params.product.manufacturer ?? "Generic",
+      category: null,
       model: null,
       upc: null,
       ndb_number: null,

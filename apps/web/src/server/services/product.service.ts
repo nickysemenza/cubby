@@ -7,7 +7,7 @@ import {
   updateProduct as updateProductRepo,
   foodLookupParamFromProduct,
 } from "../repo/product";
-import type { ProductInputPayload } from "~/schemas/product";
+import type { ProductInputPayload, ProductCategory } from "~/schemas/product";
 import type { SortParams, PaginationParams } from "~/schemas/pagination";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import { foodSummary } from "@recipehub/usda-schemas";
@@ -51,6 +51,7 @@ export class ProductService {
     nameFilter: string | undefined,
     manufacturerFilter: string | undefined,
     upcFilter: string | undefined,
+    categoryFilter: ProductCategory | undefined,
     sort: SortParams,
     pagination: PaginationParams,
   ) {
@@ -60,6 +61,7 @@ export class ProductService {
       nameFilter,
       manufacturerFilter,
       upcFilter,
+      categoryFilter,
       sort,
       pagination,
     );

@@ -35,6 +35,16 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         {product.model ? product.model : <NoneState />}
       </div>
       <div>
+        <span className="font-medium">Category:</span>{" "}
+        {product.category ? (
+          <span className="capitalize">
+            {product.category.replace("-", " ")}
+          </span>
+        ) : (
+          <NoneState />
+        )}
+      </div>
+      <div>
         <span className="font-medium">UPC:</span>{" "}
         {product.upc ? (
           <Link

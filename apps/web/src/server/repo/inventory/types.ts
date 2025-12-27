@@ -38,6 +38,7 @@ export interface CreateInventoryEntryData {
 export interface InventoryCSVExportRow {
   product_name: string;
   manufacturer: string;
+  category: string | null;
   upc: string;
   model: string | null;
   ndb_number: number | null;
@@ -61,6 +62,7 @@ export interface InventoryCSVExportRow {
 export interface ProductExportFields {
   name: string;
   manufacturer: string;
+  category: string | null;
   upc: string | null;
   model: string | null;
   ndb_number: number | null;

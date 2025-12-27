@@ -13,6 +13,7 @@ import { foodLookupParam, type FoodLookupParam } from "@recipehub/usda-schemas";
 import {
   type ProductTopLevelOut,
   type ProductInputPayload,
+  type ProductCategory,
   productTopLevelOut,
 } from "~/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
@@ -183,6 +184,7 @@ export const productList = async (
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
+  category: ProductCategory | undefined,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
@@ -211,6 +213,11 @@ export const productList = async (
     if (upcCondition) {
       conditions.push(upcCondition);
     }
+  }
+
+  if (category !== undefined) {
+    // Exact match for category (enum value)
+    conditions.push(eq(product.category, category));
   }
 
   const whereClause = and(...conditions);
@@ -352,6 +359,7 @@ export const updateProduct = async (
     const updateData: {
       name?: string;
       manufacturer?: string;
+      category?: ProductCategory | null;
       upc?: string | null;
       ndb_number?: number | null;
       model?: string | null;
@@ -467,6 +475,7 @@ export const updateProduct = async (
     const changes = computeChanges(beforeProduct, updated, [
       "name",
       "manufacturer",
+      "category",
       "upc",
       "ndb_number",
       "model",
