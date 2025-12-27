@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ProductDetail } from "~/app/_components/products/product-detail";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
-import { Skeleton } from "~/components/ui/skeleton";
+import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 
 export const Route = createFileRoute("/products/$id")({
@@ -12,21 +12,10 @@ export const Route = createFileRoute("/products/$id")({
     context.queryClient.ensureQueryData(
       context.trpc.product.getByID.queryOptions({ id: params.id }),
     ),
-  pendingComponent: ProductDetailPending,
+  pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   component: ProductDetailPage,
 });
-
-function ProductDetailPending() {
-  return (
-    <PageWrapper>
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-32 w-full" />
-      </div>
-    </PageWrapper>
-  );
-}
 
 function ProductDetailPage() {
   const { id } = Route.useParams();
@@ -35,7 +24,6 @@ function ProductDetailPage() {
 
   useDocumentTitle(product?.name);
 
-  // Loader guarantees data exists, but handle edge case for type safety
   if (!product) {
     return (
       <PageWrapper>

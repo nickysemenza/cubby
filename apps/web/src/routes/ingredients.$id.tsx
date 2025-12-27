@@ -3,47 +3,28 @@ import { createFileRoute } from "@tanstack/react-router";
 import { IngredientDetail } from "~/app/_components/ingredients/ingredient-detail";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
-import { Skeleton } from "~/components/ui/skeleton";
+import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/ingredients/$id")({
-  component: IngredientDetailPage,
+  ssr: false,
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(
+      context.trpc.ingredient.getByID.queryOptions({ id: params.id }),
+    ),
+  pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
+  component: IngredientDetailPage,
 });
 
 function IngredientDetailPage() {
   const { id } = Route.useParams();
-  const api = useTRPC();
-
-  const {
-    data: ingredient,
-    isLoading,
-    error,
-  } = useQuery(api.ingredient.getByID.queryOptions({ id }));
+  const { trpc } = Route.useRouteContext();
+  const { data: ingredient } = useQuery(
+    trpc.ingredient.getByID.queryOptions({ id }),
+  );
 
   useDocumentTitle(ingredient?.name);
-
-  if (isLoading) {
-    return (
-      <PageWrapper>
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-32 w-full" />
-        </div>
-      </PageWrapper>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageWrapper>
-        <div className="text-destructive">
-          Error loading ingredient: {error.message}
-        </div>
-      </PageWrapper>
-    );
-  }
 
   if (!ingredient) {
     return (

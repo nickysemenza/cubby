@@ -6,32 +6,33 @@ import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
+import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
-import { Skeleton } from "~/components/ui/skeleton";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
   edit: z.boolean().optional(),
 });
 
 export const Route = createFileRoute("/recipes/$id")({
-  component: RecipeDetailPage,
-  errorComponent: RouteErrorComponent,
+  ssr: false,
   validateSearch: searchSchema,
+  loader: ({ params, context }) =>
+    context.queryClient.ensureQueryData(
+      context.trpc.recipe.getByID.queryOptions({ id: params.id }),
+    ),
+  pendingComponent: DetailPagePending,
+  errorComponent: RouteErrorComponent,
+  component: RecipeDetailPage,
 });
 
 function RecipeDetailPage() {
   const { id } = Route.useParams();
   const { edit: isEditing } = Route.useSearch();
   const navigate = useNavigate();
-  const api = useTRPC();
+  const { trpc } = Route.useRouteContext();
 
-  const {
-    data: recipe,
-    isLoading,
-    error,
-  } = useQuery(api.recipe.getByID.queryOptions({ id }));
+  const { data: recipe } = useQuery(trpc.recipe.getByID.queryOptions({ id }));
 
   useDocumentTitle(recipe?.name ? `Recipe: ${recipe.name}` : undefined);
 
@@ -42,27 +43,6 @@ function RecipeDetailPage() {
   const stopEditing = () => {
     navigate({ to: ".", search: { edit: undefined } });
   };
-
-  if (isLoading) {
-    return (
-      <PageWrapper>
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-32 w-full" />
-        </div>
-      </PageWrapper>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageWrapper>
-        <div className="text-destructive">
-          Error loading recipe: {error.message}
-        </div>
-      </PageWrapper>
-    );
-  }
 
   if (!recipe) {
     return (
