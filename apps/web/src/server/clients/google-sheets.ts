@@ -166,18 +166,29 @@ export class GoogleSheetsClient {
     }
 
     const existingSheets = await this.listSheets(spreadsheetId);
-    if (existingSheets.includes(sheetName)) {
-      return; // Sheet already exists
+    // Case-insensitive check (Google Sheets treats names case-insensitively)
+    const sheetNameLower = sheetName.toLowerCase();
+    if (existingSheets.some((s) => s.toLowerCase() === sheetNameLower)) {
+      return; // Sheet already exists (possibly with different casing)
     }
 
     // Migration: if looking for "Inventory" and only "Sheet1" exists, rename it
     if (
       sheetName === SHEET_NAMES.INVENTORY &&
-      existingSheets.includes("Sheet1") &&
-      !existingSheets.includes(SHEET_NAMES.INVENTORY)
+      existingSheets.some((s) => s.toLowerCase() === "sheet1") &&
+      !existingSheets.some((s) => s.toLowerCase() === "inventory")
     ) {
-      await this.renameSheet(spreadsheetId, "Sheet1", SHEET_NAMES.INVENTORY);
-      return;
+      const sheet1Name = existingSheets.find(
+        (s) => s.toLowerCase() === "sheet1",
+      );
+      if (sheet1Name) {
+        await this.renameSheet(
+          spreadsheetId,
+          sheet1Name,
+          SHEET_NAMES.INVENTORY,
+        );
+        return;
+      }
     }
 
     // Create the sheet
@@ -209,16 +220,18 @@ export class GoogleSheetsClient {
       throw new Error("Google Sheets client is not configured");
     }
 
-    // First get the sheet ID
+    // First get the sheet ID (case-insensitive lookup)
     const response = await this.sheets.spreadsheets.get({
       spreadsheetId,
       fields: "sheets.properties",
     });
 
+    const oldNameLower = oldName.toLowerCase();
     const sheet = response.data.sheets?.find(
-      (s) => s.properties?.title === oldName,
+      (s) => s.properties?.title?.toLowerCase() === oldNameLower,
     );
-    if (!sheet?.properties?.sheetId) {
+    // Note: sheetId can be 0 for the first sheet, so check for undefined/null explicitly
+    if (sheet?.properties?.sheetId == null) {
       throw new Error(`Sheet "${oldName}" not found`);
     }
 
@@ -334,10 +347,13 @@ export class GoogleSheetsClient {
       fields: "sheets(properties,tables)",
     });
 
+    // Case-insensitive lookup (Google Sheets treats names case-insensitively)
+    const sheetNameLower = sheetName.toLowerCase();
     const sheet = response.data.sheets?.find(
-      (s) => s.properties?.title === sheetName,
+      (s) => s.properties?.title?.toLowerCase() === sheetNameLower,
     );
-    if (!sheet?.properties?.sheetId) {
+    // Note: sheetId can be 0 for the first sheet, so check for undefined/null explicitly
+    if (sheet?.properties?.sheetId == null) {
       throw new Error(`Sheet "${sheetName}" not found`);
     }
 
@@ -475,16 +491,18 @@ export class GoogleSheetsClient {
       throw new Error("Google Sheets client is not configured");
     }
 
-    // Get sheet ID
+    // Get sheet ID (case-insensitive lookup)
     const response = await this.sheets.spreadsheets.get({
       spreadsheetId,
       fields: "sheets.properties",
     });
 
+    const sheetNameLower = sheetName.toLowerCase();
     const sheet = response.data.sheets?.find(
-      (s) => s.properties?.title === sheetName,
+      (s) => s.properties?.title?.toLowerCase() === sheetNameLower,
     );
-    if (!sheet?.properties?.sheetId) {
+    // Note: sheetId can be 0 for the first sheet, so check for undefined/null explicitly
+    if (sheet?.properties?.sheetId == null) {
       throw new Error(`Sheet "${sheetName}" not found`);
     }
     const sheetId = sheet.properties.sheetId;
