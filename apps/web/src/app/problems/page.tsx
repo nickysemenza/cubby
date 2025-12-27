@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { ProblemsOverview } from "./problems-overview";
 import { EntityLayout } from "~/components/layouts/entity-layout";
+import { ProblemsOverview } from "./problems-overview";
 
 export const dynamic = "force-dynamic";
 

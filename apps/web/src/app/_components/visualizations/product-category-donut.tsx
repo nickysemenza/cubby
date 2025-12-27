@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, useCallback } from "react";
-import Link from "next/link";
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import { VisualizationPlaceholder } from "./visualization-placeholder";
 import type { ProductCategory } from "~/schemas/product";
+import { useTRPC } from "~/trpc/react";
+import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 // Color palette for categories - consistent hues
 const categoryColors: Record<string, string> = {

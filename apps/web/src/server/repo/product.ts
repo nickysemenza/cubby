@@ -1,58 +1,58 @@
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { createOrUpdatePriceMapping } from "./inventory";
+import { type FoodLookupParam, foodLookupParam } from "@recipehub/usda-schemas";
+import { and, count, eq, ilike, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { z } from "zod";
-import { parseWithContext } from "~/lib/zod-utils";
-import {
-  type SortParams,
-  type PaginationParams,
-  buildTakeSkip,
-} from "~/schemas/pagination";
-import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
-import { locationType } from "~/schemas/location";
-import { foodLookupParam, type FoodLookupParam } from "@recipehub/usda-schemas";
-import {
-  type ProductTopLevelOut,
-  type ProductInputPayload,
-  type ProductCategory,
-  productTopLevelOut,
-  hasFoodIndicators,
-} from "~/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { parseWithContext } from "~/lib/zod-utils";
+import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
+import type { ActorContext } from "~/schemas/context";
 import {
-  formatSearchTerm,
-  getDb,
-  relations,
-  buildOrderBy,
-  updateAndReturn,
-  extractImagesFromJoinTable,
-  mapRelation,
-  addProductSourceMetadata,
-  associatePendingImages,
-  executeListQueryWithCount,
-  insertAndReturn,
-  insertAndReturnDb,
-  withTransaction,
-} from "~/server/repo/database-helpers";
-import { createAppError } from "~/server/api/trpc";
-import {
-  type ProductId,
   type OrganizationId,
+  type ProductId,
   unsafeLocationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
+import { locationType } from "~/schemas/location";
 import {
-  product,
-  productUnitMappings,
+  buildTakeSkip,
+  type PaginationParams,
+  type SortParams,
+} from "~/schemas/pagination";
+import {
+  hasFoodIndicators,
+  type ProductCategory,
+  type ProductInputPayload,
+  type ProductTopLevelOut,
+  productTopLevelOut,
+} from "~/schemas/product";
+import { createAppError } from "~/server/api/trpc";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  image,
   type ingredient,
   type inventoryEntry,
   type location,
-  image,
+  product,
   productImage,
+  productUnitMappings,
 } from "~/server/db/schema";
-import { eq, and, count, ilike, inArray, isNotNull, isNull } from "drizzle-orm";
-import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import type { ActorContext } from "~/schemas/context";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  addProductSourceMetadata,
+  associatePendingImages,
+  buildOrderBy,
+  executeListQueryWithCount,
+  extractImagesFromJoinTable,
+  formatSearchTerm,
+  getDb,
+  insertAndReturn,
+  insertAndReturnDb,
+  mapRelation,
+  relations,
+  updateAndReturn,
+  withTransaction,
+} from "~/server/repo/database-helpers";
+import { createOrUpdatePriceMapping } from "./inventory";
 
 // Type for deeply nested product query
 type ProductDeepDB = typeof product.$inferSelect & {

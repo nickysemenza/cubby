@@ -1,10 +1,10 @@
-import { expect, test, describe } from "vitest";
+import type { SortingState } from "@tanstack/react-table";
+import { describe, expect, test } from "vitest";
 import {
   buildSortParams,
   defaultPagination,
   defaultSortState,
 } from "./tableUtils";
-import type { SortingState } from "@tanstack/react-table";
 
 describe("buildSortParams", () => {
   test("returns correct params with sorting state", () => {

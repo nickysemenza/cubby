@@ -1,5 +1,5 @@
-import { cn } from "~/lib/utils";
 import { Skeleton } from "~/components/ui/skeleton";
+import { cn } from "~/lib/utils";
 
 // Reusable skeleton patterns built on shadcn Skeleton
 function SkeletonText({ className }: { className?: string }) {

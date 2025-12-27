@@ -2,8 +2,8 @@
 
 import type { FC } from "react";
 import { Button } from "~/components/ui/button";
-import { NoneState } from "../NoneState";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { NoneState } from "../NoneState";
 
 interface IngredientBasicInfoProps {
   ingredient: IngredientWithFoodOut;

@@ -1,8 +1,22 @@
 "use client";
 
-import { useTRPC } from "~/trpc/react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
+import {
+  Calendar,
+  CheckCircle,
+  DollarSign,
+  ImageOff,
+  Loader2,
+  MapPin,
+  Package,
+  Utensils,
+  Zap,
+} from "lucide-react";
+import Link from "next/link";
+import { toast } from "sonner";
+import { ErrorDisplay } from "~/components/feedback/error-display";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -11,33 +25,19 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { ErrorDisplay } from "~/components/feedback/error-display";
-import {
-  CheckCircle,
-  Package,
-  MapPin,
-  DollarSign,
-  Zap,
-  Calendar,
-  ImageOff,
-  Utensils,
-  Loader2,
-} from "lucide-react";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { ProblemSection } from "./components/problem-section";
-import { formatDistanceToNow } from "date-fns";
-import Link from "next/link";
-import { toast } from "sonner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import type {
   DuplicateUniqueProduct,
-  OrphanedProduct,
-  InvalidUPC,
-  ProductWithoutMappings,
-  InvalidInventoryAmount,
   EmptyLocation,
+  InvalidInventoryAmount,
+  InvalidUPC,
+  OrphanedProduct,
+  ProductWithoutMappings,
   ProductWithoutUPCImage,
   ProductWithWrongCategory,
 } from "~/server/repo/problems";
+import { useTRPC } from "~/trpc/react";
+import { ProblemSection } from "./components/problem-section";
 
 // Inline problem list components
 function DuplicateUniqueProductsList({

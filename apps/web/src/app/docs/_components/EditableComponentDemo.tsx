@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
 import { JsonEditor } from "json-edit-react";
+import { Code, RotateCcw } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
-import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
-import { Code, RotateCcw } from "lucide-react";
+import { cn } from "~/lib/utils";
 
 interface EditableComponentDemoProps<T> {
   title: string;

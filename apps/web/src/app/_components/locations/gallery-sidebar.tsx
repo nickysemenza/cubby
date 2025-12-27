@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   ChevronRight,
-  PanelLeftClose,
-  PanelLeft,
   ImageIcon,
   Package,
+  PanelLeft,
+  PanelLeftClose,
 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "~/components/ui/button";
+import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
-import { Button } from "~/components/ui/button";
-import { ImageWithPreview } from "~/components/ui/image-with-preview";
 
 /** Build a map of location id -> parent id by traversing the tree */
 function buildParentMap(

@@ -1,18 +1,18 @@
-import { beforeEach, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import type { OrganizationId } from "~/schemas/identifiers";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
-import { parseInventoryCSV, parseLocationsCSV } from "./csv-utils";
+import type { OrganizationId } from "~/schemas/identifiers";
+import type { Database } from "~/server/db";
 import { importInventoryFromCSV } from "~/server/repo/inventory";
 import {
-  locationList,
-  findOrCreateLocationByName,
   findLocationByName,
+  findOrCreateLocationByName,
+  locationList,
 } from "~/server/repo/location";
 import { productList } from "~/server/repo/product";
+import { parseInventoryCSV, parseLocationsCSV } from "./csv-utils";
 
 const readConfigCSV = (): ReturnType<typeof parseInventoryCSV> => {
   const filePath = path.join(__dirname, "../../config.csv");

@@ -1,11 +1,11 @@
+import { instrumentDrizzle } from "@kubiks/otel-drizzle";
+import { neon } from "@neondatabase/serverless";
 import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
-import { neon } from "@neondatabase/serverless";
 import { Pool } from "pg";
 import { env } from "~/env";
-import * as schema from "./db/schema";
 import type { Database } from "./db/database";
-import { instrumentDrizzle } from "@kubiks/otel-drizzle";
+import * as schema from "./db/schema";
 
 // Re-export Database type for use throughout the application
 export type { Database };

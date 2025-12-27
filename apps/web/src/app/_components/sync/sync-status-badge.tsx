@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { AlertTriangle, Check, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { Loader2, Check, AlertTriangle, RefreshCw } from "lucide-react";
-import { cn } from "~/lib/utils";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { useSyncPreview } from "./use-sync-preview";
+import { cn } from "~/lib/utils";
 import { SyncDialog } from "./sync-dialog";
+import { useSyncPreview } from "./use-sync-preview";
 
 export const SyncStatusBadge = () => {
   const {

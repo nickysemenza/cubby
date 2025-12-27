@@ -1,12 +1,12 @@
+import { foodSummary } from "@recipehub/usda-schemas";
 import { z } from "zod";
+import { imageOut } from "./image";
+import { ingredientOut } from "./ingredient";
 import { inventoryEntryOut } from "./inventory";
 import { locationOut } from "./location";
 import { productTopLevelOut } from "./product";
-import { ingredientOut } from "./ingredient";
-import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
 import { recipeTopLevel } from "./recipe";
-import { foodSummary } from "@recipehub/usda-schemas";
-import { imageOut } from "./image";
+import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
 
 const inventoryWithProductOut = inventoryEntryOut.extend(
   z.object({

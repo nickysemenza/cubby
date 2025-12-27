@@ -1,8 +1,8 @@
 import "server-only";
 
-import { cache } from "react";
-import { headers } from "next/headers";
 import { context, propagation } from "@opentelemetry/api";
+import { headers } from "next/headers";
+import { cache } from "react";
 
 import { createCaller } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";

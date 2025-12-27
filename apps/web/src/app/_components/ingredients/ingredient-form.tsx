@@ -1,24 +1,24 @@
 "use client";
 
-import type { FC } from "react";
-import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { FC } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import { ArrayFieldManager } from "~/components/forms/array-field-manager";
+import { Input } from "~/components/ui/input";
 import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import type {
-  ingredientBase,
   IngredientUpdateInput,
+  ingredientBase,
 } from "~/schemas/ingredient";
 import {
+  buildUpdateObject,
   type CreateModeProps,
   type EditModeProps,
   FormWrapper,
-  UnifiedTextField,
   getSubmitButtonText,
-  buildUpdateObject,
+  UnifiedTextField,
 } from "../form-utils";
-import { Input } from "~/components/ui/input";
-import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 
 // Form schema for ingredient
 const formSchema = z.object({

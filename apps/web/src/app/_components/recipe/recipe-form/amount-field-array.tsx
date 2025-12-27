@@ -1,10 +1,10 @@
-import type { FC } from "react";
-import { useFieldArray, type UseFormReturn } from "react-hook-form";
-import { Button } from "~/components/ui/button";
 import { Plus, Trash } from "lucide-react";
-import type { RecipeFormValues } from "./types";
-import { AmountFieldGroup } from "../../inventory/amount-field-group";
+import type { FC } from "react";
+import { type UseFormReturn, useFieldArray } from "react-hook-form";
 import { FlexContainer } from "~/components/layout/flex-container";
+import { Button } from "~/components/ui/button";
+import { AmountFieldGroup } from "../../inventory/amount-field-group";
+import type { RecipeFormValues } from "./types";
 
 interface AmountFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;

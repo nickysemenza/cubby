@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseAliasesString, findNewAliases } from "./product-handler";
+import { describe, expect, it } from "vitest";
+import { findNewAliases, parseAliasesString } from "./product-handler";
 
 describe("parseAliasesString", () => {
   it("should parse semicolon-separated aliases", () => {

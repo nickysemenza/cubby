@@ -1,12 +1,12 @@
-import type { UnitMapping } from "./unitmapping";
 import {
-  type FoodSummary,
-  branded_food_serving_size_unit,
   type BrandedFoodServingSizeUnit,
-  getNutrientUnit,
+  branded_food_serving_size_unit,
+  type FoodSummary,
   getNutrientKey,
+  getNutrientUnit,
 } from "@recipehub/usda-schemas";
 import { wasmServer } from "~/lib/wasm";
+import type { UnitMapping } from "./unitmapping";
 
 /**
  * Normalizes USDA branded food serving size units to standard units

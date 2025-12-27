@@ -1,20 +1,19 @@
 "use client";
 
-import type { FC } from "react";
-import { type DetailSection, DetailPage } from "../data-table/detail-page";
-import type { InfLocation } from "~/schemas/location";
-import { NoneState } from "../NoneState";
-import { LocationForm } from "./location-form";
-import type { LocationUpdateInput } from "~/schemas/location";
-import { useTRPC } from "~/trpc/react";
-import EntityImageList from "../EntityImageList";
-import { LocationCardGrid } from "./location-card-grid";
-import { InventoryValueSummary } from "./inventory-value-summary";
 import { useQuery } from "@tanstack/react-query";
-import { LocationInventoryTable } from "./location-inventory-table";
-import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
+import type { FC } from "react";
+import type { InfLocation, LocationUpdateInput } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
+import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import EntityImageList from "../EntityImageList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
+import { NoneState } from "../NoneState";
+import { InventoryValueSummary } from "./inventory-value-summary";
 import { LocationBasicInfo } from "./location-basic-info";
+import { LocationCardGrid } from "./location-card-grid";
+import { LocationForm } from "./location-form";
+import { LocationInventoryTable } from "./location-inventory-table";
 
 interface LocationDetailProps {
   location: InfLocation;

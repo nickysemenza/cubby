@@ -1,12 +1,12 @@
 import {
-  Home,
-  ShoppingBag,
-  Layers,
-  Table2,
-  FileBox,
-  ShoppingCart,
   Box,
+  FileBox,
+  Home,
+  Layers,
   type LucideIcon,
+  ShoppingBag,
+  ShoppingCart,
+  Table2,
 } from "lucide-react";
 import { assertNever } from "~/lib/assert";
 import type { LocationType } from "~/schemas/location";

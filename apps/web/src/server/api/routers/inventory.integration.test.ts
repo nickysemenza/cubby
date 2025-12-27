@@ -1,17 +1,17 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import { buildTestDB, seedFromCSV } from "tooling/test-setup";
-import { inventoryRouter } from "./inventory";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { ActorContext } from "~/schemas/context";
 import {
   type OrganizationId,
-  unsafeUserId,
   unsafeOrganizationId,
+  unsafeUserId,
 } from "~/schemas/identifiers";
-import type { ActorContext } from "~/schemas/context";
+import type { Database } from "~/server/db";
+import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import { createProduct } from "~/server/repo/product";
-import { createInventoryEntry } from "~/server/repo/inventory";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { inventoryRouter } from "./inventory";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),

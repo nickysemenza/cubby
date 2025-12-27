@@ -1,9 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import { locationRouter } from "./location";
-import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { beforeEach, describe, expect, it } from "vitest";
 import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+import type { Database } from "~/server/db";
+import { createCallerFactory, createTestTRPCContext } from "../trpc";
+import { locationRouter } from "./location";
 
 const TEST_USER_ID = unsafeUserId("test-user-id");
 

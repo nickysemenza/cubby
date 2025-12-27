@@ -1,15 +1,15 @@
 "use client";
 
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ProductPillLink,
-  LocationPillLink,
-  RecipePillLink,
-  IngredientPillLink,
-} from "./EntityPill";
 import { Loader2 } from "lucide-react";
 import type { AuditEntityType } from "~/server/repo/audit-log";
+import { useTRPC } from "~/trpc/react";
+import {
+  IngredientPillLink,
+  LocationPillLink,
+  ProductPillLink,
+  RecipePillLink,
+} from "./EntityPill";
 
 interface EntityPillByIdProps {
   entityType: AuditEntityType;

@@ -2,8 +2,8 @@
  * Internal types for CSV import processing
  */
 
-import type { ProductTopLevelOut } from "~/schemas/product";
 import type { ProductChangesPreview } from "~/schemas/inventory";
+import type { ProductTopLevelOut } from "~/schemas/product";
 
 /**
  * Result of previewing product changes for a CSV row

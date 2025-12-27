@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { type AuditEntityType, getAuditLog } from "~/server/repo/audit-log";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { getAuditLog, type AuditEntityType } from "~/server/repo/audit-log";
 
 // Schema for entity types
 const auditEntityTypeSchema = z.enum([

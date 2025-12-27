@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // Exclude function types - useDebounce is for values, not callbacks
 // biome-ignore lint/complexity/noBannedTypes: intentional use of Function type for exclusion

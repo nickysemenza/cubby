@@ -13,29 +13,28 @@
  * @see MoveInventoryDialog - Lightweight modal for quick moves
  */
 "use client";
-import { useState, useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useTRPC } from "~/trpc/react";
-import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
-import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { Button } from "~/components/ui/button";
-import { Checkbox } from "~/components/ui/checkbox";
-import { Input } from "~/components/ui/input";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Package } from "lucide-react";
-import { toast } from "sonner";
-import type { InventoryId } from "~/schemas/identifiers";
 import { useRouter, useSearchParams } from "next/navigation";
-
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
+import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
 import {
   ComboboxFieldWithSearch,
   FormWrapper,
 } from "~/app/_components/form-utils";
-import { getLocationId } from "~/schemas/form-fields";
-import type { BulkMoveItem } from "~/schemas/inventory";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Input } from "~/components/ui/input";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { getLocationId } from "~/schemas/form-fields";
+import type { InventoryId } from "~/schemas/identifiers";
+import type { BulkMoveItem } from "~/schemas/inventory";
+import { useTRPC } from "~/trpc/react";
 
 type InventoryWithLocationAndProductOut = z.infer<
   typeof inventoryWithLocationAndProductOut

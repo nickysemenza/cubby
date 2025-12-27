@@ -1,16 +1,16 @@
 "use client";
 
-import type { Entity } from "~/entities/types";
+import { createElement } from "react";
 import { entities } from "~/entities/entities";
-import { useEditMode, type UseEditModeReturn } from "./useEditMode";
+import type { Entity } from "~/entities/types";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import type { DetailSection } from "../data-table/detail-page";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import type { AuditEntityType } from "~/server/repo/audit-log";
+import { AuditLogList } from "../audit-log/audit-log-list";
+import type { DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { AuditLogList } from "../audit-log/audit-log-list";
-import { createElement } from "react";
+import { type UseEditModeReturn, useEditMode } from "./useEditMode";
 
 /** Map Entity type to AuditEntityType (they differ slightly) */
 const entityToAuditType: Partial<Record<Entity, AuditEntityType>> = {

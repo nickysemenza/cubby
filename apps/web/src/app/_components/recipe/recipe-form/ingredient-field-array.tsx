@@ -1,18 +1,18 @@
-import type { FC } from "react";
-import { useFieldArray, type UseFormReturn } from "react-hook-form";
-import { Button } from "~/components/ui/button";
 import { Plus } from "lucide-react";
+import type { FC } from "react";
+import { type UseFormReturn, useFieldArray } from "react-hook-form";
+import { Button } from "~/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import type { sectionIngredientType } from "~/schemas/recipe";
 import {
   WithIngredientSearch,
   WithRecipeSearch,
 } from "../../combobox/with-search-hook";
+import { IngredientPillLink, RecipePillLink } from "../../EntityPill";
 import { ComboboxField } from "../../form-utils";
-import type { RecipeFormValues } from "./types";
 import { AmountFieldArray } from "./amount-field-array";
 import { FieldArrayItemControls } from "./field-array-item-controls";
-import { IngredientPillLink, RecipePillLink } from "../../EntityPill";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import type { sectionIngredientType } from "~/schemas/recipe";
+import type { RecipeFormValues } from "./types";
 
 interface IngredientFieldArrayProps {
   form: UseFormReturn<RecipeFormValues>;

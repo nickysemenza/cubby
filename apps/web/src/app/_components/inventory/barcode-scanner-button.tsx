@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { Camera, Loader2, X } from "lucide-react";
+import dynamic from "next/dynamic";
+import { useCallback, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -8,8 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { Camera, X, Loader2 } from "lucide-react";
-import dynamic from "next/dynamic";
 
 // Dynamically import the scanner to avoid SSR issues
 const BarcodeScanner = dynamic(

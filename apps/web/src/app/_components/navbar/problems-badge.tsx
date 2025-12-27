@@ -1,16 +1,16 @@
 "use client";
 
-import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
-import { cn } from "~/lib/utils";
+import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
 
 export const ProblemsBadge = () => {
   const api = useTRPC();

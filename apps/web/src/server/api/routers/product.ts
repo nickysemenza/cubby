@@ -6,33 +6,33 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
+import { upc } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { productWithFoodOut } from "~/server/services/product.service";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
-  productInputPayload,
-  productQuickCreatePayload,
-  productTopLevelOut,
-  productCategory,
-} from "~/schemas/product";
-import { createEntityCrudProcedures } from "../crud-factory";
-import {
-  productId,
   type ProductId,
+  productId,
   unsafeProductId,
 } from "~/schemas/identifiers";
 import {
-  findProductByUPC,
-  quickCreateProduct,
-  findProductsWithUPCNoImages,
-  findProductsNeedingFoodCategory,
+  productCategory,
+  productInputPayload,
+  productQuickCreatePayload,
+  productTopLevelOut,
+} from "~/schemas/product";
+import {
   backfillFoodCategories,
+  findProductByUPC,
+  findProductsNeedingFoodCategory,
+  findProductsWithUPCNoImages,
   getCategoryDistribution,
+  quickCreateProduct,
 } from "~/server/repo/product";
-import { getErrorMessage } from "~/lib/error-utils";
-import { upc } from "@recipehub/usda-schemas";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { importImageFromUPC } from "~/server/services/image-import";
+import { productWithFoodOut } from "~/server/services/product.service";
+import { createEntityCrudProcedures } from "../crud-factory";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Define filters schema for products
 const productFiltersSchema = z.object({

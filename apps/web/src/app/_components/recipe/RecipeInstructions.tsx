@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import type { RecipeOut } from "~/schemas/recipe";
 import { wasm } from "~/lib/wasm";
+import type { RecipeOut } from "~/schemas/recipe";
 import { formatRichText } from "./richtext";
 
 interface RecipeInstructionsProps {

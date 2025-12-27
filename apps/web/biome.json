@@ -20,6 +20,13 @@
       "tailwindDirectives": true
     }
   },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
   "linter": {
     "domains": {
       "next": "all",

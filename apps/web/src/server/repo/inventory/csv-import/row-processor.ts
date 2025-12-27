@@ -4,43 +4,43 @@
  * Handles processing a single CSV row, both for dry-run preview and actual execution.
  */
 
-import type { Database } from "~/server/db";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import type { ActorContext } from "~/schemas/context";
+import type { FieldChange } from "~/schemas/csv";
 import type {
-  OrganizationId,
   LocationId,
+  OrganizationId,
   ProductId,
 } from "~/schemas/identifiers";
 import type {
-  InventoryCSVRow,
   CSVImportResultItem,
+  InventoryCSVRow,
   ProductChangesPreview,
 } from "~/schemas/inventory";
-import type { FieldChange } from "~/schemas/csv";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import type { ProductTopLevelOut } from "~/schemas/product";
+import type { Database } from "~/server/db";
 import {
   findLocationByName,
   findOrCreateLocationByName,
 } from "~/server/repo/location";
-import type { ProductTopLevelOut } from "~/schemas/product";
-import {
-  processProductForImport,
-  previewProductForImport,
-} from "./product-handler";
-import {
-  createOrUpdatePriceMapping,
-  createUnitMappingsFromString,
-  checkPriceMappingChanges,
-  parseUnitMappingsForPreview,
-  checkUnitMappingsChanges,
-} from "./unit-mapping-handler";
 import { importProductImages, previewProductImages } from "./image-handler";
 import {
-  moveInventoryEntries,
+  checkInventoryMatch,
   createOrUpdateInventoryAtLocation,
   getExistingInventoryLocations,
-  checkInventoryMatch,
+  moveInventoryEntries,
 } from "./inventory-handler";
-import type { ActorContext } from "~/schemas/context";
+import {
+  previewProductForImport,
+  processProductForImport,
+} from "./product-handler";
+import {
+  checkPriceMappingChanges,
+  checkUnitMappingsChanges,
+  createOrUpdatePriceMapping,
+  createUnitMappingsFromString,
+  parseUnitMappingsForPreview,
+} from "./unit-mapping-handler";
 
 interface RowProcessorContext {
   db: Database;

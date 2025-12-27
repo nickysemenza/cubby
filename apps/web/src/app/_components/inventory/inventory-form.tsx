@@ -1,35 +1,35 @@
 "use client";
-import type { FC } from "react";
-import {
-  buildProductComboboxItem,
-  buildLocationComboboxItem,
-} from "~/app/_components/combobox/combobox-builders";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { FC } from "react";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
+import {
+  buildLocationComboboxItem,
+  buildProductComboboxItem,
+} from "~/app/_components/combobox/combobox-builders";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import {
+  amountField,
+  getLocationId,
+  getProductId,
+  requiredLocationField,
+  requiredProductField,
+} from "~/schemas/form-fields";
+import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type {
-  inventoryCreatePayloadData,
   InventoryUpdateInput,
+  inventoryCreatePayloadData,
   inventoryUpdatePayloadData,
 } from "~/schemas/inventory";
-import type { ProductId, LocationId } from "~/schemas/identifiers";
 import {
+  ComboboxFieldWithSearch,
   type CreateModeProps,
+  detectComboboxIdChange,
   type EditModeProps,
   FormWrapper,
-  ComboboxFieldWithSearch,
   getSubmitButtonText,
-  detectComboboxIdChange,
 } from "../form-utils";
 import { AmountFieldGroup } from "./amount-field-group";
-import {
-  requiredProductField,
-  requiredLocationField,
-  amountField,
-  getProductId,
-  getLocationId,
-} from "~/schemas/form-fields";
 
 // Form schema using shared field schemas
 const formSchema = z.object({

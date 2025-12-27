@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import { unsafeProductId } from "~/schemas/identifiers";
+import type { InventoryCSVRow } from "~/schemas/inventory";
 import { getRowDifferences } from "./csv-comparison";
 import type { InventoryCSVExportRow } from "./types";
-import type { InventoryCSVRow } from "~/schemas/inventory";
-import { unsafeProductId } from "~/schemas/identifiers";
 
 // Helper to create a minimal export row
 function makeAppRow(

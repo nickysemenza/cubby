@@ -1,10 +1,10 @@
 "use client";
-import { useMemo, useRef, useState, useCallback } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
-import { formatCurrency } from "~/lib/utils";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { formatCurrency } from "~/lib/utils";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 interface CostNode {

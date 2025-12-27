@@ -8,9 +8,9 @@ import { z } from "zod";
 import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { amount } from "~/codec/codec";
 import type {
-  ProductId,
-  LocationId,
   IngredientId,
+  LocationId,
+  ProductId,
   RecipeId,
 } from "./identifiers";
 

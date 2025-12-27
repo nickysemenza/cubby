@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import type { z } from "zod";
-import { useTRPC } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -11,10 +12,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { toast } from "sonner";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { queryKeys } from "~/lib/query-keys";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

@@ -1,6 +1,6 @@
+import { cva, type VariantProps } from "class-variance-authority";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { cva, type VariantProps } from "class-variance-authority";
 
 const tableLinkVariants = cva("transition-colors hover:underline", {
   variants: {

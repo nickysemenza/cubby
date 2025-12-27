@@ -1,8 +1,8 @@
-import type { WCompactRecipe } from "@recipehub/recipebridge";
 import type { Span } from "@opentelemetry/api";
-import { getTracer, TraceNames } from "~/server/tracing";
+import type { WCompactRecipe } from "@recipehub/recipebridge";
 import type { CompactRecipe } from "~/codec/codec";
 import { wasmServer } from "~/lib/wasm";
+import { getTracer, TraceNames } from "~/server/tracing";
 
 const scrapeRecipe = async (url: string) => {
   if (url.includes("chefsteps.com")) {

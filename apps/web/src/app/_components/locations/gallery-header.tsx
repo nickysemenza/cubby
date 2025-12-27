@@ -1,18 +1,17 @@
 "use client";
 
 import {
-  Search,
-  X,
   ChevronRight,
   Home,
   MapPin,
   Package,
   Plus,
+  Search,
+  X,
 } from "lucide-react";
 import Link from "next/link";
-import { cn } from "~/lib/utils";
-import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
   Select,
@@ -21,12 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import {
-  locationTypeOptions,
-  type LocationType,
-  type InfLocation,
-} from "~/schemas/location";
 import type { EmptyFilter } from "~/hooks/useGalleryViewState";
+import { cn } from "~/lib/utils";
+import {
+  type InfLocation,
+  type LocationType,
+  locationTypeOptions,
+} from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
 
 interface GalleryHeaderProps {

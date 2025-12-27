@@ -1,15 +1,15 @@
 import { createCallerFactory, createTRPCRouter } from "~/server/api/trpc";
-import { recipeRouter } from "./routers/recipe";
-import { ingredientRouter } from "./routers/ingredient";
-import { locationRouter } from "./routers/location";
-import { productRouter } from "./routers/product";
-import { inventoryRouter } from "./routers/inventory";
-import { usdaRouter } from "./routers/usda";
-import { upcRouter } from "./routers/upc";
-import { imageRouter } from "./routers/image";
-import { problemsRouter } from "./routers/problems";
 import { auditLogRouter } from "./routers/audit-log";
 import { googleSheetsRouter } from "./routers/google-sheets";
+import { imageRouter } from "./routers/image";
+import { ingredientRouter } from "./routers/ingredient";
+import { inventoryRouter } from "./routers/inventory";
+import { locationRouter } from "./routers/location";
+import { problemsRouter } from "./routers/problems";
+import { productRouter } from "./routers/product";
+import { recipeRouter } from "./routers/recipe";
+import { upcRouter } from "./routers/upc";
+import { usdaRouter } from "./routers/usda";
 
 /**
  * This is the primary router for your server.

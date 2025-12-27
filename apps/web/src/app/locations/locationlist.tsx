@@ -1,29 +1,29 @@
 "use client";
 
-import { useState } from "react";
-import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import RTable from "../_components/data-table/Table";
-import {
-  createCreatedAtColumn,
-  createNameColumn,
-  createImageColumn,
-  createEntityPillColumn,
-  createInventoryEntriesColumn,
-} from "../_components/data-table/columnHelpers";
-import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
-import { type LocationType, locationTypeOptions } from "~/schemas/location";
-import { LocationCardGrid } from "../_components/locations/location-card-grid";
-import { Button } from "~/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
+import { useState } from "react";
+import { Button } from "~/components/ui/button";
+import { flattenLocations } from "~/lib/location-utils";
 import type {
   InfLocation,
   LocationOutWithParentChildren,
 } from "~/schemas/location";
+import { type LocationType, locationTypeOptions } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
+import {
+  createCreatedAtColumn,
+  createEntityPillColumn,
+  createImageColumn,
+  createInventoryEntriesColumn,
+  createNameColumn,
+} from "../_components/data-table/columnHelpers";
+import RTable from "../_components/data-table/Table";
+import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
-import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { flattenLocations } from "~/lib/location-utils";
+import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { LocationCardGrid } from "../_components/locations/location-card-grid";
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");

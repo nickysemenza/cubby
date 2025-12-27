@@ -1,6 +1,6 @@
 import { USDAFoodDetail } from "~/app/_components/usda/USDAFoodDetail";
-import { api } from "~/trpc/server";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { api } from "~/trpc/server";
 
 type DetailParams = { id: string };
 type PageParams = { params: Promise<DetailParams> };

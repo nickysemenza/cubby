@@ -1,19 +1,19 @@
-import type { WAmount, AmountKind } from "@recipehub/recipebridge";
+import type { AmountKind, WAmount } from "@recipehub/recipebridge";
+import {
+  type NutrientKey,
+  type NutrientsPer100,
+  TIER1_NUTRIENTS,
+} from "@recipehub/usda-schemas";
 import type { Amount } from "~/codec/codec";
+import { wasm } from "~/lib/wasm";
 import { type Result, withFailure, withSuccess } from "~/misc/result-types";
+import type { SectionIngredientOut } from "~/schemas/recipe";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import type {
   IngredientWithFoodOut,
   ProductWithMappingsAndFoodOut,
 } from "~/server/services/ingredient.service";
-import type { UnitMapping } from "~/schemas/unitmapping";
-import {
-  type NutrientsPer100,
-  TIER1_NUTRIENTS,
-  type NutrientKey,
-} from "@recipehub/usda-schemas";
-import { wasm } from "~/lib/wasm";
-import type { SectionIngredientOut } from "~/schemas/recipe";
 
 /**
  * Get nutrient target unit strings for WASM batch conversion

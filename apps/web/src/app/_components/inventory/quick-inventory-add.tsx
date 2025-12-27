@@ -13,23 +13,22 @@
  */
 "use client";
 
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useTRPC } from "~/trpc/react";
-import { Button } from "~/components/ui/button";
-import { Plus } from "lucide-react";
-import { toast } from "sonner";
-import type { LocationId } from "~/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
+import { FormProvider, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import { amount } from "~/codec/codec";
+import { Button } from "~/components/ui/button";
 import {
   getOptionalProductId,
   requiredProductField,
 } from "~/schemas/form-fields";
+import type { LocationId } from "~/schemas/identifiers";
+import { useTRPC } from "~/trpc/react";
 import { AmountFieldGroup } from "./amount-field-group";
-import { FormProvider } from "react-hook-form";
-import { amount } from "~/codec/codec";
 
 interface QuickInventoryAddProps {
   locationId: LocationId;

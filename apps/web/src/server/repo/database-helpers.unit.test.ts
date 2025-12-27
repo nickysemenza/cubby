@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest";
-import {
-  formatSearchTerm,
-  buildPartialUpdateValues,
-} from "~/server/repo/database-helpers";
+import { describe, expect, it } from "vitest";
 import { product } from "~/server/db/schema";
+import {
+  buildPartialUpdateValues,
+  formatSearchTerm,
+} from "~/server/repo/database-helpers";
 
 describe("formatSearchTerm", () => {
   it("should return undefined for undefined input", () => {

@@ -1,12 +1,12 @@
 "use client";
 
-import type { FC } from "react";
 import Link from "next/link";
-import { NoneState } from "./NoneState";
-import { Button } from "~/components/ui/button";
-import { GridContainer } from "~/components/layout/grid-container";
+import type { FC } from "react";
 import { FlexContainer } from "~/components/layout/flex-container";
+import { GridContainer } from "~/components/layout/grid-container";
 import { InteractiveImage } from "~/components/media/interactive-image";
+import { Button } from "~/components/ui/button";
+import { NoneState } from "./NoneState";
 
 /** Minimal image type for display - only the fields we actually use */
 interface MinimalImage {

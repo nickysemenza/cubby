@@ -1,15 +1,15 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
-import type { OrganizationId } from "~/schemas/identifiers";
+import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
-import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import type { OrganizationId } from "~/schemas/identifiers";
+import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { Database } from "~/server/db";
 import {
   createInventoryEntry,
   importInventoryFromCSV,
 } from "~/server/repo/inventory";
-import type { InventoryCSVRow } from "~/schemas/inventory";
+import { createLocation } from "~/server/repo/location";
+import { createProduct } from "~/server/repo/product";
 
 describe("CSV import preview logic", () => {
   let db: Database;

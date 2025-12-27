@@ -1,10 +1,10 @@
 "use client";
 
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import type { RecipeOut } from "~/schemas/recipe";
 import { RecipeHero } from "./RecipeHero";
-import { RecipeInstructions } from "./RecipeInstructions";
 import { RecipeIngredientsSidebar } from "./RecipeIngredientsSidebar";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { RecipeInstructions } from "./RecipeInstructions";
 
 interface RecipeMagazineViewProps {
   recipe: RecipeOut;

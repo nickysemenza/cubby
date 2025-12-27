@@ -1,11 +1,11 @@
 "use client";
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
-import * as d3Hierarchy from "d3-hierarchy";
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
+import * as d3Hierarchy from "d3-hierarchy";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocationPillLinkCompact } from "~/app/_components/EntityPill";
 import type { LocationId } from "~/schemas/identifiers";
 import type { InfLocation, LocationType } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
 
 interface TreeNode {
   name: string;

@@ -1,6 +1,6 @@
+import fs from "node:fs";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { program } from "commander";
-import fs from "node:fs";
 import SuperJSON from "superjson";
 import { parseInventoryCSV } from "~/lib/csv-utils";
 import type { AppRouter } from "~/server/api/root";

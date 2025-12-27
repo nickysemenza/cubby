@@ -6,53 +6,56 @@
  * - applySync: Execute sync with user-selected resolutions for conflicts
  */
 
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
-import {
-  getGoogleSheetsClient,
-  GoogleSheetsClient,
-  SHEET_NAMES,
-  type ColumnSchema,
-} from "~/server/clients/google-sheets";
-import { productCategory } from "~/schemas/product";
-import { locationType } from "~/schemas/location";
-import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
-import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
-import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
-import { locationCSVRow, type LocationCSVRow } from "~/schemas/location";
-import {
-  getOrganizationMetadata,
-  updateOrganizationMetadata,
-} from "~/server/repo/organization";
+import { z } from "zod";
 import { toCSVString } from "~/lib/csv-utils";
 import { getErrorMessage } from "~/lib/error-utils";
-// Note: csv-comparison is now only used by the sync repo module
-import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
-import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
 import {
   type OrganizationId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
-import { deleteInventoryEntry } from "~/server/repo/inventory";
-import { deleteLocation, updateLocation } from "~/server/repo/location";
-import { updateProduct } from "~/server/repo/product";
+import { type InventoryCSVRow, inventoryCSVRow } from "~/schemas/inventory";
 import {
-  compareLocationsForSync,
-  compareInventoryForSync,
-  countByState,
-  syncItemsToLocationCSVRows,
-  syncItemsToInventoryCSVRows,
-} from "~/server/repo/sync";
+  type LocationCSVRow,
+  locationCSVRow,
+  locationType,
+} from "~/schemas/location";
+import { productCategory } from "~/schemas/product";
 import {
-  syncPreviewResult,
   applySyncInput,
   applySyncResult,
-  type LocationSyncItem,
   type InventorySyncItem,
+  type LocationSyncItem,
+  syncPreviewResult,
 } from "~/schemas/sync";
+import { createTRPCRouter, protectedProcedure } from "~/server/api/trpc";
+import {
+  type ColumnSchema,
+  GoogleSheetsClient,
+  getGoogleSheetsClient,
+  SHEET_NAMES,
+} from "~/server/clients/google-sheets";
+import { deleteInventoryEntry } from "~/server/repo/inventory";
+import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
+import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
+import { deleteLocation, updateLocation } from "~/server/repo/location";
+// Note: csv-comparison is now only used by the sync repo module
+import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
+import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
+import {
+  getOrganizationMetadata,
+  updateOrganizationMetadata,
+} from "~/server/repo/organization";
+import { updateProduct } from "~/server/repo/product";
+import {
+  compareInventoryForSync,
+  compareLocationsForSync,
+  countByState,
+  syncItemsToInventoryCSVRows,
+  syncItemsToLocationCSVRows,
+} from "~/server/repo/sync";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({

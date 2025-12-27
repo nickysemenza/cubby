@@ -1,34 +1,34 @@
 "use client";
+import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
-import { useImageState } from "~/hooks/useImageState";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
+import { useImageState } from "~/hooks/useImageState";
+import { getOptionalLocationId } from "~/schemas/form-fields";
+import type { LocationId } from "~/schemas/identifiers";
+import type { ImageOut } from "~/schemas/image";
 import {
+  type LocationCreateInput,
+  type LocationOut,
+  type LocationUpdateInput,
   locationType,
   locationTypeOptions,
-  type LocationOut,
-  type LocationCreateInput,
-  type LocationUpdateInput,
 } from "~/schemas/location";
-import type { LocationId } from "~/schemas/identifiers";
+import { ComboboxItem } from "../combobox/combobox-types";
 import {
+  buildUpdateObject,
+  ComboboxFieldWithSearch,
   type CreateModeProps,
+  detectComboboxIdChange,
   type EditModeProps,
   FormWrapper,
-  UnifiedTextField,
   getSubmitButtonText,
-  ComboboxFieldWithSearch,
-  detectComboboxIdChange,
-  buildUpdateObject,
-  SideBySideFields,
   SelectField,
+  SideBySideFields,
+  UnifiedTextField,
 } from "../form-utils";
 import { PendingImageUpload } from "../PendingImageUpload";
-import type { ImageOut } from "~/schemas/image";
-import { ComboboxItem } from "../combobox/combobox-types";
-import { getOptionalLocationId } from "~/schemas/form-fields";
 
 // Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({

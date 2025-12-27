@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
-import { amount, type Amount } from "~/codec/codec";
-import { productId } from "./identifiers";
+import { type Amount, amount } from "~/codec/codec";
 import { wasmServer } from "~/lib/wasm";
+import { dbTimestampsOut } from "./common";
+import { productId } from "./identifiers";
 
 const sourceMetadata = z.discriminatedUnion("type", [
   z.object({

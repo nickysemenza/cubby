@@ -1,18 +1,18 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import {
-  calculateInventoryValue,
-  emptyPricingStatus,
-  mergePricingStatus,
-  formatPricingStatusSummary,
-  type InventoryItem,
-  type PricingStatus,
-} from "../locations/calculate-inventory-value";
+import { beforeAll, describe, expect, it } from "vitest";
+import { ensureWasm } from "~/lib/wasm";
 import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
-import { ensureWasm } from "~/lib/wasm";
+import {
+  calculateInventoryValue,
+  emptyPricingStatus,
+  formatPricingStatusSummary,
+  type InventoryItem,
+  mergePricingStatus,
+  type PricingStatus,
+} from "../locations/calculate-inventory-value";
 
 // Initialize WASM before tests run
 beforeAll(async () => {

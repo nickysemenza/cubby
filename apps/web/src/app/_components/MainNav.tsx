@@ -1,28 +1,28 @@
 "use client";
 
+import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
+import { Bug, BugOff, Menu, PackageOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "~/lib/utils";
-import { authClient } from "~/lib/auth-client";
-import { Menu, PackageOpen, Bug, BugOff } from "lucide-react";
-import { SyncStatusBadge } from "./sync/sync-status-badge";
-import { ProblemsBadge } from "./navbar/problems-badge";
-import { QuickActionsMenu } from "./navbar/quick-actions-menu";
-import { UserAvatarDropdown } from "./navbar/user-avatar-dropdown";
-import { NavDropdown } from "./navbar/nav-dropdown";
-import { useDebug } from "~/hooks/useDebug";
-import { Button } from "~/components/ui/button";
-import { ThemeToggle } from "~/components/ui/theme-toggle";
-import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import { FlexContainer } from "~/components/layout/flex-container";
+import { Button } from "~/components/ui/button";
 import {
   Sheet,
-  SheetTrigger,
+  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetClose,
+  SheetTrigger,
 } from "~/components/ui/sheet";
+import { ThemeToggle } from "~/components/ui/theme-toggle";
+import { useDebug } from "~/hooks/useDebug";
+import { authClient } from "~/lib/auth-client";
+import { cn } from "~/lib/utils";
+import { NavDropdown } from "./navbar/nav-dropdown";
+import { ProblemsBadge } from "./navbar/problems-badge";
+import { QuickActionsMenu } from "./navbar/quick-actions-menu";
+import { UserAvatarDropdown } from "./navbar/user-avatar-dropdown";
+import { SyncStatusBadge } from "./sync/sync-status-badge";
 
 type NavItem = {
   href: string;

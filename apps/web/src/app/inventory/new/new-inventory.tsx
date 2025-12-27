@@ -1,10 +1,10 @@
 "use client";
 import type { FC } from "react";
-import { InventoryForm } from "~/app/_components/inventory/inventory-form";
 import type { z } from "zod";
+import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
+import { InventoryForm } from "~/app/_components/inventory/inventory-form";
 import type { inventoryCreatePayloadData } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
-import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 
 const CreateInventoryItem: FC = () => {
   const api = useTRPC();

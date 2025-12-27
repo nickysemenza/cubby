@@ -4,14 +4,14 @@
  * Compares app locations with sheet locations to detect field changes.
  */
 
-import type { LocationCSVRow } from "~/schemas/location";
 import type { FieldChange } from "~/schemas/csv";
-import type { LocationCSVExportRow } from "./types";
-import {
-  compareFields,
-  type ComparisonFieldSpec,
-} from "~/server/repo/csv/field-utils";
+import type { LocationCSVRow } from "~/schemas/location";
 import { parseCSVDateToUnix } from "~/server/repo/csv/date-utils";
+import {
+  type ComparisonFieldSpec,
+  compareFields,
+} from "~/server/repo/csv/field-utils";
+import type { LocationCSVExportRow } from "./types";
 
 /**
  * Normalize date strings for comparison (returns unix timestamp)

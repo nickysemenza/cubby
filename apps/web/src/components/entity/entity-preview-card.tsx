@@ -1,9 +1,9 @@
 "use client";
 
-import { Button } from "~/components/ui/button";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 interface EntityPreviewCardProps {

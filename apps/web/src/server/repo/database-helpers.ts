@@ -1,18 +1,18 @@
-import { ilike, type SQL, asc, desc, inArray } from "drizzle-orm";
 import type {
   AnyColumn,
   InferInsertModel,
   InferSelectModel,
 } from "drizzle-orm";
+import { asc, desc, ilike, inArray, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
+import { amount } from "~/codec/codec";
+import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
+import { parseWithContext } from "~/lib/zod-utils";
+import { unsafeProductId } from "~/schemas/identifiers";
 import type { SortParams } from "~/schemas/pagination";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { type productUnitMappings, image } from "~/server/db/schema";
-import { unsafeProductId } from "~/schemas/identifiers";
-import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
-import { amount } from "~/codec/codec";
-import { parseWithContext } from "~/lib/zod-utils";
+import { image, type productUnitMappings } from "~/server/db/schema";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (

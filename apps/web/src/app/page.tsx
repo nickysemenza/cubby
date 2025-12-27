@@ -1,6 +1,6 @@
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { HydrateClient } from "~/trpc/server";
 import EntityCount from "./homepage/entitycount";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 export default async function Home() {
   return (

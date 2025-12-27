@@ -1,16 +1,16 @@
 "use client";
 
-import { forwardRef, useMemo } from "react";
-import Link from "next/link";
 import { Package } from "lucide-react";
-import { cn } from "~/lib/utils";
+import Link from "next/link";
+import { forwardRef, useMemo } from "react";
+import type { z } from "zod";
 import { Badge } from "~/components/ui/badge";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
-import type { InfLocation } from "~/schemas/location";
+import { cn } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { z } from "zod";
-import { LocationIcon } from "./location-icons";
+import type { InfLocation } from "~/schemas/location";
 import { InventoryValueSummary } from "./inventory-value-summary";
+import { LocationIcon } from "./location-icons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

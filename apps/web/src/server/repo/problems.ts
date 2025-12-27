@@ -1,17 +1,17 @@
+import { upc as upcSchema } from "@recipehub/usda-schemas";
+import { and, eq, notExists, sql } from "drizzle-orm";
+import { isMiscProduct } from "~/lib/constants";
 import type { Database } from "~/server/db";
-import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import {
-  product,
   inventoryEntry,
   location,
+  product,
   productUnitMappings,
 } from "~/server/db/schema";
-import { eq, sql, notExists, and } from "drizzle-orm";
-import { upc as upcSchema } from "@recipehub/usda-schemas";
-import { isMiscProduct } from "~/lib/constants";
+import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import {
-  findProductsWithUPCNoImages,
   findProductsNeedingFoodCategory,
+  findProductsWithUPCNoImages,
 } from "~/server/repo/product";
 
 // Interface for the complete problems result

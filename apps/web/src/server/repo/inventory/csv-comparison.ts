@@ -5,15 +5,15 @@
  * to detect field-level differences.
  */
 
-import type { InventoryCSVRow } from "~/schemas/inventory";
 import type { FieldChange } from "~/schemas/csv";
-import type { InventoryCSVExportRow } from "./types";
-import { normalizeForComparison } from "~/server/repo/csv/normalize";
+import type { InventoryCSVRow } from "~/schemas/inventory";
 import {
+  type ComparisonFieldSpec,
   compareFields,
   nullToNull,
-  type ComparisonFieldSpec,
 } from "~/server/repo/csv/field-utils";
+import { normalizeForComparison } from "~/server/repo/csv/normalize";
+import type { InventoryCSVExportRow } from "./types";
 
 /** Field specs for standard inventory fields (no special normalization needed) */
 const INVENTORY_FIELD_SPECS: readonly ComparisonFieldSpec<

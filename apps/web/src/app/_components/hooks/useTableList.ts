@@ -1,9 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import type {
+  ColumnFiltersState,
+  PaginationState,
+} from "@tanstack/react-table";
 import { useTableState } from "../data-table/useTableState";
-import type { PaginationState } from "@tanstack/react-table";
-import type { ColumnFiltersState } from "@tanstack/react-table";
 
 interface TableStateOptions {
   initialSort?: string;

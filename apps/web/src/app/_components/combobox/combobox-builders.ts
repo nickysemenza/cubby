@@ -1,14 +1,14 @@
-import type { ProductTopLevelOut } from "~/schemas/product";
-import type { LocationOut } from "~/schemas/location";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import type { RecipeOut } from "~/schemas/recipe";
 import type {
-  ProductId,
-  LocationId,
   IngredientId,
+  LocationId,
+  ProductId,
   RecipeId,
 } from "~/schemas/identifiers";
+import type { LocationOut } from "~/schemas/location";
+import type { ProductTopLevelOut } from "~/schemas/product";
+import type { RecipeOut } from "~/schemas/recipe";
 
 export const buildProductComboboxItem = (
   product: ProductTopLevelOut,

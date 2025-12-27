@@ -3,12 +3,12 @@
 import type { FC } from "react";
 import type { z } from "zod";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { DetailPage, type DetailSection } from "../data-table/detail-page";
-import { InventoryForm } from "./inventory-form";
 import type { InventoryUpdateInput } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
+import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { InventoryBasicInfo } from "./inventory-basic-info";
+import { InventoryForm } from "./inventory-form";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

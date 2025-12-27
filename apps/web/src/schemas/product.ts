@@ -1,10 +1,10 @@
+import { ndb, upc } from "@recipehub/usda-schemas";
 import { z } from "zod";
+import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { dbTimestampsOut } from "./common";
-import { upc, ndb } from "@recipehub/usda-schemas";
+import { ingredientId, productId } from "./identifiers";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
-import { productId, ingredientId } from "./identifiers";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 
 // Product category values - single source of truth for both Zod and Drizzle
 export const productCategoryValues = [

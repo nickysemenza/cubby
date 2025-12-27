@@ -1,5 +1,5 @@
-import type { CompactRecipe, ParsedCompactRecipe } from "./codec";
 import { wasmServer } from "~/lib/wasm";
+import type { CompactRecipe, ParsedCompactRecipe } from "./codec";
 
 export const parseCompactRecipe = async (
   raw: CompactRecipe,

@@ -1,9 +1,9 @@
-import { ProductList } from "./productlist";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
-import { EntityLayout } from "~/components/layouts/entity-layout";
+import { ProductList } from "./productlist";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {

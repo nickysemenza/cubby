@@ -2,11 +2,11 @@
 
 import type { FC } from "react";
 import type { z } from "zod";
+import { Button } from "~/components/ui/button";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { showAmountAndPrice } from "./format-amount";
 import { LocationPillLink, ProductPillLink } from "../EntityPill";
 import { UnitMappingGraph } from "../units/UnitMappingGraph";
-import { Button } from "~/components/ui/button";
+import { showAmountAndPrice } from "./format-amount";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

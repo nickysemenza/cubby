@@ -7,7 +7,7 @@
 
 import type { IngredientId } from "~/schemas/identifiers";
 import type { ProductChangesPreview } from "~/schemas/inventory";
-import type { ProductTopLevelOut, ProductCategory } from "~/schemas/product";
+import type { ProductCategory, ProductTopLevelOut } from "~/schemas/product";
 
 /**
  * Input data from CSV row for computing product updates

@@ -1,13 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { compareInventoryForSync } from "./comparison";
-import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
-import type { InventoryCSVRow } from "~/schemas/inventory";
-import type { SyncState } from "~/schemas/sync";
+import { describe, expect, it } from "vitest";
 import {
+  unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
-  unsafeInventoryId,
 } from "~/schemas/identifiers";
+import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { SyncState } from "~/schemas/sync";
+import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
+import { compareInventoryForSync } from "./comparison";
 
 // Helper to create a minimal app row (from database)
 const makeAppRow = (

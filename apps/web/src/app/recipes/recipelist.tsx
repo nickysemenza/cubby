@@ -1,9 +1,9 @@
 "use client";
-import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
+import type { RecipeOut } from "~/schemas/recipe";
+import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import type { RecipeOut } from "~/schemas/recipe";
 
 export function RecipeList() {
   const api = useTRPC();

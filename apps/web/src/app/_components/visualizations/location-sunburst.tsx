@@ -1,15 +1,15 @@
 "use client";
-import { useMemo, useRef, useCallback, useState } from "react";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
-import { LocationIcon } from "../locations/location-icons";
-import { formatCurrency } from "~/lib/utils";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
-  useLocationHierarchy,
   type LocationHierarchyNode,
+  useLocationHierarchy,
 } from "~/hooks/useLocationHierarchy";
+import { formatCurrency } from "~/lib/utils";
 import { formatPricingStatusSummary } from "../locations/calculate-inventory-value";
+import { LocationIcon } from "../locations/location-icons";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 export default function LocationSunburst() {

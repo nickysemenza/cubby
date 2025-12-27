@@ -1,6 +1,6 @@
 import type { RichItem } from "@recipehub/recipebridge";
-import { tryFormatAmount } from "../inventory/format-amount";
 import { assertNever } from "~/lib/assert";
+import { tryFormatAmount } from "../inventory/format-amount";
 
 export const formatRichText = (text: RichItem[]) => {
   return text.map((t, x) => {

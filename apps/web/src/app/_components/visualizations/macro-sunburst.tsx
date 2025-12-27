@@ -1,9 +1,9 @@
 "use client";
-import { useMemo, useRef, useState, useCallback } from "react";
+import { TIER1_NUTRIENTS } from "@recipehub/usda-schemas";
 import * as d3Hierarchy from "d3-hierarchy";
 import Link from "next/link";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
-import { TIER1_NUTRIENTS } from "@recipehub/usda-schemas";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 

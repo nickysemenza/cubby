@@ -6,38 +6,38 @@
  * TL;DR - This is where all the tRPC server stuff is created and plugged in. The pieces you will
  * need to use are documented accordingly near the end.
  */
-import { initTRPC, TRPCError } from "@trpc/server";
-import superjson from "superjson";
-import { ZodError } from "zod";
 
-import { db } from "~/server/db";
-import { flatten } from "flat";
 import {
-  type Span,
-  SpanStatusCode,
   context,
   propagation,
+  type Span,
+  SpanStatusCode,
   trace,
 } from "@opentelemetry/api";
-import { getTracer, TraceNames } from "~/server/tracing";
-import { auth as betterAuth } from "~/lib/auth";
-import { USDAClient } from "~/server/clients/usda";
-import { UPCLookupClient } from "~/server/clients/upc-lookup";
-import { ProductService } from "~/server/services/product.service";
-import { IngredientService } from "~/server/services/ingredient.service";
-import { USDAService } from "~/server/services/usda.service";
-import { findProductsByFoodIdentifier } from "~/server/repo/product";
-import type { Database } from "~/server/db";
+import { initTRPC, TRPCError } from "@trpc/server";
+import { flatten } from "flat";
+import superjson from "superjson";
+import { ZodError } from "zod";
 import { env } from "~/env";
+import { type AppErrorReason, AppErrors } from "~/lib/app-error-codes";
+import { auth as betterAuth } from "~/lib/auth";
+import { buildActorContext } from "~/schemas/context";
 import {
-  unsafeProductId,
-  unsafeOrganizationId,
-  unsafeUserId,
   type OrganizationId,
   type UserId,
+  unsafeOrganizationId,
+  unsafeProductId,
+  unsafeUserId,
 } from "~/schemas/identifiers";
-import { AppErrors, type AppErrorReason } from "~/lib/app-error-codes";
-import { buildActorContext } from "~/schemas/context";
+import { UPCLookupClient } from "~/server/clients/upc-lookup";
+import { USDAClient } from "~/server/clients/usda";
+import type { Database } from "~/server/db";
+import { db } from "~/server/db";
+import { findProductsByFoodIdentifier } from "~/server/repo/product";
+import { IngredientService } from "~/server/services/ingredient.service";
+import { ProductService } from "~/server/services/product.service";
+import { USDAService } from "~/server/services/usda.service";
+import { getTracer, TraceNames } from "~/server/tracing";
 
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([

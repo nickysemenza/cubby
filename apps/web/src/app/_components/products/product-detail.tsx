@@ -1,15 +1,15 @@
 "use client";
 
 import type { FC } from "react";
-import { type DetailSection, DetailPage } from "../data-table/detail-page";
+import type { ProductInputPayload } from "~/schemas/product";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
-import { NutritionInfoTable } from "../usda/nutrition";
-import { ProductForm } from "./product-form";
-import type { ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
+import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { NutritionInfoTable } from "../usda/nutrition";
 import { ProductBasicInfo } from "./product-basic-info";
+import { ProductForm } from "./product-form";
 
 interface ProductDetailProps {
   product: ProductWithFoodOut;

@@ -3,8 +3,8 @@
  */
 
 import Papa from "papaparse";
-import { inventoryCSVRow, type InventoryCSVRow } from "~/schemas/inventory";
-import { locationType, type LocationCSVRow } from "~/schemas/location";
+import { type InventoryCSVRow, inventoryCSVRow } from "~/schemas/inventory";
+import { type LocationCSVRow, locationType } from "~/schemas/location";
 
 /**
  * Convert any value to a CSV-safe string.

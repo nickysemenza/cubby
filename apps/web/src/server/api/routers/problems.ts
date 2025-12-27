@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { findAllProblems } from "~/server/repo/problems";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Output schemas for each problem type
 const duplicateUniqueProductSchema = z.object({

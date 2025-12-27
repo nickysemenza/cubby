@@ -2,29 +2,29 @@
 
 import dynamic from "next/dynamic";
 import { z } from "zod";
-import { Prose } from "./_components/Prose";
-import { EditableComponentDemo } from "./_components/EditableComponentDemo";
-import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
+import { LocationTree } from "~/app/_components/inventory/location-tree-view";
 import { NYTView } from "~/app/_components/recipe/NYTView";
+import { formatRichText } from "~/app/_components/recipe/richtext";
+import { ConversionCapabilities } from "~/app/_components/units/ConversionCapabilities";
 import {
   EntitySummaryCard,
   entitySummaryDataSchema,
 } from "~/components/entity/entity-summary-card";
-import { formatRichText } from "~/app/_components/recipe/richtext";
-import { LocationTree } from "~/app/_components/inventory/location-tree-view";
-import { unitMappingWithMetadata } from "~/schemas/unitmapping";
-import { recipeOut } from "~/schemas/recipe";
-import { infLocation, locationType } from "~/schemas/location";
-import {
-  richTextInputSchema,
-  entityRelationshipsDot,
-  sampleUnitMappings,
-  sampleRecipe,
-  sampleSummaryData,
-  sampleRichTextInput,
-  sampleLocations,
-} from "./_data/samples";
 import { wasm } from "~/lib/wasm";
+import { infLocation, locationType } from "~/schemas/location";
+import { recipeOut } from "~/schemas/recipe";
+import { unitMappingWithMetadata } from "~/schemas/unitmapping";
+import { EditableComponentDemo } from "./_components/EditableComponentDemo";
+import { Prose } from "./_components/Prose";
+import {
+  entityRelationshipsDot,
+  richTextInputSchema,
+  sampleLocations,
+  sampleRecipe,
+  sampleRichTextInput,
+  sampleSummaryData,
+  sampleUnitMappings,
+} from "./_data/samples";
 
 const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
 

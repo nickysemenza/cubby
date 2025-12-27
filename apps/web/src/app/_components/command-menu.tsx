@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
 import { Settings } from "lucide-react";
-
+import { useRouter } from "next/navigation";
+import * as React from "react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -12,8 +12,6 @@ import {
   CommandList,
   CommandSeparator,
 } from "~/components/ui/command";
-
-import { useRouter } from "next/navigation";
 import { entities } from "~/entities/entities";
 
 export function GlobalCommandMenu() {

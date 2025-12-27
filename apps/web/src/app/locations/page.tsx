@@ -1,14 +1,14 @@
-import { LocationList } from "./locationlist";
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { EntityLayout } from "~/components/layouts/entity-layout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import LocationTreeGraph from "../_components/inventory/location-tree-graph";
 import LocationTreeView from "../_components/inventory/location-tree-view";
 import LocationTreemap from "../_components/inventory/location-treemap";
 import { LocationGallery } from "../_components/locations/location-gallery";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Suspense } from "react";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { EntityLayout } from "~/components/layouts/entity-layout";
 import { LocationActions } from "./location-actions";
+import { LocationList } from "./locationlist";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Locations",

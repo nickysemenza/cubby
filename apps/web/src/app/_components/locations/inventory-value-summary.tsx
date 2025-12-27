@@ -1,13 +1,13 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
 import {
   calculateInventoryValue,
-  formatPricingStatusSummary,
   emptyPricingStatus,
+  formatPricingStatusSummary,
   type InventoryItem,
   type InventoryValueResult,
 } from "./calculate-inventory-value";

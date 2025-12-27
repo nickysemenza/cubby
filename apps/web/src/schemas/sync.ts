@@ -5,10 +5,10 @@
  */
 
 import { z } from "zod";
-import { fieldChange } from "./csv";
-import { locationId, productId, inventoryId } from "./identifiers";
-import { productCategory } from "./product";
 import { parseCSVDateToUnix } from "~/server/repo/csv/date-utils";
+import { fieldChange } from "./csv";
+import { inventoryId, locationId, productId } from "./identifiers";
+import { productCategory } from "./product";
 
 /**
  * Sync states for items

@@ -1,30 +1,30 @@
+import { and, eq, ilike, inArray, lt, sql } from "drizzle-orm";
+import type {
+  ImageWithEntity,
+  InitiateUploadWithoutEntityInput,
+} from "~/schemas/image";
 import { createAppError } from "~/server/api/trpc";
+import type { Database } from "~/server/db";
 import {
+  image,
+  locationImage,
+  productImage,
+  recipeImage,
+} from "~/server/db/schema";
+import {
+  associatePendingImages,
+  buildOrderBy,
+  getDb,
+  insertAndReturnDb,
+} from "~/server/repo/database-helpers";
+import {
+  contentTypeToExtension,
+  deleteS3Object,
+  fetchAndStoreImage,
   generateImageKey,
   generatePresignedUploadUrl,
   getS3ObjectUrl,
-  deleteS3Object,
-  fetchAndStoreImage,
-  contentTypeToExtension,
 } from "../utils/s3";
-import type {
-  InitiateUploadWithoutEntityInput,
-  ImageWithEntity,
-} from "~/schemas/image";
-import type { Database } from "~/server/db";
-import {
-  getDb,
-  buildOrderBy,
-  insertAndReturnDb,
-  associatePendingImages,
-} from "~/server/repo/database-helpers";
-import {
-  image,
-  productImage,
-  locationImage,
-  recipeImage,
-} from "~/server/db/schema";
-import { eq, and, inArray, sql, lt, ilike } from "drizzle-orm";
 
 /**
  * Initiate an image upload without associating it with an entity yet

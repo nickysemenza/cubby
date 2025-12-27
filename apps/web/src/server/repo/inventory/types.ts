@@ -1,14 +1,14 @@
 import type { z } from "zod";
-import type {
-  inventoryEntry,
-  product,
-  location,
-  productUnitMappings,
-  image,
-} from "~/server/db/schema";
 import type { Amount } from "~/codec/codec";
-import type { ProductId, LocationId, InventoryId } from "~/schemas/identifiers";
+import type { InventoryId, LocationId, ProductId } from "~/schemas/identifiers";
 import type { ProductCategory } from "~/schemas/product";
+import type {
+  image,
+  inventoryEntry,
+  location,
+  product,
+  productUnitMappings,
+} from "~/server/db/schema";
 
 export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
   Product: typeof product.$inferSelect & {

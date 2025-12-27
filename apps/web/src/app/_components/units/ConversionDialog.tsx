@@ -1,15 +1,17 @@
 "use client";
 
-import * as React from "react";
-import { useState, useId } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
+import type { AmountKind, WAmount } from "@recipehub/recipebridge";
+import { Scale } from "lucide-react";
+import * as React from "react";
+import { useId, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import type { AmountKind, WAmount } from "@recipehub/recipebridge";
-import { amount, type Amount } from "~/codec/codec";
-import type { UnitMapping } from "~/schemas/unitmapping";
-import { wasm } from "~/lib/wasm";
-import { safeConvertAmount } from "./univ-conversion";
+import { FormWrapper } from "~/app/_components/form-utils";
+import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { type Amount, amount } from "~/codec/codec";
+import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,22 +20,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import { Button } from "~/components/ui/button";
+import { Label } from "~/components/ui/label";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { Scale } from "lucide-react";
-import { Checkbox } from "~/components/ui/checkbox";
-import { Label } from "~/components/ui/label";
-import { kindIconMap } from "./kind-icons";
+import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
-import { FormWrapper } from "~/app/_components/form-utils";
-import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { ConversionCapabilities } from "./ConversionCapabilities";
+import { kindIconMap } from "./kind-icons";
 import { UnitMappingGraph } from "./UnitMappingGraph";
 import { UnitMappingsTable } from "./unitmappingstable";
+import { safeConvertAmount } from "./univ-conversion";
 
 const formSchema = z.object({
   amount: amount,

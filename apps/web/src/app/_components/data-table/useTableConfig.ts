@@ -5,8 +5,8 @@ import {
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  useReactTable,
   type Table,
+  useReactTable,
 } from "@tanstack/react-table";
 import type { TableStateReturn } from "./useTableState";
 

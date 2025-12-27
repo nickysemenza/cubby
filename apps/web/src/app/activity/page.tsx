@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { EntityLayout } from "~/components/layouts/entity-layout";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
+import { EntityLayout } from "~/components/layouts/entity-layout";
 
 export const dynamic = "force-dynamic";
 

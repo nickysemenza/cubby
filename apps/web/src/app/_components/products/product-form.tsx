@@ -1,50 +1,48 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { ndb, upc } from "@recipehub/usda-schemas";
+import { Loader2, Search } from "lucide-react";
+import Image from "next/image";
 import { type FC, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { useImageState } from "~/hooks/useImageState";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useTRPCClient } from "~/trpc/react";
-import Image from "next/image";
-import {
-  type ProductInputPayload,
-  type ProductTopLevelOut,
-  productCategory,
-  productCategoryOptions,
-  hasFoodIndicators,
-} from "~/schemas/product";
-import { upc } from "@recipehub/usda-schemas";
-
-import { ndb } from "@recipehub/usda-schemas";
-import type { IngredientId } from "~/schemas/identifiers";
-import {
-  type CreateModeProps,
-  type EditModeProps,
-  FormWrapper,
-  UnifiedTextField,
-  getSubmitButtonText,
-  buildUpdateObject,
-  SideBySideFields,
-  ComboboxFieldWithSearch,
-  detectComboboxIdChange,
-  NullableNumericField,
-  SelectField,
-} from "../form-utils";
-import { getOptionalIngredientId } from "~/schemas/form-fields";
-import { AmountFieldGroup } from "../inventory/amount-field-group";
-import { unitMappingInput, type UnitMappingInput } from "~/schemas/unitmapping";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
-import { PendingImageUpload, type PendingImage } from "../PendingImageUpload";
-import type { ImageOut } from "~/schemas/image";
 import { Button } from "~/components/ui/button";
-import { Search, Loader2 } from "lucide-react";
-import { ComboboxItem } from "../combobox/combobox-types";
-import { UNSPECIFIED_MANUFACTURER, isMiscProduct } from "~/lib/constants";
+import { useImageState } from "~/hooks/useImageState";
+import { isMiscProduct, UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import { getOptionalIngredientId } from "~/schemas/form-fields";
+import type { IngredientId } from "~/schemas/identifiers";
+import type { ImageOut } from "~/schemas/image";
 import {
   extractPriceFromMappings,
   syncPriceToMappings,
 } from "~/schemas/price-mapping-utils";
+import {
+  hasFoodIndicators,
+  type ProductInputPayload,
+  type ProductTopLevelOut,
+  productCategory,
+  productCategoryOptions,
+} from "~/schemas/product";
+import { type UnitMappingInput, unitMappingInput } from "~/schemas/unitmapping";
+import { useTRPCClient } from "~/trpc/react";
+import { ComboboxItem } from "../combobox/combobox-types";
+import {
+  buildUpdateObject,
+  ComboboxFieldWithSearch,
+  type CreateModeProps,
+  detectComboboxIdChange,
+  type EditModeProps,
+  FormWrapper,
+  getSubmitButtonText,
+  NullableNumericField,
+  SelectField,
+  SideBySideFields,
+  UnifiedTextField,
+} from "../form-utils";
+import { AmountFieldGroup } from "../inventory/amount-field-group";
+import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
 
 // Form schema for product form (simple Zod schema without z.custom)
 const formSchema = z

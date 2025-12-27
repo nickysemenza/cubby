@@ -4,15 +4,15 @@
  * Handles inventory creation, updates, moves, and checking.
  */
 
-import type { Database } from "~/server/db";
+import { and, eq } from "drizzle-orm";
 import type {
+  LocationId,
   OrganizationId,
   ProductId,
-  LocationId,
 } from "~/schemas/identifiers";
-import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
+import type { Database } from "~/server/db";
 import { inventoryEntry } from "~/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import type { InventoryMatchResult } from "./types";
 
 /**

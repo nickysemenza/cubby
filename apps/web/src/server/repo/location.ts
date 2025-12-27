@@ -1,53 +1,53 @@
-import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  type LocationOutWithParentChildren,
-  type LocationOut,
-  type InfLocation,
-  locationType,
-  type LocationCreateInput,
-  type LocationUpdateInput,
-  type LocationType,
-  type InventoryItemForTree,
-} from "~/schemas/location";
+import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { parseWithContext } from "~/lib/zod-utils";
+import { extractDbTimestampsFromDBRec } from "~/schemas/common";
+import type { ActorContext } from "~/schemas/context";
 import {
   type LocationId,
   type OrganizationId,
+  unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
-  unsafeInventoryId,
 } from "~/schemas/identifiers";
 import {
-  type SortParams,
-  type PaginationParams,
+  type InfLocation,
+  type InventoryItemForTree,
+  type LocationCreateInput,
+  type LocationOut,
+  type LocationOutWithParentChildren,
+  type LocationType,
+  type LocationUpdateInput,
+  locationType,
+} from "~/schemas/location";
+import {
   buildTakeSkip,
+  type PaginationParams,
+  type SortParams,
 } from "~/schemas/pagination";
-import { extractDbTimestampsFromDBRec } from "~/schemas/common";
-import {
-  formatSearchTerm,
-  getDb,
-  unwrapDb,
-  relations,
-  buildOrderBy,
-  updateAndReturn,
-  extractImagesFromJoinTable,
-  mapRelation,
-  associatePendingImages,
-  buildPartialUpdateValues,
-  executeListQueryWithCount,
-  insertAndReturnDb,
-} from "~/server/repo/database-helpers";
 import { createAppError } from "~/server/api/trpc";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  location,
-  locationImage,
   type image,
   inventoryEntry,
+  location,
+  locationImage,
   product,
 } from "~/server/db/schema";
-import { eq, and, sql, count, desc, inArray, ilike } from "drizzle-orm";
-import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import type { ActorContext } from "~/schemas/context";
-import { parseWithContext } from "~/lib/zod-utils";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  associatePendingImages,
+  buildOrderBy,
+  buildPartialUpdateValues,
+  executeListQueryWithCount,
+  extractImagesFromJoinTable,
+  formatSearchTerm,
+  getDb,
+  insertAndReturnDb,
+  mapRelation,
+  relations,
+  unwrapDb,
+  updateAndReturn,
+} from "~/server/repo/database-helpers";
 
 // Create a new location
 export const createLocation = async (

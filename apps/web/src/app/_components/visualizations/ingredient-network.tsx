@@ -1,14 +1,14 @@
 "use client";
-import { useMemo, useRef, useEffect, useState, useCallback } from "react";
-import * as d3Force from "d3-force";
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
+import * as d3Force from "d3-force";
 import Link from "next/link";
-import type {
-  IngredientNode,
-  IngredientEdge,
-} from "~/schemas/ingredient-cooccurrence";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import type {
+  IngredientEdge,
+  IngredientNode,
+} from "~/schemas/ingredient-cooccurrence";
+import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 interface NetworkNode extends IngredientNode, d3Force.SimulationNodeDatum {}

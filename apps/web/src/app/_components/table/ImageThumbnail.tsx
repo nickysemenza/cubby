@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { cva, type VariantProps } from "class-variance-authority";
+import Image from "next/image";
 import { NoneState } from "~/app/_components/NoneState";
 
 interface ImageData {

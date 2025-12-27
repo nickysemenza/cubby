@@ -1,11 +1,11 @@
 "use client";
 
-import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
+import * as React from "react";
 import { Button } from "~/components/ui/button";
+import useDebounce from "~/hooks/useDebounce";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "./combobox-types";
-import useDebounce from "~/hooks/useDebounce";
 
 /**
  * DialogCompatibleCombobox

@@ -1,19 +1,24 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import type { z } from "zod";
-import { useTRPC } from "~/trpc/react";
+import { useMutation } from "@tanstack/react-query";
 import {
   createColumnHelper,
-  getCoreRowModel,
-  useReactTable,
   flexRender,
+  getCoreRowModel,
   type RowSelectionState,
+  useReactTable,
 } from "@tanstack/react-table";
-import { ProductPillLink } from "../EntityPill";
-import { showAmountAndPrice } from "../inventory/format-amount";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { buildSelectColumn } from "../data-table/row-selection";
+import {
+  ArrowRightLeft,
+  Check,
+  MoreHorizontal,
+  Pencil,
+  Trash,
+  X,
+} from "lucide-react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -22,6 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { Input } from "~/components/ui/input";
 import {
   Table,
   TableBody,
@@ -30,20 +36,14 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { Input } from "~/components/ui/input";
-import {
-  MoreHorizontal,
-  ArrowRightLeft,
-  Trash,
-  Pencil,
-  X,
-  Check,
-} from "lucide-react";
-import { useMutation } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
-import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { LocationId } from "~/schemas/identifiers";
+import { useTRPC } from "~/trpc/react";
+import { buildSelectColumn } from "../data-table/row-selection";
+import { ProductPillLink } from "../EntityPill";
+import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
+import { showAmountAndPrice } from "../inventory/format-amount";
+import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import { NoneState } from "../NoneState";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;

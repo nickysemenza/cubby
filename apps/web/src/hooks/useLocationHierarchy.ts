@@ -1,16 +1,16 @@
-import { useMemo } from "react";
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import {
+  calculateInventoryValue,
+  emptyPricingStatus,
+  type InventoryItem,
+  mergePricingStatus,
+  type PricingStatus,
+} from "~/app/_components/locations/calculate-inventory-value";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { LocationId } from "~/schemas/identifiers";
 import type { InfLocation, LocationType } from "~/schemas/location";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import {
-  type InventoryItem,
-  type PricingStatus,
-  emptyPricingStatus,
-  mergePricingStatus,
-  calculateInventoryValue,
-} from "~/app/_components/locations/calculate-inventory-value";
+import { useTRPC } from "~/trpc/react";
 
 /**
  * Node structure for location hierarchy visualizations.

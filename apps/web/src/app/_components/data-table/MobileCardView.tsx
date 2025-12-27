@@ -2,13 +2,13 @@
 
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { Empty, EmptyTitle, EmptyDescription } from "~/components/ui/empty";
-import { useDebug } from "~/hooks/useDebug";
-import { DebugDialog } from "./DebugDialog";
 import type { ReactNode } from "react";
 import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { Button } from "~/components/ui/button";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { useDebug } from "~/hooks/useDebug";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
+import { DebugDialog } from "./DebugDialog";
 
 interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;

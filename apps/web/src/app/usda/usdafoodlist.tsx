@@ -1,18 +1,17 @@
 "use client";
-import { useTRPC } from "~/trpc/react";
+import { type DataType, dataTypeEnum } from "@recipehub/usda-schemas";
+import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { Flatten } from "~/misc/array-helpers";
-import { dataTypeEnum, type DataType } from "@recipehub/usda-schemas";
+import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
-import { NoneState } from "../_components/NoneState";
-import { useTableState } from "../_components/data-table/useTableState";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
-import { NutritionInfoTable } from "../_components/usda/nutrition";
+import { useTableState } from "../_components/data-table/useTableState";
+import { ProductPillLink } from "../_components/EntityPill";
+import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
-import { ProductPillLink } from "../_components/EntityPill";
-
-import { useQuery } from "@tanstack/react-query";
+import { NutritionInfoTable } from "../_components/usda/nutrition";
 
 export function USDAFoodList() {
   const api = useTRPC();

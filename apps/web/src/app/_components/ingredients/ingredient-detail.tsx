@@ -1,19 +1,19 @@
 "use client";
 
 import type { FC } from "react";
-import { type DetailSection, DetailPage } from "../data-table/detail-page";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { ProductPillLink, RecipePillLink } from "../EntityPill";
-import { NutritionInfoTable } from "../usda/nutrition";
-import { EntityPillLinkList } from "../EntityPillLinkList";
-import { IngredientForm } from "./ingredient-form";
-import type { IngredientUpdateInput } from "~/schemas/ingredient";
-import { useTRPC } from "~/trpc/react";
 import { Card, CardContent } from "~/components/ui/card";
-import { UnitMappingsTable } from "../units/unitmappingstable";
+import type { IngredientUpdateInput } from "~/schemas/ingredient";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { useTRPC } from "~/trpc/react";
+import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { ProductPillLink, RecipePillLink } from "../EntityPill";
+import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
+import { UnitMappingsTable } from "../units/unitmappingstable";
+import { NutritionInfoTable } from "../usda/nutrition";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
+import { IngredientForm } from "./ingredient-form";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;

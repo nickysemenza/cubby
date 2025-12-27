@@ -3,23 +3,26 @@
 // https://github.com/t3-oss/create-t3-app/issues/2065#issuecomment-2776059485
 
 import {
-  QueryCache,
   MutationCache,
+  QueryCache,
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
-import { httpBatchStreamLink, loggerLink } from "@trpc/client";
-import { createTRPCContext } from "@trpc/tanstack-react-query";
-import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
-import { useState } from "react";
-import SuperJSON from "superjson";
-import { createTRPCClient } from "@trpc/client";
 import {
-  shouldRetryQuery,
+  createTRPCClient,
+  httpBatchStreamLink,
+  loggerLink,
+} from "@trpc/client";
+import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { createTRPCContext } from "@trpc/tanstack-react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import SuperJSON from "superjson";
+import {
   getAppErrorDetails,
   getErrorMessage,
+  shouldRetryQuery,
 } from "~/lib/error-utils";
-import { toast } from "sonner";
 
 import type { AppRouter } from "~/server/api/root";
 

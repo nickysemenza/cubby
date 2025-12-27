@@ -1,33 +1,33 @@
-import type { Database } from "~/server/db";
+import { and, count, eq, ilike, not } from "drizzle-orm";
+import type { ActorContext } from "~/schemas/context";
+import type {
+  InventoryId,
+  LocationId,
+  OrganizationId,
+  ProductId,
+} from "~/schemas/identifiers";
 import {
-  type SortParams,
-  type PaginationParams,
   buildTakeSkip,
+  type PaginationParams,
+  type SortParams,
 } from "~/schemas/pagination";
+import { createAppError } from "~/server/api/trpc";
+import type { Database } from "~/server/db";
+import { inventoryEntry, location, product } from "~/server/db/schema";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
-  getDb,
   buildOrderBy,
+  buildPartialUpdateValues,
+  getDb,
   insertAndReturnDb,
   relations,
   updateAndReturnDb,
-  buildPartialUpdateValues,
 } from "~/server/repo/database-helpers";
-import { createAppError } from "~/server/api/trpc";
-import type {
-  InventoryId,
-  OrganizationId,
-  ProductId,
-  LocationId,
-} from "~/schemas/identifiers";
-import { inventoryEntry, product, location } from "~/server/db/schema";
-import { eq, and, count, not, ilike } from "drizzle-orm";
 import { dbInventoryEntryToAPI } from "./helpers";
 import type {
-  UpdateInventoryEntryData,
   CreateInventoryEntryData,
+  UpdateInventoryEntryData,
 } from "./types";
-import { logAuditEntry, computeChanges } from "~/server/repo/audit-log";
-import type { ActorContext } from "~/schemas/context";
 
 /**
  * Check if a product with expectedQuantity=1 already exists in a different location.

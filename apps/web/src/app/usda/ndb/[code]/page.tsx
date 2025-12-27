@@ -1,5 +1,5 @@
-import { api } from "~/trpc/server";
 import { redirect } from "next/navigation";
+import { api } from "~/trpc/server";
 
 type NDBParams = { code: string };
 type PageParams = { params: Promise<NDBParams> };

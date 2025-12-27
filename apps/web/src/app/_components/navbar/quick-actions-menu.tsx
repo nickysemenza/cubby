@@ -1,7 +1,7 @@
 "use client";
 
+import { Barcode, MapPin, Package, Plus, UtensilsCrossed } from "lucide-react";
 import Link from "next/link";
-import { Plus, Package, MapPin, UtensilsCrossed, Barcode } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,

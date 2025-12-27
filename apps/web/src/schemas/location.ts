@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { dbTimestampsOut } from "./common";
 import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
-import { createInputImages, imageOut, updateInputImages } from "./image";
+import { dbTimestampsOut } from "./common";
 import { inventoryId, locationId, productId } from "./identifiers";
+import { createInputImages, imageOut, updateInputImages } from "./image";
 
 export const locationType = z
   //todo: remove this in the future to make it more flexible?

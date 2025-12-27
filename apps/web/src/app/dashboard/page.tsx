@@ -1,7 +1,7 @@
-import { auth } from "~/lib/auth";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { PageWrapper } from "~/components/layout/page-wrapper";
-import { headers } from "next/headers";
+import { auth } from "~/lib/auth";
 
 export default async function DashboardPage() {
   const session = await auth.api.getSession({ headers: await headers() });

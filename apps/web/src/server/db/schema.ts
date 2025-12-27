@@ -1,28 +1,28 @@
+import { relations, sql } from "drizzle-orm";
 import {
-  pgTable,
-  uuid,
-  text,
-  timestamp,
+  index,
   integer,
   jsonb,
-  index,
-  uniqueIndex,
   pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
 import type { Amount } from "~/codec/codec";
 import { imageStatusValues } from "~/schemas/image";
 import { productCategoryValues } from "~/schemas/product";
 import { recipeSourceValues } from "~/schemas/recipe";
 import {
-  user,
+  account,
+  apikey,
+  invitation,
   organization,
   member as organizationMember,
   session,
-  account,
+  user,
   verification,
-  invitation,
-  apikey,
 } from "./auth.schema";
 
 // JSON types for JSONB columns

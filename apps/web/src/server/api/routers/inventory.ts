@@ -7,42 +7,42 @@
  */
 
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure, createAppError } from "../trpc";
-import {
-  getInventoryEntryByID,
-  inventoryentryList,
-  updateInventoryEntry,
-  createInventoryEntry,
-  bulkProcessInventoryEntries,
-  bulkMoveInventoryEntries,
-  checkUniqueProductDuplicate,
-  exportInventoryToCSV,
-  importInventoryFromCSV,
-  deleteInventoryEntry,
-} from "~/server/repo/inventory";
 import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
-  inventoryCreatePayloadData,
-  inventoryBulkOperationPayload,
-  inventoryUpdateInput,
-  bulkMovePayload,
-  inventoryCSVRow,
-  csvImportResult,
-  type CSVImportResult,
-} from "~/schemas/inventory";
-import {
-  createEntityCrudProcedures,
-  createDeleteProcedure,
-} from "../crud-factory";
-import { createCSVProceduresWithExportInput } from "../csv-factory";
-import { findDuplicateUniqueProducts } from "~/server/repo/product";
-import {
+  type InventoryId,
   inventoryId,
   locationId,
   unsafeProductId,
-  type InventoryId,
 } from "~/schemas/identifiers";
+import {
+  bulkMovePayload,
+  type CSVImportResult,
+  csvImportResult,
+  inventoryBulkOperationPayload,
+  inventoryCreatePayloadData,
+  inventoryCSVRow,
+  inventoryUpdateInput,
+} from "~/schemas/inventory";
+import {
+  bulkMoveInventoryEntries,
+  bulkProcessInventoryEntries,
+  checkUniqueProductDuplicate,
+  createInventoryEntry,
+  deleteInventoryEntry,
+  exportInventoryToCSV,
+  getInventoryEntryByID,
+  importInventoryFromCSV,
+  inventoryentryList,
+  updateInventoryEntry,
+} from "~/server/repo/inventory";
+import { findDuplicateUniqueProducts } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
+import {
+  createDeleteProcedure,
+  createEntityCrudProcedures,
+} from "../crud-factory";
+import { createCSVProceduresWithExportInput } from "../csv-factory";
+import { createAppError, createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Schema for inventory CSV export
 const inventoryCSVExportRow = z.object({

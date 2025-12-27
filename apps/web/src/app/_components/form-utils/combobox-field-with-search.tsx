@@ -1,15 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type { UseFormReturn, FieldValues, Path } from "react-hook-form";
-import { ComboboxField } from "../form-utils";
+import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import type { ComboboxItem } from "../combobox/combobox-types";
 import {
   WithIngredientSearch,
   WithLocationSearch,
   WithProductSearch,
   WithRecipeSearch,
 } from "../combobox/with-search-hook";
-import type { ComboboxItem } from "../combobox/combobox-types";
+import { ComboboxField } from "../form-utils";
 
 type SearchType = "ingredient" | "product" | "location" | "recipe";
 

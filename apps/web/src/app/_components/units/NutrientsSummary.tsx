@@ -1,8 +1,8 @@
 import {
-  type NutrientsPer100,
-  TIER1_NUTRIENTS,
   getNutrientDisplayName,
   getNutrientUnit,
+  type NutrientsPer100,
+  TIER1_NUTRIENTS,
 } from "@recipehub/usda-schemas";
 
 // Priority order for display - show macros first, then minerals, then vitamins

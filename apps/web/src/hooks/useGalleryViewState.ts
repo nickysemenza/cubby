@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useLocalStorage } from "./useLocalStorage";
 import type { LocationType } from "~/schemas/location";
+import { useLocalStorage } from "./useLocalStorage";
 
 export type EmptyFilter = "all" | "withItems" | "empty";
 

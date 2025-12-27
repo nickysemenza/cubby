@@ -1,8 +1,8 @@
+import { ndb, upc } from "@recipehub/usda-schemas";
 import { z } from "zod";
-import { upc, ndb } from "@recipehub/usda-schemas";
 import { amount } from "~/codec/codec";
 import { dbTimestampsOut } from "./common";
-import { inventoryId, productId, locationId } from "./identifiers";
+import { inventoryId, locationId, productId } from "./identifiers";
 import { productCategory } from "./product";
 
 export const inventoryEntryOut = z

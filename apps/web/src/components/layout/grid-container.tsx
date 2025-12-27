@@ -1,8 +1,8 @@
 import * as React from "react";
 import { cn } from "~/lib/utils";
 import {
-  gridContainerVariants,
   type GridContainerVariants,
+  gridContainerVariants,
 } from "~/styles/layouts";
 
 interface GridContainerProps

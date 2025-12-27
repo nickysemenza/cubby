@@ -1,19 +1,19 @@
 "use client";
 
-import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
+import Link from "next/link";
+import type { z } from "zod";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { useTRPC } from "~/trpc/react";
+import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
-import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
-import { showAmountAndPrice } from "../_components/inventory/format-amount";
-import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
-import { ImageThumbnail, TableLink } from "../_components/table";
-import Link from "next/link";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { showAmountAndPrice } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-value";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { z } from "zod";
+import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { ImageThumbnail, TableLink } from "../_components/table";
+import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
 
 type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

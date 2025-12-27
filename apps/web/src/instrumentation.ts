@@ -1,7 +1,9 @@
+import {
+  CompositePropagator,
+  W3CBaggagePropagator,
+  W3CTraceContextPropagator,
+} from "@opentelemetry/core";
 import { FetchInstrumentation, registerOTel } from "@vercel/otel";
-import { W3CTraceContextPropagator } from "@opentelemetry/core";
-import { W3CBaggagePropagator } from "@opentelemetry/core";
-import { CompositePropagator } from "@opentelemetry/core";
 
 export function register() {
   // ReferenceError: An error occurred while loading instrumentation hook: global is not defined

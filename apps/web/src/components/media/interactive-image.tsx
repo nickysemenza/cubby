@@ -1,6 +1,6 @@
-import * as React from "react";
-import Image from "next/image";
 import { cva, type VariantProps } from "class-variance-authority";
+import Image from "next/image";
+import * as React from "react";
 import { cn } from "~/lib/utils";
 
 const interactiveImageVariants = cva(

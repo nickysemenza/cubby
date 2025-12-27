@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { MainNav } from "./_components/MainNav";
+import { describe, expect, it, vi } from "vitest";
 import { DebugContextProvider } from "../hooks/useDebug";
+import { MainNav } from "./_components/MainNav";
 
 // Mock matchMedia
 Object.defineProperty(window, "matchMedia", {

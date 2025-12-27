@@ -1,7 +1,7 @@
 "use client";
 
+import { type DehydratedState, HydrationBoundary } from "@tanstack/react-query";
 import type React from "react";
-import { HydrationBoundary, type DehydratedState } from "@tanstack/react-query";
 
 // Client component to hydrate the query client with server-fetched data
 export function HydrateClient({

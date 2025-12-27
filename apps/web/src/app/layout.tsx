@@ -1,17 +1,17 @@
 import "~/styles/globals.css";
 import "@daveyplate/better-auth-ui/css";
 
-import type { Metadata } from "next";
-import { TRPCReactProvider } from "~/trpc/react";
-import { MainNav } from "./_components/MainNav";
-import { GlobalCommandMenu } from "./_components/command-menu";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { Toaster } from "~/components/ui/sonner";
-import { WasmContextProvider } from "~/hooks/useWasm";
-import { DebugContextProvider } from "~/hooks/useDebug";
-import { ThemeProvider } from "~/components/theme-provider";
-import { AuthUIProvider } from "./_components/AuthUIProvider";
+import type { Metadata } from "next";
 import { Nunito_Sans } from "next/font/google";
+import { ThemeProvider } from "~/components/theme-provider";
+import { Toaster } from "~/components/ui/sonner";
+import { DebugContextProvider } from "~/hooks/useDebug";
+import { WasmContextProvider } from "~/hooks/useWasm";
+import { TRPCReactProvider } from "~/trpc/react";
+import { AuthUIProvider } from "./_components/AuthUIProvider";
+import { GlobalCommandMenu } from "./_components/command-menu";
+import { MainNav } from "./_components/MainNav";
 
 const nunitoSans = Nunito_Sans({ subsets: ["latin"], variable: "--font-sans" });
 

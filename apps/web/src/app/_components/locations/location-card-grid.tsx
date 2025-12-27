@@ -1,15 +1,15 @@
 "use client";
-import { Badge } from "~/components/ui/badge";
-import type { InfLocation } from "~/schemas/location";
-import { getLocationIcon, LocationIcon } from "./location-icons";
-import { cn } from "~/lib/utils";
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import { Package, Calendar, ExternalLink } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { Calendar, ExternalLink, Package } from "lucide-react";
+import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { Badge } from "~/components/ui/badge";
+import { cn } from "~/lib/utils";
+import type { InfLocation } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
 import { ProductPillLink } from "../EntityPill";
 import { InventoryValueSummary } from "./inventory-value-summary";
-import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { getLocationIcon, LocationIcon } from "./location-icons";
 
 interface LocationCardGridProps {
   locations: InfLocation[];

@@ -1,9 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useTRPC } from "~/trpc/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  ArrowRightLeft,
+  CheckCircle2,
+  GitCompare,
+  Loader2,
+  MapPin,
+  Pencil,
+  Plus,
+} from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import {
@@ -21,27 +30,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import {
-  Loader2,
-  Plus,
-  ArrowRightLeft,
-  AlertCircle,
-  CheckCircle2,
-  Pencil,
-  GitCompare,
-  MapPin,
-} from "lucide-react";
-import type {
-  SyncState,
-  SyncResolution,
-  LocationSyncItem,
-  InventorySyncItem,
-  SyncPreviewResult,
-} from "~/schemas/sync";
-import { queryKeys } from "~/lib/query-keys";
-import { ValueChange } from "../value-change";
-import { NoneState } from "../NoneState";
 import { entities } from "~/entities/entities";
+import { queryKeys } from "~/lib/query-keys";
+import type {
+  InventorySyncItem,
+  LocationSyncItem,
+  SyncPreviewResult,
+  SyncResolution,
+  SyncState,
+} from "~/schemas/sync";
+import { useTRPC } from "~/trpc/react";
+import { NoneState } from "../NoneState";
+import { ValueChange } from "../value-change";
 
 // Convert resolution to which side is selected (for visual feedback)
 const getSelectedSide = (

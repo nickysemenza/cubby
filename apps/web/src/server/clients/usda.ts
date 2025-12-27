@@ -1,14 +1,14 @@
-import { getTracer, TraceNames } from "~/server/tracing";
+import { context, propagation } from "@opentelemetry/api";
+import { usdaContract } from "@recipehub/usda-contract";
 import type {
   BrandedFoodInfo,
+  DataType,
   FoodLookupParam,
   FoodSummary,
-  DataType,
 } from "@recipehub/usda-schemas";
-import { usdaContract } from "@recipehub/usda-contract";
 import { initClient } from "@ts-rest/core";
-import type { SortParams, PaginationParams } from "~/schemas/pagination";
-import { context, propagation } from "@opentelemetry/api";
+import type { PaginationParams, SortParams } from "~/schemas/pagination";
+import { getTracer, TraceNames } from "~/server/tracing";
 
 export class USDAClient {
   private client;

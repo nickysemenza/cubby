@@ -1,3 +1,4 @@
+import type { NutritionInfo } from "@recipehub/usda-schemas";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import {
   Table,
@@ -7,7 +8,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import type { NutritionInfo } from "@recipehub/usda-schemas";
 
 export const NutritionInfoTable: React.FC<{
   n: NutritionInfo;

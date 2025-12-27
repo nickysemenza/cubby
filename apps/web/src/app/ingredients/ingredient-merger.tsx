@@ -1,12 +1,10 @@
-import type { Table } from "@tanstack/react-table";
-
-import { Button } from "~/components/ui/button";
-import { useTRPC } from "~/trpc/react";
-import { toast } from "sonner";
-import { IngredientPillLink } from "../_components/EntityPill";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-
 import { useMutation } from "@tanstack/react-query";
+import type { Table } from "@tanstack/react-table";
+import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { useTRPC } from "~/trpc/react";
+import { IngredientPillLink } from "../_components/EntityPill";
 
 interface IngredientMergerProps {
   table: Table<IngredientWithFoodOut>;

@@ -1,27 +1,27 @@
 "use client";
 
-import type { RouterOutputs } from "~/trpc/react";
-import { HoverableTimestamp } from "../HoverableTimestamp";
-import { Badge } from "~/components/ui/badge";
+import {
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  Package,
+  ShoppingCart,
+  UtensilsCrossed,
+} from "lucide-react";
+import { useState } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import { Badge } from "~/components/ui/badge";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
-import {
-  ChevronDown,
-  ChevronRight,
-  Package,
-  MapPin,
-  UtensilsCrossed,
-  ShoppingCart,
-  Bot,
-} from "lucide-react";
-import { useState } from "react";
 import { cn } from "~/lib/utils";
-import { EntityPillById } from "../EntityPillById";
 import type { AuditEntityType } from "~/server/repo/audit-log";
+import type { RouterOutputs } from "~/trpc/react";
+import { EntityPillById } from "../EntityPillById";
+import { HoverableTimestamp } from "../HoverableTimestamp";
 import { ChangesList } from "../value-change";
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];

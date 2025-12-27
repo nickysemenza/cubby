@@ -1,38 +1,38 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect, useId } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { Button } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
-import { Label } from "~/components/ui/label";
-import {
-  Upload,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Plus,
-  ArrowRightLeft,
-  RefreshCw,
-  Package,
-  MapPin,
-  Trash2,
-  Pencil,
-} from "lucide-react";
-import { useTRPC } from "~/trpc/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
+import {
+  AlertCircle,
+  ArrowRightLeft,
+  CheckCircle2,
+  Loader2,
+  MapPin,
+  Package,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import type {
-  InventoryCSVRow,
-  CSVImportResult,
-  CSVImportResultItem,
-} from "~/schemas/inventory";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
+import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
+import { entities } from "~/entities/entities";
+import useDebounce from "~/hooks/useDebounce";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { queryKeys } from "~/lib/query-keys";
-import useDebounce from "~/hooks/useDebounce";
 import { dedupe } from "~/misc/array-helpers";
-import { entities } from "~/entities/entities";
+import type {
+  CSVImportResult,
+  CSVImportResultItem,
+  InventoryCSVRow,
+} from "~/schemas/inventory";
+import { useTRPC } from "~/trpc/react";
 
 // Helper to get action styles
 const getActionStyles = (action: CSVImportResultItem["action"]) => {

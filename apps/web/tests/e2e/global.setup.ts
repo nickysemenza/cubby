@@ -1,7 +1,7 @@
-import { faker } from "@faker-js/faker";
-import { test as setup } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { faker } from "@faker-js/faker";
+import { test as setup } from "@playwright/test";
 
 // Setup must be run serially, this is necessary if Playwright is configured to run fully parallel
 setup.describe.configure({ mode: "serial" });

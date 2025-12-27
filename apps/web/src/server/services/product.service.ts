@@ -1,20 +1,20 @@
+import { foodSummary } from "@recipehub/usda-schemas";
+import type { z } from "zod";
+import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
+import type { ActorContext } from "~/schemas/context";
+import type { OrganizationId, ProductId } from "~/schemas/identifiers";
+import type { PaginationParams, SortParams } from "~/schemas/pagination";
+import type { ProductCategory, ProductInputPayload } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
 import {
+  createProduct as createProductRepo,
+  foodLookupParamFromProduct,
   getProductByID as getProductByIDRepo,
   productList as productListRepo,
-  createProduct as createProductRepo,
   updateProduct as updateProductRepo,
-  foodLookupParamFromProduct,
 } from "../repo/product";
-import type { ProductInputPayload, ProductCategory } from "~/schemas/product";
-import type { SortParams, PaginationParams } from "~/schemas/pagination";
-import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
-import { foodSummary } from "@recipehub/usda-schemas";
-import type { z } from "zod";
-import type { ProductId, OrganizationId } from "~/schemas/identifiers";
 import { batchEnrichWithFood } from "./usda-helpers";
-import type { ActorContext } from "~/schemas/context";
 
 // Extended schema that includes food data
 export const productWithFoodOut =

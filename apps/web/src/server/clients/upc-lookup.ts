@@ -1,9 +1,9 @@
-import { getTracer, TraceNames } from "~/server/tracing";
 import { context, propagation } from "@opentelemetry/api";
 import {
-  upcLookupResponseSchema,
   type UPCLookupResponse,
+  upcLookupResponseSchema,
 } from "@recipehub/upc-lookup/schemas";
+import { getTracer, TraceNames } from "~/server/tracing";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 

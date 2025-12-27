@@ -1,12 +1,12 @@
+import { PageWrapper } from "~/components/layout/page-wrapper";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "~/components/ui/card";
 import BulkInventoryForm from "./bulk-inventory-form";
-import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const metadata = {
   title: "Bulk Inventory Edit",

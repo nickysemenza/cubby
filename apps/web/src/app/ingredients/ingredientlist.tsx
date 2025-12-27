@@ -1,25 +1,25 @@
 "use client";
 
-import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useState, useId } from "react";
-import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
-import RTable from "../_components/data-table/Table";
-import { buildSelectColumn } from "../_components/data-table/row-selection";
-import { IngredientMerger } from "./ingredient-merger";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { Checkbox } from "~/components/ui/checkbox";
+import Link from "next/link";
+import { useId, useState } from "react";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
+import { entities } from "~/entities/entities";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
+  createEntityPillColumn,
   createImageColumn,
   createNameColumn,
-  createEntityPillColumn,
 } from "../_components/data-table/columnHelpers";
-import Link from "next/link";
-import { entities } from "~/entities/entities";
+import { buildSelectColumn } from "../_components/data-table/row-selection";
+import RTable from "../_components/data-table/Table";
+import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { IngredientMerger } from "./ingredient-merger";
 
 /** Aggregate unit mappings from all products for an ingredient */
 async function getIngredientMappings(

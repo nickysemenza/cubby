@@ -1,9 +1,9 @@
 "use client";
 
-import type { RecipeOut } from "~/schemas/recipe";
+import { Clock, ExternalLink, Users } from "lucide-react";
 import Image from "next/image";
-import { Clock, Users, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import type { RecipeOut } from "~/schemas/recipe";
 
 interface RecipeHeroProps {
   recipe: RecipeOut;

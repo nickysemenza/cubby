@@ -3,10 +3,10 @@
  */
 
 export {
-  compareLocationsForSync,
   compareInventoryForSync,
+  compareLocationsForSync,
   countByState,
+  syncItemsToInventoryCSVRows,
   // Converters
   syncItemsToLocationCSVRows,
-  syncItemsToInventoryCSVRows,
 } from "./comparison";

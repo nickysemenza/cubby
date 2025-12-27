@@ -1,21 +1,21 @@
-import type { Database } from "~/server/db";
+import { and, eq, notInArray } from "drizzle-orm";
+import { joinImageUrls } from "~/lib/image-utils";
 import {
-  type OrganizationId,
+  inventoryId as inventoryIdSchema,
   type LocationId,
   locationId as locationIdSchema,
-  inventoryId as inventoryIdSchema,
+  type OrganizationId,
   productId as productIdSchema,
 } from "~/schemas/identifiers";
-import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
-import { inventoryEntry, product } from "~/server/db/schema";
-import { eq, and, notInArray } from "drizzle-orm";
 import {
   extractPriceFromMappings,
   serializeUnitMappings,
 } from "~/schemas/price-mapping-utils";
-import { joinImageUrls } from "~/lib/image-utils";
-import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 import type { ProductCategory } from "~/schemas/product";
+import type { Database } from "~/server/db";
+import { inventoryEntry, product } from "~/server/db/schema";
+import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
+import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 
 /**
  * Build common product export fields from a product with unit mappings and ingredient

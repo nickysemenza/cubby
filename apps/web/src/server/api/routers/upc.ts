@@ -1,7 +1,7 @@
-import { createTRPCRouter, publicProcedure } from "../trpc";
-import { upc } from "@recipehub/usda-schemas";
 import { upcLookupResponseSchema } from "@recipehub/upc-lookup/schemas";
+import { upc } from "@recipehub/usda-schemas";
 import { z } from "zod";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 
 const lookup = publicProcedure
   .input(z.object({ upc: upc }))

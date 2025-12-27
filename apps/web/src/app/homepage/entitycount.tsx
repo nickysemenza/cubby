@@ -1,9 +1,9 @@
 "use client";
-import { useTRPC } from "~/trpc/react";
 
 import { useQueries } from "@tanstack/react-query";
-import type { SortParams } from "~/schemas/pagination";
 import { authClient } from "~/lib/auth-client";
+import type { SortParams } from "~/schemas/pagination";
+import { useTRPC } from "~/trpc/react";
 
 export default function EntityCount() {
   const api = useTRPC();

@@ -1,22 +1,22 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import type { Database } from "~/server/db";
 import { buildTestDB } from "tooling/test-setup";
+import { beforeEach, describe, expect, it } from "vitest";
+import type { ActorContext } from "~/schemas/context";
+import {
+  type OrganizationId,
+  unsafeIngredientId,
+  unsafeOrganizationId,
+  unsafeProductId,
+  unsafeUserId,
+} from "~/schemas/identifiers";
+import type { Database } from "~/server/db";
+import { createIngredient } from "./ingredient";
 import {
   createProduct,
+  findProductByNameFuzzyManufacturer,
   getProductByID,
   productList,
   updateProduct,
-  findProductByNameFuzzyManufacturer,
 } from "./product";
-import { createIngredient } from "./ingredient";
-import {
-  unsafeIngredientId,
-  unsafeProductId,
-  type OrganizationId,
-  unsafeUserId,
-  unsafeOrganizationId,
-} from "~/schemas/identifiers";
-import type { ActorContext } from "~/schemas/context";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),

@@ -1,10 +1,10 @@
 "use client";
 
 import { toast } from "sonner";
-import { RecipeForm } from "./recipe-form";
-import { useTRPC } from "~/trpc/react";
 import type { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
+import { useTRPC } from "~/trpc/react";
 import { useEntityEditMode } from "../hooks/useEntityMode";
+import { RecipeForm } from "./recipe-form";
 
 interface EditRecipeFormProps {
   recipe: RecipeOut;

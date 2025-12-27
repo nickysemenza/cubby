@@ -1,9 +1,9 @@
 "use client";
-import { ProductForm } from "./product-form";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import type { ProductInputPayload } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useEntityCreateMode } from "../hooks/useEntityMode";
+import { ProductForm } from "./product-form";
 
 export function NewProduct() {
   const api = useTRPC();

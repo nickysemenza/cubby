@@ -6,26 +6,26 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import type { SectionIngredientOut } from "~/schemas/recipe";
-import RTable from "../data-table/Table";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { renderValueOrError } from "~/misc/result";
+import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
 import {
+  type CalculateTotalsResult,
   calculateTotals,
   createIngredientData,
-  type CalculateTotalsResult,
   type IngredientDataItem,
 } from "~/app/_components/units/univ-conversion";
-import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
-import { tryFormatAmount } from "../inventory/format-amount";
-import { IngredientPillLink, RecipePillLink } from "../EntityPill";
 import {
   EntitySummaryCard,
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { renderValueOrError } from "~/misc/result";
+import type { SectionIngredientOut } from "~/schemas/recipe";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import RTable from "../data-table/Table";
+import { IngredientPillLink, RecipePillLink } from "../EntityPill";
+import { tryFormatAmount } from "../inventory/format-amount";
+import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { getIngredientName } from "./recipeutils";
 
 export const RecipeIngredientList: React.FC<{

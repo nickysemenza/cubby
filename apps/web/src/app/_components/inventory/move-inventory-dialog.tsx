@@ -13,12 +13,14 @@
  */
 "use client";
 
-import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { FormProvider, useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
-import { useTRPC } from "~/trpc/react";
 import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -28,14 +30,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { toast } from "sonner";
-import { type LocationId, unsafeInventoryId } from "~/schemas/identifiers";
-import { useMutation } from "@tanstack/react-query";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
-import { getOptionalLocationId } from "~/schemas/form-fields";
-import type { BulkMoveItem } from "~/schemas/inventory";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { FormProvider } from "react-hook-form";
+import { getOptionalLocationId } from "~/schemas/form-fields";
+import { type LocationId, unsafeInventoryId } from "~/schemas/identifiers";
+import type { BulkMoveItem } from "~/schemas/inventory";
+import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

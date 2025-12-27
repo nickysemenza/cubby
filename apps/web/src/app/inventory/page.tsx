@@ -1,7 +1,7 @@
-import { InventoryItemList } from "./inventoryitemlist";
 import type { Metadata } from "next";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { InventoryActions } from "./inventory-actions";
+import { InventoryItemList } from "./inventoryitemlist";
 
 export const dynamic = "force-dynamic";
 

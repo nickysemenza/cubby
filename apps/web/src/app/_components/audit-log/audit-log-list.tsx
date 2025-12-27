@@ -1,11 +1,11 @@
 "use client";
 
-import { useTRPC } from "~/trpc/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { AuditLogEntryComponent } from "./audit-log-entry";
-import { Button } from "~/components/ui/button";
 import { Loader2 } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import type { AuditEntityType } from "~/server/repo/audit-log";
+import { useTRPC } from "~/trpc/react";
+import { AuditLogEntryComponent } from "./audit-log-entry";
 
 interface AuditLogListProps {
   entityType?: AuditEntityType;

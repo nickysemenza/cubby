@@ -4,34 +4,34 @@
  * Handles product creation, updates, and preview logic.
  */
 
-import type { Database } from "~/server/db";
+import { eq } from "drizzle-orm";
+import type { ActorContext } from "~/schemas/context";
 import {
-  type OrganizationId,
   type IngredientId,
+  type OrganizationId,
   unsafeIngredientId,
 } from "~/schemas/identifiers";
-import { getDb } from "~/server/repo/database-helpers";
+import {
+  hasFoodIndicators,
+  type ProductCategory,
+  type ProductTopLevelOut,
+} from "~/schemas/product";
+import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { logAuditEntry } from "~/server/repo/audit-log";
+import { applyUpdates, buildAuditChanges } from "~/server/repo/csv/field-utils";
+import { getDb } from "~/server/repo/database-helpers";
+import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import {
   findProductByNameFuzzyManufacturer,
   quickCreateProduct,
 } from "~/server/repo/product";
 import {
-  type ProductTopLevelOut,
-  type ProductCategory,
-  hasFoodIndicators,
-} from "~/schemas/product";
-import { buildAuditChanges, applyUpdates } from "~/server/repo/csv/field-utils";
-import { findOrCreateIngredient } from "~/server/repo/ingredient";
-import type { ProductPreviewResult } from "./types";
-import { logAuditEntry } from "~/server/repo/audit-log";
-import type { ActorContext } from "~/schemas/context";
-import {
-  computeProductUpdates,
   computeNewProductChanges,
+  computeProductUpdates,
   type ProductUpdateInput,
 } from "./product-updates";
+import type { ProductPreviewResult } from "./types";
 
 /**
  * Parse semicolon-separated aliases string into array

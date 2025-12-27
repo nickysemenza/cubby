@@ -1,17 +1,17 @@
 import type { z } from "zod";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { locationType } from "~/schemas/location";
 import { parseWithContext } from "~/lib/zod-utils";
-import {
-  extractImagesFromJoinTable,
-  addProductSourceMetadata,
-  parseInventoryAmount,
-} from "~/server/repo/database-helpers";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   unsafeInventoryId,
-  unsafeProductId,
   unsafeLocationId,
+  unsafeProductId,
 } from "~/schemas/identifiers";
+import { locationType } from "~/schemas/location";
+import {
+  addProductSourceMetadata,
+  extractImagesFromJoinTable,
+  parseInventoryAmount,
+} from "~/server/repo/database-helpers";
 import type { InventoryEntryDeepDB } from "./types";
 
 export const dbInventoryEntryToAPI: (

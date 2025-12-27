@@ -7,32 +7,32 @@
  */
 
 import { z } from "zod";
-import { protectedProcedure, createTRPCRouter } from "../trpc";
+import { locationOutWithParentChildrenAndInventoryOut } from "~/schemas/combo";
+import { type LocationId, locationId } from "~/schemas/identifiers";
 import {
   infLocation,
-  locationType,
   locationCreateInput,
-  locationUpdateInput,
-  locationCSVRow,
   locationCSVImportResult,
+  locationCSVRow,
+  locationType,
+  locationUpdateInput,
 } from "~/schemas/location";
 import {
   buildLocationTree,
   buildLocationTypeCount,
+  createLocation,
   getLocationById,
   locationList,
-  createLocation,
   updateLocation,
 } from "~/server/repo/location";
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
 import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
-import { locationOutWithParentChildrenAndInventoryOut } from "~/schemas/combo";
 import {
-  createEntityListProcedure,
   createEntityCrudWithoutListProcedures,
+  createEntityListProcedure,
 } from "../crud-factory";
 import { createCSVProcedures } from "../csv-factory";
-import { locationId, type LocationId } from "~/schemas/identifiers";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Schema for location CSV export (without internal location_id field)
 const locationCSVExportRow = z.object({

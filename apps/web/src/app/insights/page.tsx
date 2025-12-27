@@ -1,7 +1,7 @@
 import { BarChart3 } from "lucide-react";
 import LocationTreemap from "../_components/inventory/location-treemap";
-import LocationSunburst from "../_components/visualizations/location-sunburst";
 import IngredientNetwork from "../_components/visualizations/ingredient-network";
+import LocationSunburst from "../_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "../_components/visualizations/product-category-donut";
 
 export default function InsightsPage() {

@@ -7,12 +7,12 @@
  */
 
 import { z } from "zod";
-import { createTRPCRouter, protectedProcedure } from "../trpc";
-import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
-import { mergeIngredients } from "~/server/repo/ingredient";
+import { type IngredientId, ingredientId } from "~/schemas/identifiers";
 import { ingredientBase } from "~/schemas/ingredient";
+import { mergeIngredients } from "~/server/repo/ingredient";
+import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import { createEntityCrudProcedures } from "../crud-factory";
-import { ingredientId, type IngredientId } from "~/schemas/identifiers";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Define filters schema for ingredients
 const ingredientFiltersSchema = z.object({

@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
+import type { ComboboxItem } from "./combobox/combobox-types";
 import {
-  getSubmitButtonText,
   buildUpdateObject,
   detectComboboxIdChange,
+  getSubmitButtonText,
 } from "./form-utils";
-import type { ComboboxItem } from "./combobox/combobox-types";
 
 describe("form-utils", () => {
   describe("getSubmitButtonText", () => {

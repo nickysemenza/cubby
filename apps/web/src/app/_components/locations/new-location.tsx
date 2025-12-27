@@ -1,9 +1,9 @@
 "use client";
-import { LocationForm } from "./location-form";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import type { LocationCreateInput, LocationOut } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useEntityCreateMode } from "../hooks/useEntityMode";
+import { LocationForm } from "./location-form";
 
 export function NewLocation() {
   const api = useTRPC();

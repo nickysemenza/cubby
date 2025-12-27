@@ -1,5 +1,9 @@
 "use client";
 
+import { ExternalLink, type LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
+import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { Badge } from "~/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -7,10 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Badge } from "~/components/ui/badge";
-import { ExternalLink, type LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
-import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
 
 interface ProblemSectionProps<T> {
   title: string;

@@ -1,18 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
 import type { AmountKind } from "@recipehub/recipebridge";
-import type { UnitMapping } from "~/schemas/unitmapping";
-import { safeConvertAmount } from "./univ-conversion";
-import { ConversionDialog } from "./ConversionDialog";
+import { ArrowLeftRight } from "lucide-react";
+import { useMemo } from "react";
+import { Badge } from "~/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { kindIconMap, formatKindsLabel } from "./kind-icons";
-import { ArrowLeftRight } from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import type { UnitMapping } from "~/schemas/unitmapping";
+import { ConversionDialog } from "./ConversionDialog";
+import { formatKindsLabel, kindIconMap } from "./kind-icons";
+import { safeConvertAmount } from "./univ-conversion";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];

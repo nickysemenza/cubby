@@ -1,6 +1,6 @@
+import { ChevronDown, ChevronUp, Trash } from "lucide-react";
 import type { FC } from "react";
 import { Button } from "~/components/ui/button";
-import { ChevronUp, ChevronDown, Trash } from "lucide-react";
 
 interface FieldArrayItemControlsProps {
   move: (from: number, to: number) => void;

@@ -1,12 +1,12 @@
-import { createTRPCRouter, publicProcedure } from "../trpc";
-import { foodLookupParam, dataTypeEnum } from "@recipehub/usda-schemas";
-import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
+import { dataTypeEnum, foodLookupParam } from "@recipehub/usda-schemas";
 import { z } from "zod";
+import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
 import {
+  buildPaginatedResponse,
   createPaginatedResponseSchema,
   sortPaginationCombo,
-  buildPaginatedResponse,
 } from "~/schemas/pagination";
+import { createTRPCRouter, publicProcedure } from "../trpc";
 
 const getByAlternateID = publicProcedure
   .input(foodLookupParam)

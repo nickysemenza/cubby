@@ -1,12 +1,12 @@
-import * as React from "react";
-import { z } from "zod";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { SummaryGrid } from "~/components/entity/summary-grid";
-import type { SummaryItem } from "~/app/_components/SummaryCard";
 import {
   getNutrientDisplayName,
   getNutrientUnit,
 } from "@recipehub/usda-schemas";
+import * as React from "react";
+import { z } from "zod";
+import type { SummaryItem } from "~/app/_components/SummaryCard";
+import { SummaryGrid } from "~/components/entity/summary-grid";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 // Zod schemas for summary data types
 const recipeSummaryDataSchema = z.object({

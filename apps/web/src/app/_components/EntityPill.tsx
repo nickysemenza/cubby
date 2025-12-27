@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import type React from "react";
-import { entities } from "~/entities/entities";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
-import type { LocationType } from "~/schemas/location";
-import { isMiscProduct, getMiscDisplayName } from "~/lib/constants";
-import type { Entity } from "~/entities/types";
 import { Badge } from "~/components/ui/badge";
+import { entities } from "~/entities/entities";
+import type { Entity } from "~/entities/types";
+import { getMiscDisplayName, isMiscProduct } from "~/lib/constants";
+import type { LocationType } from "~/schemas/location";
 
 interface PillProps {
   text: string;

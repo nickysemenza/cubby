@@ -1,14 +1,14 @@
 "use client";
 
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { NutritionInfoTable } from "./nutrition";
-import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
 import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
-import { ProductPillLink } from "../EntityPill";
+import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { ProductPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
-import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { NutrientsSummary } from "../units/NutrientsSummary";
+import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import { NutritionInfoTable } from "./nutrition";
 
 export const USDAFoodDetail: React.FC<{
   id: number;

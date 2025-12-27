@@ -1,12 +1,11 @@
 "use client";
 
-import type { RecipeOut } from "~/schemas/recipe";
-import { useSearchParams } from "next/navigation";
-import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
-import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
-import { Button } from "~/components/ui/button";
 import { Edit, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
+import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
+import { Button } from "~/components/ui/button";
+import type { RecipeOut } from "~/schemas/recipe";
 
 interface RecipePageClientProps {
   recipe: RecipeOut;

@@ -1,26 +1,25 @@
 "use client";
 
-import {
-  useRef,
-  useMemo,
-  useCallback,
-  useState,
-  type RefCallback,
-} from "react";
-import { useTRPC } from "~/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  useGalleryViewState,
-  type EmptyFilter,
-} from "~/hooks/useGalleryViewState";
-import type { InfLocation, LocationType } from "~/schemas/location";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+  type RefCallback,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { z } from "zod";
-
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import {
+  type EmptyFilter,
+  useGalleryViewState,
+} from "~/hooks/useGalleryViewState";
+import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { InfLocation, LocationType } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

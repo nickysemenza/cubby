@@ -1,10 +1,10 @@
 "use client";
 
+import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import { AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { Button } from "~/components/ui/button";
 import { Alert, AlertDescription } from "~/components/ui/alert";
-import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
+import { Button } from "~/components/ui/button";
 import { getAppErrorDetails } from "~/lib/error-utils";
 
 interface ErrorDisplayProps {

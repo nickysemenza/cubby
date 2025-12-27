@@ -1,22 +1,19 @@
 "use client";
 
+import { DevTool } from "@hookform/devtools";
+import type { VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
-import { Button, type buttonVariants } from "~/components/ui/button";
-import { Field, FieldLabel, FieldError } from "~/components/ui/field";
 import {
-  type UseFormReturn,
+  Controller,
   type FieldValues,
+  FormProvider,
   type Path,
   type PathValue,
-  Controller,
-  FormProvider,
+  type UseFormReturn,
 } from "react-hook-form";
-import type { VariantProps } from "class-variance-authority";
+import { Button, type buttonVariants } from "~/components/ui/button";
+import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import type { ComboboxItem } from "./combobox/combobox-types";
-import { DevTool } from "@hookform/devtools";
-import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
-import { Textarea } from "~/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -24,7 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
+import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
+import type { ComboboxItem } from "./combobox/combobox-types";
 
 // Base props shared by all forms
 interface BaseFormProps {

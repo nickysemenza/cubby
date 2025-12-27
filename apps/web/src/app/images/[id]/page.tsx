@@ -1,19 +1,19 @@
 "use client";
 
-import { useParams } from "next/navigation";
-import { useTRPC } from "~/trpc/react";
+import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useParams } from "next/navigation";
 import {
-  ProductPillLink,
   LocationPillLink,
+  ProductPillLink,
   RecipePillLink,
 } from "~/app/_components/EntityPill";
-import { ImageStatusBadge } from "~/app/_components/table";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
-import { useQuery } from "@tanstack/react-query";
-import { assertNever } from "~/lib/assert";
+import { ImageStatusBadge } from "~/app/_components/table";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { assertNever } from "~/lib/assert";
+import { useTRPC } from "~/trpc/react";
 
 export default function ImageDetailPage() {
   const params = useParams();

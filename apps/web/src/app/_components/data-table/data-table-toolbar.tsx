@@ -2,6 +2,7 @@
 
 import type { RowData, Table } from "@tanstack/react-table";
 import { X } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
@@ -11,9 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { DataTableViewOptions } from "./data-table-view-options";
-import { type ReactNode, useState, useEffect } from "react";
 import useDebounce from "~/hooks/useDebounce";
+import { DataTableViewOptions } from "./data-table-view-options";
 
 interface FilterOption {
   value: string;

@@ -1,26 +1,26 @@
 "use client";
 
+import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import type { SectionIngredientOut, RecipeOut } from "~/schemas/recipe";
-import { RecipeIngredientList } from "./recipeingredientlist";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import EntityImageList from "../EntityImageList";
-import { useTRPCClient } from "~/trpc/react";
-import { AuditLogList } from "../audit-log/audit-log-list";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { RecipeMagazineView } from "./RecipeMagazineView";
-import { NYTView } from "./NYTView";
-import { Button } from "~/components/ui/button";
-import { Table2, BookOpen, Newspaper, BarChart3 } from "lucide-react";
 import {
-  createIngredientData,
   calculateTotals,
+  createIngredientData,
   type IngredientDataItem,
 } from "~/app/_components/units/univ-conversion";
-import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
 import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
+import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { useTRPCClient } from "~/trpc/react";
+import { AuditLogList } from "../audit-log/audit-log-list";
+import EntityImageList from "../EntityImageList";
+import { NYTView } from "./NYTView";
+import { RecipeMagazineView } from "./RecipeMagazineView";
+import { RecipeIngredientList } from "./recipeingredientlist";
 import { getIngredientName } from "./recipeutils";
 
 type ViewMode = "magazine" | "nyt" | "table" | "charts";

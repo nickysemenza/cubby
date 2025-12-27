@@ -1,17 +1,17 @@
 "use client";
-import { useState, useMemo, useId } from "react";
-import { type NodeRendererProps, Tree } from "react-arborist";
+
+import { useQuery } from "@tanstack/react-query";
 import { Package } from "lucide-react";
+import Link from "next/link";
+import { useId, useMemo, useState } from "react";
+import { type NodeRendererProps, Tree } from "react-arborist";
+import { FlexContainer } from "~/components/layout/flex-container";
+import { Badge } from "~/components/ui/badge";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Label } from "~/components/ui/label";
 import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { LocationIcon } from "../locations/location-icons";
-import { Checkbox } from "~/components/ui/checkbox";
-import { Label } from "~/components/ui/label";
-import { Badge } from "~/components/ui/badge";
-import Link from "next/link";
-import { FlexContainer } from "~/components/layout/flex-container";
-
-import { useQuery } from "@tanstack/react-query";
 
 // Tree node types for react-arborist
 type LocationTreeNode = {

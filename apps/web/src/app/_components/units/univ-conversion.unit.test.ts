@@ -1,17 +1,17 @@
-import { expect, test, describe, beforeAll } from "vitest";
-import {
-  getGramAndNutrient,
-  convertAmountToPrice,
-  convertAmountToNutrients,
-  createEmptyNutrients,
-  calculateTotals,
-} from "./univ-conversion";
+import { beforeAll, describe, expect, test } from "vitest";
 import type { Amount } from "~/codec/codec";
+import { ensureWasm } from "~/lib/wasm";
+import { unsafeIngredientId, unsafeProductId } from "~/schemas/identifiers";
+import type { SectionIngredientOut } from "~/schemas/recipe";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import type { SectionIngredientOut } from "~/schemas/recipe";
-import { unsafeProductId, unsafeIngredientId } from "~/schemas/identifiers";
-import { ensureWasm } from "~/lib/wasm";
+import {
+  calculateTotals,
+  convertAmountToNutrients,
+  convertAmountToPrice,
+  createEmptyNutrients,
+  getGramAndNutrient,
+} from "./univ-conversion";
 
 // Initialize WASM before all tests
 beforeAll(async () => {

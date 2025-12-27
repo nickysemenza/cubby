@@ -1,8 +1,7 @@
 "use client";
 
+import { LogOut, Settings, User } from "lucide-react";
 import Link from "next/link";
-import { User, Settings, LogOut } from "lucide-react";
-import { authClient } from "~/lib/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import {
   DropdownMenu,
@@ -12,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { authClient } from "~/lib/auth-client";
 
 export const UserAvatarDropdown = () => {
   const session = authClient.useSession();

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import ImageList from "./imagelist";
-import { PageWrapper } from "~/components/layout/page-wrapper";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { PageWrapper } from "~/components/layout/page-wrapper";
+import ImageList from "./imagelist";
 
 export const metadata = {
   title: "Images - RecipeHub",

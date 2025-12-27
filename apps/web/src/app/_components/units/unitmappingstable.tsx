@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   Table,
   TableBody,
@@ -6,13 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import type { UnitMapping } from "~/schemas/unitmapping";
 
 import { wasm } from "~/lib/wasm";
-import { NoneState } from "../NoneState";
-import { FoodPillLink, ProductPillLink } from "../EntityPill";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { useTRPC } from "~/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+import { FoodPillLink, ProductPillLink } from "../EntityPill";
+import { NoneState } from "../NoneState";
 
 // Component for lazy loading food data and rendering FoodPillLink
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {

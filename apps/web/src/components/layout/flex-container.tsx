@@ -1,8 +1,8 @@
 import * as React from "react";
 import { cn } from "~/lib/utils";
 import {
-  flexContainerVariants,
   type FlexContainerVariants,
+  flexContainerVariants,
 } from "~/styles/layouts";
 
 interface FlexContainerProps

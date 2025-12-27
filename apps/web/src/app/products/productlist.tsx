@@ -1,24 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
-import { useTRPC } from "~/trpc/react";
-import { createColumnHelper } from "@tanstack/react-table";
 import type { ColumnFiltersState } from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
+import { useMemo } from "react";
+import { Badge } from "~/components/ui/badge";
+import { productCategoryOptions } from "~/schemas/product";
+import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import type { ProductWithFoodOut } from "~/server/services/product.service";
+import { useTRPC } from "~/trpc/react";
+import { createInventoryEntriesColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import {
   FoodPillLink,
   IngredientPillLink,
   LocationPillLink,
 } from "../_components/EntityPill";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import { NutritionInfoTable } from "../_components/usda/nutrition";
-import { NoneState } from "../_components/NoneState";
-import { createInventoryEntriesColumn } from "../_components/data-table/columnHelpers";
-import { TableLink } from "../_components/table";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import type { ProductWithFoodOut } from "~/server/services/product.service";
-import { Badge } from "~/components/ui/badge";
-import { productCategoryOptions } from "~/schemas/product";
+import { NoneState } from "../_components/NoneState";
+import { TableLink } from "../_components/table";
+import { NutritionInfoTable } from "../_components/usda/nutrition";
 
 interface ProductListProps {
   initialCategory?: string;

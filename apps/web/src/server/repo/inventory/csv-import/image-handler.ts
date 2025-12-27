@@ -5,17 +5,17 @@
  * Supports multiple images as semicolon-separated URLs.
  */
 
-import type { Database } from "~/server/db";
-import type {
-  ProductId,
-  OrganizationId,
-  LocationId,
-} from "~/schemas/identifiers";
-import { importImageFromUrl } from "~/server/repo/image";
-import { getDb, associatePendingImages } from "~/server/repo/database-helpers";
-import { productImage, locationImage } from "~/server/db/schema";
-import { eq, count } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { getErrorMessage } from "~/lib/error-utils";
+import type {
+  LocationId,
+  OrganizationId,
+  ProductId,
+} from "~/schemas/identifiers";
+import type { Database } from "~/server/db";
+import { locationImage, productImage } from "~/server/db/schema";
+import { associatePendingImages, getDb } from "~/server/repo/database-helpers";
+import { importImageFromUrl } from "~/server/repo/image";
 
 /**
  * Parse semicolon-separated image URLs into an array

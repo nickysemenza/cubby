@@ -2,6 +2,13 @@
 
 // cf https://ui.shadcn.com/docs/components/data-table
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
+import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
+import type { ReactNode } from "react";
+import { ErrorDisplay } from "~/components/feedback/error-display";
+import { SpacedContainer } from "~/components/layout/spaced-container";
+import { Button } from "~/components/ui/button";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { Spinner } from "~/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -10,18 +17,11 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { DataTableToolbar } from "./data-table-toolbar";
-import { DataTablePagination } from "./data-table-pagination";
-import { Button } from "~/components/ui/button";
-import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
-import type { ReactNode } from "react";
-import { SpacedContainer } from "~/components/layout/spaced-container";
-import { Spinner } from "~/components/ui/spinner";
-import { Empty, EmptyTitle, EmptyDescription } from "~/components/ui/empty";
 import { useDebug } from "~/hooks/useDebug";
 import { DebugDialog } from "./DebugDialog";
+import { DataTablePagination } from "./data-table-pagination";
+import { DataTableToolbar } from "./data-table-toolbar";
 import { MobileCardView } from "./MobileCardView";
-import { ErrorDisplay } from "~/components/feedback/error-display";
 
 interface FilterOption {
   value: string;

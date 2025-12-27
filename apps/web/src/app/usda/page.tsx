@@ -1,7 +1,7 @@
-import { HydrateClient } from "~/trpc/server";
-import { USDAFoodList } from "./usdafoodlist";
 import type { Metadata } from "next";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { HydrateClient } from "~/trpc/server";
+import { USDAFoodList } from "./usdafoodlist";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {

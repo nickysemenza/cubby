@@ -7,9 +7,9 @@
  * - exportCSV: Export data to CSV format
  */
 
-import { z, type ZodSchema } from "zod";
-import { protectedProcedure } from "./trpc";
+import { type ZodSchema, z } from "zod";
 import type { ProtectedCrudServices } from "./crud-factory";
+import { protectedProcedure } from "./trpc";
 
 /**
  * Configuration for CSV procedures (simple case without export input)

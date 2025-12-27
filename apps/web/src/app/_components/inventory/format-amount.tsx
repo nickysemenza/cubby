@@ -1,18 +1,18 @@
 "use client";
 
-import type { Amount } from "~/codec/codec";
-import { renderValueOrError } from "~/misc/result";
-import type { UnitMapping } from "~/schemas/unitmapping";
-import { wasm } from "~/lib/wasm";
-import { convertAmountToPrice } from "../units/univ-conversion";
 import type { WAmount } from "@recipehub/recipebridge";
+import type { Amount } from "~/codec/codec";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { wasm } from "~/lib/wasm";
+import { renderValueOrError } from "~/misc/result";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import ValidInvalidIcon from "../icons/valid-invalid";
+import { convertAmountToPrice } from "../units/univ-conversion";
 
 /**
  * Helper function for displaying amount and price

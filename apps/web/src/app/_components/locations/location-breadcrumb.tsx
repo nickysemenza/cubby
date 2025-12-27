@@ -1,20 +1,20 @@
 "use client";
 
-import * as React from "react";
-import Link from "next/link";
 import { Home } from "lucide-react";
-import { LocationIcon } from "./location-icons";
-import type { LocationType, InfLocation } from "~/schemas/location";
-import { cn } from "~/lib/utils";
-import { getDefaultLocationType } from "~/lib/location-path";
+import Link from "next/link";
+import * as React from "react";
 import {
   Breadcrumb,
-  BreadcrumbList,
   BreadcrumbItem,
   BreadcrumbLink,
+  BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "~/components/ui/breadcrumb";
+import { getDefaultLocationType } from "~/lib/location-path";
+import { cn } from "~/lib/utils";
+import type { InfLocation, LocationType } from "~/schemas/location";
+import { LocationIcon } from "./location-icons";
 
 interface LocationSegment {
   id?: string;

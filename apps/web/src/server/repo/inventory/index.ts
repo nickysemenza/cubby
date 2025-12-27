@@ -1,19 +1,19 @@
 // CRUD operations
+
+// Bulk operations
+export { bulkMoveInventoryEntries, bulkProcessInventoryEntries } from "./bulk";
 export {
   checkUniqueProductDuplicate,
+  createInventoryEntry,
+  deleteInventoryEntry,
   getInventoryEntryByID,
   inventoryentryList,
   updateInventoryEntry,
-  createInventoryEntry,
-  deleteInventoryEntry,
 } from "./crud";
-
-// Bulk operations
-export { bulkProcessInventoryEntries, bulkMoveInventoryEntries } from "./bulk";
 
 // CSV operations
 export { exportInventoryToCSV } from "./csv-export";
 export {
-  importInventoryFromCSV,
   createOrUpdatePriceMapping,
+  importInventoryFromCSV,
 } from "./csv-import/index";

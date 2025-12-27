@@ -1,15 +1,15 @@
+import type { AmountKind } from "@recipehub/recipebridge";
 import type { LucideIcon } from "lucide-react";
 import {
   DollarSign,
-  FlaskConical,
   Flame,
+  FlaskConical,
+  Ruler,
   Scale,
+  Shapes,
   Thermometer,
   Timer,
-  Ruler,
-  Shapes,
 } from "lucide-react";
-import type { AmountKind } from "@recipehub/recipebridge";
 
 export const kindIconMap: Record<
   AmountKind,

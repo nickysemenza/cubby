@@ -5,24 +5,24 @@
  * Used by the omnidirectional sync feature.
  */
 
-import { normalizeForComparison } from "~/server/repo/csv/normalize";
 import {
-  normalizeManufacturer,
   isUnspecifiedManufacturer,
+  normalizeManufacturer,
 } from "~/lib/manufacturer-utils";
-import { getLocationRowDifferences } from "~/server/repo/location/csv-comparison";
-import { getRowDifferences as getInventoryRowDifferences } from "~/server/repo/inventory/csv-comparison";
-import {
-  type SyncState,
-  type LocationSyncItem,
-  type InventorySyncItem,
-  getDefaultResolution,
-} from "~/schemas/sync";
-import type { LocationCSVExportRow } from "~/server/repo/location/types";
-import type { LocationCSVRow } from "~/schemas/location";
-import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
 import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { LocationCSVRow } from "~/schemas/location";
 import type { ProductCategory } from "~/schemas/product";
+import {
+  getDefaultResolution,
+  type InventorySyncItem,
+  type LocationSyncItem,
+  type SyncState,
+} from "~/schemas/sync";
+import { normalizeForComparison } from "~/server/repo/csv/normalize";
+import { getRowDifferences as getInventoryRowDifferences } from "~/server/repo/inventory/csv-comparison";
+import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
+import { getLocationRowDifferences } from "~/server/repo/location/csv-comparison";
+import type { LocationCSVExportRow } from "~/server/repo/location/types";
 
 /**
  * Common inventory row fields (snake_case → camelCase)

@@ -1,35 +1,33 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useTRPC } from "~/trpc/react";
-import {
-  buildProductComboboxItem,
-  buildLocationComboboxItem,
-} from "~/app/_components/combobox/combobox-builders";
-import { Button } from "~/components/ui/button";
-import { X, Plus } from "lucide-react";
-import { toast } from "sonner";
-import type { InventoryBulkOperationItem } from "~/schemas/inventory";
-import { unsafeInventoryId } from "~/schemas/identifiers";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Plus, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-import { useQuery } from "@tanstack/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+import {
+  buildLocationComboboxItem,
+  buildProductComboboxItem,
+} from "~/app/_components/combobox/combobox-builders";
 import {
   ComboboxFieldWithSearch,
   FormWrapper,
   getSubmitButtonText,
 } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { Button } from "~/components/ui/button";
 import {
-  requiredProductField,
-  requiredLocationField,
   amountField,
-  getProductId,
   getLocationId,
+  getProductId,
+  requiredLocationField,
+  requiredProductField,
 } from "~/schemas/form-fields";
+import { unsafeInventoryId } from "~/schemas/identifiers";
+import type { InventoryBulkOperationItem } from "~/schemas/inventory";
+import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas
 const inventoryItemSchema = z.object({

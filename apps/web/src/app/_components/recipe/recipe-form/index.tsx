@@ -1,41 +1,41 @@
 "use client";
 
-import type { FC } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
-import { useImageState } from "~/hooks/useImageState";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button } from "~/components/ui/button";
-import { Plus, Trash, ChevronDown, ChevronUp } from "lucide-react";
-import {
-  FormWrapper,
-  UnifiedTextField,
-  getSubmitButtonText,
-  buildUpdateObject,
-  SideBySideFields,
-} from "../../form-utils";
-import { IngredientFieldArray } from "./ingredient-field-array";
-import { InstructionFieldArray } from "./instruction-field-array";
-import {
-  type IngItem,
-  type RecipeFormProps,
-  type RecipeFormValues,
-  formSchema,
-} from "./types";
-import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
-import type {
-  RecipeIngredientInput,
-  recipeInstructionInput,
-  recipeSectionInput,
-  RecipeCreateInput,
-  RecipeUpdateInput,
-} from "~/schemas/recipe";
-import { PendingImageUpload } from "../../PendingImageUpload";
+import { ChevronDown, ChevronUp, Plus, Trash } from "lucide-react";
+import type { FC } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import type { z } from "zod";
-import type { RecipeId } from "~/schemas/identifiers";
+import { Button } from "~/components/ui/button";
+import { useImageState } from "~/hooks/useImageState";
 import {
   getOptionalIngredientId,
   getOptionalRecipeId,
 } from "~/schemas/form-fields";
+import type { RecipeId } from "~/schemas/identifiers";
+import type {
+  RecipeCreateInput,
+  RecipeIngredientInput,
+  RecipeUpdateInput,
+  recipeInstructionInput,
+  recipeSectionInput,
+} from "~/schemas/recipe";
+import {
+  buildUpdateObject,
+  FormWrapper,
+  getSubmitButtonText,
+  SideBySideFields,
+  UnifiedTextField,
+} from "../../form-utils";
+import { PendingImageUpload } from "../../PendingImageUpload";
+import { IngredientFieldArray } from "./ingredient-field-array";
+import { InstructionFieldArray } from "./instruction-field-array";
+import {
+  formSchema,
+  type IngItem,
+  type RecipeFormProps,
+  type RecipeFormValues,
+} from "./types";
+import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
 
 // Helper function to map any ingredient type to the correct API format
 const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {

@@ -16,47 +16,47 @@
  */
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useTRPC } from "~/trpc/react";
-import {
-  buildProductComboboxItem,
-  buildLocationComboboxItem,
-} from "~/app/_components/combobox/combobox-builders";
-import { Button } from "~/components/ui/button";
-import { X, Plus, ChevronDown, ChevronUp, Package } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronDown, ChevronUp, Package, Plus, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
-import type { ProductId } from "~/schemas/identifiers";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { z } from "zod";
 import {
+  buildLocationComboboxItem,
+  buildProductComboboxItem,
+} from "~/app/_components/combobox/combobox-builders";
+import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
+import { ProductPillLink } from "~/app/_components/EntityPill";
+import {
+  ComboboxField,
   ComboboxFieldWithSearch,
   FormWrapper,
   getSubmitButtonText,
 } from "~/app/_components/form-utils";
-import { queryKeys } from "~/lib/query-keys";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
-import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
-import { ComboboxField } from "~/app/_components/form-utils";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Empty, EmptyTitle } from "~/components/ui/empty";
-import { Kbd } from "~/components/ui/kbd";
 import {
   LocationBreadcrumb,
   locationToSegments,
 } from "~/app/_components/locations/location-breadcrumb";
-import { getErrorMessage } from "~/lib/error-utils";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { ProductPillLink } from "~/app/_components/EntityPill";
-import type { InfLocation } from "~/schemas/location";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Empty, EmptyTitle } from "~/components/ui/empty";
+import { Kbd } from "~/components/ui/kbd";
+import { getErrorMessage } from "~/lib/error-utils";
+import { queryKeys } from "~/lib/query-keys";
 import {
-  inventoryItemWithLocationFields,
-  getProductId,
   getOptionalLocationId,
+  getProductId,
+  inventoryItemWithLocationFields,
 } from "~/schemas/form-fields";
+import type { ProductId } from "~/schemas/identifiers";
 import { unsafeLocationId } from "~/schemas/identifiers";
+import type { InfLocation } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
 
 // Schema for the entire form using shared field schema
 const quickCaptureFormSchema = z.object({

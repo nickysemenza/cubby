@@ -6,32 +6,31 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  systemProcedure,
-  createAppError,
-} from "../trpc";
-
 import { z } from "zod";
 import { compactRecipeSchema } from "~/codec/codec";
-import { seedRealRecipes } from "~/testdata/seed";
-import { scrapeToCompact } from "./scraper";
+import { type RecipeId, recipeId } from "~/schemas/identifiers";
 import {
-  recipeOut,
   recipeCreateInput,
+  recipeOut,
   recipeUpdateInput,
 } from "~/schemas/recipe";
 import {
   createRecipe,
+  getIngredientCooccurrence,
   getRecipeByID,
   insertCompactRecipe,
   recipeList,
   updateRecipe,
-  getIngredientCooccurrence,
 } from "~/server/repo/recipe";
+import { seedRealRecipes } from "~/testdata/seed";
 import { createEntityCrudProcedures } from "../crud-factory";
-import { recipeId, type RecipeId } from "~/schemas/identifiers";
+import {
+  createAppError,
+  createTRPCRouter,
+  protectedProcedure,
+  systemProcedure,
+} from "../trpc";
+import { scrapeToCompact } from "./scraper";
 
 // Define filters schema for recipes
 const recipeFiltersSchema = z.object({
@@ -90,8 +89,8 @@ const insertCompact = protectedProcedure
 
 // Import co-occurrence schema and types
 import {
-  ingredientCooccurrenceSchema,
   type IngredientCooccurrence,
+  ingredientCooccurrenceSchema,
 } from "~/schemas/ingredient-cooccurrence";
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
