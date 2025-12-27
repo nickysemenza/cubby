@@ -79,6 +79,11 @@ const moreItems: NavItem[] = [
     isActive: (pathname) => pathname.startsWith("/images"),
   },
   {
+    href: "/settings/integrations",
+    label: "Integrations",
+    isActive: (pathname) => pathname.startsWith("/settings/integrations"),
+  },
+  {
     href: "/api/panel",
     label: "API Panel",
     isActive: () => false,

@@ -54,7 +54,7 @@ export const findNewAliases = (
 };
 
 /**
- * Find or create a product for CSV import
+ * Process a product for CSV import (find, create, or update)
  *
  * Handles:
  * - Finding existing products by name/manufacturer
@@ -62,7 +62,7 @@ export const findNewAliases = (
  * - Updating existing products with new data from CSV
  * - Creating/linking ingredients when specified
  */
-export const findOrCreateProductForImport = async (
+export const processProductForImport = async (
   db: Database,
   organizationId: OrganizationId,
   productName: string,

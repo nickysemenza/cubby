@@ -17,7 +17,8 @@ export type ColumnType =
   | { kind: "currency"; decimals?: number }
   | { kind: "dropdown"; options: string[] }
   | { kind: "checkbox" }
-  | { kind: "date" };
+  | { kind: "date" }
+  | { kind: "datetime" };
 
 export type ColumnSchema = {
   header: string;
@@ -57,6 +58,8 @@ const mapToTableColumnType = (col: ColumnType): TableColumnType => {
       return "BOOLEAN";
     case "date":
       return "DATE";
+    case "datetime":
+      return "DATE_TIME";
   }
 };
 

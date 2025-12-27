@@ -23,7 +23,7 @@ import {
 } from "~/server/repo/location";
 import type { ProductTopLevelOut } from "~/schemas/product";
 import {
-  findOrCreateProductForImport,
+  processProductForImport,
   previewProductForImport,
 } from "./product-handler";
 import {
@@ -259,7 +259,7 @@ async function executeProductOperations(
   manufacturer: string,
   actor: ActorContext,
 ): Promise<ProductOperationsResult> {
-  const productData = await findOrCreateProductForImport(
+  const productData = await processProductForImport(
     db,
     organizationId,
     row.product_name,

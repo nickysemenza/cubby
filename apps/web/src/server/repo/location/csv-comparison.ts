@@ -7,36 +7,17 @@
 import type { LocationCSVRow } from "~/schemas/location";
 import type { FieldChange } from "~/schemas/csv";
 import type { LocationCSVExportRow } from "./types";
-import dayjs from "dayjs";
-import customParseFormat from "dayjs/plugin/customParseFormat";
 import {
   compareFields,
   type ComparisonFieldSpec,
 } from "~/server/repo/csv/field-utils";
-
-dayjs.extend(customParseFormat);
+import { parseCSVDateToUnix } from "~/server/repo/csv/date-utils";
 
 /**
- * Normalize date strings for comparison.
- * Handles both app format (YYYY-MM-DD HH:mm:ss) and Sheets format (MM/DD/YYYY HH:mm:ss)
+ * Normalize date strings for comparison (returns unix timestamp)
  */
-const normalizeDateForComparison = (val: unknown): number | null => {
-  const dateStr = val as string | null | undefined;
-  if (!dateStr) return null;
-  const formats = [
-    "YYYY-MM-DD HH:mm:ss", // App format
-    "M/D/YYYY H:mm:ss", // Sheets format (single digits)
-    "MM/DD/YYYY HH:mm:ss", // Sheets format (padded)
-  ];
-  for (const fmt of formats) {
-    const parsed = dayjs(dateStr, fmt, true);
-    if (parsed.isValid()) {
-      return parsed.unix();
-    }
-  }
-  const fallback = dayjs(dateStr);
-  return fallback.isValid() ? fallback.unix() : null;
-};
+const normalizeDateForComparison = (val: unknown): number | null =>
+  parseCSVDateToUnix(val as string | null | undefined);
 
 /** Normalize parent name for comparison (lowercase, trimmed) */
 const normalizeParentName = (v: unknown): string | null =>

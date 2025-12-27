@@ -600,22 +600,21 @@ export const findOrCreateLocationByName = async (
 };
 
 /**
- * Update location fields from sync data
- * Used when resolving sync conflicts with "use_sheet"
+ * Update location fields from CSV/sync import data
+ * Used by importLocationsFromCSV when updating existing locations.
+ * Returns true if any fields were updated.
  */
-export const updateLocationFromSync = async (
+export const updateLocationFromImport = async (
   db: Database,
   locationId: LocationId,
   data: {
     lastInventoryDate?: Date | null;
     description?: string | null;
-    locationType?: LocationType;
   },
-): Promise<void> => {
+): Promise<boolean> => {
   const updateValues = buildPartialUpdateValues({
     lastBulkInventory: data.lastInventoryDate,
     description: data.description,
-    type: data.locationType,
   });
 
   // Only update if there are values to update
@@ -624,7 +623,9 @@ export const updateLocationFromSync = async (
       .update(location)
       .set(updateValues)
       .where(eq(location.id, locationId));
+    return true;
   }
+  return false;
 };
 
 /**

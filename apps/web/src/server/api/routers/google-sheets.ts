@@ -36,15 +36,7 @@ import {
   unsafeProductId,
 } from "~/schemas/identifiers";
 import { deleteInventoryEntry } from "~/server/repo/inventory";
-import {
-  deleteLocation,
-  updateLocation,
-  updateLocationFromSync,
-} from "~/server/repo/location";
-import dayjs from "dayjs";
-import customParseFormat from "dayjs/plugin/customParseFormat";
-
-dayjs.extend(customParseFormat);
+import { deleteLocation, updateLocation } from "~/server/repo/location";
 import { updateProduct } from "~/server/repo/product";
 import {
   compareLocationsForSync,
@@ -88,28 +80,6 @@ function mergeOrgMetadata(
   const current = existing ? JSON.parse(existing) : {};
   return JSON.stringify({ ...current, ...updates });
 }
-
-/**
- * Parse date string from Google Sheet into Date object.
- * Handles both app format (YYYY-MM-DD HH:mm:ss) and Sheets format (M/D/YYYY H:mm:ss)
- */
-const parseSheetDate = (dateStr: string | null | undefined): Date | null => {
-  if (!dateStr) return null;
-  const formats = [
-    "YYYY-MM-DD HH:mm:ss", // App format
-    "M/D/YYYY H:mm:ss", // Sheets format (single digits)
-    "MM/DD/YYYY HH:mm:ss", // Sheets format (padded)
-  ];
-  for (const fmt of formats) {
-    const parsed = dayjs(dateStr, fmt, true);
-    if (parsed.isValid()) {
-      return parsed.toDate();
-    }
-  }
-  // Fallback: try native parsing
-  const fallback = dayjs(dateStr);
-  return fallback.isValid() ? fallback.toDate() : null;
-};
 
 // CSV column headers for Inventory sheet
 const INVENTORY_CSV_HEADERS = [
@@ -173,7 +143,7 @@ const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
   },
   { header: "description", type: { kind: "text" } },
   { header: "location_image", type: { kind: "text" } },
-  { header: "last_inventory_date", type: { kind: "date" } },
+  { header: "last_inventory_date", type: { kind: "datetime" } },
 ];
 
 // Parse currency string to number (handles $, commas, etc.)
@@ -743,13 +713,16 @@ async function processImportsToApp(
   inventoryItems: InventorySyncItem[],
   results: SyncResults,
 ): Promise<void> {
-  // Locations to add to app (sheet_only with add_to_app)
-  const locationsToAddToApp = locationItems.filter(
-    (i) => i.state === "sheet_only" && i.resolution === "add_to_app",
+  // Locations to import: sheet_only→add_to_app OR conflict→use_sheet
+  // The import function handles both creation and updates
+  const locationsToImport = locationItems.filter(
+    (i) =>
+      (i.state === "sheet_only" && i.resolution === "add_to_app") ||
+      (i.state === "conflict" && i.resolution === "use_sheet"),
   );
 
-  if (locationsToAddToApp.length > 0) {
-    const rows = syncItemsToLocationCSVRows(locationsToAddToApp);
+  if (locationsToImport.length > 0) {
+    const rows = syncItemsToLocationCSVRows(locationsToImport);
     if (rows.length > 0) {
       const result = await importLocationsFromCSV(
         ctx.db,
@@ -760,32 +733,6 @@ async function processImportsToApp(
       results.locations.created += result.created;
       results.locations.updated += result.updated;
       results.locations.errors += result.errors;
-    }
-  }
-
-  // Locations with conflicts resolved to use_sheet - update existing locations
-  const locationsToUpdateFromSheet = locationItems.filter(
-    (i) => i.state === "conflict" && i.resolution === "use_sheet",
-  );
-
-  for (const item of locationsToUpdateFromSheet) {
-    if (!item.appData?.locationId || !item.sheetData) {
-      results.locations.errors++;
-      continue;
-    }
-
-    try {
-      await updateLocationFromSync(
-        ctx.db,
-        unsafeLocationId(item.appData.locationId),
-        {
-          lastInventoryDate: parseSheetDate(item.sheetData.lastInventoryDate),
-          description: item.sheetData.description,
-        },
-      );
-      results.locations.updated++;
-    } catch {
-      results.locations.errors++;
     }
   }
 

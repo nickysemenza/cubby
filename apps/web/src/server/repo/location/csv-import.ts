@@ -13,6 +13,7 @@ import type {
 import {
   findLocationByName,
   findOrCreateLocationByName,
+  updateLocationFromImport,
 } from "~/server/repo/location";
 import {
   importLocationImages,
@@ -23,6 +24,7 @@ import {
   createLocationCounters,
   incrementCounter,
 } from "~/server/repo/csv/result-helpers";
+import { parseCSVDate } from "~/server/repo/csv/date-utils";
 
 interface ImportOptions {
   dryRun: boolean;
@@ -145,6 +147,15 @@ async function processLocationRow(
       locationType,
     );
 
+    // If location exists, update fields from CSV (description, last_inventory_date)
+    let updated = false;
+    if (!created) {
+      updated = await updateLocationFromImport(db, locationId, {
+        description: row.description,
+        lastInventoryDate: parseCSVDate(row.last_inventory_date),
+      });
+    }
+
     // Import images if provided and location doesn't already have any
     let imageImportError: string | undefined;
     if (row.location_image) {
@@ -167,12 +178,23 @@ async function processLocationRow(
       ? `(image import failed: ${imageImportError})`
       : undefined;
 
+    // Determine action: created > updated > skipped
+    let action: "created" | "updated" | "skipped";
+    if (created) {
+      action = "created";
+    } else if (updated) {
+      action = "updated";
+    } else {
+      action = "skipped";
+    }
+
     return {
       rowIndex,
-      action: created ? "created" : "skipped",
+      action,
       locationName: row.location_name,
       locationId,
-      message: created ? message : (message ?? "Location already exists"),
+      message:
+        action === "skipped" ? (message ?? "Location already exists") : message,
     };
   } catch (error) {
     return {
