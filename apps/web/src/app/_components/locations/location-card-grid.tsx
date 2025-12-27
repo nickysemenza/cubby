@@ -1,4 +1,3 @@
-"use client";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, ExternalLink, Package } from "lucide-react";
@@ -199,7 +198,7 @@ function LocationCard({
       details={details}
       footer={footer}
       primaryAction={{
-        href: `/locations/${location.id}`,
+        route: { to: "/locations/$id" as const, params: { id: location.id } },
         label: "View",
         icon: ExternalLink,
       }}

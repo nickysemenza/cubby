@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { GridContainer } from "~/components/layout/grid-container";
@@ -37,14 +35,14 @@ const EntityImageList: FC<EntityImageListProps> = ({
           <GridContainer cols="responsive3" className="mb-4">
             {images.map((image) => (
               <Link
-                href={`/images/${image.id}`}
+                to="/images/$id"
+                params={{ id: image.id }}
                 key={image.id}
                 className="group block"
               >
                 <InteractiveImage
                   src={image.url}
                   alt={image.filename}
-                  sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                   hoverEffect="both"
                   transition="all"
                 />
@@ -55,7 +53,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
 
           {showViewAllButton && (
             <FlexContainer justify="end">
-              <Link href="/images">
+              <Link to="/images">
                 <Button variant="outline" size="sm">
                   View All Images
                 </Button>

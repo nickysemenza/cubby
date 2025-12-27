@@ -1,5 +1,3 @@
-"use client";
-
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";

@@ -1,8 +1,5 @@
-"use client";
-
 import { Camera, Loader2, X } from "lucide-react";
-import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -11,17 +8,26 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 
+// Type for barcode scan result (from @zxing/library)
+interface BarcodeResult {
+  getText(): string;
+}
+
 // Dynamically import the scanner to avoid SSR issues
-const BarcodeScanner = dynamic(
-  () => import("react-qr-barcode-scanner").then((mod) => mod.default),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    ),
-  },
+const BarcodeScanner = lazy(() =>
+  import("react-qr-barcode-scanner").then((mod) => ({
+    default: mod.default as React.ComponentType<{
+      onUpdate: (err: unknown, result?: BarcodeResult) => void;
+      onError?: (err: string | DOMException) => void;
+      facingMode?: string;
+    }>,
+  })),
+);
+
+const ScannerLoading = () => (
+  <div className="flex h-64 items-center justify-center">
+    <Loader2 className="h-8 w-8 animate-spin" />
+  </div>
 );
 
 interface BarcodeScannerButtonProps {
@@ -106,15 +112,17 @@ export function BarcodeScannerButton({
               </div>
             ) : (
               <div className="overflow-hidden rounded-lg">
-                <BarcodeScanner
-                  onUpdate={(_err, result) => {
-                    if (result) {
-                      handleScan(result.getText());
-                    }
-                  }}
-                  onError={handleError}
-                  facingMode="environment"
-                />
+                <Suspense fallback={<ScannerLoading />}>
+                  <BarcodeScanner
+                    onUpdate={(_err: unknown, result?: BarcodeResult) => {
+                      if (result) {
+                        handleScan(result.getText());
+                      }
+                    }}
+                    onError={handleError}
+                    facingMode="environment"
+                  />
+                </Suspense>
               </div>
             )}
 

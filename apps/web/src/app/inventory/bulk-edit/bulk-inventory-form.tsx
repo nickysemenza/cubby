@@ -1,8 +1,7 @@
-"use client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -48,8 +47,7 @@ export default function BulkInventoryForm() {
   const api = useTRPC();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
 
   // Initialize the form
   const form = useForm<BulkInventoryFormValues>({
@@ -83,26 +81,30 @@ export default function BulkInventoryForm() {
   // Update URL when location changes
   useEffect(() => {
     if (selectedLocation) {
-      const currentLocationId = searchParams.get("locationId");
+      const currentParams = new URLSearchParams(window.location.search);
+      const currentLocationId = currentParams.get("locationId");
       // Only update URL if it's different to avoid infinite loop
       if (currentLocationId !== selectedLocation.id) {
-        const params = new URLSearchParams(searchParams.toString());
-        params.set("locationId", selectedLocation.id);
-        router.replace(`/inventory/bulk-edit?${params.toString()}`);
+        currentParams.set("locationId", selectedLocation.id);
+        navigate({
+          to: `/inventory/bulk-edit?${currentParams.toString()}`,
+          replace: true,
+        });
       }
     }
-  }, [selectedLocation, router, searchParams]);
+  }, [selectedLocation, navigate]);
 
   // Set initial location from URL
   useEffect(() => {
-    const locationId = searchParams.get("locationId");
+    const params = new URLSearchParams(window.location.search);
+    const locationId = params.get("locationId");
     if (locationId && locations.length > 0) {
       const location = locations.find((loc) => loc.id === locationId);
       if (location) {
         form.setValue("location", buildLocationComboboxItem(location));
       }
     }
-  }, [searchParams, locations, form]);
+  }, [locations, form]);
 
   // Fetch existing inventory items when location is selected
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(

@@ -1,4 +1,3 @@
-"use client";
 import { type DataType, dataTypeEnum } from "@recipehub/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -45,7 +44,7 @@ export function USDAFoodList() {
       header: "FDC ID",
       meta: { className: "w-32 max-w-32" },
       cell: (info) => (
-        <TableLink href={`usda/${info.getValue()}`}>
+        <TableLink to="/usda/$id" params={{ id: String(info.getValue()) }}>
           {info.getValue()}
         </TableLink>
       ),
@@ -83,7 +82,8 @@ export function USDAFoodList() {
               <div className="font-mono text-xs">
                 UPC:{" "}
                 <TableLink
-                  href={`/usda/upc/${brandedFood.gtin_upc}`}
+                  to="/usda/upc/$code"
+                  params={{ code: brandedFood.gtin_upc }}
                   variant="mono"
                 >
                   {brandedFood.gtin_upc}

@@ -1,5 +1,3 @@
-"use client";
-
 import type { WAmount } from "@recipehub/recipebridge";
 import type { Amount } from "~/codec/codec";
 import {

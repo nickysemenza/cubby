@@ -1,12 +1,9 @@
-// https://nextjs.org/docs/pages/building-your-application/optimizing/lazy-loading#with-no-ssr
-
 import type { WUnitMapping } from "@recipehub/recipebridge";
-import dynamic from "next/dynamic";
-import React, { useMemo } from "react";
+import React, { lazy, Suspense, useMemo } from "react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 
-const Graphviz = dynamic(() => import("graphviz-react"), { ssr: false });
+const Graphviz = lazy(() => import("graphviz-react"));
 
 const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
   unitMapping,
@@ -55,16 +52,18 @@ const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
 
   return (
     <div className="overflow-auto rounded border bg-slate-50 p-1">
-      <Graphviz
-        dot={graphResult.graph}
-        options={{
-          fit: true,
-          width: 220,
-          height: 140,
-          zoom: true,
-          useWorker: false,
-        }}
-      />
+      <Suspense fallback={<div className="h-[140px] w-[220px]" />}>
+        <Graphviz
+          dot={graphResult.graph}
+          options={{
+            fit: true,
+            width: 220,
+            height: 140,
+            zoom: true,
+            useWorker: false,
+          }}
+        />
+      </Suspense>
     </div>
   );
 };

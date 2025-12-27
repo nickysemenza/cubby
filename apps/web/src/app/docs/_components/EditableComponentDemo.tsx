@@ -1,5 +1,3 @@
-"use client";
-
 import { JsonEditor } from "json-edit-react";
 import { Code, RotateCcw } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";

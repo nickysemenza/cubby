@@ -1,7 +1,6 @@
-"use client";
 
-import Image from "next/image";
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
+import { Image } from "~/components/ui/image";
 import {
   Tooltip,
   TooltipContent,
@@ -9,13 +8,15 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
-interface ImageWithPreviewProps {
+export interface ImageWithPreviewProps {
   /** Image source URL */
   src: string;
   /** Alt text for accessibility */
   alt: string;
-  /** Optional link destination - if provided, thumbnail becomes clickable */
-  href?: string;
+  /** TanStack Router route path - if provided, thumbnail becomes clickable */
+  to?: string;
+  /** Route params for dynamic routes (e.g., { id: "123" }) */
+  params?: Record<string, string>;
   /** Thumbnail size in pixels (default: 40) */
   size?: number;
   /** Preview popup size in pixels (default: 200) */
@@ -38,7 +39,8 @@ interface ImageWithPreviewProps {
  * <ImageWithPreview
  *   src="/photo.jpg"
  *   alt="Product photo"
- *   href="/products/123"
+ *   to="/products/$id"
+ *   params={{ id: "123" }}
  *   size={32}
  *   previewSize={240}
  * />
@@ -46,7 +48,8 @@ interface ImageWithPreviewProps {
 export function ImageWithPreview({
   src,
   alt,
-  href,
+  to,
+  params,
   size = 40,
   previewSize = 200,
   previewSide = "right",
@@ -57,9 +60,10 @@ export function ImageWithPreview({
     className,
   );
 
-  const thumbnail = href ? (
+  const thumbnail = to ? (
     <Link
-      href={href}
+      to={to}
+      params={params}
       className={thumbnailClasses}
       style={{ width: size, height: size }}
     />
@@ -73,9 +77,7 @@ export function ImageWithPreview({
         <Image
           src={src}
           alt={alt}
-          fill
-          sizes={`${size}px`}
-          className="object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       </TooltipTrigger>
       <TooltipContent
@@ -89,9 +91,7 @@ export function ImageWithPreview({
           <Image
             src={src}
             alt={alt}
-            fill
-            sizes={`${previewSize}px`}
-            className="object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         </div>
       </TooltipContent>

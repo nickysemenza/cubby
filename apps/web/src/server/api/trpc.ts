@@ -19,6 +19,7 @@ import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { env } from "~/env";
+import { initOpenTelemetry } from "~/instrumentation";
 import { type AppErrorReason, AppErrors } from "~/lib/app-error-codes";
 import { auth as betterAuth } from "~/lib/auth";
 import { buildActorContext } from "~/schemas/context";
@@ -38,6 +39,9 @@ import { IngredientService } from "~/server/services/ingredient.service";
 import { ProductService } from "~/server/services/product.service";
 import { USDAService } from "~/server/services/usda.service";
 import { getTracer, TraceNames } from "~/server/tracing";
+
+// Initialize OpenTelemetry on first import (Node.js only, no-ops on Workers)
+initOpenTelemetry();
 
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([
@@ -332,9 +336,20 @@ const tracingMiddleWare = t.middleware(async (opts) => {
       }
       span.setAttribute("userId", opts.ctx.auth?.userId ?? "guest");
       span.setAttributes({ path: opts.path });
-      const result = await opts.next();
-      span.setAttributes({ ok: result.ok });
-      return result;
+      try {
+        const result = await opts.next();
+        span.setAttributes({ ok: result.ok });
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+        throw error;
+      } finally {
+        span.end();
+      }
     },
   );
 });

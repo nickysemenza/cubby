@@ -1,5 +1,3 @@
-"use client";
-
 import { toast } from "sonner";
 import type { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
 import { useTRPC } from "~/trpc/react";

@@ -1,5 +1,3 @@
-"use client";
-
 import { useMemo } from "react";
 import { wasm } from "~/lib/wasm";
 import type { RecipeOut } from "~/schemas/recipe";

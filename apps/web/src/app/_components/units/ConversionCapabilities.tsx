@@ -1,5 +1,3 @@
-"use client";
-
 import type { AmountKind } from "@recipehub/recipebridge";
 import { ArrowLeftRight } from "lucide-react";
 import { useMemo } from "react";

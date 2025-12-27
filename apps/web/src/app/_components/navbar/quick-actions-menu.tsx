@@ -1,7 +1,5 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { Barcode, MapPin, Package, Plus, UtensilsCrossed } from "lucide-react";
-import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -64,7 +62,7 @@ export const QuickActionsMenu = () => {
         {quickActions.map((action) => (
           <DropdownMenuItem
             key={action.href}
-            render={<Link href={action.href} />}
+            render={<Link to={action.href} />}
           >
             <action.icon className="h-4 w-4" />
             <span>{action.label}</span>

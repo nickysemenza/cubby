@@ -1,6 +1,5 @@
-"use client";
+import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
-import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
@@ -225,7 +224,8 @@ function HoverTooltip({
       <div className="flex items-center gap-2 font-medium">
         <LocationIcon type={node.data.type} size={14} />
         <Link
-          href={`/locations/${node.data.id}`}
+          to="/locations/$id"
+          params={{ id: node.data.id }}
           className="hover:underline"
           style={{ pointerEvents: "auto" }}
         >

@@ -1,8 +1,5 @@
-"use client";
-
 import { Clock, ExternalLink, Users } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
+import { Image } from "~/components/ui/image";
 import type { RecipeOut } from "~/schemas/recipe";
 
 interface RecipeHeroProps {
@@ -35,9 +32,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           <Image
             src={heroImage.url}
             alt={recipe.name}
-            fill
-            className="object-cover"
-            priority
+            className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
         </>
@@ -66,7 +61,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
             <span>{totalSteps} steps</span>
           </div>
           {recipe.meta?.url && (
-            <Link
+            <a
               href={recipe.meta.url}
               target="_blank"
               rel="noopener noreferrer"
@@ -74,7 +69,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
             >
               <ExternalLink size={16} />
               <span>Source</span>
-            </Link>
+            </a>
           )}
         </div>
       </div>

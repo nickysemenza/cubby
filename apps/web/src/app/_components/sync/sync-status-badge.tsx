@@ -1,7 +1,5 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check, Loader2, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
@@ -59,7 +57,7 @@ export const SyncStatusBadge = () => {
               variant="ghost"
               size="sm"
               className="h-8 px-2"
-              render={<Link href="/settings/integrations" />}
+              render={<Link to="/settings/integrations" />}
               nativeButton={false}
             />
           }

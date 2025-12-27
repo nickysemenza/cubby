@@ -1,8 +1,6 @@
-import type { Span } from "@opentelemetry/api";
 import type { WCompactRecipe } from "@recipehub/recipebridge";
 import type { CompactRecipe } from "~/codec/codec";
-import { wasmServer } from "~/lib/wasm";
-import { getTracer, TraceNames } from "~/server/tracing";
+import { wasm } from "~/lib/wasm";
 
 const scrapeRecipe = async (url: string) => {
   if (url.includes("chefsteps.com")) {
@@ -11,21 +9,10 @@ const scrapeRecipe = async (url: string) => {
     const activityId = url.split("/").pop();
     url = `https://www.chefsteps.com/api/v0/activities/${activityId}`;
   }
-  const options = {
-    method: "GET",
-  };
-  const response = await fetch(url, options);
+  const response = await fetch(url, { method: "GET" });
   const html = await response.text();
-  const tracer = getTracer();
-
-  return tracer.startActiveSpan(
-    TraceNames.wasm("parse_scraped_recipe"),
-    async (span: Span) => {
-      span.setAttributes({ url });
-      const res = await wasmServer.parse_scraped_recipe(html, url);
-      return res;
-    },
-  );
+  // Note: wasm.parse_scraped_recipe already has tracing via the wasm proxy
+  return wasm.parse_scraped_recipe(html, url);
 };
 
 export const scrapeToCompact = async (url: string): Promise<CompactRecipe> => {

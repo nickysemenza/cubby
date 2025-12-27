@@ -1,4 +1,3 @@
-"use client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { WIngredient } from "@recipehub/recipebridge";
 import {
@@ -7,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import React, { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -45,7 +44,7 @@ type RecipeFormValues = z.infer<typeof formSchema>;
 
 const NewCompactRecipe: React.FC = () => {
   const api = useTRPC();
-  const router = useRouter();
+  const navigate = useNavigate();
 
   // Initialize form
   const form = useForm<RecipeFormValues>({
@@ -149,7 +148,7 @@ const NewCompactRecipe: React.FC = () => {
     };
     const res = await insert.mutateAsync(compact);
     toast.success(`Recipe ${values.name} created`);
-    router.push(`/recipes/${res.id}`);
+    navigate({ to: `/recipes/${res.id}` });
   };
 
   return (

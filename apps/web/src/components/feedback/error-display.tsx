@@ -1,8 +1,6 @@
-"use client";
-
 import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
+import { Link } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
-import Link from "next/link";
 import { Alert, AlertDescription } from "~/components/ui/alert";
 import { Button } from "~/components/ui/button";
 import { getAppErrorDetails } from "~/lib/error-utils";
@@ -25,7 +23,9 @@ export function ErrorDisplay({ error, className }: ErrorDisplayProps) {
             <Button
               variant="link"
               size="sm"
-              render={<Link href="/auth/sign-in" />}
+              render={
+                <Link to="/auth/$authView" params={{ authView: "sign-in" }} />
+              }
               nativeButton={false}
             >
               Sign in

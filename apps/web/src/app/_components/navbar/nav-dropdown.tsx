@@ -1,8 +1,5 @@
-"use client";
-
+import { Link, useLocation } from "@tanstack/react-router";
 import { ChevronDown } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +20,7 @@ type NavDropdownProps = {
 };
 
 export const NavDropdown = ({ label, items }: NavDropdownProps) => {
-  const pathName = usePathname();
+  const pathName = useLocation().pathname;
 
   // Check if any item in this group is active
   const isGroupActive = items.some((item) => item.isActive(pathName));
@@ -45,7 +42,7 @@ export const NavDropdown = ({ label, items }: NavDropdownProps) => {
           return (
             <DropdownMenuItem
               key={item.href}
-              render={<Link href={item.href} />}
+              render={<Link to={item.href} />}
               className={cn(active && "bg-accent")}
             >
               {item.label}

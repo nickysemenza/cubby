@@ -11,7 +11,6 @@
  *
  * @see /inventory/quick-capture - Full-featured rapid entry form
  */
-"use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";

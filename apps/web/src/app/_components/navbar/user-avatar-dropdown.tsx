@@ -1,7 +1,5 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { LogOut, Settings, User } from "lucide-react";
-import Link from "next/link";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import {
   DropdownMenu,
@@ -50,11 +48,15 @@ export const UserAvatarDropdown = () => {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem render={<Link href="/account" />}>
+        <DropdownMenuItem
+          render={
+            <Link to="/account/$accountView" params={{ accountView: "" }} />
+          }
+        >
           <User className="h-4 w-4" />
           <span>Account</span>
         </DropdownMenuItem>
-        <DropdownMenuItem render={<Link href="/settings" />}>
+        <DropdownMenuItem render={<Link to="/settings/integrations" />}>
           <Settings className="h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>

@@ -13,8 +13,8 @@ beforeAll(async () => {
   await ensureWasm();
 });
 
-test("parsing works", async () => {
-  const out = await parseCompactRecipe({
+test("parsing works", () => {
+  const out = parseCompactRecipe({
     name: "Pancakes",
     sections: [
       {

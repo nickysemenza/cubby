@@ -1,0 +1,24 @@
+{
+  "projectName": "web-start",
+  "mode": "file-router",
+  "typescript": true,
+  "tailwind": true,
+  "packageManager": "pnpm",
+  "addOnOptions": {
+    "drizzle": {
+      "database": "postgresql"
+    }
+  },
+  "git": true,
+  "version": 1,
+  "framework": "react-cra",
+  "chosenAddOns": [
+    "biome",
+    "cloudflare",
+    "start",
+    "drizzle",
+    "t3env",
+    "tRPC",
+    "tanstack-query"
+  ]
+}

@@ -1,7 +1,6 @@
-"use client";
 import { TIER1_NUTRIENTS } from "@recipehub/usda-schemas";
+import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
-import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
@@ -331,7 +330,8 @@ function Sunburst({ data }: SunburstProps) {
           <div className="font-medium">
             {hoveredNode.data.ingredientId ? (
               <Link
-                href={`/ingredients/${hoveredNode.data.ingredientId}`}
+                to="/ingredients/$id"
+                params={{ id: hoveredNode.data.ingredientId }}
                 className="hover:underline"
                 style={{ pointerEvents: "auto" }}
               >

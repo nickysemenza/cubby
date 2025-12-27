@@ -1,6 +1,5 @@
-"use client";
+import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
-import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import {
@@ -133,7 +132,8 @@ function Treemap({ data }: TreemapProps) {
                       }`}
                     >
                       <Link
-                        href={`/locations/${node.data.id}`}
+                        to="/locations/$id"
+                        params={{ id: node.data.id }}
                         className="flex min-w-0 items-center gap-1 font-medium hover:underline"
                         style={{ pointerEvents: "auto" }}
                       >

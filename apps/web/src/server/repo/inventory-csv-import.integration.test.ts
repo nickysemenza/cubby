@@ -157,7 +157,7 @@ describe("CSV import preview logic", () => {
     });
 
     it("should show created for existing product at new location", async () => {
-      const _existingLocation = await createLocation(
+      await createLocation(
         db,
         { name: "Existing Room", type: "room", parentId: null },
         actor,
@@ -170,7 +170,7 @@ describe("CSV import preview logic", () => {
         actor,
       );
 
-      const _product = await createProduct(
+      await createProduct(
         db,
         {
           name: "Existing Product",
@@ -216,7 +216,7 @@ describe("CSV import preview logic", () => {
       );
 
       // Create Location B which the CSV will reference
-      const _locationB = await createLocation(
+      await createLocation(
         db,
         { name: "Location B", type: "room", parentId: null },
         actor,

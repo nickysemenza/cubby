@@ -1,5 +1,3 @@
-"use client";
-
 // cf https://ui.shadcn.com/docs/components/data-table
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";

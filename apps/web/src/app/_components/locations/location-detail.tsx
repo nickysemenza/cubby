@@ -1,5 +1,3 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
 import type { InfLocation, LocationUpdateInput } from "~/schemas/location";

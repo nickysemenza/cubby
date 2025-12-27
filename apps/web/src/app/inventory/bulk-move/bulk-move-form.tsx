@@ -12,11 +12,10 @@
  *
  * @see MoveInventoryDialog - Lightweight modal for quick moves
  */
-"use client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Package } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -63,8 +62,7 @@ export default function BulkMoveForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [moveItems, setMoveItems] = useState<MoveItem[]>([]);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const navigate = useNavigate();
 
   // Initialize the form
   const form = useForm<BulkMoveFormValues>({
@@ -93,22 +91,23 @@ export default function BulkMoveForm() {
   // Update URL when source location changes
   useEffect(() => {
     if (sourceLocation) {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(window.location.search);
       params.set("sourceLocationId", sourceLocation.id);
-      router.push(`/inventory/bulk-move?${params.toString()}`);
+      navigate({ to: `/inventory/bulk-move?${params.toString()}` });
     }
-  }, [sourceLocation, router, searchParams]);
+  }, [sourceLocation, navigate]);
 
   // Set initial source location from URL
   useEffect(() => {
-    const locationId = searchParams.get("sourceLocationId");
+    const params = new URLSearchParams(window.location.search);
+    const locationId = params.get("sourceLocationId");
     if (locationId && locations.length > 0) {
       const location = locations.find((loc) => loc.id === locationId);
       if (location) {
         form.setValue("sourceLocation", buildLocationComboboxItem(location));
       }
     }
-  }, [searchParams, locations, form]);
+  }, [locations, form]);
 
   // Fetch inventory items from source location
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(

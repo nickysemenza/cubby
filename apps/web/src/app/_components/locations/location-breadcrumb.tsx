@@ -1,7 +1,5 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { Home } from "lucide-react";
-import Link from "next/link";
 import * as React from "react";
 import {
   Breadcrumb,
@@ -88,7 +86,7 @@ export function LocationBreadcrumb({
               <BreadcrumbLink
                 render={
                   <Link
-                    href="/"
+                    to="/"
                     className="flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-muted"
                   />
                 }
@@ -130,7 +128,9 @@ export function LocationBreadcrumb({
               <BreadcrumbItem>
                 {linkable && segment.id && !isLast ? (
                   <BreadcrumbLink
-                    render={<Link href={`/locations/${segment.id}`} />}
+                    render={
+                      <Link to="/locations/$id" params={{ id: segment.id }} />
+                    }
                   >
                     {content}
                   </BreadcrumbLink>

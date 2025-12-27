@@ -1,5 +1,3 @@
-"use client";
-
 import { createElement } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";

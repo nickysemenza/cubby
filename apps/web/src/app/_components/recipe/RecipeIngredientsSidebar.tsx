@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Checkbox } from "~/components/ui/checkbox";
 import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";

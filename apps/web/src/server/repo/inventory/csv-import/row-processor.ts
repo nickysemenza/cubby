@@ -217,7 +217,7 @@ async function previewProduct(
         productChanges.unitMappingsCurrent = mappingChanges.current;
       }
     } else {
-      const mappings = await parseUnitMappingsForPreview(row.unit_mappings);
+      const mappings = parseUnitMappingsForPreview(row.unit_mappings);
       productChanges.unitMappingsWillBeAdded = mappings.count;
       productChanges.unitMappingsDetail = mappings.details;
     }

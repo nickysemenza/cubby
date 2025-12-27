@@ -1,5 +1,3 @@
-"use client";
-
 import type { RowData, Table } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";

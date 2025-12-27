@@ -1,7 +1,5 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { ProductCategory } from "~/schemas/product";
@@ -162,7 +160,10 @@ function DonutChart({ data }: DonutChartProps) {
 
             return (
               <g key={slice.category ?? "uncategorized"}>
-                <Link href={`/products?category=${slice.category ?? ""}`}>
+                <Link
+                  to="/products"
+                  search={{ category: slice.category ?? "" }}
+                >
                   {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 donut chart hover interaction */}
                   <path
                     d={arc(

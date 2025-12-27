@@ -1,8 +1,5 @@
-"use client";
-
 import { useMutation } from "@tanstack/react-query";
 import { Camera, X } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Webcam from "react-webcam";
 import { toast } from "sonner";
@@ -14,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { EntityImage } from "~/entities/types";
@@ -321,8 +319,6 @@ export function PendingImageUpload({
                 <Image
                   src={image.url}
                   alt={image.filename}
-                  width={100}
-                  height={100}
                   className="h-24 w-full object-cover"
                 />
                 <Button
@@ -353,8 +349,6 @@ export function PendingImageUpload({
                 <Image
                   src={image.url}
                   alt={image.filename}
-                  width={100}
-                  height={100}
                   className="h-24 w-full object-cover"
                 />
                 <Button

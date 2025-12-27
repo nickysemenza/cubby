@@ -1,8 +1,6 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
-import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import {
   Tooltip,
@@ -77,7 +75,7 @@ export const ProblemsBadge = () => {
               !hasProblems && "text-muted-foreground",
               hasProblems && "text-orange-600 dark:text-orange-400",
             )}
-            render={<Link href="/problems" />}
+            render={<Link to="/problems" />}
             nativeButton={false}
           />
         }

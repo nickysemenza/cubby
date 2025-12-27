@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import Image from "next/image";
 import { NoneState } from "~/app/_components/NoneState";
+import { Image } from "~/components/ui/image";
 
 interface ImageData {
   id: string;
@@ -41,16 +41,13 @@ export const ImageThumbnail = ({
   }
 
   const image = images[0];
-  const sizePx = size === "md" ? "48px" : "32px";
 
   return (
     <div className={containerVariants({ size })}>
       <Image
         src={image.url}
         alt={alt}
-        fill
-        sizes={sizePx}
-        className="object-cover"
+        className="absolute inset-0 h-full w-full object-cover"
       />
       {images.length > 1 && <ImageBadge count={images.length - 1} />}
     </div>

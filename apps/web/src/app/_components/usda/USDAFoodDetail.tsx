@@ -1,5 +1,3 @@
-"use client";
-
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";

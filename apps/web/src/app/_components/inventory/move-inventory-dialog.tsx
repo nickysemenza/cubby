@@ -11,7 +11,6 @@
  *
  * @see /inventory/bulk-move - Full page bulk move workflow
  */
-"use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";

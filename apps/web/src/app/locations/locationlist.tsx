@@ -1,5 +1,3 @@
-"use client";
-
 import { createColumnHelper } from "@tanstack/react-table";
 import { LayoutGrid, List } from "lucide-react";
 import { useState } from "react";

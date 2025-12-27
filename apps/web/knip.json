@@ -3,10 +3,11 @@
     "wasm/**",
     "types.ts",
     "src/components/ui/**",
-    "src/trpc/react.tsx",
+    "src/trpc/react.ts",
     "scripts/**",
     "tests/**",
-    "tooling/**"
+    "tooling/**",
+    "src/routeTree.gen.ts"
   ],
   "ignoreDependencies": [
     "@devoxa/integresql-client",
@@ -14,8 +15,11 @@
     "@testing-library/.+",
     "@vitest/.+",
     "commander",
-    "copy-webpack-plugin",
-    "vite-plugin-wasm"
+    "vite-plugin-wasm",
+    "vite-plugin-top-level-await",
+    "@cloudflare/vite-plugin",
+    "@tanstack/devtools-vite",
+    "@fontsource-variable/.+"
   ],
   "tags": ["-lintignore"]
 }

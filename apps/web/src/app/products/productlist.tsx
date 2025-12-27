@@ -1,5 +1,3 @@
-"use client";
-
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
@@ -78,7 +76,11 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const upc = info.getValue();
           return upc ? (
-            <TableLink href={`/usda/upc/${upc}`} variant="mono">
+            <TableLink
+              to="/usda/upc/$code"
+              params={{ code: upc }}
+              variant="mono"
+            >
               {upc}
             </TableLink>
           ) : (
@@ -88,14 +90,20 @@ export function ProductList({ initialCategory }: ProductListProps) {
       }),
       columnHelper.accessor("ndb_number", {
         header: "NDB",
-        cell: (info) =>
-          info.getValue() ? (
-            <TableLink href={`/usda/ndb/${info.getValue()}`} variant="mono">
-              {info.getValue()}
+        cell: (info) => {
+          const ndb = info.getValue();
+          return ndb ? (
+            <TableLink
+              to="/usda/ndb/$code"
+              params={{ code: String(ndb) }}
+              variant="mono"
+            >
+              {ndb}
             </TableLink>
           ) : (
             <NoneState />
-          ),
+          );
+        },
       }),
       columnHelper.accessor("model", {
         cell: (info) =>

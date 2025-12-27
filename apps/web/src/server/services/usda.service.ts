@@ -65,7 +65,7 @@ export class USDAService {
     const enhancedData: FoodSummaryWithLinkedProducts[] = await Promise.all(
       result.data.map(async (food) => {
         // Get all inferred unit mappings from the food
-        const inferredUnitMappings = await unitMappingsFromFood(food);
+        const inferredUnitMappings = unitMappingsFromFood(food);
 
         // Get linked products for this food
         const { brandedFoodInfo, legacyFoodInfo } = food;
@@ -108,7 +108,7 @@ export class USDAService {
     );
 
     // Get all inferred unit mappings from the food
-    const inferredUnitMappings = await unitMappingsFromFood(foodSummary);
+    const inferredUnitMappings = unitMappingsFromFood(foodSummary);
 
     return {
       ...foodSummary,

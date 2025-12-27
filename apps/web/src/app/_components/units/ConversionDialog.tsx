@@ -1,5 +1,3 @@
-"use client";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AmountKind, WAmount } from "@recipehub/recipebridge";
 import { Scale } from "lucide-react";

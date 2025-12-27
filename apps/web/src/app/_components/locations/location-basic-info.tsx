@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { Button } from "~/components/ui/button";
 import type { InfLocation } from "~/schemas/location";
@@ -42,7 +40,10 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
         <Button
           variant="outline"
           render={
-            <Link href={`/inventory/quick-capture?locationId=${location.id}`} />
+            <Link
+              to="/inventory/quick-capture"
+              search={{ locationId: location.id }}
+            />
           }
           nativeButton={false}
         >
@@ -51,7 +52,10 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
         <Button
           variant="outline"
           render={
-            <Link href={`/inventory/bulk-edit?locationId=${location.id}`} />
+            <Link
+              to="/inventory/bulk-edit"
+              search={{ locationId: location.id }}
+            />
           }
           nativeButton={false}
         >

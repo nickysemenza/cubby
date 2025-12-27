@@ -1,42 +1,26 @@
-import "server-only";
-
-import { context, propagation } from "@opentelemetry/api";
-import { headers } from "next/headers";
-import { cache } from "react";
+// Shim for ~/trpc/server
+// TanStack Start doesn't use React Server Components, so this pattern needs to be replaced
+// with route loaders or server functions
 
 import { createCaller } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
-import { HydrateClient } from "./hydration-client";
 
-/**
- * This wraps the `createTRPCContext` helper and provides the required context for the tRPC API when
- * handling a tRPC call from a React Server Component.
- */
-const createContext = cache(async () => {
-  const heads = new Headers(await headers());
-  heads.set("x-trpc-source", "rsc");
+// Create a basic context for server-side calls
+// In TanStack Start, you should use route loaders or createServerFn instead
+const createContext = async (headers: Headers = new Headers()) => {
+  headers.set("x-trpc-source", "server");
+  return createTRPCContext({ headers });
+};
 
-  // No longer propagate legacy x-project-id; org context comes from Better‑Auth cookies
+// Server-side caller - use this in server functions or loaders
+export const createServerCaller = async (headers?: Headers) => {
+  return createCaller(await createContext(headers));
+};
 
-  // Inject current trace context into headers for propagation
-  const activeContext = context.active();
-  const traceHeaders: Record<string, string> = {};
-  propagation.inject(activeContext, traceHeaders);
+// For backward compatibility - creates caller with empty headers
+// NOTE: This won't have auth context. Prefer createServerCaller with actual headers.
+export const api = createCaller(createContext);
 
-  // Add trace headers to the tRPC context
-  Object.entries(traceHeaders).forEach(([key, value]) => {
-    heads.set(key, value);
-  });
-
-  return createTRPCContext({
-    headers: heads,
-  });
-});
-
-// Create a direct server-side caller for server components
-// This is the main export used by server components
-const caller = createCaller(createContext);
-export const api = caller;
-
-// Re-export the client component
-export { HydrateClient };
+// HydrateClient is not needed in TanStack Start
+export const HydrateClient = ({ children }: { children: React.ReactNode }) =>
+  children;

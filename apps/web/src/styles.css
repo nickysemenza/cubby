@@ -1,0 +1,459 @@
+/* Fonts loaded via fontsource in __root.tsx for better performance */
+@import "tailwindcss";
+@import "@daveyplate/better-auth-ui/css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+/*
+  ---break---
+*/
+@custom-variant dark (&:is(.dark *));
+@custom-variant terminal (&:is(.terminal *));
+
+@theme {
+  --font-heading: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Nunito Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
+    "Roboto Mono", Consolas, "Courier New", monospace;
+}
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+
+  /* headings from
+  https://ui.shadcn.com/docs/components/typography
+  https://tailwindcss.com/docs/adding-custom-styles#adding-base-styles
+  https://tailwindcss.com/docs/functions-and-directives#apply-directive */
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+  }
+  h1 {
+    /* font-size: var(--text-2xl); */
+    @apply scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl;
+  }
+  h2 {
+    /* font-size: var(--text-xl); */
+    @apply scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight first:mt-0;
+  }
+  ul {
+    @apply my-6 ml-6 list-inside list-disc [&>li]:mt-2;
+  }
+  code {
+    @apply bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
+  }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/*
+  ---break---
+*/
+:root {
+  /* Catppuccin Latte Base */ /* Catppuccin Latte Text */
+  --card: oklch(1 0 0); /* Catppuccin Latte Mantle */
+  --card-foreground: oklch(0.141 0.005 285.823); /* Catppuccin Latte Text */
+  --popover: oklch(1 0 0); /* Catppuccin Latte Mantle */
+  --popover-foreground: oklch(0.141 0.005 285.823); /* Catppuccin Latte Text */
+  --primary: oklch(0.646 0.222 41.116); /* Catppuccin Latte Blue */
+  --primary-foreground: oklch(0.98 0.016 73.684); /* Catppuccin Latte Base */
+  --secondary: oklch(0.967 0.001 286.375); /* Catppuccin Latte Surface0 */
+  --secondary-foreground: oklch(
+    0.21 0.006 285.885
+  ); /* Catppuccin Latte Subtext1 */
+  --muted: oklch(0.967 0.001 286.375); /* Catppuccin Latte Surface0 */
+  --muted-foreground: oklch(
+    0.552 0.016 285.938
+  ); /* Catppuccin Latte Subtext0 */
+  --accent: oklch(0.967 0.001 286.375); /* Catppuccin Latte Surface1 */
+  --accent-foreground: oklch(0.21 0.006 285.885); /* Catppuccin Latte Text */
+  --destructive: oklch(0.577 0.245 27.325); /* Catppuccin Latte Red */
+  --destructive-foreground: #eff1f5; /* Catppuccin Latte Base */
+  --border: oklch(0.92 0.004 286.32); /* Catppuccin Latte Surface0 */
+  --input: oklch(0.92 0.004 286.32); /* Catppuccin Latte Surface1 */
+  --ring: oklch(0.705 0.015 286.067); /* Catppuccin Latte Lavender */
+  --chart-1: oklch(0.837 0.128 66.29); /* Catppuccin Latte Blue */
+  --chart-2: oklch(0.705 0.213 47.604); /* Catppuccin Latte Teal */
+  --chart-3: oklch(0.646 0.222 41.116); /* Catppuccin Latte Green */
+  --chart-4: oklch(0.553 0.195 38.402); /* Catppuccin Latte Mauve */
+  --chart-5: oklch(0.47 0.157 37.304); /* Catppuccin Latte Peach */
+  --radius: 0;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-primary: oklch(0.646 0.222 41.116);
+  --sidebar-primary-foreground: oklch(0.98 0.016 73.684);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --sidebar-ring: oklch(0.705 0.015 286.067);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+}
+/*
+  ---break---
+*/
+.dark {
+  --background: oklch(0.141 0.005 285.823); /* Catppuccin Frappe Base */
+  --foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
+  --card: oklch(0.21 0.006 285.885); /* Catppuccin Frappe Mantle */
+  --card-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
+  --popover: oklch(0.21 0.006 285.885); /* Catppuccin Frappe Mantle */
+  --popover-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
+  --primary: oklch(0.705 0.213 47.604); /* Catppuccin Frappe Blue */
+  --primary-foreground: oklch(0.98 0.016 73.684); /* Catppuccin Frappe Base */
+  --secondary: oklch(0.274 0.006 286.033); /* Catppuccin Frappe Surface0 */
+  --secondary-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Subtext1 */
+  --muted: oklch(0.274 0.006 286.033); /* Catppuccin Frappe Surface0 */
+  --muted-foreground: oklch(
+    0.705 0.015 286.067
+  ); /* Catppuccin Frappe Subtext0 */
+  --accent: oklch(0.274 0.006 286.033); /* Catppuccin Frappe Surface1 */
+  --accent-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
+  --destructive: oklch(0.704 0.191 22.216); /* Catppuccin Frappe Red */
+  --destructive-foreground: #303446; /* Catppuccin Frappe Base */
+  --border: oklch(1 0 0 / 10%); /* Catppuccin Frappe Surface0 */
+  --input: oklch(1 0 0 / 15%); /* Catppuccin Frappe Surface1 */
+  --ring: oklch(0.552 0.016 285.938); /* Catppuccin Frappe Lavender */
+  --chart-1: oklch(0.837 0.128 66.29); /* Catppuccin Frappe Blue */
+  --chart-2: oklch(0.705 0.213 47.604); /* Catppuccin Frappe Teal */
+  --chart-3: oklch(0.646 0.222 41.116); /* Catppuccin Frappe Green */
+  --chart-4: oklch(0.553 0.195 38.402); /* Catppuccin Frappe Mauve */
+  --chart-5: oklch(0.47 0.157 37.304); /* Catppuccin Frappe Peach */
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.705 0.213 47.604);
+  --sidebar-primary-foreground: oklch(0.98 0.016 73.684);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.552 0.016 285.938);
+}
+/*
+  ---break---
+*/
+.terminal {
+  --background: #fdf6e3; /* NeoHtop warm cream background */
+  --foreground: #586e75; /* NeoHtop muted blue-gray text */
+  --card: #ffffff; /* Pure white cards with shadow */
+  --card-foreground: #586e75; /* Consistent text color */
+  --popover: #ffffff; /* White popover */
+  --popover-foreground: #586e75; /* Consistent text */
+  --primary: #268bd2; /* NeoHtop blue accent */
+  --primary-foreground: #fdf6e3; /* Light text on primary */
+  --secondary: #f5ede1; /* Subtle cream for secondary */
+  --secondary-foreground: #657b83; /* Slightly darker text */
+  --muted: #f5ede1; /* Muted cream background */
+  --muted-foreground: #93a1a1; /* Lighter muted text */
+  --accent: #2aa198; /* NeoHtop teal accent */
+  --accent-foreground: #fdf6e3; /* Light text on accent */
+  --destructive: #dc322f; /* NeoHtop red */
+  --destructive-foreground: #fdf6e3; /* Light text on destructive */
+  --border: #e5d9c7; /* Subtle tan borders */
+  --input: #f5ede1; /* Cream input background */
+  --ring: #268bd2; /* Blue focus ring */
+  --chart-1: #268bd2; /* Primary blue */
+  --chart-2: #b58900; /* Amber/gold */
+  --chart-3: #2aa198; /* Teal */
+  --chart-4: #6c71c4; /* Violet */
+  --chart-5: #dc322f; /* Red */
+}
+/*
+  ---break---
+*/
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --font-sans: var(--font-sans);
+}
+/*
+  ---break---
+*/
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Terminal theme specific styling - monospace and borders only */
+  .terminal {
+    font-family: var(--font-mono);
+    font-feature-settings: "liga" 0; /* Disable ligatures in terminal mode */
+    font-variant-ligatures: none;
+    font-size: 0.75rem; /* 12px base for dense display */
+    line-height: 1.3;
+  }
+
+  .terminal code,
+  .terminal pre,
+  .terminal .font-mono {
+    font-family: var(--font-mono);
+    font-variant-ligatures: none;
+  }
+
+  .terminal * {
+    font-family: var(--font-mono);
+  }
+
+  /* Terminal-specific table font and borders */
+  .terminal table {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem; /* 11px for tables */
+    line-height: 1.2;
+  }
+
+  .terminal th,
+  .terminal td {
+    border: 1px solid var(--border);
+  }
+
+  .terminal th {
+    background-color: var(--muted);
+  }
+
+  /* Remove excess container padding for terminal tables */
+  .terminal .container {
+    padding-left: 0.25rem; /* 4px */
+    padding-right: 0.25rem; /* 4px */
+  }
+}
+
+/*
+  ---break---
+  Component utility classes - extracted from long inline classNames
+*/
+@layer components {
+  /* Animate popover/dropdown - shared animation for popover, dropdown, select, context-menu */
+  .animate-popover {
+    @apply data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2;
+  }
+
+  /* SVG child defaults - consistent SVG styling in interactive elements */
+  .svg-child-defaults {
+    @apply [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4;
+  }
+
+  /* Menu item base - shared styles for dropdown/select/context menu items */
+  .menu-item-base {
+    @apply focus:bg-accent focus:text-accent-foreground relative flex cursor-default items-center gap-2 rounded-sm py-1.5 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50;
+  }
+
+  /* Command dialog cmdk child selectors */
+  .command-dialog-styles {
+    @apply [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
+  }
+
+  /*
+    ---break---
+    Motion utilities - entrance animations and hover effects
+  */
+
+  /* Slide up entrance animation */
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out forwards;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  @keyframes slideUp {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Fade in entrance animation */
+  .animate-fade-in {
+    animation: fadeIn 0.4s ease-out forwards;
+    opacity: 0;
+  }
+
+  @keyframes fadeIn {
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Stagger children - applies slide-up with delays to child elements */
+  .stagger-children > * {
+    animation: slideUp 0.4s ease-out forwards;
+    opacity: 0;
+  }
+  .stagger-children > *:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .stagger-children > *:nth-child(2) {
+    animation-delay: 50ms;
+  }
+  .stagger-children > *:nth-child(3) {
+    animation-delay: 100ms;
+  }
+  .stagger-children > *:nth-child(4) {
+    animation-delay: 150ms;
+  }
+  .stagger-children > *:nth-child(5) {
+    animation-delay: 200ms;
+  }
+  .stagger-children > *:nth-child(6) {
+    animation-delay: 250ms;
+  }
+  .stagger-children > *:nth-child(7) {
+    animation-delay: 300ms;
+  }
+  .stagger-children > *:nth-child(8) {
+    animation-delay: 350ms;
+  }
+  .stagger-children > *:nth-child(9) {
+    animation-delay: 400ms;
+  }
+  .stagger-children > *:nth-child(10) {
+    animation-delay: 450ms;
+  }
+
+  /* Card hover effect - subtle lift with shadow */
+  .card-hover {
+    @apply transition-all duration-200;
+  }
+  .card-hover:hover {
+    @apply -translate-y-0.5 shadow-md;
+  }
+
+  /* Link underline animation */
+  .link-underline {
+    @apply relative;
+  }
+  .link-underline::after {
+    content: "";
+    @apply bg-primary absolute bottom-0 left-0 h-0.5 w-0 transition-all duration-200;
+  }
+  .link-underline:hover::after {
+    @apply w-full;
+  }
+
+  /* Skeleton shimmer loading effect */
+  .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--muted) 0%,
+      var(--accent) 50%,
+      var(--muted) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /*
+    ---break---
+    Visual depth utilities - gradients and textures for atmosphere
+  */
+
+  /* Gradient mesh background - subtle colorful atmosphere */
+  .gradient-mesh {
+    position: relative;
+  }
+  .gradient-mesh::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: var(--background);
+    background-image:
+      radial-gradient(at 40% 20%, var(--chart-1) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, var(--chart-2) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, var(--chart-3) 0px, transparent 50%),
+      radial-gradient(at 80% 80%, var(--chart-4) 0px, transparent 40%);
+    opacity: 0.12;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .gradient-mesh > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Subtle noise texture overlay */
+  .noise-texture {
+    position: relative;
+  }
+  .noise-texture::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .noise-texture > * {
+    position: relative;
+    z-index: 1;
+  }
+}

@@ -1,5 +1,3 @@
-"use client";
-
 import type { RefCallback } from "react";
 import type { z } from "zod";
 import { cn } from "~/lib/utils";

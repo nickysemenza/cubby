@@ -1,6 +1,5 @@
-"use client";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowRightLeft,
@@ -11,7 +10,6 @@ import {
   Pencil,
   Plus,
 } from "lucide-react";
-import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -30,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { entities } from "~/entities/entities";
 import { queryKeys } from "~/lib/query-keys";
 import type {
   InventorySyncItem,
@@ -693,7 +690,8 @@ function LocationSyncTable({
                   </div>
                 ) : item.appData?.locationId ? (
                   <Link
-                    href={`/${entities.location.basePath}/${item.appData.locationId}`}
+                    to="/locations/$id"
+                    params={{ id: item.appData.locationId }}
                     className="text-primary hover:underline"
                   >
                     {item.appData.locationName}
@@ -772,7 +770,8 @@ function InventorySyncTable({
                   </div>
                 ) : item.appData?.productId ? (
                   <Link
-                    href={`/${entities.product.basePath}/${item.appData.productId}`}
+                    to="/products/$id"
+                    params={{ id: item.appData.productId }}
                     className="text-primary hover:underline"
                   >
                     {item.appData.productName}
@@ -793,7 +792,8 @@ function InventorySyncTable({
                   </div>
                 ) : item.appData?.locationId ? (
                   <Link
-                    href={`/${entities.location.basePath}/${item.appData.locationId}`}
+                    to="/locations/$id"
+                    params={{ id: item.appData.locationId }}
                     className="text-primary hover:underline"
                   >
                     {item.appData.locationName}

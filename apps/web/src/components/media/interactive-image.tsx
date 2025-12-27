@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import Image from "next/image";
 import * as React from "react";
+import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
 
 const interactiveImageVariants = cva(
@@ -51,11 +51,6 @@ interface InteractiveImageProps
     VariantProps<typeof interactiveImageVariants> {
   src: string;
   alt: string;
-  fill?: boolean;
-  width?: number;
-  height?: number;
-  sizes?: string;
-  priority?: boolean;
   imageTransition?: VariantProps<typeof imageContentVariants>["transition"];
   imageClassName?: string;
 }
@@ -72,11 +67,6 @@ export const InteractiveImage = React.forwardRef<
       transition,
       src,
       alt,
-      fill = true,
-      width,
-      height,
-      sizes,
-      priority,
       imageTransition = "scale",
       imageClassName,
       ...props
@@ -95,12 +85,8 @@ export const InteractiveImage = React.forwardRef<
         <Image
           src={src}
           alt={alt}
-          fill={fill}
-          width={width}
-          height={height}
-          sizes={sizes}
-          priority={priority}
           className={cn(
+            "absolute inset-0 h-full w-full object-cover",
             imageContentVariants({ transition: imageTransition }),
             imageClassName,
           )}

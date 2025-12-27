@@ -1,4 +1,3 @@
-"use client";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { RecipeOut } from "~/schemas/recipe";
 import { useTRPC } from "~/trpc/react";

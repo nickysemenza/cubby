@@ -1,6 +1,5 @@
-"use client";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircle,
   ArrowRightLeft,
@@ -14,8 +13,6 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -148,7 +145,7 @@ const ProductChangesPreview = ({ item }: { item: CSVImportResultItem }) => {
 
 export default function CSVImportForm() {
   const csvPasteId = useId();
-  const router = useRouter();
+  const navigate = useNavigate();
   const [pastedData, setPastedData] = useState("");
   const [parsedRows, setParsedRows] = useState<InventoryCSVRow[]>([]);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -455,8 +452,8 @@ export default function CSVImportForm() {
   }, [parsedRows, importMutation]);
 
   const handleDone = useCallback(() => {
-    router.push(`/${entities["inventory-item"].basePath}`);
-  }, [router]);
+    navigate({ to: `/${entities["inventory-item"].basePath}` });
+  }, [navigate]);
 
   const handleReset = useCallback(() => {
     setPastedData("");
@@ -544,7 +541,8 @@ export default function CSVImportForm() {
                       <td className="p-2">
                         {item.productId ? (
                           <Link
-                            href={`/${entities.product.basePath}/${item.productId}`}
+                            to="/products/$id"
+                            params={{ id: item.productId }}
                             className="text-primary hover:underline"
                           >
                             {item.productName}
@@ -712,7 +710,8 @@ export default function CSVImportForm() {
                         <div>
                           {item.productId ? (
                             <Link
-                              href={`/${entities.product.basePath}/${item.productId}`}
+                              to="/products/$id"
+                              params={{ id: item.productId }}
                               className="text-primary hover:underline"
                             >
                               {item.productName}

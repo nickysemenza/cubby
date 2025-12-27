@@ -1,8 +1,6 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
-import Link from "next/link";
 import { useId, useMemo, useState } from "react";
 import { type NodeRendererProps, Tree } from "react-arborist";
 import { FlexContainer } from "~/components/layout/flex-container";
@@ -129,7 +127,8 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
     return (
       <FlexContainer style={style} ref={dragHandle} align="center">
         <Link
-          href={`/inventory/${data.id.replace("inv-", "")}`}
+          to="/inventory/$id"
+          params={{ id: data.id.replace("inv-", "") }}
           className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm hover:text-foreground"
         >
           <Package size={14} className="shrink-0" />

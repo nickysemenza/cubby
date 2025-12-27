@@ -1,7 +1,5 @@
-"use client";
-
-import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
@@ -33,14 +31,14 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
   mutationOptions: TRPCMutationOptions,
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const [error, setError] = useState<string | undefined>();
 
   const mutation = useMutation<TResult, unknown, TData>({
     ...mutationOptions,
     onSuccess: (result: TResult) => {
       callbacks?.onSuccess?.(result);
-      router.push(`/${entities[entityKey].basePath}/${result.id}`);
+      navigate({ to: `/${entities[entityKey].basePath}/${result.id}` });
     },
     onError: (error: unknown) => {
       setError(getErrorMessage(error));
@@ -57,7 +55,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
   };
 
   const handleCancel = () => {
-    router.push(`/${entities[entityKey].basePath}`);
+    navigate({ to: `/${entities[entityKey].basePath}` });
   };
 
   return {
@@ -81,14 +79,14 @@ export function useEntityEditMode<TData, TResult>(
   onCancel: () => void,
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | undefined>();
 
   const mutation = useMutation<TResult, unknown, TData>({
     ...mutationOptions,
     onSuccess: (result: TResult) => {
       callbacks?.onSuccess?.(result);
-      router.refresh();
+      queryClient.invalidateQueries();
       onCancel();
     },
     onError: (error: unknown) => {

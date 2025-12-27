@@ -1,7 +1,5 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import Link from "next/link";
 import type { z } from "zod";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
@@ -45,7 +43,8 @@ export function InventoryItemList() {
           return (
             <Link
               className="block max-w-64"
-              href={`/inventory/${info.row.original.id}`}
+              to="/inventory/$id"
+              params={{ id: info.row.original.id }}
             >
               {showAmountAndPrice(
                 info.getValue(),
@@ -68,7 +67,11 @@ export function InventoryItemList() {
                 {upc && (
                   <div>
                     UPC:{" "}
-                    <TableLink href={`/usda/upc/${upc}`} variant="mono">
+                    <TableLink
+                      to="/usda/upc/$code"
+                      params={{ code: upc }}
+                      variant="mono"
+                    >
                       {upc}
                     </TableLink>
                   </div>
@@ -76,7 +79,11 @@ export function InventoryItemList() {
                 {ndb_number && (
                   <div>
                     NDB:{" "}
-                    <TableLink href={`/usda/ndb/${ndb_number}`} variant="mono">
+                    <TableLink
+                      to="/usda/ndb/$code"
+                      params={{ code: String(ndb_number) }}
+                      variant="mono"
+                    >
                       {ndb_number}
                     </TableLink>
                   </div>

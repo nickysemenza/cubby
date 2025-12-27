@@ -1,8 +1,6 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Download, Loader2, Upload } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -55,7 +53,7 @@ export function LocationActions() {
 
   return (
     <>
-      <Link href="/locations/import">
+      <Link to="/locations/import">
         <Button variant="outline">
           <Upload className="mr-1 h-4 w-4" />
           Import CSV
@@ -69,6 +67,9 @@ export function LocationActions() {
         )}
         Export CSV
       </Button>
+      <Link to="/locations/new">
+        <Button>Create New Location</Button>
+      </Link>
     </>
   );
 }

@@ -1,12 +1,12 @@
 import type { Amount } from "~/codec/codec";
-import { wasmServer } from "~/lib/wasm";
+import { wasm } from "~/lib/wasm";
 
 /**
  * Checks if a unit represents money/currency using WASM
  */
-export const isMoneyUnit = async (unit: string): Promise<boolean> => {
+export const isMoneyUnit = (unit: string): boolean => {
   try {
-    return (await wasmServer.amount_kind({ value: 1, unit })) === "money";
+    return wasm.amount_kind({ value: 1, unit }) === "money";
   } catch {
     return false;
   }
@@ -35,17 +35,17 @@ interface PriceMappingMatch<T> {
  * This is the single source of truth for price mapping detection,
  * used by both in-memory array operations and database operations.
  */
-export const findPriceMapping = async <T extends { a: Amount; b: Amount }>(
+export const findPriceMapping = <T extends { a: Amount; b: Amount }>(
   mappings: T[],
-): Promise<PriceMappingMatch<T> | null> => {
+): PriceMappingMatch<T> | null => {
   for (let i = 0; i < mappings.length; i++) {
     const m = mappings[i]!;
     // Check if b is money and a is "1 each"
-    if (isSingleEach(m.a) && (await isMoneyUnit(m.b.unit))) {
+    if (isSingleEach(m.a) && isMoneyUnit(m.b.unit)) {
       return { match: m, index: i, price: m.b };
     }
     // Check if a is money and b is "1 each"
-    if (isSingleEach(m.b) && (await isMoneyUnit(m.a.unit))) {
+    if (isSingleEach(m.b) && isMoneyUnit(m.a.unit)) {
       return { match: m, index: i, price: m.a };
     }
   }
@@ -57,10 +57,10 @@ export const findPriceMapping = async <T extends { a: Amount; b: Amount }>(
  * Handles price in either 'a' or 'b' position.
  * Returns full Amount to preserve currency info.
  */
-export const extractPriceFromMappings = async (
+export const extractPriceFromMappings = (
   mappings: Array<{ a: Amount; b: Amount }>,
-): Promise<Amount | null> => {
-  const match = await findPriceMapping(mappings);
+): Amount | null => {
+  const match = findPriceMapping(mappings);
   return match?.price ?? null;
 };
 
@@ -75,14 +75,14 @@ const DEFAULT_CURRENCY = "dollar";
  * When updating, preserves the existing currency unit.
  * When creating new, uses provided currency or defaults to "dollar".
  */
-export const syncPriceToMappings = async <
+export const syncPriceToMappings = <
   T extends { a: Amount; b: Amount; source?: string | null },
 >(
   mappings: T[],
   price: Amount | null,
   source: string = "manual",
-): Promise<T[]> => {
-  const existing = await findPriceMapping(mappings);
+): T[] => {
+  const existing = findPriceMapping(mappings);
 
   if (price === null) {
     // Remove price mapping if it exists
@@ -115,18 +115,12 @@ export const syncPriceToMappings = async <
 /**
  * Serializes non-price unit mappings to a semicolon-separated string
  */
-export const serializeUnitMappings = async (
+export const serializeUnitMappings = (
   mappings: Array<{ a: Amount; b: Amount; source: string | null }>,
-): Promise<string | null> => {
-  // Check each mapping for money units
-  const results = await Promise.all(
-    mappings.map(async (m) => ({
-      ...m,
-      isMoneyA: await isMoneyUnit(m.a.unit),
-      isMoneyB: await isMoneyUnit(m.b.unit),
-    })),
+): string | null => {
+  const nonPriceMappings = mappings.filter(
+    (m) => !isMoneyUnit(m.a.unit) && !isMoneyUnit(m.b.unit),
   );
-  const nonPriceMappings = results.filter((m) => !m.isMoneyA && !m.isMoneyB);
   if (nonPriceMappings.length === 0) return null;
 
   // Round to 6 decimal places to avoid floating point precision churn

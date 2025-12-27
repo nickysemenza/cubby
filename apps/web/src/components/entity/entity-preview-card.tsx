@@ -1,10 +1,17 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import type { LucideIcon } from "lucide-react";
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+
+// Type-safe route patterns
+type RoutePattern =
+  | { to: "/products/$id"; params: { id: string } }
+  | { to: "/locations/$id"; params: { id: string } }
+  | { to: "/inventory/$id"; params: { id: string } }
+  | { to: "/recipes/$id"; params: { id: string } }
+  | { to: "/ingredients/$id"; params: { id: string } }
+  | { to: "/images/$id"; params: { id: string } };
 
 interface EntityPreviewCardProps {
   title: string;
@@ -15,7 +22,7 @@ interface EntityPreviewCardProps {
   details?: ReactNode[];
   footer?: ReactNode;
   primaryAction?: {
-    href?: string;
+    route?: RoutePattern;
     onClick?: () => void;
     label?: string;
     icon?: LucideIcon;
@@ -56,8 +63,13 @@ export function EntityPreviewCard({
       </Button>
     );
 
-    return primaryAction.href ? (
-      <Link href={primaryAction.href}>{actionButton}</Link>
+    return primaryAction.route ? (
+      <Link
+        to={primaryAction.route.to as "/products/$id"}
+        params={primaryAction.route.params as { id: string }}
+      >
+        {actionButton}
+      </Link>
     ) : primaryAction.onClick ? (
       actionButton
     ) : null;

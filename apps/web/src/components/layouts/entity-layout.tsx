@@ -1,7 +1,7 @@
 import { type ReactNode, Suspense } from "react";
 import { ListLoadingSkeleton } from "~/components/feedback/loading-skeletons";
 import { PageWrapper } from "~/components/layout/page-wrapper";
-import { HydrateClient } from "~/trpc/server";
+import { HydrateClient } from "~/trpc/hydrate-client";
 
 interface EntityLayoutProps {
   children: ReactNode;

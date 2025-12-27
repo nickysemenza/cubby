@@ -85,7 +85,7 @@ export async function calculateInventoryValue(
 
   for (const item of items) {
     const product = item.product;
-    const mappings = await getAllUnitMappingsFromProduct(product);
+    const mappings = getAllUnitMappingsFromProduct(product);
     const priceRes = convertAmountToPrice(item.amount, mappings);
 
     const hasValue =

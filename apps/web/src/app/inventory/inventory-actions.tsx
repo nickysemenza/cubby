@@ -1,12 +1,9 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { Download, Loader2, Upload, Zap } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
-import { entities } from "~/entities/entities";
 import {
   buildCSVContent,
   downloadCSV,
@@ -61,13 +58,13 @@ export function InventoryActions() {
 
   return (
     <>
-      <Link href={`/${entities["inventory-item"].basePath}/quick-capture`}>
+      <Link to="/inventory/quick-capture">
         <Button variant="default">
           <Zap className="mr-1 h-4 w-4" />
           Quick Capture
         </Button>
       </Link>
-      <Link href={`/${entities["inventory-item"].basePath}/import`}>
+      <Link to="/inventory/import">
         <Button variant="outline">
           <Upload className="mr-1 h-4 w-4" />
           Import CSV
@@ -81,10 +78,10 @@ export function InventoryActions() {
         )}
         Export CSV
       </Button>
-      <Link href={`/${entities["inventory-item"].basePath}/bulk-edit`}>
+      <Link to="/inventory/bulk-edit">
         <Button variant="outline">Bulk Edit</Button>
       </Link>
-      <Link href={`/${entities["inventory-item"].basePath}/new`}>
+      <Link to="/inventory/new">
         <Button variant="outline">Create New</Button>
       </Link>
     </>

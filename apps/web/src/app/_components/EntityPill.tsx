@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import type React from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Badge } from "~/components/ui/badge";
@@ -45,7 +43,8 @@ export const IngredientPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ name, id, openInNewTab }) => (
   <PillLink
-    href={`/${entities.ingredient.basePath}/${id}`}
+    to="/ingredients/$id"
+    params={{ id }}
     text={name}
     entity="ingredient"
     openInNewTab={openInNewTab}
@@ -56,7 +55,8 @@ export const LocationPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ location: { name, id, type }, openInNewTab }) => (
   <PillLink
-    href={`/${entities.location.basePath}/${id}`}
+    to="/locations/$id"
+    params={{ id }}
     text={name}
     entity={"location"}
     label={type}
@@ -70,7 +70,8 @@ export const LocationPillLinkCompact: React.FC<{
   openInNewTab?: boolean;
 }> = ({ location: { name, id, type }, openInNewTab }) => (
   <Link
-    href={`/${entities.location.basePath}/${id}`}
+    to="/locations/$id"
+    params={{ id }}
     target={openInNewTab ? "_blank" : undefined}
     rel={openInNewTab ? "noopener noreferrer" : undefined}
     className="inline-block min-w-0 max-w-full"
@@ -92,7 +93,8 @@ export const RecipePillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ recipe: { name, id }, openInNewTab }) => (
   <PillLink
-    href={`/${entities.recipe.basePath}/${id}`}
+    to="/recipes/$id"
+    params={{ id }}
     text={name}
     entity={"recipe"}
     openInNewTab={openInNewTab}
@@ -105,7 +107,8 @@ export const ProductPillLink: React.FC<{
   const isMisc = isMiscProduct(name);
   return (
     <PillLink
-      href={`/${entities.product.basePath}/${id}`}
+      to="/products/$id"
+      params={{ id }}
       text={isMisc ? getMiscDisplayName(name) : name}
       label={isMisc ? "misc" : manufacturer}
       entity={"product"}
@@ -118,7 +121,8 @@ export const FoodPillLink: React.FC<{
   openInNewTab?: boolean;
 }> = ({ food, openInNewTab }) => (
   <PillLink
-    href={`/usda/${food.fdc_id}`}
+    to="/usda/$id"
+    params={{ id: String(food.fdc_id) }}
     text={food.foodInfo.description || "Unnamed Food"}
     entity={"usda-food"}
     openInNewTab={openInNewTab}
@@ -126,10 +130,16 @@ export const FoodPillLink: React.FC<{
 );
 
 const PillLink: React.FC<
-  PillProps & { href: string; openInNewTab?: boolean }
-> = ({ href, openInNewTab, ...pillProps }) => (
+  PillProps & {
+    to: string;
+    params: Record<string, string>;
+    openInNewTab?: boolean;
+  }
+> = ({ to, params, openInNewTab, ...pillProps }) => (
   <Link
-    href={href}
+    // Type assertion needed because PillLink is used with dynamic entity routes
+    to={to as "/products/$id"}
+    params={params as { id: string }}
     target={openInNewTab ? "_blank" : undefined}
     rel={openInNewTab ? "noopener noreferrer" : undefined}
     className="inline-block min-w-0 max-w-full"

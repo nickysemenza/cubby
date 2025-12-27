@@ -1,5 +1,3 @@
-"use client";
-
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 

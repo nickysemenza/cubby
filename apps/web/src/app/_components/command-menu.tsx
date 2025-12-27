@@ -1,7 +1,5 @@
-"use client";
-
+import { useNavigate } from "@tanstack/react-router";
 import { Settings } from "lucide-react";
-import { useRouter } from "next/navigation";
 import * as React from "react";
 import {
   CommandDialog,
@@ -16,7 +14,7 @@ import { entities } from "~/entities/entities";
 
 export function GlobalCommandMenu() {
   const [open, setOpen] = React.useState(false);
-  const router = useRouter();
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -31,7 +29,7 @@ export function GlobalCommandMenu() {
   }, []);
 
   const goToPage = (path: string) => {
-    router.push(path);
+    navigate({ to: path });
     setOpen(false);
   };
   return (

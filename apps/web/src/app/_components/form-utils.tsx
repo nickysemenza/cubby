@@ -1,5 +1,3 @@
-"use client";
-
 import { DevTool } from "@hookform/devtools";
 import type { VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";

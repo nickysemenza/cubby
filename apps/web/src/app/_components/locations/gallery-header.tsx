@@ -1,5 +1,4 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import {
   ChevronRight,
   Home,
@@ -9,7 +8,6 @@ import {
   Search,
   X,
 } from "lucide-react";
-import Link from "next/link";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -193,7 +191,7 @@ export function GalleryHeader({
         <Button
           size="sm"
           className="h-8 gap-1 text-xs"
-          render={<Link href="/locations/new" />}
+          render={<Link to="/locations/new" />}
           nativeButton={false}
         >
           <Plus className="h-3.5 w-3.5" />

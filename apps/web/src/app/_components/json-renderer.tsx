@@ -1,5 +1,3 @@
-"use client";
-
 import { JsonEditor } from "json-edit-react";
 import type { JSX } from "react";
 

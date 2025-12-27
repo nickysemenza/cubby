@@ -1,14 +1,12 @@
-"use client";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ndb, upc } from "@recipehub/usda-schemas";
 import { Loader2, Search } from "lucide-react";
-import Image from "next/image";
 import { type FC, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Button } from "~/components/ui/button";
+import { Image } from "~/components/ui/image";
 import { useImageState } from "~/hooks/useImageState";
 import { isMiscProduct, UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { getOptionalIngredientId } from "~/schemas/form-fields";
@@ -137,15 +135,10 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     },
   });
 
-  // Extract price from mappings asynchronously
+  // Extract price from mappings
   useEffect(() => {
-    const loadPrice = async () => {
-      const priceAmount = await extractPriceFromMappings(
-        product?.unitMappings ?? [],
-      );
-      form.setValue("price", priceAmount?.value ?? null);
-    };
-    void loadPrice();
+    const priceAmount = extractPriceFromMappings(product?.unitMappings ?? []);
+    form.setValue("price", priceAmount?.value ?? null);
   }, [product?.unitMappings, form]);
 
   // Handle UPC lookup
@@ -184,7 +177,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const handleSubmit = async (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
     // Form uses numeric price (assumes dollar), convert to Amount
-    const unitMappingsWithPrice = await syncPriceToMappings(
+    const unitMappingsWithPrice = syncPriceToMappings(
       values.unitMappings,
       values.price !== null ? { value: values.price, unit: "dollar" } : null,
       "product-form",
@@ -388,7 +381,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                   width={64}
                   height={64}
                   className="rounded border object-contain"
-                  unoptimized
                 />
                 <span>Image will be imported on save</span>
               </div>

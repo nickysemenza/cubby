@@ -1,7 +1,5 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { Package } from "lucide-react";
-import Link from "next/link";
 import { forwardRef, useMemo } from "react";
 import type { z } from "zod";
 import { Badge } from "~/components/ui/badge";
@@ -90,7 +88,8 @@ export const LocationGalleryCard = forwardRef<
           className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground"
         />
         <Link
-          href={`/locations/${location.id}`}
+          to="/locations/$id"
+          params={{ id: location.id }}
           className="flex-1 truncate font-medium text-xs hover:text-primary hover:underline"
         >
           {location.name}
@@ -111,7 +110,8 @@ export const LocationGalleryCard = forwardRef<
               key={image.id}
               src={image.url}
               alt={`${location.name} photo`}
-              href={`/images/${image.id}`}
+              to="/images/$id"
+              params={{ id: image.id }}
               size={40}
               previewSize={240}
             />
@@ -129,20 +129,23 @@ export const LocationGalleryCard = forwardRef<
                   <ImageWithPreview
                     src={product.images[0].url}
                     alt={product.name}
-                    href={`/products/${product.id}`}
+                    to="/products/$id"
+                    params={{ id: product.id }}
                     size={32}
                     previewSize={200}
                   />
                 ) : (
                   <Link
-                    href={`/products/${product.id}`}
+                    to="/products/$id"
+                    params={{ id: product.id }}
                     className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
                   >
                     <Package className="h-3 w-3 text-muted-foreground/40" />
                   </Link>
                 )}
                 <Link
-                  href={`/products/${product.id}`}
+                  to="/products/$id"
+                  params={{ id: product.id }}
                   className="line-clamp-2 flex-1 text-[10px] leading-tight hover:text-primary"
                 >
                   {product.name}

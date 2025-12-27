@@ -1,7 +1,6 @@
-"use client";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type {
@@ -357,7 +356,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
             {selectedLink.recipes.map((recipe) => (
               <Link
                 key={recipe.id}
-                href={`/recipes/${recipe.id}`}
+                to="/recipes/$id"
+                params={{ id: recipe.id }}
                 className="block text-primary text-xs hover:underline"
               >
                 {recipe.name}
@@ -372,7 +372,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
         <div className="absolute top-4 left-4 z-50 max-w-xs rounded-md bg-popover px-3 py-2 text-sm shadow-lg">
           <div className="font-medium">
             <Link
-              href={`/ingredients/${hoveredNode.id}`}
+              to="/ingredients/$id"
+              params={{ id: hoveredNode.id }}
               className="hover:underline"
               style={{ pointerEvents: "auto" }}
             >

@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { Button } from "~/components/ui/button";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -48,7 +46,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         <span className="font-medium">UPC:</span>{" "}
         {product.upc ? (
           <Link
-            href={`/usda/upc/${product.upc}`}
+            to="/usda/upc/$code"
+            params={{ code: product.upc }}
             className="text-primary hover:underline"
           >
             {product.upc}
@@ -61,7 +60,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         <span className="font-medium">NDB Number:</span>{" "}
         {product.ndb_number ? (
           <Link
-            href={`/usda/ndb/${product.ndb_number}`}
+            to="/usda/ndb/$code"
+            params={{ code: String(product.ndb_number) }}
             className="text-primary hover:underline"
           >
             {product.ndb_number}

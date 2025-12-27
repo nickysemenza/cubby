@@ -1,5 +1,3 @@
-"use client";
-
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
 import type { ReactNode } from "react";

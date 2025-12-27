@@ -1,8 +1,6 @@
-"use client";
-
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
@@ -77,7 +75,7 @@ export default function ImageList() {
       cell: ({ row }) => {
         const image = row.original;
         return (
-          <Link href={`/images/${image.id}`} className="block">
+          <Link to="/images/$id" params={{ id: image.id }} className="block">
             {row.original.status === "UPLOADED" ? (
               <ImageThumbnail images={[image]} alt={image.filename} size="md" />
             ) : (

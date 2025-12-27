@@ -1,6 +1,5 @@
-"use client";
+import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
-import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
@@ -199,7 +198,8 @@ function Treemap({ data }: TreemapProps) {
                     >
                       {node.data.id ? (
                         <Link
-                          href={`/ingredients/${node.data.id}`}
+                          to="/ingredients/$id"
+                          params={{ id: node.data.id }}
                           className="hover:underline"
                           style={{ pointerEvents: "auto" }}
                         >

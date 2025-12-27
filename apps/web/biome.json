@@ -5,14 +5,14 @@
   "files": {
     "includes": [
       "**",
-      "!.next",
-      "!out",
+      "!.vinxi",
+      "!.output",
       "!build",
       "!wasm",
       "!.vercel",
       "!drizzle",
       "!src/components/ui",
-      "!next-env.d.ts"
+      "!src/routeTree.gen.ts"
     ]
   },
   "css": {
@@ -29,7 +29,6 @@
   },
   "linter": {
     "domains": {
-      "next": "all",
       "react": "all"
     },
     "rules": {

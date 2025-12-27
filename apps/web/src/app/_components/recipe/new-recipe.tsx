@@ -1,6 +1,3 @@
-"use client";
-
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { RecipeCreateInput } from "~/schemas/recipe";
 import { useTRPC } from "~/trpc/react";
@@ -8,7 +5,6 @@ import { useEntityCreateMode } from "../hooks/useEntityMode";
 import { RecipeForm } from "./recipe-form";
 
 export default function NewRecipeForm() {
-  const router = useRouter();
   const api = useTRPC();
 
   const { error, isPending, handleCreate } = useEntityCreateMode<
@@ -29,7 +25,7 @@ export default function NewRecipeForm() {
       onCreate={handleCreate}
       isPending={isPending}
       error={error}
-      onCancel={() => router.back()}
+      onCancel={() => window.history.back()}
     />
   );
 }

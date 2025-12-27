@@ -39,5 +39,9 @@
         }
       }
     }
+  },
+  "dependencies": {
+    "@fontsource-variable/nunito-sans": "^5.2.7",
+    "@fontsource-variable/plus-jakarta-sans": "^5.2.8"
   }
 }

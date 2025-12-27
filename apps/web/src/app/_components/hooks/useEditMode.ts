@@ -1,7 +1,4 @@
-"use client";
-
-import { useMutation } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { getErrorMessage } from "~/lib/error-utils";
 
@@ -71,7 +68,7 @@ export function useEditMode<TData, TResult = unknown>({
   onSuccess,
   useRouterRefresh = true,
 }: UseEditModeOptions<TResult>): UseEditModeReturn<TData> {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -82,7 +79,7 @@ export function useEditMode<TData, TResult = unknown>({
       setError(undefined);
       onSuccess?.(result);
       if (useRouterRefresh) {
-        router.refresh();
+        queryClient.invalidateQueries();
       }
     },
     onError: (error: unknown) => {

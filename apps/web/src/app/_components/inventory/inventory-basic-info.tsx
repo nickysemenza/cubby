@@ -1,5 +1,3 @@
-"use client";
-
 import type { FC } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";

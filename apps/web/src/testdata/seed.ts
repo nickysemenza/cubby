@@ -8,7 +8,7 @@ import { exampleRecipesCompact } from "./fakeRecipes";
 
 export const seedRealRecipes = async (db: Database, actor: ActorContext) => {
   for (const recipe of exampleRecipesCompact) {
-    const parsed = await parseCompactRecipe(recipe);
+    const parsed = parseCompactRecipe(recipe);
     const recipeOut = await upsertRecipeFromCompact(parsed, db, actor);
     const res = await getRecipeByID(
       db,

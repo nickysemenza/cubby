@@ -84,7 +84,7 @@ export default defineConfig({
     // Use a built server on CI for stability; dev server locally for faster iteration
     command: isCI ? "pnpm run preview" : "pnpm run dev",
     // command: "npm run dev",
-    url: "http://127.0.0.1:3000",
+    url: "http://localhost:3000",
     reuseExistingServer: !isCI,
     timeout: isCI ? 180_000 : 60_000,
   },

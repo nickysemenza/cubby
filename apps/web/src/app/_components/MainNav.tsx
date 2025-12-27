@@ -1,9 +1,6 @@
-"use client";
-
 import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
+import { Link, useLocation } from "@tanstack/react-router";
 import { Bug, BugOff, Menu, PackageOpen } from "lucide-react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
 import {
@@ -122,13 +119,13 @@ export function MainNav({
   className,
   ...props
 }: React.HTMLAttributes<HTMLElement>) {
-  const pathName = usePathname();
+  const pathName = useLocation().pathname;
   const { isDebugEnabled, toggleDebug } = useDebug();
   const session = authClient.useSession();
 
   return (
     <div className="flex w-full items-center justify-between">
-      <Link href="/">
+      <Link to="/">
         <FlexContainer align="center" gap={3}>
           <PackageOpen />
           <span className="self-center whitespace-nowrap font-semibold text-2xl dark:text-white">
@@ -146,7 +143,7 @@ export function MainNav({
         {...props}
       >
         <Link
-          href="/"
+          to="/"
           className={cn(
             "font-medium text-sm transition-colors hover:text-primary",
             pathName !== "/" && "text-muted-foreground",
@@ -157,7 +154,7 @@ export function MainNav({
         </Link>
 
         <Link
-          href="/products"
+          to="/products"
           className={cn(
             "font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/products") && "text-muted-foreground",
@@ -170,7 +167,7 @@ export function MainNav({
         <NavDropdown label="Kitchen" items={kitchenItems} />
 
         <Link
-          href="/locations"
+          to="/locations"
           className={cn(
             "font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/locations") && "text-muted-foreground",
@@ -181,7 +178,7 @@ export function MainNav({
         </Link>
 
         <Link
-          href="/inventory"
+          to="/inventory"
           className={cn(
             "font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/inventory") && "text-muted-foreground",
@@ -232,7 +229,11 @@ export function MainNav({
         </Button>
 
         {!session.data?.user ? (
-          <Link href="/auth/sign-in" className="font-medium text-sm">
+          <Link
+            to="/auth/$authView"
+            params={{ authView: "sign-in" }}
+            className="font-medium text-sm"
+          >
             Sign In
           </Link>
         ) : (
@@ -300,7 +301,7 @@ export function MainNav({
                     key={item.href}
                     render={
                       <Link
-                        href={item.href}
+                        to={item.href}
                         className={cn(
                           "p-2 font-medium text-base transition-colors hover:text-primary",
                           !active && "text-muted-foreground",

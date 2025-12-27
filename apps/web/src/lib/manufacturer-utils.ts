@@ -32,32 +32,6 @@ export function isUnspecifiedManufacturer(
 }
 
 /**
- * Check if two manufacturers are compatible for matching purposes.
- *
- * "(unspecified)" acts as a wildcard and matches any manufacturer.
- * This enables fuzzy matching where a sheet row with "(unspecified)"
- * can match an existing product with a specific manufacturer.
- *
- * Note: Currently unused but kept for potential future use in matching logic.
- */
-function _manufacturersMatch(
-  mfr1: string | null | undefined,
-  mfr2: string | null | undefined,
-): boolean {
-  const norm1 = normalizeManufacturer(mfr1).toLowerCase();
-  const norm2 = normalizeManufacturer(mfr2).toLowerCase();
-
-  // Exact match
-  if (norm1 === norm2) return true;
-
-  // "(unspecified)" matches anything
-  const unspecified = UNSPECIFIED_MANUFACTURER.toLowerCase();
-  if (norm1 === unspecified || norm2 === unspecified) return true;
-
-  return false;
-}
-
-/**
  * Check if updating manufacturer from current to new value is a meaningful change.
  * Returns the new manufacturer value if it should be updated, undefined otherwise.
  *

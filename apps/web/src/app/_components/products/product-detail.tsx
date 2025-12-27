@@ -1,5 +1,3 @@
-"use client";
-
 import type { FC } from "react";
 import type { ProductInputPayload } from "~/schemas/product";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";

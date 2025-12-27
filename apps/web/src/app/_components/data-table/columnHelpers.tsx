@@ -1,5 +1,3 @@
-"use client";
-
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import type { ComponentType } from "react";
 import type { Amount } from "~/codec/codec";
@@ -51,7 +49,10 @@ export function createNameColumn<T extends BaseRow>(
     enableSorting: true,
     meta: { className: "w-48 max-w-48" },
     cell: (info: CellContext<T, T[keyof T]>) => (
-      <TableLink href={`/${entities[entity].basePath}/${info.row.original.id}`}>
+      <TableLink
+        to={`/${entities[entity].basePath}/$id` as "/products/$id"}
+        params={{ id: String(info.row.original.id) }}
+      >
         {String(info.getValue())}
       </TableLink>
     ),

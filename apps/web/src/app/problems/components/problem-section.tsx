@@ -1,5 +1,3 @@
-"use client";
-
 import { ExternalLink, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
@@ -11,6 +9,12 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+
+// Type-safe route patterns
+type RoutePattern =
+  | { to: "/products/$id"; params: { id: string } }
+  | { to: "/locations/$id"; params: { id: string } }
+  | { to: "/inventory/$id"; params: { id: string } };
 
 interface ProblemSectionProps<T> {
   title: string;
@@ -24,7 +28,7 @@ interface ProblemSectionProps<T> {
     subtitle?: string;
     badges?: ReactNode[];
     details?: ReactNode[];
-    editUrl: string;
+    route: RoutePattern;
     editLabel?: string;
     customActions?: ReactNode;
   };
@@ -93,20 +97,20 @@ export function ProblemSection<T>({
                     subtitle,
                     badges = [],
                     details = [],
-                    editUrl,
+                    route,
                     editLabel = "Edit",
                     customActions,
                   } = renderItem(item);
 
                   return (
                     <EntityPreviewCard
-                      key={`${itemTitle}-${editUrl}`}
+                      key={`${itemTitle}-${route.params.id}`}
                       title={itemTitle}
                       subtitle={subtitle}
                       badges={badges}
                       details={details}
                       primaryAction={{
-                        href: editUrl,
+                        route,
                         label: editLabel,
                         icon: ExternalLink,
                       }}

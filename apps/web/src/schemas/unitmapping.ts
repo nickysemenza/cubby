@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { type Amount, amount } from "~/codec/codec";
-import { wasmServer } from "~/lib/wasm";
+import { wasm } from "~/lib/wasm";
 import { dbTimestampsOut } from "./common";
 import { productId } from "./identifiers";
 
@@ -48,19 +48,17 @@ interface ParsedUnitMappingResult {
  * Parse a unit mapping string using WASM.
  * Supports formats: "4 lb = $5", "$5/4lb", "4 lb = $5 @ store"
  */
-export async function parseUnitMappingString(
+export const parseUnitMappingString = (
   input: string,
-): Promise<ParsedUnitMappingResult> {
-  const result = (await wasmServer.parse_unit_mapping(
-    input,
-  )) as WasmUnitMappingResult;
+): ParsedUnitMappingResult => {
+  const result = wasm.parse_unit_mapping(input) as WasmUnitMappingResult;
   // Normalize undefined to null for source field
   return {
     a: result.a,
     b: result.b,
     source: result.source ?? null,
   };
-}
+};
 
 export const unitMappingInput = unitMappingBase.extend({
   id: z.uuid().optional(),

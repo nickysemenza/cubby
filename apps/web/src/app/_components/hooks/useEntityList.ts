@@ -1,5 +1,3 @@
-"use client";
-
 import type { ColumnDef, Table } from "@tanstack/react-table";
 import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";

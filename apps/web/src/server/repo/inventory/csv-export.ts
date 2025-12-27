@@ -20,7 +20,7 @@ import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 /**
  * Build common product export fields from a product with unit mappings and ingredient
  */
-async function buildProductExportFields(p: ProductExportFields): Promise<{
+function buildProductExportFields(p: ProductExportFields): {
   product_name: string;
   manufacturer: string;
   category: ProductCategory | null;
@@ -33,8 +33,8 @@ async function buildProductExportFields(p: ProductExportFields): Promise<{
   ingredient_name: string | null;
   aliases: string | null;
   product_image: string | null;
-}> {
-  const priceAmount = await extractPriceFromMappings(p.unitMappings);
+} {
+  const priceAmount = extractPriceFromMappings(p.unitMappings);
   return {
     product_name: p.name,
     manufacturer: p.manufacturer,
@@ -44,7 +44,7 @@ async function buildProductExportFields(p: ProductExportFields): Promise<{
     ndb_number: p.ndb_number ?? null,
     expected_qty: p.expectedQuantity,
     price: priceAmount?.value ?? null,
-    unit_mappings: await serializeUnitMappings(p.unitMappings),
+    unit_mappings: serializeUnitMappings(p.unitMappings),
     ingredient_name: p.Ingredient?.name ?? null,
     aliases: p.Ingredient?.aliases?.join("; ") ?? null,
     product_image: joinImageUrls(p.images),
@@ -84,7 +84,7 @@ export const exportInventoryToCSV = async (
   const inventoryRows = await Promise.all(
     entries.map(async (entry) => {
       const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
-      const productFields = await buildProductExportFields(entry.Product);
+      const productFields = buildProductExportFields(entry.Product);
       return {
         ...productFields,
         location_name: entry.location.name,
@@ -127,7 +127,7 @@ export const exportInventoryToCSV = async (
   // Convert products without inventory to export rows (product-only rows)
   const productOnlyRows = await Promise.all(
     productsWithoutInventory.map(async (p) => {
-      const productFields = await buildProductExportFields(p);
+      const productFields = buildProductExportFields(p);
       return {
         ...productFields,
         location_name: "", // Empty for product-only rows

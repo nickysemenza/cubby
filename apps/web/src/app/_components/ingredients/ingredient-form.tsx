@@ -1,5 +1,3 @@
-"use client";
-
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { Controller, useForm } from "react-hook-form";

@@ -147,8 +147,8 @@ export const insertCompactRecipe = async (
   db: Database,
   actor: ActorContext,
 ) => {
-  const parsed = await parseCompactRecipe(recipe);
-  return await upsertRecipeFromCompact(parsed, db, actor);
+  const parsed = parseCompactRecipe(recipe);
+  return upsertRecipeFromCompact(parsed, db, actor);
 };
 
 /** Filters for recipe list queries */

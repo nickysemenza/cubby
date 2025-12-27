@@ -1,11 +1,8 @@
-"use client";
-
+import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import Link from "next/link";
 import { useId, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { entities } from "~/entities/entities";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
@@ -95,7 +92,7 @@ export function IngredientList() {
         <IngredientMerger table={table} />
         <Button
           variant="default"
-          render={<Link href={`/${entities.ingredient.basePath}/new`} />}
+          render={<Link to="/ingredients/new" />}
           nativeButton={false}
         >
           Create New Ingredient

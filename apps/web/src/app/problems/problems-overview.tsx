@@ -1,6 +1,5 @@
-"use client";
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import {
   Calendar,
@@ -13,7 +12,6 @@ import {
   Utensils,
   Zap,
 } from "lucide-react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -66,7 +64,7 @@ function DuplicateUniqueProductsList({
             {location.name}
           </Badge>
         )),
-        editUrl: `/products/${product.id}`,
+        route: { to: "/products/$id" as const, params: { id: product.id } },
       })}
     />
   );
@@ -93,7 +91,7 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
             Created {formatDistanceToNow(product.createdAt)} ago
           </div>,
         ],
-        editUrl: `/products/${product.id}`,
+        route: { to: "/products/$id" as const, params: { id: product.id } },
       })}
     />
   );
@@ -135,7 +133,7 @@ function InvalidUPCsList({ products }: { products: InvalidUPC[] }) {
             {product.upc}
           </code>,
         ],
-        editUrl: `/products/${product.id}`,
+        route: { to: "/products/$id" as const, params: { id: product.id } },
         editLabel: "Fix",
       })}
     />
@@ -172,7 +170,7 @@ function ProductsWithoutMappingsList({
             No unit mappings
           </Badge>,
         ],
-        editUrl: `/products/${product.id}`,
+        route: { to: "/products/$id" as const, params: { id: product.id } },
         editLabel: "Add Pricing",
       })}
     />
@@ -223,7 +221,7 @@ function InvalidInventoryAmountsList({
             {entry.amount.value} {entry.amount.unit}
           </code>,
         ],
-        editUrl: `/inventory/${entry.id}`,
+        route: { to: "/inventory/$id" as const, params: { id: entry.id } },
         editLabel: "Fix",
       })}
     />
@@ -271,10 +269,16 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
             </Badge>,
           ],
           details,
-          editUrl: `/locations/${location.id}`,
+          route: {
+            to: "/locations/$id" as const,
+            params: { id: location.id },
+          },
           editLabel: "View",
           customActions: (
-            <Link href={`/inventory/bulk-edit?locationId=${location.id}`}>
+            <Link
+              to="/inventory/bulk-edit"
+              search={{ locationId: location.id }}
+            >
               <Button size="sm">Add Inventory</Button>
             </Link>
           ),
@@ -351,7 +355,7 @@ function ProductsWithoutUPCImagesList({
             {product.upc}
           </code>,
         ],
-        editUrl: `/products/${product.id}`,
+        route: { to: "/products/$id" as const, params: { id: product.id } },
       })}
     />
   );
@@ -434,7 +438,7 @@ function ProductsWithWrongCategoryList({
             {indicatorLabel(product.indicator)}
           </Badge>,
         ],
-        editUrl: `/products/${product.id}`,
+        route: { to: "/products/$id" as const, params: { id: product.id } },
       })}
     />
   );

@@ -6,7 +6,7 @@
 
 import { eq } from "drizzle-orm";
 import type { Amount } from "~/codec/codec";
-import { wasmServer } from "~/lib/wasm";
+import { wasm } from "~/lib/wasm";
 import type { ProductId } from "~/schemas/identifiers";
 import { findPriceMapping, isMoneyUnit } from "~/schemas/price-mapping-utils";
 import { parseUnitMappingString } from "~/schemas/unitmapping";
@@ -34,7 +34,7 @@ export const createOrUpdatePriceMapping = async (
     where: eq(productUnitMappings.productId, productId),
   });
 
-  const existingPriceMapping = await findPriceMapping(existingMappings);
+  const existingPriceMapping = findPriceMapping(existingMappings);
 
   // Use provided currency, or preserve existing, or default
   const currency =
@@ -80,14 +80,9 @@ export const createUnitMappingsFromString = async (
   });
 
   // Find IDs of non-price mappings to delete
-  const nonPriceMappingIds: string[] = [];
-  for (const m of existingMappings) {
-    const aIsMoney = await isMoneyUnit(m.a.unit);
-    const bIsMoney = await isMoneyUnit(m.b.unit);
-    if (!aIsMoney && !bIsMoney) {
-      nonPriceMappingIds.push(m.id);
-    }
-  }
+  const nonPriceMappingIds = existingMappings
+    .filter((m) => !isMoneyUnit(m.a.unit) && !isMoneyUnit(m.b.unit))
+    .map((m) => m.id);
 
   // Delete existing non-price mappings
   for (const id of nonPriceMappingIds) {
@@ -104,11 +99,9 @@ export const createUnitMappingsFromString = async (
 
   for (const part of mappingParts) {
     try {
-      const parsed = await parseUnitMappingString(part);
+      const parsed = parseUnitMappingString(part);
       // Skip price mappings (those are handled separately)
-      const aIsMoney = await isMoneyUnit(parsed.a.unit);
-      const bIsMoney = await isMoneyUnit(parsed.b.unit);
-      if (aIsMoney || bIsMoney) {
+      if (isMoneyUnit(parsed.a.unit) || isMoneyUnit(parsed.b.unit)) {
         continue;
       }
       await getDb(db)
@@ -142,7 +135,7 @@ export const checkPriceMappingChanges = async (
     where: eq(productUnitMappings.productId, productId),
   });
 
-  const existingPriceMapping = await findPriceMapping(existingMappings);
+  const existingPriceMapping = findPriceMapping(existingMappings);
 
   // Return the new price value if it would be set or changed
   if (
@@ -177,9 +170,9 @@ interface UnitMappingsPreviewResult {
  *
  * Invalid mappings are collected as errors rather than silently falling back.
  */
-export const parseUnitMappingsForPreview = async (
+export const parseUnitMappingsForPreview = (
   mappingsStr: string,
-): Promise<UnitMappingsPreviewResult> => {
+): UnitMappingsPreviewResult => {
   const mappingParts = mappingsStr
     .split(";")
     .map((s) => s.trim())
@@ -190,12 +183,10 @@ export const parseUnitMappingsForPreview = async (
 
   for (const part of mappingParts) {
     try {
-      const parsed = await parseUnitMappingString(part);
-      const fromFormatted = await wasmServer.format_amount(parsed.a);
-      const toFormatted = await wasmServer.format_amount(parsed.b);
+      const parsed = parseUnitMappingString(part);
       details.push({
-        from: fromFormatted,
-        to: toFormatted,
+        from: wasm.format_amount(parsed.a),
+        to: wasm.format_amount(parsed.b),
         source: parsed.source ?? undefined,
       });
     } catch (e) {
@@ -229,19 +220,12 @@ export const checkUnitMappingsChanges = async (
   });
 
   // Filter to non-price mappings (same logic as serializeUnitMappings)
-  const nonPriceResults = await Promise.all(
-    existingMappings.map(async (m) => ({
-      ...m,
-      isMoneyA: await isMoneyUnit(m.a.unit),
-      isMoneyB: await isMoneyUnit(m.b.unit),
-    })),
-  );
-  const nonPriceMappings = nonPriceResults.filter(
-    (m) => !m.isMoneyA && !m.isMoneyB,
+  const nonPriceMappings = existingMappings.filter(
+    (m) => !isMoneyUnit(m.a.unit) && !isMoneyUnit(m.b.unit),
   );
 
   // Parse the incoming mappings string (filtering out price mappings)
-  const parsedNew = await parseUnitMappingsForPreview(newMappingsStr);
+  const parsedNew = parseUnitMappingsForPreview(newMappingsStr);
   const newNonPriceMappings = parsedNew.details.filter((d) => {
     // Check if either side looks like money (simplified check for preview)
     const looksLikeMoney = (s: string) =>

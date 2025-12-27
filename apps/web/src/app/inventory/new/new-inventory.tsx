@@ -1,4 +1,3 @@
-"use client";
 import type { FC } from "react";
 import type { z } from "zod";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";

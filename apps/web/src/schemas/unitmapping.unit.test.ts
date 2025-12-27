@@ -8,8 +8,8 @@ beforeAll(async () => {
 });
 
 describe("parseUnitMappingString", () => {
-  test("parses conversion format with source", async () => {
-    const result = await parseUnitMappingString("4 lb = $5 @ whole foods");
+  test("parses conversion format with source", () => {
+    const result = parseUnitMappingString("4 lb = $5 @ whole foods");
     expect(result.a.value).toBe(4);
     expect(result.a.unit).toBe("lb");
     expect(result.b.value).toBe(5);
@@ -17,8 +17,8 @@ describe("parseUnitMappingString", () => {
     expect(result.source).toBe("whole foods");
   });
 
-  test("parses conversion format without source", async () => {
-    const result = await parseUnitMappingString("1 cup = 120g");
+  test("parses conversion format without source", () => {
+    const result = parseUnitMappingString("1 cup = 120g");
     expect(result.a.value).toBe(1);
     expect(result.a.unit).toBe("cup");
     expect(result.b.value).toBe(120);
@@ -26,8 +26,8 @@ describe("parseUnitMappingString", () => {
     expect(result.source).toBeNull();
   });
 
-  test("parses price-per format", async () => {
-    const result = await parseUnitMappingString("$5/4lb");
+  test("parses price-per format", () => {
+    const result = parseUnitMappingString("$5/4lb");
     // Note: normalized order - amount first, then price
     expect(result.a.value).toBe(4);
     expect(result.a.unit).toBe("lb");
@@ -35,23 +35,23 @@ describe("parseUnitMappingString", () => {
     expect(result.b.unit).toBe("$");
   });
 
-  test("parses price-per format with source", async () => {
-    const result = await parseUnitMappingString("$5/4lb @ costco");
+  test("parses price-per format with source", () => {
+    const result = parseUnitMappingString("$5/4lb @ costco");
     expect(result.a.value).toBe(4);
     expect(result.a.unit).toBe("lb");
     expect(result.b.value).toBe(5);
     expect(result.source).toBe("costco");
   });
 
-  test("parses decimal values", async () => {
-    const result = await parseUnitMappingString("2.5 cups = $3.50");
+  test("parses decimal values", () => {
+    const result = parseUnitMappingString("2.5 cups = $3.50");
     expect(result.a.value).toBe(2.5);
     expect(result.a.unit).toBe("cup"); // Singularized
     expect(result.b.value).toBe(3.5);
     expect(result.b.unit).toBe("$");
   });
 
-  test("parses various unit formats", async () => {
+  test("parses various unit formats", () => {
     const examples = [
       {
         input: "1 stick = 113g",
@@ -75,7 +75,7 @@ describe("parseUnitMappingString", () => {
     ];
 
     for (const { input, expected } of examples) {
-      const result = await parseUnitMappingString(input);
+      const result = parseUnitMappingString(input);
       expect(result.a.value).toBe(expected.a.value);
       expect(result.a.unit).toBe(expected.a.unit);
       expect(result.b.value).toBe(expected.b.value);
@@ -86,9 +86,9 @@ describe("parseUnitMappingString", () => {
     }
   });
 
-  test("throws on invalid input", async () => {
-    await expect(parseUnitMappingString("invalid")).rejects.toThrow();
-    await expect(parseUnitMappingString("4 lb")).rejects.toThrow();
-    await expect(parseUnitMappingString("")).rejects.toThrow();
+  test("throws on invalid input", () => {
+    expect(() => parseUnitMappingString("invalid")).toThrow();
+    expect(() => parseUnitMappingString("4 lb")).toThrow();
+    expect(() => parseUnitMappingString("")).toThrow();
   });
 });
