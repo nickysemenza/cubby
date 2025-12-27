@@ -26,6 +26,7 @@ import {
   updateOrganizationMetadata,
 } from "~/server/repo/organization";
 import { toCSVString } from "~/lib/csv-utils";
+import { getErrorMessage } from "~/lib/error-utils";
 // Note: csv-comparison is now only used by the sync repo module
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
 import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
@@ -799,7 +800,7 @@ async function processAppDeletions(
       } catch (err) {
         results.inventory.errors++;
         results.errorMessages.push(
-          `Failed to delete inventory: ${err instanceof Error ? err.message : "Unknown error"}`,
+          `Failed to delete inventory: ${getErrorMessage(err)}`,
         );
       }
     }
@@ -822,7 +823,7 @@ async function processAppDeletions(
       } catch (err) {
         results.locations.errors++;
         results.errorMessages.push(
-          `Failed to delete location: ${err instanceof Error ? err.message : "Unknown error"}`,
+          `Failed to delete location: ${getErrorMessage(err)}`,
         );
       }
     }
@@ -860,7 +861,7 @@ async function processRenames(
       } catch (err) {
         results.inventory.errors++;
         results.errorMessages.push(
-          `Failed to rename product: ${err instanceof Error ? err.message : "Unknown error"}`,
+          `Failed to rename product: ${getErrorMessage(err)}`,
         );
       }
     }
@@ -886,7 +887,7 @@ async function processRenames(
       } catch (err) {
         results.locations.errors++;
         results.errorMessages.push(
-          `Failed to rename location: ${err instanceof Error ? err.message : "Unknown error"}`,
+          `Failed to rename location: ${getErrorMessage(err)}`,
         );
       }
     }

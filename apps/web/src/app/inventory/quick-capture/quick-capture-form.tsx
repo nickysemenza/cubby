@@ -47,6 +47,7 @@ import {
   LocationBreadcrumb,
   locationToSegments,
 } from "~/app/_components/locations/location-breadcrumb";
+import { getErrorMessage } from "~/lib/error-utils";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { ProductPillLink } from "~/app/_components/EntityPill";
 import type { InfLocation } from "~/schemas/location";
@@ -194,8 +195,7 @@ export default function QuickCaptureForm({
         );
         toast.success(`Found: ${product.name}`);
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Unknown error";
+        const errorMessage = getErrorMessage(err);
         console.error(`[Barcode Scan] Failed for ${barcode}:`, errorMessage);
         toast.error(`Failed to look up barcode: ${errorMessage}`);
       }

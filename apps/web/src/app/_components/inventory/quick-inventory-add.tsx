@@ -23,8 +23,10 @@ import { toast } from "sonner";
 import type { LocationId } from "~/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
-import { ComboboxItem } from "../combobox/combobox-types";
-import { getOptionalProductId } from "~/schemas/form-fields";
+import {
+  getOptionalProductId,
+  requiredProductField,
+} from "~/schemas/form-fields";
 import { AmountFieldGroup } from "./amount-field-group";
 import { FormProvider } from "react-hook-form";
 import { amount } from "~/codec/codec";
@@ -35,9 +37,7 @@ interface QuickInventoryAddProps {
 }
 
 const formSchema = z.object({
-  product: ComboboxItem.refine((item) => item !== null, {
-    message: "Please select a product",
-  }),
+  product: requiredProductField,
   amount: amount,
 });
 

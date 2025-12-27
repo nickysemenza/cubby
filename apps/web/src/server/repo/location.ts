@@ -34,6 +34,7 @@ import {
   associatePendingImages,
   buildPartialUpdateValues,
   executeListQueryWithCount,
+  insertAndReturnDb,
 } from "~/server/repo/database-helpers";
 import { createAppError } from "~/server/api/trpc";
 import {
@@ -56,19 +57,12 @@ export const createLocation = async (
 ) => {
   const { organizationId } = actor;
   // Create the location
-  const [newLocation] = await getDb(db)
-    .insert(location)
-    .values({
-      organizationId: organizationId,
-      name: data.name,
-      type: data.type,
-      parentId: data.parentId ?? null,
-    })
-    .returning();
-
-  if (!newLocation) {
-    throw new Error("Failed to create location");
-  }
+  const newLocation = await insertAndReturnDb(db, location, {
+    organizationId: organizationId,
+    name: data.name,
+    type: data.type,
+    parentId: data.parentId ?? null,
+  });
 
   // Associate images if provided
   if (data.pendingImageIds && data.pendingImageIds.length > 0) {
@@ -582,21 +576,14 @@ export const findOrCreateLocationByName = async (
   }
 
   // Create new location
-  const result = await getDb(db)
-    .insert(location)
-    .values({
-      organizationId,
-      name,
-      type,
-      parentId,
-    })
-    .returning();
+  const created = await insertAndReturnDb(db, location, {
+    organizationId,
+    name,
+    type,
+    parentId,
+  });
 
-  if (!result[0]) {
-    throw new Error("Failed to create location");
-  }
-
-  return { locationId: unsafeLocationId(result[0].id), created: true };
+  return { locationId: unsafeLocationId(created.id), created: true };
 };
 
 /**

@@ -15,6 +15,7 @@ import { importImageFromUrl } from "~/server/repo/image";
 import { getDb, associatePendingImages } from "~/server/repo/database-helpers";
 import { productImage, locationImage } from "~/server/db/schema";
 import { eq, count } from "drizzle-orm";
+import { getErrorMessage } from "~/lib/error-utils";
 
 /**
  * Parse semicolon-separated image URLs into an array
@@ -101,8 +102,7 @@ export async function importProductImages(
         errors.push(`Image ${i + 1}: Failed to download`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      errors.push(`Image ${i + 1}: ${message}`);
+      errors.push(`Image ${i + 1}: ${getErrorMessage(error)}`);
     }
   }
 
@@ -188,8 +188,7 @@ export async function importLocationImages(
         errors.push(`Image ${i + 1}: Failed to download`);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      errors.push(`Image ${i + 1}: ${message}`);
+      errors.push(`Image ${i + 1}: ${getErrorMessage(error)}`);
     }
   }
 

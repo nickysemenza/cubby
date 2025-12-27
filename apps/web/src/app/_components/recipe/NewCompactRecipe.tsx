@@ -12,6 +12,7 @@ import { wasm } from "~/lib/wasm";
 import { useMutation } from "@tanstack/react-query";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "~/lib/query-keys";
+import { dedupe } from "~/misc/array-helpers";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -88,7 +89,7 @@ const NewCompactRecipe: React.FC = () => {
   // Check if any ingredients are missing from the database
   // Only run queries after debounce has settled to reduce database load
   const debouncedIngredientNames = useDebounce(ingredientNames, 500);
-  const uniqueIngredientNames = Array.from(new Set(debouncedIngredientNames));
+  const uniqueIngredientNames = dedupe(debouncedIngredientNames);
 
   const ingredientQueries = useQueries({
     queries: uniqueIngredientNames.map((name) => ({

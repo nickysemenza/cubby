@@ -25,6 +25,7 @@ import {
   incrementCounter,
 } from "~/server/repo/csv/result-helpers";
 import { parseCSVDate } from "~/server/repo/csv/date-utils";
+import { getErrorMessage } from "~/lib/error-utils";
 
 interface ImportOptions {
   dryRun: boolean;
@@ -201,7 +202,7 @@ async function processLocationRow(
       rowIndex,
       action: "error",
       locationName: row.location_name,
-      message: error instanceof Error ? error.message : "Unknown error",
+      message: getErrorMessage(error),
     };
   }
 }

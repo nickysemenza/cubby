@@ -14,6 +14,7 @@ import {
 import { toast } from "sonner";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { queryKeys } from "~/lib/query-keys";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -36,7 +37,9 @@ export function DeleteInventoryDialog({
   const deleteMutation = useMutation(
     api.inventoryItem.delete.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["inventoryItem"] });
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.inventoryItem.list,
+        });
       },
     }),
   );

@@ -31,6 +31,7 @@ import type {
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { queryKeys } from "~/lib/query-keys";
 import useDebounce from "~/hooks/useDebounce";
+import { dedupe } from "~/misc/array-helpers";
 import { entities } from "~/entities/entities";
 
 // Helper to get action styles
@@ -306,7 +307,7 @@ export default function CSVImportForm() {
         return `${rowInfo}${e.message}`;
       });
       // Dedupe and limit errors shown
-      const uniqueErrors = [...new Set(errorMessages)];
+      const uniqueErrors = dedupe(errorMessages);
       const displayErrors = uniqueErrors.slice(0, 5);
       const remaining = uniqueErrors.length - displayErrors.length;
       setParseError(

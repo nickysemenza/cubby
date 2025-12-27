@@ -2,6 +2,7 @@
  * Unified tracing utilities for consistent span naming and tracer instances
  */
 import { trace } from "@opentelemetry/api";
+import { getErrorMessage } from "~/lib/error-utils";
 
 // Single tracer instance for the entire application
 const tracer = trace.getTracer("recipehub");
@@ -51,7 +52,7 @@ export const withTrace = async <T>(
     } catch (error) {
       span.setStatus({
         code: 2,
-        message: error instanceof Error ? error.message : String(error),
+        message: getErrorMessage(error),
       }); // ERROR
       throw error;
     } finally {

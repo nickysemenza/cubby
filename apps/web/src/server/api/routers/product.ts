@@ -28,6 +28,7 @@ import {
   findProductsNeedingFoodCategory,
   backfillFoodCategories,
 } from "~/server/repo/product";
+import { getErrorMessage } from "~/lib/error-utils";
 import { upc } from "@recipehub/usda-schemas";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { importImageFromUPC } from "~/server/services/image-import";
@@ -306,7 +307,7 @@ const backfillUPCImages = protectedProcedure
               productName: p.name,
               upc: p.upc,
               status: "failed" as const,
-              error: error instanceof Error ? error.message : "Unknown error",
+              error: getErrorMessage(error),
             };
           }
         }),

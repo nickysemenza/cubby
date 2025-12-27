@@ -6,7 +6,10 @@
  */
 
 import { normalizeForComparison } from "~/server/repo/csv/normalize";
-import { normalizeManufacturer } from "~/lib/manufacturer-utils";
+import {
+  normalizeManufacturer,
+  isUnspecifiedManufacturer,
+} from "~/lib/manufacturer-utils";
 import { getLocationRowDifferences } from "~/server/repo/location/csv-comparison";
 import { getRowDifferences as getInventoryRowDifferences } from "~/server/repo/inventory/csv-comparison";
 import {
@@ -511,8 +514,8 @@ export function compareInventoryForSync(
         sheetRow.manufacturer,
       ).toLowerCase();
       const manufacturersMatch = appMfr === sheetMfr;
-      const appHasSpecificMfr = appMfr !== "(unspecified)";
-      const sheetHasSpecificMfr = sheetMfr !== "(unspecified)";
+      const appHasSpecificMfr = !isUnspecifiedManufacturer(appMfr);
+      const sheetHasSpecificMfr = !isUnspecifiedManufacturer(sheetMfr);
 
       if (manufacturersMatch && appHasSpecificMfr) {
         // Both have same specific manufacturer - bonus

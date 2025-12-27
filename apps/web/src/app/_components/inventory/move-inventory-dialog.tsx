@@ -29,7 +29,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { toast } from "sonner";
-import type { LocationId, InventoryId } from "~/schemas/identifiers";
+import { type LocationId, unsafeInventoryId } from "~/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { getOptionalLocationId } from "~/schemas/form-fields";
@@ -100,7 +100,7 @@ export function MoveInventoryDialog({
     setError(null);
 
     const moveItems: BulkMoveItem[] = items.map((item) => ({
-      inventoryEntryId: item.id as InventoryId,
+      inventoryEntryId: unsafeInventoryId(item.id),
       quantity: item.amount,
     }));
 

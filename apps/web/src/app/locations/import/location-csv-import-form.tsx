@@ -25,6 +25,7 @@ import type {
 } from "~/schemas/location";
 import { queryKeys } from "~/lib/query-keys";
 import useDebounce from "~/hooks/useDebounce";
+import { getErrorMessage } from "~/lib/error-utils";
 
 // Helper to get action styles
 const getActionStyles = (action: LocationCSVImportResultItem["action"]) => {
@@ -168,9 +169,7 @@ export default function LocationCSVImportForm() {
       const validRows = rows.filter((row) => row.location_name);
       setParsedRows(validRows);
     } catch (error) {
-      setParseError(
-        `Failed to parse: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      setParseError(`Failed to parse: ${getErrorMessage(error)}`);
       setParsedRows([]);
     }
   }, []);

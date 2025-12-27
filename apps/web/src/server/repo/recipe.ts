@@ -333,19 +333,12 @@ const processIngredient = async (
   }
 
   // Create a new ingredient that points to this recipe
-  const [newIngredient] = await tx
-    .insert(ingredient)
-    .values({
-      organizationId: organizationId,
-      name: `Recipe: ${recipeRecord.name}`,
-      aliases: [],
-      recipeId: ingredientInput.recipeId,
-    })
-    .returning();
-
-  if (!newIngredient) {
-    throw new Error("Failed to create ingredient");
-  }
+  const newIngredient = await insertAndReturn(tx, ingredient, {
+    organizationId: organizationId,
+    name: `Recipe: ${recipeRecord.name}`,
+    aliases: [],
+    recipeId: ingredientInput.recipeId,
+  });
 
   return {
     ingredientId: newIngredient.id,
@@ -580,20 +573,13 @@ async function createSectionWithIngredients(
     ? await processIngredients(tx, sectionInput.ingredients, organizationId)
     : [];
 
-  const [createdSection] = await tx
-    .insert(recipeSection)
-    .values({
-      recipeId,
-      name: sectionInput.name || null,
-      instructions: sectionInput.instructions
-        ? sectionInput.instructions.map((inst) => ({ text: inst.instruction }))
-        : [],
-    })
-    .returning();
-
-  if (!createdSection) {
-    throw new Error("Failed to create recipe section");
-  }
+  const createdSection = await insertAndReturn(tx, recipeSection, {
+    recipeId,
+    name: sectionInput.name || null,
+    instructions: sectionInput.instructions
+      ? sectionInput.instructions.map((inst) => ({ text: inst.instruction }))
+      : [],
+  });
 
   if (processedIngredients.length > 0) {
     await tx.insert(recipeSectionIngredient).values(

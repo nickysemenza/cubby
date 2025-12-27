@@ -30,6 +30,9 @@ import {
   addProductSourceMetadata,
   associatePendingImages,
   executeListQueryWithCount,
+  insertAndReturn,
+  insertAndReturnDb,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 import { createAppError } from "~/server/api/trpc";
 import {
@@ -266,21 +269,14 @@ export const createProduct = async (
     : (data.category ?? null);
 
   // Use a transaction to ensure atomicity
-  return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
+  return await withTransaction(db, async (tx) => {
     // Create the product first
-    const [newProduct] = await tx
-      .insert(product)
-      .values({
-        organizationId: organizationId,
-        ...productData,
-        category,
-        ingredientId: ingredientId ?? null,
-      })
-      .returning();
-
-    if (!newProduct) {
-      throw new Error("Failed to create product");
-    }
+    const newProduct = await insertAndReturn(tx, product, {
+      organizationId: organizationId,
+      ...productData,
+      category,
+      ingredientId: ingredientId ?? null,
+    });
 
     // If there are unit mappings, create them
     if (unitMappings && unitMappings.length > 0) {
@@ -718,24 +714,17 @@ export const quickCreateProduct = async (
   // Auto-correct category to "food" if product has food indicators
   const category = hasFoodIndicators(data) ? "food" : (data.category ?? null);
 
-  const [newProduct] = await getDb(db)
-    .insert(product)
-    .values({
-      organizationId: organizationId,
-      name: data.name,
-      manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
-      upc: data.upc ?? null,
-      ndb_number: data.ndb_number ?? null,
-      model: data.model ?? null,
-      expectedQuantity: data.expectedQuantity ?? null,
-      ingredientId: data.ingredientId ?? null,
-      category,
-    })
-    .returning();
-
-  if (!newProduct) {
-    throw new Error("Failed to create product");
-  }
+  const newProduct = await insertAndReturnDb(db, product, {
+    organizationId: organizationId,
+    name: data.name,
+    manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
+    upc: data.upc ?? null,
+    ndb_number: data.ndb_number ?? null,
+    model: data.model ?? null,
+    expectedQuantity: data.expectedQuantity ?? null,
+    ingredientId: data.ingredientId ?? null,
+    category,
+  });
 
   // Create price unit mapping if price is provided
   if (data.price != null) {
