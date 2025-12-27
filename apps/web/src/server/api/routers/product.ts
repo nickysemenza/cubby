@@ -27,6 +27,7 @@ import {
   findProductsWithUPCNoImages,
   findProductsNeedingFoodCategory,
   backfillFoodCategories,
+  getCategoryDistribution,
 } from "~/server/repo/product";
 import { getErrorMessage } from "~/lib/error-utils";
 import { upc } from "@recipehub/usda-schemas";
@@ -373,6 +374,27 @@ const backfillFoodCategoriesEndpoint = protectedProcedure
     );
   });
 
+// Get category distribution for insights visualization
+const categoryDistribution = protectedProcedure
+  .output(
+    z.array(
+      z.object({
+        category: productCategory.nullable(),
+        productCount: z.number(),
+        locations: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            count: z.number(),
+          }),
+        ),
+      }),
+    ),
+  )
+  .query(async ({ ctx }) => {
+    return await getCategoryDistribution(ctx.db, ctx.organizationId);
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
   list,
@@ -384,4 +406,5 @@ export const productRouter = createTRPCRouter({
   getUPCImageBackfillCount,
   getFoodCategoryBackfillCount,
   backfillFoodCategories: backfillFoodCategoriesEndpoint,
+  categoryDistribution,
 });

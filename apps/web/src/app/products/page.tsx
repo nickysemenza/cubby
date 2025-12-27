@@ -10,7 +10,13 @@ export const metadata: Metadata = {
   title: "Products",
 };
 
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ category?: string }>;
+}) {
+  const { category } = await searchParams;
+
   return (
     <EntityLayout
       title="Products"
@@ -20,7 +26,7 @@ export default function Page() {
         </Link>
       }
     >
-      <ProductList />
+      <ProductList initialCategory={category} />
     </EntityLayout>
   );
 }

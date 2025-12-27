@@ -903,6 +903,110 @@ export const findProductsNeedingFoodCategory = async (
 };
 
 /**
+ * Get product distribution by category with top locations for each category.
+ * Used for the category donut visualization on the Insights page.
+ */
+export const getCategoryDistribution = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<
+  Array<{
+    category: ProductCategory | null;
+    productCount: number;
+    locations: Array<{ id: string; name: string; count: number }>;
+  }>
+> => {
+  const dbClient = getDb(db);
+
+  // Get all products with their inventory locations
+  const productsWithInventory = await dbClient.query.product.findMany({
+    where: and(
+      eq(product.organizationId, organizationId),
+      isNull(product.deletedAt),
+    ),
+    columns: {
+      id: true,
+      category: true,
+    },
+    with: {
+      InventoryEntry: {
+        columns: {},
+        with: {
+          location: {
+            columns: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // Group by category and aggregate
+  const categoryMap = new Map<
+    ProductCategory | null,
+    {
+      productCount: number;
+      locationCounts: Map<string, { id: string; name: string; count: number }>;
+    }
+  >();
+
+  for (const prod of productsWithInventory) {
+    const cat = prod.category as ProductCategory | null;
+
+    if (!categoryMap.has(cat)) {
+      categoryMap.set(cat, {
+        productCount: 0,
+        locationCounts: new Map(),
+      });
+    }
+
+    const catData = categoryMap.get(cat)!;
+    catData.productCount++;
+
+    // Count locations for this product
+    for (const entry of prod.InventoryEntry) {
+      const loc = entry.location;
+      const existing = catData.locationCounts.get(loc.id);
+      if (existing) {
+        existing.count++;
+      } else {
+        catData.locationCounts.set(loc.id, {
+          id: loc.id,
+          name: loc.name,
+          count: 1,
+        });
+      }
+    }
+  }
+
+  // Convert to array and sort locations by count (top 5)
+  const result: Array<{
+    category: ProductCategory | null;
+    productCount: number;
+    locations: Array<{ id: string; name: string; count: number }>;
+  }> = [];
+
+  for (const [category, data] of categoryMap) {
+    const locations = Array.from(data.locationCounts.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    result.push({
+      category,
+      productCount: data.productCount,
+      locations,
+    });
+  }
+
+  // Sort by product count descending
+  result.sort((a, b) => b.productCount - a.productCount);
+
+  return result;
+};
+
+/**
  * Backfill food category for all products with food indicators.
  * Returns the count of products updated.
  */

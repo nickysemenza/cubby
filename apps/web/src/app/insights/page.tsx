@@ -2,6 +2,7 @@ import { BarChart3 } from "lucide-react";
 import LocationTreemap from "../_components/inventory/location-treemap";
 import LocationSunburst from "../_components/visualizations/location-sunburst";
 import IngredientNetwork from "../_components/visualizations/ingredient-network";
+import ProductCategoryDonut from "../_components/visualizations/product-category-donut";
 
 export default function InsightsPage() {
   return (
@@ -10,6 +11,16 @@ export default function InsightsPage() {
         <BarChart3 className="h-8 w-8" />
         <h1 className="font-bold text-3xl">Insights</h1>
       </div>
+
+      {/* Products by Category Section */}
+      <section className="space-y-4">
+        <h2 className="font-semibold text-xl">Products by Category</h2>
+        <p className="text-muted-foreground text-sm">
+          Distribution of products across categories. Click a slice to view
+          products in that category.
+        </p>
+        <ProductCategoryDonut />
+      </section>
 
       {/* Inventory by Location Section */}
       <section className="space-y-4">

@@ -1,7 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import { useTRPC } from "~/trpc/react";
 import { createColumnHelper } from "@tanstack/react-table";
+import type { ColumnFiltersState } from "@tanstack/react-table";
 import RTable from "../_components/data-table/Table";
 import {
   FoodPillLink,
@@ -18,9 +20,19 @@ import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { Badge } from "~/components/ui/badge";
 import { productCategoryOptions } from "~/schemas/product";
 
-export function ProductList() {
+interface ProductListProps {
+  initialCategory?: string;
+}
+
+export function ProductList({ initialCategory }: ProductListProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<ProductWithFoodOut>();
+
+  // Build initial filter from URL params
+  const initialFilter = useMemo((): ColumnFiltersState => {
+    if (!initialCategory) return [];
+    return [{ id: "category", value: initialCategory }];
+  }, [initialCategory]);
 
   const { table, filterableColumns, isLoading, error } = useEntityList({
     entity: "product",
@@ -32,6 +44,9 @@ export function ProductList() {
       categoryFilter: ts.getColumnFilter("category"),
     }),
     getMappings: getAllUnitMappingsFromProduct,
+    tableStateOptions: {
+      initialFilter,
+    },
     columns: [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
       columnHelper.accessor("category", {
