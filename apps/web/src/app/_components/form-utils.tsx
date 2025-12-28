@@ -402,7 +402,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; icon?: React.ReactNode }[];
   placeholder?: string;
   nullable?: boolean;
   disabled?: boolean;

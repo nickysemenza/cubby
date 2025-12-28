@@ -207,7 +207,10 @@ export function DialogCompatibleCombobox<TId extends string = string>({
                         value?.id === result.id ? "opacity-100" : "opacity-0",
                       )}
                     />
-                    <span className="truncate">{result.name}</span>
+                    <span className="flex-1 truncate">{result.name}</span>
+                    {result.icon && (
+                      <span className="ml-1 shrink-0">{result.icon}</span>
+                    )}
                   </Button>
                 ))}
               </div>

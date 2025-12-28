@@ -123,7 +123,19 @@ export function GalleryHeader({
         <div className="flex items-center gap-1.5">
           <Label className="text-muted-foreground">Type:</Label>
           <FilterableCombobox
-            items={[{ value: "all", label: "All" }, ...locationTypeOptions]}
+            items={[
+              { value: "all", label: "All" },
+              ...locationTypeOptions.map((opt) => ({
+                ...opt,
+                icon: (
+                  <LocationIcon
+                    type={opt.value as LocationType}
+                    size={14}
+                    className="text-muted-foreground"
+                  />
+                ),
+              })),
+            ]}
             value={locationTypeFilter ?? "all"}
             onValueChange={(value) =>
               onTypeFilterChange(
@@ -141,8 +153,16 @@ export function GalleryHeader({
           <FilterableCombobox
             items={[
               { value: "all", label: "All" },
-              { value: "withItems", label: "With items" },
-              { value: "empty", label: "Empty" },
+              {
+                value: "withItems",
+                label: "With items",
+                icon: <Package size={14} className="text-muted-foreground" />,
+              },
+              {
+                value: "empty",
+                label: "Empty",
+                icon: <MapPin size={14} className="text-muted-foreground" />,
+              },
             ]}
             value={emptyFilter}
             onValueChange={(value) =>

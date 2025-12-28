@@ -1,3 +1,4 @@
+import type React from "react";
 import { z } from "zod";
 
 export const ComboboxItem = z.object({
@@ -10,4 +11,5 @@ export const ComboboxItem = z.object({
 export type ComboboxItem<TId extends string = string> = {
   name: string;
   id: TId;
+  icon?: React.ReactNode;
 };

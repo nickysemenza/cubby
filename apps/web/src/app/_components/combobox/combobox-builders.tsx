@@ -1,4 +1,5 @@
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
 import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import type {
   IngredientId,
@@ -22,6 +23,13 @@ export const buildLocationComboboxItem = (
 ): ComboboxItem<LocationId> => ({
   id: location.id,
   name: `${location.name} (${location.type})`,
+  icon: (
+    <LocationIcon
+      type={location.type}
+      size={14}
+      className="text-muted-foreground"
+    />
+  ),
 });
 
 export const buildIngredientComboboxItem = (

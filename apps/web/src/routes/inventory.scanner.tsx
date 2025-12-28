@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { z } from "zod";
 import { ScannerForm } from "~/app/_components/inventory/scanner-form";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Button } from "~/components/ui/button";
 import {
@@ -76,7 +77,14 @@ function ScannerPage() {
                 items={
                   locationsData?.items.map((location) => ({
                     value: location.id,
-                    label: location.name,
+                    label: `${location.name} (${location.type})`,
+                    icon: (
+                      <LocationIcon
+                        type={location.type}
+                        size={14}
+                        className="text-muted-foreground"
+                      />
+                    ),
                   })) ?? []
                 }
                 value={locationId ?? null}

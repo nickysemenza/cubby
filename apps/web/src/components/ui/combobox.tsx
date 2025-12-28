@@ -299,6 +299,7 @@ function useComboboxAnchor() {
 interface FilterableComboboxItem {
   value: string;
   label: string;
+  icon?: React.ReactNode;
 }
 
 interface FilterableComboboxProps {
@@ -425,6 +426,9 @@ function FilterableCombobox({
                   )}
                 >
                   <span className="flex-1 truncate">{item.label}</span>
+                  {item.icon && (
+                    <span className="shrink-0">{item.icon}</span>
+                  )}
                   <ComboboxPrimitive.ItemIndicator className="shrink-0">
                     <CheckIcon className="size-3.5" />
                   </ComboboxPrimitive.ItemIndicator>
