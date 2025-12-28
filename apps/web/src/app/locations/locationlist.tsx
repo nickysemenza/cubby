@@ -28,71 +28,72 @@ export function LocationList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<LocationOutWithParentChildren>();
 
-  const { table, filterableColumns, data, isLoading, error } = useEntityList({
-    entity: "location",
-    queryOptions: api.location.list.queryOptions,
-    buildFilters: (ts) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      itemTypeFilter: ts.getColumnFilter("type") as LocationType,
-    }),
-    // Location has custom column order (createdAt in middle), so we define all columns
-    columns: [
-      createImageColumn(columnHelper),
-      createNameColumn(columnHelper, "location"),
-      createEntityPillColumn(
-        columnHelper,
-        "children",
-        LocationPillLink,
-        "location",
-      ),
-      columnHelper.accessor("parent", {
-        enableSorting: false,
-        cell: (info) => {
-          const item = info.getValue();
-          return <div>{item && <LocationPillLink location={item} />}</div>;
-        },
+  const { table, filterableColumns, data, isLoading, error, timing } =
+    useEntityList({
+      entity: "location",
+      queryOptions: api.location.list.queryOptions,
+      buildFilters: (ts) => ({
+        nameFilter: ts.getColumnFilter("name"),
+        itemTypeFilter: ts.getColumnFilter("type") as LocationType,
       }),
-      columnHelper.accessor("type", {
-        cell: (info) => info.getValue(),
-      }),
-      columnHelper.display({
-        id: "inventory_value",
-        header: "Value",
-        cell: (info) => (
-          <InventoryValueSummary
-            locationId={info.row.original.id}
-            variant="compact"
-          />
+      // Location has custom column order (createdAt in middle), so we define all columns
+      columns: [
+        createImageColumn(columnHelper),
+        createNameColumn(columnHelper, "location"),
+        createEntityPillColumn(
+          columnHelper,
+          "children",
+          LocationPillLink,
+          "location",
         ),
-        meta: { className: "w-[180px]" },
-      }),
-      createCreatedAtColumn(columnHelper),
-      columnHelper.accessor("lastBulkInventory", {
-        header: "Last Bulk Inventory",
-        cell: (info) => {
-          const date = info.getValue();
-          return date ? <HoverableTimestamp timestamp={date} /> : "Never";
+        columnHelper.accessor("parent", {
+          enableSorting: false,
+          cell: (info) => {
+            const item = info.getValue();
+            return <div>{item && <LocationPillLink location={item} />}</div>;
+          },
+        }),
+        columnHelper.accessor("type", {
+          cell: (info) => info.getValue(),
+        }),
+        columnHelper.display({
+          id: "inventory_value",
+          header: "Value",
+          cell: (info) => (
+            <InventoryValueSummary
+              locationId={info.row.original.id}
+              variant="compact"
+            />
+          ),
+          meta: { className: "w-[180px]" },
+        }),
+        createCreatedAtColumn(columnHelper),
+        columnHelper.accessor("lastBulkInventory", {
+          header: "Last Bulk Inventory",
+          cell: (info) => {
+            const date = info.getValue();
+            return date ? <HoverableTimestamp timestamp={date} /> : "Never";
+          },
+        }),
+        createInventoryEntriesColumn(
+          columnHelper,
+          "inventoryEntries",
+          ProductPillLink,
+          "product",
+          (e) => e.product,
+          { layout: "inline" },
+        ),
+      ],
+      filters: [
+        { id: "name", placeholder: "Filter by location name..." },
+        {
+          id: "type",
+          placeholder: "Filter by type...",
+          filterType: "select",
+          options: locationTypeOptions,
         },
-      }),
-      createInventoryEntriesColumn(
-        columnHelper,
-        "inventoryEntries",
-        ProductPillLink,
-        "product",
-        (e) => e.product,
-        { layout: "inline" },
-      ),
-    ],
-    filters: [
-      { id: "name", placeholder: "Filter by location name..." },
-      {
-        id: "type",
-        placeholder: "Filter by type...",
-        filterType: "select",
-        options: locationTypeOptions,
-      },
-    ],
-  });
+      ],
+    });
 
   return (
     <div className="space-y-4">
@@ -125,6 +126,7 @@ export function LocationList() {
           isLoading={isLoading}
           error={error}
           ariaLabel="Locations Table"
+          timing={timing}
         />
       ) : (
         <div>

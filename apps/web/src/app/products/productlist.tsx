@@ -15,7 +15,7 @@ import {
 } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { NoneState } from "../_components/NoneState";
-import { TableLink } from "../_components/table";
+import { TableLink } from "../_components/table/TableLink";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 
 interface ProductListProps {
@@ -32,7 +32,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
     return [{ id: "category", value: initialCategory }];
   }, [initialCategory]);
 
-  const { table, filterableColumns, isLoading, error } = useEntityList({
+  const { table, filterableColumns, isLoading, error, timing } = useEntityList({
     entity: "product",
     queryOptions: api.product.list.queryOptions,
     buildFilters: (ts) => ({
@@ -159,6 +159,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         isLoading={isLoading}
         error={error}
         ariaLabel="Products Table"
+        timing={timing}
       />
     </div>
   );

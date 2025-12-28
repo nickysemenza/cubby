@@ -3,6 +3,8 @@ import type {
   ColumnFiltersState,
   PaginationState,
 } from "@tanstack/react-table";
+import { useEffect, useRef, useState } from "react";
+import type { QueryTiming } from "~/lib/query-timing";
 import { useTableState } from "../data-table/useTableState";
 
 interface TableStateOptions {
@@ -40,6 +42,7 @@ interface UseTableListReturn<TData = unknown> {
   isLoading: boolean;
   error: Error | null;
   tableState: ReturnType<typeof useTableState>;
+  timing: QueryTiming;
 }
 
 /**
@@ -92,6 +95,7 @@ export function useTableList<TFilters, TData = unknown>({
     data: response,
     isLoading,
     error,
+    isFetching,
   } = useQuery(
     queryOptions({
       sort: tableState.getSortParams(),
@@ -102,7 +106,31 @@ export function useTableList<TFilters, TData = unknown>({
     data: ListQueryResponse<TData> | undefined;
     isLoading: boolean;
     error: Error | null;
+    isFetching: boolean;
   };
+
+  // Track query timing
+  const startTimeRef = useRef<number | null>(null);
+  const [timing, setTiming] = useState<QueryTiming>({
+    durationMs: null,
+    isFresh: false,
+  });
+
+  // Start timing when fetch begins
+  useEffect(() => {
+    if (isFetching && startTimeRef.current === null) {
+      startTimeRef.current = performance.now();
+    }
+  }, [isFetching]);
+
+  // Calculate duration when fetch completes
+  useEffect(() => {
+    if (!isFetching && startTimeRef.current !== null) {
+      const duration = Math.round(performance.now() - startTimeRef.current);
+      setTiming({ durationMs: duration, isFresh: true });
+      startTimeRef.current = null;
+    }
+  }, [isFetching]);
 
   // useQuery returns error as Error | null when throwOnError is false (default)
   return {
@@ -111,5 +139,6 @@ export function useTableList<TFilters, TData = unknown>({
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,
+    timing,
   };
 }

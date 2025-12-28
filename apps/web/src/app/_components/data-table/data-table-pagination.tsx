@@ -16,20 +16,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
 
 interface DataTablePaginationProps<TData> {
   table: Table<TData>;
+  timing?: QueryTiming;
 }
 
 export function DataTablePagination<TData>({
   table,
+  timing,
 }: DataTablePaginationProps<TData>) {
   return (
     <div className="flex flex-col space-y-3 px-2 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
-      {/* Selected rows info - hidden on mobile to save space */}
-      <div className="hidden text-muted-foreground text-sm sm:block">
-        {table.getFilteredSelectedRowModel().rows.length} of{" "}
-        {table.getFilteredRowModel().rows.length} row(s) selected.
+      {/* Selected rows info + timing - hidden on mobile to save space */}
+      <div className="hidden items-center gap-4 text-muted-foreground text-sm sm:flex">
+        <span>
+          {table.getFilteredSelectedRowModel().rows.length} of{" "}
+          {table.getFilteredRowModel().rows.length} row(s) selected.
+        </span>
+        {timing && <QueryTimingIndicator timing={timing} />}
       </div>
 
       {/* Main pagination controls */}

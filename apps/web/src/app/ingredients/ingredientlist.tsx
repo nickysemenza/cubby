@@ -38,7 +38,7 @@ export function IngredientList() {
     missingProductsOnly: false,
   });
 
-  const { table, filterableColumns, isLoading, error } = useEntityList({
+  const { table, filterableColumns, isLoading, error, timing } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
     buildFilters: (ts) => ({
@@ -104,6 +104,7 @@ export function IngredientList() {
         isLoading={isLoading}
         error={error}
         ariaLabel="Ingredients Table"
+        timing={timing}
         additionalFilters={
           <div className="flex items-center space-x-2">
             <Checkbox

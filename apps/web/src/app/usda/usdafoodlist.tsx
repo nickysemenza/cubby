@@ -1,6 +1,6 @@
 import { type DataType, dataTypeEnum } from "@recipehub/usda-schemas";
-import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
+import { useQueryWithTiming } from "~/hooks/useQueryWithTiming";
 import type { Flatten } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
@@ -8,7 +8,7 @@ import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { useTableState } from "../_components/data-table/useTableState";
 import { ProductPillLink } from "../_components/EntityPill";
 import { NoneState } from "../_components/NoneState";
-import { TableLink } from "../_components/table";
+import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
 import { NutritionInfoTable } from "../_components/usda/nutrition";
 
@@ -22,7 +22,8 @@ export function USDAFoodList() {
     data: foodsResp,
     isLoading,
     error,
-  } = useQuery(
+    timing,
+  } = useQueryWithTiming(
     api.usda.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -166,6 +167,7 @@ export function USDAFoodList() {
         isLoading={isLoading}
         error={error}
         ariaLabel="USDA Foods Table"
+        timing={timing}
       />
     </div>
   );

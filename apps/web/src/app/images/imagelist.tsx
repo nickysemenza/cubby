@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +16,7 @@ import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { Input } from "~/components/ui/input";
 import useDebounce from "~/hooks/useDebounce";
+import { useQueryWithTiming } from "~/hooks/useQueryWithTiming";
 import { assertNever } from "~/lib/assert";
 import type { ImageWithEntity } from "~/schemas/image";
 import { useTRPC } from "~/trpc/react";
@@ -46,7 +46,8 @@ export default function ImageList() {
     data: imagesResp,
     isLoading,
     error,
-  } = useQuery(
+    timing,
+  } = useQueryWithTiming(
     api.image.list.queryOptions({
       filters: {
         searchFilter: debouncedSearchQuery || undefined,
@@ -202,6 +203,7 @@ export default function ImageList() {
         isLoading={isLoading}
         error={error}
         ariaLabel="Images Table"
+        timing={timing}
       />
     </div>
   );

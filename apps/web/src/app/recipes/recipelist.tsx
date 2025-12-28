@@ -8,7 +8,7 @@ export function RecipeList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<RecipeOut>();
 
-  const { table, filterableColumns, isLoading, error } = useEntityList({
+  const { table, filterableColumns, isLoading, error, timing } = useEntityList({
     entity: "recipe",
     queryOptions: api.recipe.list.queryOptions,
     buildFilters: (ts) => ({
@@ -35,6 +35,7 @@ export function RecipeList() {
         isLoading={isLoading}
         error={error}
         ariaLabel="Recipes Table"
+        timing={timing}
       />
     </div>
   );

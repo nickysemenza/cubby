@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import type { QueryTiming } from "~/lib/query-timing";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import {
   createCreatedAtColumn,
@@ -63,6 +64,8 @@ interface UseEntityListReturn<TData> {
   isLoading: boolean;
   /** Error state */
   error: Error | null;
+  /** Query timing info */
+  timing: QueryTiming;
 }
 
 /**
@@ -131,17 +134,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   }, [entity]);
 
   // Use the base table list hook
-  const { data, totalCount, isLoading, error, tableState } = useTableList<
-    TFilters,
-    TData
-  >({
-    queryOptions,
-    buildFilters,
-    tableStateOptions: {
-      initialSort: defaultSort,
-      ...tableStateOptions,
-    },
-  });
+  const { data, totalCount, isLoading, error, tableState, timing } =
+    useTableList<TFilters, TData>({
+      queryOptions,
+      buildFilters,
+      tableStateOptions: {
+        initialSort: defaultSort,
+        ...tableStateOptions,
+      },
+    });
 
   // Load unit mappings asynchronously if getMappings is provided
   const mappingsMap = useAsyncMemo(
@@ -222,5 +223,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     data,
     isLoading,
     error,
+    timing,
   };
 }

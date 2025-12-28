@@ -16,6 +16,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useDebug } from "~/hooks/useDebug";
+import type { QueryTiming } from "~/lib/query-timing";
 import { DebugDialog } from "./DebugDialog";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
@@ -40,6 +41,7 @@ interface TTableProps<TItem> {
   isLoading?: boolean;
   error?: unknown;
   ariaLabel?: string;
+  timing?: QueryTiming;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -50,6 +52,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     isLoading = false,
     error,
     ariaLabel = "Data Table",
+    timing,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -226,7 +229,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         <MobileCardView table={table} />
       )}
 
-      <DataTablePagination table={table} />
+      <DataTablePagination table={table} timing={timing} />
     </SpacedContainer>
   );
 }
