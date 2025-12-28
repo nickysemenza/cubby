@@ -101,6 +101,21 @@ The service layer (`/server/services/`) is used selectively for entities that re
 - **When to skip services**: Location, Inventory, and Recipe call repos directly from routers since they don't require external enrichment
 - **Pattern**: Services accept `Database` but only pass it to repo functions - they handle orchestration and external API calls
 
+### Product Types
+
+Products fall into two categories based on their level of detail:
+
+| Type | Example | Characteristics |
+|------|---------|-----------------|
+| **Specific Item** | "Kraft Macaroni & Cheese" | Has UPC, manufacturer, price, nutrition data. Created via barcode scan or full product form. |
+| **Misc Collection** | "misc:random cables" | Opaque placeholder for a group of items. Just a name, no UPC/manufacturer/price. Never gets detailed info. |
+
+**Naming convention:** Products prefixed with `misc:` are opaque collections. The Scanner page (`/inventory/scanner`) provides a checkbox to toggle misc mode for batch entry.
+
+**When to use each:**
+- **Specific Item**: Individual trackable products (food, electronics, tools with barcodes)
+- **Misc Collection**: Groups of small items not worth tracking individually (cables drawer, misc screws, office supplies)
+
 ### Other Patterns
 
 - extend baseEntitySchema for entities with id, name, and timestamps

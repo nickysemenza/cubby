@@ -1,5 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Barcode, MapPin, Package, Plus, UtensilsCrossed } from "lucide-react";
+import {
+  Barcode,
+  MapPin,
+  Package,
+  Plus,
+  ScanBarcode,
+  UtensilsCrossed,
+} from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -32,10 +39,16 @@ const quickActions = [
     icon: UtensilsCrossed,
   },
   {
+    label: "Scanner",
+    href: "/inventory/scanner",
+    icon: ScanBarcode,
+    description: "Quick scan & add",
+  },
+  {
     label: "Quick Capture",
     href: "/inventory/quick-capture",
     icon: Barcode,
-    description: "Scan barcodes",
+    description: "Batch entry",
   },
 ];
 

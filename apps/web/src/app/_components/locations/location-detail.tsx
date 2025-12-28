@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { ScanBarcode } from "lucide-react";
 import type { FC } from "react";
+import { buttonVariants } from "~/components/ui/button";
+import { cn } from "~/lib/utils";
 import type { InfLocation, LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
@@ -88,10 +92,22 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Inventory Items",
       content: (
         <div className="space-y-4">
-          <QuickInventoryAdd
-            locationId={location.id}
-            onSuccess={() => refetchInventoryItems()}
-          />
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <QuickInventoryAdd
+                locationId={location.id}
+                onSuccess={() => refetchInventoryItems()}
+              />
+            </div>
+            <Link
+              to="/inventory/scanner"
+              search={{ locationId: location.id }}
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              <ScanBarcode className="mr-2 h-4 w-4" />
+              Scan Items
+            </Link>
+          </div>
           <LocationInventoryTable
             locationId={location.id}
             inventoryItems={inventoryItemsData?.items ?? []}

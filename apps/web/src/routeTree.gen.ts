@@ -33,6 +33,7 @@ import { Route as OrganizationOrganizationViewRouteImport } from './routes/organ
 import { Route as LocationsNewRouteImport } from './routes/locations.new'
 import { Route as LocationsImportRouteImport } from './routes/locations.import'
 import { Route as LocationsIdRouteImport } from './routes/locations.$id'
+import { Route as InventoryScannerRouteImport } from './routes/inventory.scanner'
 import { Route as InventoryQuickCaptureRouteImport } from './routes/inventory.quick-capture'
 import { Route as InventoryNewRouteImport } from './routes/inventory.new'
 import { Route as InventoryImportRouteImport } from './routes/inventory.import'
@@ -171,6 +172,11 @@ const LocationsIdRoute = LocationsIdRouteImport.update({
   path: '/locations/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventoryScannerRoute = InventoryScannerRouteImport.update({
+  id: '/inventory/scanner',
+  path: '/inventory/scanner',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InventoryQuickCaptureRoute = InventoryQuickCaptureRouteImport.update({
   id: '/inventory/quick-capture',
   path: '/inventory/quick-capture',
@@ -271,6 +277,7 @@ export interface FileRoutesByFullPath {
   '/inventory/import': typeof InventoryImportRoute
   '/inventory/new': typeof InventoryNewRoute
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
+  '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/import': typeof LocationsImportRoute
   '/locations/new': typeof LocationsNewRoute
@@ -313,6 +320,7 @@ export interface FileRoutesByTo {
   '/inventory/import': typeof InventoryImportRoute
   '/inventory/new': typeof InventoryNewRoute
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
+  '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/import': typeof LocationsImportRoute
   '/locations/new': typeof LocationsNewRoute
@@ -356,6 +364,7 @@ export interface FileRoutesById {
   '/inventory/import': typeof InventoryImportRoute
   '/inventory/new': typeof InventoryNewRoute
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
+  '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/import': typeof LocationsImportRoute
   '/locations/new': typeof LocationsNewRoute
@@ -400,6 +409,7 @@ export interface FileRouteTypes {
     | '/inventory/import'
     | '/inventory/new'
     | '/inventory/quick-capture'
+    | '/inventory/scanner'
     | '/locations/$id'
     | '/locations/import'
     | '/locations/new'
@@ -442,6 +452,7 @@ export interface FileRouteTypes {
     | '/inventory/import'
     | '/inventory/new'
     | '/inventory/quick-capture'
+    | '/inventory/scanner'
     | '/locations/$id'
     | '/locations/import'
     | '/locations/new'
@@ -484,6 +495,7 @@ export interface FileRouteTypes {
     | '/inventory/import'
     | '/inventory/new'
     | '/inventory/quick-capture'
+    | '/inventory/scanner'
     | '/locations/$id'
     | '/locations/import'
     | '/locations/new'
@@ -527,6 +539,7 @@ export interface RootRouteChildren {
   InventoryImportRoute: typeof InventoryImportRoute
   InventoryNewRoute: typeof InventoryNewRoute
   InventoryQuickCaptureRoute: typeof InventoryQuickCaptureRoute
+  InventoryScannerRoute: typeof InventoryScannerRoute
   LocationsIdRoute: typeof LocationsIdRoute
   LocationsImportRoute: typeof LocationsImportRoute
   LocationsNewRoute: typeof LocationsNewRoute
@@ -721,6 +734,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LocationsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventory/scanner': {
+      id: '/inventory/scanner'
+      path: '/inventory/scanner'
+      fullPath: '/inventory/scanner'
+      preLoaderRoute: typeof InventoryScannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/inventory/quick-capture': {
       id: '/inventory/quick-capture'
       path: '/inventory/quick-capture'
@@ -865,6 +885,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryImportRoute: InventoryImportRoute,
   InventoryNewRoute: InventoryNewRoute,
   InventoryQuickCaptureRoute: InventoryQuickCaptureRoute,
+  InventoryScannerRoute: InventoryScannerRoute,
   LocationsIdRoute: LocationsIdRoute,
   LocationsImportRoute: LocationsImportRoute,
   LocationsNewRoute: LocationsNewRoute,

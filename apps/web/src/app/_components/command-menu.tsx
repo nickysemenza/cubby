@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Settings } from "lucide-react";
+import { Barcode, ScanBarcode, Settings } from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -49,8 +49,19 @@ export function GlobalCommandMenu() {
           ))}
         </CommandGroup>
         <CommandSeparator />
+        <CommandGroup heading="Quick Actions">
+          <CommandItem onSelect={() => goToPage("/inventory/scanner")}>
+            <ScanBarcode />
+            <span>Scanner</span>
+          </CommandItem>
+          <CommandItem onSelect={() => goToPage("/inventory/quick-capture")}>
+            <Barcode />
+            <span>Quick Capture</span>
+          </CommandItem>
+        </CommandGroup>
+        <CommandSeparator />
         <CommandGroup heading="Settings">
-          <CommandItem onSelect={() => goToPage(`/api/panel`)}>
+          <CommandItem onSelect={() => goToPage("/api/panel")}>
             <Settings />
             <span>API Panel</span>
           </CommandItem>
