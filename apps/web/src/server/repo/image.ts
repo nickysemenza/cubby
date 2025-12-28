@@ -1,4 +1,5 @@
 import { and, eq, ilike, inArray, lt, sql } from "drizzle-orm";
+import { getSortableFields } from "~/entities/entities";
 import type {
   ImageWithEntity,
   InitiateUploadWithoutEntityInput,
@@ -201,13 +202,9 @@ export const imageList = async (
 
   const whereClause = and(...whereConditions);
 
-  // Build orderBy using helper
+  // Build orderBy using central sortableFields config
   const orderByClause = buildOrderBy(image, sort, [
-    "createdAt",
-    "updatedAt",
-    "filename",
-    "size",
-    "status",
+    ...getSortableFields("image"),
   ]);
 
   // Calculate skip/take values from pagination parameters

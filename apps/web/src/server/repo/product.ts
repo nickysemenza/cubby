@@ -1,6 +1,7 @@
 import { type FoodLookupParam, foodLookupParam } from "@recipehub/usda-schemas";
 import { and, count, eq, ilike, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { z } from "zod";
+import { getSortableFields } from "~/entities/entities";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { parseWithContext } from "~/lib/zod-utils";
@@ -226,13 +227,9 @@ export const productList = async (
 
   const whereClause = and(...conditions);
 
-  // Build order by
+  // Build order by using central sortableFields config
   const orderByArray = buildOrderBy(product, sort, [
-    "createdAt",
-    "name",
-    "manufacturer",
-    "model",
-    "upc",
+    ...getSortableFields("product"),
   ]);
 
   const { take, skip } = buildTakeSkip(pagination);

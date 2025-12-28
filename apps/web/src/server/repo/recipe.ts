@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { z } from "zod";
 import type { amount, CompactRecipe } from "~/codec/codec";
 import { parseCompactRecipe } from "~/codec/parser";
+import { getSortableFields } from "~/entities/entities";
 import type { ActorContext } from "~/schemas/context";
 import {
   type OrganizationId,
@@ -176,8 +177,10 @@ export const recipeList = async (
   const whereClause =
     whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
-  // Build orderBy using helper
-  const orderByClause = buildOrderBy(recipe, sort, ["createdAt", "name"]);
+  // Build orderBy using central sortableFields config
+  const orderByClause = buildOrderBy(recipe, sort, [
+    ...getSortableFields("recipe"),
+  ]);
 
   const { take, skip } = buildTakeSkip(pagination);
 

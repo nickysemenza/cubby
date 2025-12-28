@@ -9,6 +9,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { z } from "zod";
+import { getSortableFields } from "~/entities/entities";
 import { dedupe } from "~/misc/array-helpers";
 import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
@@ -383,11 +384,9 @@ export const ingredientList = async (
   // For missing products filter, we need to use a left join and check for null
   const whereClause = and(...conditions);
 
-  // Build order by
+  // Build order by using central sortableFields config
   const orderByClause = buildOrderBy(ingredient, sort, [
-    "createdAt",
-    "name",
-    "aliases",
+    ...getSortableFields("ingredient"),
   ]);
 
   const { take, skip } = buildTakeSkip(pagination);

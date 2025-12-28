@@ -1,4 +1,5 @@
 import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
 import { extractDbTimestampsFromDBRec } from "~/schemas/common";
 import type { ActorContext } from "~/schemas/context";
@@ -513,12 +514,9 @@ export const locationList = async (
 
   const whereClause = and(...conditions);
 
-  // Build order by
+  // Build order by using central sortableFields config
   const orderByClause = buildOrderBy(location, sort, [
-    "createdAt",
-    "name",
-    "type",
-    "lastBulkInventory",
+    ...getSortableFields("location"),
   ]);
 
   const { take, skip } = buildTakeSkip(pagination);

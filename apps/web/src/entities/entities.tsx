@@ -15,6 +15,7 @@ export const entities: Record<Entity, EntityDefinition> = {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: [],
+      sortableFields: ["createdAt", "name"],
     },
   },
   product: {
@@ -27,6 +28,15 @@ export const entities: Record<Entity, EntityDefinition> = {
       hasUnitMappings: true,
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
+      sortableFields: [
+        "createdAt",
+        "name",
+        "manufacturer",
+        "model",
+        "upc",
+        "category",
+        "ndb_number",
+      ],
     },
   },
   recipe: {
@@ -38,6 +48,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["image", "name", "createdAt"],
+      sortableFields: ["createdAt", "name"],
     },
   },
   location: {
@@ -53,6 +64,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
+      sortableFields: ["createdAt", "name", "type", "lastBulkInventory"],
     },
   },
   "inventory-item": {
@@ -66,6 +78,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
+      sortableFields: ["createdAt", "amount"],
     },
   },
   "usda-food": {
@@ -84,6 +97,14 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: ["name", "createdAt"],
+      sortableFields: ["createdAt", "updatedAt", "filename", "size", "status"],
     },
   },
 };
+
+/**
+ * Get the list of server-sortable fields for an entity.
+ * Used by both repos (for buildOrderBy) and UI (for enableSorting).
+ */
+export const getSortableFields = (entity: Entity): readonly string[] =>
+  entities[entity].list?.sortableFields ?? ["createdAt", "name"];

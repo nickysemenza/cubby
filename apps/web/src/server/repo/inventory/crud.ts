@@ -1,4 +1,5 @@
 import { and, count, eq, ilike, not } from "drizzle-orm";
+import { getSortableFields } from "~/entities/entities";
 import type { ActorContext } from "~/schemas/context";
 import type {
   InventoryId,
@@ -99,9 +100,9 @@ export const inventoryentryList = async (
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
+  // Build order by using central sortableFields config
   const orderByArray = buildOrderBy(inventoryEntry, sort, [
-    "createdAt",
-    "amount",
+    ...getSortableFields("inventory-item"),
   ]);
   const { take, skip } = buildTakeSkip(pagination);
 

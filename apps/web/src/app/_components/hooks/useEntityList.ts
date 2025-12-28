@@ -1,7 +1,7 @@
 import type { ColumnDef, Table } from "@tanstack/react-table";
 import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
-import { entities } from "~/entities/entities";
+import { entities, getSortableFields } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { QueryTiming } from "~/lib/query-timing";
@@ -222,8 +222,20 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       );
     }
 
-    // Add custom columns
-    cols.push(...stableColumns);
+    // Add custom columns with automatic enableSorting based on sortableFields
+    const sortableFields = getSortableFields(entity);
+    const processedColumns = stableColumns.map((col) => {
+      // If enableSorting is explicitly set, respect it
+      if (col.enableSorting !== undefined) return col;
+      // Get column id from id or accessorKey
+      const colId =
+        col.id ??
+        (typeof col.accessorKey === "string" ? col.accessorKey : null);
+      // Auto-disable sorting for columns not in sortableFields
+      const canSort = colId ? sortableFields.includes(colId) : false;
+      return { ...col, enableSorting: canSort };
+    });
+    cols.push(...processedColumns);
 
     // Append unit mappings column if configured
     if (shouldUseMappings && effectiveMappingsMap) {
