@@ -8,6 +8,7 @@ export const locationType = z
   //todo: remove this in the future to make it more flexible?
   .enum([
     "room",
+    "area",
     "bag",
     "box",
     "shelf",

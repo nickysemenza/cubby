@@ -3,6 +3,7 @@ import {
   FileBox,
   Home,
   Layers,
+  LayoutGrid,
   type LucideIcon,
   ShoppingBag,
   ShoppingCart,
@@ -16,6 +17,8 @@ export const getLocationIcon = (type: LocationType): LucideIcon => {
   switch (type) {
     case "room":
       return Home;
+    case "area":
+      return LayoutGrid;
     case "bag":
       return ShoppingBag;
     case "shelf":
