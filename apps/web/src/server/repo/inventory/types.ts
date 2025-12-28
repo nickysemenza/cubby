@@ -68,6 +68,7 @@ export interface ProductExportFields {
   model: string | null;
   ndb_number: number | null;
   expectedQuantity: number | null;
+  price: number | null;
   unitMappings: Array<{ a: Amount; b: Amount; source: string | null }>;
   Ingredient: { name: string; aliases: string[] } | null;
   images: Array<{ image: { url: string } }>;

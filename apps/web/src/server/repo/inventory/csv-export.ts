@@ -34,6 +34,7 @@ function buildProductExportFields(p: ProductExportFields): {
   aliases: string | null;
   product_image: string | null;
 } {
+  // Extract price from unit mappings (source of truth, as denormalized price may be stale)
   const priceAmount = extractPriceFromMappings(p.unitMappings);
   return {
     product_name: p.name,

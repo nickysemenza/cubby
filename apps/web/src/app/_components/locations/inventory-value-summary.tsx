@@ -1,14 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { useTRPC } from "~/trpc/react";
 import {
-  calculateInventoryValue,
-  emptyPricingStatus,
+  calculateInventoryValuation,
   formatPricingStatusSummary,
   type InventoryItem,
-  type InventoryValueResult,
-} from "./calculate-inventory-value";
+} from "./calculate-inventory-valuation";
 
 type Variant = "compact" | "full";
 
@@ -24,12 +21,6 @@ const currency = new Intl.NumberFormat("en-US", {
   currency: "USD",
   maximumFractionDigits: 2,
 });
-
-const emptyResult: InventoryValueResult = {
-  totalValue: 0,
-  breakdown: [],
-  pricingStatus: emptyPricingStatus(),
-};
 
 export function InventoryValueSummary({
   locationId,
@@ -55,11 +46,10 @@ export function InventoryValueSummary({
     [items, fetched],
   );
 
-  // Load inventory value asynchronously
-  const result = useAsyncMemo(
-    async () => calculateInventoryValue(sourceItems),
+  // Calculate valuation synchronously (no WASM needed - uses precomputed values)
+  const result = useMemo(
+    () => calculateInventoryValuation(sourceItems),
     [sourceItems],
-    emptyResult,
   );
 
   const pricingSummary = formatPricingStatusSummary(result.pricingStatus);
@@ -68,7 +58,7 @@ export function InventoryValueSummary({
     return (
       <div className={className}>
         <div className="text-muted-foreground text-xs">
-          Value: {currency.format(result.totalValue)}
+          Valuation: {currency.format(result.totalValuation)}
           {pricingSummary && <span className="ml-1">({pricingSummary})</span>}
         </div>
       </div>
@@ -78,9 +68,9 @@ export function InventoryValueSummary({
   // full variant
   return (
     <div className={className}>
-      <div className="mb-2 font-medium text-sm">Inventory Value</div>
+      <div className="mb-2 font-medium text-sm">Inventory Valuation</div>
       <div className="font-semibold text-lg">
-        {currency.format(result.totalValue)}
+        {currency.format(result.totalValuation)}
       </div>
       {pricingSummary && (
         <div className="text-muted-foreground text-xs">{pricingSummary}</div>

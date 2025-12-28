@@ -1,13 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
-  calculateInventoryValue,
+  calculateInventoryValuation,
   emptyPricingStatus,
   type InventoryItem,
   mergePricingStatus,
   type PricingStatus,
-} from "~/app/_components/locations/calculate-inventory-value";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+} from "~/app/_components/locations/calculate-inventory-valuation";
 import type { LocationId } from "~/schemas/identifiers";
 import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -72,35 +71,32 @@ export function useLocationHierarchy(
     [inventoryQuery.data],
   );
 
-  // Group items by location and calculate valuations
-  const valuationByLocation = useAsyncMemo(
-    async () => {
-      const itemsByLocation = new Map<string, InventoryItem[]>();
-      for (const item of items) {
-        const locationId = item.location.id;
-        const existing = itemsByLocation.get(locationId) ?? [];
-        existing.push(item);
-        itemsByLocation.set(locationId, existing);
-      }
+  // Group items by location and calculate valuations synchronously
+  const valuationByLocation = useMemo(() => {
+    const itemsByLocation = new Map<string, InventoryItem[]>();
+    for (const item of items) {
+      const locationId = item.location.id;
+      const existing = itemsByLocation.get(locationId) ?? [];
+      existing.push(item);
+      itemsByLocation.set(locationId, existing);
+    }
 
-      const resultByLocation = new Map<
-        string,
-        { valuation: number; pricingStatus: PricingStatus }
-      >();
+    const resultByLocation = new Map<
+      string,
+      { valuation: number; pricingStatus: PricingStatus }
+    >();
 
-      for (const [locationId, locationItems] of itemsByLocation) {
-        const result = await calculateInventoryValue(locationItems);
-        resultByLocation.set(locationId, {
-          valuation: result.totalValue,
-          pricingStatus: result.pricingStatus,
-        });
-      }
+    for (const [locationId, locationItems] of itemsByLocation) {
+      // Synchronous calculation using precomputed valuation column
+      const result = calculateInventoryValuation(locationItems);
+      resultByLocation.set(locationId, {
+        valuation: result.totalValuation,
+        pricingStatus: result.pricingStatus,
+      });
+    }
 
-      return resultByLocation;
-    },
-    [items],
-    new Map<string, { valuation: number; pricingStatus: PricingStatus }>(),
-  );
+    return resultByLocation;
+  }, [items]);
 
   const hierarchyData = useMemo(() => {
     const data = locations.data;

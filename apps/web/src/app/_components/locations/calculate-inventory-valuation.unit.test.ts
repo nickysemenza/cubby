@@ -1,23 +1,17 @@
-import { beforeAll, describe, expect, it } from "vitest";
-import { ensureWasm } from "~/lib/wasm";
+import { describe, expect, it } from "vitest";
 import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
 import {
-  calculateInventoryValue,
+  calculateInventoryValuation,
   emptyPricingStatus,
   formatPricingStatusSummary,
   type InventoryItem,
   mergePricingStatus,
   type PricingStatus,
-} from "../locations/calculate-inventory-value";
-
-// Initialize WASM before tests run
-beforeAll(async () => {
-  await ensureWasm();
-});
+} from "./calculate-inventory-valuation";
 
 function makeInventoryItem(params: {
   id: string;
@@ -25,19 +19,16 @@ function makeInventoryItem(params: {
     id: string;
     name: string;
     manufacturer?: string;
-    unitMappings: Array<{
-      a: { value: number; unit: string };
-      b: { value: number; unit: string };
-    }>;
   };
-  amount: { value: number; unit: string };
+  valuation: number | null;
 }): InventoryItem {
   const now = new Date();
   return {
     id: unsafeInventoryId(params.id),
     createdAt: now,
     updatedAt: now,
-    amount: params.amount,
+    amount: { value: 1, unit: "each" },
+    valuation: params.valuation,
     location: {
       id: unsafeLocationId("loc-1"),
       name: "Test Location",
@@ -56,141 +47,91 @@ function makeInventoryItem(params: {
       upc: null,
       ndb_number: null,
       expectedQuantity: null,
+      price: null,
       images: [],
       createdAt: now,
       updatedAt: now,
-      unitMappings: params.product.unitMappings.map((m, idx) => ({
-        id: `${params.id}-um-${idx}`,
-        a: m.a,
-        b: m.b,
-        source: "test",
-        sourceMetadata: { type: "manual" as const },
-        createdAt: now,
-        updatedAt: now,
-      })),
+      unitMappings: [],
     },
   };
 }
 
-describe("calculateInventoryValue", () => {
-  it("sums totals across products using price mappings", async () => {
+describe("calculateInventoryValuation", () => {
+  it("sums precomputed valuation across items", () => {
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i1",
-        amount: { value: 2, unit: "lb" },
-        product: {
-          id: "p1",
-          name: "Flour",
-          manufacturer: "BrandA",
-          unitMappings: [
-            { a: { value: 1, unit: "lb" }, b: { value: 5, unit: "dollar" } },
-          ],
-        },
+        valuation: 10,
+        product: { id: "p1", name: "Flour", manufacturer: "BrandA" },
       }),
       makeInventoryItem({
         id: "i2",
-        amount: { value: 3, unit: "each" },
-        product: {
-          id: "p2",
-          name: "Eggs",
-          manufacturer: "BrandB",
-          unitMappings: [
-            { a: { value: 1, unit: "each" }, b: { value: 3, unit: "dollar" } },
-          ],
-        },
+        valuation: 9,
+        product: { id: "p2", name: "Eggs", manufacturer: "BrandB" },
       }),
     ];
 
-    const res = await calculateInventoryValue(items);
-    expect(res.totalValue).toBe(2 * 5 + 3 * 3); // 19
+    const res = calculateInventoryValuation(items);
+    expect(res.totalValuation).toBe(19);
     expect(res.breakdown.find((b) => b.key === "BrandA")?.value).toBe(10);
     expect(res.breakdown.find((b) => b.key === "BrandB")?.value).toBe(9);
     expect(res.pricingStatus.missingPricing.count).toBe(0);
     expect(res.pricingStatus.priced.count).toBe(2);
   });
 
-  it("handles missing price mappings gracefully", async () => {
+  it("handles null valuation gracefully", () => {
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i3",
-        amount: { value: 1, unit: "lb" },
-        product: {
-          id: "p3",
-          name: "Sugar",
-          manufacturer: "BrandC",
-          unitMappings: [
-            // No money mapping; only weight mapping example
-            { a: { value: 1, unit: "lb" }, b: { value: 454, unit: "g" } },
-          ],
-        },
+        valuation: null,
+        product: { id: "p3", name: "Sugar", manufacturer: "BrandC" },
       }),
     ];
 
-    const res = await calculateInventoryValue(items);
-    expect(res.totalValue).toBe(0);
+    const res = calculateInventoryValuation(items);
+    expect(res.totalValuation).toBe(0);
     expect(res.pricingStatus.missingPricing.itemNames).toContain("Sugar");
     expect(res.pricingStatus.missingPricing.count).toBe(1);
   });
 
-  it("handles chained conversions via intermediate units to money", async () => {
+  it("handles zero valuation as unpriced", () => {
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i4",
-        amount: { value: 2, unit: "Pound" },
-        product: {
-          id: "p4",
-          name: "Rice",
-          manufacturer: "BrandChain",
-          unitMappings: [
-            // Pound -> Gram
-            {
-              a: { value: 1, unit: "Pound" },
-              b: { value: 453.59, unit: "Gram" },
-            },
-            // Gram -> Dollar (per 100g)
-            {
-              a: { value: 100, unit: "Gram" },
-              b: { value: 1.5, unit: "Dollar" },
-            },
-          ],
-        },
+        valuation: 0,
+        product: { id: "p4", name: "Rice", manufacturer: "BrandD" },
       }),
     ];
 
-    const res = await calculateInventoryValue(items);
-    const expected = 2 * 453.59 * (1.5 / 100); // 2 lb -> g -> $ per 100g
-    expect(res.totalValue).toBeCloseTo(expected, 1);
-    expect(
-      res.breakdown.find((b) => b.key === "BrandChain")?.value,
-    ).toBeCloseTo(expected, 2);
+    const res = calculateInventoryValuation(items);
+    expect(res.totalValuation).toBe(0);
+    expect(res.pricingStatus.missingPricing.count).toBe(1);
   });
 
-  it("categorizes misc: products as miscNoPrice instead of missingPricing", async () => {
+  it("categorizes misc: products as miscNoPrice instead of missingPricing", () => {
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i5",
-        amount: { value: 1, unit: "each" },
+        valuation: null,
         product: {
           id: "p5",
           name: "misc: random screws", // misc: prefix
           manufacturer: "Unknown",
-          unitMappings: [], // No price mapping
         },
       }),
       makeInventoryItem({
         id: "i6",
-        amount: { value: 1, unit: "each" },
+        valuation: null,
         product: {
           id: "p6",
           name: "Regular Product", // No misc: prefix
           manufacturer: "Unknown",
-          unitMappings: [], // No price mapping
         },
       }),
     ];
 
-    const res = await calculateInventoryValue(items);
-    expect(res.totalValue).toBe(0);
+    const res = calculateInventoryValuation(items);
+    expect(res.totalValuation).toBe(0);
     // misc: product goes to miscNoPrice
     expect(res.pricingStatus.miscNoPrice.count).toBe(1);
     expect(res.pricingStatus.miscNoPrice.itemNames).toContain(
@@ -201,6 +142,40 @@ describe("calculateInventoryValue", () => {
     expect(res.pricingStatus.missingPricing.itemNames).toContain(
       "Regular Product",
     );
+  });
+
+  it("groups breakdown by manufacturer", () => {
+    const items: InventoryItem[] = [
+      makeInventoryItem({
+        id: "i7",
+        valuation: 5,
+        product: { id: "p7", name: "Item A", manufacturer: "Same" },
+      }),
+      makeInventoryItem({
+        id: "i8",
+        valuation: 3,
+        product: { id: "p8", name: "Item B", manufacturer: "Same" },
+      }),
+    ];
+
+    const res = calculateInventoryValuation(items);
+    expect(res.totalValuation).toBe(8);
+    expect(res.breakdown).toHaveLength(1);
+    expect(res.breakdown[0]?.key).toBe("Same");
+    expect(res.breakdown[0]?.value).toBe(8);
+  });
+
+  it("uses 'Unknown' for products without manufacturer", () => {
+    const items: InventoryItem[] = [
+      makeInventoryItem({
+        id: "i9",
+        valuation: 7,
+        product: { id: "p9", name: "Mystery", manufacturer: "" },
+      }),
+    ];
+
+    const res = calculateInventoryValuation(items);
+    expect(res.breakdown.find((b) => b.key === "Unknown")?.value).toBe(7);
   });
 });
 

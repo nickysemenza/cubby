@@ -69,7 +69,7 @@ export function LocationList() {
       }),
       columnHelper.display({
         id: "inventory_value",
-        header: "Value",
+        header: "Valuation",
         cell: (info) => (
           <InventoryValueSummary
             locationId={info.row.original.id}

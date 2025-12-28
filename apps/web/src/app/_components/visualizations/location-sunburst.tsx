@@ -7,7 +7,7 @@ import {
   useLocationHierarchy,
 } from "~/hooks/useLocationHierarchy";
 import { formatCurrency } from "~/lib/utils";
-import { formatPricingStatusSummary } from "../locations/calculate-inventory-value";
+import { formatPricingStatusSummary } from "../locations/calculate-inventory-valuation";
 import { LocationIcon } from "../locations/location-icons";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 

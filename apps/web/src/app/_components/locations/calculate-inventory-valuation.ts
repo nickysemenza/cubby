@@ -1,12 +1,10 @@
 import type { z } from "zod";
-import { convertAmountToPrice } from "~/app/_components/units/univ-conversion";
 import { isMiscProduct } from "~/lib/constants";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 
 export type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
-type InventoryValueBreakdown = {
+type InventoryValuationBreakdown = {
   key: string;
   label: string;
   value: number;
@@ -64,42 +62,42 @@ export function formatPricingStatusSummary(
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
-export type InventoryValueResult = {
-  totalValue: number;
-  breakdown: InventoryValueBreakdown[];
+export type InventoryValuationResult = {
+  totalValuation: number;
+  breakdown: InventoryValuationBreakdown[];
   pricingStatus: PricingStatus;
 };
 
 /**
- * Calculate the total inventory value for a list of inventory items.
- * Uses WASM unit mappings to convert each item's amount into a money value.
+ * Calculate the total inventory valuation for a list of inventory items.
+ * Uses the precomputed `valuation` column from each item (amount × product.price).
  * Groups a simple breakdown by product manufacturer (as a proxy for category).
  * Categorizes items by pricing status: priced, missingPricing, or miscNoPrice.
+ *
+ * This is a synchronous function - no WASM calls needed since valuations
+ * are precomputed and stored in the database.
  */
-export async function calculateInventoryValue(
+export function calculateInventoryValuation(
   items: InventoryItem[],
-): Promise<InventoryValueResult> {
-  let totalValue = 0;
+): InventoryValuationResult {
+  let totalValuation = 0;
   const pricingStatus = emptyPricingStatus();
   const byManufacturer = new Map<string, number>();
 
   for (const item of items) {
     const product = item.product;
-    const mappings = getAllUnitMappingsFromProduct(product);
-    const priceRes = convertAmountToPrice(item.amount, mappings);
+    const valuation = item.valuation;
 
-    const hasValue =
-      priceRes.success && priceRes.value.value && priceRes.value.value > 0;
+    const hasValuation = valuation != null && valuation > 0;
 
-    if (hasValue) {
+    if (hasValuation) {
       // Category: priced
-      const val = priceRes.value.value!;
-      totalValue += val;
+      totalValuation += valuation;
       pricingStatus.priced.count++;
       pricingStatus.priced.itemNames.push(product.name);
 
       const key = product.manufacturer || "Unknown";
-      byManufacturer.set(key, (byManufacturer.get(key) || 0) + val);
+      byManufacturer.set(key, (byManufacturer.get(key) || 0) + valuation);
     } else if (isMiscProduct(product.name)) {
       // Category: misc - expected no price
       pricingStatus.miscNoPrice.count++;
@@ -111,12 +109,12 @@ export async function calculateInventoryValue(
     }
   }
 
-  const breakdown: InventoryValueBreakdown[] = Array.from(byManufacturer)
+  const breakdown: InventoryValuationBreakdown[] = Array.from(byManufacturer)
     .map(([key, value]) => ({ key, label: key, value }))
     .sort((a, b) => b.value - a.value);
 
   return {
-    totalValue,
+    totalValuation,
     breakdown,
     pricingStatus,
   };

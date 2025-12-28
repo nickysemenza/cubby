@@ -56,9 +56,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         <LocationBasicInfo location={location} onEdit={editMode.startEditing} />
       ),
     },
-    // Custom section: Inventory Value
+    // Custom section: Inventory Valuation
     {
-      title: "Inventory Value",
+      title: "Inventory Valuation",
       content: (
         <div className="py-1">
           <InventoryValueSummary locationId={location.id} variant="full" />

@@ -8,7 +8,7 @@ import RTable from "../_components/data-table/Table";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
-import type { InventoryItem } from "../_components/locations/calculate-inventory-value";
+import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
 import { NoneState } from "../_components/NoneState";
 import { ImageThumbnail } from "../_components/table/ImageThumbnail";
