@@ -20,95 +20,97 @@ export function InventoryItemList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryListItem>();
 
-  const { table, filterableColumns, data, isLoading, error, timing } =
-    useEntityList({
-      entity: "inventory-item",
-      queryOptions: api.inventoryItem.list.queryOptions,
-      buildFilters: (ts) => ({
-        productNameFilter: ts.getColumnFilter("product"),
-        locationNameFilter: ts.getColumnFilter("location"),
+  const { table, data, isLoading, error, timing } = useEntityList({
+    entity: "inventory-item",
+    queryOptions: api.inventoryItem.list.queryOptions,
+    buildFilters: (ts) => ({
+      productNameFilter: ts.getColumnFilter("product"),
+      locationNameFilter: ts.getColumnFilter("location"),
+    }),
+    // Inventory has custom columns (product image, amount instead of name)
+    columns: [
+      // Image from product
+      columnHelper.accessor("product", {
+        id: "product_image",
+        header: "Image",
+        enableSorting: false,
+        cell: (info) => {
+          const product = info.getValue();
+          return <ImageThumbnail images={product.images} alt="Product image" />;
+        },
       }),
-      // Inventory has custom columns (product image, amount instead of name)
-      columns: [
-        // Image from product
-        columnHelper.accessor("product", {
-          id: "product_image",
-          header: "Image",
-          enableSorting: false,
-          cell: (info) => {
-            const product = info.getValue();
-            return (
-              <ImageThumbnail images={product.images} alt="Product image" />
-            );
-          },
-        }),
-        columnHelper.accessor("amount", {
-          cell: (info) => {
-            return (
-              <Link
-                className="block max-w-64"
-                to="/inventory/$id"
-                params={{ id: info.row.original.id }}
-              >
-                {showAmountAndPrice(
-                  info.getValue(),
-                  info.row.original.product.unitMappings,
+      columnHelper.accessor("amount", {
+        cell: (info) => {
+          return (
+            <Link
+              className="block max-w-64"
+              to="/inventory/$id"
+              params={{ id: info.row.original.id }}
+            >
+              {showAmountAndPrice(
+                info.getValue(),
+                info.row.original.product.unitMappings,
+              )}
+            </Link>
+          );
+        },
+      }),
+      columnHelper.accessor("product", {
+        enableSorting: false,
+        meta: {
+          mobileCategory: "wide",
+          filterConfig: { placeholder: "Filter product..." },
+        },
+        cell: (info) => {
+          const product = info.getValue();
+          const { upc, unitMappings } = product;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <ProductPillLink product={product} minimal />
+                {upc && (
+                  <div className="text-muted-foreground text-xs">
+                    <TableLink
+                      to="/usda/upc/$code"
+                      params={{ code: upc }}
+                      variant="mono"
+                    >
+                      {upc}
+                    </TableLink>
+                  </div>
                 )}
-              </Link>
-            );
-          },
-        }),
-        columnHelper.accessor("product", {
-          enableSorting: false,
-          meta: { mobileCategory: "wide" },
-          cell: (info) => {
-            const product = info.getValue();
-            const { upc, unitMappings } = product;
-            return (
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <ProductPillLink product={product} minimal />
-                  {upc && (
-                    <div className="text-muted-foreground text-xs">
-                      <TableLink
-                        to="/usda/upc/$code"
-                        params={{ code: upc }}
-                        variant="mono"
-                      >
-                        {upc}
-                      </TableLink>
-                    </div>
-                  )}
-                </div>
-                <UnitMappingGraph unitMapping={unitMappings} compact />
               </div>
-            );
-          },
-        }),
-        columnHelper.accessor("location", {
-          meta: { mobileCategory: "wide" },
-          enableSorting: false,
-          cell: (info) => {
-            const item = info.getValue();
-            return <LocationPillLink location={item} minimal />;
-          },
-        }),
-        createCreatedAtColumn(columnHelper),
-      ],
-      filters: ["product", "location"],
-    });
+              <UnitMappingGraph unitMapping={unitMappings} compact />
+            </div>
+          );
+        },
+      }),
+      columnHelper.accessor("location", {
+        enableSorting: false,
+        meta: {
+          mobileCategory: "wide",
+          filterConfig: { placeholder: "Filter location..." },
+        },
+        cell: (info) => {
+          const item = info.getValue();
+          return <LocationPillLink location={item} minimal />;
+        },
+      }),
+      createCreatedAtColumn(columnHelper),
+    ],
+    filters: ["product", "location"],
+  });
 
   return (
     <div>
       <RTable
         table={table}
-        additionalFilters={
+        additionalToolbarContent={
           <InventoryValueSummary
             items={data as InventoryItem[]}
             variant="compact"
           />
         }
-        filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
         ariaLabel="Inventory Items Table"

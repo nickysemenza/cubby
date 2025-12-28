@@ -17,12 +17,21 @@ import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 
+/** Configuration for inline column header filters */
+export interface FilterConfig {
+  placeholder: string;
+  filterType?: "text" | "select";
+  options?: Array<{ value: string; label: string }>;
+}
+
 // Extend TanStack Table's meta type to include our custom properties
 declare module "@tanstack/react-table" {
   // biome-ignore lint/correctness/noUnusedVariables: required for module augmentation
   interface ColumnMeta<TData, TValue> {
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
     className?: string;
+    /** Filter configuration for inline header filter */
+    filterConfig?: FilterConfig;
   }
 }
 
@@ -49,11 +58,18 @@ export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
   fieldName: keyof T = "name" as keyof T,
+  options?: {
+    /** Filter configuration for inline header filter */
+    filterConfig?: FilterConfig;
+  },
 ) {
   const config = {
     id: String(fieldName),
     enableSorting: true,
-    meta: { className: "w-64 max-w-64" },
+    meta: {
+      className: "w-64 max-w-64",
+      filterConfig: options?.filterConfig,
+    },
     cell: (info: CellContext<T, T[keyof T]>) => {
       const value = String(info.getValue());
       return (

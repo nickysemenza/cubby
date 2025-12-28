@@ -31,7 +31,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
     return [{ id: "category", value: initialCategory }];
   }, [initialCategory]);
 
-  const { table, filterableColumns, isLoading, error, timing } = useEntityList({
+  const { table, isLoading, error, timing } = useEntityList({
     entity: "product",
     queryOptions: api.product.list.queryOptions,
     buildFilters: (ts) => ({
@@ -48,6 +48,16 @@ export function ProductList({ initialCategory }: ProductListProps) {
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
       columnHelper.accessor("category", {
         header: "Category",
+        meta: {
+          filterConfig: {
+            placeholder: "Filter by category...",
+            filterType: "select",
+            options: [
+              { value: "", label: "All categories" },
+              ...productCategoryOptions,
+            ],
+          },
+        },
         cell: (info) => {
           const category = info.getValue();
           return category ? (
@@ -68,10 +78,16 @@ export function ProductList({ initialCategory }: ProductListProps) {
         },
       }),
       columnHelper.accessor("manufacturer", {
-        meta: { mobileCategory: "compact" },
+        meta: {
+          mobileCategory: "compact",
+          filterConfig: { placeholder: "Filter manufacturer..." },
+        },
         cell: (info) => info.getValue(),
       }),
       columnHelper.accessor("upc", {
+        meta: {
+          filterConfig: { placeholder: "Filter UPC..." },
+        },
         cell: (info) => {
           const upc = info.getValue();
           return upc ? (
@@ -151,7 +167,6 @@ export function ProductList({ initialCategory }: ProductListProps) {
     <div>
       <RTable
         table={table}
-        filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
         ariaLabel="Products Table"

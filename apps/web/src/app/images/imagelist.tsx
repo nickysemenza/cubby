@@ -89,9 +89,14 @@ export default function ImageList() {
         );
       },
     }),
-    createNameColumn(columnHelper, "image", "filename"),
+    createNameColumn(columnHelper, "image", "filename", {
+      filterConfig: { placeholder: "Filter by filename..." },
+    }),
     columnHelper.accessor("contentType", {
       header: "Type",
+      meta: {
+        filterConfig: { placeholder: "Filter by content type..." },
+      },
       cell: ({ getValue }) => <span>{getValue()}</span>,
     }),
     columnHelper.accessor("size", {
@@ -193,16 +198,6 @@ export default function ImageList() {
 
       <RTable
         table={table}
-        filterableColumns={[
-          {
-            id: "filename",
-            placeholder: "Filter by filename...",
-          },
-          {
-            id: "contentType",
-            placeholder: "Filter by content type...",
-          },
-        ]}
         isLoading={isLoading}
         error={error}
         ariaLabel="Images Table"

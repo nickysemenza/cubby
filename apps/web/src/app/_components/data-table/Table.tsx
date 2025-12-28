@@ -22,40 +22,37 @@ import { cn } from "~/lib/utils";
 import { DebugDialog } from "./DebugDialog";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
+import { HeaderFilter } from "./HeaderFilter";
 import { MobileCardView } from "./MobileCardView";
-
-interface FilterOption {
-  value: string;
-  label: string;
-}
-
-export interface FilterableColumn {
-  id: string;
-  placeholder: string;
-  filterType?: "text" | "select";
-  options?: FilterOption[];
-}
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
-  additionalFilters?: ReactNode;
-  filterableColumns: FilterableColumn[];
+  /** Slot for additional toolbar content like summaries (e.g., "Value: $5,845.91") */
+  additionalToolbarContent?: ReactNode;
   isLoading?: boolean;
   error?: unknown;
   ariaLabel?: string;
   timing?: QueryTiming;
+  // Deprecated props - kept for backward compatibility during migration
+  /** @deprecated Use column meta.filterConfig instead */
+  filterableColumns?: unknown[];
+  /** @deprecated Use additionalToolbarContent instead */
+  additionalFilters?: ReactNode;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
   const {
     table,
-    additionalFilters,
-    filterableColumns,
+    additionalToolbarContent,
+    additionalFilters, // deprecated, fallback
     isLoading = false,
     error,
     ariaLabel = "Data Table",
     timing,
   } = props;
+
+  // Support deprecated additionalFilters prop
+  const toolbarContent = additionalToolbarContent ?? additionalFilters;
 
   const { isDebugEnabled } = useDebug();
   const { density, setDensity } = useTableDensity();
@@ -82,8 +79,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     <SpacedContainer space={4}>
       <DataTableToolbar
         table={table}
-        additionalFilters={additionalFilters}
-        filterableColumns={filterableColumns}
+        additionalContent={toolbarContent}
         density={density}
         onDensityChange={setDensity}
       />
@@ -112,7 +108,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       />
                     );
 
-                  const contents = (
+                  const filterConfig =
+                    header.column.columnDef.meta?.filterConfig;
+
+                  const titleContent = (
                     <>
                       {header.isPlaceholder
                         ? null
@@ -123,6 +122,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       {canSort && sortingArrows}
                     </>
                   );
+
                   return (
                     <TableHead
                       key={header.id}
@@ -137,24 +137,41 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                       className={cn(
                         header.column.columnDef.meta?.className,
                         styles.header,
+                        "align-top",
                       )}
                     >
-                      {canSort ? (
-                        <Button
-                          variant="ghost"
-                          size={isDense ? "sm" : "default"}
-                          className={cn(isDense && "h-5 px-1 text-[11px]")}
-                          onClick={() =>
-                            header.column.toggleSorting(
-                              header.column.getIsSorted() === "asc",
-                            )
-                          }
-                        >
-                          {contents}
-                        </Button>
-                      ) : (
-                        contents
-                      )}
+                      <div className="flex flex-col gap-1">
+                        {/* Column title with sort */}
+                        {canSort ? (
+                          <Button
+                            variant="ghost"
+                            size={isDense ? "sm" : "default"}
+                            className={cn(
+                              "w-full justify-start",
+                              isDense && "h-5 px-1 text-[11px]",
+                            )}
+                            onClick={() =>
+                              header.column.toggleSorting(
+                                header.column.getIsSorted() === "asc",
+                              )
+                            }
+                          >
+                            {titleContent}
+                          </Button>
+                        ) : (
+                          <span className={cn(isDense ? "px-1" : "px-2")}>
+                            {titleContent}
+                          </span>
+                        )}
+                        {/* Inline filter */}
+                        {filterConfig && (
+                          <HeaderFilter
+                            column={header.column}
+                            filterConfig={filterConfig}
+                            isDense={isDense}
+                          />
+                        )}
+                      </div>
                     </TableHead>
                   );
                 })}

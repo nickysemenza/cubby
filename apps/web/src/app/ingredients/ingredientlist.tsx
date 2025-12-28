@@ -38,7 +38,7 @@ export function IngredientList() {
     missingProductsOnly: false,
   });
 
-  const { table, filterableColumns, isLoading, error, timing } = useEntityList({
+  const { table, isLoading, error, timing } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
     buildFilters: (ts) => ({
@@ -51,7 +51,9 @@ export function IngredientList() {
     columns: [
       buildSelectColumn<IngredientWithFoodOut>(),
       createImageColumn(columnHelper),
-      createNameColumn(columnHelper, "ingredient"),
+      createNameColumn(columnHelper, "ingredient", "name", {
+        filterConfig: { placeholder: "Filter by ingredient name..." },
+      }),
       columnHelper.accessor("aliases", {
         cell: (info) => (
           <div className="space-y-0.5 text-xs">
@@ -101,12 +103,11 @@ export function IngredientList() {
       </div>
       <RTable
         table={table}
-        filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
         ariaLabel="Ingredients Table"
         timing={timing}
-        additionalFilters={
+        additionalToolbarContent={
           <div className="flex items-center space-x-2">
             <Checkbox
               id={missingProductsId}

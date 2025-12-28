@@ -11,10 +11,19 @@ import {
   createImageColumn,
   createNameColumn,
   createUnitMappingsColumn,
+  type FilterConfig,
 } from "../data-table/columnHelpers";
-import type { FilterableColumn } from "../data-table/Table";
 import { useTableConfig } from "../data-table/useTableConfig";
+
 import { type UseTableListOptions, useTableList } from "./useTableList";
+
+/** Filter column definition - string expands to text filter */
+interface FilterableColumn {
+  id: string;
+  placeholder: string;
+  filterType?: "text" | "select";
+  options?: Array<{ value: string; label: string }>;
+}
 
 /** Base interface for entities in list views */
 interface BaseListRow {
@@ -122,6 +131,17 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   globalFilter,
   onGlobalFilterChange,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
+  // Stabilize filters array - only update when serialized content changes
+  // This prevents re-renders when consumer passes new array literal each render
+  const filtersKey = JSON.stringify(filters);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using filtersKey for deep comparison
+  const stableFilters = useMemo(() => filters, [filtersKey]);
+
+  // Stabilize columns array - only update when length changes
+  // (column definitions are typically static, changes in length indicate real updates)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - columns are static, length change indicates real update
+  const stableColumns = useMemo(() => customColumns, [customColumns.length]);
+
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, hasUnitMappings, defaultSort } = useMemo(() => {
     const entityConfig = entities[entity];
@@ -167,6 +187,22 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
   // Build columns array with standard columns - memoized to prevent infinite re-renders
   const allColumns = useMemo(() => {
+    // Convert FilterDef to FilterConfig for column meta
+    const getFilterConfig = (columnId: string): FilterConfig | undefined => {
+      const filterDef = stableFilters.find((f) =>
+        typeof f === "string" ? f === columnId : f.id === columnId,
+      );
+      if (!filterDef) return undefined;
+      if (typeof filterDef === "string") {
+        return { placeholder: `Filter by ${filterDef}...` };
+      }
+      return {
+        placeholder: filterDef.placeholder,
+        filterType: filterDef.filterType,
+        options: filterDef.options,
+      };
+    };
+
     const columnHelper = createColumnHelper<TData>() as ColumnHelper<TData>;
     const cols: AnyColumnDef<TData>[] = [];
 
@@ -175,11 +211,19 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       cols.push(createImageColumn(columnHelper));
     }
     if (standardColumns.includes("name")) {
-      cols.push(createNameColumn(columnHelper, entity));
+      const nameFilterConfig = getFilterConfig("name");
+      cols.push(
+        createNameColumn(
+          columnHelper,
+          entity,
+          "name" as keyof TData,
+          nameFilterConfig ? { filterConfig: nameFilterConfig } : undefined,
+        ),
+      );
     }
 
     // Add custom columns
-    cols.push(...customColumns);
+    cols.push(...stableColumns);
 
     // Append unit mappings column if configured
     if (shouldUseMappings && effectiveMappingsMap) {
@@ -193,11 +237,12 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
     return cols;
   }, [
-    customColumns,
+    stableColumns,
     entity,
     shouldUseMappings,
     standardColumns,
     effectiveMappingsMap,
+    stableFilters,
   ]);
 
   // Configure the table
@@ -212,8 +257,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
   // Expand filter definitions - memoized to prevent unnecessary re-renders
   const filterableColumns = useMemo(
-    () => filters.map(expandFilterDef),
-    [filters],
+    () => stableFilters.map(expandFilterDef),
+    [stableFilters],
   );
 
   return {
