@@ -1,11 +1,97 @@
+import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import {
   type ErrorComponentProps,
   Link,
   useRouter,
 } from "@tanstack/react-router";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import {
+  AlertCircle,
+  ChevronDown,
+  LogIn,
+  RefreshCw,
+  WifiOff,
+} from "lucide-react";
+import { useState } from "react";
 import { Button } from "~/components/ui/button";
-import { getErrorMessage } from "~/lib/error-utils";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
+import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
+
+type ErrorCategory =
+  | "auth"
+  | "organization"
+  | "notFound"
+  | "validation"
+  | "network"
+  | "generic";
+
+const FRIENDLY_MESSAGES: Record<ErrorCategory, string> = {
+  auth: "You need to sign in to view this page",
+  organization: "Please select an organization to continue",
+  notFound: "The item you're looking for doesn't exist or has been deleted",
+  validation: "The request contained invalid data",
+  network: "Unable to connect to the server. Please check your connection.",
+  generic: "Something went wrong",
+};
+
+const categorizeError = (
+  code: string | undefined,
+  reason: string | undefined,
+  message: string,
+): ErrorCategory => {
+  // Auth errors
+  if (code === "UNAUTHORIZED" || reason === "UNAUTHORIZED") {
+    return "auth";
+  }
+
+  // Organization errors
+  if (
+    code === "PRECONDITION_FAILED" ||
+    reason === "NO_ORGANIZATION_SELECTED" ||
+    reason === "NOT_ORGANIZATION_MEMBER"
+  ) {
+    return "organization";
+  }
+
+  // Not found errors
+  if (
+    code === "NOT_FOUND" ||
+    reason?.includes("NOT_FOUND") ||
+    message.toLowerCase().includes("not found")
+  ) {
+    return "notFound";
+  }
+
+  // Validation errors
+  if (code === "BAD_REQUEST" || code === "PARSE_ERROR") {
+    return "validation";
+  }
+
+  // Network errors
+  if (
+    message.toLowerCase().includes("network") ||
+    message.toLowerCase().includes("fetch") ||
+    message.toLowerCase().includes("connection")
+  ) {
+    return "network";
+  }
+
+  return "generic";
+};
+
+const getIcon = (category: ErrorCategory) => {
+  switch (category) {
+    case "network":
+      return <WifiOff className="h-12 w-12 text-muted-foreground" />;
+    case "notFound":
+      return <AlertCircle className="h-12 w-12 text-muted-foreground" />;
+    default:
+      return <AlertCircle className="h-12 w-12 text-destructive" />;
+  }
+};
 
 /**
  * Shared error component for route-level errors.
@@ -13,48 +99,115 @@ import { getErrorMessage } from "~/lib/error-utils";
  */
 export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const router = useRouter();
-  const message = getErrorMessage(error);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Check if it's a not-found type error
-  const isNotFound =
-    message.toLowerCase().includes("not found") ||
-    (error instanceof Error && error.message.includes("NOT_FOUND"));
+  const { code, reason, message } = getAppErrorDetails(error);
+  const rawMessage = getErrorMessage(error);
+  const category = categorizeError(code, reason, rawMessage);
+  const friendlyMessage = FRIENDLY_MESSAGES[category];
 
-  if (isNotFound) {
-    return (
-      <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 p-8">
-        <AlertCircle className="h-12 w-12 text-muted-foreground" />
-        <h2 className="font-semibold text-xl">Not Found</h2>
-        <p className="text-center text-muted-foreground">
-          The item you're looking for doesn't exist or has been deleted.
-        </p>
-        <Link to="/">
-          <Button variant="outline">Go Home</Button>
-        </Link>
-      </div>
-    );
-  }
+  // Get stack trace if available
+  const stack = error instanceof Error ? error.stack : undefined;
 
   return (
     <div className="flex min-h-[400px] flex-col items-center justify-center space-y-4 p-8">
-      <AlertCircle className="h-12 w-12 text-destructive" />
-      <h2 className="font-semibold text-xl">Something went wrong</h2>
-      <p className="max-w-md text-center text-muted-foreground">{message}</p>
-      <div className="flex gap-2">
+      {getIcon(category)}
+
+      <h2 className="font-semibold text-xl">
+        {category === "notFound" ? "Not Found" : "Something went wrong"}
+      </h2>
+
+      <p className="max-w-md text-center text-muted-foreground">
+        {friendlyMessage}
+      </p>
+
+      {/* Auth-specific: Sign in button */}
+      {category === "auth" && (
         <Button
-          variant="outline"
-          onClick={() => {
-            reset?.();
-            router.invalidate();
-          }}
+          variant="default"
+          render={
+            <Link to="/auth/$authView" params={{ authView: "sign-in" }} />
+          }
+          nativeButton={false}
         >
-          <RefreshCw className="mr-2 h-4 w-4" />
-          Try Again
+          <LogIn className="mr-2 h-4 w-4" />
+          Sign in
         </Button>
-        <Link to="/">
-          <Button variant="ghost">Go Home</Button>
-        </Link>
-      </div>
+      )}
+
+      {/* Organization-specific: Org switcher */}
+      {category === "organization" && (
+        <div className="flex items-center gap-3">
+          <OrganizationSwitcher />
+        </div>
+      )}
+
+      {/* Action buttons for non-auth errors */}
+      {category !== "auth" && category !== "organization" && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              reset?.();
+              router.invalidate();
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Try Again
+          </Button>
+          <Button variant="ghost" render={<Link to="/" />} nativeButton={false}>
+            Go Home
+          </Button>
+        </div>
+      )}
+
+      {/* Collapsible technical details */}
+      <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <CollapsibleTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground text-xs"
+            />
+          }
+        >
+          Technical Details
+          <ChevronDown
+            className={`ml-1 h-3 w-3 transition-transform ${detailsOpen ? "rotate-180" : ""}`}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="mt-2 max-w-lg space-y-2 rounded-md border bg-muted/50 p-3 text-left font-mono text-xs">
+            {code && (
+              <div>
+                <span className="text-muted-foreground">Code: </span>
+                <span className="text-foreground">{code}</span>
+              </div>
+            )}
+            {reason && (
+              <div>
+                <span className="text-muted-foreground">Reason: </span>
+                <span className="text-foreground">{reason}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-muted-foreground">Message: </span>
+              <span className="text-foreground">{message || rawMessage}</span>
+            </div>
+            {stack && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  Stack trace
+                </summary>
+                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">
+                  {stack}
+                </pre>
+              </details>
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   );
 }

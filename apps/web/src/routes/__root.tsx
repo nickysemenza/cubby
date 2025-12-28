@@ -16,6 +16,7 @@ import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import { PackageOpen } from "lucide-react";
 import { GlobalCommandMenu } from "~/app/_components/command-menu";
 import { MainNav } from "~/app/_components/MainNav";
+import { RouteErrorComponent } from "~/components/route-error";
 import { ThemeProvider } from "~/components/theme-provider";
 import { Toaster } from "~/components/ui/sonner";
 import { DebugContextProvider } from "~/hooks/useDebug";
@@ -64,6 +65,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
   component: RootComponent,
   shellComponent: RootDocument,
   notFoundComponent: NotFoundComponent,
+  errorComponent: RouteErrorComponent,
 });
 
 function RootComponent() {
