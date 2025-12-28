@@ -459,6 +459,83 @@ export function compareInventoryForSync(
     }
   }
 
+  // Pass 2.5: UPC-based matching for same-name products with multiple entries
+  // This handles cases where there are multiple products with the same name but
+  // we can uniquely identify them by UPC
+  for (const [key, appRow] of appByKey) {
+    if (processedKeys.has(key)) continue;
+
+    const appUpc = appRow.upc?.trim();
+    if (!appUpc) continue; // Need UPC for this pass
+
+    // Find unprocessed sheet row with matching UPC and same product name
+    for (const [sheetKey, sheetRow] of sheetByKey) {
+      if (processedKeys.has(sheetKey)) continue;
+
+      const sheetUpc = sheetRow.upc?.trim();
+      if (sheetUpc !== appUpc) continue;
+
+      // UPC matches - check if product names also match (same product, just different key)
+      const appName = normalizeForComparison(appRow.product_name);
+      const sheetName = normalizeForComparison(sheetRow.product_name);
+      if (appName !== sheetName) continue; // Different product names go to rename detection
+
+      // Same product name + same UPC = definitely the same item
+      // Detect field differences (likely manufacturer change)
+      const fieldDiffs = getInventoryRowDifferences(appRow, sheetRow);
+
+      const sameLocation =
+        normalizeForComparison(appRow.location_name ?? "") ===
+        normalizeForComparison(sheetRow.location_name ?? "");
+
+      if (!sameLocation) {
+        // Location changed = move
+        const defaultResolution = getDefaultResolution("moved");
+
+        items.push({
+          entityType: "inventory",
+          key,
+          state: "moved",
+          defaultResolution,
+          resolution: defaultResolution,
+          appData: buildInventoryAppData(appRow),
+          sheetData: buildInventorySheetData(sheetRow),
+          movedFrom: appRow.location_name ?? undefined,
+          movedTo: sheetRow.location_name ?? undefined,
+        });
+      } else if (fieldDiffs.length > 0) {
+        // Same location but other field differences = conflict
+        const defaultResolution = getDefaultResolution("conflict", fieldDiffs);
+
+        items.push({
+          entityType: "inventory",
+          key,
+          state: "conflict",
+          defaultResolution,
+          resolution: defaultResolution,
+          fieldDiffs,
+          appData: buildInventoryAppData(appRow),
+          sheetData: buildInventorySheetData(sheetRow),
+        });
+      } else {
+        // Exact match (shouldn't happen if keys are built correctly, but handle it)
+        items.push({
+          entityType: "inventory",
+          key,
+          state: "matched",
+          defaultResolution: null,
+          resolution: null,
+          appData: buildInventoryAppData(appRow),
+          sheetData: buildInventorySheetData(sheetRow),
+        });
+      }
+
+      processedKeys.add(key);
+      processedKeys.add(sheetKey);
+      break; // Found match for this app row
+    }
+  }
+
   // Third pass: detect renames (app_only + sheet_only with matching attributes)
   const unprocessedApp = [...appByKey.entries()].filter(
     ([key]) => !processedKeys.has(key),

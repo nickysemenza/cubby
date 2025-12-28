@@ -37,6 +37,7 @@ import {
   getGoogleSheetsClient,
   SHEET_NAMES,
 } from "~/server/clients/google-sheets";
+import type { Database } from "~/server/db";
 import { deleteInventoryEntry } from "~/server/repo/inventory";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
 import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
@@ -706,6 +707,102 @@ async function fetchSheetLocations(
   return [];
 }
 
+/**
+ * Update an existing product with sheet data
+ *
+ * Used when resolving conflicts with "use_sheet" - we need to update
+ * the existing product directly rather than going through CSV import
+ * (which would fail to find the product due to manufacturer mismatch)
+ */
+async function updateProductFromSheetData(
+  db: Database,
+  productId: string,
+  sheetData: {
+    productName?: string;
+    manufacturer?: string | null;
+    category?: string | null;
+    upc?: string | null;
+    model?: string | null;
+    ndbNumber?: number | null;
+    expectedQty?: number | null;
+  },
+  actorContext: Parameters<typeof updateProduct>[3],
+): Promise<void> {
+  // Map sheet data fields to ProductInputPayload fields
+  // Note: We don't update ingredientId or unitMappings from sheet data -
+  // those require more complex handling that's not needed for basic field sync
+  const updateData: {
+    name?: string;
+    manufacturer?: string;
+    category?:
+      | "food"
+      | "tools"
+      | "tool-consumables"
+      | "tool-accessories"
+      | "storage"
+      | "hardware"
+      | "electronics"
+      | "household"
+      | "supplies"
+      | null;
+    upc?: string | null;
+    model?: string | null;
+    ndb_number?: number | null;
+    expectedQuantity?: number | null;
+  } = {};
+
+  if (sheetData.productName !== undefined) {
+    updateData.name = sheetData.productName;
+  }
+  if (sheetData.manufacturer !== undefined) {
+    updateData.manufacturer = sheetData.manufacturer ?? "(unspecified)";
+  }
+  if (sheetData.category !== undefined) {
+    // Validate category is one of the allowed values
+    const validCategories = [
+      "food",
+      "tools",
+      "tool-consumables",
+      "tool-accessories",
+      "storage",
+      "hardware",
+      "electronics",
+      "household",
+      "supplies",
+    ] as const;
+    if (
+      sheetData.category === null ||
+      validCategories.includes(
+        sheetData.category as (typeof validCategories)[number],
+      )
+    ) {
+      updateData.category = sheetData.category as typeof updateData.category;
+    }
+  }
+  if (sheetData.upc !== undefined) {
+    updateData.upc = sheetData.upc;
+  }
+  if (sheetData.model !== undefined) {
+    updateData.model = sheetData.model;
+  }
+  if (sheetData.ndbNumber !== undefined) {
+    updateData.ndb_number = sheetData.ndbNumber;
+  }
+  if (sheetData.expectedQty !== undefined) {
+    updateData.expectedQuantity = sheetData.expectedQty;
+  }
+
+  // Only update if there are fields to update
+  if (Object.keys(updateData).length === 0) {
+    return;
+  }
+
+  await updateProduct(db, unsafeProductId(productId), updateData, {
+    ...actorContext,
+    source: "sheets_import",
+  });
+}
+
 /** Process imports from sheet to app (locations and inventory) */
 async function processImportsToApp(
   ctx: {
@@ -740,12 +837,35 @@ async function processImportsToApp(
     }
   }
 
-  // Inventory to add/update in app
+  // Handle conflicts with "use_sheet" - update existing products directly
+  // This is needed because the product may have a different manufacturer in the app
+  // and the standard CSV import looks up by name+manufacturer (would create duplicate)
+  const inventoryConflictsUseSheet = inventoryItems.filter(
+    (i) => i.state === "conflict" && i.resolution === "use_sheet",
+  );
+
+  for (const item of inventoryConflictsUseSheet) {
+    if (item.appData?.productId && item.sheetData) {
+      try {
+        await updateProductFromSheetData(
+          ctx.db,
+          item.appData.productId,
+          item.sheetData,
+          ctx.actorContext,
+        );
+        results.inventory.updated++;
+      } catch (error) {
+        console.error("Failed to update product from sheet data:", error);
+        results.inventory.errors++;
+      }
+    }
+  }
+
+  // Inventory to add/update in app (excluding conflicts which are handled above)
   // For "moved" items: both "apply_move" and "use_sheet" mean: use sheet's location
   const inventoryToImport = inventoryItems.filter(
     (i) =>
       (i.state === "sheet_only" && i.resolution === "add_to_app") ||
-      (i.state === "conflict" && i.resolution === "use_sheet") ||
       (i.state === "moved" &&
         (i.resolution === "apply_move" || i.resolution === "use_sheet")),
   );

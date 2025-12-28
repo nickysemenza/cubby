@@ -5,6 +5,7 @@
  * to detect field-level differences.
  */
 
+import { normalizeManufacturer } from "~/lib/manufacturer-utils";
 import type { FieldChange } from "~/schemas/csv";
 import type { InventoryCSVRow } from "~/schemas/inventory";
 import {
@@ -15,12 +16,21 @@ import {
 import { normalizeForComparison } from "~/server/repo/csv/normalize";
 import type { InventoryCSVExportRow } from "./types";
 
-/** Field specs for standard inventory fields (no special normalization needed) */
+/** Normalizer for manufacturer field - treats empty/null/(unspecified) as equivalent */
+const normalizeManufacturerField = (val: unknown): string =>
+  normalizeManufacturer(val as string | null | undefined).toLowerCase();
+
+/** Field specs for standard inventory fields */
 const INVENTORY_FIELD_SPECS: readonly ComparisonFieldSpec<
   InventoryCSVExportRow,
   InventoryCSVRow
 >[] = [
-  { field: "manufacturer", appKey: "manufacturer", sheetKey: "manufacturer" },
+  {
+    field: "manufacturer",
+    appKey: "manufacturer",
+    sheetKey: "manufacturer",
+    normalize: normalizeManufacturerField,
+  },
   { field: "upc", appKey: "upc", sheetKey: "upc" },
   { field: "model", appKey: "model", sheetKey: "model" },
   { field: "category", appKey: "category", sheetKey: "category" },

@@ -505,6 +505,246 @@ describe("compareInventoryForSync - rename detection", () => {
   });
 
   // ============================================================================
+  // Manufacturer change detection
+  // ============================================================================
+  describe("manufacturer change detection", () => {
+    it("should detect manufacturer-only change as conflict", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "(unspecified)",
+          location_name: "",
+          location_id: null,
+          inventory_entry_id: null,
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "Kirkland",
+          location_name: "",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 1,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+
+      const conflict = result.find((i) => i.state === "conflict");
+      expect(conflict?.fieldDiffs).toBeDefined();
+      expect(
+        conflict?.fieldDiffs?.some((d) => d.field === "manufacturer"),
+      ).toBe(true);
+    });
+
+    it("should detect manufacturer change with same location as conflict", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "Generic",
+          location_name: "pantry",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "Kirkland",
+          location_name: "pantry",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 1,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+    });
+
+    it("should detect manufacturer change when both have no location as conflict", () => {
+      // This tests the scenario where a product exists without inventory entries
+      // (product-only row) and only the manufacturer changes
+      const appRows = [
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "(unspecified)",
+          location_name: "",
+          location_id: null,
+          inventory_entry_id: null,
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "Kirkland",
+          location_name: "",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // Should be detected as conflict, not sheet_only + app_only
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 1,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+
+      const conflict = result.find((i) => i.state === "conflict");
+      expect(
+        conflict?.fieldDiffs?.some((d) => d.field === "manufacturer"),
+      ).toBe(true);
+    });
+
+    it("should detect manufacturer AND location change as moved (manufacturer diff is secondary)", () => {
+      // When both location and manufacturer change, the move takes precedence
+      const appRows = [
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "(unspecified)",
+          location_name: "pantry",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "Kirkland",
+          location_name: "kitchen",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // Location change takes precedence, becomes "moved"
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 1,
+      });
+    });
+
+    it("should detect change via UPC when there are multiple entries for same product", () => {
+      // When there are multiple inventory entries for the same product,
+      // but one has a matching UPC, we can identify the match
+      const appRows = [
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "CA olive range", // Typo in app
+          location_name: "",
+          location_id: null,
+          inventory_entry_id: null,
+          upc: "850687100339",
+        }),
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "Another Brand",
+          location_name: "pantry",
+          location_id: unsafeLocationId("loc-2"),
+          inventory_entry_id: unsafeInventoryId("inv-2"),
+          upc: "999999999999",
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "CA olive ranch", // Corrected in sheet
+          location_name: "",
+          upc: "850687100339",
+        }),
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "Another Brand",
+          location_name: "pantry",
+          upc: "999999999999",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // UPC match allows us to identify the manufacturer change
+      expect(counts).toEqual({
+        matched: 1, // The "Another Brand" one matches exactly
+        conflict: 1, // The "CA olive range/ranch" one is a conflict
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+
+      const conflict = result.find((i) => i.state === "conflict");
+      expect(
+        conflict?.fieldDiffs?.some((d) => d.field === "manufacturer"),
+      ).toBe(true);
+    });
+
+    it("should fall back to app_only/sheet_only when no UPC and multiple entries", () => {
+      // When there are multiple entries without UPC, we can't determine which one changed
+      const appRows = [
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "(unspecified)",
+          location_name: "pantry",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+        makeAppRow({
+          product_name: "olive oil",
+          manufacturer: "(unspecified)",
+          location_name: "garage",
+          location_id: unsafeLocationId("loc-2"),
+          inventory_entry_id: unsafeInventoryId("inv-2"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "olive oil",
+          manufacturer: "Kirkland",
+          location_name: "",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // Can't detect - falls through to app_only and sheet_only
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 0,
+        app_only: 2,
+        sheet_only: 1,
+        renamed: 0,
+        moved: 0,
+      });
+    });
+  });
+
+  // ============================================================================
   // Edge cases
   // ============================================================================
   describe("edge cases", () => {
