@@ -13,7 +13,8 @@ import {
 } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { NoneState } from "~/app/_components/NoneState";
-import { ImageStatusBadge, ImageThumbnail } from "~/app/_components/table";
+import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
+import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { Input } from "~/components/ui/input";
 import useDebounce from "~/hooks/useDebounce";
 import { assertNever } from "~/lib/assert";

@@ -6,6 +6,7 @@
 
 import { eq } from "drizzle-orm";
 import type { Amount } from "~/codec/codec";
+import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import type { ProductId } from "~/schemas/identifiers";
 import { findPriceMapping, isMoneyUnit } from "~/schemas/price-mapping-utils";
@@ -190,9 +191,7 @@ export const parseUnitMappingsForPreview = (
         source: parsed.source ?? undefined,
       });
     } catch (e) {
-      const errorMsg =
-        e instanceof Error ? e.message : "Invalid unit mapping format";
-      errors.push(`"${part}": ${errorMsg}`);
+      errors.push(`"${part}": ${getErrorMessage(e)}`);
     }
   }
 

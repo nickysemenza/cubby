@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { entities } from "~/entities/entities";
@@ -64,45 +64,5 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
     handleCreate,
     handleCreateAsync,
     handleCancel,
-  };
-}
-
-/**
- * Hook for entity edit mode that handles:
- * - Error state management
- * - Router refresh
- * - Mutation with success/error callbacks
- * - Custom onCancel callback
- */
-export function useEntityEditMode<TData, TResult>(
-  mutationOptions: TRPCMutationOptions,
-  onCancel: () => void,
-  callbacks?: EntityMutationCallbacks<TResult>,
-) {
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | undefined>();
-
-  const mutation = useMutation<TResult, unknown, TData>({
-    ...mutationOptions,
-    onSuccess: (result: TResult) => {
-      callbacks?.onSuccess?.(result);
-      queryClient.invalidateQueries();
-      onCancel();
-    },
-    onError: (error: unknown) => {
-      setError(getErrorMessage(error));
-      callbacks?.onError?.();
-    },
-  });
-
-  const handleUpdate = (data: TData) => {
-    mutation.mutate(data);
-  };
-
-  return {
-    error,
-    isPending: mutation.isPending,
-    handleUpdate,
-    handleCancel: onCancel,
   };
 }

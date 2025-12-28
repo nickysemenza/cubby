@@ -47,6 +47,7 @@ import { Empty, EmptyTitle } from "~/components/ui/empty";
 import { Kbd } from "~/components/ui/kbd";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
+import { dedupe } from "~/misc/array-helpers";
 import {
   getOptionalLocationId,
   getProductId,
@@ -260,9 +261,9 @@ export default function QuickCaptureForm({
         }
 
         // Get unique location names for success message
-        const locationNames = [
-          ...new Set(validItems.map((item) => item.location.name)),
-        ];
+        const locationNames = dedupe(
+          validItems.map((item) => item.location.name),
+        );
         const locationText =
           locationNames.length === 1
             ? locationNames[0]

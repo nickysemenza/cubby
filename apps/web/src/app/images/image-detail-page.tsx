@@ -5,7 +5,7 @@ import {
   RecipePillLink,
 } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
-import { ImageStatusBadge } from "~/app/_components/table";
+import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";

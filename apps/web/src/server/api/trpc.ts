@@ -22,6 +22,7 @@ import { env } from "~/env";
 import { initOpenTelemetry } from "~/instrumentation";
 import { type AppErrorReason, AppErrors } from "~/lib/app-error-codes";
 import { auth as betterAuth } from "~/lib/auth";
+import { getErrorMessage } from "~/lib/error-utils";
 import { buildActorContext } from "~/schemas/context";
 import {
   type OrganizationId,
@@ -344,7 +345,7 @@ const tracingMiddleWare = t.middleware(async (opts) => {
       } catch (error) {
         span.setStatus({
           code: SpanStatusCode.ERROR,
-          message: error instanceof Error ? error.message : "Unknown error",
+          message: getErrorMessage(error),
         });
         throw error;
       } finally {

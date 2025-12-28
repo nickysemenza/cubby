@@ -5,6 +5,7 @@
 
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { createMiddleware } from "@tanstack/react-start";
+import { getErrorMessage } from "~/lib/error-utils";
 
 const tracer = trace.getTracer("tanstack-start");
 
@@ -32,7 +33,7 @@ export const tracingMiddleware = createMiddleware().server(
           );
           span.setStatus({
             code: SpanStatusCode.ERROR,
-            message: error instanceof Error ? error.message : "Unknown error",
+            message: getErrorMessage(error),
           });
           throw error;
         } finally {

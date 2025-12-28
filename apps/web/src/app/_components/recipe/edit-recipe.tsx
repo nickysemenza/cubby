@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import type { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
 import { useTRPC } from "~/trpc/react";
-import { useEntityEditMode } from "../hooks/useEntityMode";
+import { useEditMode } from "../hooks/useEditMode";
 import { RecipeForm } from "./recipe-form";
 
 interface EditRecipeFormProps {
@@ -15,15 +15,11 @@ export default function EditRecipeForm({
 }: EditRecipeFormProps) {
   const api = useTRPC();
 
-  const { error, isPending, handleUpdate, handleCancel } = useEntityEditMode<
-    RecipeUpdateInput,
-    void
-  >(api.recipe.update.mutationOptions(), onCancel, {
+  const { error, isPending, handleEdit } = useEditMode<RecipeUpdateInput>({
+    mutationOptions: api.recipe.update.mutationOptions(),
     onSuccess: () => {
       toast.success("Recipe updated successfully!");
-    },
-    onError: () => {
-      toast.error("Failed to update recipe");
+      onCancel();
     },
   });
 
@@ -31,10 +27,10 @@ export default function EditRecipeForm({
     <RecipeForm
       mode="edit"
       entity={recipe}
-      onEdit={handleUpdate}
+      onEdit={handleEdit}
       isPending={isPending}
       error={error}
-      onCancel={handleCancel}
+      onCancel={onCancel}
     />
   );
 }

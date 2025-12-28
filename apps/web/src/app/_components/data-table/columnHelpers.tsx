@@ -8,7 +8,8 @@ import { EntityPillLinkList } from "../EntityPillLinkList";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { NoneState } from "../NoneState";
-import { ImageThumbnail, TableLink } from "../table";
+import { ImageThumbnail } from "../table/ImageThumbnail";
+import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 
 // Extend TanStack Table's meta type to include our custom properties
@@ -109,6 +110,9 @@ export function createImageColumn<T extends ImageRow>(
 // Entity Relationship Columns
 // ============================================================================
 
+/** Props pattern for pill components that take an entity via a named prop */
+type PillProps<TItem> = { [key: string]: TItem };
+
 /**
  * Creates a column that displays a list of related entities as pill links.
  *
@@ -126,8 +130,7 @@ export function createEntityPillColumn<
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
-  Pill: ComponentType<any>,
+  Pill: ComponentType<PillProps<TItem>>,
   pillPropName: string,
   options?: {
     header?: string;
@@ -222,15 +225,14 @@ interface InventoryEntryBase {
 export function createInventoryEntriesColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
+  TEntry extends InventoryEntryBase,
   TRelated extends { id: string; name: string },
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
-  Pill: ComponentType<any>,
+  Pill: ComponentType<PillProps<TRelated>>,
   pillPropName: string,
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
-  getRelatedEntity: (entry: any) => TRelated,
+  getRelatedEntity: (entry: TEntry) => TRelated,
   options?: {
     header?: string;
     className?: string;
@@ -240,14 +242,13 @@ export function createInventoryEntriesColumn<
 ) {
   const layout = options?.layout ?? "stacked";
 
-  // biome-ignore lint/suspicious/noExplicitAny: intentional
-  return columnHelper.accessor((row) => row[accessor] as any[], {
+  return columnHelper.accessor((row) => row[accessor] as TEntry[], {
     id: String(accessor),
     header: options?.header,
     enableSorting: false,
     meta: options?.className ? { className: options.className } : undefined,
     cell: (info) => {
-      const entries = (info.getValue() ?? []) as InventoryEntryBase[];
+      const entries = info.getValue() ?? [];
       if (entries.length === 0) {
         return <NoneState />;
       }
