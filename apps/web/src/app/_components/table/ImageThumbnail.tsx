@@ -1,6 +1,5 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import { NoneState } from "~/app/_components/NoneState";
-import { Image } from "~/components/ui/image";
+import { ImageIcon } from "lucide-react";
+import { ImageWithPreview } from "~/components/ui/image-with-preview";
 
 interface ImageData {
   id: string;
@@ -8,48 +7,51 @@ interface ImageData {
   filename?: string;
 }
 
-const containerVariants = cva("relative overflow-hidden rounded-md border", {
-  variants: {
-    size: {
-      sm: "h-8 w-8",
-      md: "h-12 w-12",
-    },
-  },
-  defaultVariants: {
-    size: "sm",
-  },
-});
+const sizeMap = {
+  sm: 32,
+  md: 48,
+} as const;
 
-interface ImageThumbnailProps extends VariantProps<typeof containerVariants> {
+interface ImageThumbnailProps {
   images: ImageData[];
   alt?: string;
+  size?: keyof typeof sizeMap;
 }
-
-const ImageBadge = ({ count }: { count: number }) => (
-  <div className="absolute right-0 bottom-0 flex h-3 w-3 items-center justify-center rounded-tl-md bg-black/70 text-white text-xs">
-    +{count}
-  </div>
-);
 
 export const ImageThumbnail = ({
   images,
   alt = "Image",
   size = "sm",
 }: ImageThumbnailProps) => {
+  const pixelSize = sizeMap[size];
+
   if (images.length === 0) {
-    return <NoneState />;
+    return (
+      <div
+        className="flex items-center justify-center overflow-hidden rounded-md border bg-muted/30"
+        style={{ width: pixelSize, height: pixelSize }}
+      >
+        <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
+      </div>
+    );
   }
 
   const image = images[0];
 
   return (
-    <div className={containerVariants({ size })}>
-      <Image
+    <div className="relative">
+      <ImageWithPreview
         src={image.url}
         alt={alt}
-        className="absolute inset-0 h-full w-full object-cover"
+        size={pixelSize}
+        previewSize={200}
+        previewSide="right"
       />
-      {images.length > 1 && <ImageBadge count={images.length - 1} />}
+      {images.length > 1 && (
+        <div className="absolute right-0 bottom-0 flex h-4 w-4 items-center justify-center rounded-tl-md bg-black/70 text-[10px] text-white">
+          +{images.length - 1}
+        </div>
+      )}
     </div>
   );
 };

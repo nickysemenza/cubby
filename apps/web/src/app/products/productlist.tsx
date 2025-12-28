@@ -16,7 +16,6 @@ import {
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
-import { NutritionInfoTable } from "../_components/usda/nutrition";
 
 interface ProductListProps {
   initialCategory?: string;
@@ -107,24 +106,20 @@ export function ProductList({ initialCategory }: ProductListProps) {
       }),
       columnHelper.accessor("model", {
         cell: (info) =>
-          info.getValue() ? <code>{info.getValue()}</code> : <NoneState />,
+          info.getValue() ? (
+            <code className="text-xs">{info.getValue()}</code>
+          ) : (
+            <NoneState />
+          ),
       }),
       columnHelper.accessor("food", {
-        id: "food info",
         meta: {
           mobileCategory: "compact",
-          className: "w-96 max-w-96",
         },
         cell: (info) => {
           const food = info.getValue();
           if (!food) return <NoneState />;
-          const { nutritionInfo } = food;
-          return (
-            <div className="w-48">
-              <FoodPillLink food={food} />
-              <NutritionInfoTable n={nutritionInfo} limit={3} />
-            </div>
-          );
+          return <FoodPillLink food={food} />;
         },
       }),
       createInventoryEntriesColumn(

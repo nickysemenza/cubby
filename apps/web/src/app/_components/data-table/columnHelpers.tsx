@@ -2,6 +2,11 @@ import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import type { ComponentType } from "react";
 import type { Amount } from "~/codec/codec";
 import { SpacedContainer } from "~/components/layout/spaced-container";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -48,15 +53,25 @@ export function createNameColumn<T extends BaseRow>(
   const config = {
     id: String(fieldName),
     enableSorting: true,
-    meta: { className: "w-48 max-w-48" },
-    cell: (info: CellContext<T, T[keyof T]>) => (
-      <TableLink
-        to={`/${entities[entity].basePath}/$id` as "/products/$id"}
-        params={{ id: String(info.row.original.id) }}
-      >
-        {String(info.getValue())}
-      </TableLink>
-    ),
+    meta: { className: "w-64 max-w-64" },
+    cell: (info: CellContext<T, T[keyof T]>) => {
+      const value = String(info.getValue());
+      return (
+        <Tooltip>
+          <TooltipTrigger render={<span className="block truncate" />}>
+            <TableLink
+              to={`/${entities[entity].basePath}/$id` as "/products/$id"}
+              params={{ id: String(info.row.original.id) }}
+            >
+              {value}
+            </TableLink>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            {value}
+          </TooltipContent>
+        </Tooltip>
+      );
+    },
   };
 
   // Only add header if it's not the default "name" field
@@ -184,18 +199,23 @@ export function createUnitMappingsColumn<T extends { id: string }>(
     id?: string;
     header?: string;
     className?: string;
+    /** Show compact view (no grid) - defaults to true for table columns */
+    compact?: boolean;
   },
 ) {
+  const compact = options?.compact ?? true;
   return columnHelper.display({
     id: options?.id ?? "unitMappings",
     header: options?.header ?? "Unit Mappings",
-    meta: { className: options?.className ?? "w-96 max-w-96" },
+    meta: {
+      className: options?.className ?? (compact ? "w-40" : "w-96 max-w-96"),
+    },
     cell: (info) => {
       const entity = info.row.original;
       const mappings = mappingsMap[entity.id] ?? [];
       return (
         <div className="w-full">
-          <UnitMappingDisplay mappings={mappings} title="" />
+          <UnitMappingDisplay mappings={mappings} title="" compact={compact} />
         </div>
       );
     },

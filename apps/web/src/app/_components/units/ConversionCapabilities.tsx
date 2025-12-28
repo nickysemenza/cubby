@@ -15,6 +15,8 @@ import { safeConvertAmount } from "./univ-conversion";
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];
   hideConvertButton?: boolean;
+  /** Compact mode hides the grid, showing only the header with Convert button and count badge */
+  compact?: boolean;
 }
 
 interface ConversionTest {
@@ -61,6 +63,7 @@ const testConversions: ConversionTest[] = [
 export function ConversionCapabilities({
   mappings,
   hideConvertButton = false,
+  compact = false,
 }: ConversionCapabilitiesProps) {
   const capabilities = useMemo(() => {
     return testConversions.map((test) => {
@@ -82,7 +85,6 @@ export function ConversionCapabilities({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <h4 className="font-medium text-xs">Unit Mappings</h4>
         <div className="flex items-center gap-2">
           {!hideConvertButton && <ConversionDialog mappings={mappings} />}
           <Badge variant="outline" className="text-muted-foreground">
@@ -91,40 +93,42 @@ export function ConversionCapabilities({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 text-[11px]">
-        {capabilities.map((capability) => {
-          const label = formatKindsLabel(capability.from, capability.to);
-          const FromIcon = kindIconMap[capability.from].Icon;
-          const ToIcon = kindIconMap[capability.to].Icon;
-          return (
-            <div
-              key={`${capability.from}-${capability.to}`}
-              className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
-                capability.success
-                  ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                  : "border border-red-100 bg-red-50/50 text-muted-foreground/60"
-              }`}
-            >
-              <Tooltip>
-                <TooltipTrigger
-                  render={
-                    <div className="flex items-center justify-center gap-1.5 p-0.5" />
-                  }
-                >
-                  <span className="sr-only">{label}</span>
-                  <FromIcon className="h-3.5 w-3.5" aria-hidden />
-                  <ArrowLeftRight
-                    className="h-3.5 w-3.5 opacity-60"
-                    aria-hidden
-                  />
-                  <ToIcon className="h-3.5 w-3.5" aria-hidden />
-                </TooltipTrigger>
-                <TooltipContent sideOffset={6}>{label}</TooltipContent>
-              </Tooltip>
-            </div>
-          );
-        })}
-      </div>
+      {!compact && (
+        <div className="grid grid-cols-3 gap-1 text-[11px]">
+          {capabilities.map((capability) => {
+            const label = formatKindsLabel(capability.from, capability.to);
+            const FromIcon = kindIconMap[capability.from].Icon;
+            const ToIcon = kindIconMap[capability.to].Icon;
+            return (
+              <div
+                key={`${capability.from}-${capability.to}`}
+                className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
+                  capability.success
+                    ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                    : "border border-red-100 bg-red-50/50 text-muted-foreground/60"
+                }`}
+              >
+                <Tooltip>
+                  <TooltipTrigger
+                    render={
+                      <div className="flex items-center justify-center gap-1.5 p-0.5" />
+                    }
+                  >
+                    <span className="sr-only">{label}</span>
+                    <FromIcon className="h-3.5 w-3.5" aria-hidden />
+                    <ArrowLeftRight
+                      className="h-3.5 w-3.5 opacity-60"
+                      aria-hidden
+                    />
+                    <ToIcon className="h-3.5 w-3.5" aria-hidden />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={6}>{label}</TooltipContent>
+                </Tooltip>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
