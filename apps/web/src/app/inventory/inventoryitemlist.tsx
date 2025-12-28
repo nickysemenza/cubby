@@ -5,7 +5,7 @@ import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
-import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
+import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
@@ -74,7 +74,7 @@ export function InventoryItemList() {
           return (
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1 space-y-0.5">
-                <ProductPillLink product={product} minimal />
+                <EntityPillLink entity="product" data={product} minimal />
                 {upc && (
                   <div className="text-muted-foreground text-xs">
                     <TableLink
@@ -100,7 +100,7 @@ export function InventoryItemList() {
         },
         cell: (info) => {
           const item = info.getValue();
-          return <LocationPillLink location={item} minimal />;
+          return <EntityPillLink entity="location" data={item} minimal />;
         },
       }),
       createCreatedAtColumn(columnHelper),

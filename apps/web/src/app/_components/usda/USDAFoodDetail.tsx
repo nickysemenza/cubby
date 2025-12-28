@@ -2,7 +2,6 @@ import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
-import { ProductPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { NutrientsSummary } from "../units/NutrientsSummary";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -139,11 +138,7 @@ export const USDAFoodDetail: React.FC<{
         </div>
       ) : (
         <div className="space-y-4">
-          <EntityPillLinkList
-            items={linkedProducts}
-            Pill={ProductPillLink}
-            pillPropName="product"
-          />
+          <EntityPillLinkList entity="product" items={linkedProducts} />
         </div>
       )}
     </div>

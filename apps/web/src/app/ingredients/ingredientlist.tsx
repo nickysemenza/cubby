@@ -14,7 +14,6 @@ import {
 } from "../_components/data-table/columnHelpers";
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import RTable from "../_components/data-table/Table";
-import { ProductPillLink, RecipePillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { IngredientMerger } from "./ingredient-merger";
 
@@ -66,23 +65,15 @@ export function IngredientList() {
         ),
       }),
       createCreatedAtColumn(columnHelper),
-      createEntityPillColumn(
-        columnHelper,
-        "appearsInRecipes",
-        RecipePillLink,
-        "recipe",
-        { className: "w-48 max-w-48", dedupe: true, minimal: true },
-      ),
-      createEntityPillColumn(
-        columnHelper,
-        "product",
-        ProductPillLink,
-        "product",
-        {
-          className: "w-48 max-w-48",
-          minimal: true,
-        },
-      ),
+      createEntityPillColumn(columnHelper, "appearsInRecipes", "recipe", {
+        className: "w-48 max-w-48",
+        dedupe: true,
+        minimal: true,
+      }),
+      createEntityPillColumn(columnHelper, "product", "product", {
+        className: "w-48 max-w-48",
+        minimal: true,
+      }),
     ],
     filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
     globalFilter,

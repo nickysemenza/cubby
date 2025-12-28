@@ -1,9 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  LocationPillLink,
-  ProductPillLink,
-  RecipePillLink,
-} from "~/app/_components/EntityPill";
+import { EntityPillLink } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import { PageWrapper } from "~/components/layout/page-wrapper";
@@ -80,8 +76,9 @@ export default function ImageDetailPage({ id }: ImageDetailPageProps) {
     switch (imageDetails.entityType) {
       case "PRODUCT":
         return (
-          <ProductPillLink
-            product={{
+          <EntityPillLink
+            entity="product"
+            data={{
               id: imageDetails.entityId,
               name: imageDetails.entityName,
               manufacturer: "", // We don't have this info here
@@ -90,18 +87,20 @@ export default function ImageDetailPage({ id }: ImageDetailPageProps) {
         );
       case "LOCATION":
         return (
-          <LocationPillLink
-            location={{
+          <EntityPillLink
+            entity="location"
+            data={{
               id: imageDetails.entityId,
               name: imageDetails.entityName,
-              type: "", // We don't have this info here
+              type: "room", // Default fallback - actual type not available in image context
             }}
           />
         );
       case "RECIPE":
         return (
-          <RecipePillLink
-            recipe={{
+          <EntityPillLink
+            entity="recipe"
+            data={{
               id: imageDetails.entityId,
               name: imageDetails.entityName,
             }}

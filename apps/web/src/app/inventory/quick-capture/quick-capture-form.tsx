@@ -27,7 +27,7 @@ import {
   buildProductComboboxItem,
 } from "~/app/_components/combobox/combobox-builders";
 import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
-import { ProductPillLink } from "~/app/_components/EntityPill";
+import { EntityPillLink } from "~/app/_components/EntityPill";
 import {
   ComboboxField,
   ComboboxFieldWithSearch,
@@ -486,7 +486,7 @@ export default function QuickCaptureForm({
                 <div className="flex flex-wrap gap-1">
                   {inventoryAtLocation.items.map((item) => (
                     <div key={item.id} className="flex items-center gap-1">
-                      <ProductPillLink product={item.product} />
+                      <EntityPillLink entity="product" data={item.product} />
                       <span className="text-muted-foreground text-xs">
                         ({item.amount.value} {item.amount.unit})
                       </span>

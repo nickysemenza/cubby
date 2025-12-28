@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
-import { IngredientPillLink } from "../_components/EntityPill";
+import { EntityPillLink } from "../_components/EntityPill";
 
 interface IngredientMergerProps {
   table: Table<IngredientWithFoodOut>;
@@ -38,10 +38,17 @@ export function IngredientMerger({ table }: IngredientMergerProps) {
   return (
     <div className="border-1 border-border border-dashed p-2">
       <h3>target</h3>
-      <IngredientPillLink name={target.name} id={target.id} />
+      <EntityPillLink
+        entity="ingredient"
+        data={{ name: target.name, id: target.id }}
+      />
       <h3>aliases to create</h3>
       {aliases.map((a) => (
-        <IngredientPillLink key={a.id} name={a.name} id={a.id} />
+        <EntityPillLink
+          key={a.id}
+          entity="ingredient"
+          data={{ name: a.name, id: a.id }}
+        />
       ))}
       <Button onClick={() => doMerge()}>merge</Button>
     </div>

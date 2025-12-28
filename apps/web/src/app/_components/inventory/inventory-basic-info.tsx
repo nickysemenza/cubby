@@ -2,7 +2,7 @@ import type { FC } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { LocationPillLink, ProductPillLink } from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { UnitMappingGraph } from "../units/UnitMappingGraph";
 import { showAmountAndPrice } from "./format-amount";
 
@@ -25,8 +25,8 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
           inventoryitem.product.unitMappings,
         )}
       </div>
-      <LocationPillLink location={inventoryitem.location} />
-      <ProductPillLink product={inventoryitem.product} />
+      <EntityPillLink entity="location" data={inventoryitem.location} />
+      <EntityPillLink entity="product" data={inventoryitem.product} />
       <div className="rounded-md bg-muted p-4">
         <UnitMappingGraph unitMapping={inventoryitem.product.unitMappings} />
       </div>

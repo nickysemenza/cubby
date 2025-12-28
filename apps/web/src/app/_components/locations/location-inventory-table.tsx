@@ -38,7 +38,7 @@ import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 import { buildSelectColumn } from "../data-table/row-selection";
-import { ProductPillLink } from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
 import { showAmountAndPrice } from "../inventory/format-amount";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
@@ -97,7 +97,7 @@ export function LocationInventoryTable({
           const product = info.getValue();
           return (
             <div className="space-y-0.5">
-              <ProductPillLink product={product} />
+              <EntityPillLink entity="product" data={product} />
             </div>
           );
         },

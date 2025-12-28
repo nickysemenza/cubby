@@ -6,7 +6,7 @@ import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
-import { ProductPillLink } from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { InventoryValueSummary } from "./inventory-value-summary";
 import { getLocationIcon, LocationIcon } from "./location-icons";
 
@@ -137,7 +137,7 @@ function LocationCard({
           {inventoryData.items.slice(0, 2).map((item) => (
             <div key={item.id} className="flex items-center gap-1 text-xs">
               <div className="h-1 w-1 rounded-full bg-primary" />
-              <ProductPillLink product={item.product} />
+              <EntityPillLink entity="product" data={item.product} />
             </div>
           ))}
           {inventoryCount > 2 && (

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LocationPillLinkCompact } from "~/app/_components/EntityPill";
+import { EntityPillLink } from "~/app/_components/EntityPill";
 import type { LocationId } from "~/schemas/identifiers";
 import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -170,12 +170,14 @@ function TidyTree({ data }: TidyTreeProps) {
                     <div
                       className={`flex ${hasChildren ? "justify-end" : "justify-start"}`}
                     >
-                      <LocationPillLinkCompact
-                        location={{
+                      <EntityPillLink
+                        entity="location"
+                        data={{
                           name: node.data.name,
                           id: node.data.id,
                           type: node.data.type,
                         }}
+                        minimal
                       />
                     </div>
                   </foreignObject>

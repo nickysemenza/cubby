@@ -8,7 +8,7 @@ import {
   WithIngredientSearch,
   WithRecipeSearch,
 } from "../../combobox/with-search-hook";
-import { IngredientPillLink, RecipePillLink } from "../../EntityPill";
+import { EntityPillLink } from "../../EntityPill";
 import { ComboboxField } from "../../form-utils";
 import { AmountFieldArray } from "./amount-field-array";
 import { FieldArrayItemControls } from "./field-array-item-controls";
@@ -104,14 +104,17 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                               `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient`,
                             ) && (
                               <div className="mt-1">
-                                <IngredientPillLink
-                                  id={form.watch(
-                                    `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.id`,
-                                  )}
-                                  name={form.watch(
-                                    `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.name`,
-                                  )}
-                                  openInNewTab={true}
+                                <EntityPillLink
+                                  entity="ingredient"
+                                  data={{
+                                    id: form.watch(
+                                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.id`,
+                                    ),
+                                    name: form.watch(
+                                      `sections.${sectionIndex}.ingredients.${ingredientIndex}.ingredient.name`,
+                                    ),
+                                  }}
+                                  openInNewTab
                                 />
                               </div>
                             )}
@@ -136,8 +139,9 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                               `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe`,
                             ) && (
                               <div className="mt-1">
-                                <RecipePillLink
-                                  recipe={{
+                                <EntityPillLink
+                                  entity="recipe"
+                                  data={{
                                     id: form.watch(
                                       `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe.id`,
                                     ),
@@ -145,7 +149,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                                       `sections.${sectionIndex}.ingredients.${ingredientIndex}.recipe.name`,
                                     ),
                                   }}
-                                  openInNewTab={true}
+                                  openInNewTab
                                 />
                               </div>
                             )}

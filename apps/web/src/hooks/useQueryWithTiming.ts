@@ -12,6 +12,7 @@ type UseQueryWithTimingResult<TData, TError> = UseQueryResult<TData, TError> & {
 
 /**
  * Wrapper around useQuery that tracks query execution time.
+ * Accepts both react-query UseQueryOptions and tRPC queryOptions return types.
  *
  * @example
  * ```tsx
@@ -26,7 +27,10 @@ export const useQueryWithTiming = <
   TError = Error,
   TData = TQueryFnData,
 >(
-  options: UseQueryOptions<TQueryFnData, TError, TData>,
+  options:
+    | UseQueryOptions<TQueryFnData, TError, TData>
+    // biome-ignore lint/suspicious/noExplicitAny: Accept both react-query and tRPC queryOptions types
+    | (Record<string, any> & { queryKey: readonly unknown[] }),
 ): UseQueryWithTimingResult<TData, TError> => {
   const query = useQuery(options);
   const { isFetching } = query;

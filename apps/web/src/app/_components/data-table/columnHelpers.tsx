@@ -1,5 +1,4 @@
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
-import type { ComponentType } from "react";
 import type { Amount } from "~/codec/codec";
 import { SpacedContainer } from "~/components/layout/spaced-container";
 import {
@@ -9,6 +8,8 @@ import {
 } from "~/components/ui/tooltip";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
+import type { LocationType } from "~/schemas/location";
+import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -141,28 +142,37 @@ export function createImageColumn<T extends ImageRow>(
 // Entity Relationship Columns
 // ============================================================================
 
-/** Props pattern for pill components that take an entity via a named prop */
-type PillProps<TItem> = { [key: string]: TItem };
+// Entity-specific data types for columns
+type EntityColumnData =
+  | { entity: "ingredient"; items: { name: string; id: string }[] }
+  | {
+      entity: "product";
+      items: { name: string; id: string; manufacturer: string }[];
+    }
+  | { entity: "recipe"; items: { name: string; id: string }[] }
+  | {
+      entity: "location";
+      items: { name: string; id: string; type: LocationType }[];
+    };
 
 /**
  * Creates a column that displays a list of related entities as pill links.
  *
  * @example
  * // For displaying location children
- * createEntityPillColumn(columnHelper, "children", LocationPillLink, "location")
+ * createEntityPillColumn(columnHelper, "children", "location")
  *
  * // For displaying products linked to an ingredient
- * createEntityPillColumn(columnHelper, "product", ProductPillLink, "product", { className: "w-48" })
+ * createEntityPillColumn(columnHelper, "product", "product", { className: "w-48" })
  */
 export function createEntityPillColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
-  TItem extends { id: string; name: string },
+  TEntity extends EntityColumnData["entity"],
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  Pill: ComponentType<PillProps<TItem> & { minimal?: boolean }>,
-  pillPropName: string,
+  entity: TEntity,
   options?: {
     header?: string;
     className?: string;
@@ -172,29 +182,31 @@ export function createEntityPillColumn<
     minimal?: boolean;
   },
 ) {
-  return columnHelper.accessor((row) => row[accessor] as TItem[], {
-    id: String(accessor),
-    header: options?.header,
-    enableSorting: false,
-    meta: options?.className ? { className: options.className } : undefined,
-    cell: (info) => {
-      let items = info.getValue() ?? [];
-      if (options?.dedupe) {
-        items = items.filter(
-          (item, i, arr) =>
-            arr.findIndex((other) => other.id === item.id) === i,
+  return columnHelper.accessor(
+    (row) => row[accessor] as { id: string; name: string }[],
+    {
+      id: String(accessor),
+      header: options?.header,
+      enableSorting: false,
+      meta: options?.className ? { className: options.className } : undefined,
+      cell: (info) => {
+        let items = info.getValue() ?? [];
+        if (options?.dedupe) {
+          items = items.filter(
+            (item, i, arr) =>
+              arr.findIndex((other) => other.id === item.id) === i,
+          );
+        }
+        return (
+          <EntityPillLinkList
+            entity={entity}
+            items={items as never}
+            minimal={options?.minimal}
+          />
         );
-      }
-      return (
-        <EntityPillLinkList
-          items={items}
-          Pill={Pill}
-          pillPropName={pillPropName}
-          minimal={options?.minimal}
-        />
-      );
+      },
     },
-  });
+  );
 }
 
 // ============================================================================
@@ -249,9 +261,20 @@ interface InventoryEntryBase {
   id: string;
   amount: Amount;
   // Optional related entities - either location (in ProductList) or product (in LocationList)
-  location?: { id: string; name: string };
-  product?: { id: string; name: string };
+  location?: { id: string; name: string; type: LocationType };
+  product?: { id: string; name: string; manufacturer: string };
 }
+
+// Discriminated union for inventory column entity types
+type InventoryRelatedEntity =
+  | {
+      entity: "location";
+      data: { id: string; name: string; type: LocationType };
+    }
+  | {
+      entity: "product";
+      data: { id: string; name: string; manufacturer: string };
+    };
 
 /**
  * Creates a column that displays inventory entries with amounts and related entity pills.
@@ -259,22 +282,23 @@ interface InventoryEntryBase {
  *
  * @example
  * // In ProductList - show locations for each inventory entry
- * createInventoryEntriesColumn(columnHelper, "inventoryEntry", LocationPillLink, "location", (e) => e.location)
+ * createInventoryEntriesColumn(columnHelper, "inventoryEntry", "location", (e) => e.location)
  *
  * // In LocationList - show products for each inventory entry
- * createInventoryEntriesColumn(columnHelper, "inventoryEntries", ProductPillLink, "product", (e) => e.product)
+ * createInventoryEntriesColumn(columnHelper, "inventoryEntries", "product", (e) => e.product)
  */
 export function createInventoryEntriesColumn<
   T extends Record<string, unknown>,
   K extends keyof T,
   TEntry extends InventoryEntryBase,
-  TRelated extends { id: string; name: string },
+  TEntity extends InventoryRelatedEntity["entity"],
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  Pill: ComponentType<PillProps<TRelated> & { minimal?: boolean }>,
-  pillPropName: string,
-  getRelatedEntity: (entry: TEntry) => TRelated,
+  entity: TEntity,
+  getRelatedEntity: (
+    entry: TEntry,
+  ) => Extract<InventoryRelatedEntity, { entity: TEntity }>["data"] | undefined,
   options?: {
     header?: string;
     className?: string;
@@ -302,26 +326,32 @@ export function createInventoryEntriesColumn<
         // Compact inline: "1 whole @ location, 2 each @ other"
         return (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            {entries.map((entry, i) => (
-              <span key={entry.id} className="inline-flex items-center gap-1">
-                <span className="text-muted-foreground">
-                  {tryFormatAmount(entry.amount)}
+            {entries.map((entry, i) => {
+              const related = getRelatedEntity(entry);
+              if (!related) return null;
+              return (
+                <span key={entry.id} className="inline-flex items-center gap-1">
+                  <span className="text-muted-foreground">
+                    {tryFormatAmount(entry.amount)}
+                  </span>
+                  <span className="text-muted-foreground/50">@</span>
+                  <EntityPillLink
+                    entity={entity}
+                    data={related as never}
+                    minimal={minimal}
+                  />
+                  {i < entries.length - 1 && (
+                    <span className="text-muted-foreground/30">,</span>
+                  )}
                 </span>
-                <span className="text-muted-foreground/50">@</span>
-                <Pill
-                  {...{ [pillPropName]: getRelatedEntity(entry) }}
-                  minimal={minimal}
-                />
-                {i < entries.length - 1 && (
-                  <span className="text-muted-foreground/30">,</span>
-                )}
-              </span>
-            ))}
+              );
+            })}
           </div>
         );
       }
 
       // Stacked layout: amounts grouped, then pills grouped
+      const relatedEntities = entries.map(getRelatedEntity).filter(Boolean);
       return (
         <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
@@ -330,9 +360,8 @@ export function createInventoryEntriesColumn<
             ))}
           </div>
           <EntityPillLinkList
-            items={entries.map(getRelatedEntity)}
-            Pill={Pill}
-            pillPropName={pillPropName}
+            entity={entity}
+            items={relatedEntities as never}
           />
         </SpacedContainer>
       );

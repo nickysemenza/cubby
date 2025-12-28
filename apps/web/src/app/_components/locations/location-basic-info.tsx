@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { Button } from "~/components/ui/button";
 import type { InfLocation } from "~/schemas/location";
-import { LocationPillLink } from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { NoneState } from "../NoneState";
 import { LocationIconWithLabel } from "./location-icons";
 
@@ -30,7 +30,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
       <div>
         <span className="font-medium">Parent Location:</span>{" "}
         {location.parent ? (
-          <LocationPillLink location={location.parent} />
+          <EntityPillLink entity="location" data={location.parent} />
         ) : (
           <NoneState />
         )}

@@ -2,11 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 import { Button } from "~/components/ui/button";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
-import {
-  FoodPillLink,
-  IngredientPillLink,
-  LocationPillLink,
-} from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { NoneState } from "../NoneState";
 
@@ -74,16 +70,19 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         {product.ingredient && (
           <div>
             <span className="font-medium">Ingredient:</span>{" "}
-            <IngredientPillLink
-              name={product.ingredient.name}
-              id={product.ingredient.id}
+            <EntityPillLink
+              entity="ingredient"
+              data={{
+                name: product.ingredient.name,
+                id: product.ingredient.id,
+              }}
             />
           </div>
         )}
         {product.food && (
           <div>
             <span className="font-medium">USDA Food:</span>{" "}
-            <FoodPillLink food={product.food} />
+            <EntityPillLink entity="usda-food" data={product.food} />
           </div>
         )}
         {product.inventoryEntry && product.inventoryEntry.length > 0 && (
@@ -91,13 +90,12 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             <span className="font-medium">Inventory Locations:</span>{" "}
             <div className="mt-1 flex flex-wrap gap-1">
               <EntityPillLinkList
+                entity="location"
                 items={product.inventoryEntry.map((entry) => ({
                   id: entry.location.id,
                   name: entry.location.name,
                   type: entry.location.type,
                 }))}
-                Pill={LocationPillLink}
-                pillPropName="location"
               />
             </div>
           </div>

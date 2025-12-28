@@ -6,7 +6,7 @@ import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { useTableState } from "../_components/data-table/useTableState";
-import { ProductPillLink } from "../_components/EntityPill";
+import { EntityPillLink } from "../_components/EntityPill";
 import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
@@ -130,7 +130,11 @@ export function USDAFoodList() {
         return (
           <div className="flex flex-wrap gap-1">
             {products.map((product) => (
-              <ProductPillLink key={product.id} product={product} />
+              <EntityPillLink
+                key={product.id}
+                entity="product"
+                data={product}
+              />
             ))}
           </div>
         );

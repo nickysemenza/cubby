@@ -8,11 +8,7 @@ import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import { createInventoryEntriesColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
-import {
-  FoodPillLink,
-  IngredientPillLink,
-  LocationPillLink,
-} from "../_components/EntityPill";
+import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
@@ -71,7 +67,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const ingredient = info.getValue();
           return ingredient ? (
-            <IngredientPillLink ingredient={ingredient} minimal />
+            <EntityPillLink entity="ingredient" data={ingredient} minimal />
           ) : (
             <NoneState />
           );
@@ -143,13 +139,12 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const food = info.getValue();
           if (!food) return <NoneState />;
-          return <FoodPillLink food={food} minimal />;
+          return <EntityPillLink entity="usda-food" data={food} minimal />;
         },
       }),
       createInventoryEntriesColumn(
         columnHelper,
         "inventoryEntry",
-        LocationPillLink,
         "location",
         (e) => e.location,
         { minimal: true },

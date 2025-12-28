@@ -5,7 +5,6 @@ import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
-import { ProductPillLink, RecipePillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { UnitMappingsTable } from "../units/unitmappingstable";
@@ -84,11 +83,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     {
       title: "Related Products",
       content: (
-        <EntityPillLinkList
-          items={ingredient.product}
-          Pill={ProductPillLink}
-          pillPropName="product"
-        />
+        <EntityPillLinkList entity="product" items={ingredient.product} />
       ),
     },
     // Custom section: Unit Mappings (uses UnitMappingsTable, not UnitMappingDisplay)
@@ -101,9 +96,8 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Appears In Recipes",
       content: (
         <EntityPillLinkList
+          entity="recipe"
           items={ingredient.appearsInRecipes}
-          Pill={RecipePillLink}
-          pillPropName="recipe"
         />
       ),
     },

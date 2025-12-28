@@ -1,32 +1,58 @@
 import type React from "react";
+import type { LocationType } from "~/schemas/location";
+import { EntityPillLink } from "./EntityPill";
 import { NoneState } from "./NoneState";
 
-interface EntityPillLinkListProps<T, P extends { [K in keyof P]: unknown }> {
-  items?: T[];
-  Pill: React.ComponentType<P>;
-  pillPropName: keyof P;
-  getKey?: (item: T) => string | number;
+// Discriminated union for entity-specific list data
+type EntityPillLinkListProps = {
   minimal?: boolean;
-}
+} & (
+  | {
+      entity: "ingredient";
+      items?: { name: string; id: string }[];
+    }
+  | {
+      entity: "product";
+      items?: { name: string; id: string; manufacturer: string }[];
+    }
+  | {
+      entity: "recipe";
+      items?: { name: string; id: string }[];
+    }
+  | {
+      entity: "location";
+      items?: { name: string; id: string; type: LocationType }[];
+    }
+  | {
+      entity: "usda-food";
+      items?: { foodInfo: { description: string | null }; fdc_id: number }[];
+    }
+);
 
-export function EntityPillLinkList<T, P extends { [K in keyof P]: unknown }>({
-  items,
-  Pill,
-  pillPropName,
-  getKey,
-  minimal,
-}: EntityPillLinkListProps<T, P>) {
+export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
+  props,
+) => {
+  const { items, minimal } = props;
+
   if (!items || items.length === 0) {
     return <NoneState />;
   }
 
   return (
     <div className="space-y-0.5">
-      {items.map((item, index) => (
-        <div key={getKey ? getKey(item) : index}>
-          <Pill {...({ [pillPropName]: item, minimal } as P)} />
-        </div>
-      ))}
+      {items.map((item, index) => {
+        const key =
+          "id" in item ? item.id : "fdc_id" in item ? item.fdc_id : index;
+        return (
+          <div key={key}>
+            <EntityPillLink
+              entity={props.entity}
+              data={item as never}
+              minimal={minimal}
+            />
+          </div>
+        );
+      })}
     </div>
   );
-}
+};

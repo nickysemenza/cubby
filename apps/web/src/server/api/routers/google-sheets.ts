@@ -1412,12 +1412,15 @@ const applySync = protectedProcedure
         await updateLastSyncTimestamp(ctx, orgMetadata);
 
         span.setAttributes({
-          "sync.locationsImported": results.locationsImported,
-          "sync.locationsDeleted": results.locationsDeleted,
-          "sync.locationsRenamed": results.locationsRenamed,
-          "sync.inventoryImported": results.inventoryImported,
-          "sync.inventoryDeleted": results.inventoryDeleted,
-          "sync.inventoryRenamed": results.inventoryRenamed,
+          "sync.locationsCreated": results.locations.created,
+          "sync.locationsUpdated": results.locations.updated,
+          "sync.locationsDeleted": results.locations.deleted,
+          "sync.locationsErrors": results.locations.errors,
+          "sync.inventoryCreated": results.inventory.created,
+          "sync.inventoryUpdated": results.inventory.updated,
+          "sync.inventoryDeleted": results.inventory.deleted,
+          "sync.inventoryMoved": results.inventory.moved,
+          "sync.inventoryErrors": results.inventory.errors,
           "sync.success": results.errorMessages.length === 0,
         });
 

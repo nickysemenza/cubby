@@ -227,10 +227,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     const processedColumns = stableColumns.map((col) => {
       // If enableSorting is explicitly set, respect it
       if (col.enableSorting !== undefined) return col;
-      // Get column id from id or accessorKey
-      const colId =
-        col.id ??
-        (typeof col.accessorKey === "string" ? col.accessorKey : null);
+      // Get column id from id or accessorKey (need to cast for accessorKey access)
+      const accessorCol = col as { accessorKey?: string };
+      const colId = col.id ?? accessorCol.accessorKey ?? null;
       // Auto-disable sorting for columns not in sortableFields
       const canSort = colId ? sortableFields.includes(colId) : false;
       return { ...col, enableSorting: canSort };

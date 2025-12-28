@@ -5,11 +5,7 @@ import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { useTableConfig } from "~/app/_components/data-table/useTableConfig";
 import { useTableState } from "~/app/_components/data-table/useTableState";
-import {
-  LocationPillLink,
-  ProductPillLink,
-  RecipePillLink,
-} from "~/app/_components/EntityPill";
+import { EntityPillLink } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
 import { NoneState } from "~/app/_components/NoneState";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
@@ -129,8 +125,9 @@ export default function ImageList() {
           switch (entityType) {
             case "PRODUCT":
               return (
-                <ProductPillLink
-                  product={{
+                <EntityPillLink
+                  entity="product"
+                  data={{
                     id: entityId,
                     name: entityName,
                     manufacturer: "", // We don't have this info here
@@ -140,8 +137,9 @@ export default function ImageList() {
               );
             case "LOCATION":
               return (
-                <LocationPillLink
-                  location={{
+                <EntityPillLink
+                  entity="location"
+                  data={{
                     id: entityId,
                     name: entityName,
                     type: "room", // Default type for minimal display
@@ -151,8 +149,9 @@ export default function ImageList() {
               );
             case "RECIPE":
               return (
-                <RecipePillLink
-                  recipe={{
+                <EntityPillLink
+                  entity="recipe"
+                  data={{
                     id: entityId,
                     name: entityName,
                   }}

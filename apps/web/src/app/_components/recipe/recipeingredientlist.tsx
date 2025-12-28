@@ -21,7 +21,7 @@ import type { SectionIngredientOut } from "~/schemas/recipe";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import RTable from "../data-table/Table";
-import { IngredientPillLink, RecipePillLink } from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { getIngredientName } from "./recipeutils";
@@ -131,13 +131,16 @@ export const RecipeIngredientList: React.FC<{
 
         if (row.type === "ingredient") {
           return (
-            <IngredientPillLink
-              name={row.ingredient.name}
-              id={row.ingredient.id}
+            <EntityPillLink
+              entity="ingredient"
+              data={{
+                name: row.ingredient.name,
+                id: row.ingredient.id,
+              }}
             />
           );
         } else if (row.type === "recipe") {
-          return <RecipePillLink recipe={row.recipe} />;
+          return <EntityPillLink entity="recipe" data={row.recipe} />;
         }
 
         return null;

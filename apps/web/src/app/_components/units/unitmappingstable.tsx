@@ -11,7 +11,7 @@ import {
 import { wasm } from "~/lib/wasm";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { useTRPC } from "~/trpc/react";
-import { FoodPillLink, ProductPillLink } from "../EntityPill";
+import { EntityPillLink } from "../EntityPill";
 import { NoneState } from "../NoneState";
 
 // Component for lazy loading food data and rendering FoodPillLink
@@ -33,7 +33,7 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
     foodInfo: { description: `food ${fdcId}${isLoading ? "..." : ""}` },
   };
 
-  return <FoodPillLink food={displayFood} />;
+  return <EntityPillLink entity="usda-food" data={displayFood} />;
 };
 
 // Component for lazy loading product data and rendering ProductPillLink
@@ -58,7 +58,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
     manufacturer: "",
   };
 
-  return <ProductPillLink product={displayProduct} />;
+  return <EntityPillLink entity="product" data={displayProduct} />;
 };
 
 // Helper function to render source with metadata-based links

@@ -17,7 +17,7 @@ import {
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
-import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
+import { EntityPillLink } from "../_components/EntityPill";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
@@ -41,19 +41,17 @@ export function LocationList() {
       createNameColumn(columnHelper, "location", "name", {
         filterConfig: { placeholder: "Filter by location name..." },
       }),
-      createEntityPillColumn(
-        columnHelper,
-        "children",
-        LocationPillLink,
-        "location",
-        { minimal: true },
-      ),
+      createEntityPillColumn(columnHelper, "children", "location", {
+        minimal: true,
+      }),
       columnHelper.accessor("parent", {
         enableSorting: false,
         cell: (info) => {
           const item = info.getValue();
           return (
-            <div>{item && <LocationPillLink location={item} minimal />}</div>
+            <div>
+              {item && <EntityPillLink entity="location" data={item} minimal />}
+            </div>
           );
         },
       }),
@@ -89,7 +87,6 @@ export function LocationList() {
       createInventoryEntriesColumn(
         columnHelper,
         "inventoryEntries",
-        ProductPillLink,
         "product",
         (e) => e.product,
         { layout: "inline", minimal: true },

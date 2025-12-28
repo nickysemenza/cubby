@@ -2,12 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import type { AuditEntityType } from "~/server/repo/audit-log";
 import { useTRPC } from "~/trpc/react";
-import {
-  IngredientPillLink,
-  LocationPillLink,
-  ProductPillLink,
-  RecipePillLink,
-} from "./EntityPill";
+import { EntityPillLink } from "./EntityPill";
 
 interface EntityPillByIdProps {
   entityType: AuditEntityType;
@@ -21,7 +16,7 @@ interface EntityPillByIdProps {
 export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
   const trpc = useTRPC();
 
-  // Select the appropriate query based on entity type
+  // All queries must be called unconditionally (React hooks rules)
   const productQuery = useQuery({
     ...trpc.product.getByID.queryOptions({ id: entityId }),
     enabled: entityType === "product",
@@ -42,8 +37,7 @@ export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
     enabled: entityType === "ingredient",
   });
 
-  // Inventory entries don't have a direct getByID that returns product info,
-  // so we'll just show a simple link for now
+  // Inventory entries don't have a getByID that returns product info
   if (entityType === "inventory") {
     return (
       <a
@@ -55,44 +49,26 @@ export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
     );
   }
 
-  // Loading state
-  const isLoading =
-    (entityType === "product" && productQuery.isLoading) ||
-    (entityType === "location" && locationQuery.isLoading) ||
-    (entityType === "recipe" && recipeQuery.isLoading) ||
-    (entityType === "ingredient" && ingredientQuery.isLoading);
+  // Lookup pattern for loading and data
+  const queries = {
+    product: productQuery,
+    location: locationQuery,
+    recipe: recipeQuery,
+    ingredient: ingredientQuery,
+  } as const;
 
-  if (isLoading) {
+  const query = queries[entityType as keyof typeof queries];
+  if (query?.isLoading) {
     return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
   }
 
-  // Render the appropriate pill based on entity type
-  switch (entityType) {
-    case "product":
-      if (productQuery.data) {
-        return <ProductPillLink product={productQuery.data} />;
-      }
-      break;
-    case "location":
-      if (locationQuery.data) {
-        return <LocationPillLink location={locationQuery.data} />;
-      }
-      break;
-    case "recipe":
-      if (recipeQuery.data) {
-        return <RecipePillLink recipe={recipeQuery.data} />;
-      }
-      break;
-    case "ingredient":
-      if (ingredientQuery.data) {
-        return (
-          <IngredientPillLink
-            name={ingredientQuery.data.name}
-            id={ingredientQuery.data.id}
-          />
-        );
-      }
-      break;
+  if (query?.data) {
+    return (
+      <EntityPillLink
+        entity={entityType as "product" | "location" | "recipe" | "ingredient"}
+        data={query.data as never}
+      />
+    );
   }
 
   // Fallback for errors or missing data (entity might have been deleted)
