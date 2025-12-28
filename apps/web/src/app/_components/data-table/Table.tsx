@@ -89,168 +89,176 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       />
 
       {/* Desktop Table View */}
-      <Table aria-label={ariaLabel} className={cn(styles.table)}>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className={cn(styles.row)}>
-              {headerGroup.headers.map((header) => {
-                const sortDirection = header.column.getIsSorted();
-                const canSort = header.column.getCanSort();
-                const sortingArrows =
-                  sortDirection === "desc" ? (
-                    <ArrowDown className={styles.sortIcon} aria-hidden="true" />
-                  ) : sortDirection === "asc" ? (
-                    <ArrowUp className={styles.sortIcon} aria-hidden="true" />
-                  ) : (
-                    <ArrowUpDown
-                      className={styles.sortIcon}
-                      aria-hidden="true"
-                    />
-                  );
-
-                const contents = (
-                  <>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                    {canSort && sortingArrows}
-                  </>
-                );
-                return (
-                  <TableHead
-                    key={header.id}
-                    colSpan={header.colSpan}
-                    aria-sort={
-                      sortDirection === "asc"
-                        ? "ascending"
-                        : sortDirection === "desc"
-                          ? "descending"
-                          : "none"
-                    }
-                    className={cn(
-                      header.column.columnDef.meta?.className,
-                      styles.header,
-                    )}
-                  >
-                    {canSort ? (
-                      <Button
-                        variant="ghost"
-                        size={isDense ? "sm" : "default"}
-                        className={cn(isDense && "h-5 px-1 text-[11px]")}
-                        onClick={() =>
-                          header.column.toggleSorting(
-                            header.column.getIsSorted() === "asc",
-                          )
-                        }
-                      >
-                        {contents}
-                      </Button>
+      <div className="hidden lg:block [&_[data-slot=table-container]]:overflow-visible">
+        <Table aria-label={ariaLabel} className={cn(styles.table)}>
+          <TableHeader className="sticky top-0 z-20 bg-background shadow-sm">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id} className={cn(styles.row)}>
+                {headerGroup.headers.map((header) => {
+                  const sortDirection = header.column.getIsSorted();
+                  const canSort = header.column.getCanSort();
+                  const sortingArrows =
+                    sortDirection === "desc" ? (
+                      <ArrowDown
+                        className={styles.sortIcon}
+                        aria-hidden="true"
+                      />
+                    ) : sortDirection === "asc" ? (
+                      <ArrowUp className={styles.sortIcon} aria-hidden="true" />
                     ) : (
-                      contents
-                    )}
-                  </TableHead>
-                );
-              })}
-              {/* Add debug header when debug mode is enabled */}
-              {isDebugEnabled && (
-                <TableHead className={cn(styles.header)}>Debug</TableHead>
-              )}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody
-          className={
-            !isLoading && table.getRowModel().rows?.length
-              ? "stagger-children"
-              : undefined
-          }
-        >
-          {isLoading ? (
-            <TableRow>
-              <TableCell
-                colSpan={
-                  table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
-                }
-                className="h-16 text-center"
-              >
-                <div className="flex items-center justify-center gap-2">
-                  <Spinner />
-                  <span>Loading...</span>
-                </div>
-              </TableCell>
-            </TableRow>
-          ) : table.getRowModel().rows?.length ? (
-            table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                data-state={row.getIsSelected() && "selected"}
-                className={cn(styles.row)}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell
-                    key={cell.id}
-                    className={cn(
-                      cell.column.columnDef.meta?.className,
-                      styles.cell,
-                    )}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-                {/* Add debug cell when debug mode is enabled */}
-                {isDebugEnabled && (
-                  <TableCell className={cn(styles.cell)}>
-                    <DebugDialog
-                      data={row.original}
-                      title={`Debug Data - Row ${row.id}`}
-                      trigger={
+                      <ArrowUpDown
+                        className={styles.sortIcon}
+                        aria-hidden="true"
+                      />
+                    );
+
+                  const contents = (
+                    <>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext(),
+                          )}
+                      {canSort && sortingArrows}
+                    </>
+                  );
+                  return (
+                    <TableHead
+                      key={header.id}
+                      colSpan={header.colSpan}
+                      aria-sort={
+                        sortDirection === "asc"
+                          ? "ascending"
+                          : sortDirection === "desc"
+                            ? "descending"
+                            : "none"
+                      }
+                      className={cn(
+                        header.column.columnDef.meta?.className,
+                        styles.header,
+                      )}
+                    >
+                      {canSort ? (
                         <Button
                           variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0"
+                          size={isDense ? "sm" : "default"}
+                          className={cn(isDense && "h-5 px-1 text-[11px]")}
+                          onClick={() =>
+                            header.column.toggleSorting(
+                              header.column.getIsSorted() === "asc",
+                            )
+                          }
                         >
-                          <Bug className="h-4 w-4" />
-                          <span className="sr-only">Debug row data</span>
+                          {contents}
                         </Button>
-                      }
-                    />
-                  </TableCell>
+                      ) : (
+                        contents
+                      )}
+                    </TableHead>
+                  );
+                })}
+                {/* Add debug header when debug mode is enabled */}
+                {isDebugEnabled && (
+                  <TableHead className={cn(styles.header)}>Debug</TableHead>
                 )}
               </TableRow>
-            ))
-          ) : error ? (
-            <TableRow>
-              <TableCell
-                colSpan={
-                  table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
-                }
-                className="h-16 text-center"
-              >
-                <ErrorDisplay error={error} />
-              </TableCell>
-            </TableRow>
-          ) : (
-            <TableRow>
-              <TableCell
-                colSpan={
-                  table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
-                }
-                className="h-24"
-              >
-                <Empty className="border-none py-4">
-                  <EmptyTitle>No results</EmptyTitle>
-                  <EmptyDescription>
-                    Try adjusting your search or filters
-                  </EmptyDescription>
-                </Empty>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+            ))}
+          </TableHeader>
+          <TableBody
+            className={
+              !isLoading && table.getRowModel().rows?.length
+                ? "stagger-children"
+                : undefined
+            }
+          >
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={
+                    table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
+                  }
+                  className="h-16 text-center"
+                >
+                  <div className="flex items-center justify-center gap-2">
+                    <Spinner />
+                    <span>Loading...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
+                  className={cn(styles.row)}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      key={cell.id}
+                      className={cn(
+                        cell.column.columnDef.meta?.className,
+                        styles.cell,
+                      )}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </TableCell>
+                  ))}
+                  {/* Add debug cell when debug mode is enabled */}
+                  {isDebugEnabled && (
+                    <TableCell className={cn(styles.cell)}>
+                      <DebugDialog
+                        data={row.original}
+                        title={`Debug Data - Row ${row.id}`}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                          >
+                            <Bug className="h-4 w-4" />
+                            <span className="sr-only">Debug row data</span>
+                          </Button>
+                        }
+                      />
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))
+            ) : error ? (
+              <TableRow>
+                <TableCell
+                  colSpan={
+                    table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
+                  }
+                  className="h-16 text-center"
+                >
+                  <ErrorDisplay error={error} />
+                </TableCell>
+              </TableRow>
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={
+                    table.getAllColumns().length + (isDebugEnabled ? 1 : 0)
+                  }
+                  className="h-24"
+                >
+                  <Empty className="border-none py-4">
+                    <EmptyTitle>No results</EmptyTitle>
+                    <EmptyDescription>
+                      Try adjusting your search or filters
+                    </EmptyDescription>
+                  </Empty>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Mobile Card View */}
       {isLoading ? (
