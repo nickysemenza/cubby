@@ -320,6 +320,7 @@ function FilterableCombobox({
 }: FilterableComboboxProps) {
   const [inputValue, setInputValue] = React.useState("");
   const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
 
   // Filter items based on input
   const filteredItems = React.useMemo(() => {
@@ -342,27 +343,102 @@ function FilterableCombobox({
       onOpenChange={setOpen}
       disabled={disabled}
     >
-      <ComboboxInput
-        className={className}
-        placeholder={placeholder}
-        value={open ? inputValue : selectedLabel}
-        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-          setInputValue(e.target.value)
-        }
-        onFocus={() => setInputValue("")}
-      />
-      <ComboboxContent>
-        <ComboboxList>
-          {filteredItems.map((item) => (
-            <ComboboxItem key={item.value} value={item.value}>
-              {item.label}
-            </ComboboxItem>
-          ))}
-        </ComboboxList>
-        {filteredItems.length === 0 && (
-          <ComboboxEmpty>No results</ComboboxEmpty>
+      {/* Polished trigger with proper borders and hover states */}
+      <ComboboxPrimitive.Trigger
+        ref={triggerRef}
+        className={cn(
+          // Structure
+          "flex w-full items-center justify-between gap-1.5 rounded-md border px-2 h-7",
+          // Colors & background
+          "border-input bg-input/20 dark:bg-input/30",
+          "hover:bg-input/30 dark:hover:bg-input/50",
+          // Focus states
+          "focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[2px]",
+          // Typography
+          "text-xs/relaxed",
+          // Transitions
+          "transition-colors duration-150 outline-none",
+          // Disabled
+          "disabled:cursor-not-allowed disabled:opacity-50",
+          className,
         )}
-      </ComboboxContent>
+      >
+        {/* Input for filtering when open, display value when closed */}
+        <ComboboxPrimitive.Input
+          className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+          placeholder={placeholder}
+          value={open ? inputValue : selectedLabel}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setInputValue(e.target.value)
+          }
+        />
+        {/* Animated chevron */}
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180",
+          )}
+        />
+      </ComboboxPrimitive.Trigger>
+
+      {/* Refined popup */}
+      <ComboboxPrimitive.Portal>
+        <ComboboxPrimitive.Positioner
+          side="bottom"
+          sideOffset={4}
+          align="start"
+          anchor={triggerRef}
+          className="isolate z-50"
+        >
+          <ComboboxPrimitive.Popup
+            className={cn(
+              // Base
+              "bg-popover text-popover-foreground",
+              // Size constraints - match trigger width
+              "max-h-60 w-(--anchor-width) overflow-hidden",
+              // Shape & depth
+              "rounded-md border border-border/50 shadow-lg",
+              // Animation
+              "data-open:animate-in data-closed:animate-out",
+              "data-closed:fade-out-0 data-open:fade-in-0",
+              "data-closed:zoom-out-95 data-open:zoom-in-95",
+              "data-[side=bottom]:slide-in-from-top-1",
+              "origin-(--transform-origin) duration-150",
+            )}
+          >
+            <ComboboxPrimitive.List className="overflow-y-auto overscroll-contain p-0.5">
+              {filteredItems.map((item) => (
+                <ComboboxPrimitive.Item
+                  key={item.value}
+                  value={item.value}
+                  className={cn(
+                    // Compact layout
+                    "relative flex items-center gap-2 rounded-sm px-2 py-1",
+                    // Typography
+                    "cursor-default text-xs outline-none select-none",
+                    // Interactive states
+                    "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                    // Selected state - subtle background highlight
+                    "data-[selected]:bg-accent/50",
+                    // Disabled
+                    "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                  )}
+                >
+                  <span className="flex-1 truncate">{item.label}</span>
+                  <ComboboxPrimitive.ItemIndicator className="shrink-0">
+                    <CheckIcon className="size-3.5" />
+                  </ComboboxPrimitive.ItemIndicator>
+                </ComboboxPrimitive.Item>
+              ))}
+            </ComboboxPrimitive.List>
+            {filteredItems.length === 0 && (
+              <div className="py-2 text-center text-muted-foreground text-xs">
+                No results
+              </div>
+            )}
+          </ComboboxPrimitive.Popup>
+        </ComboboxPrimitive.Positioner>
+      </ComboboxPrimitive.Portal>
     </ComboboxPrimitive.Root>
   );
 }
