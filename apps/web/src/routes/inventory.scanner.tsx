@@ -12,13 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { FilterableCombobox } from "~/components/ui/combobox";
 import { unsafeLocationId } from "~/schemas/identifiers";
 
 const searchSchema = z.object({
@@ -78,22 +72,18 @@ function ScannerPage() {
               </CardDescription>
             </div>
             <div className="w-64">
-              <Select
-                value={locationId ?? ""}
+              <FilterableCombobox
+                items={
+                  locationsData?.items.map((location) => ({
+                    value: location.id,
+                    label: location.name,
+                  })) ?? []
+                }
+                value={locationId ?? null}
                 onValueChange={handleLocationChange}
+                placeholder="Select location..."
                 disabled={isLoadingLocations}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select location..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {locationsData?.items.map((location) => (
-                    <SelectItem key={location.id} value={location.id}>
-                      {location.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
           </div>
         </CardHeader>

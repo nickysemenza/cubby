@@ -9,15 +9,9 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
 import {
@@ -128,44 +122,35 @@ export function GalleryHeader({
         {/* Type Filter */}
         <div className="flex items-center gap-1.5">
           <Label className="text-muted-foreground">Type:</Label>
-          <Select
+          <FilterableCombobox
+            items={[{ value: "all", label: "All" }, ...locationTypeOptions]}
             value={locationTypeFilter ?? "all"}
             onValueChange={(value) =>
               onTypeFilterChange(
                 value === "all" ? null : (value as LocationType),
               )
             }
-          >
-            <SelectTrigger className="h-8 w-[100px] text-xs">
-              <SelectValue placeholder="All" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              {locationTypeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="h-8 w-[120px]"
+            placeholder="All"
+          />
         </div>
 
         {/* Empty Filter */}
         <div className="flex items-center gap-1.5">
           <Label className="text-muted-foreground">Status:</Label>
-          <Select
+          <FilterableCombobox
+            items={[
+              { value: "all", label: "All" },
+              { value: "withItems", label: "With items" },
+              { value: "empty", label: "Empty" },
+            ]}
             value={emptyFilter}
-            onValueChange={(value) => onEmptyFilterChange(value as EmptyFilter)}
-          >
-            <SelectTrigger className="h-8 w-[100px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All</SelectItem>
-              <SelectItem value="withItems">With items</SelectItem>
-              <SelectItem value="empty">Empty</SelectItem>
-            </SelectContent>
-          </Select>
+            onValueChange={(value) =>
+              onEmptyFilterChange((value ?? "all") as EmptyFilter)
+            }
+            className="h-8 w-[120px]"
+            placeholder="All"
+          />
         </div>
 
         {/* Clear Filters Button */}

@@ -1,13 +1,7 @@
 import type { Column } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
+import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import useDebounce from "~/hooks/useDebounce";
 import type { FilterConfig } from "./columnHelpers";
 
@@ -48,18 +42,13 @@ export function HeaderFilter<TData>({
 
   if (filterConfig.filterType === "select") {
     return (
-      <Select value={value} onValueChange={(v) => v && setValue(v)}>
-        <SelectTrigger className={`w-full ${inputClassName}`}>
-          <SelectValue placeholder={filterConfig.placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {filterConfig.options?.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <FilterableCombobox
+        items={filterConfig.options ?? []}
+        value={value || null}
+        onValueChange={(v) => v && setValue(v)}
+        placeholder={filterConfig.placeholder}
+        className={`w-full ${inputClassName}`}
+      />
     );
   }
 

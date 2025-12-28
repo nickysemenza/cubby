@@ -279,6 +279,94 @@ function useComboboxAnchor() {
   return React.useRef<HTMLDivElement | null>(null);
 }
 
+/**
+ * FilterableCombobox wraps Combobox with manual filtering.
+ * Pass items as a prop and it filters as you type while enforcing selection.
+ *
+ * @example
+ * ```tsx
+ * <FilterableCombobox
+ *   items={[
+ *     { value: "apple", label: "Apple" },
+ *     { value: "banana", label: "Banana" },
+ *   ]}
+ *   value={value}
+ *   onValueChange={setValue}
+ *   placeholder="Select..."
+ * />
+ * ```
+ */
+interface FilterableComboboxItem {
+  value: string;
+  label: string;
+}
+
+interface FilterableComboboxProps {
+  items: FilterableComboboxItem[];
+  value: string | null;
+  onValueChange: (value: string | null) => void;
+  placeholder?: string;
+  className?: string;
+  disabled?: boolean;
+}
+
+function FilterableCombobox({
+  items,
+  value,
+  onValueChange,
+  placeholder,
+  className,
+  disabled,
+}: FilterableComboboxProps) {
+  const [inputValue, setInputValue] = React.useState("");
+  const [open, setOpen] = React.useState(false);
+
+  // Filter items based on input
+  const filteredItems = React.useMemo(() => {
+    if (!inputValue) return items;
+    const lower = inputValue.toLowerCase();
+    return items.filter((item) => item.label.toLowerCase().includes(lower));
+  }, [items, inputValue]);
+
+  // Get label for current value
+  const selectedLabel = items.find((item) => item.value === value)?.label ?? "";
+
+  return (
+    <ComboboxPrimitive.Root
+      value={value}
+      onValueChange={(newValue) => {
+        onValueChange(newValue);
+        setInputValue(""); // Clear filter on selection
+      }}
+      open={open}
+      onOpenChange={setOpen}
+      disabled={disabled}
+    >
+      <ComboboxInput
+        className={className}
+        placeholder={placeholder}
+        value={open ? inputValue : selectedLabel}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          setInputValue(e.target.value)
+        }
+        onFocus={() => setInputValue("")}
+      />
+      <ComboboxContent>
+        <ComboboxList>
+          {filteredItems.map((item) => (
+            <ComboboxItem key={item.value} value={item.value}>
+              {item.label}
+            </ComboboxItem>
+          ))}
+        </ComboboxList>
+        {filteredItems.length === 0 && (
+          <ComboboxEmpty>No results</ComboboxEmpty>
+        )}
+      </ComboboxContent>
+    </ComboboxPrimitive.Root>
+  );
+}
+
 export {
   Combobox,
   ComboboxInput,
@@ -295,5 +383,6 @@ export {
   ComboboxChipsInput,
   ComboboxTrigger,
   ComboboxValue,
+  FilterableCombobox,
   useComboboxAnchor,
 };

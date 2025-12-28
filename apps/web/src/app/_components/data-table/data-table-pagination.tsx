@@ -9,13 +9,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+import { FilterableCombobox } from "~/components/ui/combobox";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
 
 interface DataTablePaginationProps<TData> {
@@ -43,25 +37,17 @@ export function DataTablePagination<TData>({
         {/* Rows per page - simplified on mobile */}
         <div className="flex items-center justify-between space-x-2 sm:justify-start">
           <p className="font-medium text-sm">Rows per page</p>
-          <Select
+          <FilterableCombobox
+            items={[10, 50, 100].map((pageSize) => ({
+              value: `${pageSize}`,
+              label: `${pageSize}`,
+            }))}
             value={`${table.getState().pagination.pageSize}`}
             onValueChange={(value) => {
               if (value) table.setPageSize(Number(value));
             }}
-          >
-            <SelectTrigger className="h-8 w-16">
-              <SelectValue
-                placeholder={`${table.getState().pagination.pageSize}`}
-              />
-            </SelectTrigger>
-            <SelectContent side="top">
-              {[10, 50, 100].map((pageSize) => (
-                <SelectItem key={pageSize} value={`${pageSize}`}>
-                  {pageSize}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="h-8 w-20"
+          />
         </div>
 
         {/* Page info - responsive text */}

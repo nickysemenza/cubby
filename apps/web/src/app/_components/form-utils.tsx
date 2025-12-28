@@ -10,15 +10,9 @@ import {
   type UseFormReturn,
 } from "react-hook-form";
 import { Button, type buttonVariants } from "~/components/ui/button";
+import { FilterableCombobox } from "~/components/ui/combobox";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
@@ -394,10 +388,7 @@ export function UnifiedTextField<
 // Re-export ComboboxFieldWithSearch from its dedicated file
 export { ComboboxFieldWithSearch } from "./form-utils/combobox-field-with-search";
 
-// Sentinel value for "none" in select (Radix doesn't support empty string values)
-const SELECT_NONE_VALUE = "__none__";
-
-// Helper for handling select fields
+// Helper for handling select fields (uses FilterableCombobox for type-to-filter)
 export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,
@@ -417,6 +408,11 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   disabled?: boolean;
   description?: string;
 }) {
+  // Build items list, prepending "None" option if nullable
+  const items = nullable
+    ? [{ value: "__none__", label: "None" }, ...options]
+    : options;
+
   return (
     <Controller
       control={form.control}
@@ -424,34 +420,15 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid}>
           <FieldLabel htmlFor={name}>{label}</FieldLabel>
-          <Select
+          <FilterableCombobox
+            items={items}
+            value={field.value ?? (nullable ? "__none__" : null)}
             onValueChange={(value) =>
-              field.onChange(value === SELECT_NONE_VALUE ? null : value)
+              field.onChange(value === "__none__" ? null : value)
             }
-            value={field.value ?? (nullable ? SELECT_NONE_VALUE : undefined)}
-            defaultValue={
-              field.value ?? (nullable ? SELECT_NONE_VALUE : undefined)
-            }
+            placeholder={placeholder || `Select ${label.toLowerCase()}`}
             disabled={disabled}
-          >
-            <SelectTrigger id={name} aria-invalid={fieldState.invalid}>
-              <SelectValue
-                placeholder={placeholder || `Select ${label.toLowerCase()}`}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {nullable && (
-                <SelectItem value={SELECT_NONE_VALUE}>
-                  <span className="text-muted-foreground">None</span>
-                </SelectItem>
-              )}
-              {options.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
           {description && (
             <p className="text-muted-foreground text-xs">{description}</p>
           )}

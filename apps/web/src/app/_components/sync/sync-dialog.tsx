@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
+import { FilterableCombobox } from "~/components/ui/combobox";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import { queryKeys } from "~/lib/query-keys";
 import type {
   InventorySyncItem,
@@ -623,25 +617,17 @@ const ResolutionCell = ({
 
   return (
     <td className="p-2">
-      <Select
-        value={resolution ?? ""}
+      <FilterableCombobox
+        items={options}
+        value={resolution ?? null}
         onValueChange={(value) => {
           if (value) {
             onResolutionChange(itemKey, value as SyncResolution);
           }
         }}
-      >
-        <SelectTrigger className="h-8 w-full text-xs">
-          <SelectValue placeholder="Choose..." />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value}>
-              {opt.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        placeholder="Choose..."
+        className="h-8 w-full"
+      />
     </td>
   );
 };
