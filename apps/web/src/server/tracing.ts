@@ -26,6 +26,9 @@ export const TraceNames = {
   // Service layer operations
   service: (service: string, operation: string) =>
     `service.${service}.${operation}`,
+
+  // Database operations
+  db: (operation: string) => `db.${operation}`,
 } as const;
 
 /**

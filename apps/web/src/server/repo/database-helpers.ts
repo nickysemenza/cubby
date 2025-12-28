@@ -3,7 +3,7 @@ import type {
   InferInsertModel,
   InferSelectModel,
 } from "drizzle-orm";
-import { asc, desc, ilike, inArray, type SQL } from "drizzle-orm";
+import { asc, desc, getTableName, ilike, inArray, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import { amount } from "~/codec/codec";
@@ -13,6 +13,7 @@ import { unsafeProductId } from "~/schemas/identifiers";
 import type { SortParams } from "~/schemas/pagination";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { image, type productUnitMappings } from "~/server/db/schema";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 // Helper function to format search terms for PostgreSQL full-text search
 export const formatSearchTerm = (
@@ -54,7 +55,9 @@ export const withTransaction = async <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
 ): Promise<T> => {
-  return await getDb(db).transaction(fn);
+  return withTrace(TraceNames.db("transaction"), async () => {
+    return await getDb(db).transaction(fn);
+  });
 };
 
 /**
@@ -232,12 +235,15 @@ export const insertAndReturn = async <T extends PgTable>(
   table: T,
   values: InferInsertModel<T>,
 ): Promise<InferSelectModel<T>> => {
-  const result = await tx.insert(table).values(values).returning();
-  const [created] = result as InferSelectModel<T>[];
-  if (!created) {
-    throw new Error(FAILED_TO_INSERT);
-  }
-  return created;
+  return withTrace(TraceNames.db("insert"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    const result = await tx.insert(table).values(values).returning();
+    const [created] = result as InferSelectModel<T>[];
+    if (!created) {
+      throw new Error(FAILED_TO_INSERT);
+    }
+    return created;
+  });
 };
 
 /**
@@ -255,8 +261,12 @@ export const batchInsert = async <T extends PgTable>(
   values: InferInsertModel<T>[],
 ): Promise<InferSelectModel<T>[]> => {
   if (values.length === 0) return [];
-  const result = await tx.insert(table).values(values).returning();
-  return result as InferSelectModel<T>[];
+  return withTrace(TraceNames.db("batchInsert"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    span.setAttribute("db.batch_size", values.length);
+    const result = await tx.insert(table).values(values).returning();
+    return result as InferSelectModel<T>[];
+  });
 };
 
 /**
@@ -273,12 +283,15 @@ export const insertAndReturnDb = async <T extends PgTable>(
   table: T,
   values: InferInsertModel<T>,
 ): Promise<InferSelectModel<T>> => {
-  const result = await getDb(db).insert(table).values(values).returning();
-  const [created] = result as InferSelectModel<T>[];
-  if (!created) {
-    throw new Error(FAILED_TO_INSERT);
-  }
-  return created;
+  return withTrace(TraceNames.db("insert"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    const result = await getDb(db).insert(table).values(values).returning();
+    const [created] = result as InferSelectModel<T>[];
+    if (!created) {
+      throw new Error(FAILED_TO_INSERT);
+    }
+    return created;
+  });
 };
 
 /**
@@ -297,26 +310,30 @@ export const updateAndReturn = async <T extends PgTable>(
   values: Partial<InferInsertModel<T>>,
   where: SQL | undefined,
 ): Promise<InferSelectModel<T>> => {
-  // If no values to update, just fetch and return the existing record
-  // This handles cases like image-only updates where the main table doesn't change
-  if (Object.keys(values).length === 0) {
-    const result = await tx
-      .select()
-      .from(table as PgTable)
-      .where(where);
-    const [existing] = result as InferSelectModel<T>[];
-    if (!existing) {
+  return withTrace(TraceNames.db("update"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    // If no values to update, just fetch and return the existing record
+    // This handles cases like image-only updates where the main table doesn't change
+    if (Object.keys(values).length === 0) {
+      span.setAttribute("db.noop", true);
+      const result = await tx
+        .select()
+        .from(table as PgTable)
+        .where(where);
+      const [existing] = result as InferSelectModel<T>[];
+      if (!existing) {
+        throw new Error(FAILED_TO_UPDATE);
+      }
+      return existing;
+    }
+
+    const result = await tx.update(table).set(values).where(where).returning();
+    const [updated] = result as InferSelectModel<T>[];
+    if (!updated) {
       throw new Error(FAILED_TO_UPDATE);
     }
-    return existing;
-  }
-
-  const result = await tx.update(table).set(values).where(where).returning();
-  const [updated] = result as InferSelectModel<T>[];
-  if (!updated) {
-    throw new Error(FAILED_TO_UPDATE);
-  }
-  return updated;
+    return updated;
+  });
 };
 
 /**
@@ -335,30 +352,34 @@ export const updateAndReturnDb = async <T extends PgTable>(
   values: Partial<InferInsertModel<T>>,
   where: SQL | undefined,
 ): Promise<InferSelectModel<T>> => {
-  // If no values to update, just fetch and return the existing record
-  // This handles cases like image-only updates where the main table doesn't change
-  if (Object.keys(values).length === 0) {
+  return withTrace(TraceNames.db("update"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    // If no values to update, just fetch and return the existing record
+    // This handles cases like image-only updates where the main table doesn't change
+    if (Object.keys(values).length === 0) {
+      span.setAttribute("db.noop", true);
+      const result = await getDb(db)
+        .select()
+        .from(table as PgTable)
+        .where(where);
+      const [existing] = result as InferSelectModel<T>[];
+      if (!existing) {
+        throw new Error(FAILED_TO_UPDATE);
+      }
+      return existing;
+    }
+
     const result = await getDb(db)
-      .select()
-      .from(table as PgTable)
-      .where(where);
-    const [existing] = result as InferSelectModel<T>[];
-    if (!existing) {
+      .update(table)
+      .set(values)
+      .where(where)
+      .returning();
+    const [updated] = result as InferSelectModel<T>[];
+    if (!updated) {
       throw new Error(FAILED_TO_UPDATE);
     }
-    return existing;
-  }
-
-  const result = await getDb(db)
-    .update(table)
-    .set(values)
-    .where(where)
-    .returning();
-  const [updated] = result as InferSelectModel<T>[];
-  if (!updated) {
-    throw new Error(FAILED_TO_UPDATE);
-  }
-  return updated;
+    return updated;
+  });
 };
 
 /**
@@ -529,8 +550,14 @@ export async function executeListQueryWithCount<T>(
   dataQuery: Promise<T[]>,
   countQuery: Promise<{ count: number }[]>,
 ): Promise<{ data: T[]; count: number }> {
-  const [data, [countResult]] = await Promise.all([dataQuery, countQuery]);
-  return { data, count: countResult?.count ?? 0 };
+  return withTrace(TraceNames.db("listQueryWithCount"), async (span) => {
+    const [data, [countResult]] = await Promise.all([dataQuery, countQuery]);
+    span.setAttributes({
+      "db.result_count": data.length,
+      "db.total_count": countResult?.count ?? 0,
+    });
+    return { data, count: countResult?.count ?? 0 };
+  });
 }
 
 /**
