@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Suspense } from "react";
+import { z } from "zod";
 import LocationTreeGraph from "~/app/_components/inventory/location-tree-graph";
 import LocationTreeView from "~/app/_components/inventory/location-tree-view";
 import LocationTreemap from "~/app/_components/inventory/location-treemap";
@@ -10,15 +11,30 @@ import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
+const viewOptions = ["gallery", "table", "visualizations"] as const;
+type ViewOption = (typeof viewOptions)[number];
+
+const searchSchema = z.object({
+  view: z.enum(viewOptions).optional(),
+});
+
 export const Route = createFileRoute("/locations/")({
+  validateSearch: searchSchema,
   component: LocationsPage,
   head: () => ({ meta: [{ title: "Locations | RecipeHub" }] }),
 });
 
 function LocationsPage() {
+  const { view = "gallery" } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
+
   return (
     <EntityLayout title="Locations" actions={<LocationActions />}>
-      <Tabs defaultValue="gallery" className="space-y-4">
+      <Tabs
+        value={view}
+        onValueChange={(v) => navigate({ search: { view: v as ViewOption } })}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="gallery">Gallery</TabsTrigger>
           <TabsTrigger value="table">Table</TabsTrigger>
