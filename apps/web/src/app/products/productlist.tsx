@@ -61,7 +61,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const ingredient = info.getValue();
           return ingredient ? (
-            <IngredientPillLink name={ingredient.name} id={ingredient.id} />
+            <IngredientPillLink ingredient={ingredient} minimal />
           ) : (
             <NoneState />
           );
@@ -119,7 +119,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const food = info.getValue();
           if (!food) return <NoneState />;
-          return <FoodPillLink food={food} />;
+          return <FoodPillLink food={food} minimal />;
         },
       }),
       createInventoryEntriesColumn(
@@ -128,6 +128,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         LocationPillLink,
         "location",
         (e) => e.location,
+        { minimal: true },
       ),
     ],
     filters: [

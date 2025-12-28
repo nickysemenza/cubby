@@ -45,12 +45,15 @@ export function LocationList() {
           "children",
           LocationPillLink,
           "location",
+          { minimal: true },
         ),
         columnHelper.accessor("parent", {
           enableSorting: false,
           cell: (info) => {
             const item = info.getValue();
-            return <div>{item && <LocationPillLink location={item} />}</div>;
+            return (
+              <div>{item && <LocationPillLink location={item} minimal />}</div>
+            );
           },
         }),
         columnHelper.accessor("type", {
@@ -81,7 +84,7 @@ export function LocationList() {
           ProductPillLink,
           "product",
           (e) => e.product,
-          { layout: "inline" },
+          { layout: "inline", minimal: true },
         ),
       ],
       filters: [

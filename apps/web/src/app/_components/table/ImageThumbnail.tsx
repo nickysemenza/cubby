@@ -8,6 +8,7 @@ interface ImageData {
 }
 
 const sizeMap = {
+  xs: 20,
   sm: 32,
   md: 48,
 } as const;

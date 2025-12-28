@@ -5,9 +5,10 @@ import { wasm } from "~/lib/wasm";
 
 const Graphviz = lazy(() => import("graphviz-react"));
 
-const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
-  unitMapping,
-}) => {
+const UnitMappingGraphInner: React.FC<{
+  unitMapping: WUnitMapping[];
+  compact?: boolean;
+}> = ({ unitMapping, compact = false }) => {
   // Memoize the expensive WASM graph generation
   const graphResult = useMemo(() => {
     if (unitMapping.length === 0) {
@@ -50,16 +51,19 @@ const UnitMappingGraphInner: React.FC<{ unitMapping: WUnitMapping[] }> = ({
     return null;
   }
 
+  const width = compact ? 100 : 220;
+  const height = compact ? 60 : 140;
+
   return (
-    <div className="overflow-auto rounded border bg-slate-50 p-1">
-      <Suspense fallback={<div className="h-[140px] w-[220px]" />}>
+    <div className="overflow-auto rounded border bg-slate-50 p-0.5">
+      <Suspense fallback={<div style={{ width, height }} />}>
         <Graphviz
           dot={graphResult.graph}
           options={{
             fit: true,
-            width: 220,
-            height: 140,
-            zoom: true,
+            width,
+            height,
+            zoom: !compact,
             useWorker: false,
           }}
         />

@@ -1,3 +1,4 @@
+import { trace } from "@opentelemetry/api";
 import { createFileRoute } from "@tanstack/react-router";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "~/server/api/root";
@@ -9,6 +10,12 @@ const handler = async ({ request }: { request: Request }) => {
     req: request,
     router: appRouter,
     createContext: async () => createTRPCContext({ headers: request.headers }),
+    responseMeta: () => {
+      const traceId = trace.getActiveSpan()?.spanContext().traceId;
+      return {
+        headers: traceId ? { "x-trace-id": traceId } : {},
+      };
+    },
   });
 };
 

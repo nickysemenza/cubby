@@ -63,14 +63,13 @@ export function InventoryItemList() {
           meta: { mobileCategory: "wide" },
           cell: (info) => {
             const product = info.getValue();
-            const { upc, ndb_number, unitMappings } = product;
+            const { upc, unitMappings } = product;
             return (
-              <div className="space-y-0.5">
-                <ProductPillLink product={product} />
-                <div className="space-y-0.5 text-xs">
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <ProductPillLink product={product} minimal />
                   {upc && (
-                    <div>
-                      UPC:{" "}
+                    <div className="text-muted-foreground text-xs">
                       <TableLink
                         to="/usda/upc/$code"
                         params={{ code: upc }}
@@ -80,20 +79,8 @@ export function InventoryItemList() {
                       </TableLink>
                     </div>
                   )}
-                  {ndb_number && (
-                    <div>
-                      NDB:{" "}
-                      <TableLink
-                        to="/usda/ndb/$code"
-                        params={{ code: String(ndb_number) }}
-                        variant="mono"
-                      >
-                        {ndb_number}
-                      </TableLink>
-                    </div>
-                  )}
                 </div>
-                <UnitMappingGraph unitMapping={unitMappings} />
+                <UnitMappingGraph unitMapping={unitMappings} compact />
               </div>
             );
           },
@@ -103,7 +90,7 @@ export function InventoryItemList() {
           enableSorting: false,
           cell: (info) => {
             const item = info.getValue();
-            return <LocationPillLink location={item} />;
+            return <LocationPillLink location={item} minimal />;
           },
         }),
         createCreatedAtColumn(columnHelper),

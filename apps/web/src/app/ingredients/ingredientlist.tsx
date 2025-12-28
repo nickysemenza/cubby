@@ -69,7 +69,7 @@ export function IngredientList() {
         "appearsInRecipes",
         RecipePillLink,
         "recipe",
-        { className: "w-48 max-w-48", dedupe: true },
+        { className: "w-48 max-w-48", dedupe: true, minimal: true },
       ),
       createEntityPillColumn(
         columnHelper,
@@ -78,6 +78,7 @@ export function IngredientList() {
         "product",
         {
           className: "w-48 max-w-48",
+          minimal: true,
         },
       ),
     ],

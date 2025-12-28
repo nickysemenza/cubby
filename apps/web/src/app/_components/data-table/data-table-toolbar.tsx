@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import useDebounce from "~/hooks/useDebounce";
+import type { TableDensity } from "~/hooks/useTableDensity";
 import { DataTableViewOptions } from "./data-table-view-options";
 
 interface FilterOption {
@@ -29,6 +30,8 @@ interface DataTableToolbarProps<TData> {
   table: Table<TData>;
   additionalFilters?: ReactNode;
   filterableColumns: FilterableColumn[];
+  density?: TableDensity;
+  onDensityChange?: (density: TableDensity) => void;
 }
 
 // Text input filter component
@@ -136,6 +139,8 @@ export function DataTableToolbar<TData>({
   table,
   additionalFilters,
   filterableColumns,
+  density,
+  onDensityChange,
 }: DataTableToolbarProps<TData>) {
   // Track the input values locally for immediate UI feedback
   // Use lazy initialization to avoid setting state in effect
@@ -202,7 +207,11 @@ export function DataTableToolbar<TData>({
           </Button>
         )}
       </div>
-      <DataTableViewOptions table={table} />
+      <DataTableViewOptions
+        table={table}
+        density={density}
+        onDensityChange={onDensityChange}
+      />
     </div>
   );
 }

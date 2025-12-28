@@ -113,7 +113,7 @@ export function createImageColumn<T extends ImageRow>(
     enableSorting: false,
     cell: (info) => (
       <ImageThumbnail
-        size="md"
+        size="sm"
         images={info.getValue() ?? []}
         alt={headerText}
       />
@@ -145,13 +145,15 @@ export function createEntityPillColumn<
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  Pill: ComponentType<PillProps<TItem>>,
+  Pill: ComponentType<PillProps<TItem> & { minimal?: boolean }>,
   pillPropName: string,
   options?: {
     header?: string;
     className?: string;
     /** Optional filter to deduplicate items */
     dedupe?: boolean;
+    /** Use minimal pill style (no badges) */
+    minimal?: boolean;
   },
 ) {
   return columnHelper.accessor((row) => row[accessor] as TItem[], {
@@ -172,6 +174,7 @@ export function createEntityPillColumn<
           items={items}
           Pill={Pill}
           pillPropName={pillPropName}
+          minimal={options?.minimal}
         />
       );
     },
@@ -250,7 +253,7 @@ export function createInventoryEntriesColumn<
 >(
   columnHelper: ColumnHelper<T>,
   accessor: K,
-  Pill: ComponentType<PillProps<TRelated>>,
+  Pill: ComponentType<PillProps<TRelated> & { minimal?: boolean }>,
   pillPropName: string,
   getRelatedEntity: (entry: TEntry) => TRelated,
   options?: {
@@ -258,9 +261,12 @@ export function createInventoryEntriesColumn<
     className?: string;
     /** Layout variant: 'stacked' shows amounts then pills, 'inline' shows amount+pill per row */
     layout?: "stacked" | "inline";
+    /** Use minimal pill style (no badges) */
+    minimal?: boolean;
   },
 ) {
-  const layout = options?.layout ?? "stacked";
+  const layout = options?.layout ?? "inline";
+  const minimal = options?.minimal ?? false;
 
   return columnHelper.accessor((row) => row[accessor] as TEntry[], {
     id: String(accessor),
@@ -274,16 +280,23 @@ export function createInventoryEntriesColumn<
       }
 
       if (layout === "inline") {
-        // Each entry on its own line with amount + pill
+        // Compact inline: "1 whole @ location, 2 each @ other"
         return (
-          <div className="space-y-0.5 text-xs">
-            {entries.map((entry) => (
-              <div key={entry.id} className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+            {entries.map((entry, i) => (
+              <span key={entry.id} className="inline-flex items-center gap-1">
                 <span className="text-muted-foreground">
                   {tryFormatAmount(entry.amount)}
                 </span>
-                <Pill {...{ [pillPropName]: getRelatedEntity(entry) }} />
-              </div>
+                <span className="text-muted-foreground/50">@</span>
+                <Pill
+                  {...{ [pillPropName]: getRelatedEntity(entry) }}
+                  minimal={minimal}
+                />
+                {i < entries.length - 1 && (
+                  <span className="text-muted-foreground/30">,</span>
+                )}
+              </span>
             ))}
           </div>
         );

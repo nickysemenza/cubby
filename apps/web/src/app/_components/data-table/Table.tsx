@@ -16,7 +16,9 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useDebug } from "~/hooks/useDebug";
+import { useTableDensity } from "~/hooks/useTableDensity";
 import type { QueryTiming } from "~/lib/query-timing";
+import { cn } from "~/lib/utils";
 import { DebugDialog } from "./DebugDialog";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
@@ -56,6 +58,25 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   } = props;
 
   const { isDebugEnabled } = useDebug();
+  const { density, setDensity } = useTableDensity();
+  const isDense = density === "dense";
+
+  // Density-specific styles
+  const styles = isDense
+    ? {
+        table: "text-[10px] leading-none",
+        header: "h-5 px-1 py-0 border-x border-border text-[10px]",
+        cell: "px-1 py-0 h-[20px] border-x border-border align-middle",
+        row: "even:bg-muted/20",
+        sortIcon: "h-2.5 w-2.5",
+      }
+    : {
+        table: "",
+        header: "",
+        cell: "",
+        row: "",
+        sortIcon: "h-4 w-4",
+      };
 
   return (
     <SpacedContainer space={4}>
@@ -63,23 +84,28 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         table={table}
         additionalFilters={additionalFilters}
         filterableColumns={filterableColumns}
+        density={density}
+        onDensityChange={setDensity}
       />
 
       {/* Desktop Table View */}
-      <Table aria-label={ariaLabel}>
+      <Table aria-label={ariaLabel} className={cn(styles.table)}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
+            <TableRow key={headerGroup.id} className={cn(styles.row)}>
               {headerGroup.headers.map((header) => {
                 const sortDirection = header.column.getIsSorted();
                 const canSort = header.column.getCanSort();
                 const sortingArrows =
                   sortDirection === "desc" ? (
-                    <ArrowDown className="h-4 w-4" aria-hidden="true" />
+                    <ArrowDown className={styles.sortIcon} aria-hidden="true" />
                   ) : sortDirection === "asc" ? (
-                    <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                    <ArrowUp className={styles.sortIcon} aria-hidden="true" />
                   ) : (
-                    <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
+                    <ArrowUpDown
+                      className={styles.sortIcon}
+                      aria-hidden="true"
+                    />
                   );
 
                 const contents = (
@@ -104,11 +130,16 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                           ? "descending"
                           : "none"
                     }
-                    className={header.column.columnDef.meta?.className}
+                    className={cn(
+                      header.column.columnDef.meta?.className,
+                      styles.header,
+                    )}
                   >
                     {canSort ? (
                       <Button
                         variant="ghost"
+                        size={isDense ? "sm" : "default"}
+                        className={cn(isDense && "h-5 px-1 text-[11px]")}
                         onClick={() =>
                           header.column.toggleSorting(
                             header.column.getIsSorted() === "asc",
@@ -124,7 +155,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 );
               })}
               {/* Add debug header when debug mode is enabled */}
-              {isDebugEnabled && <TableHead>Debug</TableHead>}
+              {isDebugEnabled && (
+                <TableHead className={cn(styles.header)}>Debug</TableHead>
+              )}
             </TableRow>
           ))}
         </TableHeader>
@@ -154,18 +187,22 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               <TableRow
                 key={row.id}
                 data-state={row.getIsSelected() && "selected"}
+                className={cn(styles.row)}
               >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell
                     key={cell.id}
-                    className={cell.column.columnDef.meta?.className}
+                    className={cn(
+                      cell.column.columnDef.meta?.className,
+                      styles.cell,
+                    )}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
                 {/* Add debug cell when debug mode is enabled */}
                 {isDebugEnabled && (
-                  <TableCell>
+                  <TableCell className={cn(styles.cell)}>
                     <DebugDialog
                       data={row.original}
                       title={`Debug Data - Row ${row.id}`}
