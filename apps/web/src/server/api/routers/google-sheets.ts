@@ -57,6 +57,7 @@ import {
   syncItemsToInventoryCSVRows,
   syncItemsToLocationCSVRows,
 } from "~/server/repo/sync";
+import { TraceNames, withTrace } from "~/server/tracing";
 
 // Schema for organization metadata with Google Sheets config
 const googleSheetsMetadata = z.object({
@@ -185,28 +186,33 @@ async function getClientAndSheetId(ctx: SheetContext): Promise<{
   sheetId: string;
   orgMetadata: string | null;
 }> {
-  const client = getGoogleSheetsClient();
+  return withTrace(
+    TraceNames.api("googleSheets", "getClientAndSheetId"),
+    async () => {
+      const client = getGoogleSheetsClient();
 
-  if (!client.isConfigured()) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Google Sheets integration is not configured",
-    });
-  }
+      if (!client.isConfigured()) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Google Sheets integration is not configured",
+        });
+      }
 
-  const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
+      const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
 
-  const metadata = parseOrgMetadata(org?.metadata ?? null);
-  const sheetId = metadata.googleSheetId;
+      const metadata = parseOrgMetadata(org?.metadata ?? null);
+      const sheetId = metadata.googleSheetId;
 
-  if (!sheetId) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "No Google Sheet connected. Please connect a sheet first.",
-    });
-  }
+      if (!sheetId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "No Google Sheet connected. Please connect a sheet first.",
+        });
+      }
 
-  return { client, sheetId, orgMetadata: org?.metadata ?? null };
+      return { client, sheetId, orgMetadata: org?.metadata ?? null };
+    },
+  );
 }
 
 // Update organization's last sync timestamp
@@ -1196,82 +1202,124 @@ async function pushInventoryToSheet(
   );
 }
 
+// Shared helper for syncPreview and applySync
+const fetchAndCompareData = async (
+  ctx: { db: Database; organizationId: OrganizationId },
+  client: ReturnType<typeof getGoogleSheetsClient>,
+  sheetId: string,
+) => {
+  return withTrace(
+    TraceNames.api("googleSheets", "fetchAndCompareData"),
+    async (span) => {
+      span.setAttribute("sheets.sheetId", sheetId);
+
+      // Fetch all data in parallel - DB and Sheets calls are independent
+      const [appLocations, appInventory, sheetLocations, inventorySheetData] =
+        await Promise.all([
+          exportLocationsToCSV(ctx.db, ctx.organizationId),
+          exportInventoryToCSV(ctx.db, ctx.organizationId),
+          fetchSheetLocations(client, sheetId),
+          client.readSheet(sheetId, SHEET_NAMES.INVENTORY),
+        ]);
+
+      const sheetInventory = parseSheetRows(inventorySheetData).rows;
+
+      const locationItems = compareLocationsForSync(
+        appLocations,
+        sheetLocations,
+      );
+      const inventoryItems = compareInventoryForSync(
+        appInventory,
+        sheetInventory,
+      );
+
+      span.setAttributes({
+        "sheets.appLocations": appLocations.length,
+        "sheets.appInventory": appInventory.length,
+        "sheets.sheetLocations": sheetLocations.length,
+        "sheets.sheetInventory": sheetInventory.length,
+      });
+
+      return { locationItems, inventoryItems, sheetLocations, sheetInventory };
+    },
+  );
+};
+
 // Sync preview - unified comparison of app and sheet
 const syncPreview = protectedProcedure
   .output(syncPreviewResult)
   .mutation(async ({ ctx }) => {
-    const { client, sheetId } = await getClientAndSheetId(ctx);
+    return withTrace(
+      TraceNames.trpc("mutation", "googleSheets.syncPreview"),
+      async (span) => {
+        const { client, sheetId } = await getClientAndSheetId(ctx);
+        const { locationItems, inventoryItems } = await fetchAndCompareData(
+          ctx,
+          client,
+          sheetId,
+        );
 
-    // Fetch app data
-    const appLocations = await exportLocationsToCSV(ctx.db, ctx.organizationId);
-    const appInventory = await exportInventoryToCSV(ctx.db, ctx.organizationId);
+        // Count by state
+        const locationCounts = countByState(locationItems);
+        const inventoryCounts = countByState(inventoryItems);
 
-    // Fetch sheet data
-    const sheetLocations = await fetchSheetLocations(client, sheetId);
-    const inventorySheetData = await client.readSheet(
-      sheetId,
-      SHEET_NAMES.INVENTORY,
-    );
-    const sheetInventory = parseSheetRows(inventorySheetData).rows;
+        // Validate
+        const validationErrors = validateSyncResolutions(
+          locationItems,
+          inventoryItems,
+        );
 
-    // Compare
-    const locationItems = compareLocationsForSync(appLocations, sheetLocations);
-    const inventoryItems = compareInventoryForSync(
-      appInventory,
-      sheetInventory,
-    );
+        // Check if can apply (no unresolved conflicts)
+        const hasUnresolvedConflicts =
+          locationItems.some((i) => i.state === "conflict" && !i.resolution) ||
+          inventoryItems.some((i) => i.state === "conflict" && !i.resolution);
 
-    // Count by state
-    const locationCounts = countByState(locationItems);
-    const inventoryCounts = countByState(inventoryItems);
+        // Check if there are any changes to apply (anything not matched)
+        const hasChangesToApply =
+          locationCounts.conflict > 0 ||
+          locationCounts.app_only > 0 ||
+          locationCounts.sheet_only > 0 ||
+          locationCounts.renamed > 0 ||
+          inventoryCounts.conflict > 0 ||
+          inventoryCounts.app_only > 0 ||
+          inventoryCounts.sheet_only > 0 ||
+          inventoryCounts.renamed > 0 ||
+          inventoryCounts.moved > 0;
 
-    // Validate
-    const validationErrors = validateSyncResolutions(
-      locationItems,
-      inventoryItems,
-    );
+        span.setAttributes({
+          "sync.locationItems": locationItems.length,
+          "sync.inventoryItems": inventoryItems.length,
+          "sync.hasUnresolvedConflicts": hasUnresolvedConflicts,
+          "sync.hasChangesToApply": hasChangesToApply,
+          "sync.validationErrors": validationErrors.length,
+        });
 
-    // Check if can apply (no unresolved conflicts)
-    const hasUnresolvedConflicts =
-      locationItems.some((i) => i.state === "conflict" && !i.resolution) ||
-      inventoryItems.some((i) => i.state === "conflict" && !i.resolution);
-
-    // Check if there are any changes to apply (anything not matched)
-    const hasChangesToApply =
-      locationCounts.conflict > 0 ||
-      locationCounts.app_only > 0 ||
-      locationCounts.sheet_only > 0 ||
-      locationCounts.renamed > 0 ||
-      inventoryCounts.conflict > 0 ||
-      inventoryCounts.app_only > 0 ||
-      inventoryCounts.sheet_only > 0 ||
-      inventoryCounts.renamed > 0 ||
-      inventoryCounts.moved > 0;
-
-    return {
-      locations: {
-        items: locationItems,
-        matched: locationCounts.matched,
-        conflicts: locationCounts.conflict,
-        appOnly: locationCounts.app_only,
-        sheetOnly: locationCounts.sheet_only,
-        renamed: locationCounts.renamed,
+        return {
+          locations: {
+            items: locationItems,
+            matched: locationCounts.matched,
+            conflicts: locationCounts.conflict,
+            appOnly: locationCounts.app_only,
+            sheetOnly: locationCounts.sheet_only,
+            renamed: locationCounts.renamed,
+          },
+          inventory: {
+            items: inventoryItems,
+            matched: inventoryCounts.matched,
+            conflicts: inventoryCounts.conflict,
+            appOnly: inventoryCounts.app_only,
+            sheetOnly: inventoryCounts.sheet_only,
+            renamed: inventoryCounts.renamed,
+            moved: inventoryCounts.moved,
+          },
+          validationErrors,
+          canApply:
+            hasChangesToApply &&
+            !hasUnresolvedConflicts &&
+            validationErrors.length === 0,
+        };
       },
-      inventory: {
-        items: inventoryItems,
-        matched: inventoryCounts.matched,
-        conflicts: inventoryCounts.conflict,
-        appOnly: inventoryCounts.app_only,
-        sheetOnly: inventoryCounts.sheet_only,
-        renamed: inventoryCounts.renamed,
-        moved: inventoryCounts.moved,
-      },
-      validationErrors,
-      canApply:
-        hasChangesToApply &&
-        !hasUnresolvedConflicts &&
-        validationErrors.length === 0,
-    };
+    );
   });
 
 // Apply sync - execute the sync with user resolutions
@@ -1279,100 +1327,106 @@ const applySync = protectedProcedure
   .input(applySyncInput)
   .output(applySyncResult)
   .mutation(async ({ ctx, input }) => {
-    const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
+    return withTrace(
+      TraceNames.trpc("mutation", "googleSheets.applySync"),
+      async (span) => {
+        const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
+        const {
+          locationItems,
+          inventoryItems,
+          sheetLocations,
+          sheetInventory,
+        } = await fetchAndCompareData(ctx, client, sheetId);
 
-    // Fetch current state from both sides
-    const appLocations = await exportLocationsToCSV(ctx.db, ctx.organizationId);
-    const appInventory = await exportInventoryToCSV(ctx.db, ctx.organizationId);
-    const sheetLocations = await fetchSheetLocations(client, sheetId);
-    const inventorySheetData = await client.readSheet(
-      sheetId,
-      SHEET_NAMES.INVENTORY,
-    );
-    const sheetInventory = parseSheetRows(inventorySheetData).rows;
+        // Apply user resolutions
+        for (const item of locationItems) {
+          const userResolution = input.locationResolutions[item.key];
+          if (userResolution) item.resolution = userResolution;
+        }
+        for (const item of inventoryItems) {
+          const userResolution = input.inventoryResolutions[item.key];
+          if (userResolution) item.resolution = userResolution;
+        }
 
-    // Compare and apply user resolutions
-    const locationItems = compareLocationsForSync(appLocations, sheetLocations);
-    const inventoryItems = compareInventoryForSync(
-      appInventory,
-      sheetInventory,
-    );
+        // Validate resolutions
+        const validationErrors = validateSyncResolutions(
+          locationItems,
+          inventoryItems,
+        );
+        if (validationErrors.length > 0) {
+          span.setAttribute("sync.validationFailed", true);
+          return {
+            ...createEmptySyncResults(),
+            success: false,
+            errorMessages: validationErrors.map((e) => e.message),
+          };
+        }
 
-    for (const item of locationItems) {
-      const userResolution = input.locationResolutions[item.key];
-      if (userResolution) item.resolution = userResolution;
-    }
-    for (const item of inventoryItems) {
-      const userResolution = input.inventoryResolutions[item.key];
-      if (userResolution) item.resolution = userResolution;
-    }
+        // Execute sync operations
+        const results = createEmptySyncResults();
 
-    // Validate resolutions
-    const validationErrors = validateSyncResolutions(
-      locationItems,
-      inventoryItems,
-    );
-    if (validationErrors.length > 0) {
-      return {
-        ...createEmptySyncResults(),
-        success: false,
-        errorMessages: validationErrors.map((e) => e.message),
-      };
-    }
+        // Process locations first (inventory may reference them)
+        await processImportsToApp(
+          {
+            db: ctx.db,
+            organizationId: ctx.organizationId,
+            actorContext: ctx.actorContext,
+          },
+          locationItems,
+          inventoryItems,
+          results,
+        );
 
-    // Execute sync operations
-    const results = createEmptySyncResults();
+        // Process deletions from app
+        await processAppDeletions(
+          { db: ctx.db, actorContext: ctx.actorContext },
+          locationItems,
+          inventoryItems,
+          results,
+        );
 
-    // Process locations first (inventory may reference them)
-    await processImportsToApp(
-      {
-        db: ctx.db,
-        organizationId: ctx.organizationId,
-        actorContext: ctx.actorContext,
+        // Process renames (app → sheet name)
+        await processRenames(
+          { db: ctx.db, actorContext: ctx.actorContext },
+          locationItems,
+          inventoryItems,
+          results,
+        );
+
+        // Push changes to sheets
+        await pushLocationsToSheet(
+          client,
+          sheetId,
+          locationItems,
+          sheetLocations,
+          results,
+        );
+        await pushInventoryToSheet(
+          client,
+          sheetId,
+          inventoryItems,
+          sheetInventory,
+          results,
+        );
+
+        await updateLastSyncTimestamp(ctx, orgMetadata);
+
+        span.setAttributes({
+          "sync.locationsImported": results.locationsImported,
+          "sync.locationsDeleted": results.locationsDeleted,
+          "sync.locationsRenamed": results.locationsRenamed,
+          "sync.inventoryImported": results.inventoryImported,
+          "sync.inventoryDeleted": results.inventoryDeleted,
+          "sync.inventoryRenamed": results.inventoryRenamed,
+          "sync.success": results.errorMessages.length === 0,
+        });
+
+        return {
+          ...results,
+          success: results.errorMessages.length === 0,
+        };
       },
-      locationItems,
-      inventoryItems,
-      results,
     );
-
-    // Process deletions from app
-    await processAppDeletions(
-      { db: ctx.db, actorContext: ctx.actorContext },
-      locationItems,
-      inventoryItems,
-      results,
-    );
-
-    // Process renames (app → sheet name)
-    await processRenames(
-      { db: ctx.db, actorContext: ctx.actorContext },
-      locationItems,
-      inventoryItems,
-      results,
-    );
-
-    // Push changes to sheets
-    await pushLocationsToSheet(
-      client,
-      sheetId,
-      locationItems,
-      sheetLocations,
-      results,
-    );
-    await pushInventoryToSheet(
-      client,
-      sheetId,
-      inventoryItems,
-      sheetInventory,
-      results,
-    );
-
-    await updateLastSyncTimestamp(ctx, orgMetadata);
-
-    return {
-      ...results,
-      success: results.errorMessages.length === 0,
-    };
   });
 
 export const googleSheetsRouter = createTRPCRouter({
