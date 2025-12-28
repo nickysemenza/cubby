@@ -9,8 +9,10 @@ import {
   productUnitMappings,
 } from "~/server/db/schema";
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
+import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
   findProductsNeedingFoodCategory,
+  findProductsWithStalePrices,
   findProductsWithUPCNoImages,
 } from "~/server/repo/product";
 
@@ -24,6 +26,8 @@ interface AllProblems {
   emptyLocations: EmptyLocation[];
   productsWithoutUPCImages: ProductWithoutUPCImage[];
   productsWithWrongCategory: ProductWithWrongCategory[];
+  productsWithStalePrices: ProductWithStalePrice[];
+  inventoryWithStaleValuations: InventoryWithStaleValuation[];
   totalProblems: number;
 }
 
@@ -93,6 +97,23 @@ export interface ProductWithWrongCategory {
   manufacturer: string;
   category: string | null;
   indicator: "ndb" | "ingredient";
+}
+
+export interface ProductWithStalePrice {
+  id: string;
+  name: string;
+  manufacturer: string;
+  storedPrice: number | null;
+  computedPrice: number | null;
+  status: "missing" | "stale";
+}
+
+export interface InventoryWithStaleValuation {
+  id: string;
+  productName: string;
+  locationName: string;
+  storedValuation: number | null;
+  expectedValuation: number | null;
 }
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -376,6 +397,8 @@ export const findAllProblems = async (
     emptyLocations,
     productsWithUPCNoImages,
     productsNeedingFoodCategory,
+    productsWithStalePricesRaw,
+    inventoryWithStaleValuationsRaw,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db, organizationId),
     findOrphanedProducts(db, organizationId),
@@ -385,6 +408,8 @@ export const findAllProblems = async (
     findEmptyLocations(db, organizationId),
     findProductsWithUPCNoImages(db, organizationId as never),
     findProductsNeedingFoodCategory(db, organizationId as never),
+    findProductsWithStalePrices(db, organizationId as never),
+    findInventoryWithStaleValuations(db, organizationId as never),
   ]);
 
   // Transform to problem types
@@ -400,6 +425,12 @@ export const findAllProblems = async (
       indicator: getFoodIndicator(p),
     }));
 
+  const productsWithStalePrices: ProductWithStalePrice[] =
+    productsWithStalePricesRaw;
+
+  const inventoryWithStaleValuations: InventoryWithStaleValuation[] =
+    inventoryWithStaleValuationsRaw;
+
   const totalProblems =
     duplicateUniqueProducts.length +
     orphanedProducts.length +
@@ -408,7 +439,9 @@ export const findAllProblems = async (
     invalidInventoryAmounts.length +
     emptyLocations.length +
     productsWithoutUPCImages.length +
-    productsWithWrongCategory.length;
+    productsWithWrongCategory.length +
+    productsWithStalePrices.length +
+    inventoryWithStaleValuations.length;
 
   return {
     duplicateUniqueProducts,
@@ -419,6 +452,8 @@ export const findAllProblems = async (
     emptyLocations,
     productsWithoutUPCImages,
     productsWithWrongCategory,
+    productsWithStalePrices,
+    inventoryWithStaleValuations,
     totalProblems,
   };
 };

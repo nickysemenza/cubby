@@ -72,12 +72,31 @@ const productWithWrongCategorySchema = z.object({
   indicator: z.enum(["ndb", "ingredient"]),
 });
 
+const productWithStalePriceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+  storedPrice: z.number().nullable(),
+  computedPrice: z.number().nullable(),
+  status: z.enum(["missing", "stale"]),
+});
+
+const inventoryWithStaleValuationSchema = z.object({
+  id: z.string(),
+  productName: z.string(),
+  locationName: z.string(),
+  storedValuation: z.number().nullable(),
+  expectedValuation: z.number().nullable(),
+});
+
 // Combined output schema for all problems
 const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
   orphanedProducts: z.array(orphanedProductSchema),
   invalidUPCs: z.array(invalidUPCSchema),
   productsWithoutMappings: z.array(productWithoutMappingsSchema),
+  productsWithStalePrices: z.array(productWithStalePriceSchema),
+  inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
   productsWithoutUPCImages: z.array(productWithoutUPCImageSchema),

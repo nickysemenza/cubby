@@ -19,6 +19,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "~/schemas/pagination";
+import { computeProductPrice } from "~/schemas/price-mapping-utils";
 import {
   hasFoodIndicators,
   type ProductCategory,
@@ -53,6 +54,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { createOrUpdatePriceMapping } from "./inventory";
 
 // Type for deeply nested product query
@@ -275,7 +277,7 @@ export const createProduct = async (
       ingredientId: ingredientId ?? null,
     });
 
-    // If there are unit mappings, create them
+    // If there are unit mappings, create them and sync price
     if (unitMappings && unitMappings.length > 0) {
       await tx.insert(productUnitMappings).values(
         unitMappings.map((mapping) => ({
@@ -285,6 +287,9 @@ export const createProduct = async (
           source: mapping.source,
         })),
       );
+
+      // Sync the product price from the newly created mappings
+      await syncProductPrice(tx, unsafeProductId(newProduct.id));
     }
 
     // Associate images if provided
@@ -451,6 +456,9 @@ export const updateProduct = async (
           })
           .where(eq(productUnitMappings.id, mapping.id));
       }
+
+      // Sync the product price after all unit mapping changes
+      await syncProductPrice(tx, productId);
     }
 
     // Add new images if provided
@@ -1049,4 +1057,178 @@ export const backfillFoodCategories = async (
     updated: productsToUpdate.length,
     products: productsToUpdate.map((p) => ({ id: p.id, name: p.name })),
   };
+};
+
+/**
+ * Sync the price column for a product by recomputing from unit mappings.
+ * Also syncs valuation for all inventory entries of this product.
+ * This is the single function that should be called whenever unit mappings change.
+ */
+export const syncProductPrice = async (
+  tx: DrizzleTransaction,
+  productId: ProductId,
+): Promise<void> => {
+  // Fetch all unit mappings for this product
+  const mappings = await tx.query.productUnitMappings.findMany({
+    where: eq(productUnitMappings.productId, productId),
+  });
+
+  // Compute the price using WASM (single source of truth)
+  const price = computeProductPrice(mappings);
+
+  // Update the product's price column
+  await tx.update(product).set({ price }).where(eq(product.id, productId));
+
+  // Update valuations for all inventory entries of this product
+  await syncInventoryValuationsForProduct(tx, productId);
+};
+
+/**
+ * Find all products that have stale or missing prices.
+ * A price is stale if the computed price from unit mappings differs from the stored price.
+ * A price is missing if the product has price mappings but no stored price.
+ */
+export const findProductsWithStalePrices = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    manufacturer: string;
+    storedPrice: number | null;
+    computedPrice: number | null;
+    status: "missing" | "stale";
+  }>
+> => {
+  const dbClient = getDb(db);
+
+  // Get all products with their unit mappings
+  const productsWithMappings = await dbClient.query.product.findMany({
+    where: and(
+      eq(product.organizationId, organizationId),
+      isNull(product.deletedAt),
+    ),
+    columns: {
+      id: true,
+      name: true,
+      manufacturer: true,
+      price: true,
+    },
+    with: {
+      unitMappings: true,
+    },
+  });
+
+  const results: Array<{
+    id: string;
+    name: string;
+    manufacturer: string;
+    storedPrice: number | null;
+    computedPrice: number | null;
+    status: "missing" | "stale";
+  }> = [];
+
+  for (const prod of productsWithMappings) {
+    const computedPrice = computeProductPrice(prod.unitMappings);
+    const storedPrice = prod.price;
+
+    // Skip if both are null (no price mapping, no stored price)
+    if (computedPrice === null && storedPrice === null) {
+      continue;
+    }
+
+    // Check if price is missing or stale
+    if (computedPrice !== null && storedPrice === null) {
+      results.push({
+        id: prod.id,
+        name: prod.name,
+        manufacturer: prod.manufacturer,
+        storedPrice,
+        computedPrice,
+        status: "missing",
+      });
+    } else if (
+      computedPrice !== null &&
+      storedPrice !== null &&
+      Math.abs(computedPrice - storedPrice) > 0.001
+    ) {
+      results.push({
+        id: prod.id,
+        name: prod.name,
+        manufacturer: prod.manufacturer,
+        storedPrice,
+        computedPrice,
+        status: "stale",
+      });
+    }
+  }
+
+  return results;
+};
+
+/**
+ * Backfill product prices from unit mappings.
+ * Updates all products with missing or stale prices.
+ */
+export const backfillProductPrices = async (
+  db: Database,
+  organizationId: OrganizationId,
+  actor: ActorContext,
+): Promise<{
+  updated: number;
+  products: Array<{
+    id: string;
+    name: string;
+    oldPrice: number | null;
+    newPrice: number | null;
+  }>;
+}> => {
+  const productsToUpdate = await findProductsWithStalePrices(
+    db,
+    organizationId,
+  );
+
+  if (productsToUpdate.length === 0) {
+    return { updated: 0, products: [] };
+  }
+
+  return await withTransaction(db, async (tx) => {
+    const updatedProducts: Array<{
+      id: string;
+      name: string;
+      oldPrice: number | null;
+      newPrice: number | null;
+    }> = [];
+
+    for (const prod of productsToUpdate) {
+      // Update the product's price
+      await tx
+        .update(product)
+        .set({ price: prod.computedPrice })
+        .where(eq(product.id, prod.id));
+
+      // Log audit entry
+      await logAuditEntry(tx, actor, {
+        entityType: "product",
+        entityId: prod.id,
+        action: "update",
+        changes: {
+          price: { from: prod.storedPrice, to: prod.computedPrice },
+        },
+      });
+
+      updatedProducts.push({
+        id: prod.id,
+        name: prod.name,
+        oldPrice: prod.storedPrice,
+        newPrice: prod.computedPrice,
+      });
+    }
+
+    return {
+      updated: updatedProducts.length,
+      products: updatedProducts,
+    };
+  });
 };

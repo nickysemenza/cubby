@@ -1,19 +1,21 @@
 import { and, count, eq, ilike, not } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { ActorContext } from "~/schemas/context";
-import type {
-  InventoryId,
-  LocationId,
-  OrganizationId,
-  ProductId,
+import {
+  type InventoryId,
+  type LocationId,
+  type OrganizationId,
+  type ProductId,
+  unsafeProductId,
 } from "~/schemas/identifiers";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
 } from "~/schemas/pagination";
+import { computeInventoryValuation } from "~/schemas/price-mapping-utils";
 import { createAppError } from "~/server/api/trpc";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
@@ -22,6 +24,7 @@ import {
   getDb,
   insertAndReturnDb,
   relations,
+  unwrapDb,
   updateAndReturnDb,
 } from "~/server/repo/database-helpers";
 import { dbInventoryEntryToAPI } from "./helpers";
@@ -29,6 +32,170 @@ import type {
   CreateInventoryEntryData,
   UpdateInventoryEntryData,
 } from "./types";
+
+/**
+ * Compute valuation for an inventory entry based on amount and product price.
+ * Returns the valuation value to store.
+ */
+const computeValuationForEntry = async (
+  db: Database,
+  productId: ProductId,
+  amountValue: number,
+): Promise<number | null> => {
+  const productData = await getDb(db).query.product.findFirst({
+    where: eq(product.id, productId),
+    columns: { price: true },
+  });
+  return computeInventoryValuation(amountValue, productData?.price ?? null);
+};
+
+/**
+ * Sync valuation for all inventory entries of a specific product.
+ * Called when product price changes.
+ * Accepts both Database and DrizzleTransaction for use within transactions.
+ */
+export const syncInventoryValuationsForProduct = async (
+  db: Database | DrizzleTransaction,
+  productId: ProductId,
+): Promise<number> => {
+  const client = unwrapDb(db);
+
+  // Get the product's current price
+  const productData = await client.query.product.findFirst({
+    where: eq(product.id, productId),
+    columns: { price: true },
+  });
+  const productPrice = productData?.price ?? null;
+
+  // Get all inventory entries for this product
+  const entries = await client.query.inventoryEntry.findMany({
+    where: eq(inventoryEntry.productId, productId),
+    columns: { id: true, amount: true },
+  });
+
+  let updated = 0;
+  for (const entry of entries) {
+    const amountValue =
+      typeof entry.amount === "object" && entry.amount !== null
+        ? (entry.amount as { value: number }).value
+        : 0;
+    const valuation = computeInventoryValuation(amountValue, productPrice);
+
+    await client
+      .update(inventoryEntry)
+      .set({ valuation })
+      .where(eq(inventoryEntry.id, entry.id));
+    updated++;
+  }
+
+  return updated;
+};
+
+/**
+ * Find inventory entries with stale or missing valuations.
+ * Stale = stored valuation differs from computed (amount.value * product.price).
+ */
+export const findInventoryWithStaleValuations = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<
+  Array<{
+    id: InventoryId;
+    storedValuation: number | null;
+    expectedValuation: number | null;
+    productName: string;
+    locationName: string;
+  }>
+> => {
+  const entries = await getDb(db).query.inventoryEntry.findMany({
+    where: eq(inventoryEntry.organizationId, organizationId),
+    columns: { id: true, amount: true, valuation: true },
+    with: {
+      Product: { columns: { name: true, price: true } },
+      location: { columns: { name: true } },
+    },
+  });
+
+  const staleEntries: Array<{
+    id: InventoryId;
+    storedValuation: number | null;
+    expectedValuation: number | null;
+    productName: string;
+    locationName: string;
+  }> = [];
+
+  for (const entry of entries) {
+    const amountValue =
+      typeof entry.amount === "object" && entry.amount !== null
+        ? (entry.amount as { value: number }).value
+        : 0;
+    const expectedValuation = computeInventoryValuation(
+      amountValue,
+      entry.Product.price,
+    );
+
+    // Compare with tolerance for floating point
+    const isStale =
+      entry.valuation !== expectedValuation &&
+      !(entry.valuation === null && expectedValuation === null);
+
+    if (isStale) {
+      staleEntries.push({
+        id: entry.id as InventoryId,
+        storedValuation: entry.valuation,
+        expectedValuation,
+        productName: entry.Product.name,
+        locationName: entry.location.name,
+      });
+    }
+  }
+
+  return staleEntries;
+};
+
+/**
+ * Backfill valuations for all inventory entries in an organization.
+ * Returns count of updated entries.
+ */
+export const backfillInventoryValuations = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<{ updated: number; skipped: number }> => {
+  const entries = await getDb(db).query.inventoryEntry.findMany({
+    where: eq(inventoryEntry.organizationId, organizationId),
+    columns: { id: true, amount: true, valuation: true },
+    with: {
+      Product: { columns: { price: true } },
+    },
+  });
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const entry of entries) {
+    const amountValue =
+      typeof entry.amount === "object" && entry.amount !== null
+        ? (entry.amount as { value: number }).value
+        : 0;
+    const expectedValuation = computeInventoryValuation(
+      amountValue,
+      entry.Product.price,
+    );
+
+    // Only update if different
+    if (entry.valuation !== expectedValuation) {
+      await getDb(db)
+        .update(inventoryEntry)
+        .set({ valuation: expectedValuation })
+        .where(eq(inventoryEntry.id, entry.id));
+      updated++;
+    } else {
+      skipped++;
+    }
+  }
+
+  return { updated, skipped };
+};
 
 /**
  * Check if a product with expectedQuantity=1 already exists in a different location.
@@ -192,7 +359,7 @@ export const updateInventoryEntry = async (
 ) => {
   const { organizationId } = actor;
 
-  // Fetch current state for audit logging
+  // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
     where: and(
       eq(inventoryEntry.id, id),
@@ -200,11 +367,33 @@ export const updateInventoryEntry = async (
     ),
   });
 
+  // Recompute valuation if amount or productId changed
+  let valuation: number | null | undefined;
+  if (data.amount !== undefined || data.productId !== undefined) {
+    // Use new values if provided, otherwise use existing values
+    const effectiveProductIdRaw = data.productId ?? before?.productId;
+    const effectiveAmount = data.amount ?? before?.amount;
+    const amountValue =
+      typeof effectiveAmount === "object" && effectiveAmount !== null
+        ? (effectiveAmount as { value: number }).value
+        : 0;
+
+    if (effectiveProductIdRaw) {
+      const effectiveProductId = unsafeProductId(effectiveProductIdRaw);
+      valuation = await computeValuationForEntry(
+        db,
+        effectiveProductId,
+        amountValue,
+      );
+    }
+  }
+
   // Build update values using helper to filter undefined
   const updateValues = buildPartialUpdateValues({
     amount: data.amount,
     productId: data.productId,
     locationId: data.locationId,
+    valuation,
   });
 
   const updated = await updateAndReturnDb(
@@ -257,11 +446,23 @@ export const createInventoryEntry = async (
 ) => {
   const { organizationId } = actor;
 
+  // Compute valuation based on amount and product price
+  const amountValue =
+    typeof data.amount === "object" && data.amount !== null
+      ? (data.amount as { value: number }).value
+      : 0;
+  const valuation = await computeValuationForEntry(
+    db,
+    data.productId,
+    amountValue,
+  );
+
   const created = await insertAndReturnDb(db, inventoryEntry, {
     organizationId: organizationId,
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
+    valuation,
   });
 
   // Log audit entry

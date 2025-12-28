@@ -29,9 +29,11 @@ import type {
   EmptyLocation,
   InvalidInventoryAmount,
   InvalidUPC,
+  InventoryWithStaleValuation,
   OrphanedProduct,
   ProductWithoutMappings,
   ProductWithoutUPCImage,
+  ProductWithStalePrice,
   ProductWithWrongCategory,
 } from "~/server/repo/problems";
 import { useTRPC } from "~/trpc/react";
@@ -444,6 +446,168 @@ function ProductsWithWrongCategoryList({
   );
 }
 
+function ProductsWithStalePricesList({
+  products,
+}: {
+  products: ProductWithStalePrice[];
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const backfillMutation = useMutation(
+    api.product.backfillProductPrices.mutationOptions({
+      onSuccess: (result) => {
+        if (result.updated > 0) {
+          toast.success(
+            `Synced ${result.updated} product price${result.updated !== 1 ? "s" : ""}`,
+          );
+        } else {
+          toast.info("No products need price sync");
+        }
+        queryClient.invalidateQueries({
+          queryKey: api.problems.getAllProblems.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: api.product.list.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  return (
+    <ProblemSection
+      title="Stale Product Prices"
+      description="Products where the stored price doesn't match the computed price from unit mappings."
+      icon={DollarSign}
+      iconColor={products.length > 0 ? "text-orange-500" : "text-green-500"}
+      items={products}
+      emptyMessage="All product prices are in sync with their unit mappings."
+      headerAction={
+        products.length > 0 ? (
+          <Button
+            size="sm"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              "Sync All Prices"
+            )}
+          </Button>
+        ) : undefined
+      }
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        badges: [
+          <Badge
+            key="status"
+            variant={product.status === "missing" ? "destructive" : "secondary"}
+          >
+            {product.status === "missing" ? "Missing" : "Stale"}
+          </Badge>,
+          <span key="prices" className="text-muted-foreground text-sm">
+            {product.storedPrice !== null
+              ? `$${product.storedPrice.toFixed(2)}`
+              : "null"}{" "}
+            → ${product.computedPrice?.toFixed(2) ?? "null"}
+          </span>,
+        ],
+        route: { to: "/products/$id" as const, params: { id: product.id } },
+      })}
+    />
+  );
+}
+
+function InventoryWithStaleValuationsList({
+  entries,
+}: {
+  entries: InventoryWithStaleValuation[];
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const backfillMutation = useMutation(
+    api.inventoryItem.backfillInventoryValuations.mutationOptions({
+      onSuccess: (result) => {
+        if (result.updated > 0) {
+          toast.success(
+            `Synced ${result.updated} inventory valuation${result.updated !== 1 ? "s" : ""}`,
+          );
+        } else {
+          toast.info("No inventory entries need valuation sync");
+        }
+        queryClient.invalidateQueries({
+          queryKey: api.problems.getAllProblems.queryKey(),
+        });
+        queryClient.invalidateQueries({
+          queryKey: api.inventoryItem.list.queryKey(),
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  return (
+    <ProblemSection
+      title="Stale Inventory Valuations"
+      description="Inventory entries where the stored valuation doesn't match amount × product price."
+      icon={DollarSign}
+      iconColor={entries.length > 0 ? "text-orange-500" : "text-green-500"}
+      items={entries}
+      emptyMessage="All inventory valuations are in sync."
+      headerAction={
+        entries.length > 0 ? (
+          <Button
+            size="sm"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing...
+              </>
+            ) : (
+              "Sync All Valuations"
+            )}
+          </Button>
+        ) : undefined
+      }
+      renderItem={(entry) => ({
+        title: entry.productName,
+        details: [
+          <div
+            key="location"
+            className="flex items-center gap-2 text-gray-600 text-sm"
+          >
+            <MapPin className="h-3 w-3" />
+            {entry.locationName}
+          </div>,
+        ],
+        badges: [
+          <span key="valuations" className="text-muted-foreground text-sm">
+            {entry.storedValuation !== null
+              ? `$${entry.storedValuation.toFixed(2)}`
+              : "null"}{" "}
+            → ${entry.expectedValuation?.toFixed(2) ?? "null"}
+          </span>,
+        ],
+        route: { to: "/inventory/$id" as const, params: { id: entry.id } },
+      })}
+    />
+  );
+}
+
 export function ProblemsOverview() {
   const api = useTRPC();
 
@@ -476,7 +640,7 @@ export function ProblemsOverview() {
     <div className="space-y-6">
       {hasProblems ? (
         <Tabs defaultValue="duplicates" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
+          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
             <TabsTrigger value="duplicates" className="flex items-center gap-1">
               Duplicates
               {problems.duplicateUniqueProducts.length > 0 && (
@@ -506,6 +670,28 @@ export function ProblemsOverview() {
               {problems.productsWithoutMappings.length > 0 && (
                 <Badge variant="destructive" className="ml-1">
                   {problems.productsWithoutMappings.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="stale-prices"
+              className="flex items-center gap-1"
+            >
+              Prices
+              {problems.productsWithStalePrices.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.productsWithStalePrices.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="stale-valuations"
+              className="flex items-center gap-1"
+            >
+              Valuations
+              {problems.inventoryWithStaleValuations.length > 0 && (
+                <Badge variant="destructive" className="ml-1">
+                  {problems.inventoryWithStaleValuations.length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -560,6 +746,18 @@ export function ProblemsOverview() {
           <TabsContent value="pricing">
             <ProductsWithoutMappingsList
               products={problems.productsWithoutMappings}
+            />
+          </TabsContent>
+
+          <TabsContent value="stale-prices">
+            <ProductsWithStalePricesList
+              products={problems.productsWithStalePrices}
+            />
+          </TabsContent>
+
+          <TabsContent value="stale-valuations">
+            <InventoryWithStaleValuationsList
+              entries={problems.inventoryWithStaleValuations}
             />
           </TabsContent>
 

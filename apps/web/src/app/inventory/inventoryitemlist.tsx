@@ -7,9 +7,10 @@ import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { LocationPillLink, ProductPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { showAmountAndPrice } from "../_components/inventory/format-amount";
+import { tryFormatAmount } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-value";
 import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { NoneState } from "../_components/NoneState";
 import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
@@ -40,6 +41,7 @@ export function InventoryItemList() {
         },
       }),
       columnHelper.accessor("amount", {
+        header: "Qty",
         cell: (info) => {
           return (
             <Link
@@ -47,12 +49,17 @@ export function InventoryItemList() {
               to="/inventory/$id"
               params={{ id: info.row.original.id }}
             >
-              {showAmountAndPrice(
-                info.getValue(),
-                info.row.original.product.unitMappings,
-              )}
+              {tryFormatAmount(info.getValue())}
             </Link>
           );
+        },
+      }),
+      columnHelper.accessor("valuation", {
+        header: "Valuation",
+        cell: (info) => {
+          const val = info.getValue();
+          if (val === null || val === undefined) return <NoneState />;
+          return `$${val.toFixed(2)}`;
         },
       }),
       columnHelper.accessor("product", {

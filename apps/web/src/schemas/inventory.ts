@@ -10,6 +10,7 @@ export const inventoryEntryOut = z
     id: inventoryId,
     // inventory entries do not have a name, just ID
     amount: amount,
+    valuation: z.number().nullable(), // Precomputed: amount.value * product.price
   })
   .extend(dbTimestampsOut.shape);
 

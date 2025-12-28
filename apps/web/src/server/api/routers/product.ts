@@ -23,8 +23,10 @@ import {
 } from "~/schemas/product";
 import {
   backfillFoodCategories,
+  backfillProductPrices,
   findProductByUPC,
   findProductsNeedingFoodCategory,
+  findProductsWithStalePrices,
   findProductsWithUPCNoImages,
   getCategoryDistribution,
   quickCreateProduct,
@@ -374,6 +376,40 @@ const backfillFoodCategoriesEndpoint = protectedProcedure
     );
   });
 
+// Get count of products with stale/missing prices
+const getStalePricesCount = protectedProcedure
+  .output(z.number())
+  .query(async ({ ctx }) => {
+    const staleProducts = await findProductsWithStalePrices(
+      ctx.db,
+      ctx.organizationId,
+    );
+    return staleProducts.length;
+  });
+
+// Backfill product prices from unit mappings
+const backfillProductPricesEndpoint = protectedProcedure
+  .output(
+    z.object({
+      updated: z.number(),
+      products: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          oldPrice: z.number().nullable(),
+          newPrice: z.number().nullable(),
+        }),
+      ),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    return await backfillProductPrices(
+      ctx.db,
+      ctx.organizationId,
+      ctx.actorContext,
+    );
+  });
+
 // Get category distribution for insights visualization
 const categoryDistribution = protectedProcedure
   .output(
@@ -406,5 +442,7 @@ export const productRouter = createTRPCRouter({
   getUPCImageBackfillCount,
   getFoodCategoryBackfillCount,
   backfillFoodCategories: backfillFoodCategoriesEndpoint,
+  getStalePricesCount,
+  backfillProductPrices: backfillProductPricesEndpoint,
   categoryDistribution,
 });

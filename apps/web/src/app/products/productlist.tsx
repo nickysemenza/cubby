@@ -128,6 +128,14 @@ export function ProductList({ initialCategory }: ProductListProps) {
             <NoneState />
           ),
       }),
+      columnHelper.accessor("price", {
+        header: "Price",
+        cell: (info) => {
+          const price = info.getValue();
+          if (price === null || price === undefined) return <NoneState />;
+          return `$${price.toFixed(2)}`;
+        },
+      }),
       columnHelper.accessor("food", {
         meta: {
           mobileCategory: "compact",

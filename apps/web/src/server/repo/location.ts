@@ -217,6 +217,7 @@ const dbLocationToAPIWithChildren = (
       return {
         id: unsafeInventoryId(rest.id),
         amount: rest.amount as { value: number; unit: string },
+        valuation: rest.valuation,
         createdAt: rest.createdAt,
         updatedAt: rest.updatedAt,
         product: {
@@ -228,6 +229,7 @@ const dbLocationToAPIWithChildren = (
           ndb_number: Product.ndb_number,
           model: Product.model,
           expectedQuantity: Product.expectedQuantity,
+          price: Product.price,
           // Product images are not fetched in this query for performance reasons
           // If product images are needed, use a separate query or join
           images: [],

@@ -64,6 +64,30 @@ export const extractPriceFromMappings = (
   return match?.price ?? null;
 };
 
+/**
+ * Compute the price value to store in the product.price column.
+ * Uses WASM to detect price mappings - single source of truth.
+ * Returns just the numeric value (assumes USD for storage).
+ */
+export const computeProductPrice = (
+  unitMappings: Array<{ a: Amount; b: Amount }>,
+): number | null => {
+  const priceAmount = extractPriceFromMappings(unitMappings);
+  return priceAmount?.value ?? null;
+};
+
+/**
+ * Compute the valuation (total value) for an inventory entry.
+ * Simple multiplication of quantity by unit price.
+ */
+export const computeInventoryValuation = (
+  amountValue: number,
+  productPrice: number | null,
+): number | null => {
+  if (productPrice === null) return null;
+  return amountValue * productPrice;
+};
+
 /** Default currency unit when creating new price mappings */
 const DEFAULT_CURRENCY = "dollar";
 

@@ -80,6 +80,7 @@ export const productTopLevelOut = z
   .object({
     id: productId,
     images: z.array(imageOut).default([]),
+    price: z.number().nullable(), // Denormalized price from unit mappings
   })
   .extend(productBase.shape)
   .extend(dbTimestampsOut.shape);

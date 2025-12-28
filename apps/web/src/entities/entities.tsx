@@ -36,6 +36,7 @@ export const entities: Record<Entity, EntityDefinition> = {
         "upc",
         "category",
         "ndb_number",
+        "price",
       ],
     },
   },
@@ -78,7 +79,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     list: {
       defaultSort: "createdAt",
       standardColumns: [],
-      sortableFields: ["createdAt", "amount"],
+      sortableFields: ["createdAt", "amount", "valuation"],
     },
   },
   "usda-food": {

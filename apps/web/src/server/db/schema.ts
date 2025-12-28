@@ -5,6 +5,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -205,6 +206,7 @@ export const product = pgTable(
     category: text("category", {
       enum: productCategoryValues,
     }), // product category for filtering
+    price: real("price"), // Unit price in dollars, null if no price mapping
   },
   (table) => ({
     categoryIdx: index("Product_category_idx").on(table.category),
@@ -320,6 +322,7 @@ export const inventoryEntry = pgTable(
     locationId: uuid("locationId")
       .notNull()
       .references(() => location.id),
+    valuation: real("valuation"), // Precomputed: amount.value * product.price
   },
   (table) => ({
     productLocationUnique: uniqueIndex(

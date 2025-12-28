@@ -24,12 +24,14 @@ import {
   inventoryUpdateInput,
 } from "~/schemas/inventory";
 import {
+  backfillInventoryValuations,
   bulkMoveInventoryEntries,
   bulkProcessInventoryEntries,
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntry,
   exportInventoryToCSV,
+  findInventoryWithStaleValuations,
   getInventoryEntryByID,
   importInventoryFromCSV,
   inventoryentryList,
@@ -254,6 +256,29 @@ const { exportCSV, importCSV, previewCSVImport } =
     },
   });
 
+// Get count of inventory entries with stale/missing valuations
+const getStaleValuationsCount = protectedProcedure
+  .output(z.number())
+  .query(async ({ ctx }) => {
+    const staleEntries = await findInventoryWithStaleValuations(
+      ctx.db,
+      ctx.organizationId,
+    );
+    return staleEntries.length;
+  });
+
+// Backfill inventory valuations from product prices
+const backfillInventoryValuationsEndpoint = protectedProcedure
+  .output(
+    z.object({
+      updated: z.number(),
+      skipped: z.number(),
+    }),
+  )
+  .mutation(async ({ ctx }) => {
+    return await backfillInventoryValuations(ctx.db, ctx.organizationId);
+  });
+
 export const inventoryRouter = createTRPCRouter({
   getByID,
   list,
@@ -266,4 +291,6 @@ export const inventoryRouter = createTRPCRouter({
   exportCSV,
   importCSV,
   previewCSVImport,
+  getStaleValuationsCount,
+  backfillInventoryValuations: backfillInventoryValuationsEndpoint,
 });

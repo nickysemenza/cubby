@@ -248,6 +248,9 @@ export function createUnitMappingsColumn<T extends { id: string }>(
 interface InventoryEntryBase {
   id: string;
   amount: Amount;
+  // Optional related entities - either location (in ProductList) or product (in LocationList)
+  location?: { id: string; name: string };
+  product?: { id: string; name: string };
 }
 
 /**

@@ -2,8 +2,9 @@ import type {
   AnyColumn,
   InferInsertModel,
   InferSelectModel,
+  SQL,
 } from "drizzle-orm";
-import { asc, desc, getTableName, ilike, inArray, type SQL } from "drizzle-orm";
+import { asc, getTableName, ilike, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 import { amount } from "~/codec/codec";
@@ -218,7 +219,12 @@ export const buildOrderBy = <T extends PgTable>(
   }
   const column = table[sort.orderBy as keyof T] as AnyColumn | undefined;
   if (!column) return [];
-  return [sort.direction === "asc" ? asc(column) : desc(column)];
+  // ASC: nulls at end by default in Postgres
+  // DESC: use NULLS LAST to put nulls at the bottom instead of the top
+  if (sort.direction === "asc") {
+    return [asc(column)];
+  }
+  return [sql`${column} desc nulls last`];
 };
 
 /**

@@ -277,4 +277,103 @@ describe("product router", () => {
 
     await expect(caller.getByID({ id: nonExistentId })).rejects.toThrow();
   });
+
+  describe("backfillProductPrices", () => {
+    it("should backfill prices for products with price mappings", async () => {
+      const createCaller = createCallerFactory(productRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create a product with a price mapping
+      const productData = {
+        name: "Priced Product",
+        manufacturer: "Test Brand",
+        model: null,
+        upc: null,
+        ndb_number: null,
+        ingredientId: null,
+        pendingImageIds: [],
+        expectedQuantity: null,
+        unitMappings: [
+          {
+            a: { value: 1, unit: "each" },
+            b: { value: 9.99, unit: "dollar" },
+            source: "manual",
+          },
+        ],
+      };
+
+      const createdProduct = await caller.create(productData);
+
+      // The price should be synced on creation
+      const retrieved = await caller.getByID({ id: createdProduct.id });
+      expect(retrieved.price).toBe(9.99);
+
+      // Now test the backfill endpoint - should return 0 since prices are synced
+      const result = await caller.backfillProductPrices();
+      expect(result.updated).toBe(0);
+      expect(result.products).toEqual([]);
+    });
+
+    it("should return empty result when no products have stale prices", async () => {
+      const createCaller = createCallerFactory(productRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create a product without price mappings
+      const productData = {
+        name: "No Price Product",
+        manufacturer: "Test Brand",
+        model: null,
+        upc: null,
+        ndb_number: null,
+        ingredientId: null,
+        pendingImageIds: [],
+        expectedQuantity: null,
+      };
+
+      await caller.create(productData);
+
+      // Backfill should find nothing to update
+      const result = await caller.backfillProductPrices();
+      expect(result.updated).toBe(0);
+      expect(result.products).toEqual([]);
+    });
+
+    it("should get stale prices count", async () => {
+      const createCaller = createCallerFactory(productRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create a product without price mappings - no stale price
+      const productData = {
+        name: "Product Without Price",
+        manufacturer: "Test Brand",
+        model: null,
+        upc: null,
+        ndb_number: null,
+        ingredientId: null,
+        pendingImageIds: [],
+        expectedQuantity: null,
+      };
+
+      await caller.create(productData);
+
+      // Count should be 0
+      const count = await caller.getStalePricesCount();
+      expect(count).toBe(0);
+    });
+  });
 });

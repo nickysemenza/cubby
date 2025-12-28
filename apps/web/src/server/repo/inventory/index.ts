@@ -3,11 +3,14 @@
 // Bulk operations
 export { bulkMoveInventoryEntries, bulkProcessInventoryEntries } from "./bulk";
 export {
+  backfillInventoryValuations,
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntry,
+  findInventoryWithStaleValuations,
   getInventoryEntryByID,
   inventoryentryList,
+  syncInventoryValuationsForProduct,
   updateInventoryEntry,
 } from "./crud";
 

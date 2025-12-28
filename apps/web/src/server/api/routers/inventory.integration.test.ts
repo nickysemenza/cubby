@@ -736,4 +736,153 @@ describe("inventory router", () => {
       }),
     ).rejects.toThrow(/Failed query/);
   });
+
+  describe("backfillInventoryValuations", () => {
+    it("should compute valuation on inventory creation when product has price", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create location and product with price mapping
+      const location = await createLocation(
+        db,
+        {
+          name: "Pantry",
+          type: "room",
+          parentId: null,
+        },
+        TEST_ACTOR,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Valued Product",
+          manufacturer: "Brand",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "each" },
+              b: { value: 10.0, unit: "dollar" },
+              source: "manual",
+            },
+          ],
+        },
+        TEST_ACTOR,
+      );
+
+      // Create inventory via router - should compute valuation
+      const entry = await caller.create({
+        productId: product.id,
+        locationId: location.id,
+        amount: { value: 5, unit: "each" },
+      });
+
+      // Valuation should be computed: 5 units × $10 = $50
+      expect(entry.valuation).toBe(50.0);
+    });
+
+    it("should return null valuation when product has no price", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create inventory without price mapping
+      const seed = await seedFromCSV(
+        db,
+        organizationId,
+        [
+          {
+            product_name: "Unpriced Product",
+            manufacturer: "Brand",
+            location_name: "Pantry",
+            quantity: 3,
+            unit: "each",
+            // No price
+          },
+        ],
+        TEST_ACTOR,
+      );
+
+      const entryId = seed.inventoryIds.get("Unpriced Product@Pantry")!;
+      const entry = await caller.getByID({ id: entryId });
+
+      // Valuation should be null
+      expect(entry.valuation).toBeNull();
+    });
+
+    it("should get stale valuations count", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create some inventory
+      await seedFromCSV(
+        db,
+        organizationId,
+        [
+          {
+            product_name: "Product A",
+            manufacturer: "Brand",
+            location_name: "Pantry",
+            quantity: 2,
+            unit: "each",
+          },
+        ],
+        TEST_ACTOR,
+      );
+
+      // Should be 0 stale since valuations are synced on creation
+      const count = await caller.getStaleValuationsCount();
+      expect(count).toBe(0);
+    });
+
+    it("should backfill return empty when no stale valuations", async () => {
+      const createCaller = createCallerFactory(inventoryRouter);
+      const caller = createCaller(
+        createTestTRPCContext(db, {
+          auth: { userId: TEST_USER_ID },
+          organizationId: organizationId,
+        }),
+      );
+
+      // Create some inventory with price - valuations auto-synced
+      await seedFromCSV(
+        db,
+        organizationId,
+        [
+          {
+            product_name: "Synced Product",
+            manufacturer: "Brand",
+            location_name: "Pantry",
+            quantity: 4,
+            unit: "each",
+            price: 5.0,
+          },
+        ],
+        TEST_ACTOR,
+      );
+
+      // Backfill should find nothing since values are synced
+      const result = await caller.backfillInventoryValuations();
+      expect(result.updated).toBe(0);
+      expect(result.skipped).toBeGreaterThanOrEqual(0);
+    });
+  });
 });
