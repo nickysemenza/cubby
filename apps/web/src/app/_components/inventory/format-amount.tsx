@@ -41,11 +41,17 @@ export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
 };
 
 /**
- * Safely formats a measure, returning error string on failure
+ * Safely formats a measure, returning error string on failure.
+ * Preserves "each" unit - WASM normalizes to "whole" but we keep user's input.
  */
 export const tryFormatAmount = (amount: WAmount): string => {
   try {
-    return wasm.format_amount(amount);
+    const formatted = wasm.format_amount(amount);
+    // Preserve "each" - WASM normalizes to "whole" but we want to keep user's input
+    if (amount.unit === "each" && formatted.includes("whole")) {
+      return formatted.replace(/\bwhole\b/g, "each");
+    }
+    return formatted;
   } catch (error) {
     return `Error formatting amount: ${error}`;
   }
