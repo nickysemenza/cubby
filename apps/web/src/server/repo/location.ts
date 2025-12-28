@@ -743,6 +743,28 @@ export const deleteLocation = async (
   return false;
 };
 
+/**
+ * Update the lastBulkInventory timestamp for a location.
+ * Used when completing manual inventory at a location (e.g., from Scanner page).
+ */
+export const touchLastBulkInventory = async (
+  db: Database,
+  id: LocationId,
+  organizationId: OrganizationId,
+): Promise<void> => {
+  const result = await getDb(db)
+    .update(location)
+    .set({ lastBulkInventory: new Date() })
+    .where(
+      and(eq(location.id, id), eq(location.organizationId, organizationId)),
+    )
+    .returning({ id: location.id });
+
+  if (result.length === 0) {
+    throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
+  }
+};
+
 export const getLocationById = async (
   db: Database | DrizzleTransaction,
   id: LocationId,

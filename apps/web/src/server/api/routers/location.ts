@@ -23,6 +23,7 @@ import {
   createLocation,
   getLocationById,
   locationList,
+  touchLastBulkInventory as touchLastBulkInventoryRepo,
   updateLocation,
 } from "~/server/repo/location";
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
@@ -102,6 +103,15 @@ const makeTree = protectedProcedure
     async ({ ctx }) => await buildLocationTree(ctx.db, ctx.organizationId),
   );
 
+// Touch lastBulkInventory timestamp (for Scanner page "Mark Complete" button)
+const touchLastBulkInventory = protectedProcedure
+  .input(z.object({ id: locationId }))
+  .output(z.object({ success: z.boolean() }))
+  .mutation(async ({ ctx, input }) => {
+    await touchLastBulkInventoryRepo(ctx.db, input.id, ctx.organizationId);
+    return { success: true };
+  });
+
 // CSV import/export procedures using factory
 const { exportCSV, importCSV, previewCSVImport } = createCSVProcedures({
   schemas: {
@@ -127,6 +137,7 @@ export const locationRouter = createTRPCRouter({
   makeTree,
   create,
   update,
+  touchLastBulkInventory,
   exportCSV,
   importCSV,
   previewCSVImport,

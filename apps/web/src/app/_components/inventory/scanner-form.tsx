@@ -11,9 +11,10 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Plus } from "lucide-react";
+import { Check, CheckCircle, Plus } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import {
   Command,
@@ -30,6 +31,7 @@ import { queryKeys } from "~/lib/query-keys";
 import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { ProductTopLevelOut } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
+import { LocationInventoryTable } from "../locations/location-inventory-table";
 import { BarcodeScannerButton } from "./barcode-scanner-button";
 
 interface ScannerFormProps {
@@ -74,6 +76,15 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
     enabled: inputValue.length > 0 && !isUpcInput(inputValue),
   });
 
+  // Existing inventory at this location
+  const { data: inventoryData, refetch: refetchInventory } = useQuery({
+    ...api.inventoryItem.list.queryOptions({
+      sort: { orderBy: "createdAt", direction: "desc" },
+      filters: { locationIdFilter: locationId },
+      pagination: { pageIndex: 0, pageSize: 100 },
+    }),
+  });
+
   // UPC lookup mutation
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
@@ -99,6 +110,16 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.inventoryItem.list,
         });
+      },
+    }),
+  );
+
+  // Mark inventory complete mutation
+  const touchLastBulkInventoryMutation = useMutation(
+    api.location.touchLastBulkInventory.mutationOptions({
+      onSuccess: () => {
+        toast.success("Marked inventory complete");
+        queryClient.invalidateQueries({ queryKey: queryKeys.location.list });
       },
     }),
   );
@@ -311,6 +332,39 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
           </div>
         </div>
       )}
+
+      {/* Existing inventory at location */}
+      <div className="space-y-3 border-t pt-4">
+        <div className="flex items-center justify-between">
+          <h4 className="font-medium text-sm">
+            At {locationName}
+            {inventoryData?.items && (
+              <span className="ml-1 text-muted-foreground">
+                ({inventoryData.items.length})
+              </span>
+            )}
+          </h4>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              touchLastBulkInventoryMutation.mutate({ id: locationId })
+            }
+            disabled={touchLastBulkInventoryMutation.isPending}
+          >
+            <CheckCircle className="mr-2 h-4 w-4" />
+            {touchLastBulkInventoryMutation.isPending
+              ? "Updating..."
+              : "Mark Complete"}
+          </Button>
+        </div>
+
+        <LocationInventoryTable
+          locationId={locationId}
+          inventoryItems={inventoryData?.items ?? []}
+          onRefresh={() => refetchInventory()}
+        />
+      </div>
     </div>
   );
 }
