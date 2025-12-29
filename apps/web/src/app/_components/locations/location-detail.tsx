@@ -25,6 +25,7 @@ import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
+import { LocationBreadcrumb } from "./location-breadcrumb";
 import { LocationCardGrid } from "./location-card-grid";
 import { LocationForm } from "./location-form";
 import { LocationInventoryTable } from "./location-inventory-table";
@@ -144,11 +145,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   ];
 
   return (
-    <DetailPage
-      sections={sections}
-      entity="location"
-      name={location.name}
-      rawData={location}
-    />
+    <>
+      <LocationBreadcrumb location={location} linkable />
+      <DetailPage
+        sections={sections}
+        entity="location"
+        name={location.name}
+        rawData={location}
+      />
+    </>
   );
 };
