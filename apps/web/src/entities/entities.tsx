@@ -1,3 +1,11 @@
+import {
+  Image,
+  MapPin,
+  Package,
+  ShoppingCart,
+  Soup,
+  UtensilsCrossed,
+} from "lucide-react";
 import type { Entity, EntityDefinition } from "./types";
 
 export const entities: Record<Entity, EntityDefinition> = {
@@ -6,6 +14,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Ingredients",
     basePath: "ingredients",
     icon: "🍽️",
+    lucideIcon: UtensilsCrossed,
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
@@ -23,6 +32,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Products",
     basePath: "products",
     icon: "🛒",
+    lucideIcon: ShoppingCart,
     detail: { commonSections: ["images", "unit-mappings", "history"] },
     list: {
       hasUnitMappings: true,
@@ -45,6 +55,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Recipes",
     basePath: "recipes",
     icon: "📖",
+    lucideIcon: UtensilsCrossed,
     detail: { commonSections: ["images", "history"] },
     list: {
       defaultSort: "createdAt",
@@ -57,6 +68,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Locations",
     basePath: "locations",
     icon: "📍",
+    lucideIcon: MapPin,
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
     detail: { commonSections: ["history"] },
@@ -73,6 +85,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Inventory",
     basePath: "inventory",
     icon: "📦",
+    lucideIcon: Package,
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
     // Inventory list has custom columns (image from product, amount instead of name)
@@ -87,6 +100,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "USDA Foods",
     basePath: "usda",
     icon: "🍲",
+    lucideIcon: Soup,
     // USDA foods are read-only, no detail/list conventions needed
   },
   image: {
@@ -94,6 +108,7 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Images",
     basePath: "images",
     icon: "🖼️",
+    lucideIcon: Image,
     detail: { commonSections: ["history"] },
     list: {
       defaultSort: "createdAt",

@@ -20,15 +20,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
-import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { getOptionalLocationId } from "~/schemas/form-fields";
 import { type LocationId, unsafeInventoryId } from "~/schemas/identifiers";
@@ -84,7 +76,9 @@ export function MoveInventoryDialog({
     }),
   );
 
-  const onSubmit = async (values: FormValues) => {
+  const handleSubmit = async () => {
+    const values = form.getValues();
+
     if (!values.targetLocation) {
       setError("Please select a target location");
       return;
@@ -118,55 +112,31 @@ export function MoveInventoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            Move {items.length} Item{items.length !== 1 ? "s" : ""}
-          </DialogTitle>
-          <DialogDescription>
-            Select a destination location for the selected inventory item
-            {items.length !== 1 ? "s" : ""}.
-          </DialogDescription>
-        </DialogHeader>
+    <FormProvider {...form}>
+      <BulkActionDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        items={items}
+        action="Move"
+        pendingLabel="Moving..."
+        description={`Select a destination location for the selected inventory item${items.length !== 1 ? "s" : ""}.`}
+        renderItem={(item) =>
+          `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
+        }
+        onSubmit={handleSubmit}
+        isPending={bulkMoveMutation.isPending}
+      >
+        <div className="space-y-4">
+          <ComboboxFieldWithSearch
+            form={form}
+            name="targetLocation"
+            label="Move to Location"
+            searchType="location"
+          />
 
-        <FormProvider {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <div className="font-medium text-sm">Items to move:</div>
-              <ul className="max-h-32 space-y-1 overflow-y-auto text-muted-foreground text-sm">
-                {items.map((item) => (
-                  <li key={item.id}>
-                    {item.product.name} - {item.amount.value} {item.amount.unit}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <ComboboxFieldWithSearch
-              form={form}
-              name="targetLocation"
-              label="Move to Location"
-              searchType="location"
-            />
-
-            {error && <div className="text-destructive text-sm">{error}</div>}
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleOpenChange(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={bulkMoveMutation.isPending}>
-                {bulkMoveMutation.isPending ? "Moving..." : "Move"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </FormProvider>
-      </DialogContent>
-    </Dialog>
+          {error && <div className="text-destructive text-sm">{error}</div>}
+        </div>
+      </BulkActionDialog>
+    </FormProvider>
   );
 }

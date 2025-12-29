@@ -1,15 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
-import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { queryKeys } from "~/lib/query-keys";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
@@ -44,7 +36,6 @@ export function DeleteInventoryDialog({
 
   const handleDelete = async () => {
     try {
-      // Delete items one by one (could be optimized with bulk delete in the future)
       await Promise.all(
         items.map((item) => deleteMutation.mutateAsync({ id: item.id })),
       );
@@ -60,41 +51,19 @@ export function DeleteInventoryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            Delete {items.length} Item{items.length !== 1 ? "s" : ""}?
-          </DialogTitle>
-          <DialogDescription>
-            This action cannot be undone. The following inventory item
-            {items.length !== 1 ? "s" : ""} will be permanently deleted.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-2">
-          <ul className="max-h-32 space-y-1 overflow-y-auto text-muted-foreground text-sm">
-            {items.map((item) => (
-              <li key={item.id}>
-                {item.product.name} - {item.amount.value} {item.amount.unit}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDelete}
-            disabled={deleteMutation.isPending}
-          >
-            {deleteMutation.isPending ? "Deleting..." : "Delete"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <BulkActionDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      items={items}
+      action="Delete"
+      pendingLabel="Deleting..."
+      description={`This action cannot be undone. The following inventory item${items.length !== 1 ? "s" : ""} will be permanently deleted.`}
+      renderItem={(item) =>
+        `${item.product.name} - ${item.amount.value} ${item.amount.unit}`
+      }
+      onSubmit={handleDelete}
+      isPending={deleteMutation.isPending}
+      variant="destructive"
+    />
   );
 }

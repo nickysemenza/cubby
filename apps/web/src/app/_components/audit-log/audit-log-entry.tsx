@@ -1,12 +1,4 @@
-import {
-  Bot,
-  ChevronDown,
-  ChevronRight,
-  MapPin,
-  Package,
-  ShoppingCart,
-  UtensilsCrossed,
-} from "lucide-react";
+import { Bot, ChevronDown, ChevronRight, Package } from "lucide-react";
 import { useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
@@ -16,6 +8,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
+import { entities } from "~/entities/entities";
+import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
 import type { AuditEntityType } from "~/server/repo/audit-log";
 import type { RouterOutputs } from "~/trpc/react";
@@ -25,20 +19,20 @@ import { ChangesList } from "../value-change";
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
 
-// Map entity types to icons and paths
-const entityConfig: Record<
-  string,
-  { icon: React.ElementType; basePath: string; label: string }
-> = {
-  product: { icon: ShoppingCart, basePath: "/products", label: "Product" },
-  location: { icon: MapPin, basePath: "/locations", label: "Location" },
-  inventory: { icon: Package, basePath: "/inventory", label: "Inventory" },
-  recipe: { icon: UtensilsCrossed, basePath: "/recipes", label: "Recipe" },
-  ingredient: {
-    icon: UtensilsCrossed,
-    basePath: "/ingredients",
-    label: "Ingredient",
-  },
+/** Map AuditEntityType to Entity (handles "inventory" -> "inventory-item") */
+const auditEntityToEntity = (entityType: string): Entity => {
+  if (entityType === "inventory") return "inventory-item";
+  return entityType as Entity;
+};
+
+/** Get entity config from the unified entities definition */
+const getEntityConfig = (entityType: string) => {
+  const entity = auditEntityToEntity(entityType);
+  const config = entities[entity];
+  return {
+    icon: config?.lucideIcon ?? Package,
+    label: config?.label ?? entityType,
+  };
 };
 
 // Map actions to badge variants
@@ -70,16 +64,12 @@ export function AuditLogEntryComponent({
   const [isOpen, setIsOpen] = useState(false);
   const hasChanges = entry.changes && Object.keys(entry.changes).length > 0;
 
-  const entity = entityConfig[entry.entityType] ?? {
-    icon: Package,
-    basePath: "",
-    label: entry.entityType,
-  };
+  const entityConf = getEntityConfig(entry.entityType);
   const action = actionConfig[entry.action] ?? {
     label: entry.action,
     className: "bg-gray-100 text-gray-800",
   };
-  const EntityIcon = entity.icon;
+  const EntityIcon = entityConf.icon;
 
   const userInitials = entry.user?.name
     ? entry.user.name
@@ -120,7 +110,7 @@ export function AuditLogEntryComponent({
             ) : (
               <>
                 <EntityIcon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                <span className="font-medium text-sm">{entity.label}</span>
+                <span className="font-medium text-sm">{entityConf.label}</span>
               </>
             )}
 
