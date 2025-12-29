@@ -18,7 +18,11 @@ interface StatCardProps {
   isLoading: boolean;
 }
 
-function StatCard({ entity, count, isLoading }: StatCardProps) {
+interface StatCardPropsWithIndex extends StatCardProps {
+  index: number;
+}
+
+function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
   const def = entities[entity];
   const Icon = def.lucideIcon;
 
@@ -26,24 +30,41 @@ function StatCard({ entity, count, isLoading }: StatCardProps) {
     <Link to={`/${def.basePath}` as "/locations"}>
       <Card
         className={cn(
-          "p-2.5 transition-all duration-200",
-          "hover:border-muted-foreground/30 hover:shadow-md",
-          "cursor-pointer",
+          "group relative overflow-hidden p-3 transition-all duration-200",
+          "hover:-translate-y-0.5 hover:shadow-md",
+          "cursor-pointer border-l-4",
+          "fade-in slide-in-from-bottom-2 animate-in",
+          def.color.text.replace("text-", "border-l-"),
         )}
+        style={{ animationDelay: `${index * 50}ms`, animationFillMode: "both" }}
       >
-        <div className="flex items-center gap-2">
-          <div className={cn("rounded p-1.5", def.color.bg, def.color.text)}>
-            <Icon className="h-4 w-4" />
+        {/* Subtle background tint on hover */}
+        <div
+          className={cn(
+            "absolute inset-0 opacity-0 transition-opacity group-hover:opacity-50",
+            def.color.bg,
+          )}
+        />
+
+        <div className="relative flex items-center gap-3">
+          <div
+            className={cn(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105",
+              def.color.bg,
+              def.color.text,
+            )}
+          >
+            <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
             {isLoading ? (
-              <div className="h-5 w-8 animate-pulse rounded bg-muted" />
+              <div className="h-7 w-12 animate-pulse rounded bg-muted" />
             ) : (
-              <p className="font-semibold text-base leading-none">
+              <p className="font-heading font-semibold text-2xl leading-none tracking-tight">
                 {formatCount(count ?? 0)}
               </p>
             )}
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            <p className="mt-1 truncate text-muted-foreground text-xs">
               {def.pluralLabel}
             </p>
           </div>
@@ -96,13 +117,14 @@ export default function EntityCount() {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
       {displayOrder.map((entity, i) => (
         <StatCard
           key={entity}
           entity={entity}
-          count={results[i].data?.meta.totalCount}
-          isLoading={results[i].isLoading}
+          count={results[i]?.data?.meta.totalCount}
+          isLoading={results[i]?.isLoading ?? true}
+          index={i}
         />
       ))}
     </div>

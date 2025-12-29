@@ -7,23 +7,17 @@ import { Bug } from "lucide-react";
 import type { ReactNode } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
-import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
+import { entities } from "~/entities/entities";
+import type { Entity } from "~/entities/types";
 import { useDebug } from "~/hooks/useDebug";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
 import { DebugDialog } from "./DebugDialog";
-
-export type EntityType =
-  | "products"
-  | "locations"
-  | "inventory"
-  | "recipes"
-  | "ingredients"
-  | "images";
+import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 
 interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
   /** Entity type for navigation - when provided, cards show a view button */
-  entityType?: EntityType;
+  entity?: Entity;
   /**
    * Custom render function for mobile cards.
    * Receives the row and the default card content, allowing full customization.
@@ -96,7 +90,7 @@ function categorizeField(
 
 export function MobileCardView<TItem>({
   table,
-  entityType,
+  entity,
   renderMobileCard,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
@@ -107,6 +101,9 @@ export function MobileCardView<TItem>({
     .getAllColumns()
     .some((col) => col.id === "select");
   const isSelectable = hasRowSelection && hasSelectColumn;
+
+  // Get the base path for navigation from entity config
+  const basePath = entity ? entities[entity].basePath : undefined;
 
   return (
     <div className="block space-y-4 lg:hidden">
@@ -238,7 +235,7 @@ export function MobileCardView<TItem>({
           // Build details href for navigation
           const entityId = rowData.id as string | undefined;
           const detailsHref =
-            entityType && entityId ? `/${entityType}/${entityId}` : undefined;
+            basePath && entityId ? `/${basePath}/${entityId}` : undefined;
 
           // Build default card content
           const defaultContent = (
@@ -288,18 +285,19 @@ export function MobileCardView<TItem>({
               }
               actions={actionsContent}
               detailsHref={detailsHref}
+              entity={entity}
             >
               {defaultContent}
             </MobileCard>
           );
         })
+      ) : entity ? (
+        <EntityEmptyState
+          entity={entity}
+          isFiltered={hasActiveFilters(table.getState().columnFilters)}
+        />
       ) : (
-        <Empty className="py-8">
-          <EmptyTitle>No results</EmptyTitle>
-          <EmptyDescription>
-            Try adjusting your search or filters
-          </EmptyDescription>
-        </Empty>
+        <EntityEmptyState entity="product" isFiltered={true} />
       )}
     </div>
   );

@@ -174,7 +174,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         error={error}
         ariaLabel="Products Table"
         timing={timing}
-        entityType="products"
+        entity="product"
       />
     </div>
   );

@@ -22,11 +22,13 @@ function DashboardPage() {
 
   return (
     <PageWrapper>
-      <h1 className="mb-6 font-bold text-3xl">Dashboard</h1>
-      <p className="text-lg">
-        Welcome to your protected dashboard! This page is only visible to
-        authenticated users.
-      </p>
+      <div className="animate-fade-in">
+        <h1 className="mb-6 font-bold font-heading text-3xl">Dashboard</h1>
+        <p className="text-lg">
+          Welcome to your protected dashboard! This page is only visible to
+          authenticated users.
+        </p>
+      </div>
     </PageWrapper>
   );
 }

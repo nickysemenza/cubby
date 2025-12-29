@@ -36,7 +36,7 @@ export function RecipeList() {
         error={error}
         ariaLabel="Recipes Table"
         timing={timing}
-        entityType="recipes"
+        entity="recipe"
       />
     </div>
   );

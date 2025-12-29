@@ -11,7 +11,7 @@ export const formatRichText = (text: RichItem[]) => {
       case "Ing":
         return (
           <span
-            className="inline-flex items-center rounded bg-orange-50 px-1.5 py-0.5 font-medium text-orange-600 text-sm dark:bg-orange-950 dark:text-orange-400"
+            className="inline-flex items-center rounded bg-orange-50 px-1.5 py-0.5 font-medium text-orange-600 text-sm"
             // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
             key={x}
           >
@@ -28,7 +28,7 @@ export const formatRichText = (text: RichItem[]) => {
         }
         return (
           <span
-            className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 font-medium text-green-800 text-sm dark:bg-green-900/30 dark:text-green-400"
+            className="inline-flex items-center rounded bg-green-100 px-1.5 py-0.5 font-medium text-green-800 text-sm"
             // biome-ignore lint/suspicious/noArrayIndexKey: RichItem array has no stable IDs
             key={x}
           >

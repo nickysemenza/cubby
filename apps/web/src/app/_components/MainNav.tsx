@@ -11,7 +11,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
-import { ThemeToggle } from "~/components/ui/theme-toggle";
 import { useDebug } from "~/hooks/useDebug";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
@@ -128,7 +127,7 @@ export function MainNav({
       <Link to="/">
         <FlexContainer align="center" gap={2}>
           <PackageOpen className="h-5 w-5 sm:h-6 sm:w-6" />
-          <span className="self-center whitespace-nowrap font-semibold text-base sm:text-2xl dark:text-white">
+          <span className="self-center whitespace-nowrap font-semibold text-base sm:text-2xl">
             recipehub
           </span>
         </FlexContainer>
@@ -205,11 +204,6 @@ export function MainNav({
           <SyncStatusBadge />
         </div>
 
-        {/* Theme Toggle - hidden on mobile (available in sheet) */}
-        <div className="hidden md:block">
-          <ThemeToggle />
-        </div>
-
         {/* Debug Toggle */}
         <Button
           variant="ghost"
@@ -217,8 +211,7 @@ export function MainNav({
           onClick={toggleDebug}
           className={cn(
             "hidden h-8 px-2 md:flex",
-            isDebugEnabled &&
-              "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
+            isDebugEnabled && "bg-orange-50 text-orange-600",
           )}
           title={isDebugEnabled ? "Disable debug mode" : "Enable debug mode"}
         >
@@ -273,12 +266,6 @@ export function MainNav({
                 </div>
               )}
 
-              {/* Theme Toggle for Mobile */}
-              <div className="flex min-h-[44px] items-center justify-between px-3 py-2">
-                <span className="font-medium text-sm">Theme</span>
-                <ThemeToggle />
-              </div>
-
               {/* Debug Toggle for Mobile */}
               <SheetClose
                 render={
@@ -287,8 +274,7 @@ export function MainNav({
                     onClick={toggleDebug}
                     className={cn(
                       "min-h-[44px] justify-start px-3 py-2 text-sm",
-                      isDebugEnabled &&
-                        "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
+                      isDebugEnabled && "bg-orange-50 text-orange-600",
                     )}
                   />
                 }

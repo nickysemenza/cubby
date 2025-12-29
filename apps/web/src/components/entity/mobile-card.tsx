@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { entities } from "~/entities/entities";
+import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
 
 interface MobileCardProps {
@@ -25,6 +26,8 @@ interface MobileCardProps {
   titleIcon?: LucideIcon;
   /** Optional subtitle below title */
   subtitle?: string;
+  /** Optional entity type for colored accent border */
+  entity?: Entity;
 }
 
 /**
@@ -49,11 +52,18 @@ export function MobileCard({
   title,
   titleIcon: TitleIcon,
   subtitle,
+  entity,
 }: MobileCardProps) {
+  // Get entity-specific border color, fallback to primary
+  const borderColor = entity
+    ? entities[entity].color.text.replace("text-", "border-l-")
+    : "border-l-primary/30";
+
   return (
     <div
       className={cn(
-        "flex items-start gap-3 rounded-lg border border-l-2 border-l-primary/30 bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
+        "flex animate-fade-in items-start gap-3 rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all hover:shadow-md",
+        borderColor,
         className,
       )}
     >
@@ -84,16 +94,17 @@ export function MobileCard({
         {children}
       </div>
 
-      {/* View button and actions */}
+      {/* View button and actions - larger touch targets for mobile */}
       {(detailsHref || actions) && (
         <div className="flex shrink-0 items-center gap-1">
           {detailsHref && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-              <Link to={detailsHref}>
-                <ChevronRight className="h-4 w-4" />
-                <span className="sr-only">View details</span>
-              </Link>
-            </Button>
+            <Link
+              to={detailsHref}
+              className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="View details"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Link>
           )}
           {actions}
         </div>

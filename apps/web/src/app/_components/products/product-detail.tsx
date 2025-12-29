@@ -1,3 +1,4 @@
+import { Apple, Info } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { ProductInputPayload } from "~/schemas/product";
@@ -30,6 +31,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
+      icon: Info,
       content: editMode.isEditing ? (
         <div className="container mx-auto py-10">
           <h1 className="mb-6 font-bold text-2xl">Edit Product</h1>
@@ -51,6 +53,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ? [
           {
             title: "Nutrition Information",
+            icon: Apple,
             content: (
               <MutedBox>
                 <NutritionInfoTable n={product.food.nutritionInfo} limit={10} />

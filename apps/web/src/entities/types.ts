@@ -39,9 +39,9 @@ interface EntityListConfig {
 
 /** Entity color classes for consistent visual identification */
 interface EntityColor {
-  /** Background color classes (e.g., "bg-blue-100 dark:bg-blue-900/30") */
+  /** Background color classes (e.g., "bg-blue-100") */
   bg: string;
-  /** Text color classes (e.g., "text-blue-500 dark:text-blue-400") */
+  /** Text color classes (e.g., "text-blue-500") */
   text: string;
 }
 

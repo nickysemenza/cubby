@@ -122,7 +122,7 @@ export function InventoryItemList() {
         error={error}
         ariaLabel="Inventory Items Table"
         timing={timing}
-        entityType="inventory"
+        entity="inventory-item"
       />
     </div>
   );

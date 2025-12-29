@@ -132,7 +132,7 @@ export function LocationList() {
           error={error}
           ariaLabel="Locations Table"
           timing={timing}
-          entityType="locations"
+          entity="location"
         />
       ) : (
         <div>

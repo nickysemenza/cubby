@@ -8,10 +8,6 @@ interface PageWrapperProps {
 
 export const PageWrapper = ({ children, className }: PageWrapperProps) => {
   return (
-    <div
-      className={cn("container mx-auto p-1", "terminal:max-w-none", className)}
-    >
-      {children}
-    </div>
+    <div className={cn("container mx-auto p-1", className)}>{children}</div>
   );
 };

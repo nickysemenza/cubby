@@ -49,37 +49,37 @@ const getSyncStateStyles = (state: SyncState) => {
   switch (state) {
     case "matched":
       return {
-        bg: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+        bg: "bg-gray-100 text-gray-600",
         icon: <CheckCircle2 className="h-3 w-3" />,
         label: "Matched",
       };
     case "conflict":
       return {
-        bg: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300",
+        bg: "bg-orange-100 text-orange-700",
         icon: <GitCompare className="h-3 w-3" />,
         label: "Conflict",
       };
     case "app_only":
       return {
-        bg: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+        bg: "bg-green-100 text-green-700",
         icon: <Plus className="h-3 w-3" />,
         label: "App Only",
       };
     case "sheet_only":
       return {
-        bg: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+        bg: "bg-blue-100 text-blue-700",
         icon: <Plus className="h-3 w-3" />,
         label: "Sheet Only",
       };
     case "renamed":
       return {
-        bg: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300",
+        bg: "bg-cyan-100 text-cyan-700",
         icon: <Pencil className="h-3 w-3" />,
         label: "Renamed",
       };
     case "moved":
       return {
-        bg: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+        bg: "bg-yellow-100 text-yellow-700",
         icon: <ArrowRightLeft className="h-3 w-3" />,
         label: "Moved",
       };

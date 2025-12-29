@@ -11,15 +11,17 @@ export const Route = createFileRoute("/insights")({
 
 function InsightsPage() {
   return (
-    <div className="container mx-auto space-y-8 py-6">
+    <div className="container mx-auto animate-fade-in space-y-8 py-6">
       <div className="flex items-center gap-3">
         <BarChart3 className="h-8 w-8" />
-        <h1 className="font-bold text-3xl">Insights</h1>
+        <h1 className="font-bold font-heading text-3xl">Insights</h1>
       </div>
 
       {/* Products by Category Section */}
       <section className="space-y-4">
-        <h2 className="font-semibold text-xl">Products by Category</h2>
+        <h2 className="font-heading font-semibold text-xl">
+          Products by Category
+        </h2>
         <p className="text-muted-foreground text-sm">
           Distribution of products across categories. Click a slice to view
           products in that category.
@@ -29,7 +31,9 @@ function InsightsPage() {
 
       {/* Inventory by Location Section */}
       <section className="space-y-4">
-        <h2 className="font-semibold text-xl">Inventory by Location</h2>
+        <h2 className="font-heading font-semibold text-xl">
+          Inventory by Location
+        </h2>
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="space-y-2">
             <h3 className="font-medium text-muted-foreground text-sm">
@@ -48,7 +52,9 @@ function InsightsPage() {
 
       {/* Ingredient Relationships Section */}
       <section className="space-y-4">
-        <h2 className="font-semibold text-xl">Ingredient Relationships</h2>
+        <h2 className="font-heading font-semibold text-xl">
+          Ingredient Relationships
+        </h2>
         <p className="text-muted-foreground text-sm">
           Ingredients that appear together in multiple recipes are connected.
           Larger nodes indicate ingredients used in more recipes.

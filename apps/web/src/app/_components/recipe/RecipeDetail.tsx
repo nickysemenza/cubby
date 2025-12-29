@@ -121,7 +121,7 @@ const RecipeDetail: React.FC<{
           {/* Images for table view */}
           {recipeImages.length > 0 && (
             <div className="mb-6">
-              <EntityImageList images={recipeImages} title="Recipe Images" />
+              <EntityImageList images={recipeImages} />
             </div>
           )}
           <RecipeIngredientList ingredients={ingredients} ingMap={data} />

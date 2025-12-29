@@ -1,10 +1,16 @@
 import { Link } from "@tanstack/react-router";
+import { ImageIcon } from "lucide-react";
 import type { FC } from "react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { GridContainer } from "~/components/layout/grid-container";
 import { InteractiveImage } from "~/components/media/interactive-image";
 import { Button } from "~/components/ui/button";
-import { NoneState } from "./NoneState";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 
 /** Minimal image type for display - only the fields we actually use */
 interface MinimalImage {
@@ -15,21 +21,25 @@ interface MinimalImage {
 
 interface EntityImageListProps {
   images: MinimalImage[];
-  title?: string;
   showViewAllButton?: boolean;
 }
 
 const EntityImageList: FC<EntityImageListProps> = ({
   images,
-  title = "Images",
   showViewAllButton = true,
 }) => {
   return (
     <div>
-      {title && <h2 className="mb-3 font-semibold text-xl">{title}</h2>}
-
       {images.length === 0 ? (
-        <NoneState />
+        <Empty variant="minimal" className="py-4">
+          <EmptyMedia variant="icon">
+            <ImageIcon className="size-4" />
+          </EmptyMedia>
+          <EmptyTitle>No images</EmptyTitle>
+          <EmptyDescription>
+            Upload images to see them here
+          </EmptyDescription>
+        </Empty>
       ) : (
         <div>
           <GridContainer cols="thumbs" className="mb-4">

@@ -1,3 +1,4 @@
+import { Package } from "lucide-react";
 import type { FC } from "react";
 import type { z } from "zod";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
@@ -31,6 +32,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   const sections: DetailSection[] = [
     {
       title: "Inventory Item Details",
+      icon: Package,
       content: editMode.isEditing ? (
         <InventoryForm
           mode="edit"

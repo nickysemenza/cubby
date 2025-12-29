@@ -107,7 +107,7 @@ export function LocationBreadcrumb({
               className={cn(
                 "flex items-center gap-1.5 rounded-md px-2 py-1",
                 highlightNonDefault && !isDefault
-                  ? "border-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/30"
+                  ? "border-2 border-amber-500/50 bg-amber-50"
                   : "bg-muted/50",
                 isLast && "font-medium",
               )}

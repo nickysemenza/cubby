@@ -6,14 +6,14 @@
 /*
   ---break---
 */
-@custom-variant dark (&:is(.dark *));
-@custom-variant terminal (&:is(.terminal *));
 
 @theme {
-  --font-heading: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  /* Fraunces - warm serif with personality for headings */
+  --font-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  /* Source Sans 3 - readable, slightly warm for body text */
   --font-sans:
-    "Nunito Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Source Sans 3 Variable", ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono:
     "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
     "Roboto Mono", Consolas, "Courier New", monospace;
@@ -70,114 +70,65 @@
 
 /*
   ---break---
+  "Warm Clay" Theme - Modern/refined with warm organic touch
 */
 :root {
-  /* Catppuccin Latte Base */ /* Catppuccin Latte Text */
-  --card: oklch(1 0 0); /* Catppuccin Latte Mantle */
-  --card-foreground: oklch(0.141 0.005 285.823); /* Catppuccin Latte Text */
-  --popover: oklch(1 0 0); /* Catppuccin Latte Mantle */
-  --popover-foreground: oklch(0.141 0.005 285.823); /* Catppuccin Latte Text */
-  --primary: oklch(0.646 0.222 41.116); /* Catppuccin Latte Blue */
-  --primary-foreground: oklch(0.98 0.016 73.684); /* Catppuccin Latte Base */
-  --secondary: oklch(0.967 0.001 286.375); /* Catppuccin Latte Surface0 */
-  --secondary-foreground: oklch(
-    0.21 0.006 285.885
-  ); /* Catppuccin Latte Subtext1 */
-  --muted: oklch(0.967 0.001 286.375); /* Catppuccin Latte Surface0 */
-  --muted-foreground: oklch(
-    0.552 0.016 285.938
-  ); /* Catppuccin Latte Subtext0 */
-  --accent: oklch(0.967 0.001 286.375); /* Catppuccin Latte Surface1 */
-  --accent-foreground: oklch(0.21 0.006 285.885); /* Catppuccin Latte Text */
-  --destructive: oklch(0.577 0.245 27.325); /* Catppuccin Latte Red */
-  --destructive-foreground: #eff1f5; /* Catppuccin Latte Base */
-  --border: oklch(0.92 0.004 286.32); /* Catppuccin Latte Surface0 */
-  --input: oklch(0.92 0.004 286.32); /* Catppuccin Latte Surface1 */
-  --ring: oklch(0.705 0.015 286.067); /* Catppuccin Latte Lavender */
-  --chart-1: oklch(0.837 0.128 66.29); /* Catppuccin Latte Blue */
-  --chart-2: oklch(0.705 0.213 47.604); /* Catppuccin Latte Teal */
-  --chart-3: oklch(0.646 0.222 41.116); /* Catppuccin Latte Green */
-  --chart-4: oklch(0.553 0.195 38.402); /* Catppuccin Latte Mauve */
-  --chart-5: oklch(0.47 0.157 37.304); /* Catppuccin Latte Peach */
-  --radius: 0;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-primary: oklch(0.646 0.222 41.116);
-  --sidebar-primary-foreground: oklch(0.98 0.016 73.684);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.705 0.015 286.067);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.141 0.005 285.823);
-}
-/*
-  ---break---
-*/
-.dark {
-  --background: oklch(0.141 0.005 285.823); /* Catppuccin Frappe Base */
-  --foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
-  --card: oklch(0.21 0.006 285.885); /* Catppuccin Frappe Mantle */
-  --card-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
-  --popover: oklch(0.21 0.006 285.885); /* Catppuccin Frappe Mantle */
-  --popover-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
-  --primary: oklch(0.705 0.213 47.604); /* Catppuccin Frappe Blue */
-  --primary-foreground: oklch(0.98 0.016 73.684); /* Catppuccin Frappe Base */
-  --secondary: oklch(0.274 0.006 286.033); /* Catppuccin Frappe Surface0 */
-  --secondary-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Subtext1 */
-  --muted: oklch(0.274 0.006 286.033); /* Catppuccin Frappe Surface0 */
-  --muted-foreground: oklch(
-    0.705 0.015 286.067
-  ); /* Catppuccin Frappe Subtext0 */
-  --accent: oklch(0.274 0.006 286.033); /* Catppuccin Frappe Surface1 */
-  --accent-foreground: oklch(0.985 0 0); /* Catppuccin Frappe Text */
-  --destructive: oklch(0.704 0.191 22.216); /* Catppuccin Frappe Red */
-  --destructive-foreground: #303446; /* Catppuccin Frappe Base */
-  --border: oklch(1 0 0 / 10%); /* Catppuccin Frappe Surface0 */
-  --input: oklch(1 0 0 / 15%); /* Catppuccin Frappe Surface1 */
-  --ring: oklch(0.552 0.016 285.938); /* Catppuccin Frappe Lavender */
-  --chart-1: oklch(0.837 0.128 66.29); /* Catppuccin Frappe Blue */
-  --chart-2: oklch(0.705 0.213 47.604); /* Catppuccin Frappe Teal */
-  --chart-3: oklch(0.646 0.222 41.116); /* Catppuccin Frappe Green */
-  --chart-4: oklch(0.553 0.195 38.402); /* Catppuccin Frappe Mauve */
-  --chart-5: oklch(0.47 0.157 37.304); /* Catppuccin Frappe Peach */
-  --sidebar: oklch(0.21 0.006 285.885);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.705 0.213 47.604);
-  --sidebar-primary-foreground: oklch(0.98 0.016 73.684);
-  --sidebar-accent: oklch(0.274 0.006 286.033);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.552 0.016 285.938);
-}
-/*
-  ---break---
-*/
-.terminal {
-  --background: #fdf6e3; /* NeoHtop warm cream background */
-  --foreground: #586e75; /* NeoHtop muted blue-gray text */
-  --card: #ffffff; /* Pure white cards with shadow */
-  --card-foreground: #586e75; /* Consistent text color */
-  --popover: #ffffff; /* White popover */
-  --popover-foreground: #586e75; /* Consistent text */
-  --primary: #268bd2; /* NeoHtop blue accent */
-  --primary-foreground: #fdf6e3; /* Light text on primary */
-  --secondary: #f5ede1; /* Subtle cream for secondary */
-  --secondary-foreground: #657b83; /* Slightly darker text */
-  --muted: #f5ede1; /* Muted cream background */
-  --muted-foreground: #93a1a1; /* Lighter muted text */
-  --accent: #2aa198; /* NeoHtop teal accent */
-  --accent-foreground: #fdf6e3; /* Light text on accent */
-  --destructive: #dc322f; /* NeoHtop red */
-  --destructive-foreground: #fdf6e3; /* Light text on destructive */
-  --border: #e5d9c7; /* Subtle tan borders */
-  --input: #f5ede1; /* Cream input background */
-  --ring: #268bd2; /* Blue focus ring */
-  --chart-1: #268bd2; /* Primary blue */
-  --chart-2: #b58900; /* Amber/gold */
-  --chart-3: #2aa198; /* Teal */
-  --chart-4: #6c71c4; /* Violet */
-  --chart-5: #dc322f; /* Red */
+  /* Backgrounds - warm cream tones */
+  --background: oklch(0.985 0.008 75); /* Warm off-white with cream tint */
+  --foreground: oklch(0.22 0.02 50); /* Warm charcoal (not pure black) */
+
+  /* Card surfaces - slightly warmer than background */
+  --card: oklch(0.99 0.006 70); /* Warm cream card surface */
+  --card-foreground: oklch(0.22 0.02 50); /* Warm charcoal text */
+
+  /* Popovers - same as card */
+  --popover: oklch(0.99 0.006 70);
+  --popover-foreground: oklch(0.22 0.02 50);
+
+  /* Primary - Terracotta/rust orange for actions */
+  --primary: oklch(0.58 0.16 38); /* Rich terracotta */
+  --primary-foreground: oklch(0.98 0.01 75); /* Light cream for contrast */
+
+  /* Secondary - Warm sage green */
+  --secondary: oklch(0.94 0.025 145); /* Light sage green */
+  --secondary-foreground: oklch(0.35 0.04 145); /* Dark sage for text */
+
+  /* Muted - Warm gray with pink tint */
+  --muted: oklch(0.94 0.012 50); /* Warm beige-gray */
+  --muted-foreground: oklch(0.52 0.02 50); /* Mid-gray with warmth */
+
+  /* Accent - Golden amber highlights */
+  --accent: oklch(0.88 0.12 85); /* Golden amber */
+  --accent-foreground: oklch(0.28 0.04 50); /* Dark warm text */
+
+  /* Destructive - Warm red (not harsh) */
+  --destructive: oklch(0.55 0.2 28); /* Earthy brick red */
+  --destructive-foreground: oklch(0.98 0.01 75); /* Light text on destructive */
+
+  /* Borders and inputs */
+  --border: oklch(0.88 0.015 70); /* Warm tan border */
+  --input: oklch(0.94 0.012 50); /* Same as muted */
+  --ring: oklch(0.58 0.16 38); /* Primary color for focus rings */
+
+  /* Charts - warm palette */
+  --chart-1: oklch(0.58 0.16 38); /* Terracotta (primary) */
+  --chart-2: oklch(0.65 0.12 145); /* Sage green */
+  --chart-3: oklch(0.75 0.14 85); /* Golden amber */
+  --chart-4: oklch(0.55 0.14 320); /* Warm plum */
+  --chart-5: oklch(0.62 0.1 200); /* Slate blue with warmth */
+
+  /* Refined border radius (6px base) */
+  --radius: 0.375rem;
+
+  /* Sidebar - slightly warmer */
+  --sidebar: oklch(0.98 0.01 70);
+  --sidebar-foreground: oklch(0.22 0.02 50);
+  --sidebar-primary: oklch(0.58 0.16 38);
+  --sidebar-primary-foreground: oklch(0.98 0.01 75);
+  --sidebar-accent: oklch(0.94 0.012 50);
+  --sidebar-accent-foreground: oklch(0.28 0.04 50);
+  --sidebar-border: oklch(0.88 0.015 70);
+  --sidebar-ring: oklch(0.58 0.16 38);
 }
 /*
   ---break---
@@ -227,56 +178,6 @@
 /*
   ---break---
 */
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-
-  /* Terminal theme specific styling - monospace and borders only */
-  .terminal {
-    font-family: var(--font-mono);
-    font-feature-settings: "liga" 0; /* Disable ligatures in terminal mode */
-    font-variant-ligatures: none;
-    font-size: 0.75rem; /* 12px base for dense display */
-    line-height: 1.3;
-  }
-
-  .terminal code,
-  .terminal pre,
-  .terminal .font-mono {
-    font-family: var(--font-mono);
-    font-variant-ligatures: none;
-  }
-
-  .terminal * {
-    font-family: var(--font-mono);
-  }
-
-  /* Terminal-specific table font and borders */
-  .terminal table {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem; /* 11px for tables */
-    line-height: 1.2;
-  }
-
-  .terminal th,
-  .terminal td {
-    border: 1px solid var(--border);
-  }
-
-  .terminal th {
-    background-color: var(--muted);
-  }
-
-  /* Remove excess container padding for terminal tables */
-  .terminal .container {
-    padding-left: 0.25rem; /* 4px */
-    padding-right: 0.25rem; /* 4px */
-  }
-}
 
 /*
   ---break---

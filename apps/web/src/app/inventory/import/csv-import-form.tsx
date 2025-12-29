@@ -60,7 +60,7 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
       };
     case "error":
       return {
-        bg: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+        bg: "bg-red-100 text-red-700",
         icon: <AlertCircle className="h-3 w-3" />,
         label: "Error",
       };
@@ -506,7 +506,7 @@ export default function CSVImportForm() {
               <span className="ml-1 text-muted-foreground">skipped</span>
             </div>
             <div>
-              <span className="font-medium text-red-600 dark:text-red-400">
+              <span className="font-medium text-red-600">
                 {importResult.errors}
               </span>
               <span className="ml-1 text-muted-foreground">errors</span>
@@ -629,7 +629,7 @@ export default function CSVImportForm() {
 
       {/* Parse Error */}
       {parseError && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700 text-sm dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700 text-sm">
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <pre className="whitespace-pre-wrap">{parseError}</pre>
@@ -672,8 +672,8 @@ export default function CSVImportForm() {
               </div>
               <div className="text-muted-foreground text-xs">Skip</div>
             </div>
-            <div className="rounded border bg-red-50 p-2 text-center dark:bg-red-950">
-              <div className="font-bold text-lg text-red-600 dark:text-red-400">
+            <div className="rounded border bg-red-50 p-2 text-center">
+              <div className="font-bold text-lg text-red-600">
                 {previewResult.errors}
               </div>
               <div className="text-muted-foreground text-xs">Error</div>

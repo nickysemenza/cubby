@@ -1,3 +1,11 @@
+import {
+  Apple,
+  Info,
+  Link2,
+  Scale,
+  ScrollText,
+  UtensilsCrossed,
+} from "lucide-react";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
@@ -55,19 +63,17 @@ export const USDAFoodDetail: React.FC<{
   );
 
   const ingredientsSection = brandedFoodInfo?.ingredients ? (
-    <div>
-      <h3 className="mb-3">Ingredients</h3>
-      <div className="whitespace-pre-wrap text-sm">
-        {brandedFoodInfo.ingredients}
-      </div>
+    <div className="whitespace-pre-wrap text-sm">
+      {brandedFoodInfo.ingredients}
     </div>
   ) : (
-    <div>No ingredients information available</div>
+    <div className="text-muted-foreground">
+      No ingredients information available
+    </div>
   );
 
   const servingInfoSection = (
     <div>
-      <h3 className="mb-3">Serving Information</h3>
       {brandedFoodInfo?.serving && (
         <div className="space-y-2">
           {brandedFoodInfo.serving.serving_size &&
@@ -87,7 +93,7 @@ export const USDAFoodDetail: React.FC<{
       )}
       {portionInfoRaw.length > 0 && (
         <div className="mt-4">
-          <h4 className="mb-2 font-semibold">Portion Information</h4>
+          <h4 className="mb-2 font-heading font-medium">Portion Information</h4>
           <table className="min-w-full border-collapse">
             <thead>
               <tr className="bg-muted">
@@ -118,7 +124,7 @@ export const USDAFoodDetail: React.FC<{
 
   const nutritionSection = (
     <div>
-      <h3 className="mb-3">Nutrition per 100g</h3>
+      <p className="mb-3 text-muted-foreground text-sm">Per 100g</p>
       <div className="mb-4">
         <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} />
       </div>
@@ -126,31 +132,42 @@ export const USDAFoodDetail: React.FC<{
     </div>
   );
 
-  const unitMappingsSection = <UnitMappingDisplay mappings={mappings} />;
+  const unitMappingsSection = (
+    <UnitMappingDisplay mappings={mappings} title="" />
+  );
 
   // Section for displaying linked products
   const linkedProductsSection = (
     <div>
-      <h3 className="mb-3">Associated Products</h3>
       {!linkedProducts || linkedProducts.length === 0 ? (
-        <div className="text-muted-foreground italic">
+        <div className="text-muted-foreground">
           No associated products found
         </div>
       ) : (
-        <div className="space-y-4">
-          <EntityPillLinkList entity="product" items={linkedProducts} />
-        </div>
+        <EntityPillLinkList entity="product" items={linkedProducts} />
       )}
     </div>
   );
 
   const sections: DetailSection[] = [
-    { title: "Food Information", content: foodInfoSection },
-    { title: "Associated Products", content: linkedProductsSection },
-    { title: "Nutrition Information", content: nutritionSection },
-    { title: "Serving Information", content: servingInfoSection },
-    { title: "Branded Food Ingredients", content: ingredientsSection },
-    { title: "Unit Conversions", content: unitMappingsSection },
+    { title: "Food Information", icon: Info, content: foodInfoSection },
+    {
+      title: "Associated Products",
+      icon: Link2,
+      content: linkedProductsSection,
+    },
+    { title: "Nutrition Information", icon: Apple, content: nutritionSection },
+    {
+      title: "Serving Information",
+      icon: UtensilsCrossed,
+      content: servingInfoSection,
+    },
+    {
+      title: "Branded Food Ingredients",
+      icon: ScrollText,
+      content: ingredientsSection,
+    },
+    { title: "Unit Conversions", icon: Scale, content: unitMappingsSection },
   ];
 
   return (

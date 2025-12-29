@@ -1,6 +1,6 @@
 // Fontsource variable fonts - loaded via bundler for better performance
-import "@fontsource-variable/nunito-sans";
-import "@fontsource-variable/plus-jakarta-sans";
+import "@fontsource-variable/fraunces";
+import "@fontsource-variable/source-sans-3";
 
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
@@ -17,7 +17,6 @@ import { PackageOpen } from "lucide-react";
 import { GlobalCommandMenu } from "~/app/_components/command-menu";
 import { MainNav } from "~/app/_components/MainNav";
 import { RouteErrorComponent } from "~/components/route-error";
-import { ThemeProvider } from "~/components/theme-provider";
 import { Toaster } from "~/components/ui/sonner";
 import { DebugContextProvider } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
@@ -73,22 +72,20 @@ function RootComponent() {
 
   return (
     <Provider queryClient={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <DebugContextProvider>
-          <div className="flex flex-col">
-            <div className="border-b">
-              <div className="flex h-16 items-center px-4">
-                <MainNav className="mx-0" />
-              </div>
+      <DebugContextProvider>
+        <div className="flex flex-col">
+          <div className="border-b">
+            <div className="flex h-16 items-center px-4">
+              <MainNav className="mx-0" />
             </div>
           </div>
-          <main className="container mx-auto p-4">
-            <Outlet />
-          </main>
-          <GlobalCommandMenu />
-          <Toaster />
-        </DebugContextProvider>
-      </ThemeProvider>
+        </div>
+        <main className="container mx-auto p-4">
+          <Outlet />
+        </main>
+        <GlobalCommandMenu />
+        <Toaster />
+      </DebugContextProvider>
     </Provider>
   );
 }
@@ -118,7 +115,7 @@ function NotFoundComponent() {
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
         <HeadContent />
       </head>

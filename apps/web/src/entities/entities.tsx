@@ -18,8 +18,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "ingredients",
     lucideIcon: Carrot,
     color: {
-      bg: "bg-red-100 dark:bg-red-900/30",
-      text: "text-red-500 dark:text-red-400",
+      bg: "bg-amber-50",
+      text: "text-amber-600",
     },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
@@ -39,8 +39,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "products",
     lucideIcon: Barcode,
     color: {
-      bg: "bg-green-100 dark:bg-green-900/30",
-      text: "text-green-500 dark:text-green-400",
+      bg: "bg-emerald-50",
+      text: "text-emerald-600",
     },
     detail: { commonSections: ["images", "unit-mappings", "history"] },
     list: {
@@ -65,8 +65,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "recipes",
     lucideIcon: ChefHat,
     color: {
-      bg: "bg-purple-100 dark:bg-purple-900/30",
-      text: "text-purple-500 dark:text-purple-400",
+      bg: "bg-fuchsia-50",
+      text: "text-fuchsia-600",
     },
     detail: { commonSections: ["images", "history"] },
     list: {
@@ -81,8 +81,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "locations",
     lucideIcon: MapPin,
     color: {
-      bg: "bg-blue-100 dark:bg-blue-900/30",
-      text: "text-blue-500 dark:text-blue-400",
+      bg: "bg-sky-50",
+      text: "text-sky-600",
     },
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
@@ -101,8 +101,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "inventory",
     lucideIcon: Package,
     color: {
-      bg: "bg-orange-100 dark:bg-orange-900/30",
-      text: "text-orange-500 dark:text-orange-400",
+      bg: "bg-orange-50",
+      text: "text-orange-600",
     },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
@@ -119,8 +119,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "usda",
     lucideIcon: Apple,
     color: {
-      bg: "bg-teal-100 dark:bg-teal-900/30",
-      text: "text-teal-500 dark:text-teal-400",
+      bg: "bg-teal-50",
+      text: "text-teal-600",
     },
     // USDA foods are read-only, no detail/list conventions needed
   },
@@ -130,8 +130,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "images",
     lucideIcon: Image,
     color: {
-      bg: "bg-gray-100 dark:bg-gray-800",
-      text: "text-gray-500 dark:text-gray-400",
+      bg: "bg-stone-100",
+      text: "text-stone-600",
     },
     detail: { commonSections: ["history"] },
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList

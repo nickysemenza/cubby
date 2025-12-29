@@ -9,8 +9,8 @@ export const Route = createFileRoute("/usda/")({
 function USDAPage() {
   return (
     <PageWrapper>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-bold text-2xl">USDA Foods</h1>
+      <div className="mb-6 flex animate-fade-in items-center justify-between">
+        <h1 className="font-bold font-heading text-2xl">USDA Foods</h1>
       </div>
       <USDAFoodList />
     </PageWrapper>

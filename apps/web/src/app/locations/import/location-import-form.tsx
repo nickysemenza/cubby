@@ -49,7 +49,7 @@ const getActionStyles = (action: LocationCSVImportResultItem["action"]) => {
       };
     case "error":
       return {
-        bg: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+        bg: "bg-red-100 text-red-700",
         icon: <AlertCircle className="h-3 w-3" />,
         label: "Error",
       };

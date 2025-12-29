@@ -1,7 +1,7 @@
 import type React from "react";
+import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "./EntityPill";
-import { NoneState } from "./NoneState";
 
 // Discriminated union for entity-specific list data
 type EntityPillLinkListProps =
@@ -32,7 +32,14 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
   const { items } = props;
 
   if (!items || items.length === 0) {
-    return <NoneState />;
+    return (
+      <Empty variant="minimal" className="py-3">
+        <EmptyTitle className="text-sm">None</EmptyTitle>
+        <EmptyDescription className="text-xs">
+          No items linked yet
+        </EmptyDescription>
+      </Empty>
+    );
   }
 
   return (

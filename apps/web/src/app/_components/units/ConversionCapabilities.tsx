@@ -104,7 +104,7 @@ export function ConversionCapabilities({
                 key={`${capability.from}-${capability.to}`}
                 className={`flex items-center justify-center gap-1.5 rounded-md px-1.5 py-0.5 ${
                   capability.success
-                    ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                    ? "border border-emerald-200 bg-emerald-50/60 text-emerald-700"
                     : "border border-red-100 bg-red-50/50 text-muted-foreground/60"
                 }`}
               >

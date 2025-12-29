@@ -86,7 +86,7 @@ export function IngredientList() {
         error={error}
         ariaLabel="Ingredients Table"
         timing={timing}
-        entityType="ingredients"
+        entity="ingredient"
         additionalToolbarContent={
           <div className="flex items-center space-x-2">
             <Checkbox

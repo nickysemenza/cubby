@@ -1,3 +1,4 @@
+import { Clock, ImageIcon, Scale } from "lucide-react";
 import { createElement } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
@@ -123,6 +124,7 @@ export function useEntityDetail<
       case "images":
         commonSections.push({
           title: "Images",
+          icon: ImageIcon,
           content: createElement(EntityImageList, {
             images: data.images ?? [],
           }),
@@ -132,6 +134,7 @@ export function useEntityDetail<
       case "unit-mappings":
         commonSections.push({
           title: "Unit Mappings",
+          icon: Scale,
           content: createElement(UnitMappingDisplay, {
             mappings,
             title: "",
@@ -144,6 +147,7 @@ export function useEntityDetail<
         if (auditType) {
           commonSections.push({
             title: "History",
+            icon: Clock,
             content: createElement(AuditLogList, {
               entityType: auditType,
               entityId: data.id,

@@ -1,3 +1,4 @@
+import { Apple, ChefHat, Info, Scale, ShoppingCart } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Card, CardContent } from "~/components/ui/card";
@@ -37,6 +38,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
+      icon: Info,
       content: editMode.isEditing ? (
         <Card>
           <CardContent className="pt-6">
@@ -62,6 +64,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       ? [
           {
             title: "Nutrition Information",
+            icon: Apple,
             content: (
               <MutedBox>
                 <NutritionInfoTable n={nutritionInfo} limit={10} />
@@ -73,6 +76,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     // Custom section: Related Products
     {
       title: "Related Products",
+      icon: ShoppingCart,
       content: (
         <EntityPillLinkList entity="product" items={ingredient.product} />
       ),
@@ -80,11 +84,13 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     // Custom section: Unit Mappings (uses UnitMappingsTable, not UnitMappingDisplay)
     {
       title: "Unit Mappings",
+      icon: Scale,
       content: <UnitMappingsTable mappings={mappings} />,
     },
     // Custom section: Appears In Recipes
     {
       title: "Appears In Recipes",
+      icon: ChefHat,
       content: (
         <EntityPillLinkList
           entity="recipe"

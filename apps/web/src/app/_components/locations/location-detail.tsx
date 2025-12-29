@@ -1,8 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ScanBarcode } from "lucide-react";
+import {
+  DollarSign,
+  FolderTree,
+  ImageIcon,
+  Info,
+  Package,
+  ScanBarcode,
+} from "lucide-react";
 import type { FC } from "react";
 import { buttonVariants } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyMedia,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import { cn } from "~/lib/utils";
 import type { InfLocation, LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -10,7 +23,6 @@ import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
-import { NoneState } from "../NoneState";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
 import { LocationCardGrid } from "./location-card-grid";
@@ -44,6 +56,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const sections: DetailSection[] = [
     {
       title: "Basic Information",
+      icon: Info,
       content: editMode.isEditing ? (
         <div className="container mx-auto py-10">
           <h1 className="mb-6 font-bold text-2xl">Edit Location</h1>
@@ -63,6 +76,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     // Custom section: Inventory Valuation
     {
       title: "Inventory Valuation",
+      icon: DollarSign,
       content: (
         <div className="py-1">
           <InventoryValuationSummary locationId={location.id} variant="full" />
@@ -72,11 +86,13 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     // Custom section: Images (positioned before child locations)
     {
       title: "Images",
+      icon: ImageIcon,
       content: <EntityImageList images={location.images ?? []} />,
     },
     // Custom section: Child Locations
     {
       title: "Child Locations",
+      icon: FolderTree,
       content:
         location.children && location.children.length > 0 ? (
           <LocationCardGrid
@@ -85,12 +101,21 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
             maxColumns={2}
           />
         ) : (
-          <NoneState />
+          <Empty variant="minimal" className="py-4">
+            <EmptyMedia variant="icon">
+              <FolderTree className="size-4" />
+            </EmptyMedia>
+            <EmptyTitle>No child locations</EmptyTitle>
+            <EmptyDescription>
+              This location has no sub-locations
+            </EmptyDescription>
+          </Empty>
         ),
     },
     // Custom section: Inventory Items (with interactive refetch)
     {
       title: "Inventory Items",
+      icon: Package,
       content: (
         <div className="space-y-4">
           <div className="flex items-end gap-2">

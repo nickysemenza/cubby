@@ -1,15 +1,34 @@
 import { cva, type VariantProps } from "class-variance-authority";
+import type { LucideIcon } from "lucide-react";
 
 import { cn } from "~/lib/utils";
 
-function Empty({ className, ...props }: React.ComponentProps<"div">) {
+const emptyVariants = cva(
+  "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl p-6 text-center text-balance animate-fade-in",
+  {
+    variants: {
+      variant: {
+        default: "border border-dashed",
+        warm: "bg-gradient-to-b from-muted/30 to-transparent border border-dashed border-muted-foreground/20",
+        minimal: "",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  },
+);
+
+function Empty({
+  className,
+  variant = "default",
+  ...props
+}: React.ComponentProps<"div"> & VariantProps<typeof emptyVariants>) {
   return (
     <div
       data-slot="empty"
-      className={cn(
-        "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border-dashed p-6 text-center text-balance",
-        className,
-      )}
+      data-variant={variant}
+      className={cn(emptyVariants({ variant, className }))}
       {...props}
     />
   );
@@ -91,6 +110,32 @@ function EmptyContent({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+/** Wrapper for action buttons in empty state */
+function EmptyActions({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="empty-actions"
+      className={cn("mt-2 flex flex-wrap items-center justify-center gap-2", className)}
+      {...props}
+    />
+  );
+}
+
+/** Convenience component for rendering a Lucide icon in EmptyMedia */
+function EmptyIcon({
+  icon: Icon,
+  className,
+}: {
+  icon: LucideIcon;
+  className?: string;
+}) {
+  return (
+    <EmptyMedia variant="icon">
+      <Icon className={cn("size-4", className)} />
+    </EmptyMedia>
+  );
+}
+
 export {
   Empty,
   EmptyHeader,
@@ -98,4 +143,6 @@ export {
   EmptyDescription,
   EmptyContent,
   EmptyMedia,
+  EmptyActions,
+  EmptyIcon,
 };
