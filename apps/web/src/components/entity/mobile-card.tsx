@@ -1,3 +1,4 @@
+import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
@@ -11,21 +12,31 @@ interface MobileCardProps {
   /** Optional actions element (typically a dropdown menu) */
   actions?: ReactNode;
   /** Main content of the card */
-  children: ReactNode;
+  children?: ReactNode;
   /** Additional className for the card container */
   className?: string;
   /** Optional click handler for the card (for navigation) */
   onClick?: () => void;
+  /** Optional title - renders structured header when provided */
+  title?: string;
+  /** Optional icon for title */
+  titleIcon?: LucideIcon;
+  /** Optional subtitle below title */
+  subtitle?: string;
 }
 
 /**
  * A mobile-friendly card component with optional selection checkbox.
  * Provides consistent layout: [Checkbox] | Content | [Actions]
  *
+ * Supports two modes:
+ * - Structured: Pass title/subtitle props for automatic header rendering
+ * - Flexible: Pass children for full control over content
+ *
  * Used by:
  * - MobileCardView for entity lists (with optional selection)
  * - LocationInventoryTable for inventory items with inline editing
- * - EntityPreviewCard as the base card component
+ * - ProblemSection and LocationCardGrid for entity previews
  */
 export function MobileCard({
   selectable,
@@ -33,6 +44,9 @@ export function MobileCard({
   children,
   className,
   onClick,
+  title,
+  titleIcon: TitleIcon,
+  subtitle,
 }: MobileCardProps) {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: role/tabIndex only added when onClick present
@@ -72,7 +86,21 @@ export function MobileCard({
       )}
 
       {/* Content */}
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1 space-y-2">
+        {/* Structured header when title is provided */}
+        {title && (
+          <div>
+            <h5 className="flex items-center gap-2 font-medium">
+              {TitleIcon && <TitleIcon className="h-4 w-4" />}
+              <span className="truncate">{title}</span>
+            </h5>
+            {subtitle && (
+              <p className="text-muted-foreground text-sm">{subtitle}</p>
+            )}
+          </div>
+        )}
+        {children}
+      </div>
 
       {/* Actions - stops propagation to prevent triggering card onClick */}
       {actions && (

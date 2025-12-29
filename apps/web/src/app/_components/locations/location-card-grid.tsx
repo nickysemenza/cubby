@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, ExternalLink, Package } from "lucide-react";
-import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -161,34 +163,42 @@ function LocationCard({
     );
   }
 
-  // Create footer with timestamp
-  const footer = location.lastBulkInventory ? (
-    <div className="flex items-center gap-1 text-muted-foreground text-xs">
-      <Calendar size={10} />
-      <span>
-        Updated{" "}
-        {formatDistanceToNow(location.lastBulkInventory, {
-          addSuffix: true,
-        })}
-      </span>
-    </div>
-  ) : undefined;
-
   return (
-    <EntityPreviewCard
+    <MobileCard
       title={location.name}
       titleIcon={getLocationIcon(location.type)}
       subtitle={subtitle}
-      badges={badges}
-      details={details}
-      footer={footer}
-      primaryAction={{
-        route: { to: "/locations/$id" as const, params: { id: location.id } },
-        label: "View",
-        icon: ExternalLink,
-      }}
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
-      className="card-hover h-full"
-    />
+      className="card-hover h-full border-l border-l-border p-4"
+      actions={
+        <Link to="/locations/$id" params={{ id: location.id }}>
+          <Button variant="outline" size="sm">
+            <ExternalLink className="mr-1 h-4 w-4" />
+            View
+          </Button>
+        </Link>
+      }
+    >
+      {/* Details */}
+      {details.length > 0 && <div className="space-y-1">{details}</div>}
+
+      {/* Badges */}
+      {badges.length > 0 && (
+        <div className="flex flex-wrap gap-2">{badges}</div>
+      )}
+
+      {/* Footer with timestamp */}
+      {location.lastBulkInventory && (
+        <div className="flex items-center gap-1 border-t pt-2 text-muted-foreground text-xs">
+          <Calendar size={10} />
+          <span>
+            Updated{" "}
+            {formatDistanceToNow(location.lastBulkInventory, {
+              addSuffix: true,
+            })}
+          </span>
+        </div>
+      )}
+    </MobileCard>
   );
 }

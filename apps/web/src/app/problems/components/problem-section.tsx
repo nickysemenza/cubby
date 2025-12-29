@@ -1,8 +1,10 @@
+import { Link } from "@tanstack/react-router";
 import { ExternalLink, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -104,20 +106,33 @@ export function ProblemSection<T>({
                   } = renderItem(item);
 
                   return (
-                    <EntityPreviewCard
+                    <MobileCard
                       key={`${itemTitle}-${route.params.id}`}
                       title={itemTitle}
                       subtitle={subtitle}
-                      badges={badges}
-                      details={details}
-                      primaryAction={{
-                        route,
-                        label: editLabel,
-                        icon: ExternalLink,
-                      }}
-                      secondaryActions={customActions}
-                      variant="compact"
-                    />
+                      className="border-l border-l-border p-3"
+                      actions={
+                        <div className="flex gap-1">
+                          <Link
+                            to={route.to as "/products/$id"}
+                            params={route.params as { id: string }}
+                          >
+                            <Button variant="outline" size="sm">
+                              <ExternalLink className="mr-1 h-3 w-3" />
+                              {editLabel}
+                            </Button>
+                          </Link>
+                          {customActions}
+                        </div>
+                      }
+                    >
+                      {details.length > 0 && (
+                        <div className="space-y-0.5">{details}</div>
+                      )}
+                      {badges.length > 0 && (
+                        <div className="flex flex-wrap gap-1">{badges}</div>
+                      )}
+                    </MobileCard>
                   );
                 })}
               </GridContainer>
