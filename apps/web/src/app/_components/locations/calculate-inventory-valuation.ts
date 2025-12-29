@@ -7,7 +7,7 @@ export type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 type InventoryValuationBreakdown = {
   key: string;
   label: string;
-  value: number;
+  valuation: number;
 };
 
 /** Per-category breakdown with counts and item names */
@@ -110,8 +110,8 @@ export function calculateInventoryValuation(
   }
 
   const breakdown: InventoryValuationBreakdown[] = Array.from(byManufacturer)
-    .map(([key, value]) => ({ key, label: key, value }))
-    .sort((a, b) => b.value - a.value);
+    .map(([key, valuation]) => ({ key, label: key, valuation }))
+    .sort((a, b) => b.valuation - a.valuation);
 
   return {
     totalValuation,

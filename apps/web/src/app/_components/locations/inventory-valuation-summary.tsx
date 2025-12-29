@@ -9,7 +9,7 @@ import {
 
 type Variant = "compact" | "full";
 
-interface InventoryValueSummaryProps {
+interface InventoryValuationSummaryProps {
   locationId?: string;
   items?: InventoryItem[];
   variant?: Variant;
@@ -22,12 +22,12 @@ const currency = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-export function InventoryValueSummary({
+export function InventoryValuationSummary({
   locationId,
   items,
   variant = "compact",
   className,
-}: InventoryValueSummaryProps) {
+}: InventoryValuationSummaryProps) {
   const api = useTRPC();
 
   const enabled = !items && !!locationId;
@@ -88,7 +88,9 @@ export function InventoryValueSummary({
                 className="flex items-center justify-between text-sm"
               >
                 <span className="truncate pr-2">{b.label}</span>
-                <span className="tabular-nums">{currency.format(b.value)}</span>
+                <span className="tabular-nums">
+                  {currency.format(b.valuation)}
+                </span>
               </li>
             ))}
           </ul>

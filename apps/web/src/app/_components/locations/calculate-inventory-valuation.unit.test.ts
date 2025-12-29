@@ -73,8 +73,8 @@ describe("calculateInventoryValuation", () => {
 
     const res = calculateInventoryValuation(items);
     expect(res.totalValuation).toBe(19);
-    expect(res.breakdown.find((b) => b.key === "BrandA")?.value).toBe(10);
-    expect(res.breakdown.find((b) => b.key === "BrandB")?.value).toBe(9);
+    expect(res.breakdown.find((b) => b.key === "BrandA")?.valuation).toBe(10);
+    expect(res.breakdown.find((b) => b.key === "BrandB")?.valuation).toBe(9);
     expect(res.pricingStatus.missingPricing.count).toBe(0);
     expect(res.pricingStatus.priced.count).toBe(2);
   });
@@ -162,7 +162,7 @@ describe("calculateInventoryValuation", () => {
     expect(res.totalValuation).toBe(8);
     expect(res.breakdown).toHaveLength(1);
     expect(res.breakdown[0]?.key).toBe("Same");
-    expect(res.breakdown[0]?.value).toBe(8);
+    expect(res.breakdown[0]?.valuation).toBe(8);
   });
 
   it("uses 'Unknown' for products without manufacturer", () => {
@@ -175,7 +175,7 @@ describe("calculateInventoryValuation", () => {
     ];
 
     const res = calculateInventoryValuation(items);
-    expect(res.breakdown.find((b) => b.key === "Unknown")?.value).toBe(7);
+    expect(res.breakdown.find((b) => b.key === "Unknown")?.valuation).toBe(7);
   });
 });
 

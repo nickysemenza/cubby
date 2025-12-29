@@ -20,7 +20,7 @@ import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { useEntityList } from "../_components/hooks/useEntityList";
-import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 
 export function LocationList() {
@@ -67,7 +67,7 @@ export function LocationList() {
         id: "inventory_value",
         header: "Valuation",
         cell: (info) => (
-          <InventoryValueSummary
+          <InventoryValuationSummary
             locationId={info.row.original.id}
             variant="compact"
           />

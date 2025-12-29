@@ -7,7 +7,7 @@ import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { InfLocation } from "~/schemas/location";
-import { InventoryValueSummary } from "./inventory-value-summary";
+import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationIcon } from "./location-icons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -96,7 +96,7 @@ export const LocationGalleryCard = forwardRef<
           {location.name}
         </Link>
         {inventoryItems.length > 0 && (
-          <InventoryValueSummary items={inventoryItems} variant="compact" />
+          <InventoryValuationSummary items={inventoryItems} variant="compact" />
         )}
         <Badge variant="outline" className="h-4 px-1 text-[9px] capitalize">
           {location.type}

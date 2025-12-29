@@ -11,7 +11,7 @@ import EntityImageList from "../EntityImageList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { NoneState } from "../NoneState";
-import { InventoryValueSummary } from "./inventory-value-summary";
+import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
 import { LocationCardGrid } from "./location-card-grid";
 import { LocationForm } from "./location-form";
@@ -65,7 +65,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Inventory Valuation",
       content: (
         <div className="py-1">
-          <InventoryValueSummary locationId={location.id} variant="full" />
+          <InventoryValuationSummary locationId={location.id} variant="full" />
         </div>
       ),
     },

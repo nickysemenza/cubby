@@ -10,7 +10,7 @@ import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
-import { InventoryValueSummary } from "./inventory-value-summary";
+import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { getLocationIcon, LocationIcon } from "./location-icons";
 
 interface LocationCardGridProps {
@@ -125,7 +125,7 @@ function LocationCard({
   // Inventory value
   if (hasInventory) {
     details.push(
-      <InventoryValueSummary
+      <InventoryValuationSummary
         key="value"
         locationId={location.id}
         variant="compact"

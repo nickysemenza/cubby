@@ -9,7 +9,7 @@ import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
-import { InventoryValueSummary } from "../_components/locations/inventory-value-summary";
+import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { NoneState } from "../_components/NoneState";
 import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
@@ -113,7 +113,7 @@ export function InventoryItemList() {
       <RTable
         table={table}
         additionalToolbarContent={
-          <InventoryValueSummary
+          <InventoryValuationSummary
             items={data as InventoryItem[]}
             variant="compact"
           />
