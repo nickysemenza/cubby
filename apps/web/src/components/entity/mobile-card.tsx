@@ -1,5 +1,7 @@
-import type { LucideIcon } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
 
@@ -15,8 +17,8 @@ interface MobileCardProps {
   children?: ReactNode;
   /** Additional className for the card container */
   className?: string;
-  /** Optional click handler for the card (for navigation) */
-  onClick?: () => void;
+  /** Optional link to details page - renders a visible view button */
+  detailsHref?: string;
   /** Optional title - renders structured header when provided */
   title?: string;
   /** Optional icon for title */
@@ -43,46 +45,26 @@ export function MobileCard({
   actions,
   children,
   className,
-  onClick,
+  detailsHref,
   title,
   titleIcon: TitleIcon,
   subtitle,
 }: MobileCardProps) {
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: role/tabIndex only added when onClick present
     <div
       className={cn(
         "flex items-start gap-3 rounded-lg border border-l-2 border-l-primary/30 bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
-        onClick && "cursor-pointer",
         className,
       )}
-      onClick={onClick}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onClick();
-              }
-            }
-          : undefined
-      }
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
     >
-      {/* Checkbox - only rendered if selectable, stops propagation */}
+      {/* Checkbox - only rendered if selectable */}
       {selectable && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation wrapper
-        <div onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={selectable.isSelected}
-            onCheckedChange={(checked) =>
-              selectable.onSelectionChange(!!checked)
-            }
-            className="mt-1"
-            aria-label="Select item"
-          />
-        </div>
+        <Checkbox
+          checked={selectable.isSelected}
+          onCheckedChange={(checked) => selectable.onSelectionChange(!!checked)}
+          className="mt-1"
+          aria-label="Select item"
+        />
       )}
 
       {/* Content */}
@@ -102,10 +84,17 @@ export function MobileCard({
         {children}
       </div>
 
-      {/* Actions - stops propagation to prevent triggering card onClick */}
-      {actions && (
-        // biome-ignore lint/a11y/noStaticElementInteractions: stopPropagation wrapper
-        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+      {/* View button and actions */}
+      {(detailsHref || actions) && (
+        <div className="flex shrink-0 items-center gap-1">
+          {detailsHref && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <Link to={detailsHref}>
+                <ChevronRight className="h-4 w-4" />
+                <span className="sr-only">View details</span>
+              </Link>
+            </Button>
+          )}
           {actions}
         </div>
       )}

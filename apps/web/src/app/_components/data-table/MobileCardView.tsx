@@ -1,4 +1,3 @@
-import { useNavigate } from "@tanstack/react-router";
 import {
   flexRender,
   type Table as ITable,
@@ -23,7 +22,7 @@ export type EntityType =
 
 interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
-  /** Entity type for navigation - when provided, cards become clickable */
+  /** Entity type for navigation - when provided, cards show a view button */
   entityType?: EntityType;
   /**
    * Custom render function for mobile cards.
@@ -101,7 +100,6 @@ export function MobileCardView<TItem>({
   renderMobileCard,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
-  const navigate = useNavigate();
 
   // Check if table has row selection enabled
   const hasRowSelection = table.options.enableRowSelection !== false;
@@ -237,17 +235,10 @@ export function MobileCardView<TItem>({
             </div>
           ) : undefined;
 
-          // Get entity ID for navigation
+          // Build details href for navigation
           const entityId = rowData.id as string | undefined;
-          const handleClick =
-            entityType && entityId
-              ? () => {
-                  navigate({
-                    to: `/${entityType}/$id`,
-                    params: { id: entityId },
-                  });
-                }
-              : undefined;
+          const detailsHref =
+            entityType && entityId ? `/${entityType}/${entityId}` : undefined;
 
           // Build default card content
           const defaultContent = (
@@ -296,7 +287,7 @@ export function MobileCardView<TItem>({
                   : undefined
               }
               actions={actionsContent}
-              onClick={handleClick}
+              detailsHref={detailsHref}
             >
               {defaultContent}
             </MobileCard>
