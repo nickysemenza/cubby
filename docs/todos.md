@@ -12,3 +12,12 @@ Now that all unit conversions go through WASM with compound unit support:
 ## Future: Location Enhancements
 
 - [ ] Add drag-drop between locations in tree view
+
+## Architecture Improvements (from assumption review)
+
+### Quick wins
+- [x] Simplify CLAUDE.md - remove low-value prescriptions that limit flexibility (230→85 lines)
+- [ ] Document test placement criteria (unit vs integration vs e2e)
+
+### Larger changes
+- [ ] Simplify household sharing - replace organization plugin with simple household model (users share one household UUID, magic link invites, no hierarchy)

@@ -46,9 +46,9 @@ export function GalleryHeader({
     <div className={cn("sticky top-0 z-10 border-b", className)}>
       {/* Stats + Breadcrumb row */}
       <div className="flex min-h-[32px] items-center gap-3 border-b bg-muted/30 px-4 py-1">
-        {/* Stats */}
+        {/* Stats - hidden on mobile */}
         {stats && (
-          <div className="flex items-center gap-3 border-r pr-3 text-muted-foreground text-xs">
+          <div className="hidden items-center gap-3 border-r pr-3 text-muted-foreground text-xs md:flex">
             <span className="flex items-center gap-1">
               <EntityIcon entity="location" className="h-3 w-3" />
               {stats.locationCount} locations
@@ -114,7 +114,9 @@ export function GalleryHeader({
 
         {/* Type Filter */}
         <div className="flex items-center gap-1.5">
-          <Label className="text-muted-foreground">Type:</Label>
+          <Label className="hidden text-muted-foreground sm:inline">
+            Type:
+          </Label>
           <FilterableCombobox
             items={[
               { value: "all", label: "All" },
@@ -142,7 +144,9 @@ export function GalleryHeader({
 
         {/* Empty Filter */}
         <div className="flex items-center gap-1.5">
-          <Label className="text-muted-foreground">Status:</Label>
+          <Label className="hidden text-muted-foreground sm:inline">
+            Status:
+          </Label>
           <FilterableCombobox
             items={[
               { value: "all", label: "All" },

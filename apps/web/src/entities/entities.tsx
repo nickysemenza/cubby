@@ -134,9 +134,10 @@ export const entities: Record<Entity, EntityDefinition> = {
       text: "text-gray-500 dark:text-gray-400",
     },
     detail: { commonSections: ["history"] },
+    // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["name", "createdAt"],
+      standardColumns: ["createdAt"],
       sortableFields: ["createdAt", "updatedAt", "filename", "size", "status"],
     },
   },

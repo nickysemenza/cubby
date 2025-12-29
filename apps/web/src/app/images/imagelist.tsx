@@ -21,7 +21,28 @@ export default function ImageList() {
       searchFilter: ts.getColumnFilter("filename") ?? undefined,
     }),
     columns: [
-      // Preview column (before name)
+      // Filename column (links to detail page)
+      columnHelper.accessor("filename", {
+        header: "Filename",
+        cell: ({ row, getValue }) => {
+          const filename = getValue();
+          return (
+            <Link
+              to="/images/$id"
+              params={{ id: row.original.id }}
+              className="font-medium text-primary hover:underline"
+            >
+              {filename || <NoneState />}
+            </Link>
+          );
+        },
+        meta: {
+          filterConfig: {
+            placeholder: "Filter by filename...",
+          },
+        },
+      }),
+      // Preview column
       columnHelper.display({
         id: "preview",
         header: "Preview",

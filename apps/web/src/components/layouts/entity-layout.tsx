@@ -14,9 +14,9 @@ export function EntityLayout({ children, title, actions }: EntityLayoutProps) {
     <HydrateClient>
       <PageWrapper>
         {(title || actions) && (
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
             {title && <h1 className="font-bold text-2xl">{title}</h1>}
-            {actions && <div className="flex gap-2">{actions}</div>}
+            {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
           </div>
         )}
         <Suspense fallback={<ListLoadingSkeleton />}>{children}</Suspense>
