@@ -44,6 +44,7 @@ import { Route as IngredientsNewRouteImport } from './routes/ingredients.new'
 import { Route as IngredientsIdRouteImport } from './routes/ingredients.$id'
 import { Route as ImagesIdRouteImport } from './routes/images.$id'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
+import { Route as ApiPanelRouteImport } from './routes/api/panel'
 import { Route as AccountAccountViewRouteImport } from './routes/account.$accountView'
 import { Route as UsdaUpcCodeRouteImport } from './routes/usda.upc.$code'
 import { Route as UsdaNdbCodeRouteImport } from './routes/usda.ndb.$code'
@@ -227,6 +228,11 @@ const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
   path: '/auth/$authView',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPanelRoute = ApiPanelRouteImport.update({
+  id: '/api/panel',
+  path: '/api/panel',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountAccountViewRoute = AccountAccountViewRouteImport.update({
   id: '/account/$accountView',
   path: '/account/$accountView',
@@ -267,6 +273,7 @@ export interface FileRoutesByFullPath {
   '/insights': typeof InsightsRoute
   '/problems': typeof ProblemsRoute
   '/account/$accountView': typeof AccountAccountViewRoute
+  '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/images/$id': typeof ImagesIdRoute
   '/ingredients/$id': typeof IngredientsIdRoute
@@ -310,6 +317,7 @@ export interface FileRoutesByTo {
   '/insights': typeof InsightsRoute
   '/problems': typeof ProblemsRoute
   '/account/$accountView': typeof AccountAccountViewRoute
+  '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/images/$id': typeof ImagesIdRoute
   '/ingredients/$id': typeof IngredientsIdRoute
@@ -354,6 +362,7 @@ export interface FileRoutesById {
   '/insights': typeof InsightsRoute
   '/problems': typeof ProblemsRoute
   '/account/$accountView': typeof AccountAccountViewRoute
+  '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/images/$id': typeof ImagesIdRoute
   '/ingredients/$id': typeof IngredientsIdRoute
@@ -399,6 +408,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/problems'
     | '/account/$accountView'
+    | '/api/panel'
     | '/auth/$authView'
     | '/images/$id'
     | '/ingredients/$id'
@@ -442,6 +452,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/problems'
     | '/account/$accountView'
+    | '/api/panel'
     | '/auth/$authView'
     | '/images/$id'
     | '/ingredients/$id'
@@ -485,6 +496,7 @@ export interface FileRouteTypes {
     | '/insights'
     | '/problems'
     | '/account/$accountView'
+    | '/api/panel'
     | '/auth/$authView'
     | '/images/$id'
     | '/ingredients/$id'
@@ -529,6 +541,7 @@ export interface RootRouteChildren {
   InsightsRoute: typeof InsightsRoute
   ProblemsRoute: typeof ProblemsRoute
   AccountAccountViewRoute: typeof AccountAccountViewRoute
+  ApiPanelRoute: typeof ApiPanelRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
   ImagesIdRoute: typeof ImagesIdRoute
   IngredientsIdRoute: typeof IngredientsIdRoute
@@ -811,6 +824,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAuthViewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/panel': {
+      id: '/api/panel'
+      path: '/api/panel'
+      fullPath: '/api/panel'
+      preLoaderRoute: typeof ApiPanelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account/$accountView': {
       id: '/account/$accountView'
       path: '/account/$accountView'
@@ -875,6 +895,7 @@ const rootRouteChildren: RootRouteChildren = {
   InsightsRoute: InsightsRoute,
   ProblemsRoute: ProblemsRoute,
   AccountAccountViewRoute: AccountAccountViewRoute,
+  ApiPanelRoute: ApiPanelRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
   ImagesIdRoute: ImagesIdRoute,
   IngredientsIdRoute: IngredientsIdRoute,
