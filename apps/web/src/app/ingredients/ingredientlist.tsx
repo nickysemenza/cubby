@@ -56,10 +56,12 @@ export function IngredientList() {
       }),
       createCreatedAtColumn(columnHelper),
       createEntityPillColumn(columnHelper, "appearsInRecipes", "recipe", {
+        header: "Recipes",
         className: "w-48 max-w-48",
         dedupe: true,
       }),
       createEntityPillColumn(columnHelper, "product", "product", {
+        header: "Product",
         className: "w-48 max-w-48",
       }),
     ],

@@ -2,6 +2,7 @@ import type React from "react";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "./EntityPill";
+import { NoneState } from "./NoneState";
 import { TruncatedList } from "./TruncatedList";
 
 // Base props shared across all entity types
@@ -43,6 +44,9 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
   const { items, compact, maxItems } = props;
 
   if (!items || items.length === 0) {
+    if (compact) {
+      return <NoneState />;
+    }
     return (
       <Empty variant="minimal" className="py-3">
         <EmptyTitle className="text-sm">None</EmptyTitle>
