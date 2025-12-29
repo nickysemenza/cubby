@@ -9,7 +9,9 @@ import {
   ShoppingCart,
   Table2,
 } from "lucide-react";
+import { entities } from "~/entities/entities";
 import { assertNever } from "~/lib/assert";
+import { cn } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
 
 // Helper to get icon for a location type
@@ -46,15 +48,23 @@ interface LocationIconProps {
   type: LocationType;
   className?: string;
   size?: number;
+  /** Apply the location entity color */
+  colored?: boolean;
 }
 
 export function LocationIcon({
   type,
   className,
   size = 16,
+  colored,
 }: LocationIconProps) {
   const IconComponent = getLocationIcon(type);
-  return <IconComponent className={className} size={size} />;
+  return (
+    <IconComponent
+      className={cn(colored && entities.location.color.text, className)}
+      size={size}
+    />
+  );
 }
 
 interface LocationIconWithLabelProps extends LocationIconProps {
@@ -68,10 +78,16 @@ export function LocationIconWithLabel({
   className,
   size = 16,
   showLabel = true,
+  colored,
 }: LocationIconWithLabelProps) {
   return (
     <div className="flex items-center gap-2">
-      <LocationIcon type={type} className={className} size={size} />
+      <LocationIcon
+        type={type}
+        className={className}
+        size={size}
+        colored={colored}
+      />
       {showLabel && <span>{label}</span>}
     </div>
   );

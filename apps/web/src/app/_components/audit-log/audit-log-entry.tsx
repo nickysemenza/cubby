@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, ChevronRight, Package } from "lucide-react";
+import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
@@ -8,7 +8,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
-import { entities } from "~/entities/entities";
+import { EntityIcon, entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
 import type { AuditEntityType } from "~/server/repo/audit-log";
@@ -30,7 +30,7 @@ const getEntityConfig = (entityType: string) => {
   const entity = auditEntityToEntity(entityType);
   const config = entities[entity];
   return {
-    icon: config?.lucideIcon ?? Package,
+    entity,
     label: config?.label ?? entityType,
   };
 };
@@ -69,7 +69,6 @@ export function AuditLogEntryComponent({
     label: entry.action,
     className: "bg-gray-100 text-gray-800",
   };
-  const EntityIcon = entityConf.icon;
 
   const userInitials = entry.user?.name
     ? entry.user.name
@@ -109,7 +108,11 @@ export function AuditLogEntryComponent({
               />
             ) : (
               <>
-                <EntityIcon className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                <EntityIcon
+                  entity={entityConf.entity}
+                  colored
+                  className="h-4 w-4 flex-shrink-0"
+                />
                 <span className="font-medium text-sm">{entityConf.label}</span>
               </>
             )}

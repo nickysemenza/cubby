@@ -8,6 +8,7 @@ import {
   MapPin,
   Package,
 } from "lucide-react";
+import { cn } from "~/lib/utils";
 import type { Entity, EntityDefinition } from "./types";
 
 export const entities: Record<Entity, EntityDefinition> = {
@@ -16,6 +17,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Ingredients",
     basePath: "ingredients",
     lucideIcon: Carrot,
+    color: {
+      bg: "bg-red-100 dark:bg-red-900/30",
+      text: "text-red-500 dark:text-red-400",
+    },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
@@ -33,6 +38,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Products",
     basePath: "products",
     lucideIcon: Barcode,
+    color: {
+      bg: "bg-green-100 dark:bg-green-900/30",
+      text: "text-green-500 dark:text-green-400",
+    },
     detail: { commonSections: ["images", "unit-mappings", "history"] },
     list: {
       hasUnitMappings: true,
@@ -55,6 +64,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Recipes",
     basePath: "recipes",
     lucideIcon: ChefHat,
+    color: {
+      bg: "bg-purple-100 dark:bg-purple-900/30",
+      text: "text-purple-500 dark:text-purple-400",
+    },
     detail: { commonSections: ["images", "history"] },
     list: {
       defaultSort: "createdAt",
@@ -67,6 +80,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Locations",
     basePath: "locations",
     lucideIcon: MapPin,
+    color: {
+      bg: "bg-blue-100 dark:bg-blue-900/30",
+      text: "text-blue-500 dark:text-blue-400",
+    },
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
     detail: { commonSections: ["history"] },
@@ -83,6 +100,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Inventory",
     basePath: "inventory",
     lucideIcon: Package,
+    color: {
+      bg: "bg-orange-100 dark:bg-orange-900/30",
+      text: "text-orange-500 dark:text-orange-400",
+    },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
     // Inventory list has custom columns (image from product, amount instead of name)
@@ -97,6 +118,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "USDA Foods",
     basePath: "usda",
     lucideIcon: Apple,
+    color: {
+      bg: "bg-teal-100 dark:bg-teal-900/30",
+      text: "text-teal-500 dark:text-teal-400",
+    },
     // USDA foods are read-only, no detail/list conventions needed
   },
   image: {
@@ -104,6 +129,10 @@ export const entities: Record<Entity, EntityDefinition> = {
     pluralLabel: "Images",
     basePath: "images",
     lucideIcon: Image,
+    color: {
+      bg: "bg-gray-100 dark:bg-gray-800",
+      text: "text-gray-500 dark:text-gray-400",
+    },
     detail: { commonSections: ["history"] },
     list: {
       defaultSort: "createdAt",
@@ -123,11 +152,20 @@ export const getSortableFields = (entity: Entity): readonly string[] =>
 /**
  * Render an entity's lucide icon. Useful for entities with hyphenated names
  * like "inventory-item" where JSX bracket notation doesn't work.
+ *
+ * Use `colored` prop to apply the entity's text color for visual identification.
  */
 export const EntityIcon = ({
   entity,
+  colored,
+  className,
   ...props
-}: { entity: Entity } & LucideProps) => {
-  const Icon = entities[entity].lucideIcon;
-  return <Icon {...props} />;
+}: { entity: Entity; colored?: boolean } & LucideProps) => {
+  const def = entities[entity];
+  return (
+    <def.lucideIcon
+      className={cn(colored && def.color.text, className)}
+      {...props}
+    />
+  );
 };

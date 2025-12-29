@@ -12,21 +12,6 @@ import { useTRPC } from "~/trpc/react";
 const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
 const formatCount = (count: number): string => compactFormatter.format(count);
 
-/** Color classes for each entity type */
-const entityColors: Record<Entity, string> = {
-  location: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-  product:
-    "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
-  "inventory-item":
-    "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400",
-  recipe:
-    "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
-  ingredient: "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400",
-  image: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-  "usda-food":
-    "bg-teal-100 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400",
-};
-
 interface StatCardProps {
   entity: Entity;
   count: number | undefined;
@@ -47,7 +32,7 @@ function StatCard({ entity, count, isLoading }: StatCardProps) {
         )}
       >
         <div className="flex items-center gap-2">
-          <div className={cn("rounded p-1.5", entityColors[entity])}>
+          <div className={cn("rounded p-1.5", def.color.bg, def.color.text)}>
             <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">

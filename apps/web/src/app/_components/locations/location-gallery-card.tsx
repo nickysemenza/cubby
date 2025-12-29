@@ -85,7 +85,8 @@ export const LocationGalleryCard = forwardRef<
       <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
         <LocationIcon
           type={location.type}
-          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+          colored
+          className="h-3.5 w-3.5 shrink-0"
         />
         <Link
           to="/locations/$id"

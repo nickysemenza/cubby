@@ -7,6 +7,7 @@ import {
   DollarSign,
   ImageOff,
   Loader2,
+  Utensils,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -60,7 +61,7 @@ function DuplicateUniqueProductsList({
             variant="outline"
             className="flex items-center gap-1"
           >
-            <EntityIcon entity="location" className="h-3 w-3" />
+            <EntityIcon entity="location" colored className="h-3 w-3" />
             {location.name}
           </Badge>
         )),
@@ -209,7 +210,7 @@ function InvalidInventoryAmountsList({
             key="location"
             className="flex items-center gap-2 text-gray-600 text-sm"
           >
-            <EntityIcon entity="location" className="h-3 w-3" />
+            <EntityIcon entity="location" colored className="h-3 w-3" />
             {entry.locationName}
           </div>,
         ],
@@ -588,7 +589,7 @@ function InventoryWithStaleValuationsList({
             key="location"
             className="flex items-center gap-2 text-gray-600 text-sm"
           >
-            <EntityIcon entity="location" className="h-3 w-3" />
+            <EntityIcon entity="location" colored className="h-3 w-3" />
             {entry.locationName}
           </div>,
         ],

@@ -37,6 +37,14 @@ interface EntityListConfig {
   sortableFields?: readonly string[];
 }
 
+/** Entity color classes for consistent visual identification */
+interface EntityColor {
+  /** Background color classes (e.g., "bg-blue-100 dark:bg-blue-900/30") */
+  bg: string;
+  /** Text color classes (e.g., "text-blue-500 dark:text-blue-400") */
+  text: string;
+}
+
 /** Full entity definition including UI conventions */
 export interface EntityDefinition {
   label: string;
@@ -45,6 +53,8 @@ export interface EntityDefinition {
   shortcut?: string;
   /** Lucide icon component for UI elements */
   lucideIcon: LucideIcon;
+  /** Color classes for visual entity identification */
+  color: EntityColor;
   /** Detail page conventions */
   detail?: EntityDetailConfig;
   /** List page conventions */

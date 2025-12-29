@@ -112,7 +112,7 @@ export function LocationBreadcrumb({
                 isLast && "font-medium",
               )}
             >
-              <LocationIcon type={segment.type} size={14} />
+              <LocationIcon type={segment.type} size={14} colored />
               <span>{segment.name}</span>
               {showTypeAnnotations && !isDefault && (
                 <span className="text-muted-foreground text-xs">
