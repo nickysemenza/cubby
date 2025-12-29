@@ -8,6 +8,7 @@ import {
 } from "~/app/_components/units/univ-conversion";
 import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
 import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
@@ -143,8 +144,8 @@ const RecipeDetail: React.FC<{
                     totalCost={totals?.price ?? 0}
                   />
                 ) : (
-                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                    Loading...
+                  <div className="h-[300px]">
+                    <SimpleLoading />
                   </div>
                 )}
               </CardContent>
@@ -159,8 +160,8 @@ const RecipeDetail: React.FC<{
                 {ingredientDataItems.length > 0 ? (
                   <MacroSunburst ingredients={ingredientDataItems} />
                 ) : (
-                  <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                    Loading...
+                  <div className="h-[300px]">
+                    <SimpleLoading />
                   </div>
                 )}
               </CardContent>

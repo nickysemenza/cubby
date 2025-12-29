@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NewLocation } from "~/app/_components/locations/new-location";
+import { NewEntityPage } from "~/components/entity/new-entity-page";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const Route = createFileRoute("/locations/new")({
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/locations/new")({
 function NewLocationPage() {
   return (
     <PageWrapper>
-      <NewLocation />
+      <NewEntityPage entity="location" />
     </PageWrapper>
   );
 }

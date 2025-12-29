@@ -1,5 +1,6 @@
 import { Check, ChevronsUpDown } from "lucide-react";
 import * as React from "react";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Button } from "~/components/ui/button";
 import useDebounce from "~/hooks/useDebounce";
 import { cn } from "~/lib/utils";
@@ -148,9 +149,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
 
           <div className="max-h-[300px] overflow-y-auto">
             {isLoading ? (
-              <div className="px-3 py-6 text-center text-muted-foreground text-sm">
-                Loading...
-              </div>
+              <SimpleLoading />
             ) : items.length === 0 ? (
               <div className="px-3 py-6 text-left text-sm">
                 No {label} found.

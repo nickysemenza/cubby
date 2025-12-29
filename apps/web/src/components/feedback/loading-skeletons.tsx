@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
 
@@ -39,10 +40,11 @@ export function ListLoadingSkeleton({ count = 6 }: { count?: number }) {
   );
 }
 
-// Simple loading text for inline use
+// Simple loading text with spinner for inline use
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
-    <div className="flex items-center justify-center p-4 text-muted-foreground">
+    <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
       {text}
     </div>
   );

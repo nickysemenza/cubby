@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { NewIngredient } from "~/app/_components/ingredients/new-ingredient";
+import { NewEntityPage } from "~/components/entity/new-entity-page";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const Route = createFileRoute("/ingredients/new")({
@@ -9,7 +9,7 @@ export const Route = createFileRoute("/ingredients/new")({
 function NewIngredientPage() {
   return (
     <PageWrapper>
-      <NewIngredient />
+      <NewEntityPage entity="ingredient" />
     </PageWrapper>
   );
 }

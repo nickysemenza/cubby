@@ -7,9 +7,9 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
 import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
+import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { SpacedContainer } from "~/components/layout/spaced-container";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -191,10 +191,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                   }
                   className="h-16 text-center"
                 >
-                  <div className="flex items-center justify-center gap-2">
-                    <Spinner />
-                    <span>Loading...</span>
-                  </div>
+                  <SimpleLoading />
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows?.length ? (
@@ -277,9 +274,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
       {/* Mobile Card View */}
       {isLoading ? (
-        <div className="flex items-center justify-center gap-2 py-8 lg:hidden">
-          <Spinner />
-          <span>Loading...</span>
+        <div className="lg:hidden">
+          <SimpleLoading />
         </div>
       ) : error ? (
         <div className="block py-8 lg:hidden">
