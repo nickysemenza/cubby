@@ -76,7 +76,7 @@ type _AssertAllEntitiesCovered = _MissingEntities extends never
 declare const _ensureExhaustive: _AssertAllEntitiesCovered;
 
 const minimalLinkClass =
-  "inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline";
+  "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-sm text-primary hover:border-border hover:bg-muted/50";
 const fullLinkClass = "inline-block min-w-0 max-w-full";
 
 export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
