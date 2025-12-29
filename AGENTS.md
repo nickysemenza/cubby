@@ -61,15 +61,15 @@ Use these shared helpers instead of writing inline patterns. **Check for existin
 ### Authentication (Better‑Auth)
 
 - Better‑Auth is the auth system for the web app.
-- Server config: `apps/web/src/lib/auth.ts` (Next.js integration via `better-auth/next-js`).
+- Server config: `apps/web/src/lib/auth.ts` (TanStack Start integration via `better-auth/tanstack-start`).
 - Client: `apps/web/src/lib/auth-client.ts` (React hooks such as `useSession`, `useListOrganizations`, `useActiveOrganization`).
-- API route: `apps/web/src/app/api/auth/[...all]/route.ts` exports `{ GET, POST }` from `toNextJsHandler(auth)`.
+- API route: `apps/web/src/routes/api/auth/$.ts` using TanStack Start handlers.
 - Organization plugin is enabled and fully adopted. Custom Project/Member codepaths are deprecated and removed from the UI and routers. Use organizations for scoping.
 - UI: `@daveyplate/better-auth-ui` dynamic routes are used for all auth/account/org views
-  - Auth: `apps/web/src/app/auth/[path]/page.tsx` → `<AuthView path={path}/>`
-  - Account: `apps/web/src/app/account/[path]/page.tsx` → `<AccountView path={path}/>`
-  - Organization: `apps/web/src/app/organization/[path]/page.tsx` → `<OrganizationView path={path}/>`
-  - CSS: import `@daveyplate/better-auth-ui/css` in `apps/web/src/app/layout.tsx`
+  - Auth: `apps/web/src/routes/auth.$authView.tsx` → `<AuthView />`
+  - Account: `apps/web/src/routes/account.$accountView.tsx` → `<AccountView />`
+  - Organization: `apps/web/src/routes/organization.$organizationView.tsx` → `<OrganizationView />`
+  - CSS: import `@daveyplate/better-auth-ui/css` in `apps/web/src/routes/__root.tsx`
 
 ## Form Patterns
 
