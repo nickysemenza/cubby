@@ -94,38 +94,9 @@ function mergeOrgMetadata(
   return JSON.stringify({ ...current, ...updates });
 }
 
-// CSV column headers for Inventory sheet
-const INVENTORY_CSV_HEADERS = [
-  "product_name",
-  "manufacturer",
-  "category",
-  "upc",
-  "model",
-  "ndb_number",
-  "location_name",
-  "quantity",
-  "unit",
-  "expected_qty",
-  "price",
-  "unit_mappings",
-  "ingredient_name",
-  "aliases",
-  "product_image",
-];
-
-// CSV column headers for Locations sheet
-const LOCATION_CSV_HEADERS = [
-  "location_name",
-  "parent_name",
-  "location_type",
-  "description",
-  "location_image",
-  "last_inventory_date",
-];
-
-// Column type schemas for Google Sheets formatting
-// These define dropdowns, number formats, etc. for each column
-// Order must match INVENTORY_CSV_HEADERS
+// Column schemas for Google Sheets formatting
+// These define column order, dropdowns, number formats, etc.
+// To reorder columns, just reorder these arrays - headers are derived automatically
 const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "product_name", type: { kind: "text" } },
   { header: "manufacturer", type: { kind: "text" } },
@@ -158,6 +129,10 @@ const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "location_image", type: { kind: "text" } },
   { header: "last_inventory_date", type: { kind: "datetime" } },
 ];
+
+// Derive CSV headers from column schemas (single source of truth)
+const INVENTORY_CSV_HEADERS = INVENTORY_COLUMN_SCHEMA.map((col) => col.header);
+const LOCATION_CSV_HEADERS = LOCATION_COLUMN_SCHEMA.map((col) => col.header);
 
 // Parse currency string to number (handles $, commas, etc.)
 function parseCurrency(value: string | undefined): number | undefined {
