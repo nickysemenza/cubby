@@ -52,6 +52,28 @@ import { NoneState } from "../NoneState";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
+/** Shared move/delete action items for inventory - used by both desktop and mobile */
+const InventoryItemActions: React.FC<{
+  item: InventoryItem;
+  onMove: () => void;
+  onDelete: () => void;
+}> = ({ onMove, onDelete }) => (
+  <>
+    <DropdownMenuItem onClick={onMove}>
+      <ArrowRightLeft className="mr-2 h-4 w-4" />
+      Move to...
+    </DropdownMenuItem>
+    <DropdownMenuSeparator />
+    <DropdownMenuItem
+      className="text-destructive focus:text-destructive"
+      onClick={onDelete}
+    >
+      <Trash className="mr-2 h-4 w-4" />
+      Delete
+    </DropdownMenuItem>
+  </>
+);
+
 /** Editable amount cell - used in both desktop table and mobile cards */
 const EditableAmountCell: React.FC<{
   item: InventoryItem;
@@ -244,22 +266,11 @@ export function LocationInventoryTable({
 
       createActionsColumn(columnHelper, "inventory-item", {
         extraActions: (item) => (
-          <>
-            <DropdownMenuItem
-              onClick={() => setDialogState({ type: "move", items: [item] })}
-            >
-              <ArrowRightLeft className="mr-2 h-4 w-4" />
-              Move to...
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => setDialogState({ type: "delete", items: [item] })}
-            >
-              <Trash className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </>
+          <InventoryItemActions
+            item={item}
+            onMove={() => setDialogState({ type: "move", items: [item] })}
+            onDelete={() => setDialogState({ type: "delete", items: [item] })}
+          />
         ),
       }),
     ],
@@ -394,24 +405,13 @@ export function LocationInventoryTable({
                   <Eye className="mr-2 h-4 w-4" />
                   View Details
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setDialogState({ type: "move", items: [item] })
-                  }
-                >
-                  <ArrowRightLeft className="mr-2 h-4 w-4" />
-                  Move to...
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() =>
+                <InventoryItemActions
+                  item={item}
+                  onMove={() => setDialogState({ type: "move", items: [item] })}
+                  onDelete={() =>
                     setDialogState({ type: "delete", items: [item] })
                   }
-                >
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
+                />
               </DropdownMenuContent>
             </DropdownMenu>
           );

@@ -154,3 +154,17 @@ export const getAllUnitMappingsFromProduct = (product: {
   const foodMappings = product.food ? unitMappingsFromFood(product.food) : [];
   return [...product.unitMappings, ...foodMappings];
 };
+
+/**
+ * Aggregates unit mappings from all products for an entity with multiple products
+ * (e.g., an ingredient that has multiple linked products)
+ */
+export const getIngredientMappings = <
+  T extends {
+    product: Array<{ unitMappings: UnitMapping[]; food?: FoodSummary | null }>;
+  },
+>(
+  entity: T,
+): UnitMapping[] => {
+  return entity.product.flatMap((p) => getAllUnitMappingsFromProduct(p));
+};

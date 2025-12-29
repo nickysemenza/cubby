@@ -3,7 +3,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useId, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -16,16 +16,6 @@ import { buildSelectColumn } from "../_components/data-table/row-selection";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { IngredientMerger } from "./ingredient-merger";
-
-/** Aggregate unit mappings from all products for an ingredient */
-async function getIngredientMappings(
-  ingredient: IngredientWithFoodOut,
-): Promise<Awaited<ReturnType<typeof getAllUnitMappingsFromProduct>>> {
-  const results = await Promise.all(
-    ingredient.product.map((p) => getAllUnitMappingsFromProduct(p)),
-  );
-  return results.flat();
-}
 
 export function IngredientList() {
   const missingProductsId = useId();

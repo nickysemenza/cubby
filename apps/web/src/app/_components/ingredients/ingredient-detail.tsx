@@ -2,7 +2,7 @@ import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Card, CardContent } from "~/components/ui/card";
 import type { IngredientUpdateInput } from "~/schemas/ingredient";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
@@ -15,16 +15,6 @@ import { IngredientForm } from "./ingredient-form";
 
 interface IngredientDetailProps {
   ingredient: IngredientWithFoodOut;
-}
-
-/** Aggregate unit mappings from all products for an ingredient */
-async function getIngredientMappings(
-  ingredient: IngredientWithFoodOut,
-): Promise<Awaited<ReturnType<typeof getAllUnitMappingsFromProduct>>> {
-  const results = await Promise.all(
-    ingredient.product.map((product) => getAllUnitMappingsFromProduct(product)),
-  );
-  return results.flat();
 }
 
 export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
