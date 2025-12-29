@@ -10,17 +10,21 @@
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
-import type { OrganizationId } from "~/schemas/identifiers";
+import type { OrganizationId, ProductId } from "~/schemas/identifiers";
 import type { InventoryCSVRow } from "~/schemas/inventory";
 import type { Database } from "~/server/db";
+import { withTransaction } from "~/server/repo/database-helpers";
 import {
   createInventoryEntry,
   importInventoryFromCSV,
+  updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
+import { createOrUpdatePriceMapping } from "~/server/repo/inventory/csv-import";
 import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
 import { createLocation } from "~/server/repo/location";
-import { createProduct } from "~/server/repo/product";
+import { createProduct, syncProductPrice } from "~/server/repo/product";
+import { compareInventoryForSync } from "~/server/repo/sync";
 
 /**
  * Convert an export row to an import row format (test helper)
@@ -320,6 +324,271 @@ describe("CSV round-trip tests", () => {
       expect(exported.unit).toBe("pieces");
       expect(exported.expected_qty).toBe(10);
       expect(exported.price).toBe(29.99);
+    });
+  });
+
+  describe("Sync conflict resolution", () => {
+    /**
+     * Helper to simulate "use_sheet" resolution for a conflict.
+     * This mirrors what processImportsToApp does when resolution="use_sheet"
+     */
+    const applyUseSheetResolution = async (
+      db: Database,
+      productId: ProductId,
+      inventoryEntryId: string,
+      sheetData: {
+        quantity?: number;
+        unit?: string;
+        price?: number;
+      },
+      actor: ActorContext,
+    ) => {
+      // Update inventory entry quantity if provided
+      if (sheetData.quantity !== undefined) {
+        await updateInventoryEntry(
+          db,
+          inventoryEntryId as Parameters<typeof updateInventoryEntry>[1],
+          {
+            amount: {
+              value: sheetData.quantity,
+              unit: sheetData.unit ?? "each",
+            },
+          },
+          actor,
+        );
+      }
+
+      // Update price via unit mapping + sync if provided
+      if (sheetData.price !== undefined) {
+        await withTransaction(db, async (tx) => {
+          await createOrUpdatePriceMapping(
+            tx,
+            productId,
+            { value: sheetData.price!, unit: "dollar" },
+            "test",
+          );
+          await syncProductPrice(tx, productId);
+        });
+      }
+    };
+
+    it("should resolve quantity conflict when use_sheet is applied", async () => {
+      // Setup: Create product and inventory with quantity=5
+      const location = await createLocation(
+        db,
+        { name: "Storage", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Test Product",
+          manufacturer: "Brand",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [],
+        },
+        actor,
+      );
+
+      const entry = await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 5, unit: "each" },
+        },
+        actor,
+      );
+
+      // Simulate sheet data with different quantity (quantity=10)
+      const sheetRow: InventoryCSVRow = {
+        product_name: "Test Product",
+        manufacturer: "Brand",
+        location_name: "Storage",
+        quantity: 10,
+        unit: "each",
+      };
+
+      // Detect conflict
+      const appRows = await exportInventoryToCSV(db, organizationId);
+      const syncResult = compareInventoryForSync(appRows, [sheetRow]);
+
+      expect(syncResult).toHaveLength(1);
+      expect(syncResult[0].state).toBe("conflict");
+      expect(syncResult[0].fieldDiffs).toBeDefined();
+      expect(syncResult[0].fieldDiffs?.some((d) => d.field === "qty")).toBe(
+        true,
+      );
+
+      // Apply "use_sheet" resolution
+      await applyUseSheetResolution(
+        db,
+        product.id,
+        entry.id,
+        { quantity: 10, unit: "each" },
+        actor,
+      );
+
+      // Verify: re-run comparison, should now match
+      const appRowsAfter = await exportInventoryToCSV(db, organizationId);
+      const syncResultAfter = compareInventoryForSync(appRowsAfter, [sheetRow]);
+
+      expect(syncResultAfter).toHaveLength(1);
+      expect(syncResultAfter[0].state).toBe("matched");
+    });
+
+    it("should resolve price conflict when use_sheet is applied", async () => {
+      // Setup: Create product without price
+      const location = await createLocation(
+        db,
+        { name: "Warehouse", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Priced Item",
+          manufacturer: "PriceCo",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [], // No price initially
+        },
+        actor,
+      );
+
+      await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        actor,
+      );
+
+      // Simulate sheet data with price
+      const sheetRow: InventoryCSVRow = {
+        product_name: "Priced Item",
+        manufacturer: "PriceCo",
+        location_name: "Warehouse",
+        quantity: 1,
+        unit: "each",
+        price: 25.99,
+      };
+
+      // Detect conflict (price difference)
+      const appRows = await exportInventoryToCSV(db, organizationId);
+      const syncResult = compareInventoryForSync(appRows, [sheetRow]);
+
+      expect(syncResult).toHaveLength(1);
+      expect(syncResult[0].state).toBe("conflict");
+      expect(syncResult[0].fieldDiffs?.some((d) => d.field === "price")).toBe(
+        true,
+      );
+
+      // Apply "use_sheet" resolution for price
+      await applyUseSheetResolution(
+        db,
+        product.id,
+        "", // No inventory entry update needed
+        { price: 25.99 },
+        actor,
+      );
+
+      // Verify: re-run comparison, should now match
+      const appRowsAfter = await exportInventoryToCSV(db, organizationId);
+      const syncResultAfter = compareInventoryForSync(appRowsAfter, [sheetRow]);
+
+      expect(syncResultAfter).toHaveLength(1);
+      expect(syncResultAfter[0].state).toBe("matched");
+    });
+
+    it("should resolve both quantity and price conflicts when use_sheet is applied", async () => {
+      // Setup: Create product with initial price and quantity
+      const location = await createLocation(
+        db,
+        { name: "Shop", type: "room", parentId: null },
+        actor,
+      );
+
+      const product = await createProduct(
+        db,
+        {
+          name: "Combo Item",
+          manufacturer: "ComboCo",
+          model: null,
+          upc: null,
+          ndb_number: null,
+          expectedQuantity: null,
+          ingredientId: null,
+          unitMappings: [
+            {
+              a: { value: 1, unit: "each" },
+              b: { value: 10.0, unit: "dollar" },
+              source: "test",
+            },
+          ],
+        },
+        actor,
+      );
+
+      const entry = await createInventoryEntry(
+        db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: 3, unit: "each" },
+        },
+        actor,
+      );
+
+      // Simulate sheet data with different quantity AND price
+      const sheetRow: InventoryCSVRow = {
+        product_name: "Combo Item",
+        manufacturer: "ComboCo",
+        location_name: "Shop",
+        quantity: 7, // App has 3
+        unit: "each",
+        price: 15.0, // App has 10
+      };
+
+      // Detect conflict
+      const appRows = await exportInventoryToCSV(db, organizationId);
+      const syncResult = compareInventoryForSync(appRows, [sheetRow]);
+
+      expect(syncResult).toHaveLength(1);
+      expect(syncResult[0].state).toBe("conflict");
+      expect(syncResult[0].fieldDiffs?.length).toBeGreaterThanOrEqual(2);
+
+      // Apply "use_sheet" resolution for both
+      await applyUseSheetResolution(
+        db,
+        product.id,
+        entry.id,
+        { quantity: 7, unit: "each", price: 15.0 },
+        actor,
+      );
+
+      // Verify: re-run comparison, should now match
+      const appRowsAfter = await exportInventoryToCSV(db, organizationId);
+      const syncResultAfter = compareInventoryForSync(appRowsAfter, [sheetRow]);
+
+      expect(syncResultAfter).toHaveLength(1);
+      expect(syncResultAfter[0].state).toBe("matched");
+
+      // Verify the actual values were updated
+      const exportedAfter = appRowsAfter[0];
+      expect(exportedAfter.quantity).toBe(7);
+      expect(exportedAfter.price).toBe(15.0);
     });
   });
 });

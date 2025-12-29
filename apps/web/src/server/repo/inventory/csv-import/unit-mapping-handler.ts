@@ -11,9 +11,9 @@ import { wasm } from "~/lib/wasm";
 import type { ProductId } from "~/schemas/identifiers";
 import { findPriceMapping, isMoneyUnit } from "~/schemas/price-mapping-utils";
 import { parseUnitMappingString } from "~/schemas/unitmapping";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { productUnitMappings } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, unwrapDb } from "~/server/repo/database-helpers";
 
 /** Default currency unit when creating new price mappings */
 const DEFAULT_CURRENCY = "dollar";
@@ -24,14 +24,17 @@ const DEFAULT_CURRENCY = "dollar";
  *
  * Always normalizes to canonical format: 1 each <-> $X (a=each, b=price)
  * Preserves existing currency when updating, uses provided currency or defaults when creating.
+ *
+ * Accepts both Database and DrizzleTransaction for use within transactions.
  */
 export const createOrUpdatePriceMapping = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   productId: ProductId,
   price: Amount,
   source: string = "csv-import",
 ): Promise<void> => {
-  const existingMappings = await getDb(db).query.productUnitMappings.findMany({
+  const client = unwrapDb(db);
+  const existingMappings = await client.query.productUnitMappings.findMany({
     where: eq(productUnitMappings.productId, productId),
   });
 
@@ -43,7 +46,7 @@ export const createOrUpdatePriceMapping = async (
 
   if (existingPriceMapping) {
     // Update existing, always normalize to canonical format
-    await getDb(db)
+    await client
       .update(productUnitMappings)
       .set({
         a: { value: 1, unit: "each" },
@@ -53,14 +56,12 @@ export const createOrUpdatePriceMapping = async (
       .where(eq(productUnitMappings.id, existingPriceMapping.match.id));
   } else {
     // Create new price mapping in canonical format
-    await getDb(db)
-      .insert(productUnitMappings)
-      .values({
-        productId,
-        a: { value: 1, unit: "each" },
-        b: { value: price.value, unit: currency },
-        source,
-      });
+    await client.insert(productUnitMappings).values({
+      productId,
+      a: { value: 1, unit: "each" },
+      b: { value: price.value, unit: currency },
+      source,
+    });
   }
 };
 

@@ -38,9 +38,16 @@ import {
   SHEET_NAMES,
 } from "~/server/clients/google-sheets";
 import type { Database } from "~/server/db";
-import { deleteInventoryEntry } from "~/server/repo/inventory";
+import { withTransaction } from "~/server/repo/database-helpers";
+import {
+  deleteInventoryEntry,
+  updateInventoryEntry,
+} from "~/server/repo/inventory";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
-import { importInventoryFromCSV } from "~/server/repo/inventory/csv-import";
+import {
+  createOrUpdatePriceMapping,
+  importInventoryFromCSV,
+} from "~/server/repo/inventory/csv-import";
 import { deleteLocation, updateLocation } from "~/server/repo/location";
 // Note: csv-comparison is now only used by the sync repo module
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
@@ -49,7 +56,7 @@ import {
   getOrganizationMetadata,
   updateOrganizationMetadata,
 } from "~/server/repo/organization";
-import { updateProduct } from "~/server/repo/product";
+import { syncProductPrice, updateProduct } from "~/server/repo/product";
 import {
   compareInventoryForSync,
   compareLocationsForSync,
@@ -731,6 +738,7 @@ async function updateProductFromSheetData(
     model?: string | null;
     ndbNumber?: number | null;
     expectedQty?: number | null;
+    price?: number | null;
   },
   actorContext: Parameters<typeof updateProduct>[3],
 ): Promise<void> {
@@ -798,15 +806,29 @@ async function updateProductFromSheetData(
     updateData.expectedQuantity = sheetData.expectedQty;
   }
 
-  // Only update if there are fields to update
-  if (Object.keys(updateData).length === 0) {
-    return;
+  // Update product fields if any changed
+  if (Object.keys(updateData).length > 0) {
+    await updateProduct(db, unsafeProductId(productId), updateData, {
+      ...actorContext,
+      source: "sheets_import",
+    });
   }
 
-  await updateProduct(db, unsafeProductId(productId), updateData, {
-    ...actorContext,
-    source: "sheets_import",
-  });
+  // Handle price separately via unit mappings (price is stored as a unit mapping, not a product field)
+  // Use transaction to ensure price mapping and product.price column are updated atomically
+  const priceValue = sheetData.price;
+  if (priceValue !== undefined && priceValue !== null) {
+    await withTransaction(db, async (tx) => {
+      await createOrUpdatePriceMapping(
+        tx,
+        unsafeProductId(productId),
+        { value: priceValue, unit: "dollar" },
+        "sheets_import",
+      );
+      // Sync the product.price column from the unit mapping
+      await syncProductPrice(tx, unsafeProductId(productId));
+    });
+  }
 }
 
 /** Process imports from sheet to app (locations and inventory) */
@@ -843,7 +865,7 @@ async function processImportsToApp(
     }
   }
 
-  // Handle conflicts with "use_sheet" - update existing products directly
+  // Handle conflicts with "use_sheet" - update existing products and inventory entries
   // This is needed because the product may have a different manufacturer in the app
   // and the standard CSV import looks up by name+manufacturer (would create duplicate)
   const inventoryConflictsUseSheet = inventoryItems.filter(
@@ -853,15 +875,35 @@ async function processImportsToApp(
   for (const item of inventoryConflictsUseSheet) {
     if (item.appData?.productId && item.sheetData) {
       try {
+        // Update product fields (name, manufacturer, price, etc.)
         await updateProductFromSheetData(
           ctx.db,
           item.appData.productId,
           item.sheetData,
           ctx.actorContext,
         );
+
+        // Update inventory entry fields (quantity) if we have an inventory entry
+        if (
+          item.appData.inventoryEntryId &&
+          item.sheetData.quantity !== undefined
+        ) {
+          await updateInventoryEntry(
+            ctx.db,
+            unsafeInventoryId(item.appData.inventoryEntryId),
+            {
+              amount: {
+                value: item.sheetData.quantity ?? 1,
+                unit: item.sheetData.unit ?? item.appData.unit ?? "each",
+              },
+            },
+            { ...ctx.actorContext, source: "sheets_import" },
+          );
+        }
+
         results.inventory.updated++;
       } catch (error) {
-        console.error("Failed to update product from sheet data:", error);
+        console.error("Failed to update from sheet data:", error);
         results.inventory.errors++;
       }
     }
