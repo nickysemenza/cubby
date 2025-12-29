@@ -1,6 +1,12 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Activity, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyIcon,
+  EmptyTitle,
+} from "~/components/ui/empty";
 import type { AuditEntityType } from "~/server/repo/audit-log";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogEntryComponent } from "./audit-log-entry";
@@ -9,12 +15,15 @@ interface AuditLogListProps {
   entityType?: AuditEntityType;
   entityId?: string;
   showEntityLink?: boolean;
+  /** Number of entries per page (default 20) */
+  limit?: number;
 }
 
 export function AuditLogList({
   entityType,
   entityId,
   showEntityLink = true,
+  limit = 20,
 }: AuditLogListProps) {
   const trpc = useTRPC();
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
@@ -23,7 +32,7 @@ export function AuditLogList({
         {
           entityType,
           entityId,
-          limit: 20,
+          limit,
         },
         {
           getNextPageParam: (lastPage) => lastPage.nextCursor,
@@ -43,9 +52,11 @@ export function AuditLogList({
 
   if (entries.length === 0) {
     return (
-      <div className="py-8 text-center text-muted-foreground">
-        No activity yet
-      </div>
+      <Empty variant="minimal" className="py-6">
+        <EmptyIcon icon={Activity} />
+        <EmptyTitle>No activity yet</EmptyTitle>
+        <EmptyDescription>Actions you take will appear here</EmptyDescription>
+      </Empty>
     );
   }
 
