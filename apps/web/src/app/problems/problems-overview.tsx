@@ -10,6 +10,7 @@ import {
   Utensils,
   Zap,
 } from "lucide-react";
+import { useRef } from "react";
 import { toast } from "sonner";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -21,7 +22,6 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { EntityIcon } from "~/entities/entities";
 import type {
   DuplicateUniqueProduct,
@@ -641,6 +641,7 @@ function InventoryWithStaleValuationsList({
 
 export function ProblemsOverview() {
   const api = useTRPC();
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const {
     data: problems,
@@ -670,155 +671,89 @@ export function ProblemsOverview() {
     );
   }
 
-  const hasProblems = problems.totalProblems > 0;
+  // Categories with issues for the summary links
+  const categoryLinks = [
+    {
+      id: "duplicates",
+      label: "Duplicates",
+      count: problems.duplicateUniqueProducts.length,
+    },
+    {
+      id: "orphaned",
+      label: "Orphaned",
+      count: problems.orphanedProducts.length,
+    },
+    { id: "upcs", label: "UPCs", count: problems.invalidUPCs.length },
+    {
+      id: "pricing",
+      label: "Pricing",
+      count: problems.productsWithoutMappings.length,
+    },
+    {
+      id: "stale-prices",
+      label: "Stale Prices",
+      count: problems.productsWithStalePrices.length,
+    },
+    {
+      id: "stale-valuations",
+      label: "Stale Valuations",
+      count: problems.inventoryWithStaleValuations.length,
+    },
+    {
+      id: "amounts",
+      label: "Amounts",
+      count: problems.invalidInventoryAmounts.length,
+    },
+    {
+      id: "locations",
+      label: "Locations",
+      count: problems.emptyLocations.length,
+    },
+    {
+      id: "images",
+      label: "Images",
+      count: problems.productsWithoutUPCImages.length,
+    },
+    {
+      id: "categories",
+      label: "Categories",
+      count: problems.productsWithWrongCategory.length,
+    },
+  ].filter((cat) => cat.count > 0);
+
+  const scrollToSection = (id: string) => {
+    sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth" });
+  };
 
   return (
     <div className="space-y-6">
-      {hasProblems ? (
-        <Tabs defaultValue="duplicates" className="space-y-4">
-          <TabsList className="flex w-full overflow-x-auto lg:grid lg:grid-cols-10">
-            <TabsTrigger value="duplicates" className="flex items-center gap-1">
-              Duplicates
-              {problems.duplicateUniqueProducts.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.duplicateUniqueProducts.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="orphaned" className="flex items-center gap-1">
-              Orphaned
-              {problems.orphanedProducts.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.orphanedProducts.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="upcs" className="flex items-center gap-1">
-              UPCs
-              {problems.invalidUPCs.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.invalidUPCs.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="pricing" className="flex items-center gap-1">
-              Pricing
-              {problems.productsWithoutMappings.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.productsWithoutMappings.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="stale-prices"
-              className="flex items-center gap-1"
-            >
-              Prices
-              {problems.productsWithStalePrices.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.productsWithStalePrices.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="stale-valuations"
-              className="flex items-center gap-1"
-            >
-              Valuations
-              {problems.inventoryWithStaleValuations.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.inventoryWithStaleValuations.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="amounts" className="flex items-center gap-1">
-              Amounts
-              {problems.invalidInventoryAmounts.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.invalidInventoryAmounts.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="locations" className="flex items-center gap-1">
-              Locations
-              {problems.emptyLocations.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.emptyLocations.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="images" className="flex items-center gap-1">
-              Images
-              {problems.productsWithoutUPCImages.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.productsWithoutUPCImages.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="categories" className="flex items-center gap-1">
-              Categories
-              {problems.productsWithWrongCategory.length > 0 && (
-                <Badge variant="destructive" className="ml-1">
-                  {problems.productsWithWrongCategory.length}
-                </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="duplicates">
-            <DuplicateUniqueProductsList
-              products={problems.duplicateUniqueProducts}
-            />
-          </TabsContent>
-
-          <TabsContent value="orphaned">
-            <OrphanedProductsList products={problems.orphanedProducts} />
-          </TabsContent>
-
-          <TabsContent value="upcs">
-            <InvalidUPCsList products={problems.invalidUPCs} />
-          </TabsContent>
-
-          <TabsContent value="pricing">
-            <ProductsWithoutMappingsList
-              products={problems.productsWithoutMappings}
-            />
-          </TabsContent>
-
-          <TabsContent value="stale-prices">
-            <ProductsWithStalePricesList
-              products={problems.productsWithStalePrices}
-            />
-          </TabsContent>
-
-          <TabsContent value="stale-valuations">
-            <InventoryWithStaleValuationsList
-              entries={problems.inventoryWithStaleValuations}
-            />
-          </TabsContent>
-
-          <TabsContent value="amounts">
-            <InvalidInventoryAmountsList
-              entries={problems.invalidInventoryAmounts}
-            />
-          </TabsContent>
-
-          <TabsContent value="locations">
-            <EmptyLocationsList locations={problems.emptyLocations} />
-          </TabsContent>
-
-          <TabsContent value="images">
-            <ProductsWithoutUPCImagesList
-              products={problems.productsWithoutUPCImages}
-            />
-          </TabsContent>
-
-          <TabsContent value="categories">
-            <ProductsWithWrongCategoryList
-              products={problems.productsWithWrongCategory}
-            />
-          </TabsContent>
-        </Tabs>
+      {/* Summary header */}
+      {problems.totalProblems > 0 ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2">
+              <Badge variant="destructive" className="text-base">
+                {problems.totalProblems}
+              </Badge>
+              {problems.totalProblems === 1 ? "Issue" : "Issues"} Found
+            </CardTitle>
+            <div className="flex flex-wrap gap-2 pt-2">
+              {categoryLinks.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => scrollToSection(cat.id)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2.5 py-1 text-sm transition-colors hover:bg-muted/80"
+                >
+                  {cat.label}
+                  <Badge variant="destructive" className="ml-0.5">
+                    {cat.count}
+                  </Badge>
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+        </Card>
       ) : (
         <Card>
           <CardHeader>
@@ -832,6 +767,92 @@ export function ProblemsOverview() {
           </CardHeader>
         </Card>
       )}
+
+      {/* All problem sections */}
+      <div
+        ref={(el) => {
+          sectionRefs.current.duplicates = el;
+        }}
+      >
+        <DuplicateUniqueProductsList
+          products={problems.duplicateUniqueProducts}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.orphaned = el;
+        }}
+      >
+        <OrphanedProductsList products={problems.orphanedProducts} />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.upcs = el;
+        }}
+      >
+        <InvalidUPCsList products={problems.invalidUPCs} />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.pricing = el;
+        }}
+      >
+        <ProductsWithoutMappingsList
+          products={problems.productsWithoutMappings}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["stale-prices"] = el;
+        }}
+      >
+        <ProductsWithStalePricesList
+          products={problems.productsWithStalePrices}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["stale-valuations"] = el;
+        }}
+      >
+        <InventoryWithStaleValuationsList
+          entries={problems.inventoryWithStaleValuations}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.amounts = el;
+        }}
+      >
+        <InvalidInventoryAmountsList
+          entries={problems.invalidInventoryAmounts}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.locations = el;
+        }}
+      >
+        <EmptyLocationsList locations={problems.emptyLocations} />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.images = el;
+        }}
+      >
+        <ProductsWithoutUPCImagesList
+          products={problems.productsWithoutUPCImages}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.categories = el;
+        }}
+      >
+        <ProductsWithWrongCategoryList
+          products={problems.productsWithWrongCategory}
+        />
+      </div>
     </div>
   );
 }
