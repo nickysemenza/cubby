@@ -42,6 +42,7 @@ import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 import { createActionsColumn } from "../data-table/columnHelpers";
+import { MobileCardView } from "../data-table/MobileCardView";
 import { buildSelectColumn } from "../data-table/row-selection";
 import { EntityPillLink } from "../EntityPill";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
@@ -50,6 +51,111 @@ import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import { NoneState } from "../NoneState";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
+
+/** Editable amount cell - used in both desktop table and mobile cards */
+const EditableAmountCell: React.FC<{
+  item: InventoryItem;
+  isEditing: boolean;
+  editingAmount: { value: number; unit: string };
+  setEditingAmount: React.Dispatch<
+    React.SetStateAction<{ value: number; unit: string }>
+  >;
+  onStartEdit: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  isPending: boolean;
+  variant: "desktop" | "mobile";
+}> = ({
+  item,
+  isEditing,
+  editingAmount,
+  setEditingAmount,
+  onStartEdit,
+  onSave,
+  onCancel,
+  isPending,
+  variant,
+}) => {
+  const isMobile = variant === "mobile";
+  const inputClass = isMobile ? "h-8 w-20" : "w-20";
+  const buttonClass = isMobile ? "h-8 w-8" : undefined;
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center gap-2">
+        <Input
+          type="number"
+          value={editingAmount.value}
+          onChange={(e) =>
+            setEditingAmount((prev) => ({
+              ...prev,
+              value: parseFloat(e.target.value) || 0,
+            }))
+          }
+          className={inputClass}
+          step="any"
+          autoFocus
+        />
+        <Input
+          type="text"
+          value={editingAmount.unit}
+          onChange={(e) =>
+            setEditingAmount((prev) => ({
+              ...prev,
+              unit: e.target.value,
+            }))
+          }
+          className={inputClass}
+          placeholder="unit"
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          className={buttonClass}
+          onClick={onSave}
+          disabled={isPending}
+        >
+          <Check className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className={buttonClass}
+          onClick={onCancel}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  // Display mode
+  if (isMobile) {
+    return (
+      <button
+        type="button"
+        className="flex min-h-[44px] items-center gap-1 rounded-md bg-muted/50 px-3 py-2 text-left transition-colors hover:bg-muted"
+        onClick={onStartEdit}
+      >
+        <span className="text-sm">
+          {showAmountAndPrice(item.amount, item.product.unitMappings)}
+        </span>
+        <Pencil className="ml-2 h-3 w-3 text-muted-foreground" />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
+      onClick={onStartEdit}
+    >
+      {showAmountAndPrice(item.amount, item.product.unitMappings)}
+      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+    </button>
+  );
+};
 
 interface LocationInventoryTableProps {
   locationId: LocationId;
@@ -112,72 +218,26 @@ export function LocationInventoryTable({
         header: "Amount",
         cell: (info) => {
           const item = info.row.original;
-          const isEditing = editingRowId === item.id;
-
-          if (isEditing) {
-            return (
-              <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  value={editingAmount.value}
-                  onChange={(e) =>
-                    setEditingAmount((prev) => ({
-                      ...prev,
-                      value: parseFloat(e.target.value) || 0,
-                    }))
-                  }
-                  className="w-20"
-                  step="any"
-                  autoFocus
-                />
-                <Input
-                  type="text"
-                  value={editingAmount.unit}
-                  onChange={(e) =>
-                    setEditingAmount((prev) => ({
-                      ...prev,
-                      unit: e.target.value,
-                    }))
-                  }
-                  className="w-20"
-                  placeholder="unit"
-                />
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => {
-                    updateMutation.mutate({
-                      id: item.id,
-                      data: { amount: editingAmount },
-                    });
-                  }}
-                  disabled={updateMutation.isPending}
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => setEditingRowId(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            );
-          }
-
           return (
-            <button
-              type="button"
-              className="flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
-              onClick={() => {
+            <EditableAmountCell
+              item={item}
+              isEditing={editingRowId === item.id}
+              editingAmount={editingAmount}
+              setEditingAmount={setEditingAmount}
+              onStartEdit={() => {
                 setEditingRowId(item.id);
                 setEditingAmount(item.amount);
               }}
-            >
-              {showAmountAndPrice(info.getValue(), item.product.unitMappings)}
-              <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
-            </button>
+              onSave={() => {
+                updateMutation.mutate({
+                  id: item.id,
+                  data: { amount: editingAmount },
+                });
+              }}
+              onCancel={() => setEditingRowId(null)}
+              isPending={updateMutation.isPending}
+              variant="desktop"
+            />
           );
         },
       }),
@@ -308,10 +368,11 @@ export function LocationInventoryTable({
       </div>
 
       {/* Mobile Card View */}
-      <div className="space-y-3 lg:hidden">
-        {inventoryItems.map((item) => {
+      <MobileCardView
+        table={table}
+        renderMobileCard={(row) => {
+          const item = row.original;
           const isSelected = rowSelection[item.id] ?? false;
-          const isEditing = editingRowId === item.id;
 
           const actionsDropdown = (
             <DropdownMenu>
@@ -357,7 +418,6 @@ export function LocationInventoryTable({
 
           return (
             <MobileCard
-              key={item.id}
               selectable={{
                 isSelected,
                 onSelectionChange: (checked) => {
@@ -386,79 +446,30 @@ export function LocationInventoryTable({
                 </div>
 
                 {/* Amount - editable */}
-                {isEditing ? (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      value={editingAmount.value}
-                      onChange={(e) =>
-                        setEditingAmount((prev) => ({
-                          ...prev,
-                          value: parseFloat(e.target.value) || 0,
-                        }))
-                      }
-                      className="h-8 w-20"
-                      step="any"
-                      autoFocus
-                    />
-                    <Input
-                      type="text"
-                      value={editingAmount.unit}
-                      onChange={(e) =>
-                        setEditingAmount((prev) => ({
-                          ...prev,
-                          unit: e.target.value,
-                        }))
-                      }
-                      className="h-8 w-20"
-                      placeholder="unit"
-                    />
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => {
-                        updateMutation.mutate({
-                          id: item.id,
-                          data: { amount: editingAmount },
-                        });
-                      }}
-                      disabled={updateMutation.isPending}
-                    >
-                      <Check className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      onClick={() => setEditingRowId(null)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="flex min-h-[44px] items-center gap-1 rounded-md bg-muted/50 px-3 py-2 text-left transition-colors hover:bg-muted"
-                    onClick={() => {
-                      setEditingRowId(item.id);
-                      setEditingAmount(item.amount);
-                    }}
-                  >
-                    <span className="text-sm">
-                      {showAmountAndPrice(
-                        item.amount,
-                        item.product.unitMappings,
-                      )}
-                    </span>
-                    <Pencil className="ml-2 h-3 w-3 text-muted-foreground" />
-                  </button>
-                )}
+                <EditableAmountCell
+                  item={item}
+                  isEditing={editingRowId === item.id}
+                  editingAmount={editingAmount}
+                  setEditingAmount={setEditingAmount}
+                  onStartEdit={() => {
+                    setEditingRowId(item.id);
+                    setEditingAmount(item.amount);
+                  }}
+                  onSave={() => {
+                    updateMutation.mutate({
+                      id: item.id,
+                      data: { amount: editingAmount },
+                    });
+                  }}
+                  onCancel={() => setEditingRowId(null)}
+                  isPending={updateMutation.isPending}
+                  variant="mobile"
+                />
               </div>
             </MobileCard>
           );
-        })}
-      </div>
+        }}
+      />
 
       {/* Move dialog */}
       <MoveInventoryDialog
