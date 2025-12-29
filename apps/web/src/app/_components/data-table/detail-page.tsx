@@ -32,7 +32,7 @@ export const DetailPage: FC<DetailPageProps> = ({
   return (
     <div className="space-y-4 sm:space-y-6">
       <h1 className="font-bold text-xl capitalize sm:text-2xl">
-        <span>{entityDetails.icon}</span>
+        <entityDetails.lucideIcon className="mr-2 inline-block h-6 w-6" />
         {entityDetails.label} Detail: {name}
       </h1>
 

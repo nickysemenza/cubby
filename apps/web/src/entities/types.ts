@@ -43,10 +43,8 @@ export interface EntityDefinition {
   basePath: string;
   pluralLabel: string;
   shortcut?: string;
-  /** Emoji icon for display */
-  icon: string;
-  /** Lucide icon component for UI elements like audit logs */
-  lucideIcon?: LucideIcon;
+  /** Lucide icon component for UI elements */
+  lucideIcon: LucideIcon;
   /** Detail page conventions */
   detail?: EntityDetailConfig;
   /** List page conventions */

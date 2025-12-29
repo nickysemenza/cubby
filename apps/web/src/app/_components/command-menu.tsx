@@ -43,7 +43,7 @@ export function GlobalCommandMenu() {
               key={entity.basePath}
               onSelect={() => goToPage(`/${entity.basePath}`)}
             >
-              {entity.icon}
+              <entity.lucideIcon className="h-4 w-4" />
               <span>{entity.pluralLabel}</span>
             </CommandItem>
           ))}
