@@ -12,13 +12,10 @@ interface FlexContainerProps
 export const FlexContainer = React.forwardRef<
   HTMLDivElement,
   FlexContainerProps
->(({ className, direction, align, justify, gap, ...props }, ref) => {
+>(({ className, align, justify, gap, ...props }, ref) => {
   return (
     <div
-      className={cn(
-        flexContainerVariants({ direction, align, justify, gap }),
-        className,
-      )}
+      className={cn(flexContainerVariants({ align, justify, gap }), className)}
       ref={ref}
       {...props}
     />
