@@ -9,7 +9,9 @@ function ImportPage() {
   return (
     <div className="container mx-auto py-6">
       <div className="mb-6">
-        <h1 className="font-heading font-bold text-2xl">Import Inventory from CSV</h1>
+        <h1 className="font-bold font-heading text-2xl">
+          Import Inventory from CSV
+        </h1>
         <p className="text-muted-foreground">
           Paste data from Google Sheets or upload a CSV file. Preview updates
           automatically.

@@ -36,9 +36,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
             <ImageIcon className="size-4" />
           </EmptyMedia>
           <EmptyTitle>No images</EmptyTitle>
-          <EmptyDescription>
-            Upload images to see them here
-          </EmptyDescription>
+          <EmptyDescription>Upload images to see them here</EmptyDescription>
         </Empty>
       ) : (
         <div>

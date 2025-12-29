@@ -10,7 +10,7 @@ function LocationImportPage() {
   return (
     <PageWrapper>
       <div className="mb-6">
-        <h1 className="font-heading font-bold text-2xl">Import Locations</h1>
+        <h1 className="font-bold font-heading text-2xl">Import Locations</h1>
         <p className="text-muted-foreground">
           Import locations from a CSV file to quickly set up your storage
           structure.

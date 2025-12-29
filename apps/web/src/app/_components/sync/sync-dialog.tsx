@@ -44,42 +44,42 @@ const getSelectedSide = (
   return undefined;
 };
 
-// State styles and labels
+// State styles and labels - using theme colors
 const getSyncStateStyles = (state: SyncState) => {
   switch (state) {
     case "matched":
       return {
-        bg: "bg-gray-100 text-gray-600",
+        bg: "bg-muted text-muted-foreground",
         icon: <CheckCircle2 className="h-3 w-3" />,
         label: "Matched",
       };
     case "conflict":
       return {
-        bg: "bg-orange-100 text-orange-700",
+        bg: "bg-destructive/15 text-destructive",
         icon: <GitCompare className="h-3 w-3" />,
         label: "Conflict",
       };
     case "app_only":
       return {
-        bg: "bg-green-100 text-green-700",
+        bg: "bg-secondary text-secondary-foreground",
         icon: <Plus className="h-3 w-3" />,
         label: "App Only",
       };
     case "sheet_only":
       return {
-        bg: "bg-blue-100 text-blue-700",
+        bg: "bg-primary/15 text-primary",
         icon: <Plus className="h-3 w-3" />,
         label: "Sheet Only",
       };
     case "renamed":
       return {
-        bg: "bg-cyan-100 text-cyan-700",
+        bg: "bg-chart-4/20 text-chart-4",
         icon: <Pencil className="h-3 w-3" />,
         label: "Renamed",
       };
     case "moved":
       return {
-        bg: "bg-yellow-100 text-yellow-700",
+        bg: "bg-accent text-accent-foreground",
         icon: <ArrowRightLeft className="h-3 w-3" />,
         label: "Moved",
       };
