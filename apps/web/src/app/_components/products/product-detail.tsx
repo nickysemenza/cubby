@@ -33,17 +33,14 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       title: "Basic Information",
       icon: Info,
       content: editMode.isEditing ? (
-        <div className="container mx-auto py-10">
-          <h1 className="mb-6 font-bold text-2xl">Edit Product</h1>
-          <ProductForm
-            mode="edit"
-            entity={product}
-            onEdit={editMode.handleEdit}
-            isPending={editMode.isPending}
-            error={editMode.error}
-            onCancel={editMode.handleCancel}
-          />
-        </div>
+        <ProductForm
+          mode="edit"
+          entity={product}
+          onEdit={editMode.handleEdit}
+          isPending={editMode.isPending}
+          error={editMode.error}
+          onCancel={editMode.handleCancel}
+        />
       ) : (
         <ProductBasicInfo product={product} onEdit={editMode.startEditing} />
       ),

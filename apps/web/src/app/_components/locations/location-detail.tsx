@@ -58,17 +58,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Basic Information",
       icon: Info,
       content: editMode.isEditing ? (
-        <div className="container mx-auto py-10">
-          <h1 className="mb-6 font-bold text-2xl">Edit Location</h1>
-          <LocationForm
-            mode="edit"
-            entity={location}
-            onEdit={editMode.handleEdit}
-            isPending={editMode.isPending}
-            error={editMode.error}
-            onCancel={editMode.handleCancel}
-          />
-        </div>
+        <LocationForm
+          mode="edit"
+          entity={location}
+          onEdit={editMode.handleEdit}
+          isPending={editMode.isPending}
+          error={editMode.error}
+          onCancel={editMode.handleCancel}
+        />
       ) : (
         <LocationBasicInfo location={location} onEdit={editMode.startEditing} />
       ),

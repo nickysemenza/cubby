@@ -262,6 +262,20 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
   );
 }
 
+// Helper to submit changes or cancel if no changes detected
+export function submitOrCancel<T>(
+  updates: Record<string, unknown>,
+  buildPayload: () => T,
+  onEdit: (data: T) => void,
+  onCancel?: () => void,
+) {
+  if (Object.keys(updates).length > 0) {
+    onEdit(buildPayload());
+  } else {
+    onCancel?.();
+  }
+}
+
 // Generic function to build an update object based on changed fields
 export function buildUpdateObject<
   T extends Record<string, unknown>,

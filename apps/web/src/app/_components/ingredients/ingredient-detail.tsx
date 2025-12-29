@@ -1,7 +1,6 @@
 import { Apple, ChefHat, Info, Scale, ShoppingCart } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
-import { Card, CardContent } from "~/components/ui/card";
 import type { IngredientUpdateInput } from "~/schemas/ingredient";
 import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -40,18 +39,14 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
       title: "Basic Information",
       icon: Info,
       content: editMode.isEditing ? (
-        <Card>
-          <CardContent className="pt-6">
-            <IngredientForm
-              mode="edit"
-              entity={ingredient}
-              isPending={editMode.isPending}
-              error={editMode.error}
-              onEdit={editMode.handleEdit}
-              onCancel={editMode.handleCancel}
-            />
-          </CardContent>
-        </Card>
+        <IngredientForm
+          mode="edit"
+          entity={ingredient}
+          isPending={editMode.isPending}
+          error={editMode.error}
+          onEdit={editMode.handleEdit}
+          onCancel={editMode.handleCancel}
+        />
       ) : (
         <IngredientBasicInfo
           ingredient={ingredient}

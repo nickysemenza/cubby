@@ -27,6 +27,7 @@ import {
   type EditModeProps,
   FormWrapper,
   getSubmitButtonText,
+  submitOrCancel,
 } from "../form-utils";
 import { AmountFieldGroup } from "./amount-field-group";
 
@@ -108,15 +109,12 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       if (locationIdChange) {
         updates.locationId = locationIdChange;
       }
-      if (Object.keys(updates).length > 0) {
-        const updateData: InventoryUpdateInput = {
-          id: inventoryItem.id,
-          data: updates,
-        };
-        props.onEdit(updateData);
-      } else if (onCancel) {
-        onCancel();
-      }
+      submitOrCancel(
+        updates,
+        () => ({ id: inventoryItem.id, data: updates }),
+        props.onEdit,
+        onCancel,
+      );
     }
   };
 

@@ -15,6 +15,7 @@ import {
   type EditModeProps,
   FormWrapper,
   getSubmitButtonText,
+  submitOrCancel,
   UnifiedTextField,
 } from "../form-utils";
 
@@ -85,17 +86,12 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
         "aliases",
       ]);
 
-      // Only update if there are changes
-      if (Object.keys(updates).length > 0) {
-        const updateData: IngredientUpdateInput = {
-          id: ingredient.id,
-          data: updates,
-        };
-        props.onEdit(updateData);
-      } else if (onCancel) {
-        // If no changes, just run the cancel function
-        onCancel();
-      }
+      submitOrCancel(
+        updates,
+        () => ({ id: ingredient.id, data: updates }),
+        props.onEdit,
+        onCancel,
+      );
     }
   };
 
