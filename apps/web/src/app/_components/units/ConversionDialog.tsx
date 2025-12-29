@@ -132,14 +132,14 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
               render={
                 <Button
                   variant="secondary"
-                  size="sm"
+                  size="xs"
                   className="flex items-center gap-1"
                 />
               }
             />
           }
         >
-          <Scale className="h-4 w-4" />
+          <Scale className="h-3 w-3" />
           <span>Convert</span>
         </DialogTrigger>
         <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>

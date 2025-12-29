@@ -72,12 +72,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Dense table styles with warm accents
   const styles = {
-    table: "text-xs leading-tight",
+    table: "text-[11px] leading-tight",
     header:
-      "h-7 px-2 py-1 border-x border-border/50 text-xs font-medium bg-muted/50 text-muted-foreground",
-    cell: "px-2 py-1 h-[28px] border-x border-border/30 align-middle",
+      "h-6 px-1.5 py-0.5 border-x border-border/50 text-[10px] font-medium bg-muted/50 text-muted-foreground",
+    cell: "px-1.5 py-0.5 min-h-[22px] border-x border-border/30 align-middle",
     row: "even:bg-muted/20 hover:bg-primary/5 hover:border-l-2 hover:border-l-primary/50 transition-colors",
-    sortIcon: "h-3 w-3",
+    sortIcon: "h-2.5 w-2.5",
   };
 
   return (
@@ -140,13 +140,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                         "align-top",
                       )}
                     >
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-0.5">
                         {/* Column title with sort */}
                         {canSort ? (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 w-full justify-start px-1 text-[11px]"
+                            className="h-4 w-full justify-start px-0.5 text-[10px]"
                             onClick={() =>
                               header.column.toggleSorting(
                                 header.column.getIsSorted() === "asc",
@@ -205,8 +205,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                     <TableCell
                       key={cell.id}
                       className={cn(
-                        cell.column.columnDef.meta?.className,
                         styles.cell,
+                        cell.column.columnDef.meta?.className,
                       )}
                     >
                       {flexRender(

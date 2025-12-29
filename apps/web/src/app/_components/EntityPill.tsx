@@ -38,7 +38,7 @@ type EntityPillLinkProps = {
 );
 
 const linkClass =
-  "inline-flex items-center gap-1.5 rounded-md border border-border/50 px-1.5 py-0.5 text-sm hover:border-border hover:bg-muted/50";
+  "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-[11px] hover:border-border hover:bg-muted/50";
 
 /** Internal helper to render pill content consistently */
 function PillContent({
@@ -56,14 +56,14 @@ function PillContent({
     <>
       <span className="shrink-0">{icon}</span>
       <span
-        className={cn("min-w-0 text-primary", compact && "max-w-40 truncate")}
+        className={cn("min-w-0 text-primary", compact && "max-w-32 truncate")}
       >
         {name}
       </span>
       {metadata && (
         <>
           <span className="shrink-0 text-muted-foreground/40">|</span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
+          <span className="shrink-0 text-[9px] text-muted-foreground">
             {metadata}
           </span>
         </>

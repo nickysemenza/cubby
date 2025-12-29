@@ -36,7 +36,7 @@ export function HeaderFilter<TData>({
     }
   }
 
-  const inputClassName = "h-5 text-[10px] px-1";
+  const inputClassName = "h-4 text-[9px] px-0.5";
 
   if (filterConfig.filterType === "select") {
     return (

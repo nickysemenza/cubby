@@ -57,7 +57,7 @@ export function TruncatedList<T>({
           <PopoverTrigger openOnHover closeDelay={150}>
             <Badge
               variant="secondary"
-              className="h-5 cursor-default px-1.5 font-normal text-[10px]"
+              className="h-4 cursor-default px-1 font-normal text-[9px]"
             >
               +{hiddenCount}
             </Badge>

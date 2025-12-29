@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
-import { Eye, MoreHorizontal } from "lucide-react";
+import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Amount } from "~/codec/codec";
 import { SpacedContainer } from "~/components/layout/spaced-container";
@@ -131,20 +131,27 @@ export function createCreatedAtColumn<T extends BaseRow>(
 /**
  * Creates an image column that displays the first image thumbnail
  */
-export function createImageColumn<T extends ImageRow>(
+export function createImageColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
-  headerText: string = "Image",
+  options?: {
+    /** Custom accessor when row doesn't have standard `images` array */
+    getImages?: (
+      row: T,
+    ) => Array<{ id: string; url: string; filename?: string }>;
+  },
 ) {
-  return columnHelper.accessor((row) => row.images, {
+  const getImages =
+    options?.getImages ??
+    ((row: T) => (row as unknown as ImageRow).images ?? []);
+
+  return columnHelper.accessor((row) => getImages(row), {
     id: "image",
-    header: headerText,
+    header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
     enableSorting: false,
+    // h-px trick: setting height:1px on td makes h-full work on children
+    meta: { className: "px-0 py-0 h-px" },
     cell: (info) => (
-      <ImageThumbnail
-        size="sm"
-        images={info.getValue() ?? []}
-        alt={headerText}
-      />
+      <ImageThumbnail images={info.getValue() ?? []} alt="Image" />
     ),
   });
 }

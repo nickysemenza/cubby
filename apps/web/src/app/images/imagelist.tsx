@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { NoneState } from "~/app/_components/NoneState";
-import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
 import type { ImageWithEntity } from "~/schemas/image";
 import { useTRPC } from "~/trpc/react";
@@ -43,27 +43,8 @@ export default function ImageList() {
         },
       }),
       // Preview column
-      columnHelper.display({
-        id: "preview",
-        header: "Preview",
-        cell: ({ row }) => {
-          const image = row.original;
-          return (
-            <Link to="/images/$id" params={{ id: image.id }} className="block">
-              {row.original.status === "UPLOADED" ? (
-                <ImageThumbnail
-                  images={[image]}
-                  alt={image.filename}
-                  size="md"
-                />
-              ) : (
-                <div className="flex h-12 w-12 items-center justify-center rounded-md border bg-muted">
-                  <NoneState />
-                </div>
-              )}
-            </Link>
-          );
-        },
+      createImageColumn(columnHelper, {
+        getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
       }),
       // Content type
       columnHelper.accessor("contentType", {

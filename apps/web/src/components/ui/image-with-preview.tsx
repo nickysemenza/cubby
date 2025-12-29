@@ -23,7 +23,7 @@ export interface ImageWithPreviewProps {
   previewSize?: number;
   /** Which side to show the preview (default: "right") */
   previewSide?: "top" | "right" | "bottom" | "left";
-  /** Additional classes for the thumbnail container */
+  /** Additional classes for the thumbnail container (can override defaults like rounded, border) */
   className?: string;
 }
 
@@ -50,7 +50,7 @@ export function ImageWithPreview({
   alt,
   to,
   params,
-  size = 40,
+  size,
   previewSize = 200,
   previewSide = "right",
   className,
@@ -60,15 +60,18 @@ export function ImageWithPreview({
     className,
   );
 
+  // Only apply inline size when provided (undefined = rely on className for sizing)
+  const sizeStyle = size != null ? { width: size, height: size } : undefined;
+
   const thumbnail = to ? (
     <Link
       to={to}
       params={params}
       className={thumbnailClasses}
-      style={{ width: size, height: size }}
+      style={sizeStyle}
     />
   ) : (
-    <div className={thumbnailClasses} style={{ width: size, height: size }} />
+    <div className={thumbnailClasses} style={sizeStyle} />
   );
 
   return (
@@ -77,7 +80,7 @@ export function ImageWithPreview({
         <Image
           src={src}
           alt={alt}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-y-0 left-1/2 -translate-x-1/2 h-full aspect-square object-cover"
         />
       </TooltipTrigger>
       <TooltipContent
