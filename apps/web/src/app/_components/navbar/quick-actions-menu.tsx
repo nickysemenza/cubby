@@ -11,9 +11,9 @@ import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
@@ -70,17 +70,18 @@ export const QuickActionsMenu = () => {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel>Create</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {quickActions.map((action) => (
-          <DropdownMenuItem
-            key={action.href}
-            render={<Link to={action.href} />}
-          >
-            <action.icon className="h-4 w-4" />
-            <span>{action.label}</span>
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Create</DropdownMenuLabel>
+          {quickActions.map((action) => (
+            <DropdownMenuItem
+              key={action.href}
+              render={<Link to={action.href} />}
+            >
+              <action.icon className="h-4 w-4" />
+              <span>{action.label}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

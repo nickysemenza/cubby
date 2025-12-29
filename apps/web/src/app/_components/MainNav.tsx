@@ -126,9 +126,9 @@ export function MainNav({
   return (
     <div className="flex w-full items-center justify-between">
       <Link to="/">
-        <FlexContainer align="center" gap={3}>
-          <PackageOpen />
-          <span className="self-center whitespace-nowrap font-semibold text-2xl dark:text-white">
+        <FlexContainer align="center" gap={2}>
+          <PackageOpen className="h-5 w-5 sm:h-6 sm:w-6" />
+          <span className="self-center whitespace-nowrap font-semibold text-base sm:text-2xl dark:text-white">
             recipehub
           </span>
         </FlexContainer>
@@ -199,14 +199,16 @@ export function MainNav({
         {/* Quick Actions */}
         {session.data?.user && <QuickActionsMenu />}
 
-        {/* Problems Badge */}
-        {session.data?.user && <ProblemsBadge />}
+        {/* Status Badges - stacked on mobile */}
+        <div className="flex flex-col gap-0.5 md:flex-row md:gap-2">
+          {session.data?.user && <ProblemsBadge />}
+          <SyncStatusBadge />
+        </div>
 
-        {/* Sync Status Badge */}
-        <SyncStatusBadge />
-
-        {/* Theme Toggle */}
-        <ThemeToggle />
+        {/* Theme Toggle - hidden on mobile (available in sheet) */}
+        <div className="hidden md:block">
+          <ThemeToggle />
+        </div>
 
         {/* Debug Toggle */}
         <Button
@@ -238,7 +240,9 @@ export function MainNav({
           </Link>
         ) : (
           <>
-            <OrganizationSwitcher />
+            <div className="hidden md:block">
+              <OrganizationSwitcher />
+            </div>
             <UserAvatarDropdown />
           </>
         )}
@@ -261,6 +265,14 @@ export function MainNav({
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col space-y-4 p-4">
+              {/* Organization Switcher for Mobile */}
+              {session.data?.user && (
+                <div className="flex items-center justify-between p-2">
+                  <span className="font-medium text-base">Organization</span>
+                  <OrganizationSwitcher />
+                </div>
+              )}
+
               {/* Theme Toggle for Mobile */}
               <div className="flex items-center justify-between p-2">
                 <span className="font-medium text-base">Theme</span>

@@ -4,6 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -39,27 +40,28 @@ export const UserAvatarDropdown = () => {
         </Avatar>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="font-medium text-sm leading-none">{user.name}</p>
-            <p className="text-muted-foreground text-xs leading-none">
-              {user.email}
-            </p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          render={
-            <Link to="/account/$accountView" params={{ accountView: "" }} />
-          }
-        >
-          <User className="h-4 w-4" />
-          <span>Account</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem render={<Link to="/settings/integrations" />}>
-          <Settings className="h-4 w-4" />
-          <span>Settings</span>
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="font-medium text-sm leading-none">{user.name}</p>
+              <p className="text-muted-foreground text-xs leading-none">
+                {user.email}
+              </p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuItem
+            render={
+              <Link to="/account/$accountView" params={{ accountView: "" }} />
+            }
+          >
+            <User className="h-4 w-4" />
+            <span>Account</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem render={<Link to="/settings/integrations" />}>
+            <Settings className="h-4 w-4" />
+            <span>Settings</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => authClient.signOut()}
