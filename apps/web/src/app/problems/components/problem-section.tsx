@@ -90,7 +90,7 @@ export function ProblemSection<T>({
                   <Badge variant="outline">{groupItems.length}</Badge>
                 </h4>
               )}
-              <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {groupItems.map((item) => {
                   const {
                     title: itemTitle,
@@ -115,6 +115,7 @@ export function ProblemSection<T>({
                         icon: ExternalLink,
                       }}
                       secondaryActions={customActions}
+                      variant="compact"
                     />
                   );
                 })}

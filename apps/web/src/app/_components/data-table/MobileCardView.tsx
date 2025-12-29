@@ -129,11 +129,11 @@ export function MobileCardView<TItem>({
             (f) => f.category === "wide",
           );
 
-          // Extract raw data values directly from the row
-          const rowData = row.original as Record<string, unknown>;
+          // Get title using generic utility function (no cast needed)
+          const titleString = extractEntityTitle(row.original);
 
-          // Get title using utility function
-          const titleString = extractEntityTitle(rowData);
+          // Extract raw data for image extraction
+          const rowData = row.original as Record<string, unknown>;
 
           // Get image using utility function, with fallback to rendered field
           const entityImage = getEntityImage(rowData);
@@ -157,10 +157,16 @@ export function MobileCardView<TItem>({
             </div>
           ));
 
-          // Create badges from wide fields (simplified representation)
+          // Create badges from wide fields with their content
           const badges = wideFields.map((field) => (
-            <div key={field.id} className="text-muted-foreground text-xs">
-              {field.displayHeader}
+            <div
+              key={field.id}
+              className="flex min-w-0 items-center gap-1 text-xs"
+            >
+              <span className="shrink-0 text-muted-foreground">
+                {field.displayHeader}:
+              </span>
+              <span className="min-w-0 truncate">{field.content}</span>
             </div>
           ));
 

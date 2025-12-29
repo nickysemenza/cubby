@@ -64,3 +64,5 @@ certificates
 # better-auth configuration (can include secrets)
 /.auth/
 
+.playwright-mcp/
+

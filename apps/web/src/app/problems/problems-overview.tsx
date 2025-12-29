@@ -640,7 +640,7 @@ export function ProblemsOverview() {
     <div className="space-y-6">
       {hasProblems ? (
         <Tabs defaultValue="duplicates" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5 lg:grid-cols-10">
+          <TabsList className="flex w-full overflow-x-auto lg:grid lg:grid-cols-10">
             <TabsTrigger value="duplicates" className="flex items-center gap-1">
               Duplicates
               {problems.duplicateUniqueProducts.length > 0 && (
