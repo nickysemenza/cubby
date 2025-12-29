@@ -1,5 +1,9 @@
 // cf https://ui.shadcn.com/docs/components/data-table
-import { flexRender, type Table as ITable } from "@tanstack/react-table";
+import {
+  flexRender,
+  type Table as ITable,
+  type Row,
+} from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
 import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
@@ -34,6 +38,12 @@ interface TTableProps<TItem> {
   timing?: QueryTiming;
   /** Entity type for mobile card navigation - when provided, cards become clickable */
   entityType?: EntityType;
+  /**
+   * Custom render function for mobile cards.
+   * Receives the row and the default card content, allowing full customization.
+   * Useful for tables with inline editing or special mobile UX.
+   */
+  renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
   // Deprecated props - kept for backward compatibility during migration
   /** @deprecated Use column meta.filterConfig instead */
   filterableColumns?: unknown[];
@@ -51,6 +61,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     ariaLabel = "Data Table",
     timing,
     entityType,
+    renderMobileCard,
   } = props;
 
   // Support deprecated additionalFilters prop
@@ -270,7 +281,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           <ErrorDisplay error={error} />
         </div>
       ) : (
-        <MobileCardView table={table} entityType={entityType} />
+        <MobileCardView
+          table={table}
+          entityType={entityType}
+          renderMobileCard={renderMobileCard}
+        />
       )}
 
       <DataTablePagination table={table} timing={timing} />

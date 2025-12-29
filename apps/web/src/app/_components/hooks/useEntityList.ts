@@ -7,6 +7,7 @@ import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import {
+  createActionsColumn,
   createCreatedAtColumn,
   createImageColumn,
   createNameColumn,
@@ -245,6 +246,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     if (standardColumns.includes("createdAt")) {
       cols.push(createCreatedAtColumn(columnHelper));
     }
+
+    // Append actions column (always last)
+    cols.push(createActionsColumn(columnHelper, entity));
 
     return cols;
   }, [

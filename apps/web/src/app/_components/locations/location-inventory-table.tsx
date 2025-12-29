@@ -41,6 +41,7 @@ import {
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
+import { createActionsColumn } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 import { EntityPillLink } from "../EntityPill";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
@@ -181,47 +182,25 @@ export function LocationInventoryTable({
         },
       }),
 
-      columnHelper.display({
-        id: "actions",
-        header: "",
-        cell: (info) => {
-          const item = info.row.original;
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button variant="ghost" size="icon" />}
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  render={<Link to="/inventory/$id" params={{ id: item.id }} />}
-                >
-                  <Eye className="mr-2 h-4 w-4" />
-                  View Details
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() =>
-                    setDialogState({ type: "move", items: [item] })
-                  }
-                >
-                  <ArrowRightLeft className="mr-2 h-4 w-4" />
-                  Move to...
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={() =>
-                    setDialogState({ type: "delete", items: [item] })
-                  }
-                >
-                  <Trash className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        },
+      createActionsColumn(columnHelper, "inventory-item", {
+        extraActions: (item) => (
+          <>
+            <DropdownMenuItem
+              onClick={() => setDialogState({ type: "move", items: [item] })}
+            >
+              <ArrowRightLeft className="mr-2 h-4 w-4" />
+              Move to...
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setDialogState({ type: "delete", items: [item] })}
+            >
+              <Trash className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </>
+        ),
       }),
     ],
     [columnHelper, editingRowId, editingAmount, updateMutation],

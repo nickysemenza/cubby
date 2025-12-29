@@ -1,5 +1,9 @@
 import { useNavigate } from "@tanstack/react-router";
-import { flexRender, type Table as ITable } from "@tanstack/react-table";
+import {
+  flexRender,
+  type Table as ITable,
+  type Row,
+} from "@tanstack/react-table";
 import { Bug } from "lucide-react";
 import type { ReactNode } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
@@ -21,6 +25,12 @@ interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
   /** Entity type for navigation - when provided, cards become clickable */
   entityType?: EntityType;
+  /**
+   * Custom render function for mobile cards.
+   * Receives the row and the default card content, allowing full customization.
+   * Useful for tables with inline editing or special mobile UX.
+   */
+  renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
 }
 
 type FieldCategory = "hero" | "compact" | "medium" | "wide";
@@ -88,6 +98,7 @@ function categorizeField(
 export function MobileCardView<TItem>({
   table,
   entityType,
+  renderMobileCard,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
@@ -103,10 +114,24 @@ export function MobileCardView<TItem>({
     <div className="block space-y-4 lg:hidden">
       {table.getRowModel().rows?.length ? (
         table.getRowModel().rows.map((row) => {
-          // Categorize all fields for this row, filtering out "select" column
+          // Extract actions cell content (for MobileCard.actions slot)
+          const actionsCell = row
+            .getVisibleCells()
+            .find((cell) => cell.column.id === "actions");
+          const actionsContent = actionsCell
+            ? flexRender(
+                actionsCell.column.columnDef.cell,
+                actionsCell.getContext(),
+              )
+            : undefined;
+
+          // Categorize all fields for this row, filtering out "select" and "actions" columns
           const categorizedFields: CategorizedField[] = row
             .getVisibleCells()
-            .filter((cell) => cell.column.id !== "select") // Filter out select column
+            .filter(
+              (cell) =>
+                cell.column.id !== "select" && cell.column.id !== "actions",
+            )
             .map((cell) => {
               const header = cell.column.columnDef.header;
               let headerText = cell.column.id;
@@ -224,7 +249,40 @@ export function MobileCardView<TItem>({
                 }
               : undefined;
 
-          // Always use MobileCard with optional selection
+          // Build default card content
+          const defaultContent = (
+            <div className="space-y-2">
+              {/* Title with image */}
+              <div className="flex items-start gap-3">
+                {imageContent && (
+                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded">
+                    {imageContent}
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{titleString}</p>
+                </div>
+              </div>
+
+              {/* Details */}
+              {details.length > 0 && <div className="space-y-1">{details}</div>}
+
+              {/* Badges */}
+              {badges.length > 0 && <div className="space-y-1">{badges}</div>}
+
+              {/* Debug footer */}
+              {footer}
+            </div>
+          );
+
+          // Allow custom rendering for special cases (e.g., inline editing)
+          if (renderMobileCard) {
+            return (
+              <div key={row.id}>{renderMobileCard(row, defaultContent)}</div>
+            );
+          }
+
+          // Default MobileCard with optional selection and actions
           return (
             <MobileCard
               key={row.id}
@@ -237,32 +295,10 @@ export function MobileCardView<TItem>({
                     }
                   : undefined
               }
+              actions={actionsContent}
               onClick={handleClick}
             >
-              <div className="space-y-2">
-                {/* Title with image */}
-                <div className="flex items-start gap-3">
-                  {imageContent && (
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded">
-                      {imageContent}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{titleString}</p>
-                  </div>
-                </div>
-
-                {/* Details */}
-                {details.length > 0 && (
-                  <div className="space-y-1">{details}</div>
-                )}
-
-                {/* Badges */}
-                {badges.length > 0 && <div className="space-y-1">{badges}</div>}
-
-                {/* Debug footer */}
-                {footer}
-              </div>
+              {defaultContent}
             </MobileCard>
           );
         })

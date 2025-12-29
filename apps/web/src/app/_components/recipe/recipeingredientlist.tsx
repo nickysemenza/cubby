@@ -20,6 +20,7 @@ import { renderValueOrError } from "~/misc/result";
 import type { SectionIngredientOut } from "~/schemas/recipe";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
@@ -164,6 +165,16 @@ export const RecipeIngredientList: React.FC<{
         const mappings = id ? (mappingsMap[id] ?? []) : [];
         return <UnitMappingDisplay mappings={mappings} title="" />;
       },
+    }),
+    // Actions column - links to ingredient or recipe detail
+    createActionsColumnBase(columnHelper, (row) => {
+      if (row.type === "ingredient") {
+        return { to: "/ingredients/$id", params: { id: row.ingredient.id } };
+      }
+      if (row.type === "recipe") {
+        return { to: "/recipes/$id", params: { id: row.recipe.id } };
+      }
+      return null;
     }),
   ];
 

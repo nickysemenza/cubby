@@ -3,6 +3,8 @@ import {
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type OnChangeFn,
+  type RowSelectionState,
   type Table,
   useReactTable,
 } from "@tanstack/react-table";
@@ -22,6 +24,14 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   manualFiltering?: boolean;
   globalFilter?: GlobalFilterData;
   onGlobalFilterChange?: (value: GlobalFilterData) => void;
+  /** Custom row ID function for row selection */
+  getRowId?: (row: TData) => string;
+  /** Enable row selection */
+  enableRowSelection?: boolean;
+  /** Current row selection state */
+  rowSelection?: RowSelectionState;
+  /** Callback when row selection changes */
+  onRowSelectionChange?: OnChangeFn<RowSelectionState>;
 }
 
 export function useTableConfig<TData, GlobalFilterData>({
@@ -34,6 +44,10 @@ export function useTableConfig<TData, GlobalFilterData>({
   manualFiltering = true,
   globalFilter,
   onGlobalFilterChange,
+  getRowId,
+  enableRowSelection,
+  rowSelection,
+  onRowSelectionChange,
 }: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
   const {
     sorting,
@@ -64,11 +78,16 @@ export function useTableConfig<TData, GlobalFilterData>({
     manualFiltering,
     manualPagination,
     rowCount: totalCount,
+    // Row selection
+    ...(getRowId ? { getRowId } : {}),
+    ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
+    ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
     state: {
       sorting,
       columnFilters,
       pagination,
       ...(globalFilter ? { globalFilter } : {}),
+      ...(rowSelection ? { rowSelection } : {}),
     },
     ...(onGlobalFilterChange ? { onGlobalFilterChange } : {}),
   });

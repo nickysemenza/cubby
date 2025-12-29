@@ -1,6 +1,16 @@
+import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
+import { Eye, MoreHorizontal } from "lucide-react";
+import type { ReactNode } from "react";
 import type { Amount } from "~/codec/codec";
 import { SpacedContainer } from "~/components/layout/spaced-container";
+import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
@@ -349,6 +359,105 @@ export function createInventoryEntriesColumn<
             items={relatedEntities as never}
           />
         </SpacedContainer>
+      );
+    },
+  });
+}
+
+// ============================================================================
+// Actions Column
+// ============================================================================
+
+interface ActionsColumnOptions<T> {
+  /** Additional actions to render after "View Details" */
+  extraActions?: (row: T) => ReactNode;
+}
+
+/**
+ * Creates a standard actions column with a dropdown menu.
+ * Includes "View Details" link by default, with optional extra actions.
+ *
+ * @example
+ * // Basic usage - just View Details
+ * createActionsColumn(columnHelper, "product")
+ *
+ * // With extra actions (e.g., for inventory items)
+ * createActionsColumn(columnHelper, "inventory-item", {
+ *   extraActions: (item) => (
+ *     <>
+ *       <DropdownMenuItem onClick={() => handleMove(item)}>
+ *         <ArrowRightLeft /> Move to...
+ *       </DropdownMenuItem>
+ *       <DropdownMenuItem onClick={() => handleDelete(item)}>
+ *         <Trash /> Delete
+ *       </DropdownMenuItem>
+ *     </>
+ *   ),
+ * })
+ */
+export function createActionsColumn<T extends { id: string | number }>(
+  columnHelper: ColumnHelper<T>,
+  entity: Entity,
+  options?: ActionsColumnOptions<T>,
+) {
+  return createActionsColumnBase(
+    columnHelper,
+    (row) => ({
+      to: `/${entities[entity].basePath}/$id`,
+      params: { id: String(row.id) },
+    }),
+    options?.extraActions,
+  );
+}
+
+/**
+ * Base implementation for actions columns.
+ * Use `createActionsColumn` for standard entity tables.
+ * Call this directly for polymorphic rows where entity type varies per row.
+ */
+export function createActionsColumnBase<T>(
+  columnHelper: ColumnHelper<T>,
+  getLinkProps: (
+    row: T,
+  ) => { to: string; params: Record<string, string> } | null,
+  extraActions?: (row: T) => ReactNode,
+) {
+  return columnHelper.display({
+    id: "actions",
+    header: "",
+    enableSorting: false,
+    meta: {
+      className: "w-10",
+    },
+    cell: (info) => {
+      const row = info.row.original;
+      const linkProps = getLinkProps(row);
+
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon" className="h-8 w-8" />}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+            <span className="sr-only">Open menu</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {linkProps && (
+              <DropdownMenuItem
+                render={
+                  <Link
+                    to={linkProps.to as "/products/$id"}
+                    params={linkProps.params}
+                  />
+                }
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                View Details
+              </DropdownMenuItem>
+            )}
+            {extraActions?.(row)}
+          </DropdownMenuContent>
+        </DropdownMenu>
       );
     },
   });
