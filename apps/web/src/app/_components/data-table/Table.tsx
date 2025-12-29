@@ -16,7 +16,6 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { useDebug } from "~/hooks/useDebug";
-import { useTableDensity } from "~/hooks/useTableDensity";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
 import { DebugDialog } from "./DebugDialog";
@@ -58,35 +57,20 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const toolbarContent = additionalToolbarContent ?? additionalFilters;
 
   const { isDebugEnabled } = useDebug();
-  const { density, setDensity } = useTableDensity();
-  const isDense = density === "dense";
 
-  // Density-specific styles
-  const styles = isDense
-    ? {
-        table: "text-xs leading-tight",
-        header:
-          "h-6 px-1.5 py-0.5 border-x border-border text-xs font-medium bg-muted/40",
-        cell: "px-1.5 py-0.5 h-[24px] border-x border-border align-middle",
-        row: "even:bg-muted/30 hover:bg-muted/50 transition-colors",
-        sortIcon: "h-3 w-3",
-      }
-    : {
-        table: "",
-        header: "",
-        cell: "",
-        row: "",
-        sortIcon: "h-4 w-4",
-      };
+  // Dense table styles
+  const styles = {
+    table: "text-xs leading-tight",
+    header:
+      "h-6 px-1.5 py-0.5 border-x border-border text-xs font-medium bg-muted/40",
+    cell: "px-1.5 py-0.5 h-[24px] border-x border-border align-middle",
+    row: "even:bg-muted/30 hover:bg-muted/50 transition-colors",
+    sortIcon: "h-3 w-3",
+  };
 
   return (
     <SpacedContainer space={4}>
-      <DataTableToolbar
-        table={table}
-        additionalContent={toolbarContent}
-        density={density}
-        onDensityChange={setDensity}
-      />
+      <DataTableToolbar table={table} additionalContent={toolbarContent} />
 
       {/* Desktop Table View */}
       <div className="hidden lg:block [&_[data-slot=table-container]]:overflow-visible">
@@ -149,11 +133,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                         {canSort ? (
                           <Button
                             variant="ghost"
-                            size={isDense ? "sm" : "default"}
-                            className={cn(
-                              "w-full justify-start",
-                              isDense && "h-5 px-1 text-[11px]",
-                            )}
+                            size="sm"
+                            className="h-5 w-full justify-start px-1 text-[11px]"
                             onClick={() =>
                               header.column.toggleSorting(
                                 header.column.getIsSorted() === "asc",
@@ -163,16 +144,13 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                             {titleContent}
                           </Button>
                         ) : (
-                          <span className={cn(isDense ? "px-1" : "px-2")}>
-                            {titleContent}
-                          </span>
+                          <span className="px-1">{titleContent}</span>
                         )}
                         {/* Inline filter */}
                         {filterConfig && (
                           <HeaderFilter
                             column={header.column}
                             filterConfig={filterConfig}
-                            isDense={isDense}
                           />
                         )}
                       </div>

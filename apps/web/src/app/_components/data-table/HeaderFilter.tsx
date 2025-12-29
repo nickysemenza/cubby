@@ -8,13 +8,11 @@ import type { FilterConfig } from "./columnHelpers";
 interface HeaderFilterProps<TData> {
   column: Column<TData, unknown>;
   filterConfig: FilterConfig;
-  isDense?: boolean;
 }
 
 export function HeaderFilter<TData>({
   column,
   filterConfig,
-  isDense = false,
 }: HeaderFilterProps<TData>) {
   // Get external filter value (from table state, e.g., after reset)
   const externalValue = (column.getFilterValue() as string) ?? "";
@@ -38,7 +36,7 @@ export function HeaderFilter<TData>({
     }
   }
 
-  const inputClassName = isDense ? "h-5 text-[10px] px-1" : "h-7 text-xs px-2";
+  const inputClassName = "h-5 text-[10px] px-1";
 
   if (filterConfig.filterType === "select") {
     return (

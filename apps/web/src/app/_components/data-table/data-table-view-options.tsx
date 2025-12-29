@@ -8,23 +8,15 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import type { TableDensity } from "~/hooks/useTableDensity";
 
 interface DataTableViewOptionsProps<TData> {
   table: Table<TData>;
-  density?: TableDensity;
-  onDensityChange?: (density: TableDensity) => void;
 }
 
 export function DataTableViewOptions<TData>({
   table,
-  density = "normal",
-  onDensityChange,
 }: DataTableViewOptionsProps<TData>) {
   return (
     <DropdownMenu>
@@ -37,17 +29,6 @@ export function DataTableViewOptions<TData>({
         View
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[150px]">
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Density</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={density}
-            onValueChange={(value) => onDensityChange?.(value as TableDensity)}
-          >
-            <DropdownMenuRadioItem value="normal">Normal</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="dense">Dense</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
           {table
