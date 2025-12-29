@@ -5,7 +5,7 @@ import {
 import * as React from "react";
 import { z } from "zod";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
-import { SummaryGrid } from "~/components/entity/summary-grid";
+import { GridContainer } from "~/components/layout/grid-container";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 // Zod schemas for summary data types
@@ -270,7 +270,7 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
         )}
       </CardHeader>
       <CardContent>
-        <SummaryGrid>
+        <GridContainer cols="summary">
           {items.map((item) => (
             <div key={item.label}>
               <div className="text-muted-foreground text-sm">{item.label}</div>
@@ -279,7 +279,7 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
               </div>
             </div>
           ))}
-        </SummaryGrid>
+        </GridContainer>
       </CardContent>
     </Card>
   );

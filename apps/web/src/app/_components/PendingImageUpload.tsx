@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { Camera, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ImageGrid } from "~/components/media/image-grid";
+import { GridContainer } from "~/components/layout/grid-container";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
@@ -238,7 +238,7 @@ export function PendingImageUpload({
       {pendingImages.length > 0 && (
         <div className="space-y-2">
           <Label>New images</Label>
-          <ImageGrid variant="images">
+          <GridContainer cols="images" gap={2}>
             {pendingImages.map((image) => (
               <div
                 key={image.id}
@@ -260,7 +260,7 @@ export function PendingImageUpload({
                 </Button>
               </div>
             ))}
-          </ImageGrid>
+          </GridContainer>
         </div>
       )}
 
@@ -268,7 +268,7 @@ export function PendingImageUpload({
       {currentExistingImages.length > 0 && (
         <div className="space-y-2">
           <Label>Existing images</Label>
-          <ImageGrid variant="images">
+          <GridContainer cols="images" gap={2}>
             {currentExistingImages.map((image) => (
               <div
                 key={image.id}
@@ -290,7 +290,7 @@ export function PendingImageUpload({
                 </Button>
               </div>
             ))}
-          </ImageGrid>
+          </GridContainer>
         </div>
       )}
     </div>
