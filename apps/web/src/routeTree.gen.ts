@@ -31,12 +31,10 @@ import { Route as ProductsNewRouteImport } from './routes/products.new'
 import { Route as ProductsIdRouteImport } from './routes/products.$id'
 import { Route as OrganizationOrganizationViewRouteImport } from './routes/organization.$organizationView'
 import { Route as LocationsNewRouteImport } from './routes/locations.new'
-import { Route as LocationsImportRouteImport } from './routes/locations.import'
 import { Route as LocationsIdRouteImport } from './routes/locations.$id'
 import { Route as InventoryScannerRouteImport } from './routes/inventory.scanner'
 import { Route as InventoryQuickCaptureRouteImport } from './routes/inventory.quick-capture'
 import { Route as InventoryNewRouteImport } from './routes/inventory.new'
-import { Route as InventoryImportRouteImport } from './routes/inventory.import'
 import { Route as InventoryBulkMoveRouteImport } from './routes/inventory.bulk-move'
 import { Route as InventoryBulkEditRouteImport } from './routes/inventory.bulk-edit'
 import { Route as InventoryIdRouteImport } from './routes/inventory.$id'
@@ -163,11 +161,6 @@ const LocationsNewRoute = LocationsNewRouteImport.update({
   path: '/locations/new',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LocationsImportRoute = LocationsImportRouteImport.update({
-  id: '/locations/import',
-  path: '/locations/import',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LocationsIdRoute = LocationsIdRouteImport.update({
   id: '/locations/$id',
   path: '/locations/$id',
@@ -186,11 +179,6 @@ const InventoryQuickCaptureRoute = InventoryQuickCaptureRouteImport.update({
 const InventoryNewRoute = InventoryNewRouteImport.update({
   id: '/inventory/new',
   path: '/inventory/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryImportRoute = InventoryImportRouteImport.update({
-  id: '/inventory/import',
-  path: '/inventory/import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryBulkMoveRoute = InventoryBulkMoveRouteImport.update({
@@ -281,12 +269,10 @@ export interface FileRoutesByFullPath {
   '/inventory/$id': typeof InventoryIdRoute
   '/inventory/bulk-edit': typeof InventoryBulkEditRoute
   '/inventory/bulk-move': typeof InventoryBulkMoveRoute
-  '/inventory/import': typeof InventoryImportRoute
   '/inventory/new': typeof InventoryNewRoute
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
   '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
-  '/locations/import': typeof LocationsImportRoute
   '/locations/new': typeof LocationsNewRoute
   '/organization/$organizationView': typeof OrganizationOrganizationViewRoute
   '/products/$id': typeof ProductsIdRoute
@@ -325,12 +311,10 @@ export interface FileRoutesByTo {
   '/inventory/$id': typeof InventoryIdRoute
   '/inventory/bulk-edit': typeof InventoryBulkEditRoute
   '/inventory/bulk-move': typeof InventoryBulkMoveRoute
-  '/inventory/import': typeof InventoryImportRoute
   '/inventory/new': typeof InventoryNewRoute
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
   '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
-  '/locations/import': typeof LocationsImportRoute
   '/locations/new': typeof LocationsNewRoute
   '/organization/$organizationView': typeof OrganizationOrganizationViewRoute
   '/products/$id': typeof ProductsIdRoute
@@ -370,12 +354,10 @@ export interface FileRoutesById {
   '/inventory/$id': typeof InventoryIdRoute
   '/inventory/bulk-edit': typeof InventoryBulkEditRoute
   '/inventory/bulk-move': typeof InventoryBulkMoveRoute
-  '/inventory/import': typeof InventoryImportRoute
   '/inventory/new': typeof InventoryNewRoute
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
   '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
-  '/locations/import': typeof LocationsImportRoute
   '/locations/new': typeof LocationsNewRoute
   '/organization/$organizationView': typeof OrganizationOrganizationViewRoute
   '/products/$id': typeof ProductsIdRoute
@@ -416,12 +398,10 @@ export interface FileRouteTypes {
     | '/inventory/$id'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
-    | '/inventory/import'
     | '/inventory/new'
     | '/inventory/quick-capture'
     | '/inventory/scanner'
     | '/locations/$id'
-    | '/locations/import'
     | '/locations/new'
     | '/organization/$organizationView'
     | '/products/$id'
@@ -460,12 +440,10 @@ export interface FileRouteTypes {
     | '/inventory/$id'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
-    | '/inventory/import'
     | '/inventory/new'
     | '/inventory/quick-capture'
     | '/inventory/scanner'
     | '/locations/$id'
-    | '/locations/import'
     | '/locations/new'
     | '/organization/$organizationView'
     | '/products/$id'
@@ -504,12 +482,10 @@ export interface FileRouteTypes {
     | '/inventory/$id'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
-    | '/inventory/import'
     | '/inventory/new'
     | '/inventory/quick-capture'
     | '/inventory/scanner'
     | '/locations/$id'
-    | '/locations/import'
     | '/locations/new'
     | '/organization/$organizationView'
     | '/products/$id'
@@ -549,12 +525,10 @@ export interface RootRouteChildren {
   InventoryIdRoute: typeof InventoryIdRoute
   InventoryBulkEditRoute: typeof InventoryBulkEditRoute
   InventoryBulkMoveRoute: typeof InventoryBulkMoveRoute
-  InventoryImportRoute: typeof InventoryImportRoute
   InventoryNewRoute: typeof InventoryNewRoute
   InventoryQuickCaptureRoute: typeof InventoryQuickCaptureRoute
   InventoryScannerRoute: typeof InventoryScannerRoute
   LocationsIdRoute: typeof LocationsIdRoute
-  LocationsImportRoute: typeof LocationsImportRoute
   LocationsNewRoute: typeof LocationsNewRoute
   OrganizationOrganizationViewRoute: typeof OrganizationOrganizationViewRoute
   ProductsIdRoute: typeof ProductsIdRoute
@@ -733,13 +707,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LocationsNewRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/locations/import': {
-      id: '/locations/import'
-      path: '/locations/import'
-      fullPath: '/locations/import'
-      preLoaderRoute: typeof LocationsImportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/locations/$id': {
       id: '/locations/$id'
       path: '/locations/$id'
@@ -766,13 +733,6 @@ declare module '@tanstack/react-router' {
       path: '/inventory/new'
       fullPath: '/inventory/new'
       preLoaderRoute: typeof InventoryNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/import': {
-      id: '/inventory/import'
-      path: '/inventory/import'
-      fullPath: '/inventory/import'
-      preLoaderRoute: typeof InventoryImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory/bulk-move': {
@@ -903,12 +863,10 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryIdRoute: InventoryIdRoute,
   InventoryBulkEditRoute: InventoryBulkEditRoute,
   InventoryBulkMoveRoute: InventoryBulkMoveRoute,
-  InventoryImportRoute: InventoryImportRoute,
   InventoryNewRoute: InventoryNewRoute,
   InventoryQuickCaptureRoute: InventoryQuickCaptureRoute,
   InventoryScannerRoute: InventoryScannerRoute,
   LocationsIdRoute: LocationsIdRoute,
-  LocationsImportRoute: LocationsImportRoute,
   LocationsNewRoute: LocationsNewRoute,
   OrganizationOrganizationViewRoute: OrganizationOrganizationViewRoute,
   ProductsIdRoute: ProductsIdRoute,

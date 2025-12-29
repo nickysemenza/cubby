@@ -11,12 +11,10 @@ import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   type InventoryId,
   inventoryId,
-  locationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
 import {
   bulkMovePayload,
-  type CSVImportResult,
   csvImportResult,
   inventoryBulkOperationPayload,
   inventoryCreatePayloadData,
@@ -30,7 +28,6 @@ import {
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntry,
-  exportInventoryToCSV,
   findInventoryWithStaleValuations,
   getInventoryEntryByID,
   importInventoryFromCSV,
@@ -43,22 +40,7 @@ import {
   createDeleteProcedure,
   createEntityCrudProcedures,
 } from "../crud-factory";
-import { createCSVProceduresWithExportInput } from "../csv-factory";
 import { createAppError, createTRPCRouter, protectedProcedure } from "../trpc";
-
-// Schema for inventory CSV export
-const inventoryCSVExportRow = z.object({
-  product_name: z.string(),
-  manufacturer: z.string(),
-  upc: z.string(),
-  location_name: z.string(),
-  quantity: z.number().nullable(),
-  unit: z.string().nullable(),
-  expected_qty: z.number().nullable(),
-  price: z.number().nullable(),
-  unit_mappings: z.string().nullable(),
-  ingredient_name: z.string().nullable(),
-});
 
 // Define filters schema for inventory entries
 const inventoryFiltersSchema = z.object({
@@ -205,55 +187,50 @@ const findDuplicates = protectedProcedure
     }));
   });
 
-// CSV import/export procedures using factory
-const { exportCSV, importCSV, previewCSVImport } =
-  createCSVProceduresWithExportInput({
-    schemas: {
-      importRow: inventoryCSVRow,
-      importResult: csvImportResult,
-      exportRow: inventoryCSVExportRow,
-      exportInput: z.object({ locationId: locationId.optional() }),
-    },
-    repo: {
-      import: (ctx, rows, dryRun) =>
-        importInventoryFromCSV(ctx.db, ctx.organizationId, rows, {
-          dryRun,
-          actor: { ...ctx.actorContext, source: "csv_import" },
-        }),
-      export: (ctx, input) =>
-        exportInventoryToCSV(ctx.db, ctx.organizationId, input.locationId),
-    },
+// CSV import procedure (used by scripts/load-data.ts)
+const importCSV = protectedProcedure
+  .input(z.object({ rows: z.array(inventoryCSVRow) }))
+  .output(csvImportResult)
+  .mutation(async ({ ctx, input }) => {
+    const result = await importInventoryFromCSV(
+      ctx.db,
+      ctx.organizationId,
+      input.rows,
+      {
+        dryRun: false,
+        actor: { ...ctx.actorContext, source: "csv_import" },
+      },
+    );
+
     // Import UPC images for newly created products after successful import
-    afterImport: async (ctx, _rows, result: CSVImportResult) => {
-      const productsToImportImages = result.items.filter(
-        (item) =>
-          item.productId &&
-          item.upc &&
-          (item.action === "created" || item.action === "product_only"),
-      );
+    const productsToImportImages = result.items.filter(
+      (item) =>
+        item.productId &&
+        item.upc &&
+        (item.action === "created" || item.action === "product_only"),
+    );
 
-      // Process image imports in parallel but don't block on failures
-      await Promise.allSettled(
-        productsToImportImages.map(async (item) => {
-          try {
-            await importImageFromUPC(
-              ctx.db,
-              ctx.organizationId,
-              ctx.upcLookupClient,
-              item.upc!,
-              unsafeProductId(item.productId!),
-            );
-          } catch (error) {
-            console.error(
-              `[importCSV] Image import failed for UPC ${item.upc}:`,
-              error,
-            );
-          }
-        }),
-      );
+    // Process image imports in parallel but don't block on failures
+    await Promise.allSettled(
+      productsToImportImages.map(async (item) => {
+        try {
+          await importImageFromUPC(
+            ctx.db,
+            ctx.organizationId,
+            ctx.upcLookupClient,
+            item.upc!,
+            unsafeProductId(item.productId!),
+          );
+        } catch (error) {
+          console.error(
+            `[importCSV] Image import failed for UPC ${item.upc}:`,
+            error,
+          );
+        }
+      }),
+    );
 
-      return result;
-    },
+    return result;
   });
 
 // Get count of inventory entries with stale/missing valuations
@@ -288,9 +265,7 @@ export const inventoryRouter = createTRPCRouter({
   bulkProcess,
   bulkMove,
   findDuplicates,
-  exportCSV,
   importCSV,
-  previewCSVImport,
   getStaleValuationsCount,
   backfillInventoryValuations: backfillInventoryValuationsEndpoint,
 });
