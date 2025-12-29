@@ -15,6 +15,7 @@ import {
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { TruncatedList } from "../_components/TruncatedList";
 import { IngredientMerger } from "./ingredient-merger";
 
 export function IngredientList() {
@@ -44,14 +45,17 @@ export function IngredientList() {
         filterConfig: { placeholder: "Filter by ingredient name..." },
       }),
       columnHelper.accessor("aliases", {
+        header: "Aliases",
         cell: (info) => (
-          <div className="space-y-0.5 text-xs">
-            {info.getValue().map((alias: string) => (
-              <div key={alias} className="truncate">
+          <TruncatedList
+            items={info.getValue()}
+            maxItems={2}
+            renderItem={(alias: string) => (
+              <span key={alias} className="truncate text-xs">
                 {alias}
-              </div>
-            ))}
-          </div>
+              </span>
+            )}
+          />
         ),
       }),
       createCreatedAtColumn(columnHelper),

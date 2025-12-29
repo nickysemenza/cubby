@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Badge } from "~/components/ui/badge";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { NoneState } from "./NoneState";
 
 interface TruncatedListProps<T> {
   items: T[];
@@ -37,7 +38,7 @@ export function TruncatedList<T>({
   direction = "horizontal",
 }: TruncatedListProps<T>) {
   if (!items || items.length === 0) {
-    return null;
+    return <NoneState />;
   }
 
   const shouldTruncate = maxItems !== undefined && items.length > maxItems;
@@ -52,23 +53,23 @@ export function TruncatedList<T>({
     <div className={containerClass}>
       {visibleItems.map((item, index) => renderItem(item, index))}
       {hiddenCount > 0 && (
-        <Tooltip>
-          <TooltipTrigger>
+        <Popover>
+          <PopoverTrigger openOnHover closeDelay={150}>
             <Badge
               variant="secondary"
               className="h-5 cursor-default px-1.5 font-normal text-[10px]"
             >
               +{hiddenCount}
             </Badge>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs">
+          </PopoverTrigger>
+          <PopoverContent side="bottom" className="w-auto max-w-xs p-2">
             <div className="flex flex-col gap-1">
               {hiddenItems.map((item, index) =>
                 (renderOverflowItem ?? renderItem)(item, index + maxItems!),
               )}
             </div>
-          </TooltipContent>
-        </Tooltip>
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );

@@ -197,7 +197,9 @@ export function createEntityPillColumn<
       id: String(accessor),
       header: options?.header,
       enableSorting: false,
-      meta: options?.className ? { className: options.className } : undefined,
+      meta: options?.className
+        ? { className: `${options.className} overflow-hidden` }
+        : undefined,
       cell: (info) => {
         let items = info.getValue() ?? [];
         if (options?.dedupe) {
