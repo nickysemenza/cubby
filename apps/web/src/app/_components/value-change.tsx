@@ -85,7 +85,7 @@ export function ValueChange({
         className={cn(
           strikethrough && "line-through",
           sizeClasses[size],
-          fromDimmed ? "text-red-400/40" : "text-red-600",
+          fromDimmed ? "text-destructive/40" : "text-destructive",
         )}
       >
         {formatValue(from)}
@@ -105,7 +105,9 @@ export function ValueChange({
       <span
         className={cn(
           sizeClasses[size],
-          toDimmed ? "text-green-400/40" : "text-green-600",
+          toDimmed
+            ? "text-secondary-foreground/40"
+            : "text-secondary-foreground",
         )}
       >
         {formatValue(to)}

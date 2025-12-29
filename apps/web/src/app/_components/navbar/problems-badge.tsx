@@ -73,7 +73,7 @@ export const ProblemsBadge = () => {
             className={cn(
               "h-8 px-2 font-medium",
               !hasProblems && "text-muted-foreground",
-              hasProblems && "text-orange-600",
+              hasProblems && "text-accent-foreground",
             )}
             render={<Link to="/problems" />}
             nativeButton={false}

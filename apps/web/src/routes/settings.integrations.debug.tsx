@@ -66,7 +66,7 @@ function GoogleSheetsDebugPage() {
       {/* Parse Errors */}
       {data?.parseErrors && data.parseErrors.length > 0 && (
         <div className="mb-6">
-          <h2 className="mb-2 font-semibold text-lg text-red-600">
+          <h2 className="mb-2 font-semibold text-destructive text-lg">
             Parse Errors ({data.parseErrors.length})
           </h2>
           <ColoredAlert variant="destructive">

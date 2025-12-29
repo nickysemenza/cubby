@@ -12,10 +12,11 @@ type ColoredAlertVariant =
 const variantClasses: Record<ColoredAlertVariant, string> = {
   default: "",
   destructive: "",
-  success: "border-green-200 bg-green-50 text-green-800 [&>svg]:text-green-600",
+  success:
+    "border-secondary bg-secondary text-secondary-foreground [&>svg]:text-secondary-foreground",
   warning:
-    "border-yellow-200 bg-yellow-50 text-yellow-800 [&>svg]:text-yellow-600",
-  info: "border-blue-200 bg-blue-50 text-blue-800 [&>svg]:text-blue-600",
+    "border-accent bg-accent/30 text-accent-foreground [&>svg]:text-accent-foreground",
+  info: "border-chart-5/30 bg-chart-5/10 text-chart-5 [&>svg]:text-chart-5",
 };
 
 interface ColoredAlertProps

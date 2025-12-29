@@ -35,19 +35,19 @@ const getEntityConfig = (entityType: string) => {
   };
 };
 
-// Map actions to badge variants
+// Map actions to badge variants - using theme colors
 const actionConfig: Record<string, { label: string; className: string }> = {
   create: {
     label: "Created",
-    className: "bg-green-100 text-green-800",
+    className: "bg-secondary text-secondary-foreground",
   },
   update: {
     label: "Updated",
-    className: "bg-blue-100 text-blue-800",
+    className: "bg-chart-5/20 text-chart-5",
   },
   delete: {
     label: "Deleted",
-    className: "bg-red-100 text-red-800",
+    className: "bg-destructive/15 text-destructive",
   },
 };
 
@@ -66,7 +66,7 @@ export function AuditLogEntryComponent({
   const entityConf = getEntityConfig(entry.entityType);
   const action = actionConfig[entry.action] ?? {
     label: entry.action,
-    className: "bg-gray-100 text-gray-800",
+    className: "bg-muted text-muted-foreground",
   };
 
   const userInitials = entry.user?.name

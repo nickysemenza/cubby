@@ -55,7 +55,7 @@ const UnitMappingGraphInner: React.FC<{
   const height = compact ? 60 : 140;
 
   return (
-    <div className="overflow-auto rounded border bg-slate-50 p-0.5">
+    <div className="overflow-auto rounded border bg-muted p-0.5">
       <Suspense fallback={<div style={{ width, height }} />}>
         <Graphviz
           dot={graphResult.graph}

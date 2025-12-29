@@ -188,7 +188,9 @@ function Treemap({ data }: TreemapProps) {
                   <div className="flex h-full flex-col overflow-hidden">
                     <div
                       className={`font-medium text-xs ${
-                        node.data.hasPrice ? "text-white" : "text-slate-600"
+                        node.data.hasPrice
+                          ? "text-white"
+                          : "text-muted-foreground"
                       }`}
                       style={{
                         textShadow: node.data.hasPrice
@@ -225,7 +227,7 @@ function Treemap({ data }: TreemapProps) {
                       </div>
                     )}
                     {!node.data.hasPrice && width > 60 && height > 45 && (
-                      <div className="mt-0.5 text-[10px] text-slate-500">
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">
                         No price
                       </div>
                     )}

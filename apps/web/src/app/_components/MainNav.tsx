@@ -211,7 +211,7 @@ export function MainNav({
           onClick={toggleDebug}
           className={cn(
             "hidden h-8 px-2 md:flex",
-            isDebugEnabled && "bg-orange-50 text-orange-600",
+            isDebugEnabled && "bg-accent/30 text-accent-foreground",
           )}
           title={isDebugEnabled ? "Disable debug mode" : "Enable debug mode"}
         >
@@ -274,7 +274,7 @@ export function MainNav({
                     onClick={toggleDebug}
                     className={cn(
                       "min-h-[44px] justify-start px-3 py-2 text-sm",
-                      isDebugEnabled && "bg-orange-50 text-orange-600",
+                      isDebugEnabled && "bg-accent/30 text-accent-foreground",
                     )}
                   />
                 }

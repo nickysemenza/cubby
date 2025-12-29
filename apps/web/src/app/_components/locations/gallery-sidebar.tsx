@@ -307,7 +307,7 @@ function SidebarTreeNode({
           ],
           isMatch &&
             !isActive &&
-            "bg-yellow-100/60 ring-1 ring-yellow-300/50 ring-inset",
+            "bg-accent/30 ring-1 ring-accent/50 ring-inset",
         )}
         style={{ paddingLeft: `${8 + indent}px` }}
         onClick={handleLocationClick}

@@ -64,7 +64,7 @@ export function EditableComponentDemo<T>({
     <div className={cn("my-8", className)}>
       {/* Header */}
       <div className="mb-3 flex items-center gap-3">
-        <span className="inline-flex items-center rounded bg-green-100 px-2 py-1 font-medium text-green-800 text-xs">
+        <span className="inline-flex items-center rounded bg-secondary px-2 py-1 font-medium text-secondary-foreground text-xs">
           Interactive
         </span>
         {title && <span className="font-medium">{title}</span>}
@@ -116,7 +116,7 @@ export function EditableComponentDemo<T>({
             />
           </div>
           {error && (
-            <div className="border-t bg-red-50 px-3 py-2 text-red-600 text-xs">
+            <div className="border-t bg-destructive/10 px-3 py-2 text-destructive text-xs">
               Validation error: {error}
             </div>
           )}

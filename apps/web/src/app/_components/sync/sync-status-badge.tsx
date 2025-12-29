@@ -173,8 +173,8 @@ export const SyncStatusBadge = () => {
               className={cn(
                 "h-8 px-2 font-medium",
                 inSync && "text-muted-foreground",
-                !inSync && !hasActionNeeded && "text-green-600",
-                hasActionNeeded && "text-orange-600",
+                !inSync && !hasActionNeeded && "text-secondary-foreground",
+                hasActionNeeded && "text-accent-foreground",
               )}
               onClick={handleClick}
             />

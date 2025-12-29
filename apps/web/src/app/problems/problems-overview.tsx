@@ -49,7 +49,9 @@ function DuplicateUniqueProductsList({
       title="Duplicate Unique Products"
       description="Products marked as unique (expectedQuantity=1) but found in multiple locations. These should be consolidated or have their expectedQuantity updated."
       entity="product"
-      iconColor={products.length > 0 ? "text-red-500" : "text-green-500"}
+      iconColor={
+        products.length > 0 ? "text-destructive" : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="No duplicate unique products found. All products with expectedQuantity=1 are in single locations."
       renderItem={(product) => ({
@@ -77,7 +79,11 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
       title="Orphaned Products"
       description="Products with no inventory entries. These may be unused and can potentially be deleted."
       entity="product"
-      iconColor={products.length > 0 ? "text-gray-500" : "text-green-500"}
+      iconColor={
+        products.length > 0
+          ? "text-muted-foreground"
+          : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="No orphaned products found. All products have inventory entries."
       renderItem={(product) => ({
@@ -86,7 +92,7 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
         details: [
           <div
             key="created"
-            className="flex items-center gap-1 text-gray-500 text-sm"
+            className="flex items-center gap-1 text-muted-foreground text-sm"
           >
             <Calendar className="h-3 w-3" />
             Created {formatDistanceToNow(product.createdAt)} ago
@@ -104,7 +110,11 @@ function InvalidUPCsList({ products }: { products: InvalidUPC[] }) {
       title="Invalid UPCs"
       description="Products with invalid UPC formats or duplicate UPC codes."
       icon={Zap}
-      iconColor={products.length > 0 ? "text-yellow-500" : "text-green-500"}
+      iconColor={
+        products.length > 0
+          ? "text-accent-foreground"
+          : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="No invalid UPC codes found. All UPCs are properly formatted and unique."
       groupBy={(items) => {
@@ -130,7 +140,7 @@ function InvalidUPCsList({ products }: { products: InvalidUPC[] }) {
               ? "Invalid UPC"
               : "Duplicate UPC"}
           </Badge>,
-          <code key="upc" className="rounded bg-gray-100 px-2 py-1 text-sm">
+          <code key="upc" className="rounded bg-muted px-2 py-1 text-sm">
             {product.upc}
           </code>,
         ],
@@ -151,7 +161,9 @@ function ProductsWithoutMappingsList({
       title="Products Without Pricing"
       description="Products missing unit mappings. Add pricing information to enable value calculations."
       icon={DollarSign}
-      iconColor={products.length > 0 ? "text-red-500" : "text-green-500"}
+      iconColor={
+        products.length > 0 ? "text-destructive" : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="All products have unit mappings for pricing information."
       renderItem={(product) => ({
@@ -160,7 +172,7 @@ function ProductsWithoutMappingsList({
         details: [
           <div
             key="created"
-            className="flex items-center gap-1 text-gray-500 text-sm"
+            className="flex items-center gap-1 text-muted-foreground text-sm"
           >
             <Calendar className="h-3 w-3" />
             Created {formatDistanceToNow(product.createdAt)} ago
@@ -188,7 +200,9 @@ function InvalidInventoryAmountsList({
       title="Invalid Inventory Amounts"
       description="Inventory entries with zero or negative amounts that should be fixed or removed."
       entity="inventory-item"
-      iconColor={entries.length > 0 ? "text-red-500" : "text-green-500"}
+      iconColor={
+        entries.length > 0 ? "text-destructive" : "text-secondary-foreground"
+      }
       items={entries}
       emptyMessage="All inventory entries have valid positive amounts."
       groupBy={(items) => {
@@ -208,7 +222,7 @@ function InvalidInventoryAmountsList({
         details: [
           <div
             key="location"
-            className="flex items-center gap-2 text-gray-600 text-sm"
+            className="flex items-center gap-2 text-muted-foreground text-sm"
           >
             <EntityIcon entity="location" colored className="h-3 w-3" />
             {entry.locationName}
@@ -218,7 +232,7 @@ function InvalidInventoryAmountsList({
           <Badge key="issue" variant="destructive">
             {entry.issue === "zero" ? "Zero Amount" : "Negative Amount"}
           </Badge>,
-          <code key="amount" className="rounded bg-gray-100 px-2 py-1 text-sm">
+          <code key="amount" className="rounded bg-muted px-2 py-1 text-sm">
             {entry.amount.value} {entry.amount.unit}
           </code>,
         ],
@@ -235,14 +249,16 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
       title="Empty Locations"
       description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
       entity="location"
-      iconColor={locations.length > 0 ? "text-purple-500" : "text-green-500"}
+      iconColor={
+        locations.length > 0 ? "text-chart-4" : "text-secondary-foreground"
+      }
       items={locations}
       emptyMessage="All leaf locations have inventory entries."
       renderItem={(location) => {
         const details = [
           <div
             key="created"
-            className="flex items-center gap-1 text-gray-500 text-sm"
+            className="flex items-center gap-1 text-muted-foreground text-sm"
           >
             <Calendar className="h-3 w-3" />
             Created {formatDistanceToNow(location.createdAt)} ago
@@ -253,7 +269,7 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
           details.push(
             <div
               key="last-inventory"
-              className="flex items-center gap-1 text-gray-500 text-sm"
+              className="flex items-center gap-1 text-muted-foreground text-sm"
             >
               <Calendar className="h-3 w-3" />
               Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
@@ -327,7 +343,11 @@ function ProductsWithoutUPCImagesList({
       title="Missing UPC Images"
       description="Products with UPC codes that don't have images fetched from the product database."
       icon={ImageOff}
-      iconColor={products.length > 0 ? "text-orange-500" : "text-green-500"}
+      iconColor={
+        products.length > 0
+          ? "text-accent-foreground"
+          : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="All products with UPC codes have images."
       headerAction={
@@ -352,7 +372,7 @@ function ProductsWithoutUPCImagesList({
         title: product.name,
         subtitle: `by ${product.manufacturer}`,
         badges: [
-          <code key="upc" className="rounded bg-gray-100 px-2 py-1 text-sm">
+          <code key="upc" className="rounded bg-muted px-2 py-1 text-sm">
             {product.upc}
           </code>,
         ],
@@ -407,7 +427,11 @@ function ProductsWithWrongCategoryList({
       title="Wrong Category"
       description="Products with food indicators (UPC, NDB, or ingredient link) but category is not set to 'food'."
       icon={Utensils}
-      iconColor={products.length > 0 ? "text-orange-500" : "text-green-500"}
+      iconColor={
+        products.length > 0
+          ? "text-accent-foreground"
+          : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="All products with food indicators have correct categories."
       headerAction={
@@ -481,7 +505,11 @@ function ProductsWithStalePricesList({
       title="Stale Product Prices"
       description="Products where the stored price doesn't match the computed price from unit mappings."
       icon={DollarSign}
-      iconColor={products.length > 0 ? "text-orange-500" : "text-green-500"}
+      iconColor={
+        products.length > 0
+          ? "text-accent-foreground"
+          : "text-secondary-foreground"
+      }
       items={products}
       emptyMessage="All product prices are in sync with their unit mappings."
       headerAction={
@@ -561,7 +589,11 @@ function InventoryWithStaleValuationsList({
       title="Stale Inventory Valuations"
       description="Inventory entries where the stored valuation doesn't match amount × product price."
       icon={DollarSign}
-      iconColor={entries.length > 0 ? "text-orange-500" : "text-green-500"}
+      iconColor={
+        entries.length > 0
+          ? "text-accent-foreground"
+          : "text-secondary-foreground"
+      }
       items={entries}
       emptyMessage="All inventory valuations are in sync."
       headerAction={
@@ -587,7 +619,7 @@ function InventoryWithStaleValuationsList({
         details: [
           <div
             key="location"
-            className="flex items-center gap-2 text-gray-600 text-sm"
+            className="flex items-center gap-2 text-muted-foreground text-sm"
           >
             <EntityIcon entity="location" colored className="h-3 w-3" />
             {entry.locationName}
@@ -621,14 +653,19 @@ export function ProblemsOverview() {
   }
 
   if (error) {
-    return <ErrorDisplay error={error} className="rounded-md bg-red-50 p-4" />;
+    return (
+      <ErrorDisplay
+        error={error}
+        className="rounded-md bg-destructive/10 p-4"
+      />
+    );
   }
 
   if (!problems) {
     return (
       <ErrorDisplay
         error="No problem data available"
-        className="rounded-md bg-yellow-50 p-4"
+        className="rounded-md bg-accent/20 p-4"
       />
     );
   }
@@ -786,7 +823,7 @@ export function ProblemsOverview() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <CheckCircle className="h-5 w-5 text-secondary-foreground" />
               All Good!
             </CardTitle>
             <CardDescription>

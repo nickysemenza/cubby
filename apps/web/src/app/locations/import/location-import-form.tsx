@@ -26,36 +26,36 @@ import type {
 } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
-// Helper to get action styles
+// Helper to get action styles - using theme colors
 const getActionStyles = (action: LocationCSVImportResultItem["action"]) => {
   switch (action) {
     case "created":
       return {
-        bg: "bg-green-100 text-green-700",
+        bg: "bg-secondary text-secondary-foreground",
         icon: <Plus className="h-3 w-3" />,
         label: "Create",
       };
     case "updated":
       return {
-        bg: "bg-blue-100 text-blue-700",
+        bg: "bg-chart-5/20 text-chart-5",
         icon: <RefreshCw className="h-3 w-3" />,
         label: "Update",
       };
     case "skipped":
       return {
-        bg: "bg-gray-100 text-gray-700",
+        bg: "bg-muted text-muted-foreground",
         icon: null,
         label: "Skip",
       };
     case "error":
       return {
-        bg: "bg-red-100 text-red-700",
+        bg: "bg-destructive/15 text-destructive",
         icon: <AlertCircle className="h-3 w-3" />,
         label: "Error",
       };
     case "removed":
       return {
-        bg: "bg-orange-100 text-orange-700",
+        bg: "bg-primary/15 text-primary",
         icon: <AlertCircle className="h-3 w-3" />,
         label: "Remove",
       };
@@ -294,17 +294,17 @@ Fridge,Kitchen,cabinet,,`}
                 {importResult ? "Import Result" : "Preview"}
               </h3>
               <div className="flex gap-3 text-muted-foreground text-sm">
-                <span className="text-green-600">
+                <span className="text-secondary-foreground">
                   {displayResult.created} create
                 </span>
-                <span className="text-blue-600">
+                <span className="text-chart-5">
                   {displayResult.updated} update
                 </span>
-                <span className="text-gray-600">
+                <span className="text-muted-foreground">
                   {displayResult.skipped} skip
                 </span>
                 {displayResult.errors > 0 && (
-                  <span className="text-red-600">
+                  <span className="text-destructive">
                     {displayResult.errors} error
                   </span>
                 )}

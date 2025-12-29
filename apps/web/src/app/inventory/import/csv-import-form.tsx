@@ -31,54 +31,54 @@ import type {
 } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
-// Helper to get action styles
+// Helper to get action styles - using theme colors
 const getActionStyles = (action: CSVImportResultItem["action"]) => {
   switch (action) {
     case "created":
       return {
-        bg: "bg-green-100 text-green-700",
+        bg: "bg-secondary text-secondary-foreground",
         icon: <Plus className="h-3 w-3" />,
         label: "Create",
       };
     case "moved":
       return {
-        bg: "bg-yellow-100 text-yellow-700",
+        bg: "bg-accent text-accent-foreground",
         icon: <ArrowRightLeft className="h-3 w-3" />,
         label: "Move",
       };
     case "updated":
       return {
-        bg: "bg-blue-100 text-blue-700",
+        bg: "bg-chart-5/20 text-chart-5",
         icon: <RefreshCw className="h-3 w-3" />,
         label: "Update",
       };
     case "skipped":
       return {
-        bg: "bg-gray-100 text-gray-700",
+        bg: "bg-muted text-muted-foreground",
         icon: null,
         label: "Skip",
       };
     case "error":
       return {
-        bg: "bg-red-100 text-red-700",
+        bg: "bg-destructive/15 text-destructive",
         icon: <AlertCircle className="h-3 w-3" />,
         label: "Error",
       };
     case "product_only":
       return {
-        bg: "bg-purple-100 text-purple-700",
+        bg: "bg-chart-4/20 text-chart-4",
         icon: <Package className="h-3 w-3" />,
         label: "Product",
       };
     case "removed":
       return {
-        bg: "bg-orange-100 text-orange-700",
+        bg: "bg-primary/15 text-primary",
         icon: <Trash2 className="h-3 w-3" />,
         label: "Remove",
       };
     case "renamed":
       return {
-        bg: "bg-cyan-100 text-cyan-700",
+        bg: "bg-chart-4/20 text-chart-4",
         icon: <Pencil className="h-3 w-3" />,
         label: "Rename",
       };
@@ -469,44 +469,44 @@ export default function CSVImportForm() {
   if (importResult) {
     return (
       <div className="space-y-4">
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-          <div className="flex items-center gap-2 text-green-700">
+        <div className="rounded-lg border border-secondary bg-secondary/30 p-4">
+          <div className="flex items-center gap-2 text-secondary-foreground">
             <CheckCircle2 className="h-5 w-5" />
             <span className="font-medium">Import Complete</span>
           </div>
           <div className="mt-2 grid grid-cols-6 gap-4 text-sm">
             <div>
-              <span className="font-medium text-green-600">
+              <span className="font-medium text-secondary-foreground">
                 {importResult.created}
               </span>
               <span className="ml-1 text-muted-foreground">created</span>
             </div>
             <div>
-              <span className="font-medium text-yellow-600">
+              <span className="font-medium text-accent-foreground">
                 {importResult.moved}
               </span>
               <span className="ml-1 text-muted-foreground">moved</span>
             </div>
             <div>
-              <span className="font-medium text-blue-600">
+              <span className="font-medium text-chart-5">
                 {importResult.updated}
               </span>
               <span className="ml-1 text-muted-foreground">updated</span>
             </div>
             <div>
-              <span className="font-medium text-purple-600">
+              <span className="font-medium text-chart-4">
                 {importResult.productOnly}
               </span>
               <span className="ml-1 text-muted-foreground">product only</span>
             </div>
             <div>
-              <span className="font-medium text-gray-600">
+              <span className="font-medium text-muted-foreground">
                 {importResult.skipped}
               </span>
               <span className="ml-1 text-muted-foreground">skipped</span>
             </div>
             <div>
-              <span className="font-medium text-red-600">
+              <span className="font-medium text-destructive">
                 {importResult.errors}
               </span>
               <span className="ml-1 text-muted-foreground">errors</span>
@@ -629,7 +629,7 @@ export default function CSVImportForm() {
 
       {/* Parse Error */}
       {parseError && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-red-700 text-sm">
+        <div className="rounded border border-destructive/30 bg-destructive/10 p-3 text-destructive text-sm">
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <pre className="whitespace-pre-wrap">{parseError}</pre>
@@ -642,38 +642,38 @@ export default function CSVImportForm() {
         <div className="space-y-2">
           {/* Summary counts */}
           <div className="grid grid-cols-6 gap-2 text-sm">
-            <div className="rounded border bg-green-50 p-2 text-center">
-              <div className="font-bold text-green-600 text-lg">
+            <div className="rounded border bg-secondary p-2 text-center">
+              <div className="font-bold text-lg text-secondary-foreground">
                 {previewResult.created}
               </div>
               <div className="text-muted-foreground text-xs">Create</div>
             </div>
-            <div className="rounded border bg-yellow-50 p-2 text-center">
-              <div className="font-bold text-lg text-yellow-600">
+            <div className="rounded border bg-accent/30 p-2 text-center">
+              <div className="font-bold text-accent-foreground text-lg">
                 {previewResult.moved}
               </div>
               <div className="text-muted-foreground text-xs">Move</div>
             </div>
-            <div className="rounded border bg-blue-50 p-2 text-center">
-              <div className="font-bold text-blue-600 text-lg">
+            <div className="rounded border bg-chart-5/20 p-2 text-center">
+              <div className="font-bold text-chart-5 text-lg">
                 {previewResult.updated}
               </div>
               <div className="text-muted-foreground text-xs">Update</div>
             </div>
-            <div className="rounded border bg-purple-50 p-2 text-center">
-              <div className="font-bold text-lg text-purple-600">
+            <div className="rounded border bg-chart-4/20 p-2 text-center">
+              <div className="font-bold text-chart-4 text-lg">
                 {previewResult.productOnly}
               </div>
               <div className="text-muted-foreground text-xs">Product</div>
             </div>
-            <div className="rounded border bg-gray-50 p-2 text-center">
-              <div className="font-bold text-gray-600 text-lg">
+            <div className="rounded border bg-muted p-2 text-center">
+              <div className="font-bold text-lg text-muted-foreground">
                 {previewResult.skipped}
               </div>
               <div className="text-muted-foreground text-xs">Skip</div>
             </div>
-            <div className="rounded border bg-red-50 p-2 text-center">
-              <div className="font-bold text-lg text-red-600">
+            <div className="rounded border bg-destructive/15 p-2 text-center">
+              <div className="font-bold text-destructive text-lg">
                 {previewResult.errors}
               </div>
               <div className="text-muted-foreground text-xs">Error</div>

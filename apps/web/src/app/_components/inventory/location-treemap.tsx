@@ -127,7 +127,7 @@ function Treemap({ data }: TreemapProps) {
                     <div
                       className={`flex items-center gap-1 text-xs ${
                         node.data.totalCount === 0
-                          ? "text-slate-600"
+                          ? "text-muted-foreground"
                           : "text-white drop-shadow-sm"
                       }`}
                     >
@@ -169,7 +169,7 @@ function Treemap({ data }: TreemapProps) {
                         </span>
                       )}
                       {width > 120 && node.data.totalCount === 0 && (
-                        <span className="shrink-0 text-[10px] text-slate-500">
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
                           · empty
                         </span>
                       )}
