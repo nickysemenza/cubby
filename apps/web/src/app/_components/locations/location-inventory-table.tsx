@@ -1,4 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   createColumnHelper,
   flexRender,
@@ -9,6 +10,7 @@ import {
 import {
   ArrowRightLeft,
   Check,
+  Eye,
   MoreHorizontal,
   Package,
   Pencil,
@@ -193,6 +195,12 @@ export function LocationInventoryTable({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
+                  render={<Link to="/inventory/$id" params={{ id: item.id }} />}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Details
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() =>
                     setDialogState({ type: "move", items: [item] })
                   }
@@ -340,6 +348,12 @@ export function LocationInventoryTable({
                 <MoreHorizontal className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  render={<Link to="/inventory/$id" params={{ id: item.id }} />}
+                >
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Details
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() =>
                     setDialogState({ type: "move", items: [item] })
