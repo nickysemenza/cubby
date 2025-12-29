@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { ColoredAlert } from "~/components/common/colored-alert";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import {
@@ -386,12 +387,12 @@ export const SyncDialog = ({
 
         <div className="flex-1 overflow-y-auto">
           {activeValidationErrors.length > 0 && !isComplete && (
-            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
-              <div className="mb-2 flex items-center gap-2 font-medium text-red-700 dark:text-red-300">
+            <ColoredAlert variant="destructive" className="mb-4">
+              <div className="mb-2 flex items-center gap-2 font-medium">
                 <AlertCircle className="h-4 w-4" />
                 Validation Errors
               </div>
-              <ul className="list-inside list-disc space-y-1 text-red-600 text-sm dark:text-red-400">
+              <ul className="list-inside list-disc space-y-1 text-sm opacity-90">
                 {activeValidationErrors.map((err) => (
                   <li
                     key={`${err.entityType}-${err.itemKey ?? ""}-${err.message}`}
@@ -400,16 +401,16 @@ export const SyncDialog = ({
                   </li>
                 ))}
               </ul>
-            </div>
+            </ColoredAlert>
           )}
 
           {isComplete && (
-            <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
-              <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+            <ColoredAlert variant="success" className="mb-4">
+              <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4" />
                 <span className="font-medium">Sync completed successfully</span>
               </div>
-            </div>
+            </ColoredAlert>
           )}
 
           {previewResult.locations.items.length > 0 && (

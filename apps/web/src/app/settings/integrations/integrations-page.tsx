@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useId, useState } from "react";
 import { toast } from "sonner";
+import { ColoredAlert } from "~/components/common/colored-alert";
 import { Button } from "~/components/ui/button";
 import {
   Card,
@@ -153,14 +154,14 @@ export function IntegrationsPage() {
         <CardContent className="space-y-4">
           {/* Configuration status */}
           {!status?.configured && (
-            <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+            <ColoredAlert variant="warning">
               <p className="font-medium">Integration not configured</p>
               <p className="mt-1 text-xs">
                 The Google Sheets integration requires server-side
                 configuration. Contact your administrator to set up the service
                 account credentials.
               </p>
-            </div>
+            </ColoredAlert>
           )}
 
           {/* Current connection status */}
@@ -170,13 +171,13 @@ export function IntegrationsPage() {
               Checking connection...
             </div>
           ) : status?.connected ? (
-            <div className="rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
-              <div className="flex items-center gap-2 font-medium text-green-800 text-sm dark:text-green-200">
+            <ColoredAlert variant="success">
+              <div className="flex items-center gap-2 font-medium text-sm">
                 <CheckCircle className="h-4 w-4" />
                 Connected to &ldquo;{status.sheetName}&rdquo;
               </div>
               {status.lastSync && (
-                <p className="mt-1 text-green-700 text-xs dark:text-green-300">
+                <p className="mt-1 text-xs opacity-80">
                   Last synced: {new Date(status.lastSync).toLocaleString()}
                 </p>
               )}
@@ -229,14 +230,14 @@ export function IntegrationsPage() {
                   Disconnect
                 </Button>
               </div>
-            </div>
+            </ColoredAlert>
           ) : status?.sheetId ? (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950">
-              <div className="flex items-center gap-2 font-medium text-red-800 text-sm dark:text-red-200">
+            <ColoredAlert variant="destructive">
+              <div className="flex items-center gap-2 font-medium text-sm">
                 <XCircle className="h-4 w-4" />
                 Cannot access connected sheet
               </div>
-              <p className="mt-1 text-red-700 text-xs dark:text-red-300">
+              <p className="mt-1 text-xs opacity-80">
                 The previously connected sheet is no longer accessible. It may
                 have been deleted or the sharing was removed.
               </p>
@@ -250,7 +251,7 @@ export function IntegrationsPage() {
                 <Unlink className="h-3 w-3" />
                 Clear Connection
               </Button>
-            </div>
+            </ColoredAlert>
           ) : null}
 
           {/* Connect new sheet */}

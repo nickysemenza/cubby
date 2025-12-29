@@ -8,6 +8,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useState } from "react";
+import { MutedBox } from "~/components/layout/muted-box";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Badge } from "~/components/ui/badge";
 import {
@@ -162,7 +163,7 @@ export function AuditLogEntryComponent({
 
           <CollapsibleContent className="mt-2">
             {entry.changes && (
-              <div className="rounded-md bg-muted p-2">
+              <MutedBox padding="sm">
                 <ChangesList
                   changes={
                     entry.changes as Record<
@@ -171,7 +172,7 @@ export function AuditLogEntryComponent({
                     >
                   }
                 />
-              </div>
+              </MutedBox>
             )}
           </CollapsibleContent>
         </div>

@@ -12,6 +12,7 @@ import {
 import Papa from "papaparse";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
+import { ColoredAlert } from "~/components/common/colored-alert";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
@@ -276,10 +277,12 @@ Fridge,Kitchen,cabinet,,`}
 
       {/* Parse error */}
       {parseError && (
-        <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
-          <AlertCircle className="h-4 w-4" />
-          {parseError}
-        </div>
+        <ColoredAlert variant="destructive">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            {parseError}
+          </div>
+        </ColoredAlert>
       )}
 
       {/* Preview/Import result */}

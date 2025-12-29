@@ -1,5 +1,6 @@
 import { Camera, Loader2, X } from "lucide-react";
 import { lazy, Suspense, useCallback, useState } from "react";
+import { ColoredAlert } from "~/components/common/colored-alert";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -98,7 +99,7 @@ export function BarcodeScannerButton({
 
           <div className="space-y-4">
             {error ? (
-              <div className="rounded border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+              <ColoredAlert variant="destructive">
                 <p className="font-medium">Camera Error</p>
                 <p className="text-sm">{error}</p>
                 <Button
@@ -109,7 +110,7 @@ export function BarcodeScannerButton({
                 >
                   Try Again
                 </Button>
-              </div>
+              </ColoredAlert>
             ) : (
               <div className="overflow-hidden rounded-lg">
                 <Suspense fallback={<ScannerLoading />}>

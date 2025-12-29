@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import { MutedBox } from "~/components/layout/muted-box";
 import type { ProductInputPayload } from "~/schemas/product";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -51,9 +52,9 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
           {
             title: "Nutrition Information",
             content: (
-              <div className="rounded-md bg-muted p-4">
+              <MutedBox>
                 <NutritionInfoTable n={product.food.nutritionInfo} limit={10} />
-              </div>
+              </MutedBox>
             ),
           },
         ]

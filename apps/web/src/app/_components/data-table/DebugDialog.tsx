@@ -1,4 +1,5 @@
 import type React from "react";
+import { MutedBox } from "~/components/layout/muted-box";
 import {
   Dialog,
   DialogContent,
@@ -27,9 +28,9 @@ export function DebugDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-auto">
-          <div className="overflow-auto rounded-md bg-muted p-4">
+          <MutedBox className="overflow-auto">
             <JsonRenderer input={data} pretty />
-          </div>
+          </MutedBox>
         </div>
       </DialogContent>
     </Dialog>

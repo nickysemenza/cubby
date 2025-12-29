@@ -1,5 +1,6 @@
 import type { FC } from "react";
 import type { z } from "zod";
+import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { EntityPillLink } from "../EntityPill";
@@ -27,9 +28,9 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
       </div>
       <EntityPillLink entity="location" data={inventoryitem.location} />
       <EntityPillLink entity="product" data={inventoryitem.product} />
-      <div className="rounded-md bg-muted p-4">
+      <MutedBox>
         <UnitMappingGraph unitMapping={inventoryitem.product.unitMappings} />
-      </div>
+      </MutedBox>
       <Button variant="outline" onClick={onEdit}>
         Edit Inventory Item
       </Button>

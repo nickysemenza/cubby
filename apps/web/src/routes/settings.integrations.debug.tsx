@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import JsonRenderer from "~/app/_components/json-renderer";
+import { ColoredAlert } from "~/components/common/colored-alert";
+import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 
@@ -37,10 +39,10 @@ function GoogleSheetsDebugPage() {
             </Button>
           </Link>
         </div>
-        <div className="rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+        <ColoredAlert variant="destructive">
           <p className="font-medium">Error loading sheet data</p>
           <p className="text-sm">{error.message}</p>
-        </div>
+        </ColoredAlert>
       </div>
     );
   }
@@ -67,9 +69,9 @@ function GoogleSheetsDebugPage() {
           <h2 className="mb-2 font-semibold text-lg text-red-600">
             Parse Errors ({data.parseErrors.length})
           </h2>
-          <div className="rounded-md border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950">
+          <ColoredAlert variant="destructive">
             <JsonRenderer input={data.parseErrors} pretty />
-          </div>
+          </ColoredAlert>
         </div>
       )}
 
@@ -78,9 +80,9 @@ function GoogleSheetsDebugPage() {
         <h2 className="mb-2 font-semibold text-lg">
           Headers ({data?.headers.length ?? 0} columns)
         </h2>
-        <div className="rounded-md border bg-muted p-4">
+        <MutedBox className="border">
           <JsonRenderer input={data?.headers} pretty />
-        </div>
+        </MutedBox>
       </div>
 
       {/* Raw Rows */}
@@ -88,9 +90,9 @@ function GoogleSheetsDebugPage() {
         <h2 className="mb-2 font-semibold text-lg">
           Raw Rows ({data?.rawRows.length ?? 0} rows)
         </h2>
-        <div className="max-h-[500px] overflow-auto rounded-md border bg-muted p-4">
+        <MutedBox className="max-h-[500px] overflow-auto border">
           <JsonRenderer input={data?.rawRows} pretty />
-        </div>
+        </MutedBox>
       </div>
 
       {/* Parsed Rows */}
@@ -98,9 +100,9 @@ function GoogleSheetsDebugPage() {
         <h2 className="mb-2 font-semibold text-lg">
           Parsed Rows ({data?.parsedRows.length ?? 0} rows)
         </h2>
-        <div className="max-h-[500px] overflow-auto rounded-md border bg-muted p-4">
+        <MutedBox className="max-h-[500px] overflow-auto border">
           <JsonRenderer input={data?.parsedRows} pretty />
-        </div>
+        </MutedBox>
       </div>
     </div>
   );

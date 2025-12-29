@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
+import { InfoRow } from "~/components/common/info-row";
 import { Button } from "~/components/ui/button";
 import type { InfLocation } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
-import { NoneState } from "../NoneState";
 import { LocationIconWithLabel } from "./location-icons";
 
 interface LocationBasicInfoProps {
@@ -24,17 +24,12 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           size={20}
         />
       </div>
-      <div>
-        <span className="font-medium">Type:</span> {location.type}
-      </div>
-      <div>
-        <span className="font-medium">Parent Location:</span>{" "}
+      <InfoRow label="Type">{location.type}</InfoRow>
+      <InfoRow label="Parent Location">
         {location.parent ? (
           <EntityPillLink entity="location" data={location.parent} />
-        ) : (
-          <NoneState />
-        )}
-      </div>
+        ) : undefined}
+      </InfoRow>
       <div className="mt-4 flex gap-2">
         <Button onClick={onEdit}>Edit</Button>
         <Button

@@ -1,10 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
+import { InfoRow } from "~/components/common/info-row";
 import { Button } from "~/components/ui/button";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
-import { NoneState } from "../NoneState";
 
 interface ProductBasicInfoProps {
   product: ProductWithFoodOut;
@@ -17,29 +17,17 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
 }) => {
   return (
     <div className="space-y-2">
-      <div>
-        <span className="font-medium">Name:</span> {product.name}
-      </div>
-      <div>
-        <span className="font-medium">Manufacturer:</span>{" "}
-        {product.manufacturer}
-      </div>
-      <div>
-        <span className="font-medium">Model:</span>{" "}
-        {product.model ? product.model : <NoneState />}
-      </div>
-      <div>
-        <span className="font-medium">Category:</span>{" "}
+      <InfoRow label="Name">{product.name}</InfoRow>
+      <InfoRow label="Manufacturer">{product.manufacturer}</InfoRow>
+      <InfoRow label="Model">{product.model}</InfoRow>
+      <InfoRow label="Category">
         {product.category ? (
           <span className="capitalize">
             {product.category.replace("-", " ")}
           </span>
-        ) : (
-          <NoneState />
-        )}
-      </div>
-      <div>
-        <span className="font-medium">UPC:</span>{" "}
+        ) : undefined}
+      </InfoRow>
+      <InfoRow label="UPC">
         {product.upc ? (
           <Link
             to="/usda/upc/$code"
@@ -48,12 +36,9 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           >
             {product.upc}
           </Link>
-        ) : (
-          <NoneState />
-        )}
-      </div>
-      <div>
-        <span className="font-medium">NDB Number:</span>{" "}
+        ) : undefined}
+      </InfoRow>
+      <InfoRow label="NDB Number">
         {product.ndb_number ? (
           <Link
             to="/usda/ndb/$code"
@@ -62,14 +47,11 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           >
             {product.ndb_number}
           </Link>
-        ) : (
-          <NoneState />
-        )}
-      </div>
+        ) : undefined}
+      </InfoRow>
       <div className="mt-4 space-y-2">
         {product.ingredient && (
-          <div>
-            <span className="font-medium">Ingredient:</span>{" "}
+          <InfoRow label="Ingredient">
             <EntityPillLink
               entity="ingredient"
               data={{
@@ -77,17 +59,15 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                 id: product.ingredient.id,
               }}
             />
-          </div>
+          </InfoRow>
         )}
         {product.food && (
-          <div>
-            <span className="font-medium">USDA Food:</span>{" "}
+          <InfoRow label="USDA Food">
             <EntityPillLink entity="usda-food" data={product.food} />
-          </div>
+          </InfoRow>
         )}
         {product.inventoryEntry && product.inventoryEntry.length > 0 && (
-          <div>
-            <span className="font-medium">Inventory Locations:</span>{" "}
+          <InfoRow label="Inventory Locations">
             <div className="mt-1 flex flex-wrap gap-1">
               <EntityPillLinkList
                 entity="location"
@@ -98,7 +78,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
                 }))}
               />
             </div>
-          </div>
+          </InfoRow>
         )}
       </div>
       <div className="mt-4">
