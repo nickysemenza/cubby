@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
-import { Calendar, ExternalLink, Package } from "lucide-react";
+import { Calendar, ExternalLink } from "lucide-react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -108,7 +109,11 @@ function LocationCard({
   if (hasInventory) {
     badges.push(
       <div key="inventory" className="flex items-center gap-1 text-xs">
-        <Package size={10} className="text-muted-foreground" />
+        <EntityIcon
+          entity="inventory-item"
+          size={10}
+          className="text-muted-foreground"
+        />
         <span className="text-muted-foreground">{inventoryCount}</span>
       </div>,
     );

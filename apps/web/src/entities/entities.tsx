@@ -4,6 +4,7 @@ import {
   Carrot,
   ChefHat,
   Image,
+  type LucideProps,
   MapPin,
   Package,
 } from "lucide-react";
@@ -118,3 +119,15 @@ export const entities: Record<Entity, EntityDefinition> = {
  */
 export const getSortableFields = (entity: Entity): readonly string[] =>
   entities[entity].list?.sortableFields ?? ["createdAt", "name"];
+
+/**
+ * Render an entity's lucide icon. Useful for entities with hyphenated names
+ * like "inventory-item" where JSX bracket notation doesn't work.
+ */
+export const EntityIcon = ({
+  entity,
+  ...props
+}: { entity: Entity } & LucideProps) => {
+  const Icon = entities[entity].lucideIcon;
+  return <Icon {...props} />;
+};

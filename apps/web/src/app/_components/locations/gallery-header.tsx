@@ -1,17 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import {
-  ChevronRight,
-  Home,
-  MapPin,
-  Package,
-  Plus,
-  Search,
-  X,
-} from "lucide-react";
+import { ChevronRight, Home, Plus, Search, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { EntityIcon } from "~/entities/entities";
 import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
 import {
@@ -57,11 +50,11 @@ export function GalleryHeader({
         {stats && (
           <div className="flex items-center gap-3 border-r pr-3 text-muted-foreground text-xs">
             <span className="flex items-center gap-1">
-              <MapPin className="h-3 w-3" />
+              <EntityIcon entity="location" className="h-3 w-3" />
               {stats.locationCount} locations
             </span>
             <span className="flex items-center gap-1">
-              <Package className="h-3 w-3" />
+              <EntityIcon entity="inventory-item" className="h-3 w-3" />
               {stats.itemCount} items
             </span>
           </div>
@@ -156,12 +149,24 @@ export function GalleryHeader({
               {
                 value: "withItems",
                 label: "With items",
-                icon: <Package size={14} className="text-muted-foreground" />,
+                icon: (
+                  <EntityIcon
+                    entity="inventory-item"
+                    size={14}
+                    className="text-muted-foreground"
+                  />
+                ),
               },
               {
                 value: "empty",
                 label: "Empty",
-                icon: <MapPin size={14} className="text-muted-foreground" />,
+                icon: (
+                  <EntityIcon
+                    entity="location"
+                    size={14}
+                    className="text-muted-foreground"
+                  />
+                ),
               },
             ]}
             value={emptyFilter}

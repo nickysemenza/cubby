@@ -7,9 +7,6 @@ import {
   DollarSign,
   ImageOff,
   Loader2,
-  MapPin,
-  Package,
-  Utensils,
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -24,6 +21,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { EntityIcon } from "~/entities/entities";
 import type {
   DuplicateUniqueProduct,
   EmptyLocation,
@@ -49,7 +47,7 @@ function DuplicateUniqueProductsList({
     <ProblemSection
       title="Duplicate Unique Products"
       description="Products marked as unique (expectedQuantity=1) but found in multiple locations. These should be consolidated or have their expectedQuantity updated."
-      icon={Package}
+      entity="product"
       iconColor={products.length > 0 ? "text-red-500" : "text-green-500"}
       items={products}
       emptyMessage="No duplicate unique products found. All products with expectedQuantity=1 are in single locations."
@@ -62,7 +60,7 @@ function DuplicateUniqueProductsList({
             variant="outline"
             className="flex items-center gap-1"
           >
-            <MapPin className="h-3 w-3" />
+            <EntityIcon entity="location" className="h-3 w-3" />
             {location.name}
           </Badge>
         )),
@@ -77,7 +75,7 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
     <ProblemSection
       title="Orphaned Products"
       description="Products with no inventory entries. These may be unused and can potentially be deleted."
-      icon={Package}
+      entity="product"
       iconColor={products.length > 0 ? "text-gray-500" : "text-green-500"}
       items={products}
       emptyMessage="No orphaned products found. All products have inventory entries."
@@ -188,7 +186,7 @@ function InvalidInventoryAmountsList({
     <ProblemSection
       title="Invalid Inventory Amounts"
       description="Inventory entries with zero or negative amounts that should be fixed or removed."
-      icon={Package}
+      entity="inventory-item"
       iconColor={entries.length > 0 ? "text-red-500" : "text-green-500"}
       items={entries}
       emptyMessage="All inventory entries have valid positive amounts."
@@ -211,7 +209,7 @@ function InvalidInventoryAmountsList({
             key="location"
             className="flex items-center gap-2 text-gray-600 text-sm"
           >
-            <MapPin className="h-3 w-3" />
+            <EntityIcon entity="location" className="h-3 w-3" />
             {entry.locationName}
           </div>,
         ],
@@ -235,7 +233,7 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
     <ProblemSection
       title="Empty Locations"
       description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
-      icon={MapPin}
+      entity="location"
       iconColor={locations.length > 0 ? "text-purple-500" : "text-green-500"}
       items={locations}
       emptyMessage="All leaf locations have inventory entries."
@@ -590,7 +588,7 @@ function InventoryWithStaleValuationsList({
             key="location"
             className="flex items-center gap-2 text-gray-600 text-sm"
           >
-            <MapPin className="h-3 w-3" />
+            <EntityIcon entity="location" className="h-3 w-3" />
             {entry.locationName}
           </div>,
         ],

@@ -1,12 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Barcode,
-  MapPin,
-  Package,
-  Plus,
-  ScanBarcode,
-  UtensilsCrossed,
-} from "lucide-react";
+import { Barcode, type LucideIcon, Plus, ScanBarcode } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -21,30 +14,30 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { EntityIcon, entities } from "~/entities/entities";
+import type { Entity } from "~/entities/types";
 
-export type QuickAction = {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
+type EntityAction = {
+  entity: Entity;
   description?: string;
 };
 
+type CustomAction = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  description?: string;
+};
+
+type QuickAction = EntityAction | CustomAction;
+
+const isEntityAction = (action: QuickAction): action is EntityAction =>
+  "entity" in action;
+
 export const quickActions: QuickAction[] = [
-  {
-    label: "New Product",
-    href: "/products/new",
-    icon: Package,
-  },
-  {
-    label: "New Location",
-    href: "/locations/new",
-    icon: MapPin,
-  },
-  {
-    label: "New Recipe",
-    href: "/recipes/new",
-    icon: UtensilsCrossed,
-  },
+  { entity: "product" },
+  { entity: "location" },
+  { entity: "recipe" },
   {
     label: "Scanner",
     href: "/inventory/scanner",
@@ -79,15 +72,29 @@ export const QuickActionsMenu = () => {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuGroup>
           <DropdownMenuLabel>Create</DropdownMenuLabel>
-          {quickActions.map((action) => (
-            <DropdownMenuItem
-              key={action.href}
-              render={<Link to={action.href} />}
-            >
-              <action.icon className="h-4 w-4" />
-              <span>{action.label}</span>
-            </DropdownMenuItem>
-          ))}
+          {quickActions.map((action) => {
+            if (isEntityAction(action)) {
+              const def = entities[action.entity];
+              return (
+                <DropdownMenuItem
+                  key={action.entity}
+                  render={<Link to={`/${def.basePath}/new`} />}
+                >
+                  <EntityIcon entity={action.entity} className="h-4 w-4" />
+                  <span>New {def.label}</span>
+                </DropdownMenuItem>
+              );
+            }
+            return (
+              <DropdownMenuItem
+                key={action.href}
+                render={<Link to={action.href} />}
+              >
+                <action.icon className="h-4 w-4" />
+                <span>{action.label}</span>
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -15,7 +15,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Package } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -29,6 +29,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
+import { EntityIcon } from "~/entities/entities";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { getLocationId } from "~/schemas/form-fields";
 import type { InventoryId } from "~/schemas/identifiers";
@@ -312,7 +313,10 @@ export default function BulkMoveForm() {
                     onCheckedChange={() => toggleItemSelection(index)}
                   />
                   <div className="flex flex-1 items-center gap-2">
-                    <Package className="h-4 w-4 text-muted-foreground" />
+                    <EntityIcon
+                      entity="inventory-item"
+                      className="h-4 w-4 text-muted-foreground"
+                    />
                     <span className="font-medium">{item.productName}</span>
                   </div>
                   <div className="w-32 text-right text-muted-foreground">

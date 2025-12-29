@@ -1,13 +1,13 @@
 import {
   ChevronRight,
   ImageIcon,
-  Package,
   PanelLeft,
   PanelLeftClose,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
+import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
@@ -385,7 +385,7 @@ function SidebarTreeNode({
                 : "bg-muted text-muted-foreground group-hover:bg-muted/80",
             )}
           >
-            <Package className="h-2.5 w-2.5" />
+            <EntityIcon entity="inventory-item" className="h-2.5 w-2.5" />
             {hasChildren ? (
               <>
                 <span>{itemCount}</span>

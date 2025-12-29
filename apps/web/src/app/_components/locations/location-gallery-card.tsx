@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Package } from "lucide-react";
 import { forwardRef, useMemo } from "react";
 import type { z } from "zod";
 import { Badge } from "~/components/ui/badge";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
+import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { InfLocation } from "~/schemas/location";
@@ -140,7 +140,10 @@ export const LocationGalleryCard = forwardRef<
                     params={{ id: product.id }}
                     className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded border bg-muted/50"
                   >
-                    <Package className="h-3 w-3 text-muted-foreground/40" />
+                    <EntityIcon
+                      entity="product"
+                      className="h-3 w-3 text-muted-foreground/40"
+                    />
                   </Link>
                 )}
                 <Link
@@ -155,7 +158,10 @@ export const LocationGalleryCard = forwardRef<
           </div>
         ) : (
           <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-muted-foreground">
-            <Package className="h-3 w-3 opacity-40" />
+            <EntityIcon
+              entity="inventory-item"
+              className="h-3 w-3 opacity-40"
+            />
             <span>Empty</span>
           </div>
         )}

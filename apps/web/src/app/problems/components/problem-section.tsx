@@ -12,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { EntityIcon } from "~/entities/entities";
+import type { Entity } from "~/entities/types";
 
 // Type-safe route patterns
 type RoutePattern =
@@ -19,10 +21,14 @@ type RoutePattern =
   | { to: "/locations/$id"; params: { id: string } }
   | { to: "/inventory/$id"; params: { id: string } };
 
-interface ProblemSectionProps<T> {
+// Icon can be either a LucideIcon component or an entity key
+type IconProp =
+  | { icon: LucideIcon; entity?: never }
+  | { entity: Entity; icon?: never };
+
+type ProblemSectionProps<T> = {
   title: string;
   description: string;
-  icon: LucideIcon;
   iconColor: string;
   items: T[];
   emptyMessage: string;
@@ -37,12 +43,13 @@ interface ProblemSectionProps<T> {
   };
   groupBy?: (items: T[]) => { [key: string]: T[] };
   headerAction?: ReactNode;
-}
+} & IconProp;
 
 export function ProblemSection<T>({
   title,
   description,
-  icon: Icon,
+  icon,
+  entity,
   iconColor,
   items,
   emptyMessage,
@@ -52,12 +59,22 @@ export function ProblemSection<T>({
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
 
+  // Render icon based on whether we have an entity or a LucideIcon
+  const IconElement = entity ? (
+    <EntityIcon entity={entity} className={`h-5 w-5 ${iconColor}`} />
+  ) : (
+    (() => {
+      const Icon = icon;
+      return <Icon className={`h-5 w-5 ${iconColor}`} />;
+    })()
+  );
+
   if (!hasItems) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Icon className={`h-5 w-5 ${iconColor}`} />
+            {IconElement}
             {title}
           </CardTitle>
           <CardDescription>{emptyMessage}</CardDescription>
@@ -75,7 +92,7 @@ export function ProblemSection<T>({
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
-            <Icon className={`h-5 w-5 ${iconColor}`} />
+            {IconElement}
             {title}
             <Badge variant="destructive">{items.length}</Badge>
           </CardTitle>

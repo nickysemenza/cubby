@@ -17,7 +17,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Package, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -45,6 +45,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Empty, EmptyTitle } from "~/components/ui/empty";
 import { Kbd } from "~/components/ui/kbd";
+import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { dedupe } from "~/misc/array-helpers";
@@ -468,7 +469,7 @@ export default function QuickCaptureForm({
               onClick={() => setShowInventory(!showInventory)}
             >
               <CardTitle className="flex items-center gap-2 font-medium text-sm">
-                <Package className="h-4 w-4" />
+                <EntityIcon entity="inventory-item" className="h-4 w-4" />
                 Items at {focusedItem?.location?.name ?? "this location"} (
                 {inventoryAtLocation?.meta?.totalCount ?? 0})
               </CardTitle>
