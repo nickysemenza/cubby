@@ -80,10 +80,9 @@ const minimalLinkClass =
 const fullLinkClass = "inline-block min-w-0 max-w-full";
 
 export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
-  const { openInNewTab, minimal } = props;
+  const { openInNewTab, minimal = false } = props;
   const linkTarget = openInNewTab ? "_blank" : undefined;
   const linkRel = openInNewTab ? "noopener noreferrer" : undefined;
-
   switch (props.entity) {
     case "ingredient": {
       const { data } = props;

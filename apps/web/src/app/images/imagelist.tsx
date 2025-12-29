@@ -201,6 +201,7 @@ export default function ImageList() {
         error={error}
         ariaLabel="Images Table"
         timing={timing}
+        entityType="images"
       />
     </div>
   );

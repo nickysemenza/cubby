@@ -260,22 +260,22 @@ export function MainNav({
           >
             <Menu size={24} />
           </SheetTrigger>
-          <SheetContent side="left" className="w-72">
-            <SheetHeader>
+          <SheetContent side="left" className="flex w-72 flex-col">
+            <SheetHeader className="p-4 pb-2">
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
-            <nav className="flex flex-col space-y-4 p-4">
+            <nav className="flex flex-1 flex-col space-y-1 overflow-y-auto px-4 pb-4">
               {/* Organization Switcher for Mobile */}
               {session.data?.user && (
-                <div className="flex items-center justify-between p-2">
-                  <span className="font-medium text-base">Organization</span>
+                <div className="flex items-center justify-between px-2 py-1.5">
+                  <span className="font-medium text-sm">Organization</span>
                   <OrganizationSwitcher />
                 </div>
               )}
 
               {/* Theme Toggle for Mobile */}
-              <div className="flex items-center justify-between p-2">
-                <span className="font-medium text-base">Theme</span>
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="font-medium text-sm">Theme</span>
                 <ThemeToggle />
               </div>
 
@@ -286,7 +286,7 @@ export function MainNav({
                     variant="ghost"
                     onClick={toggleDebug}
                     className={cn(
-                      "h-auto justify-start p-2",
+                      "h-auto justify-start px-2 py-1.5 text-sm",
                       isDebugEnabled &&
                         "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
                     )}
@@ -298,7 +298,7 @@ export function MainNav({
                 ) : (
                   <Bug className="mr-2 h-4 w-4" />
                 )}
-                {isDebugEnabled ? "Disable Debug Mode" : "Enable Debug Mode"}
+                {isDebugEnabled ? "Disable Debug" : "Enable Debug"}
               </SheetClose>
               {allNavItems.map((item) => {
                 const active = item.isActive(pathName);
@@ -315,7 +315,7 @@ export function MainNav({
                       <Link
                         to={item.href}
                         className={cn(
-                          "p-2 font-medium text-base transition-colors hover:text-primary",
+                          "px-2 py-1.5 font-medium text-sm transition-colors hover:text-primary",
                           !active && "text-muted-foreground",
                           active && "rounded bg-muted",
                         )}

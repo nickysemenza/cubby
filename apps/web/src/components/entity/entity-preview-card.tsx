@@ -95,7 +95,7 @@ export function EntityPreviewCard({
   return (
     <div
       className={cn(
-        "rounded-lg border transition-colors",
+        "overflow-hidden rounded-lg border transition-colors",
         isCompact ? "p-3" : "p-4",
         onClick && "cursor-pointer hover:bg-gray-50",
         className,

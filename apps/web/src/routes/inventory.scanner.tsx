@@ -62,17 +62,19 @@ function ScannerPage() {
     <PageWrapper>
       <Card>
         <CardHeader>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex-1">
-              <CardTitle>Scanner</CardTitle>
-              <CardDescription>
-                Scan barcodes or type product names to add inventory
-              </CardDescription>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="icon" onClick={handleBack}>
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div className="flex-1">
+                <CardTitle>Scanner</CardTitle>
+                <CardDescription>
+                  Scan barcodes or type product names to add inventory
+                </CardDescription>
+              </div>
             </div>
-            <div className="w-64">
+            <div className="w-full sm:w-64">
               <FilterableCombobox
                 items={
                   locationsData?.items.map((location) => ({

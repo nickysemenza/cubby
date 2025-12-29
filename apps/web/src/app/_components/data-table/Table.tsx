@@ -23,7 +23,7 @@ import { DebugDialog } from "./DebugDialog";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { HeaderFilter } from "./HeaderFilter";
-import { MobileCardView } from "./MobileCardView";
+import { type EntityType, MobileCardView } from "./MobileCardView";
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
@@ -33,6 +33,8 @@ interface TTableProps<TItem> {
   error?: unknown;
   ariaLabel?: string;
   timing?: QueryTiming;
+  /** Entity type for mobile card navigation - when provided, cards become clickable */
+  entityType?: EntityType;
   // Deprecated props - kept for backward compatibility during migration
   /** @deprecated Use column meta.filterConfig instead */
   filterableColumns?: unknown[];
@@ -49,6 +51,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     error,
     ariaLabel = "Data Table",
     timing,
+    entityType,
   } = props;
 
   // Support deprecated additionalFilters prop
@@ -288,7 +291,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           <ErrorDisplay error={error} />
         </div>
       ) : (
-        <MobileCardView table={table} />
+        <MobileCardView table={table} entityType={entityType} />
       )}
 
       <DataTablePagination table={table} timing={timing} />

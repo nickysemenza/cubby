@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
 import type { ReactNode } from "react";
@@ -8,8 +9,18 @@ import { useDebug } from "~/hooks/useDebug";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
 import { DebugDialog } from "./DebugDialog";
 
+export type EntityType =
+  | "products"
+  | "locations"
+  | "inventory"
+  | "recipes"
+  | "ingredients"
+  | "images";
+
 interface MobileCardViewProps<TItem> {
   table: ITable<TItem>;
+  /** Entity type for navigation - when provided, cards become clickable */
+  entityType?: EntityType;
 }
 
 type FieldCategory = "hero" | "compact" | "medium" | "wide";
@@ -62,8 +73,12 @@ function categorizeField(
   return "medium";
 }
 
-export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
+export function MobileCardView<TItem>({
+  table,
+  entityType,
+}: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
+  const navigate = useNavigate();
 
   return (
     <div className="block space-y-4 lg:hidden">
@@ -129,11 +144,16 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
 
           // Create details from medium and compact fields
           const details = [...mediumFields, ...compactFields].map((field) => (
-            <div key={field.id} className="flex items-center justify-between">
-              <span className="font-medium text-muted-foreground text-xs">
+            <div
+              key={field.id}
+              className="flex min-w-0 items-center justify-between gap-2"
+            >
+              <span className="shrink-0 font-medium text-muted-foreground text-xs">
                 {field.displayHeader}:
               </span>
-              <span className="text-sm">{field.content}</span>
+              <span className="truncate text-right text-sm">
+                {field.content}
+              </span>
             </div>
           ));
 
@@ -162,6 +182,18 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
             </div>
           ) : undefined;
 
+          // Get entity ID for navigation
+          const entityId = rowData.id as string | undefined;
+          const handleClick =
+            entityType && entityId
+              ? () => {
+                  navigate({
+                    to: `/${entityType}/$id`,
+                    params: { id: entityId },
+                  });
+                }
+              : undefined;
+
           return (
             <EntityPreviewCard
               key={row.id}
@@ -172,6 +204,7 @@ export function MobileCardView<TItem>({ table }: MobileCardViewProps<TItem>) {
               footer={footer}
               variant="compact"
               className="shadow-sm"
+              onClick={handleClick}
             />
           );
         })

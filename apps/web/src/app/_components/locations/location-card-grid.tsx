@@ -160,9 +160,17 @@ function LocationCard({
         <div className="flex flex-wrap gap-1">
           {location.children.slice(0, 3).map((child) => {
             return (
-              <Badge key={child.id} variant="secondary" className="text-xs">
-                <LocationIcon type={child.type} size={10} className="mr-1" />
-                {child.name}
+              <Badge
+                key={child.id}
+                variant="secondary"
+                className="max-w-[120px] text-xs"
+              >
+                <LocationIcon
+                  type={child.type}
+                  size={10}
+                  className="mr-1 shrink-0"
+                />
+                <span className="truncate">{child.name}</span>
               </Badge>
             );
           })}

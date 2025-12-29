@@ -7,7 +7,7 @@ export const Route = createFileRoute("/")({ component: Home });
 function Home() {
   return (
     <div className="container mx-auto">
-      <Card className="w-sm">
+      <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>Entity Counts</CardTitle>
         </CardHeader>
