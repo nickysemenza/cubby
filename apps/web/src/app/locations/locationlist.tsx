@@ -41,16 +41,14 @@ export function LocationList() {
       createNameColumn(columnHelper, "location", "name", {
         filterConfig: { placeholder: "Filter by location name..." },
       }),
-      createEntityPillColumn(columnHelper, "children", "location", {
-        minimal: true,
-      }),
+      createEntityPillColumn(columnHelper, "children", "location"),
       columnHelper.accessor("parent", {
         enableSorting: false,
         cell: (info) => {
           const item = info.getValue();
           return (
             <div>
-              {item && <EntityPillLink entity="location" data={item} minimal />}
+              {item && <EntityPillLink entity="location" data={item} />}
             </div>
           );
         },
@@ -89,7 +87,7 @@ export function LocationList() {
         "inventoryEntries",
         "product",
         (e) => e.product,
-        { layout: "inline", minimal: true },
+        { layout: "inline" },
       ),
     ],
     filters: [

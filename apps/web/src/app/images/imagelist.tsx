@@ -132,7 +132,6 @@ export default function ImageList() {
                     name: entityName,
                     manufacturer: "", // We don't have this info here
                   }}
-                  minimal
                 />
               );
             case "LOCATION":
@@ -142,9 +141,8 @@ export default function ImageList() {
                   data={{
                     id: entityId,
                     name: entityName,
-                    type: "room", // Default type for minimal display
+                    type: "room", // Default type
                   }}
-                  minimal
                 />
               );
             case "RECIPE":
@@ -155,7 +153,6 @@ export default function ImageList() {
                     id: entityId,
                     name: entityName,
                   }}
-                  minimal
                 />
               );
             default:

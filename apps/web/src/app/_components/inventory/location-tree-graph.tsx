@@ -177,7 +177,6 @@ function TidyTree({ data }: TidyTreeProps) {
                           id: node.data.id,
                           type: node.data.type,
                         }}
-                        minimal
                       />
                     </div>
                   </foreignObject>

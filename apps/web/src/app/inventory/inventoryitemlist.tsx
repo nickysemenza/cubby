@@ -74,7 +74,7 @@ export function InventoryItemList() {
           return (
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1 space-y-0.5">
-                <EntityPillLink entity="product" data={product} minimal />
+                <EntityPillLink entity="product" data={product} />
                 {upc && (
                   <div className="text-muted-foreground text-xs">
                     <TableLink
@@ -100,7 +100,7 @@ export function InventoryItemList() {
         },
         cell: (info) => {
           const item = info.getValue();
-          return <EntityPillLink entity="location" data={item} minimal />;
+          return <EntityPillLink entity="location" data={item} />;
         },
       }),
       createCreatedAtColumn(columnHelper),

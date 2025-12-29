@@ -68,11 +68,9 @@ export function IngredientList() {
       createEntityPillColumn(columnHelper, "appearsInRecipes", "recipe", {
         className: "w-48 max-w-48",
         dedupe: true,
-        minimal: true,
       }),
       createEntityPillColumn(columnHelper, "product", "product", {
         className: "w-48 max-w-48",
-        minimal: true,
       }),
     ],
     filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],

@@ -1,51 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import type React from "react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { Badge } from "~/components/ui/badge";
-import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { assertNever } from "~/lib/assert";
 import { getMiscDisplayName, isMiscProduct } from "~/lib/constants";
 import type { LocationType } from "~/schemas/location";
 
-interface PillProps {
-  text: string;
-  entity?: Entity;
-  label?: string;
-}
-
-export const EntityPill: React.FC<PillProps> = ({ text, entity, label }) => {
-  return (
-    <Badge variant="outline" className="max-w-full gap-1 font-medium">
-      <span className="min-w-0 truncate">{text}</span>
-      {entity && (
-        <Badge
-          variant="default"
-          className="ml-0.5 h-4 shrink-0 gap-0.5 rounded-sm px-1 py-0 text-[10px]"
-        >
-          {entities[entity].icon}
-          <span>{entities[entity].label}</span>
-        </Badge>
-      )}
-      {label && (
-        <Badge
-          variant="secondary"
-          className="ml-0.5 h-4 shrink-0 rounded-sm px-1 py-0 text-[10px]"
-        >
-          {label}
-        </Badge>
-      )}
-    </Badge>
-  );
-};
-
-// Entities that don't have pill links (no detail pages or special handling)
-type ExcludedFromPillLink = "inventory-item" | "image";
-
 // Discriminated union for entity-specific data shapes
 type EntityPillLinkProps = {
   openInNewTab?: boolean;
-  minimal?: boolean;
 } & (
   | { entity: "ingredient"; data: { name: string; id: string } }
   | {
@@ -63,26 +25,14 @@ type EntityPillLinkProps = {
     }
 );
 
-// Compile-time check: ensure all Entity types are either handled or explicitly excluded
-// If this errors, add the missing entity to EntityPillLinkProps or ExcludedFromPillLink
-type _MissingEntities = Exclude<
-  Entity,
-  EntityPillLinkProps["entity"] | ExcludedFromPillLink
->;
-// biome-ignore lint/complexity/noBannedTypes: compile-time check pattern
-type _AssertAllEntitiesCovered = _MissingEntities extends never
-  ? {}
-  : _MissingEntities;
-declare const _ensureExhaustive: _AssertAllEntitiesCovered;
-
-const minimalLinkClass =
+const linkClass =
   "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-sm text-primary hover:border-border hover:bg-muted/50";
-const fullLinkClass = "inline-block min-w-0 max-w-full";
 
 export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
-  const { openInNewTab, minimal = false } = props;
+  const { openInNewTab } = props;
   const linkTarget = openInNewTab ? "_blank" : undefined;
   const linkRel = openInNewTab ? "noopener noreferrer" : undefined;
+
   switch (props.entity) {
     case "ingredient": {
       const { data } = props;
@@ -92,13 +42,9 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           params={{ id: data.id }}
           target={linkTarget}
           rel={linkRel}
-          className={minimal ? minimalLinkClass : fullLinkClass}
+          className={linkClass}
         >
-          {minimal ? (
-            data.name
-          ) : (
-            <EntityPill text={data.name} entity="ingredient" />
-          )}
+          {data.name}
         </Link>
       );
     }
@@ -111,13 +57,9 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           params={{ id: data.id }}
           target={linkTarget}
           rel={linkRel}
-          className={minimal ? minimalLinkClass : fullLinkClass}
+          className={linkClass}
         >
-          {minimal ? (
-            data.name
-          ) : (
-            <EntityPill text={data.name} entity="recipe" />
-          )}
+          {data.name}
         </Link>
       );
     }
@@ -130,19 +72,13 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           params={{ id: data.id }}
           target={linkTarget}
           rel={linkRel}
-          className={minimal ? minimalLinkClass : fullLinkClass}
+          className={linkClass}
         >
-          {minimal ? (
-            <>
-              <LocationIcon type={data.type} size={12} className="shrink-0" />
-              <span>{data.name}</span>
-              <span className="text-[10px] text-muted-foreground">
-                ({data.type})
-              </span>
-            </>
-          ) : (
-            <EntityPill text={data.name} entity="location" label={data.type} />
-          )}
+          <LocationIcon type={data.type} size={12} className="shrink-0" />
+          <span>{data.name}</span>
+          <span className="text-[10px] text-muted-foreground">
+            ({data.type})
+          </span>
         </Link>
       );
     }
@@ -159,19 +95,11 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           params={{ id: data.id }}
           target={linkTarget}
           rel={linkRel}
-          className={minimal ? minimalLinkClass : fullLinkClass}
+          className={linkClass}
         >
-          {minimal ? (
-            <>
-              <span>{displayName}</span>
-              {label && (
-                <span className="text-[10px] text-muted-foreground">
-                  ({label})
-                </span>
-              )}
-            </>
-          ) : (
-            <EntityPill text={displayName} entity="product" label={label} />
+          <span>{displayName}</span>
+          {label && (
+            <span className="text-[10px] text-muted-foreground">({label})</span>
           )}
         </Link>
       );
@@ -187,9 +115,9 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           params={{ id: String(data.fdc_id) }}
           target={linkTarget}
           rel={linkRel}
-          className={minimal ? minimalLinkClass : fullLinkClass}
+          className={linkClass}
         >
-          {minimal ? text : <EntityPill text={text} entity="usda-food" />}
+          {text}
         </Link>
       );
     }

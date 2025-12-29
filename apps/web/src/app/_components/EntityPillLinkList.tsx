@@ -4,9 +4,7 @@ import { EntityPillLink } from "./EntityPill";
 import { NoneState } from "./NoneState";
 
 // Discriminated union for entity-specific list data
-type EntityPillLinkListProps = {
-  minimal?: boolean;
-} & (
+type EntityPillLinkListProps =
   | {
       entity: "ingredient";
       items?: { name: string; id: string }[];
@@ -26,13 +24,12 @@ type EntityPillLinkListProps = {
   | {
       entity: "usda-food";
       items?: { foodInfo: { description: string | null }; fdc_id: number }[];
-    }
-);
+    };
 
 export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
   props,
 ) => {
-  const { items, minimal } = props;
+  const { items } = props;
 
   if (!items || items.length === 0) {
     return <NoneState />;
@@ -45,11 +42,7 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
           "id" in item ? item.id : "fdc_id" in item ? item.fdc_id : index;
         return (
           <div key={key}>
-            <EntityPillLink
-              entity={props.entity}
-              data={item as never}
-              minimal={minimal}
-            />
+            <EntityPillLink entity={props.entity} data={item as never} />
           </div>
         );
       })}

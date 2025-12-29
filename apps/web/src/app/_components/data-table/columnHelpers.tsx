@@ -178,8 +178,6 @@ export function createEntityPillColumn<
     className?: string;
     /** Optional filter to deduplicate items */
     dedupe?: boolean;
-    /** Use minimal pill style (no badges) */
-    minimal?: boolean;
   },
 ) {
   return columnHelper.accessor(
@@ -197,13 +195,7 @@ export function createEntityPillColumn<
               arr.findIndex((other) => other.id === item.id) === i,
           );
         }
-        return (
-          <EntityPillLinkList
-            entity={entity}
-            items={items as never}
-            minimal={options?.minimal}
-          />
-        );
+        return <EntityPillLinkList entity={entity} items={items as never} />;
       },
     },
   );
@@ -304,12 +296,9 @@ export function createInventoryEntriesColumn<
     className?: string;
     /** Layout variant: 'stacked' shows amounts then pills, 'inline' shows amount+pill per row */
     layout?: "stacked" | "inline";
-    /** Use minimal pill style (no badges) */
-    minimal?: boolean;
   },
 ) {
   const layout = options?.layout ?? "inline";
-  const minimal = options?.minimal ?? false;
 
   return columnHelper.accessor((row) => row[accessor] as TEntry[], {
     id: String(accessor),
@@ -335,11 +324,7 @@ export function createInventoryEntriesColumn<
                     {tryFormatAmount(entry.amount)}
                   </span>
                   <span className="text-muted-foreground/50">@</span>
-                  <EntityPillLink
-                    entity={entity}
-                    data={related as never}
-                    minimal={minimal}
-                  />
+                  <EntityPillLink entity={entity} data={related as never} />
                   {i < entries.length - 1 && (
                     <span className="text-muted-foreground/30">,</span>
                   )}
