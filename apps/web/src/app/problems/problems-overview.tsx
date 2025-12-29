@@ -49,9 +49,6 @@ function DuplicateUniqueProductsList({
       title="Duplicate Unique Products"
       description="Products marked as unique (expectedQuantity=1) but found in multiple locations. These should be consolidated or have their expectedQuantity updated."
       entity="product"
-      iconColor={
-        products.length > 0 ? "text-destructive" : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="No duplicate unique products found. All products with expectedQuantity=1 are in single locations."
       renderItem={(product) => ({
@@ -79,11 +76,6 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
       title="Orphaned Products"
       description="Products with no inventory entries. These may be unused and can potentially be deleted."
       entity="product"
-      iconColor={
-        products.length > 0
-          ? "text-muted-foreground"
-          : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="No orphaned products found. All products have inventory entries."
       renderItem={(product) => ({
@@ -110,11 +102,6 @@ function InvalidUPCsList({ products }: { products: InvalidUPC[] }) {
       title="Invalid UPCs"
       description="Products with invalid UPC formats or duplicate UPC codes."
       icon={Zap}
-      iconColor={
-        products.length > 0
-          ? "text-accent-foreground"
-          : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="No invalid UPC codes found. All UPCs are properly formatted and unique."
       groupBy={(items) => {
@@ -161,9 +148,6 @@ function ProductsWithoutMappingsList({
       title="Products Without Pricing"
       description="Products missing unit mappings. Add pricing information to enable value calculations."
       icon={DollarSign}
-      iconColor={
-        products.length > 0 ? "text-destructive" : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="All products have unit mappings for pricing information."
       renderItem={(product) => ({
@@ -200,9 +184,6 @@ function InvalidInventoryAmountsList({
       title="Invalid Inventory Amounts"
       description="Inventory entries with zero or negative amounts that should be fixed or removed."
       entity="inventory-item"
-      iconColor={
-        entries.length > 0 ? "text-destructive" : "text-secondary-foreground"
-      }
       items={entries}
       emptyMessage="All inventory entries have valid positive amounts."
       groupBy={(items) => {
@@ -249,9 +230,6 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
       title="Empty Locations"
       description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
       entity="location"
-      iconColor={
-        locations.length > 0 ? "text-plum" : "text-secondary-foreground"
-      }
       items={locations}
       emptyMessage="All leaf locations have inventory entries."
       renderItem={(location) => {
@@ -343,30 +321,23 @@ function ProductsWithoutUPCImagesList({
       title="Missing UPC Images"
       description="Products with UPC codes that don't have images fetched from the product database."
       icon={ImageOff}
-      iconColor={
-        products.length > 0
-          ? "text-accent-foreground"
-          : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="All products with UPC codes have images."
       headerAction={
-        products.length > 0 ? (
-          <Button
-            size="sm"
-            onClick={() => backfillMutation.mutate()}
-            disabled={backfillMutation.isPending}
-          >
-            {backfillMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Fetching...
-              </>
-            ) : (
-              "Fetch All Images"
-            )}
-          </Button>
-        ) : undefined
+        <Button
+          size="sm"
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+        >
+          {backfillMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Fetching...
+            </>
+          ) : (
+            "Fetch All Images"
+          )}
+        </Button>
       }
       renderItem={(product) => ({
         title: product.name,
@@ -427,30 +398,23 @@ function ProductsWithWrongCategoryList({
       title="Wrong Category"
       description="Products with food indicators (UPC, NDB, or ingredient link) but category is not set to 'food'."
       icon={Utensils}
-      iconColor={
-        products.length > 0
-          ? "text-accent-foreground"
-          : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="All products with food indicators have correct categories."
       headerAction={
-        products.length > 0 ? (
-          <Button
-            size="sm"
-            onClick={() => backfillMutation.mutate()}
-            disabled={backfillMutation.isPending}
-          >
-            {backfillMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Fixing...
-              </>
-            ) : (
-              "Fix All Categories"
-            )}
-          </Button>
-        ) : undefined
+        <Button
+          size="sm"
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+        >
+          {backfillMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Fixing...
+            </>
+          ) : (
+            "Fix All Categories"
+          )}
+        </Button>
       }
       renderItem={(product) => ({
         title: product.name,
@@ -505,30 +469,23 @@ function ProductsWithStalePricesList({
       title="Stale Product Prices"
       description="Products where the stored price doesn't match the computed price from unit mappings."
       icon={DollarSign}
-      iconColor={
-        products.length > 0
-          ? "text-accent-foreground"
-          : "text-secondary-foreground"
-      }
       items={products}
       emptyMessage="All product prices are in sync with their unit mappings."
       headerAction={
-        products.length > 0 ? (
-          <Button
-            size="sm"
-            onClick={() => backfillMutation.mutate()}
-            disabled={backfillMutation.isPending}
-          >
-            {backfillMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              "Sync All Prices"
-            )}
-          </Button>
-        ) : undefined
+        <Button
+          size="sm"
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+        >
+          {backfillMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            "Sync All Prices"
+          )}
+        </Button>
       }
       renderItem={(product) => ({
         title: product.name,
@@ -589,30 +546,23 @@ function InventoryWithStaleValuationsList({
       title="Stale Inventory Valuations"
       description="Inventory entries where the stored valuation doesn't match amount × product price."
       icon={DollarSign}
-      iconColor={
-        entries.length > 0
-          ? "text-accent-foreground"
-          : "text-secondary-foreground"
-      }
       items={entries}
       emptyMessage="All inventory valuations are in sync."
       headerAction={
-        entries.length > 0 ? (
-          <Button
-            size="sm"
-            onClick={() => backfillMutation.mutate()}
-            disabled={backfillMutation.isPending}
-          >
-            {backfillMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              "Sync All Valuations"
-            )}
-          </Button>
-        ) : undefined
+        <Button
+          size="sm"
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+        >
+          {backfillMutation.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Syncing...
+            </>
+          ) : (
+            "Sync All Valuations"
+          )}
+        </Button>
       }
       renderItem={(entry) => ({
         title: entry.productName,

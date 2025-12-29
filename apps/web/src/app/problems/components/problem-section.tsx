@@ -29,7 +29,6 @@ type IconProp =
 type ProblemSectionProps<T> = {
   title: string;
   description: string;
-  iconColor: string;
   items: T[];
   emptyMessage: string;
   renderItem: (item: T) => {
@@ -42,6 +41,7 @@ type ProblemSectionProps<T> = {
     customActions?: ReactNode;
   };
   groupBy?: (items: T[]) => { [key: string]: T[] };
+  /** Only rendered when items exist */
   headerAction?: ReactNode;
 } & IconProp;
 
@@ -50,7 +50,6 @@ export function ProblemSection<T>({
   description,
   icon,
   entity,
-  iconColor,
   items,
   emptyMessage,
   renderItem,
@@ -58,6 +57,7 @@ export function ProblemSection<T>({
   headerAction,
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
+  const iconColor = hasItems ? "text-destructive" : "text-secondary-foreground";
 
   // Render icon based on whether we have an entity or a LucideIcon
   const IconElement = entity ? (
