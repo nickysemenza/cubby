@@ -85,7 +85,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       <DataTableToolbar table={table} additionalContent={toolbarContent} />
 
       {/* Desktop Table View */}
-      <div className="hidden lg:block [&_[data-slot=table-container]]:overflow-visible">
+      <div className="hidden lg:block">
         <Table aria-label={ariaLabel} className={cn(styles.table)}>
           <TableHeader className="sticky top-0 z-20 bg-background shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (

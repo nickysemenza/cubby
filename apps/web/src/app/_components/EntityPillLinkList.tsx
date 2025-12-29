@@ -2,11 +2,14 @@ import type React from "react";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "./EntityPill";
+import { TruncatedList } from "./TruncatedList";
 
 // Base props shared across all entity types
 type BaseProps = {
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
+  /** Maximum items to show before truncating with "+N more". undefined = show all */
+  maxItems?: number;
 };
 
 // Discriminated union for entity-specific list data
@@ -37,7 +40,7 @@ type EntityPillLinkListProps = BaseProps &
 export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
   props,
 ) => {
-  const { items, compact } = props;
+  const { items, compact, maxItems } = props;
 
   if (!items || items.length === 0) {
     return (
@@ -50,21 +53,39 @@ export const EntityPillLinkList: React.FC<EntityPillLinkListProps> = (
     );
   }
 
+  const getKey = (item: (typeof items)[number], index: number) => {
+    if ("id" in item) return item.id;
+    if ("fdc_id" in item) return item.fdc_id;
+    return index;
+  };
+
+  const renderItem = (item: (typeof items)[number], index: number) => (
+    <EntityPillLink
+      key={getKey(item, index)}
+      entity={props.entity}
+      data={item as never}
+      compact={compact}
+    />
+  );
+
+  // When maxItems is set, use TruncatedList for horizontal truncation
+  if (maxItems !== undefined) {
+    return (
+      <TruncatedList
+        items={items}
+        maxItems={maxItems}
+        renderItem={renderItem}
+        gap="gap-1"
+      />
+    );
+  }
+
+  // Default: show all items vertically (for detail pages)
   return (
     <div className="space-y-0.5">
-      {items.map((item, index) => {
-        const key =
-          "id" in item ? item.id : "fdc_id" in item ? item.fdc_id : index;
-        return (
-          <div key={key}>
-            <EntityPillLink
-              entity={props.entity}
-              data={item as never}
-              compact={compact}
-            />
-          </div>
-        );
-      })}
+      {items.map((item, index) => (
+        <div key={getKey(item, index)}>{renderItem(item, index)}</div>
+      ))}
     </div>
   );
 };

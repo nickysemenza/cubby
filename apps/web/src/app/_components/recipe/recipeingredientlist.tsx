@@ -138,10 +138,11 @@ export const RecipeIngredientList: React.FC<{
                 name: row.ingredient.name,
                 id: row.ingredient.id,
               }}
+              compact
             />
           );
         } else if (row.type === "recipe") {
-          return <EntityPillLink entity="recipe" data={row.recipe} />;
+          return <EntityPillLink entity="recipe" data={row.recipe} compact />;
         }
 
         return null;

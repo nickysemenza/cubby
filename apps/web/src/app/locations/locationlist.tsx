@@ -48,7 +48,7 @@ export function LocationList() {
           const item = info.getValue();
           return (
             <div>
-              {item && <EntityPillLink entity="location" data={item} />}
+              {item && <EntityPillLink entity="location" data={item} compact />}
             </div>
           );
         },

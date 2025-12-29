@@ -67,7 +67,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const ingredient = info.getValue();
           return ingredient ? (
-            <EntityPillLink entity="ingredient" data={ingredient} />
+            <EntityPillLink entity="ingredient" data={ingredient} compact />
           ) : (
             <NoneState />
           );
@@ -139,7 +139,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const food = info.getValue();
           if (!food) return <NoneState />;
-          return <EntityPillLink entity="usda-food" data={food} />;
+          return <EntityPillLink entity="usda-food" data={food} compact />;
         },
       }),
       createInventoryEntriesColumn(

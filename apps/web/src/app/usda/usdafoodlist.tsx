@@ -134,6 +134,7 @@ export function USDAFoodList() {
                 key={product.id}
                 entity="product"
                 data={product}
+                compact
               />
             ))}
           </div>

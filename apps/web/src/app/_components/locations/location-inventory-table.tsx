@@ -230,7 +230,7 @@ export function LocationInventoryTable({
           const product = info.getValue();
           return (
             <div className="space-y-0.5">
-              <EntityPillLink entity="product" data={product} />
+              <EntityPillLink entity="product" data={product} compact />
             </div>
           );
         },

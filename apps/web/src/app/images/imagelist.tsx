@@ -110,6 +110,7 @@ export default function ImageList() {
               <EntityPillLink
                 entity={entityMap[entityType]}
                 data={{ id: entityId, name: entityName }}
+                compact
               />
             );
           },

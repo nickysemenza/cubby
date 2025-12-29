@@ -65,6 +65,7 @@ export function InventoryItemList() {
       columnHelper.accessor("product", {
         enableSorting: false,
         meta: {
+          className: "min-w-0 w-56 max-w-72",
           mobileCategory: "wide",
           filterConfig: { placeholder: "Filter product..." },
         },
@@ -74,7 +75,7 @@ export function InventoryItemList() {
           return (
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1 space-y-0.5">
-                <EntityPillLink entity="product" data={product} />
+                <EntityPillLink entity="product" data={product} compact />
                 {upc && (
                   <div className="text-muted-foreground text-xs">
                     <TableLink
@@ -95,12 +96,13 @@ export function InventoryItemList() {
       columnHelper.accessor("location", {
         enableSorting: false,
         meta: {
+          className: "min-w-0 w-40 max-w-56",
           mobileCategory: "wide",
           filterConfig: { placeholder: "Filter location..." },
         },
         cell: (info) => {
           const item = info.getValue();
-          return <EntityPillLink entity="location" data={item} />;
+          return <EntityPillLink entity="location" data={item} compact />;
         },
       }),
       createCreatedAtColumn(columnHelper),

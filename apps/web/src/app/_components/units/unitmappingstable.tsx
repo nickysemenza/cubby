@@ -33,7 +33,7 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
     foodInfo: { description: `food ${fdcId}${isLoading ? "..." : ""}` },
   };
 
-  return <EntityPillLink entity="usda-food" data={displayFood} />;
+  return <EntityPillLink entity="usda-food" data={displayFood} compact />;
 };
 
 // Component for lazy loading product data and rendering ProductPillLink
@@ -58,7 +58,7 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
     manufacturer: "",
   };
 
-  return <EntityPillLink entity="product" data={displayProduct} />;
+  return <EntityPillLink entity="product" data={displayProduct} compact />;
 };
 
 // Helper function to render source with metadata-based links

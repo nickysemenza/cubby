@@ -24,6 +24,7 @@ import { EntityPillLinkList } from "../EntityPillLinkList";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { NoneState } from "../NoneState";
+import { TruncatedList } from "../TruncatedList";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -78,7 +79,7 @@ export function createNameColumn<T extends BaseRow>(
     id: String(fieldName),
     enableSorting: true,
     meta: {
-      className: "w-64 max-w-64",
+      className: "min-w-0 w-40 max-w-56",
       filterConfig: options?.filterConfig,
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
@@ -205,7 +206,14 @@ export function createEntityPillColumn<
               arr.findIndex((other) => other.id === item.id) === i,
           );
         }
-        return <EntityPillLinkList entity={entity} items={items as never} />;
+        return (
+          <EntityPillLinkList
+            entity={entity}
+            items={items as never}
+            maxItems={1}
+            compact
+          />
+        );
       },
     },
   );
@@ -241,7 +249,8 @@ export function createUnitMappingsColumn<T extends { id: string }>(
     id: options?.id ?? "unitMappings",
     header: options?.header ?? "Unit Mappings",
     meta: {
-      className: options?.className ?? (compact ? "w-40" : "w-96 max-w-96"),
+      className:
+        options?.className ?? (compact ? "min-w-0 w-32" : "w-96 max-w-96"),
     },
     cell: (info) => {
       const entity = info.row.original;
@@ -312,9 +321,10 @@ export function createInventoryEntriesColumn<
 
   return columnHelper.accessor((row) => row[accessor] as TEntry[], {
     id: String(accessor),
-    header: options?.header,
+    header:
+      options?.header ?? (entity === "location" ? "Locations" : "Products"),
     enableSorting: false,
-    meta: options?.className ? { className: options.className } : undefined,
+    meta: { className: options?.className ?? "min-w-0 w-40 max-w-56" },
     cell: (info) => {
       const entries = info.getValue() ?? [];
       if (entries.length === 0) {
@@ -322,26 +332,29 @@ export function createInventoryEntriesColumn<
       }
 
       if (layout === "inline") {
-        // Compact inline: "1 whole @ location, 2 each @ other"
+        // Compact inline with truncation: show first entry + "+N more"
+        const renderEntry = (entry: TEntry) => {
+          const related = getRelatedEntity(entry);
+          if (!related) return null;
+          return (
+            <span key={entry.id} className="inline-flex items-center gap-1">
+              <span className="text-muted-foreground">
+                {tryFormatAmount(entry.amount)}
+              </span>
+              <span className="text-muted-foreground/50">@</span>
+              <EntityPillLink entity={entity} data={related as never} compact />
+            </span>
+          );
+        };
+
         return (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            {entries.map((entry, i) => {
-              const related = getRelatedEntity(entry);
-              if (!related) return null;
-              return (
-                <span key={entry.id} className="inline-flex items-center gap-1">
-                  <span className="text-muted-foreground">
-                    {tryFormatAmount(entry.amount)}
-                  </span>
-                  <span className="text-muted-foreground/50">@</span>
-                  <EntityPillLink entity={entity} data={related as never} />
-                  {i < entries.length - 1 && (
-                    <span className="text-muted-foreground/30">,</span>
-                  )}
-                </span>
-              );
-            })}
-          </div>
+          <TruncatedList
+            items={entries}
+            maxItems={1}
+            gap="gap-1"
+            renderItem={(entry) => renderEntry(entry)}
+            renderOverflowItem={(entry) => renderEntry(entry)}
+          />
         );
       }
 
@@ -357,6 +370,7 @@ export function createInventoryEntriesColumn<
           <EntityPillLinkList
             entity={entity}
             items={relatedEntities as never}
+            compact
           />
         </SpacedContainer>
       );
