@@ -97,7 +97,6 @@
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.68.0",
     "react-qr-barcode-scanner": "^2.1.19",
-    "react-webcam": "^7.2.0",
     "shadcn": "^3.6.2",
     "sonner": "^2.0.7",
     "superjson": "^2.2.6",

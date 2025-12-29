@@ -1,20 +1,14 @@
 import { useMutation } from "@tanstack/react-query";
 import { Camera, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import Webcam from "react-webcam";
 import { toast } from "sonner";
 import { ImageGrid } from "~/components/media/image-grid";
 import { Button } from "~/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { EntityImage } from "~/entities/types";
+import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 
@@ -49,23 +43,15 @@ export function PendingImageUpload({
   const [removedExistingImageIds, setRemovedExistingImageIds] = useState<
     string[]
   >([]);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const webcamRef = useRef<Webcam>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const api = useTRPC();
 
   // Initialize existing images from props
   useEffect(() => {
     setCurrentExistingImages(existingImages);
   }, [existingImages]);
-
-  // Camera configuration
-  const videoConstraints = {
-    width: 1280,
-    height: 720,
-    facingMode: "environment",
-  };
 
   // tRPC mutation for initiating an upload
   const uploadImageMutation = useMutation(
@@ -76,16 +62,6 @@ export function PendingImageUpload({
     }),
   );
 
-  // Open camera dialog
-  const openCamera = useCallback(() => {
-    setIsCameraOpen(true);
-  }, []);
-
-  // Close camera dialog
-  const closeCamera = useCallback(() => {
-    setIsCameraOpen(false);
-  }, []);
-
   // Upload a file (used by both file input and camera)
   const uploadFile = useCallback(
     async (file: File) => {
@@ -94,9 +70,9 @@ export function PendingImageUpload({
         return null;
       }
 
-      try {
-        setUploading(true);
+      setUploading(true);
 
+      try {
         // Step 1: Get a presigned URL
         const initResult = await uploadImageMutation.mutateAsync({
           filename: file.name,
@@ -115,7 +91,12 @@ export function PendingImageUpload({
         });
 
         if (!uploadResult.ok) {
-          throw new Error("Failed to upload to storage");
+          const errorText = await uploadResult
+            .text()
+            .catch(() => "Unknown error");
+          throw new Error(
+            `Storage error (${uploadResult.status}): ${errorText}`,
+          );
         }
 
         // Step 3: Add image to pending images list
@@ -140,7 +121,7 @@ export function PendingImageUpload({
         return newImage;
       } catch (error) {
         console.error("Upload error:", error);
-        toast.error("Failed to upload image. Please try again.");
+        toast.error(`Upload failed: ${getErrorMessage(error)}`);
         return null;
       } finally {
         setUploading(false);
@@ -148,52 +129,6 @@ export function PendingImageUpload({
     },
     [entityType, uploadImageMutation, pendingImages, onImagesChange],
   );
-
-  // Capture photo using react-webcam
-  const capturePhoto = useCallback(async () => {
-    if (!webcamRef.current) return;
-
-    try {
-      // Get screenshot as base64
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (!imageSrc) {
-        toast.error("Failed to capture image");
-        return;
-      }
-
-      // Convert base64 to blob
-      const base64Data = imageSrc.split(",")[1];
-      const byteCharacters = atob(base64Data);
-      const byteArrays = [];
-
-      for (let i = 0; i < byteCharacters.length; i += 512) {
-        const slice = byteCharacters.slice(i, i + 512);
-        const byteNumbers = new Array(slice.length);
-
-        for (let j = 0; j < slice.length; j++) {
-          byteNumbers[j] = slice.charCodeAt(j);
-        }
-
-        const byteArray = new Uint8Array(byteNumbers);
-        byteArrays.push(byteArray);
-      }
-
-      const blob = new Blob(byteArrays, { type: "image/jpeg" });
-
-      // Create a File object from the blob
-      const filename = `camera-capture-${Date.now()}.jpg`;
-      const file = new File([blob], filename, { type: "image/jpeg" });
-
-      // Upload the captured image
-      await uploadFile(file);
-
-      // Close the camera
-      closeCamera();
-    } catch (error) {
-      console.error("Error capturing photo:", error);
-      toast.error("Failed to capture photo");
-    }
-  }, [uploadFile, closeCamera]);
 
   // Handle file upload from input
   const handleFileUpload = useCallback(
@@ -206,9 +141,12 @@ export function PendingImageUpload({
 
       await uploadFile(file);
 
-      // Reset the file input
+      // Reset the file inputs
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
+      }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = "";
       }
     },
     [uploadFile],
@@ -263,36 +201,26 @@ export function PendingImageUpload({
             disabled={uploading}
             className="flex-1"
           />
-          <Button type="button" onClick={openCamera} disabled={uploading}>
+          {/* Hidden input for native camera capture (opens Camera app on mobile, file picker on desktop) */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFileUpload}
+            disabled={uploading}
+            hidden
+          />
+          <Button
+            type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            disabled={uploading}
+          >
             <Camera className="mr-2 h-4 w-4" />
             Camera
           </Button>
         </div>
       </div>
-
-      {/* Camera Dialog */}
-      <Dialog
-        open={isCameraOpen}
-        onOpenChange={(open) => !open && closeCamera()}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Take a photo</DialogTitle>
-          </DialogHeader>
-          <div className="relative aspect-video overflow-hidden rounded-md bg-black">
-            <Webcam
-              audio={false}
-              ref={webcamRef}
-              screenshotFormat="image/jpeg"
-              videoConstraints={videoConstraints}
-              className="h-full w-full object-cover"
-            />
-          </div>
-          <div className="mt-2 flex justify-center">
-            <Button onClick={capturePhoto}>Capture</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {uploading && (
         <div className="py-2 text-center">
