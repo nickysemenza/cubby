@@ -10,6 +10,7 @@ import {
   ArrowRightLeft,
   Check,
   MoreHorizontal,
+  Package,
   Pencil,
   Trash,
   X,
@@ -17,6 +18,7 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { z } from "zod";
+import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -281,8 +283,8 @@ export function LocationInventoryTable({
         </div>
       )}
 
-      {/* Table */}
-      <div className="rounded-md border">
+      {/* Desktop Table */}
+      <div className="hidden rounded-md border lg:block">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -316,6 +318,153 @@ export function LocationInventoryTable({
             ))}
           </TableBody>
         </Table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="space-y-3 lg:hidden">
+        {inventoryItems.map((item) => {
+          const isSelected = rowSelection[item.id] ?? false;
+          const isEditing = editingRowId === item.id;
+
+          const actionsDropdown = (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                  />
+                }
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() =>
+                    setDialogState({ type: "move", items: [item] })
+                  }
+                >
+                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                  Move to...
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onClick={() =>
+                    setDialogState({ type: "delete", items: [item] })
+                  }
+                >
+                  <Trash className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          );
+
+          return (
+            <MobileCard
+              key={item.id}
+              selectable={{
+                isSelected,
+                onSelectionChange: (checked) => {
+                  setRowSelection((prev) => ({
+                    ...prev,
+                    [item.id]: checked,
+                  }));
+                },
+              }}
+              actions={actionsDropdown}
+            >
+              <div className="space-y-2">
+                {/* Product name */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate font-medium">
+                      {item.product.name}
+                    </span>
+                  </div>
+                  {item.product.manufacturer && (
+                    <p className="ml-6 truncate text-muted-foreground text-sm">
+                      {item.product.manufacturer}
+                    </p>
+                  )}
+                </div>
+
+                {/* Amount - editable */}
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={editingAmount.value}
+                      onChange={(e) =>
+                        setEditingAmount((prev) => ({
+                          ...prev,
+                          value: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                      className="h-8 w-20"
+                      step="any"
+                      autoFocus
+                    />
+                    <Input
+                      type="text"
+                      value={editingAmount.unit}
+                      onChange={(e) =>
+                        setEditingAmount((prev) => ({
+                          ...prev,
+                          unit: e.target.value,
+                        }))
+                      }
+                      className="h-8 w-20"
+                      placeholder="unit"
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        updateMutation.mutate({
+                          id: item.id,
+                          data: { amount: editingAmount },
+                        });
+                      }}
+                      disabled={updateMutation.isPending}
+                    >
+                      <Check className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => setEditingRowId(null)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="flex min-h-[44px] items-center gap-1 rounded-md bg-muted/50 px-3 py-2 text-left transition-colors hover:bg-muted"
+                    onClick={() => {
+                      setEditingRowId(item.id);
+                      setEditingAmount(item.amount);
+                    }}
+                  >
+                    <span className="text-sm">
+                      {showAmountAndPrice(
+                        item.amount,
+                        item.product.unitMappings,
+                      )}
+                    </span>
+                    <Pencil className="ml-2 h-3 w-3 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+            </MobileCard>
+          );
+        })}
       </div>
 
       {/* Move dialog */}

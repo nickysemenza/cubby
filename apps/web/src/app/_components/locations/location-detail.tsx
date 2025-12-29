@@ -82,6 +82,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           <LocationCardGrid
             locations={location.children}
             showParentPath={false}
+            maxColumns={2}
           />
         ) : (
           <NoneState />

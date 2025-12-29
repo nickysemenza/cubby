@@ -22,7 +22,14 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 
-const quickActions = [
+export type QuickAction = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description?: string;
+};
+
+export const quickActions: QuickAction[] = [
   {
     label: "New Product",
     href: "/products/new",

@@ -9,7 +9,7 @@ export type TableDensity = "normal" | "dense";
 export function useTableDensity() {
   const [density, setDensity] = useLocalStorage<TableDensity>(
     "table-density",
-    "normal",
+    "dense",
   );
   return { density, setDensity };
 }

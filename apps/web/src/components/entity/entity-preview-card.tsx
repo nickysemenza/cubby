@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
+import { MobileCard } from "./mobile-card";
 
 // Type-safe route patterns
 type RoutePattern =
@@ -33,6 +34,13 @@ interface EntityPreviewCardProps {
   onClick?: () => void;
 }
 
+/**
+ * A convenience wrapper around MobileCard that provides structured props
+ * for common entity preview patterns (title, image, badges, details, actions).
+ *
+ * Use this when you have structured content to display.
+ * Use MobileCard directly when you need custom children or selection.
+ */
 export function EntityPreviewCard({
   title,
   titleIcon: TitleIcon,
@@ -49,6 +57,7 @@ export function EntityPreviewCard({
 }: EntityPreviewCardProps) {
   const isCompact = variant === "compact";
 
+  // Build primary action button
   const renderPrimaryAction = () => {
     if (!primaryAction) return null;
 
@@ -75,102 +84,81 @@ export function EntityPreviewCard({
     ) : null;
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if ((e.key === "Enter" || e.key === " ") && onClick) {
-      e.preventDefault();
-      onClick();
-    }
-  };
-
-  // Only add interactive attributes when onClick is provided
-  const interactiveProps = onClick
-    ? {
-        role: "button" as const,
-        tabIndex: 0,
-        onKeyDown: handleKeyDown,
-        onClick: onClick,
-      }
-    : {};
+  // Build actions element for MobileCard
+  const actionsElement =
+    primaryAction || secondaryActions ? (
+      <div className={cn("flex gap-2", isCompact && "gap-1")}>
+        {renderPrimaryAction()}
+        {secondaryActions}
+      </div>
+    ) : undefined;
 
   return (
-    <div
+    <MobileCard
+      onClick={onClick}
+      actions={actionsElement}
       className={cn(
-        "overflow-hidden rounded-lg border bg-card transition-all",
-        "hover:border-muted-foreground/20 hover:shadow-sm",
+        // Override MobileCard's default left accent with plain border
+        "border-l border-l-border",
         isCompact ? "p-3" : "p-4",
-        onClick && "cursor-pointer hover:bg-muted/50",
         className,
       )}
-      {...interactiveProps}
     >
-      <div className="flex items-start justify-between">
-        {/* Image and Content */}
-        <div className={cn("flex items-start gap-3", !image && "flex-1")}>
-          {/* Image */}
-          {image && <div className="flex-shrink-0">{image}</div>}
+      <div className="flex items-start gap-3">
+        {/* Image */}
+        {image && <div className="shrink-0">{image}</div>}
 
-          {/* Main Content */}
-          <div
-            className={cn("min-w-0 flex-1 space-y-2", isCompact && "space-y-1")}
-          >
-            {/* Title and Subtitle */}
-            <div>
-              <h5
+        {/* Main Content */}
+        <div
+          className={cn("min-w-0 flex-1 space-y-2", isCompact && "space-y-1")}
+        >
+          {/* Title and Subtitle */}
+          <div>
+            <h5
+              className={cn(
+                "flex items-center gap-2 font-medium",
+                isCompact && "text-sm",
+              )}
+            >
+              {TitleIcon && (
+                <TitleIcon className={cn("h-4 w-4", isCompact && "h-3 w-3")} />
+              )}
+              <span className="truncate">{title}</span>
+            </h5>
+            {subtitle && (
+              <p
                 className={cn(
-                  "flex items-center gap-2 font-medium",
-                  isCompact && "text-sm",
+                  "text-muted-foreground",
+                  isCompact ? "text-xs" : "text-sm",
                 )}
               >
-                {TitleIcon && (
-                  <TitleIcon
-                    className={cn("h-4 w-4", isCompact && "h-3 w-3")}
-                  />
-                )}
-                <span className="truncate">{title}</span>
-              </h5>
-              {subtitle && (
-                <p
-                  className={cn(
-                    "text-gray-600",
-                    isCompact ? "text-xs" : "text-sm",
-                  )}
-                >
-                  {subtitle}
-                </p>
-              )}
+                {subtitle}
+              </p>
+            )}
+          </div>
+
+          {/* Details */}
+          {details.length > 0 && (
+            <div className={cn("space-y-1", isCompact && "space-y-0.5")}>
+              {details}
             </div>
+          )}
 
-            {/* Details */}
-            {details.length > 0 && (
-              <div className={cn("space-y-1", isCompact && "space-y-0.5")}>
-                {details}
-              </div>
-            )}
+          {/* Badges */}
+          {badges.length > 0 && (
+            <div className={cn("flex flex-wrap gap-2", isCompact && "gap-1")}>
+              {badges}
+            </div>
+          )}
 
-            {/* Badges */}
-            {badges.length > 0 && (
-              <div className={cn("flex flex-wrap gap-2", isCompact && "gap-1")}>
-                {badges}
-              </div>
-            )}
-
-            {/* Footer */}
-            {footer && (
-              <div className={cn("border-t pt-2", isCompact && "pt-1")}>
-                {footer}
-              </div>
-            )}
-          </div>
+          {/* Footer */}
+          {footer && (
+            <div className={cn("border-t pt-2", isCompact && "pt-1")}>
+              {footer}
+            </div>
+          )}
         </div>
-
-        {/* Actions */}
-        {(primaryAction || secondaryActions) && (
-          <div className={cn("flex gap-2", isCompact && "gap-1")}>
-            {renderPrimaryAction()}
-            {secondaryActions}
-          </div>
-        )}
       </div>
-    </div>
+    </MobileCard>
   );
 }

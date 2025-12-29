@@ -2,7 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { flexRender, type Table as ITable } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
 import type { ReactNode } from "react";
-import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
 import { useDebug } from "~/hooks/useDebug";
@@ -30,6 +30,18 @@ interface CategorizedField {
   displayHeader: string;
   content: ReactNode;
   category: FieldCategory;
+}
+
+/**
+ * Check if a field has meaningful content worth displaying
+ */
+function hasContent(content: ReactNode): boolean {
+  if (content === null || content === undefined) return false;
+  if (typeof content === "string") {
+    const trimmed = content.trim();
+    return trimmed !== "" && trimmed !== "—";
+  }
+  return true;
 }
 
 function categorizeField(
@@ -80,13 +92,21 @@ export function MobileCardView<TItem>({
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
 
+  // Check if table has row selection enabled
+  const hasRowSelection = table.options.enableRowSelection !== false;
+  const hasSelectColumn = table
+    .getAllColumns()
+    .some((col) => col.id === "select");
+  const isSelectable = hasRowSelection && hasSelectColumn;
+
   return (
     <div className="block space-y-4 lg:hidden">
       {table.getRowModel().rows?.length ? (
         table.getRowModel().rows.map((row) => {
-          // Categorize all fields for this row
+          // Categorize all fields for this row, filtering out "select" column
           const categorizedFields: CategorizedField[] = row
             .getVisibleCells()
+            .filter((cell) => cell.column.id !== "select") // Filter out select column
             .map((cell) => {
               const header = cell.column.columnDef.header;
               let headerText = cell.column.id;
@@ -142,33 +162,37 @@ export function MobileCardView<TItem>({
           );
           const imageContent = entityImage || imageField?.content;
 
-          // Create details from medium and compact fields
-          const details = [...mediumFields, ...compactFields].map((field) => (
-            <div
-              key={field.id}
-              className="flex min-w-0 items-center justify-between gap-2"
-            >
-              <span className="shrink-0 font-medium text-muted-foreground text-xs">
-                {field.displayHeader}:
-              </span>
-              <span className="truncate text-right text-sm">
-                {field.content}
-              </span>
-            </div>
-          ));
+          // Create details from medium and compact fields (filter empty)
+          const details = [...mediumFields, ...compactFields]
+            .filter((field) => hasContent(field.content))
+            .map((field) => (
+              <div
+                key={field.id}
+                className="flex min-w-0 items-center justify-between gap-2"
+              >
+                <span className="shrink-0 font-medium text-muted-foreground text-xs">
+                  {field.displayHeader}:
+                </span>
+                <span className="truncate text-right text-sm">
+                  {field.content}
+                </span>
+              </div>
+            ));
 
-          // Create badges from wide fields with their content
-          const badges = wideFields.map((field) => (
-            <div
-              key={field.id}
-              className="flex min-w-0 items-center gap-1 text-xs"
-            >
-              <span className="shrink-0 text-muted-foreground">
-                {field.displayHeader}:
-              </span>
-              <span className="min-w-0 truncate">{field.content}</span>
-            </div>
-          ));
+          // Create badges from wide fields with their content (filter empty)
+          const badges = wideFields
+            .filter((field) => hasContent(field.content))
+            .map((field) => (
+              <div
+                key={field.id}
+                className="flex min-w-0 items-center gap-1 text-xs"
+              >
+                <span className="shrink-0 text-muted-foreground">
+                  {field.displayHeader}:
+                </span>
+                <span className="min-w-0 truncate">{field.content}</span>
+              </div>
+            ));
 
           const footer = isDebugEnabled ? (
             <div className="flex items-center justify-between">
@@ -200,18 +224,46 @@ export function MobileCardView<TItem>({
                 }
               : undefined;
 
+          // Always use MobileCard with optional selection
           return (
-            <EntityPreviewCard
+            <MobileCard
               key={row.id}
-              title={titleString}
-              image={imageContent}
-              details={details}
-              badges={badges}
-              footer={footer}
-              variant="compact"
-              className="shadow-sm"
+              selectable={
+                isSelectable
+                  ? {
+                      isSelected: row.getIsSelected(),
+                      onSelectionChange: (checked) =>
+                        row.toggleSelected(checked),
+                    }
+                  : undefined
+              }
               onClick={handleClick}
-            />
+            >
+              <div className="space-y-2">
+                {/* Title with image */}
+                <div className="flex items-start gap-3">
+                  {imageContent && (
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded">
+                      {imageContent}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">{titleString}</p>
+                  </div>
+                </div>
+
+                {/* Details */}
+                {details.length > 0 && (
+                  <div className="space-y-1">{details}</div>
+                )}
+
+                {/* Badges */}
+                {badges.length > 0 && <div className="space-y-1">{badges}</div>}
+
+                {/* Debug footer */}
+                {footer}
+              </div>
+            </MobileCard>
           );
         })
       ) : (

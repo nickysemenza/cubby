@@ -64,11 +64,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   // Density-specific styles
   const styles = isDense
     ? {
-        table: "text-[10px] leading-none",
-        header: "h-5 px-1 py-0 border-x border-border text-[10px]",
-        cell: "px-1 py-0 h-[20px] border-x border-border align-middle",
-        row: "even:bg-muted/20",
-        sortIcon: "h-2.5 w-2.5",
+        table: "text-xs leading-tight",
+        header:
+          "h-6 px-1.5 py-0.5 border-x border-border text-xs font-medium bg-muted/40",
+        cell: "px-1.5 py-0.5 h-[24px] border-x border-border align-middle",
+        row: "even:bg-muted/30 hover:bg-muted/50 transition-colors",
+        sortIcon: "h-3 w-3",
       }
     : {
         table: "",

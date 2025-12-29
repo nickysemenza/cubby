@@ -253,7 +253,7 @@ export function MainNav({
             render={
               <button
                 type="button"
-                className="p-2 md:hidden"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-muted md:hidden"
                 aria-label="Toggle menu"
               />
             }
@@ -267,14 +267,14 @@ export function MainNav({
             <nav className="flex flex-1 flex-col space-y-1 overflow-y-auto px-4 pb-4">
               {/* Organization Switcher for Mobile */}
               {session.data?.user && (
-                <div className="flex items-center justify-between px-2 py-1.5">
+                <div className="flex min-h-[44px] items-center justify-between px-3 py-2">
                   <span className="font-medium text-sm">Organization</span>
                   <OrganizationSwitcher />
                 </div>
               )}
 
               {/* Theme Toggle for Mobile */}
-              <div className="flex items-center justify-between px-2 py-1.5">
+              <div className="flex min-h-[44px] items-center justify-between px-3 py-2">
                 <span className="font-medium text-sm">Theme</span>
                 <ThemeToggle />
               </div>
@@ -286,7 +286,7 @@ export function MainNav({
                     variant="ghost"
                     onClick={toggleDebug}
                     className={cn(
-                      "h-auto justify-start px-2 py-1.5 text-sm",
+                      "min-h-[44px] justify-start px-3 py-2 text-sm",
                       isDebugEnabled &&
                         "bg-orange-50 text-orange-600 dark:bg-orange-950 dark:text-orange-400",
                     )}
@@ -315,9 +315,9 @@ export function MainNav({
                       <Link
                         to={item.href}
                         className={cn(
-                          "px-2 py-1.5 font-medium text-sm transition-colors hover:text-primary",
+                          "flex min-h-[44px] items-center rounded-md px-3 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
                           !active && "text-muted-foreground",
-                          active && "rounded bg-muted",
+                          active && "bg-muted text-foreground",
                         )}
                         aria-current={active ? "page" : undefined}
                       />
