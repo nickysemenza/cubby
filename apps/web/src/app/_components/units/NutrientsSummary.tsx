@@ -57,8 +57,8 @@ export function NutrientsSummary({
 
         return (
           <div key={code} className="border border-muted px-2 py-1">
-            <span className="font-medium text-chart-2">{displayName}:</span>{" "}
-            <span className="text-chart-1">{value.toFixed(1)}</span>{" "}
+            <span className="font-medium text-subtle">{displayName}:</span>{" "}
+            <span className="text-highlight">{value.toFixed(1)}</span>{" "}
             <span className="text-muted-foreground">{unit}</span>
           </div>
         );

@@ -48,7 +48,7 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
       };
     case "updated":
       return {
-        bg: "bg-chart-5/20 text-chart-5",
+        bg: "bg-slate/20 text-slate",
         icon: <RefreshCw className="h-3 w-3" />,
         label: "Update",
       };
@@ -66,7 +66,7 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
       };
     case "product_only":
       return {
-        bg: "bg-chart-4/20 text-chart-4",
+        bg: "bg-plum/20 text-plum",
         icon: <Package className="h-3 w-3" />,
         label: "Product",
       };
@@ -78,7 +78,7 @@ const getActionStyles = (action: CSVImportResultItem["action"]) => {
       };
     case "renamed":
       return {
-        bg: "bg-chart-4/20 text-chart-4",
+        bg: "bg-plum/20 text-plum",
         icon: <Pencil className="h-3 w-3" />,
         label: "Rename",
       };
@@ -488,13 +488,13 @@ export default function CSVImportForm() {
               <span className="ml-1 text-muted-foreground">moved</span>
             </div>
             <div>
-              <span className="font-medium text-chart-5">
+              <span className="font-medium text-slate">
                 {importResult.updated}
               </span>
               <span className="ml-1 text-muted-foreground">updated</span>
             </div>
             <div>
-              <span className="font-medium text-chart-4">
+              <span className="font-medium text-plum">
                 {importResult.productOnly}
               </span>
               <span className="ml-1 text-muted-foreground">product only</span>
@@ -654,14 +654,14 @@ export default function CSVImportForm() {
               </div>
               <div className="text-muted-foreground text-xs">Move</div>
             </div>
-            <div className="rounded border bg-chart-5/20 p-2 text-center">
-              <div className="font-bold text-chart-5 text-lg">
+            <div className="rounded border bg-slate/20 p-2 text-center">
+              <div className="font-bold text-lg text-slate">
                 {previewResult.updated}
               </div>
               <div className="text-muted-foreground text-xs">Update</div>
             </div>
-            <div className="rounded border bg-chart-4/20 p-2 text-center">
-              <div className="font-bold text-chart-4 text-lg">
+            <div className="rounded border bg-plum/20 p-2 text-center">
+              <div className="font-bold text-lg text-plum">
                 {previewResult.productOnly}
               </div>
               <div className="text-muted-foreground text-xs">Product</div>

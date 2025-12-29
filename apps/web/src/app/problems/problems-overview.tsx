@@ -250,7 +250,7 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
       description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
       entity="location"
       iconColor={
-        locations.length > 0 ? "text-chart-4" : "text-secondary-foreground"
+        locations.length > 0 ? "text-plum" : "text-secondary-foreground"
       }
       items={locations}
       emptyMessage="All leaf locations have inventory entries."

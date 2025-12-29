@@ -15,8 +15,8 @@ import type { Entity, EntityDefinition } from "./types";
 // - primary (terracotta): inventory - core entity
 // - secondary (sage green): products, usda-food - items/data
 // - accent (golden amber): ingredients - food-related
-// - chart-4 (warm plum): recipes - creative
-// - chart-5 (slate blue): locations - places
+// - plum (warm plum): recipes - creative
+// - slate (slate blue): locations - places
 // - muted: images - supporting
 
 export const entities: Record<Entity, EntityDefinition> = {
@@ -73,8 +73,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "recipes",
     lucideIcon: ChefHat,
     color: {
-      bg: "bg-chart-4/20",
-      text: "text-chart-4",
+      bg: "bg-plum/20",
+      text: "text-plum",
     },
     detail: { commonSections: ["images", "history"] },
     list: {
@@ -89,8 +89,8 @@ export const entities: Record<Entity, EntityDefinition> = {
     basePath: "locations",
     lucideIcon: MapPin,
     color: {
-      bg: "bg-chart-5/20",
-      text: "text-chart-5",
+      bg: "bg-slate/20",
+      text: "text-slate",
     },
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common

@@ -73,7 +73,7 @@ const getSyncStateStyles = (state: SyncState) => {
       };
     case "renamed":
       return {
-        bg: "bg-chart-4/20 text-chart-4",
+        bg: "bg-plum/20 text-plum",
         icon: <Pencil className="h-3 w-3" />,
         label: "Renamed",
       };

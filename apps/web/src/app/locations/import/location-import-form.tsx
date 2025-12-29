@@ -37,7 +37,7 @@ const getActionStyles = (action: LocationCSVImportResultItem["action"]) => {
       };
     case "updated":
       return {
-        bg: "bg-chart-5/20 text-chart-5",
+        bg: "bg-slate/20 text-slate",
         icon: <RefreshCw className="h-3 w-3" />,
         label: "Update",
       };
@@ -297,7 +297,7 @@ Fridge,Kitchen,cabinet,,`}
                 <span className="text-secondary-foreground">
                   {displayResult.created} create
                 </span>
-                <span className="text-chart-5">
+                <span className="text-slate">
                   {displayResult.updated} update
                 </span>
                 <span className="text-muted-foreground">

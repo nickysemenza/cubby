@@ -16,7 +16,7 @@ const variantClasses: Record<ColoredAlertVariant, string> = {
     "border-secondary bg-secondary text-secondary-foreground [&>svg]:text-secondary-foreground",
   warning:
     "border-accent bg-accent/30 text-accent-foreground [&>svg]:text-accent-foreground",
-  info: "border-chart-5/30 bg-chart-5/10 text-chart-5 [&>svg]:text-chart-5",
+  info: "border-slate/30 bg-slate/10 text-slate [&>svg]:text-slate",
 };
 
 interface ColoredAlertProps

@@ -43,7 +43,7 @@ const actionConfig: Record<string, { label: string; className: string }> = {
   },
   update: {
     label: "Updated",
-    className: "bg-chart-5/20 text-chart-5",
+    className: "bg-slate/20 text-slate",
   },
   delete: {
     label: "Deleted",
