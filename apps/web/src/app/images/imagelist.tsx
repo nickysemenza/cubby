@@ -6,7 +6,6 @@ import { useEntityList } from "~/app/_components/hooks/useEntityList";
 import { NoneState } from "~/app/_components/NoneState";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
-import { assertNever } from "~/lib/assert";
 import type { ImageWithEntity } from "~/schemas/image";
 import { useTRPC } from "~/trpc/react";
 
@@ -80,42 +79,18 @@ export default function ImageList() {
               return <NoneState />;
             }
 
-            switch (entityType) {
-              case "PRODUCT":
-                return (
-                  <EntityPillLink
-                    entity="product"
-                    data={{
-                      id: entityId,
-                      name: entityName,
-                      manufacturer: "",
-                    }}
-                  />
-                );
-              case "LOCATION":
-                return (
-                  <EntityPillLink
-                    entity="location"
-                    data={{
-                      id: entityId,
-                      name: entityName,
-                      type: "room",
-                    }}
-                  />
-                );
-              case "RECIPE":
-                return (
-                  <EntityPillLink
-                    entity="recipe"
-                    data={{
-                      id: entityId,
-                      name: entityName,
-                    }}
-                  />
-                );
-              default:
-                return assertNever(entityType);
-            }
+            const entityMap = {
+              PRODUCT: "product",
+              LOCATION: "location",
+              RECIPE: "recipe",
+            } as const;
+
+            return (
+              <EntityPillLink
+                entity={entityMap[entityType]}
+                data={{ id: entityId, name: entityName }}
+              />
+            );
           },
         },
       ),

@@ -5,19 +5,22 @@ import { assertNever } from "~/lib/assert";
 import { getMiscDisplayName, isMiscProduct } from "~/lib/constants";
 import type { LocationType } from "~/schemas/location";
 
+// Minimal data shape - just id and name
+type MinimalEntityData = { id: string; name: string };
+
 // Discriminated union for entity-specific data shapes
 type EntityPillLinkProps = {
   openInNewTab?: boolean;
 } & (
-  | { entity: "ingredient"; data: { name: string; id: string } }
+  | { entity: "ingredient"; data: MinimalEntityData }
   | {
       entity: "product";
-      data: { name: string; id: string; manufacturer: string };
+      data: MinimalEntityData & { manufacturer?: string };
     }
-  | { entity: "recipe"; data: { name: string; id: string } }
+  | { entity: "recipe"; data: MinimalEntityData }
   | {
       entity: "location";
-      data: { name: string; id: string; type: LocationType };
+      data: MinimalEntityData & { type?: LocationType };
     }
   | {
       entity: "usda-food";
@@ -74,11 +77,15 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
           rel={linkRel}
           className={linkClass}
         >
-          <LocationIcon type={data.type} size={12} className="shrink-0" />
+          {data.type && (
+            <LocationIcon type={data.type} size={12} className="shrink-0" />
+          )}
           <span>{data.name}</span>
-          <span className="text-[10px] text-muted-foreground">
-            ({data.type})
-          </span>
+          {data.type && (
+            <span className="text-[10px] text-muted-foreground">
+              ({data.type})
+            </span>
+          )}
         </Link>
       );
     }
