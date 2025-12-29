@@ -32,7 +32,7 @@ const EntityImageList: FC<EntityImageListProps> = ({
         <NoneState />
       ) : (
         <div>
-          <GridContainer cols="responsive3" className="mb-4">
+          <GridContainer cols="thumbs" className="mb-4">
             {images.map((image) => (
               <Link
                 to="/images/$id"

@@ -1,6 +1,7 @@
 import { ExternalLink, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -90,7 +91,7 @@ export function ProblemSection<T>({
                   <Badge variant="outline">{groupItems.length}</Badge>
                 </h4>
               )}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <GridContainer cols="cards3" className="stagger-children">
                 {groupItems.map((item) => {
                   const {
                     title: itemTitle,
@@ -119,7 +120,7 @@ export function ProblemSection<T>({
                     />
                   );
                 })}
-              </div>
+              </GridContainer>
             </div>
           ))}
         </div>

@@ -44,13 +44,17 @@ export const flexContainerVariants = cva("flex", {
 export const gridContainerVariants = cva("grid", {
   variants: {
     cols: {
+      // Fixed columns
       1: "grid-cols-1",
       2: "grid-cols-2",
       3: "grid-cols-3",
       4: "grid-cols-4",
-      responsive2: "grid-cols-1 md:grid-cols-2",
-      responsive3: "grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
-      responsive4: "grid-cols-3 sm:grid-cols-4 md:grid-cols-5",
+      // Card grids (start at 1 col on mobile)
+      cards2: "grid-cols-1 sm:grid-cols-2",
+      cards3: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3",
+      cards4: "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+      // Thumbnail grids (denser, start at 2+ cols)
+      thumbs: "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
     },
     gap: {
       0: "gap-0",

@@ -74,7 +74,7 @@ className = 'text-destructive';
 | ------------------- | ------------------------- | ---------------------------------------- |
 | Raw Tailwind        | One-off styling           | `className="mt-4"`                       |
 | `FlexContainer`     | Repeated flex patterns    | `<FlexContainer align="center" gap={2}>` |
-| `GridContainer`     | Grid layouts              | `<GridContainer cols="responsive3">`     |
+| `GridContainer`     | Grid layouts              | `<GridContainer cols="cards3">`          |
 | `SpacedContainer`   | Vertical stacked content  | `<SpacedContainer space={4}>`            |
 | CVA                 | Components with variants  | Button, Badge                            |
 | `@layer components` | Complex selector patterns | `.animate-popover`                       |
@@ -91,7 +91,7 @@ Located in `~/components/ui/`:
 </FlexContainer>
 
 // GridContainer - responsive grids
-<GridContainer cols="responsive3" gap={4}>
+<GridContainer cols="cards3" gap={4}>
   {items.map(item => <Card key={item.id} />)}
 </GridContainer>
 

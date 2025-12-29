@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, ExternalLink, Package } from "lucide-react";
 import { EntityPreviewCard } from "~/components/entity/entity-preview-card";
+import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
@@ -18,11 +19,11 @@ interface LocationCardGridProps {
   maxColumns?: 2 | 3 | 4;
 }
 
-const columnClasses = {
-  2: "grid grid-cols-1 gap-4 md:grid-cols-2",
-  3: "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3",
-  4: "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
-};
+const colsVariant = {
+  2: "cards2",
+  3: "cards3",
+  4: "cards4",
+} as const;
 
 export function LocationCardGrid({
   locations,
@@ -32,8 +33,9 @@ export function LocationCardGrid({
   maxColumns = 4,
 }: LocationCardGridProps) {
   return (
-    <div
-      className={cn(columnClasses[maxColumns], "stagger-children", className)}
+    <GridContainer
+      cols={colsVariant[maxColumns]}
+      className={cn("stagger-children", className)}
     >
       {locations.map((location) => (
         <LocationCard
@@ -43,7 +45,7 @@ export function LocationCardGrid({
           onLocationSelect={onLocationSelect}
         />
       ))}
-    </div>
+    </GridContainer>
   );
 }
 
