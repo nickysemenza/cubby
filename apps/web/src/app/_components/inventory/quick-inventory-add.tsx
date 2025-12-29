@@ -79,30 +79,28 @@ export function QuickInventoryAdd({
   return (
     <FormProvider {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="flex items-end gap-2">
-          <div className="min-w-[200px] flex-1">
-            <ComboboxFieldWithSearch
-              form={form}
-              name="product"
-              label="Add Product"
-              searchType="product"
-            />
-          </div>
-          <div className="flex-shrink-0">
+        <div className="flex flex-col gap-2">
+          <ComboboxFieldWithSearch
+            form={form}
+            name="product"
+            label="Add Product"
+            searchType="product"
+          />
+          <div className="flex items-end gap-2">
             <AmountFieldGroup
               form={form}
               valuePath="amount.value"
               unitPath="amount.unit"
             />
+            <Button
+              type="submit"
+              size="icon"
+              disabled={createMutation.isPending}
+              className="mb-0.5"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
           </div>
-          <Button
-            type="submit"
-            size="icon"
-            disabled={createMutation.isPending}
-            className="mb-0.5 flex-shrink-0"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
         </div>
       </form>
     </FormProvider>
