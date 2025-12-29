@@ -7,13 +7,19 @@ import { EntityPillLink } from "./EntityPill";
 interface EntityPillByIdProps {
   entityType: AuditEntityType;
   entityId: string;
+  /** Compact mode: truncates long names with max-width */
+  compact?: boolean;
 }
 
 /**
  * A "smart" pill component that fetches entity data by ID and renders the appropriate pill.
  * Uses React Query caching so multiple pills with the same ID won't cause duplicate fetches.
  */
-export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
+export function EntityPillById({
+  entityType,
+  entityId,
+  compact,
+}: EntityPillByIdProps) {
   const trpc = useTRPC();
 
   // All queries must be called unconditionally (React hooks rules)
@@ -67,6 +73,7 @@ export function EntityPillById({ entityType, entityId }: EntityPillByIdProps) {
       <EntityPillLink
         entity={entityType as "product" | "location" | "recipe" | "ingredient"}
         data={query.data as never}
+        compact={compact}
       />
     );
   }

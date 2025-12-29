@@ -104,6 +104,7 @@ export function AuditLogEntryComponent({
               <EntityPillById
                 entityType={entry.entityType as AuditEntityType}
                 entityId={entry.entityId}
+                compact
               />
             ) : (
               <>
