@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
+import { useId } from "react";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -18,6 +20,8 @@ interface GalleryHeaderProps {
   onTypeFilterChange: (type: LocationType | null) => void;
   emptyFilter: EmptyFilter;
   onEmptyFilterChange: (filter: EmptyFilter) => void;
+  hideNonMatching: boolean;
+  onHideNonMatchingChange: (value: boolean) => void;
   breadcrumbPath?: InfLocation[];
   onBreadcrumbClick?: (locationId: string) => void;
   stats?: { locationCount: number; itemCount: number };
@@ -31,11 +35,14 @@ export function GalleryHeader({
   onTypeFilterChange,
   emptyFilter,
   onEmptyFilterChange,
+  hideNonMatching,
+  onHideNonMatchingChange,
   breadcrumbPath = [],
   onBreadcrumbClick,
   stats,
   className,
 }: GalleryHeaderProps) {
+  const hideNonMatchingId = useId();
   const hasActiveFilters =
     searchTerm || locationTypeFilter || emptyFilter !== "all";
 
@@ -155,6 +162,26 @@ export function GalleryHeader({
             placeholder="All"
           />
         </div>
+
+        {/* Hide Non-Matching Checkbox - only show when filters are active */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-1.5">
+            <Checkbox
+              id={hideNonMatchingId}
+              checked={hideNonMatching}
+              onCheckedChange={(checked) =>
+                onHideNonMatchingChange(checked === true)
+              }
+              className="h-4 w-4"
+            />
+            <Label
+              htmlFor={hideNonMatchingId}
+              className="cursor-pointer text-muted-foreground text-xs"
+            >
+              Hide non-matching
+            </Label>
+          </div>
+        )}
 
         {/* Clear Filters Button */}
         {hasActiveFilters && (

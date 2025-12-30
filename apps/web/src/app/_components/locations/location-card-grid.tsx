@@ -11,6 +11,7 @@ import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
+import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIcon } from "./location-icons";
 import { getLocationIcon } from "./location-type-theme";
 
@@ -87,11 +88,7 @@ function LocationCard({
       : undefined;
 
   // Create badges
-  const badges = [
-    <Badge key="type" variant="outline" className="text-xs">
-      {location.type}
-    </Badge>,
-  ];
+  const badges = [<LocationTypeBadge key="type" type={location.type} />];
 
   // Add stats badges
   if (hasChildren) {

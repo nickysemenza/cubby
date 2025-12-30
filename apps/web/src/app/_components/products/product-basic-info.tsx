@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
+import { CategoryBadge } from "./CategoryBadge";
 
 interface ProductBasicInfoProps {
   product: ProductWithFoodOut;
@@ -21,9 +22,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     { label: "Model", value: product.model },
     {
       label: "Category",
-      value: product.category ? (
-        <span className="capitalize">{product.category.replace("-", " ")}</span>
-      ) : undefined,
+      value: <CategoryBadge category={product.category} />,
     },
     {
       label: "UPC",

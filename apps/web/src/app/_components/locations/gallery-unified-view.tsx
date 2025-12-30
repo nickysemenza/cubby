@@ -11,7 +11,8 @@ interface GalleryUnifiedViewProps {
   locations: InfLocation[];
   inventoryByLocation: Map<string, InventoryItem[]>;
   searchTerm: string;
-  matchingIds: Set<string>;
+  searchMatchingIds: Set<string>;
+  fadedIds: Set<string>;
   createLocationRef: (locationId: string) => RefCallback<HTMLDivElement>;
   className?: string;
 }
@@ -37,7 +38,8 @@ export function GalleryUnifiedView({
   locations,
   inventoryByLocation,
   searchTerm,
-  matchingIds,
+  searchMatchingIds,
+  fadedIds,
   createLocationRef,
   className,
 }: GalleryUnifiedViewProps) {
@@ -49,7 +51,8 @@ export function GalleryUnifiedView({
         level={0}
         inventoryByLocation={inventoryByLocation}
         searchTerm={searchTerm}
-        matchingIds={matchingIds}
+        searchMatchingIds={searchMatchingIds}
+        fadedIds={fadedIds}
         createLocationRef={createLocationRef}
       />
     </div>
@@ -61,7 +64,8 @@ interface LocationRowProps {
   level: number;
   inventoryByLocation: Map<string, InventoryItem[]>;
   searchTerm: string;
-  matchingIds: Set<string>;
+  searchMatchingIds: Set<string>;
+  fadedIds: Set<string>;
   createLocationRef: (locationId: string) => RefCallback<HTMLDivElement>;
 }
 
@@ -70,7 +74,8 @@ function LocationRow({
   level,
   inventoryByLocation,
   searchTerm,
-  matchingIds,
+  searchMatchingIds,
+  fadedIds,
   createLocationRef,
 }: LocationRowProps) {
   const bgClass =
@@ -81,9 +86,9 @@ function LocationRow({
       {locations.map((location) => {
         const inventoryItems = inventoryByLocation.get(location.id) ?? [];
         const isHighlighted = Boolean(
-          searchTerm && matchingIds.has(location.id),
+          searchTerm && searchMatchingIds.has(location.id),
         );
-        const isFaded = Boolean(searchTerm && !matchingIds.has(location.id));
+        const isFaded = fadedIds.has(location.id);
         const hasChildren = location.children && location.children.length > 0;
 
         return (
@@ -116,7 +121,8 @@ function LocationRow({
                         level={level + 1}
                         inventoryByLocation={inventoryByLocation}
                         searchTerm={searchTerm}
-                        matchingIds={matchingIds}
+                        searchMatchingIds={searchMatchingIds}
+                        fadedIds={fadedIds}
                         createLocationRef={createLocationRef}
                       />
                     </div>

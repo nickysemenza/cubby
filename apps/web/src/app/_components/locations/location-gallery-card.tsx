@@ -1,13 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { forwardRef, useMemo } from "react";
 import type { z } from "zod";
-import { Badge } from "~/components/ui/badge";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { InfLocation } from "~/schemas/location";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
+import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIcon } from "./location-icons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
@@ -98,9 +98,7 @@ export const LocationGalleryCard = forwardRef<
         {inventoryItems.length > 0 && (
           <InventoryValuationSummary items={inventoryItems} variant="compact" />
         )}
-        <Badge variant="outline" className="h-4 px-1 text-[9px] capitalize">
-          {location.type}
-        </Badge>
+        <LocationTypeBadge type={location.type} />
       </div>
 
       {/* Location Images Strip */}

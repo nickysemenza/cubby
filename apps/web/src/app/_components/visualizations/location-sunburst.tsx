@@ -8,6 +8,7 @@ import {
 } from "~/hooks/useLocationHierarchy";
 import { formatCurrency } from "~/lib/utils";
 import { formatPricingStatusSummary } from "../locations/calculate-inventory-valuation";
+import { LocationTypeBadge } from "../locations/LocationTypeBadge";
 import { LocationIcon } from "../locations/location-icons";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
@@ -233,7 +234,7 @@ function HoverTooltip({
         </Link>
       </div>
       <div className="mt-1 space-y-0.5 text-muted-foreground">
-        <div>Type: {node.data.type}</div>
+        <LocationTypeBadge type={node.data.type} />
         <div>
           Items: {node.data.directCount} direct / {node.data.totalCount} total
         </div>

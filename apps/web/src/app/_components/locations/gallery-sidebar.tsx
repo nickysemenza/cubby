@@ -44,29 +44,6 @@ function getAncestorIds(
   return ancestors;
 }
 
-/** Find all location IDs that match the search term */
-function findMatchingLocationIds(
-  locations: InfLocation[],
-  searchTerm: string,
-): Set<string> {
-  const matches = new Set<string>();
-  const term = searchTerm.toLowerCase();
-
-  function search(locs: InfLocation[]) {
-    for (const loc of locs) {
-      if (loc.name.toLowerCase().includes(term)) {
-        matches.add(loc.id);
-      }
-      if (loc.children) {
-        search(loc.children);
-      }
-    }
-  }
-
-  search(locations);
-  return matches;
-}
-
 interface GallerySidebarProps {
   locations: InfLocation[];
   searchTerm: string;
@@ -74,6 +51,8 @@ interface GallerySidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   activeLocationId?: string;
+  searchMatchingIds: Set<string>;
+  fadedIds: Set<string>;
   className?: string;
 }
 
@@ -84,19 +63,12 @@ export function GallerySidebar({
   isCollapsed,
   onToggleCollapse,
   activeLocationId,
+  searchMatchingIds,
+  fadedIds,
   className,
 }: GallerySidebarProps) {
   // Build parent map for ancestor lookup
   const parentMap = useMemo(() => buildParentMap(locations), [locations]);
-
-  // Find matching location IDs for search highlighting
-  const matchingIds = useMemo(
-    () =>
-      searchTerm
-        ? findMatchingLocationIds(locations, searchTerm)
-        : new Set<string>(),
-    [locations, searchTerm],
-  );
 
   // Compute expanded nodes, including auto-expanded ancestors
   const [manualExpandedNodes, setManualExpandedNodes] = useState<Set<string>>(
@@ -117,7 +89,7 @@ export function GallerySidebar({
 
     // When searching, expand ancestors of all matching locations
     if (searchTerm) {
-      for (const matchId of matchingIds) {
+      for (const matchId of searchMatchingIds) {
         const ancestors = getAncestorIds(matchId, parentMap);
         ancestors.forEach((id) => {
           nodes.add(id);
@@ -131,7 +103,7 @@ export function GallerySidebar({
     activeLocationId,
     parentMap,
     searchTerm,
-    matchingIds,
+    searchMatchingIds,
   ]);
 
   const toggleNode = useCallback((nodeId: string) => {
@@ -220,7 +192,8 @@ export function GallerySidebar({
               toggleNode={toggleNode}
               onLocationClick={onLocationClick}
               activeLocationId={activeLocationId}
-              matchingIds={matchingIds}
+              searchMatchingIds={searchMatchingIds}
+              fadedIds={fadedIds}
               searchTerm={searchTerm}
               activeItemRef={activeItemRef}
             />
@@ -238,7 +211,8 @@ interface SidebarTreeNodeProps {
   toggleNode: (nodeId: string) => void;
   onLocationClick: (locationId: string) => void;
   activeLocationId?: string;
-  matchingIds: Set<string>;
+  searchMatchingIds: Set<string>;
+  fadedIds: Set<string>;
   searchTerm: string;
   activeItemRef: React.RefObject<HTMLDivElement | null>;
 }
@@ -250,15 +224,17 @@ function SidebarTreeNode({
   toggleNode,
   onLocationClick,
   activeLocationId,
-  matchingIds,
+  searchMatchingIds,
+  fadedIds,
   searchTerm,
   activeItemRef,
 }: SidebarTreeNodeProps) {
   const hasChildren = location.children && location.children.length > 0;
   const isExpanded = expandedNodes.has(location.id);
   const isActive = activeLocationId === location.id;
-  const isMatch = matchingIds.has(location.id);
+  const isSearchMatch = searchMatchingIds.has(location.id);
   const indent = level * 12;
+  const isFaded = fadedIds.has(location.id);
 
   // Get first image for thumbnail
   const thumbnail = location.images[0];
@@ -305,9 +281,10 @@ function SidebarTreeNode({
             "ring-1 ring-primary/30 ring-inset",
             "before:absolute before:top-1/2 before:left-0 before:h-4 before:w-1 before:-translate-y-1/2 before:rounded-r-full before:bg-primary before:transition-all before:duration-150",
           ],
-          isMatch &&
+          isSearchMatch &&
             !isActive &&
             "bg-accent/30 ring-1 ring-accent/50 ring-inset",
+          isFaded && "opacity-40",
         )}
         style={{ paddingLeft: `${8 + indent}px` }}
         onClick={handleLocationClick}
@@ -415,7 +392,8 @@ function SidebarTreeNode({
               toggleNode={toggleNode}
               onLocationClick={onLocationClick}
               activeLocationId={activeLocationId}
-              matchingIds={matchingIds}
+              searchMatchingIds={searchMatchingIds}
+              fadedIds={fadedIds}
               searchTerm={searchTerm}
               activeItemRef={activeItemRef}
             />

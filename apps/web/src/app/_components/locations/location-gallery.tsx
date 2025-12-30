@@ -77,12 +77,14 @@ function buildAncestorMap(
   return map;
 }
 
-/** Filter locations by type */
+/** Filter locations by type, returning both filtered tree and IDs that actually match */
 function filterLocationsByType(
   locations: InfLocation[],
   typeFilter: LocationType | null,
-): InfLocation[] {
-  if (!typeFilter) return locations;
+): { filtered: InfLocation[]; matchingIds: Set<string> } {
+  const matchingIds = new Set<string>();
+
+  if (!typeFilter) return { filtered: locations, matchingIds };
 
   function filter(locs: InfLocation[]): InfLocation[] {
     const result: InfLocation[] = [];
@@ -91,6 +93,10 @@ function filterLocationsByType(
       const filteredChildren = loc.children ? filter(loc.children) : [];
       const matchesType = loc.type === typeFilter;
       const hasMatchingChildren = filteredChildren.length > 0;
+
+      if (matchesType) {
+        matchingIds.add(loc.id);
+      }
 
       if (matchesType || hasMatchingChildren) {
         result.push({
@@ -103,16 +109,18 @@ function filterLocationsByType(
     return result;
   }
 
-  return filter(locations);
+  return { filtered: filter(locations), matchingIds };
 }
 
-/** Filter locations by empty/non-empty status */
+/** Filter locations by empty/non-empty status, returning both filtered tree and IDs that actually match */
 function filterLocationsByEmpty(
   locations: InfLocation[],
   emptyFilter: EmptyFilter,
   inventoryByLocation: Map<string, InventoryItem[]>,
-): InfLocation[] {
-  if (emptyFilter === "all") return locations;
+): { filtered: InfLocation[]; matchingIds: Set<string> } {
+  const matchingIds = new Set<string>();
+
+  if (emptyFilter === "all") return { filtered: locations, matchingIds };
 
   function filter(locs: InfLocation[]): InfLocation[] {
     const result: InfLocation[] = [];
@@ -122,6 +130,10 @@ function filterLocationsByEmpty(
       const hasItems = (inventoryByLocation.get(loc.id)?.length ?? 0) > 0;
       const matchesFilter = emptyFilter === "withItems" ? hasItems : !hasItems;
       const hasMatchingChildren = filteredChildren.length > 0;
+
+      if (matchesFilter) {
+        matchingIds.add(loc.id);
+      }
 
       if (matchesFilter || hasMatchingChildren) {
         result.push({
@@ -134,7 +146,56 @@ function filterLocationsByEmpty(
     return result;
   }
 
-  return filter(locations);
+  return { filtered: filter(locations), matchingIds };
+}
+
+/** Find all location IDs matching type filter (without structural removal) */
+function findTypeMatchingIds(
+  locations: InfLocation[],
+  typeFilter: LocationType | null,
+): Set<string> {
+  const matchingIds = new Set<string>();
+  if (!typeFilter) return matchingIds;
+
+  function collect(locs: InfLocation[]) {
+    for (const loc of locs) {
+      if (loc.type === typeFilter) {
+        matchingIds.add(loc.id);
+      }
+      if (loc.children) {
+        collect(loc.children);
+      }
+    }
+  }
+
+  collect(locations);
+  return matchingIds;
+}
+
+/** Find all location IDs matching empty filter (without structural removal) */
+function findEmptyMatchingIds(
+  locations: InfLocation[],
+  emptyFilter: EmptyFilter,
+  inventoryByLocation: Map<string, InventoryItem[]>,
+): Set<string> {
+  const matchingIds = new Set<string>();
+  if (emptyFilter === "all") return matchingIds;
+
+  function collect(locs: InfLocation[]) {
+    for (const loc of locs) {
+      const hasItems = (inventoryByLocation.get(loc.id)?.length ?? 0) > 0;
+      const matchesFilter = emptyFilter === "withItems" ? hasItems : !hasItems;
+      if (matchesFilter) {
+        matchingIds.add(loc.id);
+      }
+      if (loc.children) {
+        collect(loc.children);
+      }
+    }
+  }
+
+  collect(locations);
+  return matchingIds;
 }
 
 /** Calculate gallery stats */
@@ -175,6 +236,8 @@ export function LocationGallery() {
     setLocationTypeFilter,
     emptyFilter,
     setEmptyFilter,
+    hideNonMatching,
+    setHideNonMatching,
   } = useGalleryViewState();
 
   // Track active location for sidebar highlighting
@@ -284,16 +347,46 @@ export function LocationGallery() {
     return map;
   }, [inventoryData]);
 
-  // Filter locations by type and empty status
-  const filteredLocations = useMemo(() => {
-    const byType = filterLocationsByType(locations ?? [], locationTypeFilter);
-    return filterLocationsByEmpty(byType, emptyFilter, inventoryByLocation);
-  }, [locations, locationTypeFilter, emptyFilter, inventoryByLocation]);
+  // Find matching IDs for type filter (always needed for fading)
+  const typeMatchingIds = useMemo(
+    () => findTypeMatchingIds(locations ?? [], locationTypeFilter),
+    [locations, locationTypeFilter],
+  );
 
-  // Calculate stats for display
+  // Find matching IDs for empty filter (always needed for fading)
+  const emptyMatchingIds = useMemo(
+    () =>
+      findEmptyMatchingIds(locations ?? [], emptyFilter, inventoryByLocation),
+    [locations, emptyFilter, inventoryByLocation],
+  );
+
+  // Conditionally filter locations - only structurally remove if hideNonMatching is ON
+  const displayLocations = useMemo(() => {
+    if (!hideNonMatching) return locations ?? [];
+
+    // Apply structural filtering when hideNonMatching is enabled
+    const { filtered: byType } = filterLocationsByType(
+      locations ?? [],
+      locationTypeFilter,
+    );
+    const { filtered } = filterLocationsByEmpty(
+      byType,
+      emptyFilter,
+      inventoryByLocation,
+    );
+    return filtered;
+  }, [
+    locations,
+    locationTypeFilter,
+    emptyFilter,
+    inventoryByLocation,
+    hideNonMatching,
+  ]);
+
+  // Calculate stats - always use unfiltered locations so counts stay consistent
   const stats = useMemo(
-    () => calculateStats(filteredLocations, inventoryByLocation),
-    [filteredLocations, inventoryByLocation],
+    () => calculateStats(locations ?? [], inventoryByLocation),
+    [locations, inventoryByLocation],
   );
 
   // Build ancestor map for breadcrumbs (use unfiltered locations for complete paths)
@@ -321,10 +414,45 @@ export function LocationGallery() {
   }, [activeLocationId, ancestorMap, locationMap]);
 
   // Find matching location IDs for search
-  const matchingIds = useMemo(
-    () => findMatchingIds(filteredLocations, inventoryByLocation, searchTerm),
-    [filteredLocations, inventoryByLocation, searchTerm],
+  const searchMatchingIds = useMemo(
+    () => findMatchingIds(displayLocations, inventoryByLocation, searchTerm),
+    [displayLocations, inventoryByLocation, searchTerm],
   );
+
+  // Precompute faded IDs - locations that don't match all active filters
+  const fadedIds = useMemo(() => {
+    const hasActiveFilter =
+      locationTypeFilter !== null ||
+      emptyFilter !== "all" ||
+      Boolean(searchTerm);
+
+    if (!hasActiveFilter) return new Set<string>();
+
+    const faded = new Set<string>();
+
+    function checkLocation(locs: InfLocation[]) {
+      for (const loc of locs) {
+        const matchesAll =
+          (!locationTypeFilter || typeMatchingIds.has(loc.id)) &&
+          (emptyFilter === "all" || emptyMatchingIds.has(loc.id)) &&
+          (!searchTerm || searchMatchingIds.has(loc.id));
+
+        if (!matchesAll) faded.add(loc.id);
+        if (loc.children) checkLocation(loc.children);
+      }
+    }
+
+    checkLocation(displayLocations);
+    return faded;
+  }, [
+    displayLocations,
+    locationTypeFilter,
+    emptyFilter,
+    searchTerm,
+    typeMatchingIds,
+    emptyMatchingIds,
+    searchMatchingIds,
+  ]);
 
   // Scroll to location handler
   const scrollToLocation = useCallback((locationId: string) => {
@@ -344,7 +472,7 @@ export function LocationGallery() {
     );
   }
 
-  if (!filteredLocations.length) {
+  if (!displayLocations.length) {
     return (
       <div className="flex h-[400px] flex-col items-center justify-center text-muted-foreground">
         <span className="text-lg">No locations found</span>
@@ -365,12 +493,14 @@ export function LocationGallery() {
     <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border bg-background">
       {/* Sidebar */}
       <GallerySidebar
-        locations={filteredLocations}
+        locations={displayLocations}
         searchTerm={searchTerm}
         onLocationClick={scrollToLocation}
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={toggleSidebar}
         activeLocationId={activeLocationId}
+        searchMatchingIds={searchMatchingIds}
+        fadedIds={fadedIds}
       />
 
       {/* Main Content */}
@@ -383,6 +513,8 @@ export function LocationGallery() {
           onTypeFilterChange={setLocationTypeFilter}
           emptyFilter={emptyFilter}
           onEmptyFilterChange={setEmptyFilter}
+          hideNonMatching={hideNonMatching}
+          onHideNonMatchingChange={setHideNonMatching}
           breadcrumbPath={breadcrumbPath}
           onBreadcrumbClick={scrollToLocation}
           stats={stats}
@@ -391,10 +523,11 @@ export function LocationGallery() {
         {/* Gallery Content */}
         <div ref={mainContentRef} className="flex-1 overflow-y-auto px-4">
           <GalleryUnifiedView
-            locations={filteredLocations}
+            locations={displayLocations}
             inventoryByLocation={inventoryByLocation}
             searchTerm={searchTerm}
-            matchingIds={matchingIds}
+            searchMatchingIds={searchMatchingIds}
+            fadedIds={fadedIds}
             createLocationRef={createLocationRef}
           />
         </div>

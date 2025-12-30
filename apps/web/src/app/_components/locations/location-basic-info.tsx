@@ -4,6 +4,7 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Button } from "~/components/ui/button";
 import type { InfLocation } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
+import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIconWithLabel } from "./location-icons";
 
 interface LocationBasicInfoProps {
@@ -16,7 +17,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
   onEdit,
 }) => {
   const fields: BasicInfoField[] = [
-    { label: "Type", value: location.type },
+    { label: "Type", value: <LocationTypeBadge type={location.type} /> },
     {
       label: "Parent Location",
       value: location.parent ? (

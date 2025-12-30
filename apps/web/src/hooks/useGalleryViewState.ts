@@ -9,6 +9,7 @@ interface GalleryViewState {
   searchTerm: string;
   locationTypeFilter: LocationType | null;
   emptyFilter: EmptyFilter;
+  hideNonMatching: boolean;
 }
 
 const DEFAULT_STATE: GalleryViewState = {
@@ -16,6 +17,7 @@ const DEFAULT_STATE: GalleryViewState = {
   searchTerm: "",
   locationTypeFilter: null,
   emptyFilter: "all",
+  hideNonMatching: false,
 };
 
 /**
@@ -39,6 +41,11 @@ export function useGalleryViewState() {
   const [emptyFilter, setEmptyFilterRaw] = useLocalStorage<EmptyFilter>(
     "gallery-empty-filter",
     DEFAULT_STATE.emptyFilter,
+  );
+
+  const [hideNonMatching, setHideNonMatchingRaw] = useLocalStorage<boolean>(
+    "gallery-hide-non-matching",
+    DEFAULT_STATE.hideNonMatching,
   );
 
   const toggleSidebar = useCallback(() => {
@@ -66,6 +73,13 @@ export function useGalleryViewState() {
     [setEmptyFilterRaw],
   );
 
+  const setHideNonMatching = useCallback(
+    (value: boolean) => {
+      setHideNonMatchingRaw(value);
+    },
+    [setHideNonMatchingRaw],
+  );
+
   const clearFilters = useCallback(() => {
     setSearchTermRaw("");
     setLocationTypeFilterRaw(null);
@@ -79,6 +93,7 @@ export function useGalleryViewState() {
       searchTerm,
       locationTypeFilter,
       emptyFilter,
+      hideNonMatching,
 
       // Actions
       setSidebarCollapsed,
@@ -86,6 +101,7 @@ export function useGalleryViewState() {
       setSearchTerm,
       setLocationTypeFilter,
       setEmptyFilter,
+      setHideNonMatching,
       clearFilters,
     }),
     [
@@ -93,11 +109,13 @@ export function useGalleryViewState() {
       searchTerm,
       locationTypeFilter,
       emptyFilter,
+      hideNonMatching,
       setSidebarCollapsed,
       toggleSidebar,
       setSearchTerm,
       setLocationTypeFilter,
       setEmptyFilter,
+      setHideNonMatching,
       clearFilters,
     ],
   );
