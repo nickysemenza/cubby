@@ -1,32 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  formatCategoryLabel,
+  getCategoryColor,
+} from "~/app/_components/products/category-theme";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { ProductCategory } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
-
-// Color palette for categories - consistent hues
-const categoryColors: Record<string, string> = {
-  food: "hsl(142, 55%, 45%)", // green
-  tools: "hsl(220, 55%, 50%)", // blue
-  "tool-consumables": "hsl(200, 55%, 55%)", // light blue
-  "tool-accessories": "hsl(240, 45%, 55%)", // indigo
-  storage: "hsl(35, 55%, 50%)", // orange
-  hardware: "hsl(0, 55%, 50%)", // red
-  electronics: "hsl(280, 55%, 50%)", // purple
-  household: "hsl(60, 45%, 45%)", // yellow-green
-  supplies: "hsl(180, 45%, 45%)", // teal
-  uncategorized: "hsl(0, 0%, 65%)", // gray
-};
-
-const getCategoryColor = (category: ProductCategory | null): string =>
-  category
-    ? (categoryColors[category] ?? categoryColors.uncategorized)
-    : categoryColors.uncategorized;
-
-const formatCategoryLabel = (category: ProductCategory | null): string =>
-  category ? category.replace("-", " ") : "uncategorized";
 
 type CategoryData = {
   category: ProductCategory | null;

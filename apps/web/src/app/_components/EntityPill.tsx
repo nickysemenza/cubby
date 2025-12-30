@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import type React from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -11,6 +10,7 @@ import { getMiscDisplayName, isMiscProduct } from "~/lib/constants";
 import { cn } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
 import { LocationIcon } from "./locations/location-icons";
+import { Pill, pillClassName } from "./Pill";
 
 // Minimal data shape - just id and name
 type MinimalEntityData = { id: string; name: string };
@@ -37,40 +37,7 @@ type EntityPillLinkProps = {
     }
 );
 
-const linkClass =
-  "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-[11px] hover:border-border hover:bg-muted/50";
-
-/** Internal helper to render pill content consistently */
-function PillContent({
-  name,
-  metadata,
-  icon,
-  compact,
-}: {
-  name: string;
-  metadata?: string;
-  icon: React.ReactNode;
-  compact?: boolean;
-}) {
-  return (
-    <>
-      <span className="shrink-0">{icon}</span>
-      <span
-        className={cn("min-w-0 text-primary", compact && "max-w-32 truncate")}
-      >
-        {name}
-      </span>
-      {metadata && (
-        <>
-          <span className="shrink-0 text-muted-foreground/40">|</span>
-          <span className="shrink-0 text-[9px] text-muted-foreground">
-            {metadata}
-          </span>
-        </>
-      )}
-    </>
-  );
-}
+const linkClass = cn(pillClassName, "hover:border-border hover:bg-muted/50");
 
 export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
   const { openInNewTab, compact } = props;
@@ -93,11 +60,13 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
               />
             }
           >
-            <PillContent
-              name={data.name}
+            <Pill
               icon={<EntityIcon entity="ingredient" size={12} colored />}
               compact={compact}
-            />
+              className="border-0 p-0"
+            >
+              {data.name}
+            </Pill>
           </TooltipTrigger>
           <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
         </Tooltip>
@@ -119,11 +88,13 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
               />
             }
           >
-            <PillContent
-              name={data.name}
+            <Pill
               icon={<EntityIcon entity="recipe" size={12} colored />}
               compact={compact}
-            />
+              className="border-0 p-0"
+            >
+              {data.name}
+            </Pill>
           </TooltipTrigger>
           <TooltipContent className="max-w-lg">{data.name}</TooltipContent>
         </Tooltip>
@@ -146,9 +117,7 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
               />
             }
           >
-            <PillContent
-              name={data.name}
-              metadata={data.type}
+            <Pill
               icon={
                 data.type ? (
                   <LocationIcon type={data.type} size={12} colored />
@@ -156,8 +125,12 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
                   <EntityIcon entity="location" size={12} colored />
                 )
               }
+              metadata={data.type}
               compact={compact}
-            />
+              className="border-0 p-0"
+            >
+              {data.name}
+            </Pill>
           </TooltipTrigger>
           <TooltipContent className="max-w-lg">{fullText}</TooltipContent>
         </Tooltip>
@@ -184,12 +157,14 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
               />
             }
           >
-            <PillContent
-              name={displayName}
-              metadata={metadata}
+            <Pill
               icon={<EntityIcon entity="product" size={12} colored />}
+              metadata={metadata}
               compact={compact}
-            />
+              className="border-0 p-0"
+            >
+              {displayName}
+            </Pill>
           </TooltipTrigger>
           <TooltipContent className="max-w-lg">{fullText}</TooltipContent>
         </Tooltip>
@@ -213,11 +188,13 @@ export const EntityPillLink: React.FC<EntityPillLinkProps> = (props) => {
               />
             }
           >
-            <PillContent
-              name={text}
+            <Pill
               icon={<EntityIcon entity="usda-food" size={12} colored />}
               compact={compact}
-            />
+              className="border-0 p-0"
+            >
+              {text}
+            </Pill>
           </TooltipTrigger>
           <TooltipContent className="max-w-lg">{text}</TooltipContent>
         </Tooltip>

@@ -1,54 +1,11 @@
-import {
-  Box,
-  FileBox,
-  Home,
-  Layers,
-  LayoutGrid,
-  type LucideIcon,
-  ShoppingBag,
-  ShoppingCart,
-  Table2,
-} from "lucide-react";
-import { entities } from "~/entities/entities";
-import { assertNever } from "~/lib/assert";
-import { cn } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
-
-// Helper to get icon for a location type
-export const getLocationIcon = (type: LocationType): LucideIcon => {
-  switch (type) {
-    case "room":
-      return Home;
-    case "area":
-      return LayoutGrid;
-    case "bag":
-      return ShoppingBag;
-    case "shelf":
-      return Layers;
-    case "crate":
-    case "half-crate":
-    case "milk-crate":
-    case "tote-bin":
-      return Box;
-    case "table":
-      return Table2;
-    case "drawer":
-      return FileBox;
-    case "cart":
-      return ShoppingCart;
-    case "cabinet":
-    case "box":
-      return Box;
-    default:
-      assertNever(type);
-  }
-};
+import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 
 interface LocationIconProps {
   type: LocationType;
   className?: string;
   size?: number;
-  /** Apply the location entity color */
+  /** Apply the type-specific color */
   colored?: boolean;
 }
 
@@ -61,8 +18,9 @@ export function LocationIcon({
   const IconComponent = getLocationIcon(type);
   return (
     <IconComponent
-      className={cn(colored && entities.location.color.text, className)}
+      className={className}
       size={size}
+      style={colored ? { color: getLocationTypeColor(type) } : undefined}
     />
   );
 }

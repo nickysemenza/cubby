@@ -21,6 +21,7 @@ import { EntityPillLink } from "../_components/EntityPill";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
+import { LocationTypeBadge } from "../_components/locations/LocationTypeBadge";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
 
 export function LocationList() {
@@ -61,7 +62,7 @@ export function LocationList() {
             options: locationTypeOptions,
           },
         },
-        cell: (info) => info.getValue(),
+        cell: (info) => <LocationTypeBadge type={info.getValue()} />,
       }),
       columnHelper.display({
         id: "inventory_value",

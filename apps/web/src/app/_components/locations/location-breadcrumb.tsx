@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Home } from "lucide-react";
 import * as React from "react";
+import { Pill } from "~/app/_components/Pill";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -52,8 +53,14 @@ interface LocationBreadcrumbProps {
   highlightNonDefault?: boolean;
   /** Make segments clickable links to /locations/{id} */
   linkable?: boolean;
+  /** Callback when segment is clicked (alternative to linkable) */
+  onSegmentClick?: (locationId: string) => void;
   /** Show a Home link before the location segments */
   showHome?: boolean;
+  /** Truncate long segment names */
+  compact?: boolean;
+  /** Add bg-primary/10 tint to active (last) segment */
+  activeHighlight?: boolean;
   /** Additional class name */
   className?: string;
 }
@@ -69,7 +76,10 @@ export function LocationBreadcrumb({
   showTypeAnnotations = false,
   highlightNonDefault = false,
   linkable = false,
+  onSegmentClick,
   showHome = false,
+  compact = false,
+  activeHighlight = false,
   className,
 }: LocationBreadcrumbProps) {
   // Derive segments from location if not provided directly
@@ -103,30 +113,37 @@ export function LocationBreadcrumb({
           const isLast = index === segments.length - 1;
 
           const content = (
-            <span
+            <Pill
+              icon={<LocationIcon type={segment.type} size={12} colored />}
+              metadata={
+                showTypeAnnotations && !isDefault ? segment.type : undefined
+              }
+              compact={compact}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-2 py-1",
-                highlightNonDefault && !isDefault
-                  ? "border-2 border-amber-500/50 bg-amber-50"
-                  : "bg-muted/50",
+                highlightNonDefault &&
+                  !isDefault &&
+                  "border-amber-500/50 bg-amber-50",
                 isLast && "font-medium",
+                isLast && activeHighlight && "bg-primary/10",
               )}
             >
-              <LocationIcon type={segment.type} size={14} colored />
-              <span>{segment.name}</span>
-              {showTypeAnnotations && !isDefault && (
-                <span className="text-muted-foreground text-xs">
-                  [{segment.type}]
-                </span>
-              )}
-            </span>
+              {segment.name}
+            </Pill>
           );
 
           return (
             <React.Fragment key={segment.id ?? index}>
               {index > 0 && <BreadcrumbSeparator />}
               <BreadcrumbItem>
-                {linkable && segment.id && !isLast ? (
+                {onSegmentClick && segment.id && !isLast ? (
+                  <button
+                    type="button"
+                    onClick={() => onSegmentClick(segment.id!)}
+                    className="transition-opacity hover:opacity-80"
+                  >
+                    {content}
+                  </button>
+                ) : linkable && segment.id && !isLast ? (
                   <BreadcrumbLink
                     render={
                       <Link to="/locations/$id" params={{ id: segment.id }} />

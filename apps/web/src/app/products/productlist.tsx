@@ -1,7 +1,6 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
-import { Badge } from "~/components/ui/badge";
 import { productCategoryOptions } from "~/schemas/product";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -11,6 +10,7 @@ import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { NoneState } from "../_components/NoneState";
+import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { TableLink } from "../_components/table/TableLink";
 
 interface ProductListProps {
@@ -54,14 +54,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
             ],
           },
         },
-        cell: (info) => {
-          const category = info.getValue();
-          return category ? (
-            <Badge variant="secondary">{category.replace("-", " ")}</Badge>
-          ) : (
-            <NoneState />
-          );
-        },
+        cell: (info) => <CategoryBadge category={info.getValue()} />,
       }),
       columnHelper.accessor("ingredient", {
         cell: (info) => {

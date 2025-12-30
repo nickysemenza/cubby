@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ChevronRight, Home, Plus, Search, X } from "lucide-react";
+import { Plus, Search, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
@@ -12,6 +12,7 @@ import {
   type LocationType,
   locationTypeOptions,
 } from "~/schemas/location";
+import { LocationBreadcrumb } from "./location-breadcrumb";
 import { LocationIcon } from "./location-icons";
 
 interface GalleryHeaderProps {
@@ -62,31 +63,17 @@ export function GalleryHeader({
 
         {/* Breadcrumb */}
         <div className="flex flex-1 items-center gap-1 overflow-hidden">
-          <Home className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-          {breadcrumbPath.length > 0 ? (
-            breadcrumbPath.map((loc, idx) => (
-              <div key={loc.id} className="flex items-center gap-1">
-                <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
-                <button
-                  type="button"
-                  onClick={() => onBreadcrumbClick?.(loc.id)}
-                  className={cn(
-                    "flex items-center gap-1 rounded px-1 py-0.5 text-xs transition-colors",
-                    idx === breadcrumbPath.length - 1
-                      ? "bg-primary/10 font-medium text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                  )}
-                >
-                  <LocationIcon type={loc.type} className="h-3 w-3" />
-                  <span className="max-w-[100px] truncate">{loc.name}</span>
-                </button>
-              </div>
-            ))
-          ) : (
-            <span className="ml-1 text-muted-foreground text-xs">
-              Scroll to see path
-            </span>
-          )}
+          <LocationBreadcrumb
+            showHome
+            segments={breadcrumbPath.map((loc) => ({
+              id: loc.id,
+              name: loc.name,
+              type: loc.type,
+            }))}
+            compact
+            onSegmentClick={onBreadcrumbClick}
+            activeHighlight
+          />
         </div>
       </div>
 

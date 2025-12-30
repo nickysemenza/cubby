@@ -11,7 +11,8 @@ import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
-import { getLocationIcon, LocationIcon } from "./location-icons";
+import { LocationIcon } from "./location-icons";
+import { getLocationIcon } from "./location-type-theme";
 
 interface LocationCardGridProps {
   locations: InfLocation[];
