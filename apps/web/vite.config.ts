@@ -9,6 +9,10 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   envDir: ".", // Explicitly load .env from this directory
+  server: {
+    host: "0.0.0.0",
+    allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
+  },
   ssr: {
     // Externalize OpenTelemetry packages to avoid ESM/CJS compatibility issues
     external: [

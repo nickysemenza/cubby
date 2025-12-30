@@ -61,6 +61,14 @@ export const findNewAliases = (
 };
 
 /**
+ * Timestamps for preserving through sync
+ */
+export interface ProductTimestamps {
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+/**
  * Result of processing a product for import
  */
 export interface ProcessProductResult {
@@ -91,6 +99,7 @@ export const processProductForImport = async (
   aliasesStr: string | null | undefined,
   category: ProductCategory | null | undefined,
   actor: ActorContext,
+  timestamps?: ProductTimestamps,
 ): Promise<ProcessProductResult> => {
   // Parse aliases from semicolon-separated string
   const aliases = parseAliasesString(aliasesStr);
@@ -137,6 +146,9 @@ export const processProductForImport = async (
         ndb_number: ndbNumber ?? null,
         ingredientId,
         category: category ?? null,
+        // Preserve timestamps if provided (for sync restore)
+        createdAt: timestamps?.createdAt,
+        updatedAt: timestamps?.updatedAt,
       },
       actor,
     );

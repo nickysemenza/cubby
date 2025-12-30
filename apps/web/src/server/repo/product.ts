@@ -711,6 +711,9 @@ export const quickCreateProduct = async (
     ingredientId?: string | null;
     price?: number | null;
     category?: ProductCategory | null;
+    // Timestamps (optional, for preserving through sync)
+    createdAt?: Date;
+    updatedAt?: Date;
   },
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
@@ -729,6 +732,9 @@ export const quickCreateProduct = async (
     expectedQuantity: data.expectedQuantity ?? null,
     ingredientId: data.ingredientId ?? null,
     category,
+    // Preserve timestamps if provided (for sync restore)
+    ...(data.createdAt && { createdAt: data.createdAt }),
+    ...(data.updatedAt && { updatedAt: data.updatedAt }),
   });
 
   // Create price unit mapping if price is provided

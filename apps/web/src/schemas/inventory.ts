@@ -88,6 +88,11 @@ export const inventoryCSVRow = z.object({
     .optional(), // true = create ingredient with same name as product
   aliases: z.string().nullable().optional(), // semicolon-separated: "sugar;granulated sugar"
   product_image: z.string().url().nullable().optional(), // URL of product's primary image
+  // Timestamps (optional - old exports won't have them, controlled by SYNC_TIMESTAMPS)
+  product_created_at: z.string().nullable().optional(),
+  product_updated_at: z.string().nullable().optional(),
+  inventory_created_at: z.string().nullable().optional(),
+  inventory_updated_at: z.string().nullable().optional(),
 });
 
 export type InventoryCSVRow = z.infer<typeof inventoryCSVRow>;

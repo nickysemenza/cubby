@@ -568,6 +568,11 @@ export const findOrCreateLocationByName = async (
   name: string,
   parentId: LocationId | null,
   type: LocationType,
+  options?: {
+    /** Optional timestamps to restore from sheet import */
+    createdAt?: Date | null;
+    updatedAt?: Date | null;
+  },
 ): Promise<{ locationId: LocationId; created: boolean }> => {
   // Check if location already exists
   const existingId = await findLocationByName(db, organizationId, name);
@@ -575,12 +580,14 @@ export const findOrCreateLocationByName = async (
     return { locationId: existingId, created: false };
   }
 
-  // Create new location
+  // Create new location (with optional timestamps for sheet import)
   const created = await insertAndReturnDb(db, location, {
     organizationId,
     name,
     type,
     parentId,
+    ...(options?.createdAt && { createdAt: options.createdAt }),
+    ...(options?.updatedAt && { updatedAt: options.updatedAt }),
   });
 
   return { locationId: unsafeLocationId(created.id), created: true };

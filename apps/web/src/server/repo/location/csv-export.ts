@@ -13,7 +13,14 @@ import type { LocationType } from "~/schemas/location";
 import type { Database } from "~/server/db";
 import { location } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import type { LocationCSVExportRow } from "./types";
+
+/** Format a date for CSV/Sheets export */
+function formatTimestamp(date: Date | null): string | null {
+  if (!date) return null;
+  return dayjs(date).format("YYYY-MM-DD HH:mm:ss");
+}
 
 /**
  * Query all locations with their images and immediate parent
@@ -61,5 +68,10 @@ export const exportLocationsToCSV = async (
       ? dayjs(loc.lastBulkInventory).format("YYYY-MM-DD HH:mm:ss")
       : null,
     location_id: locationIdSchema.parse(loc.id),
+    // Timestamps (only if feature flag enabled)
+    ...(SYNC_TIMESTAMPS && {
+      location_created_at: formatTimestamp(loc.createdAt),
+      location_updated_at: formatTimestamp(loc.updatedAt),
+    }),
   }));
 };

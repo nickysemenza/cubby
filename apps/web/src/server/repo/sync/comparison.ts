@@ -43,6 +43,11 @@ type InventoryRowLike = {
   ingredient_name?: string | null;
   aliases?: string | null;
   product_image?: string | null;
+  // Timestamps (for SYNC_TIMESTAMPS feature, NOT used in comparison)
+  product_created_at?: string | null;
+  product_updated_at?: string | null;
+  inventory_created_at?: string | null;
+  inventory_updated_at?: string | null;
 };
 
 const buildInventorySyncFields = (row: InventoryRowLike) => ({
@@ -61,6 +66,8 @@ const buildInventorySyncFields = (row: InventoryRowLike) => ({
   ingredientName: row.ingredient_name ?? null,
   aliases: row.aliases ?? null,
   productImage: row.product_image ?? null,
+  // Note: Timestamps intentionally excluded from normal sync
+  // They are only written via "Refresh Timestamps" button
 });
 
 /** Build appData object from an inventory export row (adds IDs) */
@@ -776,6 +783,7 @@ const locationAppDataToCSVRow = (
 
 /**
  * Convert inventory sync item sheetData to InventoryCSVRow format
+ * Note: Timestamps not included - they are only written via "Refresh Timestamps"
  */
 const inventorySheetDataToCSVRow = (
   sheetData: NonNullable<InventorySyncItem["sheetData"]>,
@@ -799,6 +807,7 @@ const inventorySheetDataToCSVRow = (
 
 /**
  * Convert inventory sync item appData to InventoryCSVRow format
+ * Note: Timestamps not included - they are only written via "Refresh Timestamps"
  */
 const inventoryAppDataToCSVRow = (
   appData: NonNullable<InventorySyncItem["appData"]>,

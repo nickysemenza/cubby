@@ -64,6 +64,7 @@ import {
   syncItemsToInventoryCSVRows,
   syncItemsToLocationCSVRows,
 } from "~/server/repo/sync";
+import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 // Schema for organization metadata with Google Sheets config
@@ -116,6 +117,15 @@ const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "ingredient_name", type: { kind: "text" } },
   { header: "aliases", type: { kind: "text" } },
   { header: "product_image", type: { kind: "text" } },
+  // Timestamp columns (only if feature flag enabled)
+  ...(SYNC_TIMESTAMPS
+    ? [
+        { header: "product_created_at", type: { kind: "datetime" } } as const,
+        { header: "product_updated_at", type: { kind: "datetime" } } as const,
+        { header: "inventory_created_at", type: { kind: "datetime" } } as const,
+        { header: "inventory_updated_at", type: { kind: "datetime" } } as const,
+      ]
+    : []),
 ];
 
 const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
@@ -128,6 +138,13 @@ const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "description", type: { kind: "text" } },
   { header: "location_image", type: { kind: "text" } },
   { header: "last_inventory_date", type: { kind: "datetime" } },
+  // Timestamp columns (only if feature flag enabled)
+  ...(SYNC_TIMESTAMPS
+    ? [
+        { header: "location_created_at", type: { kind: "datetime" } } as const,
+        { header: "location_updated_at", type: { kind: "datetime" } } as const,
+      ]
+    : []),
 ];
 
 // Derive CSV headers from column schemas (single source of truth)
@@ -252,6 +269,11 @@ function parseSheetRows(rows: string[][]): ParseSheetResult {
       ingredient_name: rowObj.ingredient_name || undefined,
       ingredient: rowObj.ingredient,
       aliases: rowObj.aliases || undefined,
+      // Timestamps (optional - only parsed if present in sheet)
+      product_created_at: rowObj.product_created_at || undefined,
+      product_updated_at: rowObj.product_updated_at || undefined,
+      inventory_created_at: rowObj.inventory_created_at || undefined,
+      inventory_updated_at: rowObj.inventory_updated_at || undefined,
     });
 
     if (result.success) {
@@ -1091,7 +1113,10 @@ async function pushLocationsToSheet(
   );
 
   // Count updates to sheet
-  results.locations.updated += updateKeys.size + renamedLocationsUseApp.length;
+  const conflictUpdates = locationItems.filter(
+    (i) => i.state === "conflict" && i.resolution === "use_app",
+  ).length;
+  results.locations.updated += conflictUpdates + renamedLocationsUseApp.length;
 
   // Rebuild sheet rows
   const updatedRows = [
@@ -1136,6 +1161,7 @@ async function pushInventoryToSheet(
   sheetInventory: InventoryCSVRow[],
   results: SyncResults,
 ): Promise<void> {
+  // Items to add/update in sheet
   const inventoryToAddToSheet = inventoryItems.filter(
     (i) =>
       (i.state === "app_only" && i.resolution === "add_to_sheet") ||
@@ -1189,7 +1215,10 @@ async function pushInventoryToSheet(
   });
 
   // Count updates to sheet
-  results.inventory.updated += updateKeys.size + movedOrRenamedUseApp.length;
+  const conflictUpdates = inventoryItems.filter(
+    (i) => i.state === "conflict" && i.resolution === "use_app",
+  ).length;
+  results.inventory.updated += conflictUpdates + movedOrRenamedUseApp.length;
 
   // Rebuild sheet rows
   const updatedRows = [
@@ -1411,20 +1440,72 @@ const applySync = protectedProcedure
         );
 
         // Push changes to sheets
-        await pushLocationsToSheet(
-          client,
-          sheetId,
-          locationItems,
-          sheetLocations,
-          results,
-        );
-        await pushInventoryToSheet(
-          client,
-          sheetId,
-          inventoryItems,
-          sheetInventory,
-          results,
-        );
+        if (input.forceOverwrite) {
+          // "Refresh Timestamps" mode: export ALL app data directly (with timestamps)
+          // This bypasses sync comparison data and writes fresh exports to the sheet
+          const [appLocations, appInventory] = await Promise.all([
+            exportLocationsToCSV(ctx.db, ctx.organizationId),
+            exportInventoryToCSV(ctx.db, ctx.organizationId),
+          ]);
+
+          // Write locations directly
+          const locationDataRows = appLocations.map((row) =>
+            LOCATION_CSV_HEADERS.map((h) =>
+              toCSVString(row[h as keyof typeof row]),
+            ),
+          );
+          await client.writeSheet(
+            sheetId,
+            [LOCATION_CSV_HEADERS, ...locationDataRows],
+            SHEET_NAMES.LOCATIONS,
+          );
+          await ensureTableSchema(
+            client,
+            sheetId,
+            SHEET_NAMES.LOCATIONS,
+            "locations",
+            LOCATION_COLUMN_SCHEMA,
+            LOCATION_CSV_HEADERS,
+            locationDataRows.length,
+          );
+
+          // Write inventory directly (includes timestamps from export)
+          const inventoryDataRows = appInventory.map((row) =>
+            INVENTORY_CSV_HEADERS.map((h) =>
+              toCSVString(row[h as keyof typeof row]),
+            ),
+          );
+          await client.writeSheet(
+            sheetId,
+            [INVENTORY_CSV_HEADERS, ...inventoryDataRows],
+            SHEET_NAMES.INVENTORY,
+          );
+          await ensureTableSchema(
+            client,
+            sheetId,
+            SHEET_NAMES.INVENTORY,
+            "inventory",
+            INVENTORY_COLUMN_SCHEMA,
+            INVENTORY_CSV_HEADERS,
+            inventoryDataRows.length,
+          );
+        } else {
+          // Normal sync mode: push based on sync comparison
+          await pushLocationsToSheet(
+            client,
+            sheetId,
+            locationItems,
+            sheetLocations,
+            results,
+          );
+          await pushInventoryToSheet(
+            client,
+            sheetId,
+            inventoryItems,
+            sheetInventory,
+            results,
+          );
+        }
 
         await updateLastSyncTimestamp(ctx, orgMetadata);
 

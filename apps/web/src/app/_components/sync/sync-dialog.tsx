@@ -9,10 +9,21 @@ import {
   MapPin,
   Pencil,
   Plus,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { ColoredAlert } from "~/components/common/colored-alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import {
@@ -215,6 +226,7 @@ export const SyncDialog = ({
   const api = useTRPC();
   const queryClient = useQueryClient();
   const [isComplete, setIsComplete] = useState(false);
+  const [showForcePushConfirm, setShowForcePushConfirm] = useState(false);
 
   // Initialize resolutions from preview result defaults
   const initialResolutions = extractInitialResolutions(previewResult);
@@ -296,6 +308,42 @@ export const SyncDialog = ({
     });
   };
 
+  // Refresh timestamps mutation - rewrites matched items to sheet with current timestamps
+  const refreshTimestampsMutation = useMutation(
+    api.googleSheets.applySync.mutationOptions({
+      onSuccess: (result) => {
+        if (result.success) {
+          setIsComplete(true);
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.inventoryItem.list,
+          });
+          queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+          queryClient.invalidateQueries({ queryKey: queryKeys.location.list });
+
+          toast.success("Timestamps refreshed in sheet");
+          onSyncComplete();
+        } else {
+          toast.error(
+            `Refresh failed: ${result.errorMessages.join(", ") || "Unknown error"}`,
+          );
+        }
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  const handleRefreshTimestamps = () => {
+    // Just refresh timestamps for matched items - use current resolutions for everything else
+    refreshTimestampsMutation.mutate({
+      locationResolutions,
+      inventoryResolutions,
+      forceOverwrite: true,
+    });
+    setShowForcePushConfirm(false);
+  };
+
   const handleClose = () => {
     onClose();
     onOpenChange(false);
@@ -353,7 +401,8 @@ export const SyncDialog = ({
     !hasUnresolvedConflicts &&
     activeValidationErrors.length === 0;
 
-  const isApplying = applySyncMutation.isPending;
+  const isApplying =
+    applySyncMutation.isPending || refreshTimestampsMutation.isPending;
 
   // Show loading state if no preview result yet
   if (!previewResult) {
@@ -483,6 +532,15 @@ export const SyncDialog = ({
                 Cancel
               </Button>
               <Button
+                variant="secondary"
+                onClick={() => setShowForcePushConfirm(true)}
+                disabled={isApplying}
+                title="Update timestamps in sheet for matched items"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Refresh Timestamps
+              </Button>
+              <Button
                 onClick={handleApply}
                 disabled={isApplying || !canApply}
                 title={
@@ -505,6 +563,36 @@ export const SyncDialog = ({
             </>
           )}
         </DialogFooter>
+
+        {/* Refresh Timestamps Confirmation Dialog */}
+        <AlertDialog
+          open={showForcePushConfirm}
+          onOpenChange={setShowForcePushConfirm}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Refresh Timestamps?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will update timestamps in the Google Sheet for all matched
+                items (items that haven't changed). Conflicts and other sync
+                states will still be resolved according to your selections.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleRefreshTimestamps}>
+                {refreshTimestampsMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Refreshing...
+                  </>
+                ) : (
+                  "Refresh Timestamps"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

@@ -16,6 +16,14 @@ import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import type { InventoryMatchResult } from "./types";
 
 /**
+ * Timestamps for preserving through sync
+ */
+export interface InventoryTimestamps {
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+/**
  * Move all inventory entries of a product to a new target location
  *
  * Deletes existing entries and creates a new one at the target.
@@ -27,6 +35,7 @@ export const moveInventoryEntries = async (
   productId: ProductId,
   targetLocationId: LocationId,
   newAmount: { value: number; unit: string },
+  timestamps?: InventoryTimestamps,
 ): Promise<string[]> => {
   const existingEntries = await getDb(db).query.inventoryEntry.findMany({
     where: and(
@@ -59,12 +68,17 @@ export const moveInventoryEntries = async (
   });
 
   if (!existingAtTarget) {
-    await getDb(db).insert(inventoryEntry).values({
-      organizationId,
-      productId,
-      locationId: targetLocationId,
-      amount: newAmount,
-    });
+    await getDb(db)
+      .insert(inventoryEntry)
+      .values({
+        organizationId,
+        productId,
+        locationId: targetLocationId,
+        amount: newAmount,
+        // Preserve timestamps if provided (for sync restore)
+        ...(timestamps?.createdAt && { createdAt: timestamps.createdAt }),
+        ...(timestamps?.updatedAt && { updatedAt: timestamps.updatedAt }),
+      });
   }
 
   return existingEntries.map((e) => e.location.name);
@@ -82,6 +96,7 @@ export const createOrUpdateInventoryAtLocation = async (
   productId: ProductId,
   targetLocationId: LocationId,
   newAmount: { value: number; unit: string },
+  timestamps?: InventoryTimestamps,
 ): Promise<"created" | "updated"> => {
   const existingAtTarget = await getDb(db).query.inventoryEntry.findFirst({
     where: and(
@@ -108,12 +123,17 @@ export const createOrUpdateInventoryAtLocation = async (
     return "updated";
   }
 
-  await getDb(db).insert(inventoryEntry).values({
-    organizationId,
-    productId,
-    locationId: targetLocationId,
-    amount: newAmount,
-  });
+  await getDb(db)
+    .insert(inventoryEntry)
+    .values({
+      organizationId,
+      productId,
+      locationId: targetLocationId,
+      amount: newAmount,
+      // Preserve timestamps if provided (for sync restore)
+      ...(timestamps?.createdAt && { createdAt: timestamps.createdAt }),
+      ...(timestamps?.updatedAt && { updatedAt: timestamps.updatedAt }),
+    });
   return "created";
 };
 

@@ -107,6 +107,9 @@ export const locationCSVRow = z.object({
   description: z.string().nullable().optional(),
   location_image: z.string().optional(), // Semicolon-separated image URLs
   last_inventory_date: z.string().nullable().optional(), // ISO timestamp of when location was last inventoried
+  // Timestamps (optional, only present when SYNC_TIMESTAMPS enabled)
+  location_created_at: z.string().nullable().optional(),
+  location_updated_at: z.string().nullable().optional(),
 });
 
 export type LocationCSVRow = z.infer<typeof locationCSVRow>;

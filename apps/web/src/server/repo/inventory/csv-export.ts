@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { and, eq, notInArray } from "drizzle-orm";
 import { joinImageUrls } from "~/lib/image-utils";
 import {
@@ -15,7 +16,14 @@ import type { ProductCategory } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
+import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import type { InventoryCSVExportRow, ProductExportFields } from "./types";
+
+/** Format a date for CSV/Sheets export */
+function formatTimestamp(date: Date | null): string | null {
+  if (!date) return null;
+  return dayjs(date).format("YYYY-MM-DD HH:mm:ss");
+}
 
 /**
  * Build common product export fields from a product with unit mappings and ingredient
@@ -33,6 +41,8 @@ function buildProductExportFields(p: ProductExportFields): {
   ingredient_name: string | null;
   aliases: string | null;
   product_image: string | null;
+  product_created_at?: string | null;
+  product_updated_at?: string | null;
 } {
   // Extract price from unit mappings (source of truth, as denormalized price may be stale)
   const priceAmount = extractPriceFromMappings(p.unitMappings);
@@ -49,6 +59,11 @@ function buildProductExportFields(p: ProductExportFields): {
     ingredient_name: p.Ingredient?.name ?? null,
     aliases: p.Ingredient?.aliases?.join("; ") ?? null,
     product_image: joinImageUrls(p.images),
+    // Timestamps (only if feature flag enabled)
+    ...(SYNC_TIMESTAMPS && {
+      product_created_at: formatTimestamp(p.createdAt),
+      product_updated_at: formatTimestamp(p.updatedAt),
+    }),
   };
 }
 
@@ -85,7 +100,11 @@ export const exportInventoryToCSV = async (
   const inventoryRows = await Promise.all(
     entries.map(async (entry) => {
       const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
-      const productFields = buildProductExportFields(entry.Product);
+      const productFields = buildProductExportFields({
+        ...entry.Product,
+        createdAt: entry.Product.createdAt,
+        updatedAt: entry.Product.updatedAt,
+      });
       return {
         ...productFields,
         location_name: entry.location.name,
@@ -94,6 +113,11 @@ export const exportInventoryToCSV = async (
         product_id: productIdSchema.parse(entry.productId),
         quantity: parsedAmount.value,
         unit: parsedAmount.unit,
+        // Inventory timestamps (only if feature flag enabled)
+        ...(SYNC_TIMESTAMPS && {
+          inventory_created_at: formatTimestamp(entry.createdAt),
+          inventory_updated_at: formatTimestamp(entry.updatedAt),
+        }),
       };
     }),
   );
@@ -128,7 +152,11 @@ export const exportInventoryToCSV = async (
   // Convert products without inventory to export rows (product-only rows)
   const productOnlyRows = await Promise.all(
     productsWithoutInventory.map(async (p) => {
-      const productFields = buildProductExportFields(p);
+      const productFields = buildProductExportFields({
+        ...p,
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
+      });
       return {
         ...productFields,
         location_name: "", // Empty for product-only rows
@@ -137,6 +165,11 @@ export const exportInventoryToCSV = async (
         product_id: productIdSchema.parse(p.id),
         quantity: null, // No inventory
         unit: null, // No inventory
+        // No inventory timestamps for product-only rows
+        ...(SYNC_TIMESTAMPS && {
+          inventory_created_at: null,
+          inventory_updated_at: null,
+        }),
       };
     }),
   );

@@ -19,18 +19,22 @@ import type {
 } from "~/schemas/inventory";
 import type { ProductTopLevelOut } from "~/schemas/product";
 import type { Database } from "~/server/db";
+import { parseCSVDate } from "~/server/repo/csv/date-utils";
 import {
   findLocationByName,
   findOrCreateLocationByName,
 } from "~/server/repo/location";
+import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import { importProductImages, previewProductImages } from "./image-handler";
 import {
   checkInventoryMatch,
   createOrUpdateInventoryAtLocation,
   getExistingInventoryLocations,
+  type InventoryTimestamps,
   moveInventoryEntries,
 } from "./inventory-handler";
 import {
+  type ProductTimestamps,
   previewProductForImport,
   processProductForImport,
 } from "./product-handler";
@@ -47,6 +51,39 @@ interface RowProcessorContext {
   organizationId: OrganizationId;
   dryRun: boolean;
   actor: ActorContext;
+}
+
+/**
+ * Parse timestamps from CSV row if SYNC_TIMESTAMPS is enabled
+ */
+function parseRowTimestamps(row: InventoryCSVRow): {
+  product: ProductTimestamps | undefined;
+  inventory: InventoryTimestamps | undefined;
+} {
+  if (!SYNC_TIMESTAMPS) {
+    return { product: undefined, inventory: undefined };
+  }
+
+  const product: ProductTimestamps = {};
+  const inventory: InventoryTimestamps = {};
+
+  if (row.product_created_at) {
+    product.createdAt = parseCSVDate(row.product_created_at) ?? undefined;
+  }
+  if (row.product_updated_at) {
+    product.updatedAt = parseCSVDate(row.product_updated_at) ?? undefined;
+  }
+  if (row.inventory_created_at) {
+    inventory.createdAt = parseCSVDate(row.inventory_created_at) ?? undefined;
+  }
+  if (row.inventory_updated_at) {
+    inventory.updatedAt = parseCSVDate(row.inventory_updated_at) ?? undefined;
+  }
+
+  return {
+    product: Object.keys(product).length > 0 ? product : undefined,
+    inventory: Object.keys(inventory).length > 0 ? inventory : undefined,
+  };
 }
 
 /**
@@ -259,6 +296,7 @@ async function executeProductOperations(
   row: InventoryCSVRow,
   manufacturer: string,
   actor: ActorContext,
+  productTimestamps?: ProductTimestamps,
 ): Promise<ProductOperationsResult> {
   const { productData, productWasCreated } = await processProductForImport(
     db,
@@ -274,6 +312,7 @@ async function executeProductOperations(
     row.aliases,
     row.category,
     actor,
+    productTimestamps,
   );
 
   if (row.price != null) {
@@ -473,6 +512,9 @@ export const processRow = async (
   const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
   const isProductOnly = !row.location_name || row.location_name.trim() === "";
 
+  // Parse timestamps from row (if SYNC_TIMESTAMPS enabled)
+  const timestamps = parseRowTimestamps(row);
+
   // -------------------------------------------------------------------------
   // Step 1: Process product (preview or execute)
   // -------------------------------------------------------------------------
@@ -493,6 +535,7 @@ export const processRow = async (
       row,
       manufacturer,
       actor,
+      timestamps.product,
     );
     productData = result.productData;
     productWillBeCreated = result.productWasCreated;
@@ -629,6 +672,7 @@ export const processRow = async (
       dryRun,
       imageImportError,
       locationWasCreated,
+      timestamps.inventory,
     );
   }
 
@@ -648,6 +692,7 @@ export const processRow = async (
     dryRun,
     imageImportError,
     locationWasCreated,
+    timestamps.inventory,
   );
 };
 
@@ -713,6 +758,7 @@ async function handleMoveCase(
   dryRun: boolean,
   imageImportError?: string,
   locationWasCreated?: boolean,
+  inventoryTimestamps?: InventoryTimestamps,
 ): Promise<CSVImportResultItem> {
   const locationNote = locationWasCreated ? " (location auto-created)" : "";
 
@@ -731,6 +777,7 @@ async function handleMoveCase(
     productData.id,
     targetLocationId,
     newAmount,
+    inventoryTimestamps,
   );
 
   if (fromLocations.length > 0) {
@@ -773,6 +820,7 @@ async function handleInventoryResult(
   dryRun: boolean,
   imageImportError?: string,
   locationWasCreated?: boolean,
+  inventoryTimestamps?: InventoryTimestamps,
 ): Promise<CSVImportResultItem> {
   const locationNote = locationWasCreated ? " (location auto-created)" : "";
 
@@ -834,6 +882,7 @@ async function handleInventoryResult(
     productData.id,
     targetLocationId,
     newAmount,
+    inventoryTimestamps,
   );
 
   const message =

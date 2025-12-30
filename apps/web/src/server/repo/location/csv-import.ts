@@ -140,12 +140,18 @@ async function processLocationRow(
     const locationType =
       row.location_type ?? getDefaultLocationType(parentId !== null);
 
+    // Parse timestamps for restore on create
+    const createdAt = parseCSVDate(row.location_created_at);
+    const updatedAt = parseCSVDate(row.location_updated_at);
+
     const { locationId, created } = await findOrCreateLocationByName(
       db,
       organizationId,
       row.location_name,
       parentId,
       locationType,
+      // Pass timestamps for restore on create (only used when creating new location)
+      createdAt || updatedAt ? { createdAt, updatedAt } : undefined,
     );
 
     // If location exists, update all sync fields from CSV

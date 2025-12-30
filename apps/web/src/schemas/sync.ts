@@ -86,6 +86,7 @@ export type LocationSyncItem = z.infer<typeof locationSyncItem>;
 
 /**
  * Common inventory sync fields (shared between app and sheet data)
+ * Note: Timestamps are NOT part of sync data - they are only written via "Refresh Timestamps" button
  */
 const inventorySyncFields = z.object({
   productName: z.string(),
@@ -170,6 +171,8 @@ export type SyncPreviewResult = z.infer<typeof syncPreviewResult>;
 export const applySyncInput = z.object({
   locationResolutions: z.record(z.string(), syncResolution), // key -> resolution
   inventoryResolutions: z.record(z.string(), syncResolution), // key -> resolution
+  // When true, rebuilds entire sheet from app data (including matched items for timestamp refresh)
+  forceOverwrite: z.boolean().optional(),
 });
 
 /**

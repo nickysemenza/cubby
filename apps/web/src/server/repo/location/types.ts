@@ -14,4 +14,7 @@ export interface LocationCSVExportRow {
   last_inventory_date: string | null; // ISO timestamp of when location was last inventoried
   // Internal ID (not exported to sheet, used for comparison)
   location_id: LocationId;
+  // Timestamps (optional, controlled by SYNC_TIMESTAMPS flag)
+  location_created_at?: string | null;
+  location_updated_at?: string | null;
 }
