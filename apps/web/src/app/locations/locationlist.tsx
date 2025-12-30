@@ -6,8 +6,8 @@ import { flattenLocations } from "~/lib/location-utils";
 import type {
   InfLocation,
   LocationOutWithParentChildren,
+  LocationType,
 } from "~/schemas/location";
-import { type LocationType, locationTypeOptions } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
@@ -23,6 +23,7 @@ import { useEntityList } from "../_components/hooks/useEntityList";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { LocationTypeBadge } from "../_components/locations/LocationTypeBadge";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
+import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
 
 export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
@@ -59,7 +60,7 @@ export function LocationList() {
           filterConfig: {
             placeholder: "Filter by type...",
             filterType: "select",
-            options: locationTypeOptions,
+            options: locationTypeOptionsWithTheme,
           },
         },
         cell: (info) => <LocationTypeBadge type={info.getValue()} />,
@@ -97,7 +98,7 @@ export function LocationList() {
         id: "type",
         placeholder: "Filter by type...",
         filterType: "select",
-        options: locationTypeOptions,
+        options: locationTypeOptionsWithTheme,
       },
     ],
   });

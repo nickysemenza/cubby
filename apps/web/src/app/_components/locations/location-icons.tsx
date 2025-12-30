@@ -1,4 +1,4 @@
-import type { LocationType } from "~/schemas/location";
+import { type LocationType, locationType } from "~/schemas/location";
 import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 
 interface LocationIconProps {
@@ -50,3 +50,13 @@ export function LocationIconWithLabel({
     </div>
   );
 }
+
+/** Location type options with colored icons for dropdowns */
+export const locationTypeOptionsWithTheme = locationType.options.map(
+  (type) => ({
+    value: type,
+    label: type,
+    icon: <LocationIcon type={type} size={14} colored />,
+    color: getLocationTypeColor(type),
+  }),
+);

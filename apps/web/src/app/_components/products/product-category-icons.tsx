@@ -1,5 +1,5 @@
 import { cn } from "~/lib/utils";
-import type { ProductCategory } from "~/schemas/product";
+import { type ProductCategory, productCategory } from "~/schemas/product";
 import { getCategoryColor, getCategoryIcon } from "./category-theme";
 
 interface CategoryIconProps {
@@ -47,3 +47,13 @@ export function CategoryIconWithLabel({
     </div>
   );
 }
+
+/** Product category options with colored icons for dropdowns */
+export const productCategoryOptionsWithTheme = productCategory.options.map(
+  (cat) => ({
+    value: cat,
+    label: cat.replace("-", " "),
+    icon: <CategoryIcon category={cat} size={14} colored />,
+    color: getCategoryColor(cat),
+  }),
+);

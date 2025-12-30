@@ -1,7 +1,6 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
-import { productCategoryOptions } from "~/schemas/product";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
@@ -11,6 +10,7 @@ import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { NoneState } from "../_components/NoneState";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
+import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 import { TableLink } from "../_components/table/TableLink";
 
 interface ProductListProps {
@@ -50,7 +50,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
             filterType: "select",
             options: [
               { value: "", label: "All categories" },
-              ...productCategoryOptions,
+              ...productCategoryOptionsWithTheme,
             ],
           },
         },
@@ -153,7 +153,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         filterType: "select",
         options: [
           { value: "", label: "All categories" },
-          ...productCategoryOptions,
+          ...productCategoryOptionsWithTheme,
         ],
       },
     ],

@@ -21,7 +21,6 @@ import {
   type ProductInputPayload,
   type ProductTopLevelOut,
   productCategory,
-  productCategoryOptions,
 } from "~/schemas/product";
 import { type UnitMappingInput, unitMappingInput } from "~/schemas/unitmapping";
 import { useTRPCClient } from "~/trpc/react";
@@ -41,6 +40,7 @@ import {
 } from "../form-utils";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
+import { productCategoryOptionsWithTheme } from "./product-category-icons";
 
 // Form schema for product form (simple Zod schema without z.custom)
 const formSchema = z
@@ -314,7 +314,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
               form={form}
               name="category"
               label="Category"
-              options={productCategoryOptions}
+              options={productCategoryOptionsWithTheme}
               placeholder="Select category"
               nullable={true}
               disabled={isFoodForced}

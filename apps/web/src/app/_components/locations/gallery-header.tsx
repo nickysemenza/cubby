@@ -7,13 +7,9 @@ import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
 import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
-import {
-  type InfLocation,
-  type LocationType,
-  locationTypeOptions,
-} from "~/schemas/location";
+import type { InfLocation, LocationType } from "~/schemas/location";
 import { LocationBreadcrumb } from "./location-breadcrumb";
-import { LocationIcon } from "./location-icons";
+import { locationTypeOptionsWithTheme } from "./location-icons";
 
 interface GalleryHeaderProps {
   searchTerm: string;
@@ -107,16 +103,7 @@ export function GalleryHeader({
           <FilterableCombobox
             items={[
               { value: "all", label: "All" },
-              ...locationTypeOptions.map((opt) => ({
-                ...opt,
-                icon: (
-                  <LocationIcon
-                    type={opt.value as LocationType}
-                    size={14}
-                    className="text-muted-foreground"
-                  />
-                ),
-              })),
+              ...locationTypeOptionsWithTheme,
             ]}
             value={locationTypeFilter ?? "all"}
             onValueChange={(value) =>

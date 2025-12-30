@@ -10,10 +10,8 @@ import type { ImageOut } from "~/schemas/image";
 import {
   type LocationCreateInput,
   type LocationOut,
-  type LocationType,
   type LocationUpdateInput,
   locationType,
-  locationTypeOptions,
 } from "~/schemas/location";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
@@ -29,18 +27,7 @@ import {
   UnifiedTextField,
 } from "../form-utils";
 import { PendingImageUpload } from "../PendingImageUpload";
-import { LocationIcon } from "./location-icons";
-
-const locationTypeOptionsWithIcons = locationTypeOptions.map((opt) => ({
-  ...opt,
-  icon: (
-    <LocationIcon
-      type={opt.value as LocationType}
-      size={14}
-      className="text-muted-foreground"
-    />
-  ),
-}));
+import { locationTypeOptionsWithTheme } from "./location-icons";
 
 // Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({
@@ -169,7 +156,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           form={form}
           name="type"
           label="Type"
-          options={locationTypeOptionsWithIcons}
+          options={locationTypeOptionsWithTheme}
           placeholder="Select a location type"
         />
       </SideBySideFields>

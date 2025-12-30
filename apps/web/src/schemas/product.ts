@@ -24,12 +24,6 @@ export const productCategory = z.enum(productCategoryValues);
 
 export type ProductCategory = z.infer<typeof productCategory>;
 
-/** Pre-built options for product category select fields */
-export const productCategoryOptions = productCategory.options.map((cat) => ({
-  value: cat,
-  label: cat.replace("-", " "),
-}));
-
 /**
  * Check if a product has USDA food data indicators that should force category to "food"
  *

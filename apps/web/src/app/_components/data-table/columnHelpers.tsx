@@ -33,7 +33,12 @@ import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select";
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{
+    value: string;
+    label: string;
+    icon?: React.ReactNode;
+    color?: string;
+  }>;
 }
 
 // Extend TanStack Table's meta type to include our custom properties

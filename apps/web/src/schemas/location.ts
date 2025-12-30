@@ -24,11 +24,6 @@ export const locationType = z
   .describe("type of location (room, container, etc)");
 export type LocationType = z.infer<typeof locationType>;
 
-/** Pre-built options for location type select fields */
-export const locationTypeOptions = locationType.options.map((type) => ({
-  value: type,
-  label: type,
-}));
 const locationBase = z.object({
   name: z.string().describe("name of location"),
   type: locationType,

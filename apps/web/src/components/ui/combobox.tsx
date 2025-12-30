@@ -300,6 +300,7 @@ interface FilterableComboboxItem {
   value: string;
   label: string;
   icon?: React.ReactNode;
+  color?: string;
 }
 
 interface FilterableComboboxProps {
@@ -396,7 +397,7 @@ function FilterableCombobox({
               // Base
               "bg-popover text-popover-foreground",
               // Size constraints - match trigger width
-              "max-h-60 w-(--anchor-width) overflow-hidden",
+              "w-(--anchor-width)",
               // Shape & depth
               "rounded-md border border-border/50 shadow-lg",
               // Animation
@@ -407,7 +408,7 @@ function FilterableCombobox({
               "origin-(--transform-origin) duration-150",
             )}
           >
-            <ComboboxPrimitive.List className="overflow-y-auto overscroll-contain p-0.5">
+            <ComboboxPrimitive.List className="max-h-60 overflow-y-auto overscroll-contain p-0.5">
               {filteredItems.map((item) => (
                 <ComboboxPrimitive.Item
                   key={item.value}
@@ -424,14 +425,21 @@ function FilterableCombobox({
                     // Disabled
                     "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                   )}
+                  style={
+                    item.color
+                      ? {
+                          backgroundColor: `color-mix(in srgb, ${item.color} 15%, transparent)`,
+                        }
+                      : undefined
+                  }
                 >
+                  <ComboboxPrimitive.ItemIndicator className="shrink-0">
+                    <CheckIcon className="size-3.5" />
+                  </ComboboxPrimitive.ItemIndicator>
                   <span className="flex-1 truncate">{item.label}</span>
                   {item.icon && (
                     <span className="shrink-0">{item.icon}</span>
                   )}
-                  <ComboboxPrimitive.ItemIndicator className="shrink-0">
-                    <CheckIcon className="size-3.5" />
-                  </ComboboxPrimitive.ItemIndicator>
                 </ComboboxPrimitive.Item>
               ))}
             </ComboboxPrimitive.List>
