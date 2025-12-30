@@ -42,10 +42,7 @@ export type LocationOut = z.infer<typeof locationOut>;
 /** Minimal inventory item info for tree display */
 const inventoryItemForTree = z.object({
   id: inventoryId,
-  amount: z.object({
-    value: z.number(),
-    unit: z.string(),
-  }),
+  amount,
   productName: z.string(),
   productId: productId,
 });
@@ -94,6 +91,7 @@ export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 // Location CSV Import/Export Schemas
 // ============================================================================
 
+import { amount } from "~/codec/codec";
 import { fieldChange } from "./csv";
 
 /**

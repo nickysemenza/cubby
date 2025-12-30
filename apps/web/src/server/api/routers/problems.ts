@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { amount } from "~/codec/codec";
 import { findAllProblems } from "~/server/repo/problems";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -42,10 +43,7 @@ const invalidInventoryAmountSchema = z.object({
   id: z.string(),
   productName: z.string(),
   locationName: z.string(),
-  amount: z.object({
-    value: z.number(),
-    unit: z.string(),
-  }),
+  amount,
   issue: z.enum(["zero", "negative"]),
 });
 

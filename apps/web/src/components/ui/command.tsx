@@ -35,12 +35,14 @@ function CommandDialog({
   children,
   className,
   showCloseButton = false,
+  shouldFilter,
   ...props
 }: Omit<React.ComponentProps<typeof Dialog>, "children"> & {
   title?: string;
   description?: string;
   className?: string;
   showCloseButton?: boolean;
+  shouldFilter?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -53,7 +55,7 @@ function CommandDialog({
         className={cn("overflow-hidden rounded-xl! p-0", className)}
         showCloseButton={showCloseButton}
       >
-        <Command>
+        <Command shouldFilter={shouldFilter}>
           {children}
         </Command>
       </DialogContent>
