@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/command";
 import { EntityIcon, entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
+import { formatCurrency } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
 import type { ProductCategory } from "~/schemas/product";
 import type { SearchableEntity } from "~/schemas/search";
@@ -44,7 +45,7 @@ function getEnrichmentText(item: SearchResult): string | null {
   switch (item.entityType) {
     case "product": {
       const parts: string[] = [];
-      if (item.price != null) parts.push(`$${item.price.toFixed(2)}`);
+      if (item.price != null) parts.push(formatCurrency(item.price));
       if (item.stockCount != null && item.stockCount > 0)
         parts.push(`${item.stockCount} in stock`);
       return parts.length > 0 ? parts.join(" · ") : null;

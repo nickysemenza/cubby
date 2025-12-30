@@ -222,7 +222,7 @@ function Treemap({ data }: TreemapProps) {
                         className="mt-0.5 text-[10px] text-white/80"
                         style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
                       >
-                        {formatCurrency(node.data.value, 2)} (
+                        {formatCurrency(node.data.value)} (
                         {node.data.percentage.toFixed(0)}%)
                       </div>
                     )}
@@ -260,7 +260,7 @@ function HoverTooltip({
       <div className="mt-1 text-muted-foreground">
         {node.data.hasPrice ? (
           <>
-            <div>Cost: {formatCurrency(node.data.value, 2)}</div>
+            <div>Cost: {formatCurrency(node.data.value)}</div>
             <div>{node.data.percentage.toFixed(1)}% of total</div>
           </>
         ) : (

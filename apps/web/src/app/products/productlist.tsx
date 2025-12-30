@@ -1,6 +1,7 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
+import { formatCurrency } from "~/lib/utils";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
@@ -122,7 +123,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         cell: (info) => {
           const price = info.getValue();
           if (price === null || price === undefined) return <NoneState />;
-          return `$${price.toFixed(2)}`;
+          return formatCurrency(price);
         },
       }),
       columnHelper.accessor("food", {

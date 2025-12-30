@@ -8,9 +8,9 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a number as USD currency.
  * @param value - The number to format
- * @param decimals - Maximum fraction digits (default: 0)
+ * @param decimals - Maximum fraction digits (default: 2)
  */
-export function formatCurrency(value: number, decimals = 0): string {
+export function formatCurrency(value: number, decimals = 2): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",

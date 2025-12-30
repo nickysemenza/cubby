@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import {
   calculateInventoryValuation,
@@ -15,12 +16,6 @@ interface InventoryValuationSummaryProps {
   variant?: Variant;
   className?: string;
 }
-
-const currency = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 2,
-});
 
 export function InventoryValuationSummary({
   locationId,
@@ -58,7 +53,7 @@ export function InventoryValuationSummary({
     return (
       <div className={className}>
         <div className="text-muted-foreground text-xs">
-          Valuation: {currency.format(result.totalValuation)}
+          Valuation: {formatCurrency(result.totalValuation)}
           {pricingSummary && <span className="ml-1">({pricingSummary})</span>}
         </div>
       </div>
@@ -70,7 +65,7 @@ export function InventoryValuationSummary({
     <div className={className}>
       <div className="mb-2 font-medium text-sm">Inventory Valuation</div>
       <div className="font-semibold text-lg">
-        {currency.format(result.totalValuation)}
+        {formatCurrency(result.totalValuation)}
       </div>
       {pricingSummary && (
         <div className="text-muted-foreground text-xs">{pricingSummary}</div>
@@ -89,7 +84,7 @@ export function InventoryValuationSummary({
               >
                 <span className="truncate pr-2">{b.label}</span>
                 <span className="tabular-nums">
-                  {currency.format(b.valuation)}
+                  {formatCurrency(b.valuation)}
                 </span>
               </li>
             ))}

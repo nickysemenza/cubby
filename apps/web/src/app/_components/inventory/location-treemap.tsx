@@ -151,7 +151,7 @@ function Treemap({ data }: TreemapProps) {
                       )}
                       {width > 220 && node.data.totalValuation > 0 && (
                         <span className="shrink-0 text-[10px] text-white/80">
-                          · {formatCurrency(node.data.totalValuation)}
+                          · {formatCurrency(node.data.totalValuation, 0)}
                           {(node.data.totalPricingStatus.missingPricing.count >
                             0 ||
                             node.data.totalPricingStatus.miscNoPrice.count >
@@ -216,8 +216,8 @@ function HoverTooltip({
         </div>
         {(node.data.directValuation > 0 || node.data.totalValuation > 0) && (
           <div>
-            Value: {formatCurrency(node.data.directValuation)} direct /{" "}
-            {formatCurrency(node.data.totalValuation)} total
+            Value: {formatCurrency(node.data.directValuation, 0)} direct /{" "}
+            {formatCurrency(node.data.totalValuation, 0)} total
           </div>
         )}
         {(() => {

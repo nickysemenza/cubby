@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { formatCurrency } from "~/lib/utils";
 
 // Zod schemas for summary data types
 const recipeSummaryDataSchema = z.object({
@@ -217,7 +218,7 @@ const formatInventorySummary = (data: InventorySummaryData): SummaryItem[] => [
   {
     label: "Total Value",
     value: data.totalValue,
-    formatter: (value) => `$${Number(value).toFixed(2)}`,
+    formatter: (value) => formatCurrency(Number(value)),
   },
   {
     label: "Items",

@@ -23,6 +23,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { EntityIcon } from "~/entities/entities";
+import { formatCurrency } from "~/lib/utils";
 import type {
   DuplicateUniqueProduct,
   EmptyLocation,
@@ -499,9 +500,12 @@ function ProductsWithStalePricesList({
           </Badge>,
           <span key="prices" className="text-muted-foreground text-sm">
             {product.storedPrice !== null
-              ? `$${product.storedPrice.toFixed(2)}`
+              ? formatCurrency(product.storedPrice)
               : "null"}{" "}
-            → ${product.computedPrice?.toFixed(2) ?? "null"}
+            →{" "}
+            {product.computedPrice != null
+              ? formatCurrency(product.computedPrice)
+              : "null"}
           </span>,
         ],
         route: { to: "/products/$id" as const, params: { id: product.id } },
@@ -578,9 +582,12 @@ function InventoryWithStaleValuationsList({
         badges: [
           <span key="valuations" className="text-muted-foreground text-sm">
             {entry.storedValuation !== null
-              ? `$${entry.storedValuation.toFixed(2)}`
+              ? formatCurrency(entry.storedValuation)
               : "null"}{" "}
-            → ${entry.expectedValuation?.toFixed(2) ?? "null"}
+            →{" "}
+            {entry.expectedValuation != null
+              ? formatCurrency(entry.expectedValuation)
+              : "null"}
           </span>,
         ],
         route: { to: "/inventory/$id" as const, params: { id: entry.id } },

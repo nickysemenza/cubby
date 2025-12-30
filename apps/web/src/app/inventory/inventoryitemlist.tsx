@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { z } from "zod";
+import { formatCurrency } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
 import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
@@ -59,7 +60,7 @@ export function InventoryItemList() {
         cell: (info) => {
           const val = info.getValue();
           if (val === null || val === undefined) return <NoneState />;
-          return `$${val.toFixed(2)}`;
+          return formatCurrency(val);
         },
       }),
       columnHelper.accessor("product", {
