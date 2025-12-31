@@ -16,6 +16,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ActivityRouteImport } from './routes/activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsdaIndexRouteImport } from './routes/usda.index'
+import { Route as SearchIndexRouteImport } from './routes/search.index'
 import { Route as RecipesIndexRouteImport } from './routes/recipes.index'
 import { Route as ProductsIndexRouteImport } from './routes/products.index'
 import { Route as LocationsIndexRouteImport } from './routes/locations.index'
@@ -83,6 +84,11 @@ const IndexRoute = IndexRouteImport.update({
 const UsdaIndexRoute = UsdaIndexRouteImport.update({
   id: '/usda/',
   path: '/usda/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchIndexRoute = SearchIndexRouteImport.update({
+  id: '/search/',
+  path: '/search/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecipesIndexRoute = RecipesIndexRouteImport.update({
@@ -288,6 +294,7 @@ export interface FileRoutesByFullPath {
   '/locations': typeof LocationsIndexRoute
   '/products': typeof ProductsIndexRoute
   '/recipes': typeof RecipesIndexRoute
+  '/search': typeof SearchIndexRoute
   '/usda': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -330,6 +337,7 @@ export interface FileRoutesByTo {
   '/locations': typeof LocationsIndexRoute
   '/products': typeof ProductsIndexRoute
   '/recipes': typeof RecipesIndexRoute
+  '/search': typeof SearchIndexRoute
   '/usda': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -373,6 +381,7 @@ export interface FileRoutesById {
   '/locations/': typeof LocationsIndexRoute
   '/products/': typeof ProductsIndexRoute
   '/recipes/': typeof RecipesIndexRoute
+  '/search/': typeof SearchIndexRoute
   '/usda/': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
@@ -417,6 +426,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/products'
     | '/recipes'
+    | '/search'
     | '/usda'
     | '/api/auth/$'
     | '/api/trpc/$'
@@ -459,6 +469,7 @@ export interface FileRouteTypes {
     | '/locations'
     | '/products'
     | '/recipes'
+    | '/search'
     | '/usda'
     | '/api/auth/$'
     | '/api/trpc/$'
@@ -501,6 +512,7 @@ export interface FileRouteTypes {
     | '/locations/'
     | '/products/'
     | '/recipes/'
+    | '/search/'
     | '/usda/'
     | '/api/auth/$'
     | '/api/trpc/$'
@@ -544,6 +556,7 @@ export interface RootRouteChildren {
   LocationsIndexRoute: typeof LocationsIndexRoute
   ProductsIndexRoute: typeof ProductsIndexRoute
   RecipesIndexRoute: typeof RecipesIndexRoute
+  SearchIndexRoute: typeof SearchIndexRoute
   UsdaIndexRoute: typeof UsdaIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
@@ -600,6 +613,13 @@ declare module '@tanstack/react-router' {
       path: '/usda'
       fullPath: '/usda'
       preLoaderRoute: typeof UsdaIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search/': {
+      id: '/search/'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recipes/': {
@@ -882,6 +902,7 @@ const rootRouteChildren: RootRouteChildren = {
   LocationsIndexRoute: LocationsIndexRoute,
   ProductsIndexRoute: ProductsIndexRoute,
   RecipesIndexRoute: RecipesIndexRoute,
+  SearchIndexRoute: SearchIndexRoute,
   UsdaIndexRoute: UsdaIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,

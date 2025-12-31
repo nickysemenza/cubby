@@ -45,6 +45,8 @@ interface TTableProps<TItem> {
    * Useful for tables with inline editing or special mobile UX.
    */
   renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
+  /** Callback when a row is clicked */
+  onRowClick?: (row: Row<TItem>) => void;
   // Deprecated props - kept for backward compatibility during migration
   /** @deprecated Use column meta.filterConfig instead */
   filterableColumns?: unknown[];
@@ -63,6 +65,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     timing,
     entity,
     renderMobileCard,
+    onRowClick,
   } = props;
 
   // Support deprecated additionalFilters prop
@@ -199,7 +202,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className={cn(styles.row)}
+                  className={cn(styles.row, onRowClick && "cursor-pointer")}
+                  onClick={onRowClick ? () => onRowClick(row) : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell

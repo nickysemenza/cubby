@@ -18,6 +18,7 @@ import {
 } from "~/components/ui/tooltip";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
+import { cn } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -143,6 +144,8 @@ export function createImageColumn<T extends BaseRow>(
     getImages?: (
       row: T,
     ) => Array<{ id: string; url: string; filename?: string }>;
+    /** Custom className for the column (default: "px-0 py-0 h-px") */
+    className?: string;
   },
 ) {
   const getImages =
@@ -154,7 +157,7 @@ export function createImageColumn<T extends BaseRow>(
     header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
     enableSorting: false,
     // h-px trick: setting height:1px on td makes h-full work on children
-    meta: { className: "px-0 py-0 h-px" },
+    meta: { className: cn("h-px px-0 py-0", options?.className) },
     cell: (info) => (
       <ImageThumbnail images={info.getValue() ?? []} alt="Image" />
     ),

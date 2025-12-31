@@ -9,7 +9,7 @@ import { createTRPCRouter, protectedProcedure } from "../trpc";
 // Input schema
 const globalSearchInputSchema = z.object({
   query: z.string().min(1).max(100),
-  limit: z.number().min(1).max(10).default(5),
+  limit: z.number().min(1).max(50).default(5),
 });
 
 // Main search procedure

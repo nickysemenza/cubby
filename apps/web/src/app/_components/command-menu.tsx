@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -11,66 +11,13 @@ import {
   CommandSeparator,
 } from "~/components/ui/command";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
-import { formatCurrency } from "~/lib/utils";
-import type { LocationType } from "~/schemas/location";
-import type { ProductCategory } from "~/schemas/product";
-import type { SearchableEntity } from "~/schemas/search";
 import { useGlobalSearch } from "./command-menu/use-global-search";
-import { tryFormatAmount } from "./inventory/format-amount";
-import {
-  getLocationIcon,
-  getLocationTypeColor,
-} from "./locations/location-type-theme";
 import { Pill } from "./Pill";
-import { getCategoryColor, getCategoryIcon } from "./products/category-theme";
-
-// Map search result entityType to Entity for icons/colors
-const entityTypeMap: Record<SearchableEntity, Entity> = {
-  product: "product",
-  recipe: "recipe",
-  ingredient: "ingredient",
-  location: "location",
-  "inventory-item": "inventory-item",
-};
-
-// Helper to format enrichment info for display
-type SearchResult = ReturnType<typeof useGlobalSearch>["results"] extends
-  | (infer T)[]
-  | undefined
-  ? T
-  : never;
-
-function getEnrichmentText(item: SearchResult): string | null {
-  switch (item.entityType) {
-    case "product": {
-      const parts: string[] = [];
-      if (item.price != null) parts.push(formatCurrency(item.price));
-      if (item.stockCount != null && item.stockCount > 0)
-        parts.push(`${item.stockCount} in stock`);
-      return parts.length > 0 ? parts.join(" · ") : null;
-    }
-    case "location": {
-      const parts: string[] = [];
-      if (item.itemCount != null && item.itemCount > 0)
-        parts.push(`${item.itemCount} items`);
-      if (item.childCount != null && item.childCount > 0)
-        parts.push(`${item.childCount} sub`);
-      return parts.length > 0 ? parts.join(" · ") : null;
-    }
-    case "inventory-item":
-      if (item.amount) return tryFormatAmount(item.amount);
-      return null;
-    case "recipe":
-      if (item.ingredientCount != null && item.ingredientCount > 0)
-        return `${item.ingredientCount} ingredients`;
-      return null;
-    case "ingredient":
-      if (item.recipeCount != null && item.recipeCount > 0)
-        return `in ${item.recipeCount} recipes`;
-      return null;
-  }
-}
+import {
+  entityTypeMap,
+  getEnrichmentText,
+  SearchResultItemIcon,
+} from "./search/search-utils";
 
 export function GlobalCommandMenu() {
   const [open, setOpen] = React.useState(false);
@@ -147,30 +94,6 @@ export function GlobalCommandMenu() {
             {results.map((item) => {
               const entity = entityTypeMap[item.entityType];
               const entityDef = entities[entity];
-
-              // Determine type-specific icon and color based on typeHint
-              const isLocation =
-                item.entityType === "location" && item.typeHint;
-              const isProduct =
-                (item.entityType === "product" ||
-                  item.entityType === "inventory-item") &&
-                item.typeHint;
-
-              // Get the appropriate icon and color
-              let TypeIcon: React.ComponentType<{
-                className?: string;
-                style?: React.CSSProperties;
-              }> | null = null;
-              let typeColor: string | undefined;
-
-              if (isLocation) {
-                TypeIcon = getLocationIcon(item.typeHint as LocationType);
-                typeColor = getLocationTypeColor(item.typeHint as LocationType);
-              } else if (isProduct) {
-                TypeIcon = getCategoryIcon(item.typeHint as ProductCategory);
-                typeColor = getCategoryColor(item.typeHint as ProductCategory);
-              }
-
               const enrichment = getEnrichmentText(item);
 
               return (
@@ -179,18 +102,7 @@ export function GlobalCommandMenu() {
                   onSelect={() => goToEntity(item.entityType, item.id)}
                   className="flex items-center gap-2"
                 >
-                  {TypeIcon ? (
-                    <TypeIcon
-                      className="h-4 w-4 shrink-0"
-                      style={{ color: typeColor }}
-                    />
-                  ) : (
-                    <EntityIcon
-                      entity={entity}
-                      colored
-                      className="h-4 w-4 shrink-0"
-                    />
-                  )}
+                  <SearchResultItemIcon item={item} />
                   <span className="w-56 min-w-0 shrink-0 truncate">
                     {item.name}
                   </span>
@@ -208,6 +120,16 @@ export function GlobalCommandMenu() {
                 </CommandItem>
               );
             })}
+            <CommandItem
+              onSelect={() => {
+                navigate({ to: "/search", search: { q: search } });
+                setOpen(false);
+              }}
+              className="justify-center text-muted-foreground"
+            >
+              <Search className="mr-2 h-4 w-4" />
+              See all results for "{search}"
+            </CommandItem>
           </CommandGroup>
         )}
 

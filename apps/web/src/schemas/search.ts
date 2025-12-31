@@ -3,7 +3,7 @@ import { amount } from "~/codec/codec";
 import type { Entity } from "~/entities/types";
 
 /** Searchable entities - subset of Entity excluding "usda-food" and "image" */
-const searchableEntities = [
+export const searchableEntities = [
   "product",
   "recipe",
   "ingredient",
@@ -14,12 +14,19 @@ const searchableEntities = [
 export const searchableEntitySchema = z.enum(searchableEntities);
 export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
 
+/** Search type options for filtering (includes "all") */
+export const searchTypeOptions = ["all", ...searchableEntities] as const;
+export const searchTypeSchema = z.enum(searchTypeOptions);
+export type SearchType = z.infer<typeof searchTypeSchema>;
+
 // Base fields shared by all search results
 const baseSearchResult = z.object({
   id: z.string(),
   name: z.string(),
   subtitle: z.string().nullable(),
   typeHint: z.string().nullable(),
+  imageUrl: z.string().nullable(),
+  createdAt: z.coerce.date(),
 });
 
 // Per-entity result schemas
