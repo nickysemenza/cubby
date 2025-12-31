@@ -1,5 +1,5 @@
-import { Camera, Loader2, X } from "lucide-react";
-import { lazy, Suspense, useCallback, useState } from "react";
+import { Camera, X } from "lucide-react";
+import { useCallback, useState } from "react";
 import { ColoredAlert } from "~/components/common/colored-alert";
 import { Button } from "~/components/ui/button";
 import {
@@ -8,28 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-
-// Type for barcode scan result (from @zxing/library)
-interface BarcodeResult {
-  getText(): string;
-}
-
-// Dynamically import the scanner to avoid SSR issues
-const BarcodeScanner = lazy(() =>
-  import("react-qr-barcode-scanner").then((mod) => ({
-    default: mod.default as React.ComponentType<{
-      onUpdate: (err: unknown, result?: BarcodeResult) => void;
-      onError?: (err: string | DOMException) => void;
-      facingMode?: string;
-    }>,
-  })),
-);
-
-const ScannerLoading = () => (
-  <div className="flex h-64 items-center justify-center">
-    <Loader2 className="h-8 w-8 animate-spin" />
-  </div>
-);
+import { BarcodeScanner } from "./barcode-scanner";
 
 interface BarcodeScannerButtonProps {
   onScan: (barcode: string) => void;
@@ -50,19 +29,16 @@ export function BarcodeScannerButton({
   const [error, setError] = useState<string | null>(null);
 
   const handleScan = useCallback(
-    (result: string | null) => {
-      if (result) {
-        onScan(result);
-        setIsOpen(false);
-      }
+    (result: string) => {
+      onScan(result);
+      setIsOpen(false);
     },
     [onScan],
   );
 
-  const handleError = useCallback((err: string | DOMException) => {
+  const handleError = useCallback((err: string) => {
     console.error("Barcode scanner error:", err);
-    const message = typeof err === "string" ? err : err.message;
-    setError(message || "Failed to access camera");
+    setError(err || "Failed to access camera");
   }, []);
 
   return (
@@ -112,19 +88,9 @@ export function BarcodeScannerButton({
                 </Button>
               </ColoredAlert>
             ) : (
-              <div className="overflow-hidden rounded-lg">
-                <Suspense fallback={<ScannerLoading />}>
-                  <BarcodeScanner
-                    onUpdate={(_err: unknown, result?: BarcodeResult) => {
-                      if (result) {
-                        handleScan(result.getText());
-                      }
-                    }}
-                    onError={handleError}
-                    facingMode="environment"
-                  />
-                </Suspense>
-              </div>
+              isOpen && (
+                <BarcodeScanner onScan={handleScan} onError={handleError} />
+              )
             )}
 
             <p className="text-center text-muted-foreground text-sm">
