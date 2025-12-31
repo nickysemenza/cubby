@@ -157,7 +157,10 @@ export function createImageColumn<T extends BaseRow>(
     header: () => <ImageIcon className="h-3 w-3 text-muted-foreground" />,
     enableSorting: false,
     // h-px trick: setting height:1px on td makes h-full work on children
-    meta: { className: cn("h-px px-0 py-0", options?.className) },
+    // overflow-hidden prevents image from expanding the row
+    meta: {
+      className: cn("h-px overflow-hidden px-0 py-0", options?.className),
+    },
     cell: (info) => (
       <ImageThumbnail images={info.getValue() ?? []} alt="Image" />
     ),

@@ -80,7 +80,7 @@ export function ImageWithPreview({
         <Image
           src={src}
           alt={alt}
-          className="absolute inset-y-0 left-1/2 -translate-x-1/2 h-full aspect-square object-cover"
+          className="absolute inset-0 h-full w-full object-cover"
         />
       </TooltipTrigger>
       <TooltipContent
