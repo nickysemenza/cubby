@@ -111,7 +111,7 @@ export const searchColumns = [
 
   // Actions - polymorphic (entity varies per row)
   createActionsColumnBase(columnHelper, (row) => ({
-    to: `/${entities[entityTypeMap[row.entityType]].basePath}/$id`,
+    to: entities[entityTypeMap[row.entityType]].routes.detail,
     params: { id: row.id },
   })),
 ];

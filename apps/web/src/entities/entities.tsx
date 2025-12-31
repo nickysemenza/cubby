@@ -29,6 +29,11 @@ export const entities: Record<Entity, EntityDefinition> = {
       bg: "bg-accent/20",
       text: "text-accent-foreground",
     },
+    routes: {
+      detail: "/ingredients/$id",
+      list: "/ingredients",
+      new: "/ingredients/new",
+    },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
@@ -49,6 +54,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     color: {
       bg: "bg-secondary",
       text: "text-secondary-foreground",
+    },
+    routes: {
+      detail: "/products/$id",
+      list: "/products",
+      new: "/products/new",
     },
     detail: { commonSections: ["images", "unit-mappings", "history"] },
     list: {
@@ -76,6 +86,11 @@ export const entities: Record<Entity, EntityDefinition> = {
       bg: "bg-plum/20",
       text: "text-plum",
     },
+    routes: {
+      detail: "/recipes/$id",
+      list: "/recipes",
+      new: "/recipes/new",
+    },
     detail: { commonSections: ["images", "history"] },
     list: {
       defaultSort: "createdAt",
@@ -91,6 +106,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     color: {
       bg: "bg-slate/20",
       text: "text-slate",
+    },
+    routes: {
+      detail: "/locations/$id",
+      list: "/locations",
+      new: "/locations/new",
     },
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
@@ -112,6 +132,11 @@ export const entities: Record<Entity, EntityDefinition> = {
       bg: "bg-primary/15",
       text: "text-primary",
     },
+    routes: {
+      detail: "/inventory/$id",
+      list: "/inventory",
+      new: "/inventory/new",
+    },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
     // Inventory list has custom columns (image from product, amount instead of name)
@@ -130,6 +155,11 @@ export const entities: Record<Entity, EntityDefinition> = {
       bg: "bg-secondary",
       text: "text-secondary-foreground",
     },
+    routes: {
+      detail: "/usda/$id",
+      list: "/usda",
+      // no "new" - USDA foods are read-only
+    },
     // USDA foods are read-only, no detail/list conventions needed
   },
   image: {
@@ -140,6 +170,11 @@ export const entities: Record<Entity, EntityDefinition> = {
     color: {
       bg: "bg-muted",
       text: "text-muted-foreground",
+    },
+    routes: {
+      detail: "/images/$id",
+      list: "/images",
+      // no "new" - images are uploaded, not created via form
     },
     detail: { commonSections: ["history"] },
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList

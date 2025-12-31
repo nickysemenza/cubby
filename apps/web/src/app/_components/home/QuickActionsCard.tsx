@@ -28,10 +28,7 @@ export function QuickActionsCard() {
           if (isEntityAction(action)) {
             const def = entities[action.entity];
             return (
-              <Link
-                key={action.entity}
-                to={`/${def.basePath}/new` as "/products/new"}
-              >
+              <Link key={action.entity} to={def.routes.new!}>
                 <Button
                   variant="outline"
                   size="sm"

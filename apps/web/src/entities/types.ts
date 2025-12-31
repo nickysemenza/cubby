@@ -13,6 +13,44 @@ export type Entity =
   | "usda-food"
   | "image";
 
+/** All valid entity detail routes (e.g., /products/$id) */
+export type EntityDetailRoute =
+  | "/ingredients/$id"
+  | "/products/$id"
+  | "/recipes/$id"
+  | "/locations/$id"
+  | "/inventory/$id"
+  | "/usda/$id"
+  | "/images/$id";
+
+/** All valid entity list routes (e.g., /products) */
+export type EntityListRoute =
+  | "/ingredients"
+  | "/products"
+  | "/recipes"
+  | "/locations"
+  | "/inventory"
+  | "/usda"
+  | "/images";
+
+/** All valid entity "new" routes (e.g., /products/new) */
+export type EntityNewRoute =
+  | "/ingredients/new"
+  | "/products/new"
+  | "/recipes/new"
+  | "/locations/new"
+  | "/inventory/new";
+
+/** Typed routes for an entity */
+export interface EntityRoutes {
+  /** Detail page route (e.g., "/products/$id") */
+  detail: EntityDetailRoute;
+  /** List page route (e.g., "/products") */
+  list: EntityListRoute;
+  /** "New" page route - optional since not all entities have one */
+  new?: EntityNewRoute;
+}
+
 /** Common section types that can be auto-generated for detail pages */
 type CommonSectionType = "images" | "history" | "unit-mappings";
 
@@ -55,6 +93,8 @@ export interface EntityDefinition {
   lucideIcon: LucideIcon;
   /** Color classes for visual entity identification */
   color: EntityColor;
+  /** Typed routes for this entity */
+  routes: EntityRoutes;
   /** Detail page conventions */
   detail?: EntityDetailConfig;
   /** List page conventions */

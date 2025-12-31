@@ -27,7 +27,7 @@ function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
   const Icon = def.lucideIcon;
 
   return (
-    <Link to={`/${def.basePath}` as "/locations"}>
+    <Link to={def.routes.list}>
       <Card
         className={cn(
           "group relative overflow-hidden p-3 transition-all duration-200",

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { cva, type VariantProps } from "class-variance-authority";
 import type { ReactNode } from "react";
+import type { EntityDetailRoute } from "~/entities/types";
 
 const tableLinkVariants = cva("transition-colors hover:underline", {
   variants: {
@@ -15,21 +16,18 @@ const tableLinkVariants = cva("transition-colors hover:underline", {
   },
 });
 
-// Type-safe overloads for known routes
+/** USDA lookup routes (not standard entity routes) */
+type USDALookupRoute =
+  | { to: "/usda/upc/$code"; params: { code: string } }
+  | { to: "/usda/ndb/$code"; params: { code: string } };
+
+/** Standard entity detail routes */
+type EntityRoute = { to: EntityDetailRoute; params: { id: string } };
+
 type TableLinkProps = VariantProps<typeof tableLinkVariants> & {
   children: ReactNode;
   className?: string;
-} & (
-    | { to: "/usda/upc/$code"; params: { code: string } }
-    | { to: "/usda/ndb/$code"; params: { code: string } }
-    | { to: "/usda/$id"; params: { id: string } }
-    | { to: "/products/$id"; params: { id: string } }
-    | { to: "/locations/$id"; params: { id: string } }
-    | { to: "/recipes/$id"; params: { id: string } }
-    | { to: "/ingredients/$id"; params: { id: string } }
-    | { to: "/inventory/$id"; params: { id: string } }
-    | { to: "/images/$id"; params: { id: string } }
-  );
+} & (USDALookupRoute | EntityRoute);
 
 export const TableLink = ({
   to,
@@ -41,8 +39,8 @@ export const TableLink = ({
   return (
     <Link
       className={tableLinkVariants({ variant, className })}
-      to={to as "/usda/upc/$code"}
-      params={params as { code: string }}
+      to={to}
+      params={params}
     >
       {children}
     </Link>

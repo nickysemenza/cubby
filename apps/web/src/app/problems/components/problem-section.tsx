@@ -13,13 +13,10 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { EntityIcon } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
+import type { Entity, EntityDetailRoute } from "~/entities/types";
 
-// Type-safe route patterns
-type RoutePattern =
-  | { to: "/products/$id"; params: { id: string } }
-  | { to: "/locations/$id"; params: { id: string } }
-  | { to: "/inventory/$id"; params: { id: string } };
+// Type-safe route patterns for entity detail pages
+type RoutePattern = { to: EntityDetailRoute; params: { id: string } };
 
 // Icon can be either a LucideIcon component or an entity key
 type IconProp =
@@ -130,10 +127,7 @@ export function ProblemSection<T>({
                       className="border-l border-l-border p-3"
                       actions={
                         <div className="flex gap-1">
-                          <Link
-                            to={route.to as "/products/$id"}
-                            params={route.params as { id: string }}
-                          >
+                          <Link to={route.to} params={route.params}>
                             <Button variant="outline" size="sm">
                               <ExternalLink className="mr-1 h-3 w-3" />
                               {editLabel}

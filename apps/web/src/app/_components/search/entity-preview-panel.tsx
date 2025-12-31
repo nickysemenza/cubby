@@ -80,7 +80,6 @@ export function EntityPreviewPanel({
 
   // Get entity definition for link
   const entityDef = entities[entityType];
-  const detailPath = `/${entityDef.basePath}/${id}`;
 
   if (isLoading) {
     return (
@@ -106,7 +105,7 @@ export function EntityPreviewPanel({
           <Button
             variant="outline"
             size="sm"
-            render={<Link to={detailPath as "/products/$id"} params={{ id }} />}
+            render={<Link to={entityDef.routes.detail} params={{ id }} />}
           >
             <ExternalLink className="mr-1 h-3 w-3" />
             View Full Details

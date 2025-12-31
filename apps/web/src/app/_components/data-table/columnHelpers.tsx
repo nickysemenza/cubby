@@ -17,7 +17,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
+import type { Entity, EntityDetailRoute } from "~/entities/types";
 import { cn, formatCurrency } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
@@ -94,7 +94,7 @@ export function createNameColumn<T extends BaseRow>(
         <Tooltip>
           <TooltipTrigger render={<span className="block truncate" />}>
             <TableLink
-              to={`/${entities[entity].basePath}/$id` as "/products/$id"}
+              to={entities[entity].routes.detail}
               params={{ id: String(info.row.original.id) }}
             >
               {value}
@@ -437,7 +437,7 @@ export function createActionsColumn<T extends { id: string | number }>(
   return createActionsColumnBase(
     columnHelper,
     (row) => ({
-      to: `/${entities[entity].basePath}/$id`,
+      to: entities[entity].routes.detail,
       params: { id: String(row.id) },
     }),
     options?.extraActions,
@@ -451,7 +451,9 @@ export function createActionsColumn<T extends { id: string | number }>(
  */
 export function createActionsColumnBase<T>(
   columnHelper: ColumnHelper<T>,
-  getLinkProps: (row: T) => { to: string; params: { id: string } } | null,
+  getLinkProps: (
+    row: T,
+  ) => { to: EntityDetailRoute; params: { id: string } } | null,
   extraActions?: (row: T) => ReactNode,
 ) {
   return columnHelper.display({
@@ -476,12 +478,7 @@ export function createActionsColumnBase<T>(
           <DropdownMenuContent align="end">
             {linkProps && (
               <DropdownMenuItem
-                render={
-                  <Link
-                    to={linkProps.to as "/products/$id"}
-                    params={linkProps.params}
-                  />
-                }
+                render={<Link to={linkProps.to} params={linkProps.params} />}
               >
                 <Eye className="mr-2 h-4 w-4" />
                 View Details
