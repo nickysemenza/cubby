@@ -1,19 +1,22 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
-import { formatCurrency } from "~/lib/utils";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
-import { createInventoryEntriesColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCurrencyColumn,
+  createExternalLinkColumn,
+  createFilterableSelectColumn,
+  createInventoryEntriesColumn,
+  createSingleEntityPillColumn,
+} from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
-import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
-import { TableLink } from "../_components/table/TableLink";
 
 interface ProductListProps {
   initialCategory?: string;
@@ -45,30 +48,16 @@ export function ProductList({ initialCategory }: ProductListProps) {
     },
     columns: [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
-      columnHelper.accessor("category", {
+      createFilterableSelectColumn(columnHelper, "category", {
         header: "Category",
-        meta: {
-          filterConfig: {
-            placeholder: "Filter by category...",
-            filterType: "select",
-            options: [
-              { value: "", label: "All categories" },
-              ...productCategoryOptionsWithTheme,
-            ],
-          },
-        },
-        cell: (info) => <CategoryBadge category={info.getValue()} />,
+        placeholder: "Filter by category...",
+        selectOptions: [
+          { value: "", label: "All categories" },
+          ...productCategoryOptionsWithTheme,
+        ],
+        renderCell: (category) => <CategoryBadge category={category} />,
       }),
-      columnHelper.accessor("ingredient", {
-        cell: (info) => {
-          const ingredient = info.getValue();
-          return ingredient ? (
-            <EntityPillLink entity="ingredient" data={ingredient} compact />
-          ) : (
-            <NoneState />
-          );
-        },
-      }),
+      createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient"),
       columnHelper.accessor("manufacturer", {
         meta: {
           mobileCategory: "compact",
@@ -76,41 +65,11 @@ export function ProductList({ initialCategory }: ProductListProps) {
         },
         cell: (info) => info.getValue(),
       }),
-      columnHelper.accessor("upc", {
-        meta: {
-          filterConfig: { placeholder: "Filter UPC..." },
-        },
-        cell: (info) => {
-          const upc = info.getValue();
-          return upc ? (
-            <TableLink
-              to="/usda/upc/$code"
-              params={{ code: upc }}
-              variant="mono"
-            >
-              {upc}
-            </TableLink>
-          ) : (
-            <NoneState />
-          );
-        },
+      createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
+        filterConfig: { placeholder: "Filter UPC..." },
       }),
-      columnHelper.accessor("ndb_number", {
+      createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", {
         header: "NDB",
-        cell: (info) => {
-          const ndb = info.getValue();
-          return ndb ? (
-            <TableLink
-              to="/usda/ndb/$code"
-              params={{ code: String(ndb) }}
-              variant="mono"
-            >
-              {ndb}
-            </TableLink>
-          ) : (
-            <NoneState />
-          );
-        },
       }),
       columnHelper.accessor("model", {
         cell: (info) =>
@@ -120,23 +79,9 @@ export function ProductList({ initialCategory }: ProductListProps) {
             <NoneState />
           ),
       }),
-      columnHelper.accessor("price", {
-        header: "Price",
-        cell: (info) => {
-          const price = info.getValue();
-          if (price === null || price === undefined) return <NoneState />;
-          return formatCurrency(price);
-        },
-      }),
-      columnHelper.accessor("food", {
-        meta: {
-          mobileCategory: "compact",
-        },
-        cell: (info) => {
-          const food = info.getValue();
-          if (!food) return <NoneState />;
-          return <EntityPillLink entity="usda-food" data={food} compact />;
-        },
+      createCurrencyColumn(columnHelper, "price"),
+      createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
+        mobileCategory: "compact",
       }),
       createInventoryEntriesColumn(
         columnHelper,

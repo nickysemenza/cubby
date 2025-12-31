@@ -18,7 +18,7 @@ import {
 } from "~/components/ui/tooltip";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
-import { cn } from "~/lib/utils";
+import { cn, formatCurrency } from "~/lib/utils";
 import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -491,6 +491,265 @@ export function createActionsColumnBase<T>(
           </DropdownMenuContent>
         </DropdownMenu>
       );
+    },
+  });
+}
+
+// ============================================================================
+// Currency Column
+// ============================================================================
+
+/**
+ * Creates a column that displays a currency value with proper formatting.
+ *
+ * @example
+ * createCurrencyColumn(columnHelper, "price")
+ * createCurrencyColumn(columnHelper, "valuation", { header: "Valuation" })
+ */
+export function createCurrencyColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options?: {
+    header?: string;
+    className?: string;
+  },
+) {
+  return columnHelper.accessor((row) => row[accessor] as number | null, {
+    id: String(accessor),
+    header: options?.header,
+    meta: options?.className ? { className: options.className } : undefined,
+    cell: (info) => {
+      const val = info.getValue();
+      if (val === null || val === undefined) return <NoneState />;
+      return formatCurrency(val);
+    },
+  });
+}
+
+// ============================================================================
+// Single Entity Pill Column
+// ============================================================================
+
+// Entity-specific single data types (nullable)
+type SingleEntityColumnData =
+  | { entity: "ingredient"; data: { name: string; id: string } | null }
+  | {
+      entity: "product";
+      data: { name: string; id: string; manufacturer: string } | null;
+    }
+  | { entity: "recipe"; data: { name: string; id: string } | null }
+  | {
+      entity: "location";
+      data: { name: string; id: string; type: LocationType } | null;
+    }
+  | {
+      entity: "usda-food";
+      data: { fdc_id: number; description: string } | null;
+    };
+
+/**
+ * Creates a column that displays a single related entity as a pill link.
+ * Shows NoneState when the entity is null/undefined.
+ *
+ * @example
+ * // For displaying a product's linked ingredient
+ * createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient")
+ *
+ * // For displaying a location's parent
+ * createSingleEntityPillColumn(columnHelper, "parent", "location")
+ */
+export function createSingleEntityPillColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+  TEntity extends SingleEntityColumnData["entity"],
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  entity: TEntity,
+  options?: {
+    header?: string;
+    className?: string;
+    compact?: boolean;
+    mobileCategory?: "hero" | "compact" | "medium" | "wide";
+    filterConfig?: FilterConfig;
+  },
+) {
+  const compact = options?.compact ?? true;
+
+  return columnHelper.accessor(
+    (row) =>
+      row[accessor] as Extract<
+        SingleEntityColumnData,
+        { entity: TEntity }
+      >["data"],
+    {
+      id: String(accessor),
+      header: options?.header,
+      enableSorting: false,
+      meta: {
+        className: options?.className,
+        mobileCategory: options?.mobileCategory,
+        filterConfig: options?.filterConfig,
+      },
+      cell: (info) => {
+        const item = info.getValue();
+        if (!item) return <NoneState />;
+        return (
+          <EntityPillLink
+            entity={entity}
+            data={item as never}
+            compact={compact}
+          />
+        );
+      },
+    },
+  );
+}
+
+// ============================================================================
+// Filterable Select Column
+// ============================================================================
+
+/**
+ * Creates a column with a select-based inline filter.
+ *
+ * @example
+ * createFilterableSelectColumn(columnHelper, "category", {
+ *   header: "Category",
+ *   placeholder: "Filter by category...",
+ *   selectOptions: productCategoryOptionsWithTheme,
+ *   renderCell: (category) => <CategoryBadge category={category} />,
+ * })
+ */
+export function createFilterableSelectColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options: {
+    header?: string;
+    placeholder: string;
+    selectOptions: Array<{
+      value: string;
+      label: string;
+      icon?: ReactNode;
+      color?: string;
+    }>;
+    renderCell: (value: T[K]) => ReactNode;
+    className?: string;
+  },
+) {
+  return columnHelper.accessor((row) => row[accessor], {
+    id: String(accessor),
+    header: options.header,
+    meta: {
+      className: options.className,
+      filterConfig: {
+        placeholder: options.placeholder,
+        filterType: "select",
+        options: options.selectOptions,
+      },
+    },
+    cell: (info) => options.renderCell(info.getValue() as T[K]),
+  });
+}
+
+// ============================================================================
+// External Link Column
+// ============================================================================
+
+/**
+ * Creates a column that displays a value as a link to an external/internal page.
+ * Shows NoneState when the value is null/undefined.
+ *
+ * @example
+ * // UPC link to USDA lookup
+ * createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code")
+ *
+ * // NDB number link
+ * createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", { header: "NDB" })
+ */
+export function createExternalLinkColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  linkTo: string,
+  options?: {
+    header?: string;
+    /** Name of the route param to use (default: "code") */
+    paramName?: string;
+    variant?: "mono" | "default";
+    className?: string;
+    filterConfig?: FilterConfig;
+  },
+) {
+  const paramName = options?.paramName ?? "code";
+  const variant = options?.variant ?? "mono";
+
+  return columnHelper.accessor(
+    (row) => row[accessor] as string | number | null,
+    {
+      id: String(accessor),
+      header: options?.header,
+      meta: {
+        className: options?.className,
+        filterConfig: options?.filterConfig,
+      },
+      cell: (info) => {
+        const value = info.getValue();
+        if (value === null || value === undefined) return <NoneState />;
+        return (
+          <TableLink
+            to={linkTo as "/usda/upc/$code"}
+            params={{ [paramName]: String(value) } as { code: string }}
+            variant={variant}
+          >
+            {value}
+          </TableLink>
+        );
+      },
+    },
+  );
+}
+
+// ============================================================================
+// Timestamp Column (generalized)
+// ============================================================================
+
+/**
+ * Creates a timestamp column with HoverableTimestamp display.
+ * Generalization of createCreatedAtColumn for any timestamp field.
+ *
+ * @example
+ * createTimestampColumn(columnHelper, "lastBulkInventory", { header: "Last Bulk Inventory", fallback: "Never" })
+ */
+export function createTimestampColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options?: {
+    header?: string;
+    fallback?: ReactNode;
+    className?: string;
+  },
+) {
+  const fallback = options?.fallback ?? "";
+
+  return columnHelper.accessor((row) => row[accessor] as string | Date | null, {
+    id: String(accessor),
+    header: options?.header,
+    meta: options?.className ? { className: options.className } : undefined,
+    cell: (info) => {
+      const value = info.getValue();
+      return value ? <HoverableTimestamp timestamp={value} /> : fallback;
     },
   });
 }

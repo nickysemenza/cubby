@@ -12,13 +12,14 @@ import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
   createEntityPillColumn,
+  createFilterableSelectColumn,
   createImageColumn,
   createInventoryEntriesColumn,
   createNameColumn,
+  createSingleEntityPillColumn,
+  createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
-import { EntityPillLink } from "../_components/EntityPill";
-import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
@@ -46,26 +47,11 @@ export function LocationList() {
         filterConfig: { placeholder: "Filter by location name..." },
       }),
       createEntityPillColumn(columnHelper, "children", "location"),
-      columnHelper.accessor("parent", {
-        enableSorting: false,
-        cell: (info) => {
-          const item = info.getValue();
-          return (
-            <div>
-              {item && <EntityPillLink entity="location" data={item} compact />}
-            </div>
-          );
-        },
-      }),
-      columnHelper.accessor("type", {
-        meta: {
-          filterConfig: {
-            placeholder: "Filter by type...",
-            filterType: "select",
-            options: locationTypeOptionsWithTheme,
-          },
-        },
-        cell: (info) => <LocationTypeBadge type={info.getValue()} />,
+      createSingleEntityPillColumn(columnHelper, "parent", "location"),
+      createFilterableSelectColumn(columnHelper, "type", {
+        placeholder: "Filter by type...",
+        selectOptions: locationTypeOptionsWithTheme,
+        renderCell: (type) => <LocationTypeBadge type={type} />,
       }),
       columnHelper.display({
         id: "inventory_value",
@@ -79,12 +65,9 @@ export function LocationList() {
         meta: { className: "w-[180px]" },
       }),
       createCreatedAtColumn(columnHelper),
-      columnHelper.accessor("lastBulkInventory", {
+      createTimestampColumn(columnHelper, "lastBulkInventory", {
         header: "Last Bulk Inventory",
-        cell: (info) => {
-          const date = info.getValue();
-          return date ? <HoverableTimestamp timestamp={date} /> : "Never";
-        },
+        fallback: "Never",
       }),
       createInventoryEntriesColumn(
         columnHelper,

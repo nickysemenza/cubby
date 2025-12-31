@@ -3,10 +3,10 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { useQueryWithTiming } from "~/hooks/useQueryWithTiming";
 import type { Flatten } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
+import { createEntityPillColumn } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { useTableState } from "../_components/data-table/useTableState";
-import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
@@ -124,26 +124,9 @@ export function USDAFoodList() {
         );
       },
     }),
-    columnHelper.accessor("linkedProducts", {
+    createEntityPillColumn(columnHelper, "linkedProducts", "product", {
       header: "Linked Products",
-      meta: { className: "w-48 max-w-48" },
-      cell: (info) => {
-        const products = info.getValue();
-        if (!products || products.length === 0) return <NoneState />;
-
-        return (
-          <div className="flex flex-wrap gap-1">
-            {products.map((product) => (
-              <EntityPillLink
-                key={product.id}
-                entity="product"
-                data={product}
-                compact
-              />
-            ))}
-          </div>
-        );
-      },
+      className: "w-48 max-w-48",
     }),
   ];
 

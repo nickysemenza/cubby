@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { z } from "zod";
-import { formatCurrency } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,
+  createCurrencyColumn,
   createImageColumn,
+  createSingleEntityPillColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
@@ -15,7 +16,6 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
-import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
 
@@ -52,14 +52,7 @@ export function InventoryItemList() {
           );
         },
       }),
-      columnHelper.accessor("valuation", {
-        header: "Valuation",
-        cell: (info) => {
-          const val = info.getValue();
-          if (val === null || val === undefined) return <NoneState />;
-          return formatCurrency(val);
-        },
-      }),
+      createCurrencyColumn(columnHelper, "valuation", { header: "Valuation" }),
       columnHelper.accessor("product", {
         enableSorting: false,
         meta: {
@@ -91,17 +84,10 @@ export function InventoryItemList() {
           );
         },
       }),
-      columnHelper.accessor("location", {
-        enableSorting: false,
-        meta: {
-          className: "min-w-0 w-40 max-w-56",
-          mobileCategory: "wide",
-          filterConfig: { placeholder: "Filter location..." },
-        },
-        cell: (info) => {
-          const item = info.getValue();
-          return <EntityPillLink entity="location" data={item} compact />;
-        },
+      createSingleEntityPillColumn(columnHelper, "location", "location", {
+        className: "min-w-0 w-40 max-w-56",
+        mobileCategory: "wide",
+        filterConfig: { placeholder: "Filter location..." },
       }),
       createCreatedAtColumn(columnHelper),
     ],
