@@ -20,6 +20,7 @@ import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
 import { HoverableTimestamp } from "../_components/HoverableTimestamp";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { LocationTypeBadge } from "../_components/locations/LocationTypeBadge";
 import { LocationCardGrid } from "../_components/locations/location-card-grid";
@@ -29,6 +30,7 @@ export function LocationList() {
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const api = useTRPC();
   const columnHelper = createColumnHelper<LocationOutWithParentChildren>();
+  const { onRowClick, PreviewSheet } = useEntityPreview("location");
 
   const { table, data, isLoading, error, timing } = useEntityList({
     entity: "location",
@@ -135,6 +137,7 @@ export function LocationList() {
           ariaLabel="Locations Table"
           timing={timing}
           entity="location"
+          onRowClick={onRowClick}
         />
       ) : (
         <div>
@@ -150,6 +153,7 @@ export function LocationList() {
           )}
         </div>
       )}
+      <PreviewSheet />
     </div>
   );
 }

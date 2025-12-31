@@ -9,6 +9,7 @@ import { createInventoryEntriesColumn } from "../_components/data-table/columnHe
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
@@ -21,6 +22,7 @@ interface ProductListProps {
 export function ProductList({ initialCategory }: ProductListProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<ProductWithFoodOut>();
+  const { onRowClick, PreviewSheet } = useEntityPreview("product");
 
   // Build initial filter from URL params
   const initialFilter = useMemo((): ColumnFiltersState => {
@@ -169,7 +171,9 @@ export function ProductList({ initialCategory }: ProductListProps) {
         ariaLabel="Products Table"
         timing={timing}
         entity="product"
+        onRowClick={onRowClick}
       />
+      <PreviewSheet />
     </div>
   );
 }

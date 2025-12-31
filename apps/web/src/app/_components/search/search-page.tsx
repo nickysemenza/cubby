@@ -7,13 +7,11 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import { Search } from "lucide-react";
-import { useState } from "react";
 import { Input } from "~/components/ui/input";
-import { Sheet, SheetContent } from "~/components/ui/sheet";
-import type { SearchableEntity, SearchType } from "~/schemas/search";
+import type { SearchType } from "~/schemas/search";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";
-import { EntityPreviewPanel } from "./entity-preview-panel";
+import { useEntityPreview } from "../hooks/useEntityPreview";
 import { searchColumns } from "./search-columns";
 
 interface SearchPageProps {
@@ -24,12 +22,7 @@ interface SearchPageProps {
 export function SearchPage({ query = "", type }: SearchPageProps) {
   const api = useTRPC();
   const navigate = useNavigate();
-
-  // Use local state for preview (no URL sync to avoid navigation overhead)
-  const [preview, setPreview] = useState<{
-    entityType: SearchableEntity;
-    id: string;
-  } | null>(null);
+  const { onRowClick, PreviewSheet } = useEntityPreview(); // Dynamic entity from row
 
   // Search query - 50 per entity type for full search page
   const { data, isLoading, error } = useQuery({
@@ -63,16 +56,6 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
     });
   };
 
-  // Open preview panel on row click (local state, no navigation)
-  const handleRowClick = (row: {
-    original: { entityType: SearchableEntity; id: string };
-  }) => {
-    setPreview({
-      entityType: row.original.entityType,
-      id: row.original.id,
-    });
-  };
-
   return (
     <div className="container mx-auto space-y-4 p-1">
       {/* Search input */}
@@ -95,31 +78,14 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
           isLoading={isLoading}
           error={error}
           ariaLabel="Search results"
-          onRowClick={handleRowClick}
+          onRowClick={onRowClick}
         />
       ) : (
         <div className="flex h-48 items-center justify-center text-muted-foreground">
           Enter a search term to find items
         </div>
       )}
-
-      {/* Side panel preview */}
-      <Sheet
-        open={!!preview}
-        onOpenChange={(open) => !open && setPreview(null)}
-      >
-        <SheetContent
-          side="right"
-          className="!w-1/2 !max-w-none overflow-y-auto"
-        >
-          {preview && (
-            <EntityPreviewPanel
-              entityType={preview.entityType}
-              id={preview.id}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      <PreviewSheet />
     </div>
   );
 }

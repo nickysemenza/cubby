@@ -4,15 +4,18 @@ import type { z } from "zod";
 import { formatCurrency } from "~/lib/utils";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
-import { createCreatedAtColumn } from "../_components/data-table/columnHelpers";
+import {
+  createCreatedAtColumn,
+  createImageColumn,
+} from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { NoneState } from "../_components/NoneState";
-import { ImageThumbnail } from "../_components/table/ImageThumbnail";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
 
@@ -21,6 +24,7 @@ type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 export function InventoryItemList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryListItem>();
+  const { onRowClick, PreviewSheet } = useEntityPreview("inventory-item");
 
   const { table, data, isLoading, error, timing } = useEntityList({
     entity: "inventory-item",
@@ -31,15 +35,8 @@ export function InventoryItemList() {
     }),
     // Inventory has custom columns (product image, amount instead of name)
     columns: [
-      // Image from product
-      columnHelper.accessor("product", {
-        id: "product_image",
-        header: "Image",
-        enableSorting: false,
-        cell: (info) => {
-          const product = info.getValue();
-          return <ImageThumbnail images={product.images} alt="Product image" />;
-        },
+      createImageColumn(columnHelper, {
+        getImages: (row) => row.product.images,
       }),
       columnHelper.accessor("amount", {
         header: "Qty",
@@ -126,7 +123,9 @@ export function InventoryItemList() {
         ariaLabel="Inventory Items Table"
         timing={timing}
         entity="inventory-item"
+        onRowClick={onRowClick}
       />
+      <PreviewSheet />
     </div>
   );
 }

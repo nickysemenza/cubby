@@ -4,14 +4,17 @@ import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import { useEntityList } from "~/app/_components/hooks/useEntityList";
+import { useEntityPreview } from "~/app/_components/hooks/useEntityPreview";
 import { NoneState } from "~/app/_components/NoneState";
 import { ImageStatusBadge } from "~/app/_components/table/StatusBadge";
+import { formatBytes } from "~/lib/format";
 import type { ImageWithEntity } from "~/schemas/image";
 import { useTRPC } from "~/trpc/react";
 
 export default function ImageList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<ImageWithEntity>();
+  const { onRowClick, PreviewSheet } = useEntityPreview("image");
 
   const { table, isLoading, error, timing, data } = useEntityList({
     entity: "image",
@@ -112,26 +115,17 @@ export default function ImageList() {
   }
 
   return (
-    <RTable
-      table={table}
-      isLoading={isLoading}
-      error={error}
-      ariaLabel="Images Table"
-      timing={timing}
-      entity="image"
-    />
+    <div>
+      <RTable
+        table={table}
+        isLoading={isLoading}
+        error={error}
+        ariaLabel="Images Table"
+        timing={timing}
+        entity="image"
+        onRowClick={onRowClick}
+      />
+      <PreviewSheet />
+    </div>
   );
-}
-
-// Helper function to format bytes
-function formatBytes(bytes: number, decimals = 2) {
-  if (bytes === 0) return "0 Bytes";
-
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-  return `${parseFloat((bytes / k ** i).toFixed(dm))} ${sizes[i]}`;
 }

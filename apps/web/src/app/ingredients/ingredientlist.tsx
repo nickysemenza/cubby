@@ -15,6 +15,7 @@ import {
 import { buildSelectColumn } from "../_components/data-table/row-selection";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { TruncatedList } from "../_components/TruncatedList";
 import { IngredientMerger } from "./ingredient-merger";
 
@@ -22,6 +23,7 @@ export function IngredientList() {
   const missingProductsId = useId();
   const api = useTRPC();
   const columnHelper = createColumnHelper<IngredientWithFoodOut>();
+  const { onRowClick, PreviewSheet } = useEntityPreview("ingredient");
 
   // Global filter for missing products
   const [globalFilter, setGlobalFilter] = useState({
@@ -93,6 +95,7 @@ export function IngredientList() {
         ariaLabel="Ingredients Table"
         timing={timing}
         entity="ingredient"
+        onRowClick={onRowClick}
         additionalToolbarContent={
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -111,6 +114,7 @@ export function IngredientList() {
           </div>
         }
       />
+      <PreviewSheet />
     </div>
   );
 }

@@ -3,10 +3,12 @@ import type { RecipeOut } from "~/schemas/recipe";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 
 export function RecipeList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<RecipeOut>();
+  const { onRowClick, PreviewSheet } = useEntityPreview("recipe");
 
   const { table, filterableColumns, isLoading, error, timing } = useEntityList({
     entity: "recipe",
@@ -37,7 +39,9 @@ export function RecipeList() {
         ariaLabel="Recipes Table"
         timing={timing}
         entity="recipe"
+        onRowClick={onRowClick}
       />
+      <PreviewSheet />
     </div>
   );
 }

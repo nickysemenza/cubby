@@ -7,6 +7,7 @@ import RTable from "../_components/data-table/Table";
 import { useTableConfig } from "../_components/data-table/useTableConfig";
 import { useTableState } from "../_components/data-table/useTableState";
 import { EntityPillLink } from "../_components/EntityPill";
+import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { NoneState } from "../_components/NoneState";
 import { TableLink } from "../_components/table/TableLink";
 import { UnitMappingDisplay } from "../_components/units/UnitMappingDisplay";
@@ -14,6 +15,9 @@ import { NutritionInfoTable } from "../_components/usda/nutrition";
 
 export function USDAFoodList() {
   const api = useTRPC();
+  const { onRowClick, PreviewSheet } = useEntityPreview("usda-food", {
+    idField: "fdc_id",
+  });
   // Set up table state
   const tableState = useTableState({ initialSort: "fdc_id" });
 
@@ -173,7 +177,9 @@ export function USDAFoodList() {
         error={error}
         ariaLabel="USDA Foods Table"
         timing={timing}
+        onRowClick={onRowClick}
       />
+      <PreviewSheet />
     </div>
   );
 }
