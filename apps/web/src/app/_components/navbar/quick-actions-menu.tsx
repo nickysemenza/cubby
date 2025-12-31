@@ -78,7 +78,9 @@ export const QuickActionsMenu = () => {
               return (
                 <DropdownMenuItem
                   key={action.entity}
-                  render={<Link to={`/${def.basePath}/new`} />}
+                  render={
+                    <Link to={`/${def.basePath}/new` as "/products/new"} />
+                  }
                 >
                   <EntityIcon
                     entity={action.entity}

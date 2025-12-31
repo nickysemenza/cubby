@@ -20,28 +20,16 @@ interface LocationCardGridProps {
   className?: string;
   showParentPath?: boolean;
   onLocationSelect?: (location: InfLocation) => void;
-  /** Max columns at largest breakpoint. Default is 4. */
-  maxColumns?: 2 | 3 | 4;
 }
-
-const colsVariant = {
-  2: "cards2",
-  3: "cards3",
-  4: "cards4",
-} as const;
 
 export function LocationCardGrid({
   locations,
   className,
   showParentPath = false,
   onLocationSelect,
-  maxColumns = 4,
 }: LocationCardGridProps) {
   return (
-    <GridContainer
-      cols={colsVariant[maxColumns]}
-      className={cn("stagger-children", className)}
-    >
+    <GridContainer cols="cards3" className={cn("stagger-children", className)}>
       {locations.map((location) => (
         <LocationCard
           key={location.id}

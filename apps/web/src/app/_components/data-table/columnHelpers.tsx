@@ -451,9 +451,7 @@ export function createActionsColumn<T extends { id: string | number }>(
  */
 export function createActionsColumnBase<T>(
   columnHelper: ColumnHelper<T>,
-  getLinkProps: (
-    row: T,
-  ) => { to: string; params: Record<string, string> } | null,
+  getLinkProps: (row: T) => { to: string; params: { id: string } } | null,
   extraActions?: (row: T) => ReactNode,
 ) {
   return columnHelper.display({

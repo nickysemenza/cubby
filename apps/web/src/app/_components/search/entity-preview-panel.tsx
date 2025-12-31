@@ -103,15 +103,13 @@ export function EntityPreviewPanel({
       <SheetHeader className="border-b pr-12 pb-4">
         <div className="flex items-center justify-between">
           <SheetTitle>Preview</SheetTitle>
-          <Button variant="outline" size="sm" asChild>
-            <Link
-              to={detailPath as "/products/$id"}
-              params={{ id }}
-              className="inline-flex items-center"
-            >
-              <ExternalLink className="mr-1 h-3 w-3" />
-              View Full Details
-            </Link>
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link to={detailPath as "/products/$id"} params={{ id }} />}
+          >
+            <ExternalLink className="mr-1 h-3 w-3" />
+            View Full Details
           </Button>
         </div>
       </SheetHeader>

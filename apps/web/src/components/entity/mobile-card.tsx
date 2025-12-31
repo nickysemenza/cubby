@@ -28,6 +28,8 @@ interface MobileCardProps {
   subtitle?: string;
   /** Optional entity type for colored accent border */
   entity?: Entity;
+  /** Optional click handler for the entire card */
+  onClick?: () => void;
 }
 
 /**
@@ -53,6 +55,7 @@ export function MobileCard({
   titleIcon: TitleIcon,
   subtitle,
   entity,
+  onClick,
 }: MobileCardProps) {
   // Get entity-specific border color, fallback to primary
   const borderColor = entity
@@ -64,8 +67,13 @@ export function MobileCard({
       className={cn(
         "flex animate-fade-in items-start gap-3 rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all hover:shadow-md",
         borderColor,
+        onClick && "cursor-pointer",
         className,
       )}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
     >
       {/* Checkbox - only rendered if selectable */}
       {selectable && (

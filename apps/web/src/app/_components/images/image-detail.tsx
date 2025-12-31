@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
 import { assertNever } from "~/lib/assert";
 import { formatBytes } from "~/lib/format";
+import type { ImageStatus } from "~/schemas/image";
 
 interface ImageData {
   id: string;
@@ -13,7 +14,7 @@ interface ImageData {
   url: string;
   contentType: string;
   size: number;
-  status: "pending" | "uploaded" | "failed";
+  status: ImageStatus;
   entityType: "PRODUCT" | "LOCATION" | "RECIPE" | null;
   entityId: string | null;
   entityName: string | null;
@@ -75,7 +76,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
         </CardHeader>
         <CardContent className="flex justify-center">
           <div className="relative aspect-square w-full max-w-xs overflow-hidden rounded-md border">
-            {image.status === "uploaded" ? (
+            {image.status === "UPLOADED" ? (
               <Image
                 src={image.url}
                 alt={image.filename}
@@ -86,7 +87,7 @@ export function ImageDetail({ image }: ImageDetailProps) {
                 <div className="text-center">
                   <ImageIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
                   <p className="mt-2 text-muted-foreground text-sm">
-                    {image.status === "pending"
+                    {image.status === "PENDING"
                       ? "Upload pending..."
                       : "Upload failed"}
                   </p>

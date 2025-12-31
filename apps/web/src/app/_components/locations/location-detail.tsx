@@ -96,7 +96,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           <LocationCardGrid
             locations={location.children}
             showParentPath={false}
-            maxColumns={2}
           />
         ) : (
           <Empty variant="minimal" className="py-4">

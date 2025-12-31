@@ -11,6 +11,7 @@ import {
   CommandSeparator,
 } from "~/components/ui/command";
 import { EntityIcon, entities } from "~/entities/entities";
+import type { SearchableEntity } from "~/schemas/search";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { Pill } from "./Pill";
 import {

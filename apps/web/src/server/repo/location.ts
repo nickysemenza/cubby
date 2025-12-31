@@ -765,7 +765,7 @@ export const touchLastBulkInventory = async (
     .where(
       and(eq(location.id, id), eq(location.organizationId, organizationId)),
     )
-    .returning({ id: location.id });
+    .returning();
 
   if (result.length === 0) {
     throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper } from "@tanstack/react-table";
+import { createColumnHelper, type Row } from "@tanstack/react-table";
 import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityPillLink } from "~/app/_components/EntityPill";
@@ -92,7 +92,7 @@ export default function ImageList() {
 
             return (
               <EntityPillLink
-                entity={entityMap[entityType]}
+                entity={entityMap[entityType as keyof typeof entityMap]}
                 data={{ id: entityId, name: entityName }}
                 compact
               />
@@ -123,7 +123,9 @@ export default function ImageList() {
         ariaLabel="Images Table"
         timing={timing}
         entity="image"
-        onRowClick={onRowClick}
+        onRowClick={
+          onRowClick as unknown as (row: Row<ImageWithEntity>) => void
+        }
       />
       <PreviewSheet />
     </div>
