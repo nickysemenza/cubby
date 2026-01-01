@@ -134,3 +134,14 @@ export function getNutrientValueByKey(
   const code = TIER1_NUTRIENTS[key].code;
   return getNutrientValue(nutrients, code);
 }
+
+/**
+ * Get the canonical unit string for a nutrient (e.g., "g protein", "kcal").
+ * Used by both mapping creation and conversion targets.
+ * Avoids duplication like "kcal kcal" - uses just the unit when they match.
+ */
+export function getNutrientUnitString(key: NutrientKey): string {
+  const info = TIER1_NUTRIENTS[key];
+  const unit = info.unit.toLowerCase();
+  return unit === key ? unit : `${unit} ${key}`;
+}

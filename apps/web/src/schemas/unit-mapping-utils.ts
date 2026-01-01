@@ -3,7 +3,9 @@ import {
   branded_food_serving_size_unit,
   type FoodSummary,
   getNutrientKey,
-  getNutrientUnit,
+  getNutrientUnitString,
+  isTier1Nutrient,
+  type NutrientKey,
 } from "@recipehub/usda-schemas";
 import { wasm } from "~/lib/wasm";
 import type { UnitMapping } from "./unitmapping";
@@ -111,12 +113,10 @@ const unitMappingsFromNutrition = (food: FoodSummary): UnitMapping[] => {
   const { fdc_id } = food;
 
   return Object.entries(nutrients)
-    .filter(([_, amount]) => amount > 0)
+    .filter(([code, amount]) => amount > 0 && isTier1Nutrient(code))
     .map(([code, amount]) => {
-      const unit = getNutrientUnit(code).toLowerCase();
-      const key = getNutrientKey(code);
-      // Avoid duplication like "kcal kcal" - use just the unit when they match
-      const unitStr = unit === key ? unit : `${unit} ${key}`;
+      const key = getNutrientKey(code) as NutrientKey;
+      const unitStr = getNutrientUnitString(key);
       return {
         a: { value: 100, unit: "g" },
         b: { value: amount, unit: unitStr },

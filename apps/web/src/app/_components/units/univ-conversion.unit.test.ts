@@ -43,9 +43,10 @@ describe("convertAmountToNutrients", () => {
         source: "test",
         sourceMetadata: { type: "manual" },
       },
+      // kcal mapping uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
       {
         a: { value: 100, unit: "g" },
-        b: { value: 200, unit: "kcal kcal" },
+        b: { value: 200, unit: "kcal" },
         source: "test",
         sourceMetadata: { type: "manual" },
       },
@@ -88,6 +89,47 @@ describe("convertAmountToNutrients", () => {
 
     expect(result.success).toBe(false);
   });
+
+  test("kcal requires 'kcal' unit (not 'kcal kcal') because WASM uses Unit::KCal internally", async () => {
+    // This test documents a key implementation detail:
+    // WASM treats MeasureKind::Calories → Unit::KCal (built-in)
+    // but MeasureKind::Nutrient("kcal") → Unit::Other("kcal") (generic)
+    // These don't match in the graph! So we use conv_amount_to_kind("calories")
+    // for kcal, which requires mappings with "kcal" (parses to Unit::KCal).
+
+    const amount: Amount = { value: 100, unit: "g" };
+
+    // This FAILS: "kcal kcal" parses to Unit::Other("kcal kcal")
+    const badMappings: UnitMapping[] = [
+      {
+        a: { value: 100, unit: "g" },
+        b: { value: 200, unit: "kcal kcal" }, // Wrong format!
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+    ];
+
+    const badResult = convertAmountToNutrients(amount, badMappings);
+    // Should fail because "kcal kcal" doesn't match Unit::KCal
+    expect(badResult.success).toBe(false);
+
+    // This WORKS: "kcal" parses to Unit::KCal
+    const goodMappings: UnitMapping[] = [
+      {
+        a: { value: 100, unit: "g" },
+        b: { value: 200, unit: "kcal" }, // Correct format!
+        source: "test",
+        sourceMetadata: { type: "manual" },
+      },
+    ];
+
+    const goodResult = convertAmountToNutrients(amount, goodMappings);
+    expect(goodResult.success).toBe(true);
+    if (goodResult.success) {
+      // Nutrient code "208" is kcal
+      expect(goodResult.value["208"]).toBe(200);
+    }
+  });
 });
 
 describe("getGramAndNutrient", () => {
@@ -107,9 +149,10 @@ describe("getGramAndNutrient", () => {
         source: "test",
         sourceMetadata: { type: "manual" },
       },
+      // kcal mapping uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
       {
         a: { value: 100, unit: "g" },
-        b: { value: 200, unit: "kcal kcal" },
+        b: { value: 200, unit: "kcal" },
         source: "test",
         sourceMetadata: { type: "manual" },
       },
@@ -189,9 +232,10 @@ describe("getGramAndNutrient", () => {
         source: "test",
         sourceMetadata: { type: "manual" },
       },
+      // kcal mapping uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
       {
         a: { value: 1, unit: "serving" },
-        b: { value: 200, unit: "kcal kcal" },
+        b: { value: 200, unit: "kcal" },
         source: "test",
         sourceMetadata: { type: "manual" },
       },
@@ -547,10 +591,11 @@ describe("calculateTotals", () => {
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
+              // kcal uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
               {
                 id: "map1-kcal",
                 a: { value: 100, unit: "g" },
-                b: { value: 200, unit: "kcal kcal" },
+                b: { value: 200, unit: "kcal" },
                 source: "test",
                 sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
@@ -622,10 +667,11 @@ describe("calculateTotals", () => {
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
+              // kcal uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
               {
                 id: "map3-kcal",
                 a: { value: 100, unit: "g" },
-                b: { value: 130, unit: "kcal kcal" },
+                b: { value: 130, unit: "kcal" },
                 source: "test",
                 sourceMetadata: { type: "manual" },
                 createdAt: new Date(),
@@ -793,10 +839,11 @@ describe("calculateTotals", () => {
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },
+              // kcal uses "kcal" (parses to Unit::KCal) - required for conv_amount_to_kind("calories")
               {
                 id: "map1-kcal",
                 a: { value: 100, unit: "g" },
-                b: { value: 200, unit: "kcal kcal" },
+                b: { value: 200, unit: "kcal" },
                 source: "test",
                 sourceMetadata: { type: "manual" },
                 createdAt: new Date(),

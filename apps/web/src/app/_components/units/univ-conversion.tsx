@@ -1,5 +1,6 @@
 import type { AmountKind, WAmount } from "@recipehub/recipebridge";
 import {
+  getNutrientUnitString,
   type NutrientKey,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
@@ -17,18 +18,17 @@ import type {
 
 /**
  * Get nutrient target unit strings for WASM batch conversion
- * Format: "g protein", "mg sodium", "kcal kcal", etc.
+ * Format: "g protein", "mg sodium", etc.
+ * NOTE: kcal is excluded - it must use conv_amount_to_kind("calories") instead
+ * because WASM treats Unit::KCal differently from Unit::Other("kcal")
  */
 const getNutrientTargets = (): { key: NutrientKey; target: string }[] => {
-  return (
-    Object.entries(TIER1_NUTRIENTS) as [
-      NutrientKey,
-      (typeof TIER1_NUTRIENTS)[NutrientKey],
-    ][]
-  ).map(([key, info]) => ({
-    key,
-    target: `${info.unit.toLowerCase()} ${key}`,
-  }));
+  return (Object.keys(TIER1_NUTRIENTS) as NutrientKey[])
+    .filter((key) => key !== "kcal") // kcal handled separately via conv_amount_to_kind
+    .map((key) => ({
+      key,
+      target: getNutrientUnitString(key),
+    }));
 };
 
 /**
@@ -59,6 +59,19 @@ export const convertAmountToNutrients = (
         const code = TIER1_NUTRIENTS[key].code;
         nutrients[code] = converted.value;
       }
+    }
+
+    // Handle kcal separately using conv_amount_to_kind("calories")
+    // This is needed because WASM treats Unit::KCal differently from Unit::Other("kcal")
+    // MeasureKind::Nutrient("kcal") creates Unit::Other("kcal"), but mappings use Unit::KCal
+    try {
+      const kcalResult = wasm.conv_amount_to_kind(mappings, "calories", amount);
+      if (kcalResult) {
+        const kcalCode = TIER1_NUTRIENTS.kcal.code;
+        nutrients[kcalCode] = kcalResult.value;
+      }
+    } catch {
+      // kcal conversion failed - this is fine, just means no path exists
     }
 
     // Check if we got any nutrients
