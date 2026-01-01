@@ -206,7 +206,7 @@ export function LocationInventoryTable({
 
   // Update mutation for inline editing
   const updateMutation = useMutation(
-    api.inventoryItem.update.mutationOptions({
+    api.inventory.update.mutationOptions({
       onSuccess: () => {
         toast.success("Amount updated");
         setEditingRowId(null);
@@ -264,7 +264,7 @@ export function LocationInventoryTable({
         },
       }),
 
-      createActionsColumn(columnHelper, "inventory-item", {
+      createActionsColumn(columnHelper, "inventory", {
         extraActions: (item) => (
           <InventoryItemActions
             item={item}

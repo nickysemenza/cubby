@@ -51,7 +51,7 @@ const csvContent = fs.readFileSync(options.file, "utf8");
 const rows = parseInventoryCSV(csvContent);
 console.log(`Parsed ${rows.length} rows from CSV`);
 
-const result = await client.inventoryItem.importCSV.mutate({ rows });
+const result = await client.inventory.importCSV.mutate({ rows });
 console.log(`Import complete:
   - Created: ${result.created}
   - Moved: ${result.moved}
@@ -61,7 +61,9 @@ console.log(`Import complete:
   - Errors: ${result.errors}`);
 
 if (result.errors > 0) {
-  const errorItems = result.items.filter((item) => item.action === "error");
+  const errorItems = result.items.filter(
+    (item: { action: string }) => item.action === "error",
+  );
   console.error("Error details:", errorItems);
 }
 

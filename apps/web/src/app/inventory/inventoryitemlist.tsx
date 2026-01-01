@@ -24,11 +24,11 @@ type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 export function InventoryItemList() {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryListItem>();
-  const { onRowClick, PreviewSheet } = useEntityPreview("inventory-item");
+  const { onRowClick, PreviewSheet } = useEntityPreview("inventory");
 
   const { table, data, isLoading, error, timing } = useEntityList({
-    entity: "inventory-item",
-    queryOptions: api.inventoryItem.list.queryOptions,
+    entity: "inventory",
+    queryOptions: api.inventory.list.queryOptions,
     buildFilters: (ts) => ({
       productNameFilter: ts.getColumnFilter("product"),
       locationNameFilter: ts.getColumnFilter("location"),
@@ -108,7 +108,7 @@ export function InventoryItemList() {
         error={error}
         ariaLabel="Inventory Items Table"
         timing={timing}
-        entity="inventory-item"
+        entity="inventory"
         onRowClick={onRowClick}
       />
       <PreviewSheet />

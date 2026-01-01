@@ -1,17 +1,10 @@
 import { and, desc, eq, lt } from "drizzle-orm";
+import type { AuditEntityType } from "~/schemas/audit";
 import type { ActorContext } from "~/schemas/context";
 import type { OrganizationId } from "~/schemas/identifiers";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
-
-// Entity types that can be audited
-export type AuditEntityType =
-  | "product"
-  | "location"
-  | "inventory"
-  | "recipe"
-  | "ingredient";
 
 // Action types for audit entries
 type AuditAction = "create" | "update" | "delete";

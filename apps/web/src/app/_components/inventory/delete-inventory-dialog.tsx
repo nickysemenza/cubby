@@ -25,10 +25,10 @@ export function DeleteInventoryDialog({
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation(
-    api.inventoryItem.delete.mutationOptions({
+    api.inventory.delete.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.inventoryItem.list,
+          queryKey: queryKeys.inventory.list,
         });
       },
     }),

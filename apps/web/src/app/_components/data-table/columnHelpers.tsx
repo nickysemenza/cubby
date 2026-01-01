@@ -416,7 +416,7 @@ interface ActionsColumnOptions<T> {
  * createActionsColumn(columnHelper, "product")
  *
  * // With extra actions (e.g., for inventory items)
- * createActionsColumn(columnHelper, "inventory-item", {
+ * createActionsColumn(columnHelper, "inventory", {
  *   extraActions: (item) => (
  *     <>
  *       <DropdownMenuItem onClick={() => handleMove(item)}>

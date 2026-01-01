@@ -108,7 +108,7 @@ export default function BulkInventoryForm() {
 
   // Fetch existing inventory items when location is selected
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
-    api.inventoryItem.list.queryOptions(
+    api.inventory.list.queryOptions(
       {
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
@@ -146,7 +146,7 @@ export default function BulkInventoryForm() {
 
   // Bulk process mutation
   const bulkProcessMutation = useMutation(
-    api.inventoryItem.bulkProcess.mutationOptions({
+    api.inventory.bulkProcess.mutationOptions({
       onSuccess: () => {
         refetchInventoryItems();
       },

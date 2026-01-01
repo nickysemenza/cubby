@@ -131,7 +131,7 @@ export default function QuickCaptureForm({
 
   // Fetch inventory at focused location
   const { data: inventoryAtLocation } = useQuery({
-    ...api.inventoryItem.list.queryOptions({
+    ...api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 20 },
       filters: { locationIdFilter: focusedLocationId },
@@ -165,10 +165,10 @@ export default function QuickCaptureForm({
 
   // Bulk process mutation
   const bulkProcessMutation = useMutation(
-    api.inventoryItem.bulkProcess.mutationOptions({
+    api.inventory.bulkProcess.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.inventoryItem.list,
+          queryKey: queryKeys.inventory.list,
         });
       },
     }),
@@ -469,7 +469,7 @@ export default function QuickCaptureForm({
               onClick={() => setShowInventory(!showInventory)}
             >
               <CardTitle className="flex items-center gap-2 font-medium text-sm">
-                <EntityIcon entity="inventory-item" className="h-4 w-4" />
+                <EntityIcon entity="inventory" className="h-4 w-4" />
                 Items at {focusedItem?.location?.name ?? "this location"} (
                 {inventoryAtLocation?.meta?.totalCount ?? 0})
               </CardTitle>

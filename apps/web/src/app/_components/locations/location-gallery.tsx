@@ -327,7 +327,7 @@ export function LocationGallery() {
 
   // Fetch all inventory items (without location filter)
   const { data: inventoryData, isLoading: inventoryLoading } = useQuery(
-    api.inventoryItem.list.queryOptions({
+    api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 10000 },
       filters: {},

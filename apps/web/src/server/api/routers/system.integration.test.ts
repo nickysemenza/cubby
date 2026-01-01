@@ -78,7 +78,7 @@ describe("CSV import test", () => {
     );
 
     // Import CSV data
-    const importResult = await caller.inventoryItem.importCSV({
+    const importResult = await caller.inventory.importCSV({
       rows: testCSVRows,
     });
 

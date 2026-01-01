@@ -112,7 +112,7 @@ export default function BulkMoveForm() {
 
   // Fetch inventory items from source location
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
-    api.inventoryItem.list.queryOptions(
+    api.inventory.list.queryOptions(
       {
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
@@ -176,7 +176,7 @@ export default function BulkMoveForm() {
 
   // Bulk move mutation
   const bulkMoveMutation = useMutation(
-    api.inventoryItem.bulkMove.mutationOptions({
+    api.inventory.bulkMove.mutationOptions({
       onSuccess: () => {
         refetchInventoryItems();
       },
@@ -314,7 +314,7 @@ export default function BulkMoveForm() {
                   />
                   <div className="flex flex-1 items-center gap-2">
                     <EntityIcon
-                      entity="inventory-item"
+                      entity="inventory"
                       className="h-4 w-4 text-muted-foreground"
                     />
                     <span className="font-medium">{item.productName}</span>

@@ -157,10 +157,7 @@ export const LocationGalleryCard = forwardRef<
           </div>
         ) : (
           <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-muted-foreground">
-            <EntityIcon
-              entity="inventory-item"
-              className="h-3 w-3 opacity-40"
-            />
+            <EntityIcon entity="inventory" className="h-3 w-3 opacity-40" />
             <span>Empty</span>
           </div>
         )}

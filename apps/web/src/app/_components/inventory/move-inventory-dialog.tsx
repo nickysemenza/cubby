@@ -61,7 +61,7 @@ export function MoveInventoryDialog({
   });
 
   const bulkMoveMutation = useMutation(
-    api.inventoryItem.bulkMove.mutationOptions({
+    api.inventory.bulkMove.mutationOptions({
       onSuccess: () => {
         toast.success(
           `Successfully moved ${items.length} item${items.length !== 1 ? "s" : ""}`,

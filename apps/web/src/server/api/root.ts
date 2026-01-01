@@ -22,7 +22,7 @@ export const appRouter = createTRPCRouter({
   ingredient: ingredientRouter,
   location: locationRouter,
   product: productRouter,
-  inventoryItem: inventoryRouter,
+  inventory: inventoryRouter,
   usda: usdaRouter,
   upc: upcRouter,
   image: imageRouter,

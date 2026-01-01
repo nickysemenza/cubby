@@ -89,7 +89,7 @@ export default function EntityCount() {
     queries: [
       { ...api.location.list.queryOptions(opts), enabled: !!activeOrg },
       { ...api.product.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.inventoryItem.list.queryOptions(opts), enabled: !!activeOrg },
+      { ...api.inventory.list.queryOptions(opts), enabled: !!activeOrg },
       { ...api.recipe.list.queryOptions(opts), enabled: !!activeOrg },
       { ...api.ingredient.list.queryOptions(opts), enabled: !!activeOrg },
       { ...api.image.list.queryOptions(opts), enabled: !!activeOrg },
@@ -101,7 +101,7 @@ export default function EntityCount() {
   const displayOrder: Entity[] = [
     "location",
     "product",
-    "inventory-item",
+    "inventory",
     "recipe",
     "ingredient",
     "image",

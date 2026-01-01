@@ -362,7 +362,7 @@ function SidebarTreeNode({
                 : "bg-muted text-muted-foreground group-hover:bg-muted/80",
             )}
           >
-            <EntityIcon entity="inventory-item" className="h-2.5 w-2.5" />
+            <EntityIcon entity="inventory" className="h-2.5 w-2.5" />
             {hasChildren ? (
               <>
                 <span>{itemCount}</span>

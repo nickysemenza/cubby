@@ -270,7 +270,7 @@ export const SyncDialog = ({
         if (result.success) {
           setIsComplete(true);
           queryClient.invalidateQueries({
-            queryKey: queryKeys.inventoryItem.list,
+            queryKey: queryKeys.inventory.list,
           });
           queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
           queryClient.invalidateQueries({ queryKey: queryKeys.location.list });
@@ -315,7 +315,7 @@ export const SyncDialog = ({
         if (result.success) {
           setIsComplete(true);
           queryClient.invalidateQueries({
-            queryKey: queryKeys.inventoryItem.list,
+            queryKey: queryKeys.inventory.list,
           });
           queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
           queryClient.invalidateQueries({ queryKey: queryKeys.location.list });

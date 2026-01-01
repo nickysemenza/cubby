@@ -123,7 +123,7 @@ export const entities: Record<Entity, EntityDefinition> = {
       sortableFields: ["createdAt", "name", "type", "lastBulkInventory"],
     },
   },
-  "inventory-item": {
+  inventory: {
     label: "Inventory Item",
     pluralLabel: "Inventory",
     basePath: "inventory",
@@ -194,8 +194,8 @@ export const getSortableFields = (entity: Entity): readonly string[] =>
   entities[entity].list?.sortableFields ?? ["createdAt", "name"];
 
 /**
- * Render an entity's lucide icon. Useful for entities with hyphenated names
- * like "inventory-item" where JSX bracket notation doesn't work.
+ * Render an entity's lucide icon. Useful for entities where you need
+ * dynamic icon selection based on entity type.
  *
  * Use `colored` prop to apply the entity's text color for visual identification.
  */

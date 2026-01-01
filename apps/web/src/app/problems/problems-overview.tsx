@@ -184,7 +184,7 @@ function InvalidInventoryAmountsList({
     <ProblemSection
       title="Invalid Inventory Amounts"
       description="Inventory entries with zero or negative amounts that should be fixed or removed."
-      entity="inventory-item"
+      entity="inventory"
       items={entries}
       emptyMessage="All inventory entries have valid positive amounts."
       groupBy={(items) => {
@@ -523,7 +523,7 @@ function InventoryWithStaleValuationsList({
   const queryClient = useQueryClient();
 
   const backfillMutation = useMutation(
-    api.inventoryItem.backfillInventoryValuations.mutationOptions({
+    api.inventory.backfillInventoryValuations.mutationOptions({
       onSuccess: (result) => {
         if (result.updated > 0) {
           toast.success(
@@ -536,7 +536,7 @@ function InventoryWithStaleValuationsList({
           queryKey: api.problems.getAllProblems.queryKey(),
         });
         queryClient.invalidateQueries({
-          queryKey: api.inventoryItem.list.queryKey(),
+          queryKey: api.inventory.list.queryKey(),
         });
       },
       onError: (error) => {

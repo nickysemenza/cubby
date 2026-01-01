@@ -59,7 +59,7 @@ export function useLocationHierarchy(
   const locations = useQuery(api.location.makeTree.queryOptions());
 
   const inventoryQuery = useQuery(
-    api.inventoryItem.list.queryOptions({
+    api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 5000 },
       filters: {},

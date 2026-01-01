@@ -47,7 +47,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   });
 
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
-    api.inventoryItem.list.queryOptions({
+    api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 100 },
       filters: { locationIdFilter: location.id },

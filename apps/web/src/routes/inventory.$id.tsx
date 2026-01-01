@@ -10,7 +10,7 @@ export const Route = createFileRoute("/inventory/$id")({
   ssr: false,
   loader: ({ params, context }) =>
     context.queryClient.ensureQueryData(
-      context.trpc.inventoryItem.getByID.queryOptions({ id: params.id }),
+      context.trpc.inventory.getByID.queryOptions({ id: params.id }),
     ),
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
@@ -21,7 +21,7 @@ function InventoryDetailPage() {
   const { id } = Route.useParams();
   const { trpc } = Route.useRouteContext();
   const { data: inventory } = useQuery(
-    trpc.inventoryItem.getByID.queryOptions({ id }),
+    trpc.inventory.getByID.queryOptions({ id }),
   );
 
   useDocumentTitle(inventory?.product?.name);

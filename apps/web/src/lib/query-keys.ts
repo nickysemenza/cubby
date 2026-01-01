@@ -3,8 +3,8 @@
  * Use these constants to ensure consistency across query invalidations.
  */
 export const queryKeys = {
-  inventoryItem: {
-    list: ["inventoryItem", "list"] as const,
+  inventory: {
+    list: ["inventory", "list"] as const,
   },
   product: {
     list: ["product", "list"] as const,

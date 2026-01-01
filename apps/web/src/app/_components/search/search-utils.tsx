@@ -17,7 +17,7 @@ export const entityTypeMap: Record<SearchableEntity, Entity> = {
   recipe: "recipe",
   ingredient: "ingredient",
   location: "location",
-  "inventory-item": "inventory-item",
+  inventory: "inventory",
 };
 
 /** Render the appropriate icon for a search result item */
@@ -39,7 +39,7 @@ export function SearchResultItemIcon({
 
   // Product/inventory with category hint
   if (
-    (item.entityType === "product" || item.entityType === "inventory-item") &&
+    (item.entityType === "product" || item.entityType === "inventory") &&
     item.typeHint
   ) {
     const Icon = getCategoryIcon(item.typeHint as ProductCategory);
@@ -69,7 +69,7 @@ export function getEnrichmentText(item: SearchResultItem): string | null {
         parts.push(`${item.childCount} sub`);
       return parts.length > 0 ? parts.join(" · ") : null;
     }
-    case "inventory-item":
+    case "inventory":
       if (item.amount) return tryFormatAmount(item.amount);
       return null;
     case "recipe":

@@ -8,7 +8,7 @@ export const searchableEntities = [
   "recipe",
   "ingredient",
   "location",
-  "inventory-item",
+  "inventory",
 ] as const satisfies readonly Entity[];
 
 export const searchableEntitySchema = z.enum(searchableEntities);
@@ -43,7 +43,7 @@ const locationResult = baseSearchResult.extend({
 });
 
 const inventoryResult = baseSearchResult.extend({
-  entityType: z.literal("inventory-item"),
+  entityType: z.literal("inventory"),
   amount: amount.nullable(),
 });
 

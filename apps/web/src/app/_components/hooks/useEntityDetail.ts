@@ -3,19 +3,19 @@ import { createElement } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import type { AuditEntityType } from "~/schemas/audit";
 import type { UnitMapping } from "~/schemas/unitmapping";
-import type { AuditEntityType } from "~/server/repo/audit-log";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import type { DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 import { type UseEditModeReturn, useEditMode } from "./useEditMode";
 
-/** Map Entity type to AuditEntityType (they differ slightly) */
+/** Map Entity type to AuditEntityType (they're now the same) */
 const entityToAuditType: Partial<Record<Entity, AuditEntityType>> = {
   product: "product",
   location: "location",
-  "inventory-item": "inventory",
+  inventory: "inventory",
   recipe: "recipe",
   ingredient: "ingredient",
 };

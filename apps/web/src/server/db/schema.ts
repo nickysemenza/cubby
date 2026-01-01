@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { Amount } from "~/codec/codec";
+import type { AuditEntityType } from "~/schemas/audit";
 import { imageStatusValues } from "~/schemas/image";
 import { productCategoryValues } from "~/schemas/product";
 import { type RecipeYield, recipeSourceValues } from "~/schemas/recipe";
@@ -621,7 +622,7 @@ export const auditLog = pgTable(
     organizationId: text("organizationId")
       .notNull()
       .references(() => organization.id),
-    entityType: text("entityType").notNull(), // 'product', 'location', 'inventory', 'recipe', 'ingredient'
+    entityType: text("entityType").notNull().$type<AuditEntityType>(),
     entityId: uuid("entityId").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'delete'
     changes:

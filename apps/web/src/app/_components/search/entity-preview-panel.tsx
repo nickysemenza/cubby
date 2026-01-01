@@ -43,8 +43,8 @@ export function EntityPreviewPanel({
     enabled: entityType === "location",
   });
   const inventoryQuery = useQuery({
-    ...api.inventoryItem.getByID.queryOptions({ id }),
-    enabled: entityType === "inventory-item",
+    ...api.inventory.getByID.queryOptions({ id }),
+    enabled: entityType === "inventory",
   });
   const usdaQuery = useQuery({
     ...api.usda.getByID.queryOptions({ id: parseInt(id, 10) }),
@@ -66,7 +66,7 @@ export function EntityPreviewPanel({
         return ingredientQuery;
       case "location":
         return locationQuery;
-      case "inventory-item":
+      case "inventory":
         return inventoryQuery;
       case "usda-food":
         return usdaQuery;
@@ -126,7 +126,7 @@ export function EntityPreviewPanel({
         {entityType === "location" && locationQuery.data && (
           <LocationDetail location={locationQuery.data} />
         )}
-        {entityType === "inventory-item" && inventoryQuery.data && (
+        {entityType === "inventory" && inventoryQuery.data && (
           <InventoryDetail inventoryitem={inventoryQuery.data} />
         )}
         {entityType === "usda-food" && usdaQuery.data && (

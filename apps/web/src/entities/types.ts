@@ -4,14 +4,17 @@ import { z } from "zod";
 export const entityImage = z.enum(["PRODUCT", "LOCATION", "RECIPE"]);
 export type EntityImage = z.infer<typeof entityImage>;
 
-export type Entity =
-  | "ingredient"
-  | "product"
-  | "recipe"
-  | "location"
-  | "inventory-item"
-  | "usda-food"
-  | "image";
+/** All entity types in the system */
+export const entitySchema = z.enum([
+  "ingredient",
+  "product",
+  "recipe",
+  "location",
+  "inventory",
+  "usda-food",
+  "image",
+]);
+export type Entity = z.infer<typeof entitySchema>;
 
 /** All valid entity detail routes (e.g., /products/$id) */
 export type EntityDetailRoute =

@@ -175,7 +175,7 @@ export async function globalSearch(
           id: inventoryEntry.id,
           name: product.name,
           subtitle: location.name,
-          entityType: sql<"inventory-item">`'inventory-item'`.as("entityType"),
+          entityType: sql<"inventory">`'inventory'`.as("entityType"),
           typeHint: product.category,
           imageUrl: sql<string | null>`(
             SELECT i."url" FROM "ProductImage" pi

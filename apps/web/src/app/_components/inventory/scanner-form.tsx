@@ -78,7 +78,7 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
 
   // Existing inventory at this location
   const { data: inventoryData, refetch: refetchInventory } = useQuery({
-    ...api.inventoryItem.list.queryOptions({
+    ...api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       filters: { locationIdFilter: locationId },
       pagination: { pageIndex: 0, pageSize: 100 },
@@ -105,10 +105,10 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
 
   // Inventory create mutation
   const createInventoryMutation = useMutation(
-    api.inventoryItem.create.mutationOptions({
+    api.inventory.create.mutationOptions({
       onSuccess: () => {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.inventoryItem.list,
+          queryKey: queryKeys.inventory.list,
         });
       },
     }),

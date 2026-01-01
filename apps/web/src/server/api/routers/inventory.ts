@@ -112,7 +112,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       );
     },
   },
-  entityName: "inventory-item",
+  entityName: "inventory",
 });
 
 // Delete procedure using standalone factory

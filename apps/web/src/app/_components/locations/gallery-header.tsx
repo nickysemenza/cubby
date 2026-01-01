@@ -58,7 +58,7 @@ export function GalleryHeader({
               {stats.locationCount} locations
             </span>
             <span className="flex items-center gap-1">
-              <EntityIcon entity="inventory-item" className="h-3 w-3" />
+              <EntityIcon entity="inventory" className="h-3 w-3" />
               {stats.itemCount} items
             </span>
           </div>
@@ -136,7 +136,7 @@ export function GalleryHeader({
                 label: "With items",
                 icon: (
                   <EntityIcon
-                    entity="inventory-item"
+                    entity="inventory"
                     size={14}
                     className="text-muted-foreground"
                   />

@@ -7,7 +7,7 @@ import {
   EmptyIcon,
   EmptyTitle,
 } from "~/components/ui/empty";
-import type { AuditEntityType } from "~/server/repo/audit-log";
+import type { AuditEntityType } from "~/schemas/audit";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 

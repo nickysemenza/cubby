@@ -269,7 +269,7 @@ export const inventoryentryList = async (
 ) => {
   // Build order by using central sortableFields config
   const orderByArray = buildOrderBy(inventoryEntry, sort, [
-    ...getSortableFields("inventory-item"),
+    ...getSortableFields("inventory"),
   ]);
   const { take, skip } = buildTakeSkip(pagination);
 

@@ -24,9 +24,9 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     InventoryItem,
     InventoryUpdateInput
   >({
-    entity: "inventory-item",
+    entity: "inventory",
     data: inventoryitem,
-    mutationOptions: api.inventoryItem.update.mutationOptions(),
+    mutationOptions: api.inventory.update.mutationOptions(),
   });
 
   const sections: DetailSection[] = [
@@ -56,7 +56,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   return (
     <DetailPage
       sections={sections}
-      entity="inventory-item"
+      entity="inventory"
       name={inventoryitem.product.name}
       rawData={inventoryitem}
     />

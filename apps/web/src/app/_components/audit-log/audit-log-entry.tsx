@@ -9,31 +9,14 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
-import type { AuditEntityType } from "~/server/repo/audit-log";
+import type { AuditEntityType } from "~/schemas/audit";
 import type { RouterOutputs } from "~/trpc/react";
 import { EntityPillById } from "../EntityPillById";
 import { HoverableTimestamp } from "../HoverableTimestamp";
 import { ChangesList } from "../value-change";
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
-
-/** Map AuditEntityType to Entity (handles "inventory" -> "inventory-item") */
-const auditEntityToEntity = (entityType: string): Entity => {
-  if (entityType === "inventory") return "inventory-item";
-  return entityType as Entity;
-};
-
-/** Get entity config from the unified entities definition */
-const getEntityConfig = (entityType: string) => {
-  const entity = auditEntityToEntity(entityType);
-  const config = entities[entity];
-  return {
-    entity,
-    label: config?.label ?? entityType,
-  };
-};
 
 // Map actions to badge variants - using theme colors
 const actionConfig: Record<string, { label: string; className: string }> = {
@@ -63,7 +46,7 @@ export function AuditLogEntryComponent({
   const [isOpen, setIsOpen] = useState(false);
   const hasChanges = entry.changes && Object.keys(entry.changes).length > 0;
 
-  const entityConf = getEntityConfig(entry.entityType);
+  const entityConfig = entities[entry.entityType as AuditEntityType];
   const action = actionConfig[entry.action] ?? {
     label: entry.action,
     className: "bg-muted text-muted-foreground",
@@ -102,18 +85,20 @@ export function AuditLogEntryComponent({
             {/* Entity Pill or Icon */}
             {showEntityLink ? (
               <EntityPillById
-                entityType={entry.entityType as AuditEntityType}
+                entityType={entry.entityType}
                 entityId={entry.entityId}
                 compact
               />
             ) : (
               <>
                 <EntityIcon
-                  entity={entityConf.entity}
+                  entity={entry.entityType}
                   colored
                   className="h-4 w-4 flex-shrink-0"
                 />
-                <span className="font-medium text-sm">{entityConf.label}</span>
+                <span className="font-medium text-sm">
+                  {entityConfig.label}
+                </span>
               </>
             )}
 

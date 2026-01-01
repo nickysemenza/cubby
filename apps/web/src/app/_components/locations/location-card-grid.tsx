@@ -57,7 +57,7 @@ function LocationCard({
 
   // Get inventory items for this location
   const { data: inventoryData } = useQuery(
-    api.inventoryItem.list.queryOptions({
+    api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 5 }, // Just get first few for preview
       filters: { locationIdFilter: location.id },
@@ -96,7 +96,7 @@ function LocationCard({
     badges.push(
       <div key="inventory" className="flex items-center gap-1 text-xs">
         <EntityIcon
-          entity="inventory-item"
+          entity="inventory"
           size={10}
           className="text-muted-foreground"
         />

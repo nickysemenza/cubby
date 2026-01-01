@@ -42,7 +42,7 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
       "Create locations to organize where you store things. Pantry, fridge, garage - you decide.",
     actionLabel: "Create Location",
   },
-  "inventory-item": {
+  inventory: {
     title: "Nothing in stock",
     description:
       "Start tracking what you have and where. Scan barcodes or add items manually.",

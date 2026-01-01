@@ -131,7 +131,7 @@ function Node({ node, style, dragHandle }: NodeRendererProps<TreeNode>) {
           params={{ id: data.id.replace("inv-", "") }}
           className="flex min-w-0 items-center gap-2 text-muted-foreground text-sm hover:text-foreground"
         >
-          <EntityIcon entity="inventory-item" size={14} className="shrink-0" />
+          <EntityIcon entity="inventory" size={14} className="shrink-0" />
           <span className="shrink-0">
             {data.amount.value} {data.amount.unit}
           </span>

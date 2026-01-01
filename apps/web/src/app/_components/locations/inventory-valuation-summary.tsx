@@ -26,7 +26,7 @@ export function InventoryValuationSummary({
   const api = useTRPC();
 
   const enabled = !items && !!locationId;
-  const baseOptions = api.inventoryItem.list.queryOptions({
+  const baseOptions = api.inventory.list.queryOptions({
     sort: { orderBy: "createdAt", direction: "desc" },
     // Fetch generously to cover typical cases; server supports pagination
     pagination: { pageIndex: 0, pageSize: 1000 },

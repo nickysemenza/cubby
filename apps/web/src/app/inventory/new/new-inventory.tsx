@@ -11,7 +11,7 @@ const CreateInventoryItem: FC = () => {
   const { error, isPending, handleCreate, handleCancel } = useEntityCreateMode<
     z.infer<typeof inventoryCreatePayloadData>,
     { id: string }
-  >("inventory-item", api.inventoryItem.create.mutationOptions());
+  >("inventory", api.inventory.create.mutationOptions());
 
   return (
     <div>

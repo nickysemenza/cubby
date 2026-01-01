@@ -26,7 +26,7 @@ const entityTypeOptions: Array<{
   { value: "recipe", label: "Recipe" },
   { value: "ingredient", label: "Ingredient" },
   { value: "location", label: "Location" },
-  { value: "inventory-item", label: "Inventory" },
+  { value: "inventory", label: "Inventory" },
 ];
 
 export const searchColumns = [
