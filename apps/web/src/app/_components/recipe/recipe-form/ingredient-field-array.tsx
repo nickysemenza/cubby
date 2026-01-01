@@ -3,7 +3,7 @@ import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import type { sectionIngredientType } from "~/schemas/recipe";
+import type { SectionIngredientType } from "~/schemas/recipe";
 import {
   WithIngredientSearch,
   WithRecipeSearch,
@@ -56,7 +56,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                       const currentField = form.getValues(
                         `sections.${sectionIndex}.ingredients.${ingredientIndex}`,
                       );
-                      const newType = value as sectionIngredientType;
+                      const newType = value as SectionIngredientType;
 
                       // Update the field with the new type and reset the corresponding values
                       if (newType === "ingredient") {

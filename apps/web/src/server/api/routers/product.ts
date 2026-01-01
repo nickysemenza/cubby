@@ -17,7 +17,7 @@ import {
 } from "~/schemas/identifiers";
 import {
   productCategory,
-  productInputPayload,
+  productCreateInput,
   productQuickCreatePayload,
   productTopLevelOut,
 } from "~/schemas/product";
@@ -47,8 +47,8 @@ const productFiltersSchema = z.object({
 // Create standardized CRUD procedures using factory (except create, which we customize)
 const { getByID, list, update } = createEntityCrudProcedures({
   schemas: {
-    createInput: productInputPayload,
-    updateInput: productInputPayload.partial(),
+    createInput: productCreateInput,
+    updateInput: productCreateInput.partial(),
     output: productWithFoodOut,
     filters: productFiltersSchema,
     idSchema: productId,
@@ -90,7 +90,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
 
 // Custom create procedure that imports UPC images after product creation
 const create = protectedProcedure
-  .input(productInputPayload)
+  .input(productCreateInput)
   .output(productWithFoodOut)
   .mutation(async ({ ctx, input }) => {
     // Create the product

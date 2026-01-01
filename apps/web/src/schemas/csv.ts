@@ -58,3 +58,27 @@ export const INVENTORY_CSV_ACTIONS = [
 ] as const;
 
 export type InventoryCSVAction = (typeof INVENTORY_CSV_ACTIONS)[number];
+
+// =============================================================================
+// Base CSV Result Schemas
+// =============================================================================
+
+/**
+ * Base fields for CSV result items (shared by inventory and location)
+ */
+export const baseCsvResultItem = z.object({
+  rowIndex: z.number(),
+  message: z.string().optional(),
+  fieldChanges: z.array(fieldChange).optional(),
+});
+
+/**
+ * Base count fields for CSV import results (shared by inventory and location)
+ */
+export const baseCsvImportCounts = z.object({
+  created: z.number(),
+  updated: z.number(),
+  skipped: z.number(),
+  errors: z.number(),
+  removed: z.number().optional(),
+});

@@ -92,7 +92,7 @@ export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 // ============================================================================
 
 import { amount } from "~/codec/codec";
-import { fieldChange } from "./csv";
+import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
 
 /**
  * CSV row schema for location import/export
@@ -115,13 +115,10 @@ export type LocationCSVRow = z.infer<typeof locationCSVRow>;
 /**
  * Individual result item for location CSV import
  */
-const locationCSVImportResultItem = z.object({
-  rowIndex: z.number(),
+const locationCSVImportResultItem = baseCsvResultItem.extend({
   action: z.enum(["created", "updated", "skipped", "error", "removed"]),
   locationName: z.string(),
   locationId: locationId.optional(),
-  message: z.string().optional(),
-  fieldChanges: z.array(fieldChange).optional(),
   // Preview fields
   locationWillBeCreated: z.boolean().optional(),
   imageWillBeImported: z.string().optional(),
@@ -136,12 +133,7 @@ export type LocationCSVImportResultItem = z.infer<
 /**
  * Result of location CSV import operation
  */
-export const locationCSVImportResult = z.object({
-  created: z.number(),
-  updated: z.number(),
-  skipped: z.number(),
-  errors: z.number(),
-  removed: z.number().optional(), // For push preview: locations that will be removed from sheet
+export const locationCSVImportResult = baseCsvImportCounts.extend({
   items: z.array(locationCSVImportResultItem),
 });
 

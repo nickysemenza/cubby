@@ -1,9 +1,16 @@
+import { z } from "zod";
 import type { OrganizationId, UserId } from "./identifiers";
 
 /**
  * Source of an action for audit logging
  */
-type AuditSource = "ui" | "csv_import" | "sheets_import" | "api";
+export const auditSourceSchema = z.enum([
+  "ui",
+  "csv_import",
+  "sheets_import",
+  "api",
+]);
+export type AuditSource = z.infer<typeof auditSourceSchema>;
 
 /**
  * Context representing who is performing an action.

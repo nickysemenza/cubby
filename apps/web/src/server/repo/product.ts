@@ -23,7 +23,7 @@ import { computeProductPrice } from "~/schemas/price-mapping-utils";
 import {
   hasFoodIndicators,
   type ProductCategory,
-  type ProductInputPayload,
+  type ProductCreateInput,
   type ProductTopLevelOut,
   productTopLevelOut,
 } from "~/schemas/product";
@@ -256,7 +256,7 @@ export const productList = async (
 // Create a new product
 export const createProduct = async (
   db: Database,
-  data: ProductInputPayload,
+  data: ProductCreateInput,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   const { organizationId } = actor;
@@ -334,7 +334,7 @@ export const createProduct = async (
 export const updateProduct = async (
   db: Database,
   id: ProductId,
-  data: Partial<ProductInputPayload>,
+  data: Partial<ProductCreateInput>,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
   const { organizationId } = actor;

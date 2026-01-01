@@ -4,7 +4,7 @@ import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo
 import type { ActorContext } from "~/schemas/context";
 import type { OrganizationId, ProductId } from "~/schemas/identifiers";
 import type { PaginationParams, SortParams } from "~/schemas/pagination";
-import type { ProductCategory, ProductInputPayload } from "~/schemas/product";
+import type { ProductCategory, ProductCreateInput } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import type { USDAClient } from "../clients/usda";
 import {
@@ -76,7 +76,7 @@ export class ProductService {
   }
 
   async createProduct(
-    data: ProductInputPayload,
+    data: ProductCreateInput,
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     const product = await createProductRepo(this.db, data, actor);
@@ -85,7 +85,7 @@ export class ProductService {
 
   async updateProduct(
     id: ProductId,
-    data: Partial<ProductInputPayload>,
+    data: Partial<ProductCreateInput>,
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     await updateProductRepo(this.db, id, data, actor);

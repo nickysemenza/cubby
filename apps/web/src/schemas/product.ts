@@ -58,9 +58,9 @@ const productBase = z.object({
     .describe("product category for filtering"),
 });
 
-// Input payload for creating/updating products (includes relationships)
+// Input schema for creating products (includes relationships)
 // Note: category is optional in input (defaults to null) but required in output
-export const productInputPayload = productBase
+export const productCreateInput = productBase
   .omit({ category: true })
   .extend({
     category: productCategory.nullable().optional(),
@@ -68,6 +68,12 @@ export const productInputPayload = productBase
     unitMappings: z.array(unitMappingInput).default([]),
   })
   .merge(updateInputImages);
+
+// Input schema for updating products (matches location/recipe/ingredient pattern)
+export const productUpdateInput = z.object({
+  id: productId,
+  data: productCreateInput.partial(),
+});
 
 // Response schema for product data
 export const productTopLevelOut = z
@@ -80,7 +86,14 @@ export const productTopLevelOut = z
   .extend(dbTimestampsOut.shape);
 
 export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
-export type ProductInputPayload = z.infer<typeof productInputPayload>;
+export type ProductCreateInput = z.infer<typeof productCreateInput>;
+export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
+
+// Backwards compatibility aliases (deprecated - use ProductCreateInput)
+/** @deprecated Use ProductCreateInput instead */
+export const productInputPayload = productCreateInput;
+/** @deprecated Use ProductCreateInput instead */
+export type ProductInputPayload = ProductCreateInput;
 
 // Quick create schema - minimal required fields for rapid entry
 // Used for quick inventory capture workflow

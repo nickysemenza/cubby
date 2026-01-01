@@ -145,11 +145,10 @@ const productChangesPreview = z.object({
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
 
-import { fieldChange } from "./csv";
+import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
 
 // Result types for CSV import (and push preview)
-const csvImportResultItem = z.object({
-  rowIndex: z.number(),
+const csvImportResultItem = baseCsvResultItem.extend({
   action: z.enum([
     "created",
     "moved",
@@ -166,8 +165,6 @@ const csvImportResultItem = z.object({
   upc: z.string().optional(), // UPC code for image import
   locationName: z.string().optional(), // Optional for product-only rows
   locationId: locationId.optional(), // Location ID for linking to location page
-  message: z.string().optional(),
-  fieldChanges: z.array(fieldChange).optional(), // Structured field changes for display
   // Preview fields
   productWillBeCreated: z.boolean().optional(),
   locationNotFound: z.boolean().optional(), // True if location name doesn't exist
@@ -179,14 +176,9 @@ const csvImportResultItem = z.object({
 
 export type CSVImportResultItem = z.infer<typeof csvImportResultItem>;
 
-export const csvImportResult = z.object({
-  created: z.number(),
+export const csvImportResult = baseCsvImportCounts.extend({
   moved: z.number(),
-  updated: z.number(),
-  skipped: z.number(),
-  errors: z.number(),
   productOnly: z.number(), // Products created/updated without inventory placement
-  removed: z.number().optional(), // For push preview: rows that will be removed from sheet
   renamed: z.number().optional(), // For push preview: products that were renamed
   items: z.array(csvImportResultItem),
 });

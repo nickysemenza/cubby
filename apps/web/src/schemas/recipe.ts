@@ -71,7 +71,9 @@ export const recipeOut = z
 
 export type RecipeOut = z.infer<typeof recipeOut>;
 
-export type sectionIngredientType = "ingredient" | "recipe";
+export type SectionIngredientType = z.infer<
+  typeof sectionIngredientOut
+>["type"];
 
 // Schema for recipe mutations
 export const recipeIngredientInput = z.discriminatedUnion("type", [
