@@ -7,6 +7,13 @@ import { createInputImages, imageOut, updateInputImages } from "./image";
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = ["Book", "Website", "Other"] as const;
 
+// Recipe yield schema - what the recipe produces
+export const recipeYieldSchema = z.object({
+  value: z.number().positive(),
+  unit: z.string().min(1),
+});
+export type RecipeYield = z.infer<typeof recipeYieldSchema>;
+
 const ingredientOut = baseEntitySchema;
 
 export const recipeTopLevel = baseEntitySchema.extend({
@@ -15,6 +22,9 @@ export const recipeTopLevel = baseEntitySchema.extend({
       url: z.url().nullable(),
     })
     .nullable(),
+  yield: recipeYieldSchema.nullish(),
+  servings: z.number().int().positive().nullish(),
+  tags: z.array(z.string()).nullish(),
 });
 
 // Create a base schema with common fields
@@ -98,6 +108,9 @@ export const recipeCreateInput = z
   .object({
     name: z.string(),
     meta: recipeTopLevel.shape.meta,
+    yield: recipeYieldSchema.nullable().optional(),
+    servings: z.number().int().positive().nullable().optional(),
+    tags: z.array(z.string()).nullable().optional(),
     sections: z.array(recipeSectionInput),
   })
   .extend(createInputImages.shape);

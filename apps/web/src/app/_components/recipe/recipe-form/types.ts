@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { amount } from "~/codec/codec";
 import type { ImageOut } from "~/schemas/image";
-import { recipeTopLevel } from "~/schemas/recipe";
+import { recipeTopLevel, recipeYieldSchema } from "~/schemas/recipe";
 import { ComboboxItem } from "../../combobox/combobox-types";
 import type { PendingImage } from "../../PendingImageUpload";
 
@@ -27,6 +27,9 @@ export type IngItem = z.infer<typeof ingItem>;
 export const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   meta: recipeTopLevel.shape.meta,
+  yield: recipeYieldSchema.nullable(),
+  servings: z.number().int().positive().nullable(),
+  tags: z.array(z.string()).nullable(),
   sections: z.array(
     z.object({
       id: z.uuid().optional(),

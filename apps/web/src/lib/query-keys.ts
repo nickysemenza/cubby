@@ -18,5 +18,7 @@ export const queryKeys = {
   },
   recipe: {
     list: ["recipe", "list"] as const,
+    getByID: ["recipe", "getByID"] as const,
+    all: ["recipe"] as const,
   },
 } as const;

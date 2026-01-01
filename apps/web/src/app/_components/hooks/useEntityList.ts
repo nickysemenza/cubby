@@ -1,4 +1,9 @@
-import type { ColumnDef, Table } from "@tanstack/react-table";
+import type {
+  ColumnDef,
+  OnChangeFn,
+  RowSelectionState,
+  Table,
+} from "@tanstack/react-table";
 import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { entities, getSortableFields } from "~/entities/entities";
@@ -14,6 +19,7 @@ import {
   createUnitMappingsColumn,
   type FilterConfig,
 } from "../data-table/columnHelpers";
+import { buildSelectColumn } from "../data-table/row-selection";
 import { useTableConfig } from "../data-table/useTableConfig";
 
 import { type UseTableListOptions, useTableList } from "./useTableList";
@@ -59,6 +65,12 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   globalFilter?: unknown;
   /** Global filter change handler */
   onGlobalFilterChange?: (value: unknown) => void;
+  /** Enable row selection with checkbox column */
+  enableRowSelection?: boolean;
+  /** Current row selection state (required if enableRowSelection is true) */
+  rowSelection?: RowSelectionState;
+  /** Callback when row selection changes */
+  onRowSelectionChange?: OnChangeFn<RowSelectionState>;
 }
 
 interface UseEntityListReturn<TData> {
@@ -131,6 +143,9 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   tableStateOptions,
   globalFilter,
   onGlobalFilterChange,
+  enableRowSelection,
+  rowSelection,
+  onRowSelectionChange,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
@@ -207,6 +222,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     const columnHelper = createColumnHelper<TData>() as ColumnHelper<TData>;
     const cols: AnyColumnDef<TData>[] = [];
 
+    // Prepend select column if row selection is enabled
+    if (enableRowSelection) {
+      cols.push(buildSelectColumn<TData>());
+    }
+
     // Prepend standard columns
     if (standardColumns.includes("image")) {
       cols.push(createImageColumn(columnHelper));
@@ -258,6 +278,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     standardColumns,
     effectiveMappingsMap,
     stableFilters,
+    enableRowSelection,
   ]);
 
   // Configure the table
@@ -268,6 +289,10 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     totalCount,
     globalFilter,
     onGlobalFilterChange,
+    getRowId: enableRowSelection ? (row) => row.id : undefined,
+    enableRowSelection,
+    rowSelection,
+    onRowSelectionChange,
   });
 
   // Expand filter definitions - memoized to prevent unnecessary re-renders

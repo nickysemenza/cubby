@@ -14,7 +14,7 @@ import {
 import type { Amount } from "~/codec/codec";
 import { imageStatusValues } from "~/schemas/image";
 import { productCategoryValues } from "~/schemas/product";
-import { recipeSourceValues } from "~/schemas/recipe";
+import { type RecipeYield, recipeSourceValues } from "~/schemas/recipe";
 import {
   account,
   apikey,
@@ -63,6 +63,9 @@ export const recipe = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     SourceType: recipeSourceEnum("SourceType"),
     SourceData: text("SourceData"),
+    yield: jsonb("yield").$type<RecipeYield>(),
+    servings: integer("servings"),
+    tags: text("tags").array(),
   },
   (table) => ({
     projectNameUnique: uniqueIndex("Recipe_organizationId_name_key").on(

@@ -14,6 +14,8 @@ interface UseEditModeOptions<TResult = unknown> {
   mutationOptions: TRPCMutationOptions;
   onSuccess?: (result?: TResult) => void;
   useRouterRefresh?: boolean;
+  /** Optional query keys to invalidate. If not provided, invalidates all queries. */
+  invalidateKeys?: readonly (readonly unknown[])[];
 }
 
 export interface UseEditModeReturn<TData> {
@@ -67,6 +69,7 @@ export function useEditMode<TData, TResult = unknown>({
   mutationOptions,
   onSuccess,
   useRouterRefresh = true,
+  invalidateKeys,
 }: UseEditModeOptions<TResult>): UseEditModeReturn<TData> {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
@@ -79,7 +82,15 @@ export function useEditMode<TData, TResult = unknown>({
       setError(undefined);
       onSuccess?.(result);
       if (useRouterRefresh) {
-        queryClient.invalidateQueries();
+        if (invalidateKeys && invalidateKeys.length > 0) {
+          // Invalidate specific query keys
+          for (const key of invalidateKeys) {
+            queryClient.invalidateQueries({ queryKey: key });
+          }
+        } else {
+          // Fall back to invalidating all queries
+          queryClient.invalidateQueries();
+        }
       }
     },
     onError: (error: unknown) => {

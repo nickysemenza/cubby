@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { queryKeys } from "~/lib/query-keys";
 import type { RecipeOut, RecipeUpdateInput } from "~/schemas/recipe";
 import { useTRPC } from "~/trpc/react";
 import { useEditMode } from "../hooks/useEditMode";
@@ -21,6 +22,8 @@ export default function EditRecipeForm({
       toast.success("Recipe updated successfully!");
       onCancel();
     },
+    // Only invalidate recipe queries to avoid triggering problematic ingredient queries
+    invalidateKeys: [queryKeys.recipe.all],
   });
 
   return (

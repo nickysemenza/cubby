@@ -19,6 +19,7 @@ import type {
   RecipeCreateInput,
   RecipeOut,
   RecipeUpdateInput,
+  RecipeYield,
   recipeIngredientInput,
   recipeTopLevel,
   SectionIngredient,
@@ -236,6 +237,9 @@ export const createRecipe = async (
       name: recipeInput.name,
       SourceType: sourceType,
       SourceData: sourceData,
+      yield: recipeInput.yield ?? null,
+      servings: recipeInput.servings ?? null,
+      tags: recipeInput.tags ?? null,
     });
 
     // Create sections and their ingredients
@@ -487,7 +491,14 @@ async function updateRecipeBasicProperties(
   updates: RecipeUpdateInput["data"],
   existingRecipe: ExistingRecipeWithSections,
 ): Promise<void> {
-  if (!updates.name && updates.meta === undefined) return;
+  const hasBasicUpdates =
+    updates.name ||
+    updates.meta !== undefined ||
+    updates.yield !== undefined ||
+    updates.servings !== undefined ||
+    updates.tags !== undefined;
+
+  if (!hasBasicUpdates) return;
 
   const sourceType = updates.meta?.url
     ? "Website"
@@ -501,6 +512,9 @@ async function updateRecipeBasicProperties(
     name?: string;
     SourceType?: "Book" | "Website" | "Other";
     SourceData?: string | null;
+    yield?: RecipeYield | null;
+    servings?: number | null;
+    tags?: string[] | null;
   } = {};
 
   if (updates.name) {
@@ -509,6 +523,15 @@ async function updateRecipeBasicProperties(
   if (updates.meta !== undefined) {
     updateData.SourceType = sourceType;
     updateData.SourceData = sourceData;
+  }
+  if (updates.yield !== undefined) {
+    updateData.yield = updates.yield;
+  }
+  if (updates.servings !== undefined) {
+    updateData.servings = updates.servings;
+  }
+  if (updates.tags !== undefined) {
+    updateData.tags = updates.tags;
   }
 
   await tx
@@ -883,6 +906,36 @@ export const getIngredientCooccurrence = async (
   nodes.sort((a, b) => b.recipeCount - a.recipeCount);
 
   return { nodes, edges };
+};
+
+/**
+ * Get all unique tags used across recipes in the organization.
+ * Used for tag autocomplete suggestions.
+ */
+export const getAllTags = async (
+  db: Database,
+  organizationId: OrganizationId,
+): Promise<string[]> => {
+  const dbClient = getDb(db);
+
+  // Get all recipes with tags
+  const recipesWithTags = await dbClient.query.recipe.findMany({
+    where: eq(recipe.organizationId, organizationId),
+    columns: { tags: true },
+  });
+
+  // Collect unique tags
+  const tagSet = new Set<string>();
+  for (const r of recipesWithTags) {
+    if (r.tags) {
+      for (const tag of r.tags) {
+        tagSet.add(tag);
+      }
+    }
+  }
+
+  // Return sorted array of unique tags
+  return Array.from(tagSet).sort();
 };
 
 export const updateRecipe = async (

@@ -13,6 +13,9 @@ describe("recipe repository helpers", () => {
         organizationId: "00000000-0000-0000-0000-000000000000",
         SourceType: "Website" as const,
         SourceData: "https://example.com/recipe",
+        yield: null,
+        servings: null,
+        tags: null,
       };
 
       const result = dbRecipeToAPIShallow(recipe);
@@ -24,6 +27,9 @@ describe("recipe repository helpers", () => {
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
+        yield: null,
+        servings: null,
+        tags: null,
         meta: {
           url: "https://example.com/recipe",
         },
@@ -40,6 +46,9 @@ describe("recipe repository helpers", () => {
         organizationId: "00000000-0000-0000-0000-000000000000",
         SourceType: "Other" as const,
         SourceData: "some data",
+        yield: null,
+        servings: null,
+        tags: null,
       };
 
       const result = dbRecipeToAPIShallow(recipe);
@@ -51,6 +60,9 @@ describe("recipe repository helpers", () => {
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
         deletedAt: null,
+        yield: null,
+        servings: null,
+        tags: null,
         meta: {
           url: null,
         },

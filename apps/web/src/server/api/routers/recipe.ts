@@ -16,6 +16,7 @@ import {
 } from "~/schemas/recipe";
 import {
   createRecipe,
+  getAllTags,
   getIngredientCooccurrence,
   getRecipeByID,
   insertCompactRecipe,
@@ -104,6 +105,12 @@ const getIngredientCooccurrenceEndpoint = protectedProcedure
     );
   });
 
+const getAllTagsEndpoint = protectedProcedure
+  .output(z.array(z.string()))
+  .query(async ({ ctx }) => {
+    return await getAllTags(ctx.db, ctx.organizationId);
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   scrape,
@@ -113,4 +120,5 @@ export const recipeRouter = createTRPCRouter({
   create,
   update,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
+  getAllTags: getAllTagsEndpoint,
 });

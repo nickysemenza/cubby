@@ -27,6 +27,7 @@ import { Route as UsdaIdRouteImport } from './routes/usda.$id'
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
 import { Route as RecipesNewCompactRouteImport } from './routes/recipes.new-compact'
 import { Route as RecipesNewRouteImport } from './routes/recipes.new'
+import { Route as RecipesCompareRouteImport } from './routes/recipes.compare'
 import { Route as RecipesIdRouteImport } from './routes/recipes.$id'
 import { Route as ProductsNewRouteImport } from './routes/products.new'
 import { Route as ProductsIdRouteImport } from './routes/products.$id'
@@ -139,6 +140,11 @@ const RecipesNewCompactRoute = RecipesNewCompactRouteImport.update({
 const RecipesNewRoute = RecipesNewRouteImport.update({
   id: '/recipes/new',
   path: '/recipes/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecipesCompareRoute = RecipesCompareRouteImport.update({
+  id: '/recipes/compare',
+  path: '/recipes/compare',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecipesIdRoute = RecipesIdRouteImport.update({
@@ -284,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
+  '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
   '/recipes/new-compact': typeof RecipesNewCompactRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
@@ -327,6 +334,7 @@ export interface FileRoutesByTo {
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
+  '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
   '/recipes/new-compact': typeof RecipesNewCompactRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
@@ -371,6 +379,7 @@ export interface FileRoutesById {
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
+  '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
   '/recipes/new-compact': typeof RecipesNewCompactRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
@@ -416,6 +425,7 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
+    | '/recipes/compare'
     | '/recipes/new'
     | '/recipes/new-compact'
     | '/settings/integrations'
@@ -459,6 +469,7 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
+    | '/recipes/compare'
     | '/recipes/new'
     | '/recipes/new-compact'
     | '/settings/integrations'
@@ -502,6 +513,7 @@ export interface FileRouteTypes {
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
+    | '/recipes/compare'
     | '/recipes/new'
     | '/recipes/new-compact'
     | '/settings/integrations'
@@ -546,6 +558,7 @@ export interface RootRouteChildren {
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsNewRoute: typeof ProductsNewRoute
   RecipesIdRoute: typeof RecipesIdRoute
+  RecipesCompareRoute: typeof RecipesCompareRoute
   RecipesNewRoute: typeof RecipesNewRoute
   RecipesNewCompactRoute: typeof RecipesNewCompactRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRouteWithChildren
@@ -690,6 +703,13 @@ declare module '@tanstack/react-router' {
       path: '/recipes/new'
       fullPath: '/recipes/new'
       preLoaderRoute: typeof RecipesNewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recipes/compare': {
+      id: '/recipes/compare'
+      path: '/recipes/compare'
+      fullPath: '/recipes/compare'
+      preLoaderRoute: typeof RecipesCompareRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recipes/$id': {
@@ -892,6 +912,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductsIdRoute: ProductsIdRoute,
   ProductsNewRoute: ProductsNewRoute,
   RecipesIdRoute: RecipesIdRoute,
+  RecipesCompareRoute: RecipesCompareRoute,
   RecipesNewRoute: RecipesNewRoute,
   RecipesNewCompactRoute: RecipesNewCompactRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRouteWithChildren,

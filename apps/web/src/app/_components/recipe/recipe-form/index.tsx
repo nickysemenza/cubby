@@ -1,9 +1,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronDown, ChevronUp, Plus, Trash } from "lucide-react";
-import type { FC } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { type FC, useId } from "react";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
+import { Field, FieldLabel } from "~/components/ui/field";
+import { Input } from "~/components/ui/input";
 import { useImageState } from "~/hooks/useImageState";
 import {
   getOptionalIngredientId,
@@ -21,12 +23,14 @@ import {
   buildUpdateObject,
   FormWrapper,
   getSubmitButtonText,
+  NullableNumericField,
   SideBySideFields,
   UnifiedTextField,
 } from "../../form-utils";
 import { PendingImageUpload } from "../../PendingImageUpload";
 import { IngredientFieldArray } from "./ingredient-field-array";
 import { InstructionFieldArray } from "./instruction-field-array";
+import { TagInput } from "./tag-input";
 import {
   formSchema,
   type IngItem,
@@ -34,6 +38,54 @@ import {
   type RecipeFormValues,
 } from "./types";
 import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
+
+// Yield and Servings fields with smart hide behavior
+const YieldServingsFields: FC<{
+  form: ReturnType<typeof useForm<RecipeFormValues>>;
+}> = ({ form }) => {
+  const yieldUnitId = useId();
+  const yieldUnit = useWatch({ control: form.control, name: "yield.unit" });
+
+  // Show servings field if yield unit is set and not "servings"
+  const showServings = yieldUnit && yieldUnit !== "servings";
+
+  return (
+    <div className="space-y-4">
+      <SideBySideFields>
+        <NullableNumericField
+          form={form}
+          name="yield.value"
+          label="Yield Value (Optional)"
+          placeholder="e.g., 24"
+        />
+        <Controller
+          control={form.control}
+          name="yield.unit"
+          render={({ field }) => (
+            <Field>
+              <FieldLabel htmlFor={yieldUnitId}>Yield Unit</FieldLabel>
+              <Input
+                id={yieldUnitId}
+                placeholder="e.g., cookies, servings, cups"
+                value={field.value ?? ""}
+                onChange={(e) => field.onChange(e.target.value || null)}
+              />
+            </Field>
+          )}
+        />
+      </SideBySideFields>
+
+      {showServings && (
+        <NullableNumericField
+          form={form}
+          name="servings"
+          label="Servings"
+          placeholder="How many portions?"
+        />
+      )}
+    </div>
+  );
+};
 
 // Helper function to map any ingredient type to the correct API format
 const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
@@ -78,6 +130,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     defaultValues: {
       name: recipe ? recipe.name : (initialName ?? ""),
       meta: recipe ? recipe.meta : null,
+      yield: recipe?.yield ?? null,
+      servings: recipe?.servings ?? null,
+      tags: recipe?.tags ?? [],
       sections: recipe
         ? recipe.sections.map((section) => ({
             id: section.id,
@@ -136,6 +191,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       const createData: RecipeCreateInput = {
         name: values.name,
         meta: values.meta,
+        yield: values.yield,
+        servings: values.servings,
+        tags: values.tags,
         sections: values.sections.map((section) => ({
           name: section.name,
           ingredients: section.ingredients.map(mapIngredientToApiFormat),
@@ -147,7 +205,13 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       props.onCreate(createData);
     } else if (mode === "edit" && recipe) {
       // In edit mode, determine which fields have changed
-      const basicUpdates = buildUpdateObject(recipe, values, ["name", "meta"]);
+      const basicUpdates = buildUpdateObject(recipe, values, [
+        "name",
+        "meta",
+        "yield",
+        "servings",
+        "tags",
+      ]);
 
       // Handle section updates - this is more complex since we need to track IDs
       const sectionUpdates = values.sections.map((section, idx) => {
@@ -260,6 +324,21 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           nullable={true}
         />
       </SideBySideFields>
+
+      {/* Yield and Servings */}
+      <YieldServingsFields form={form} />
+
+      {/* Tags */}
+      <Controller
+        control={form.control}
+        name="tags"
+        render={({ field }) => (
+          <Field>
+            <FieldLabel htmlFor="tags">Tags (Optional)</FieldLabel>
+            <TagInput value={field.value} onChange={field.onChange} />
+          </Field>
+        )}
+      />
 
       {/* Show image upload in both create and edit modes */}
       <PendingImageUpload
