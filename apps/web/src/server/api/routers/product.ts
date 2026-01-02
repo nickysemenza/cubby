@@ -55,14 +55,10 @@ const { getByID, list, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: ProductId) => {
-      return await services.services.product.getProductByID(
-        id,
-        services.organizationId,
-      );
+      return await services.services.product.getProductByID(id);
     },
     list: async (services, filters, sort, pagination) => {
       return await services.services.product.productList(
-        services.organizationId,
         filters.nameFilter,
         filters.manufacturerFilter,
         filters.upcFilter,
@@ -104,7 +100,6 @@ const create = protectedProcedure
       try {
         await importImageFromUPC(
           ctx.db,
-          ctx.actorContext.organizationId,
           ctx.upcLookupClient,
           input.upc,
           unsafeProductId(product.id),
@@ -147,12 +142,8 @@ const findOrCreateByUPC = protectedProcedure
   )
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
-    // 1. Check if product with this UPC already exists in organization
-    const existing = await findProductByUPC(
-      ctx.db,
-      input.upc,
-      ctx.actorContext.organizationId,
-    );
+    // 1. Check if product with this UPC already exists
+    const existing = await findProductByUPC(ctx.db, input.upc);
     if (existing) {
       return existing;
     }
@@ -207,7 +198,6 @@ const findOrCreateByUPC = protectedProcedure
         try {
           await importImageFromUPC(
             ctx.db,
-            ctx.actorContext.organizationId,
             ctx.upcLookupClient,
             input.upc,
             unsafeProductId(newProduct.id),
@@ -255,10 +245,7 @@ const backfillUPCImages = protectedProcedure
   )
   .mutation(async ({ ctx }) => {
     // Find all products with UPC but without images
-    const productsWithUPCNoImages = await findProductsWithUPCNoImages(
-      ctx.db,
-      ctx.organizationId,
-    );
+    const productsWithUPCNoImages = await findProductsWithUPCNoImages(ctx.db);
 
     const details: Array<{
       productId: string;
@@ -282,7 +269,6 @@ const backfillUPCImages = protectedProcedure
           try {
             const result = await importImageFromUPC(
               ctx.db,
-              ctx.organizationId,
               ctx.upcLookupClient,
               p.upc,
               unsafeProductId(p.id),
@@ -337,10 +323,7 @@ const backfillUPCImages = protectedProcedure
 const getUPCImageBackfillCount = protectedProcedure
   .output(z.object({ count: z.number() }))
   .query(async ({ ctx }) => {
-    const products = await findProductsWithUPCNoImages(
-      ctx.db,
-      ctx.organizationId,
-    );
+    const products = await findProductsWithUPCNoImages(ctx.db);
     return { count: products.length };
   });
 
@@ -348,10 +331,7 @@ const getUPCImageBackfillCount = protectedProcedure
 const getFoodCategoryBackfillCount = protectedProcedure
   .output(z.object({ count: z.number() }))
   .query(async ({ ctx }) => {
-    const products = await findProductsNeedingFoodCategory(
-      ctx.db,
-      ctx.organizationId,
-    );
+    const products = await findProductsNeedingFoodCategory(ctx.db);
     return { count: products.length };
   });
 
@@ -369,21 +349,14 @@ const backfillFoodCategoriesEndpoint = protectedProcedure
     }),
   )
   .mutation(async ({ ctx }) => {
-    return await backfillFoodCategories(
-      ctx.db,
-      ctx.organizationId,
-      ctx.actorContext,
-    );
+    return await backfillFoodCategories(ctx.db, ctx.actorContext);
   });
 
 // Get count of products with stale/missing prices
 const getStalePricesCount = protectedProcedure
   .output(z.number())
   .query(async ({ ctx }) => {
-    const staleProducts = await findProductsWithStalePrices(
-      ctx.db,
-      ctx.organizationId,
-    );
+    const staleProducts = await findProductsWithStalePrices(ctx.db);
     return staleProducts.length;
   });
 
@@ -403,11 +376,7 @@ const backfillProductPricesEndpoint = protectedProcedure
     }),
   )
   .mutation(async ({ ctx }) => {
-    return await backfillProductPrices(
-      ctx.db,
-      ctx.organizationId,
-      ctx.actorContext,
-    );
+    return await backfillProductPrices(ctx.db, ctx.actorContext);
   });
 
 // Get category distribution for insights visualization
@@ -428,7 +397,7 @@ const categoryDistribution = protectedProcedure
     ),
   )
   .query(async ({ ctx }) => {
-    return await getCategoryDistribution(ctx.db, ctx.organizationId);
+    return await getCategoryDistribution(ctx.db);
   });
 
 export const productRouter = createTRPCRouter({

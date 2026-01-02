@@ -3,7 +3,7 @@
  */
 
 import { getErrorMessage } from "~/lib/error-utils";
-import type { LocationId, OrganizationId } from "~/schemas/identifiers";
+import type { LocationId } from "~/schemas/identifiers";
 import type {
   LocationCSVImportResult,
   LocationCSVImportResultItem,
@@ -43,7 +43,6 @@ function getDefaultLocationType(hasParent: boolean): LocationType {
  */
 async function processLocationRow(
   db: Database,
-  organizationId: OrganizationId,
   row: LocationCSVRow,
   rowIndex: number,
   options: ImportOptions,
@@ -52,16 +51,12 @@ async function processLocationRow(
 
   try {
     // Check if location already exists
-    const existingLocationId = await findLocationByName(
-      db,
-      organizationId,
-      row.location_name,
-    );
+    const existingLocationId = await findLocationByName(db, row.location_name);
 
     // Resolve parent if specified
     let parentId: LocationId | null = null;
     if (row.parent_name) {
-      parentId = await findLocationByName(db, organizationId, row.parent_name);
+      parentId = await findLocationByName(db, row.parent_name);
       if (!parentId && !dryRun) {
         return {
           rowIndex,
@@ -146,7 +141,6 @@ async function processLocationRow(
 
     const { locationId, created } = await findOrCreateLocationByName(
       db,
-      organizationId,
       row.location_name,
       parentId,
       locationType,
@@ -175,7 +169,6 @@ async function processLocationRow(
       if (!hasImages) {
         const imageResult = await importLocationImages(
           db,
-          organizationId,
           locationId,
           row.location_image,
           row.location_name,
@@ -275,7 +268,6 @@ function sortRowsParentsFirst(rows: LocationCSVRow[]): LocationCSVRow[] {
  */
 export const importLocationsFromCSV = async (
   db: Database,
-  organizationId: OrganizationId,
   rows: LocationCSVRow[],
   options: ImportOptions,
 ): Promise<LocationCSVImportResult> => {
@@ -292,13 +284,7 @@ export const importLocationsFromCSV = async (
       (r) => r.location_name.toLowerCase() === row.location_name.toLowerCase(),
     );
 
-    const result = await processLocationRow(
-      db,
-      organizationId,
-      row,
-      originalIndex,
-      options,
-    );
+    const result = await processLocationRow(db, row, originalIndex, options);
 
     items.push(result);
     incrementCounter(counters, result.action);

@@ -6,11 +6,7 @@
 
 import { eq } from "drizzle-orm";
 import type { ActorContext } from "~/schemas/context";
-import {
-  type IngredientId,
-  type OrganizationId,
-  unsafeIngredientId,
-} from "~/schemas/identifiers";
+import { type IngredientId, unsafeIngredientId } from "~/schemas/identifiers";
 import {
   hasFoodIndicators,
   type ProductCategory,
@@ -87,7 +83,6 @@ export interface ProcessProductResult {
  */
 export const processProductForImport = async (
   db: Database,
-  organizationId: OrganizationId,
   productName: string,
   manufacturer: string,
   upc: string | undefined,
@@ -115,7 +110,6 @@ export const processProductForImport = async (
       db,
       effectiveIngredientName,
       aliases.length > 0 ? aliases : undefined,
-      organizationId,
     );
     ingredientId = unsafeIngredientId(ingredientData.id);
   }
@@ -126,7 +120,6 @@ export const processProductForImport = async (
     db,
     productName,
     manufacturer,
-    organizationId,
   );
 
   let productData: ProductTopLevelOut;
@@ -241,7 +234,6 @@ export const processProductForImport = async (
  */
 export const previewProductForImport = async (
   db: Database,
-  organizationId: OrganizationId,
   productName: string,
   manufacturer: string,
   upc: string | undefined,
@@ -262,7 +254,6 @@ export const previewProductForImport = async (
     db,
     productName,
     manufacturer,
-    organizationId,
   );
 
   if (!existingProduct) {

@@ -34,7 +34,6 @@ import {
 export const initiateImageUploadWithoutEntity = async (
   db: Database,
   { filename, contentType, size }: InitiateUploadWithoutEntityInput,
-  organizationId: string,
 ) => {
   // Generate S3 key for the image
   const key = generateImageKey(filename);
@@ -42,7 +41,6 @@ export const initiateImageUploadWithoutEntity = async (
 
   // Create image record in pending state
   const createdImage = await insertAndReturnDb(db, image, {
-    organizationId,
     key,
     filename,
     size,
@@ -187,20 +185,20 @@ const imageEntityRelations = {
  */
 export const imageList = async (
   db: Database,
-  organizationId: string,
   filterText: string | undefined,
   sort: { orderBy: string; direction: "asc" | "desc" },
   pagination: { pageIndex: number; pageSize: number },
 ) => {
   const dbClient = getDb(db);
 
-  // Build where conditions - always include organization filter for security
-  const whereConditions = [eq(image.organizationId, organizationId)];
+  // Build where conditions
+  const whereConditions: ReturnType<typeof eq>[] = [];
   if (filterText && filterText.trim() !== "") {
     whereConditions.push(ilike(image.filename, `%${filterText}%`));
   }
 
-  const whereClause = and(...whereConditions);
+  const whereClause =
+    whereConditions.length > 0 ? and(...whereConditions) : undefined;
 
   // Build orderBy using central sortableFields config
   const orderByClause = buildOrderBy(image, sort, [
@@ -240,12 +238,11 @@ export const imageList = async (
  */
 export const getImageById = async (
   db: Database,
-  organizationId: string,
   imageId: string,
 ): Promise<ImageWithEntity> => {
-  // Find the image by ID with organization filter and entity relations
+  // Find the image by ID with entity relations
   const imageRecord = await getDb(db).query.image.findFirst({
-    where: and(eq(image.id, imageId), eq(image.organizationId, organizationId)),
+    where: eq(image.id, imageId),
     with: imageEntityRelations,
   });
 
@@ -259,13 +256,11 @@ export const getImageById = async (
 /**
  * Cull (delete) pending images that are older than the specified threshold
  * @param db Database client
- * @param organizationId Organization ID to scope the cull to
  * @param olderThanHours Delete images older than this many hours
  * @returns Object with count of deleted images and related information
  */
 export const cullPendingImages = async (
   db: Database,
-  organizationId: string,
   olderThanHours: number,
 ) => {
   const dbClient = getDb(db);
@@ -300,13 +295,9 @@ export const cullPendingImages = async (
     ...recipeAssocs.map((a) => a.imageId),
   ]);
 
-  // Find pending images older than the cutoff date, scoped to organization
+  // Find pending images older than the cutoff date
   const allPendingImages = await dbClient.query.image.findMany({
-    where: and(
-      eq(image.organizationId, organizationId),
-      eq(image.status, "PENDING"),
-      lt(image.createdAt, cutoffDate),
-    ),
+    where: and(eq(image.status, "PENDING"), lt(image.createdAt, cutoffDate)),
     columns: {
       id: true,
       key: true,
@@ -352,14 +343,12 @@ export const cullPendingImages = async (
  * Creates an image record with status "UPLOADED" (not PENDING, since it's already uploaded).
  *
  * @param db Database client
- * @param organizationId Organization ID for the image
  * @param params.sourceUrl The external URL to fetch the image from
  * @param params.filenamePrefix Prefix for the generated filename (e.g., "upc-123456789012")
  * @returns Object with imageId, key, and url, or null on failure
  */
 export const importImageFromUrl = async (
   db: Database,
-  organizationId: string,
   params: { sourceUrl: string; filenamePrefix: string },
 ): Promise<{ imageId: string; key: string; url: string } | null> => {
   // Fetch and store the image in R2
@@ -374,7 +363,6 @@ export const importImageFromUrl = async (
 
   // Create the image record with status UPLOADED (not PENDING)
   const createdImage = await insertAndReturnDb(db, image, {
-    organizationId,
     key: stored.key,
     filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
     size: stored.size,

@@ -3,12 +3,9 @@
  */
 
 import dayjs from "dayjs";
-import { eq } from "drizzle-orm";
+import { isNull } from "drizzle-orm";
 import { joinImageUrls } from "~/lib/image-utils";
-import {
-  locationId as locationIdSchema,
-  type OrganizationId,
-} from "~/schemas/identifiers";
+import { locationId as locationIdSchema } from "~/schemas/identifiers";
 import type { LocationType } from "~/schemas/location";
 import type { Database } from "~/server/db";
 import { location } from "~/server/db/schema";
@@ -25,12 +22,9 @@ function formatTimestamp(date: Date | null): string | null {
 /**
  * Query all locations with their images and immediate parent
  */
-async function getLocationsWithParent(
-  db: Database,
-  organizationId: OrganizationId,
-) {
+async function getLocationsWithParent(db: Database) {
   return getDb(db).query.location.findMany({
-    where: eq(location.organizationId, organizationId),
+    where: isNull(location.deletedAt),
     with: {
       images: {
         with: { image: true },
@@ -53,9 +47,8 @@ async function getLocationsWithParent(
  */
 export const exportLocationsToCSV = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<LocationCSVExportRow[]> => {
-  const locations = await getLocationsWithParent(db, organizationId);
+  const locations = await getLocationsWithParent(db);
 
   return locations.map((loc) => ({
     location_name: loc.name,

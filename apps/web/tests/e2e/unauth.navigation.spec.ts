@@ -61,7 +61,7 @@ test.describe("Main navigation", () => {
     await inventoryLink.click();
     await page.waitForURL(/\/inventory/, { timeout: 10000 });
     await expect(
-      page.getByRole("heading", { name: /Inventory Items/i }),
+      page.getByRole("heading", { name: /^Inventory$/i }),
     ).toBeVisible();
   });
 });

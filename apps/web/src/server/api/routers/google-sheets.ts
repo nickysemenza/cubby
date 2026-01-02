@@ -11,7 +11,6 @@ import { z } from "zod";
 import { toCSVString } from "~/lib/csv-utils";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
-  type OrganizationId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
@@ -38,6 +37,10 @@ import {
   SHEET_NAMES,
 } from "~/server/clients/google-sheets";
 import type { Database } from "~/server/db";
+import {
+  getAppSettings,
+  updateAppSettingsMetadata,
+} from "~/server/repo/app-settings";
 import { withTransaction } from "~/server/repo/database-helpers";
 import {
   deleteInventoryEntry,
@@ -52,10 +55,6 @@ import { deleteLocation, updateLocation } from "~/server/repo/location";
 // Note: csv-comparison is now only used by the sync repo module
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
 import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
-import {
-  getOrganizationMetadata,
-  updateOrganizationMetadata,
-} from "~/server/repo/organization";
 import { syncProductPrice, updateProduct } from "~/server/repo/product";
 import {
   compareInventoryForSync,
@@ -75,23 +74,24 @@ const googleSheetsMetadata = z.object({
 
 type GoogleSheetsMetadata = z.infer<typeof googleSheetsMetadata>;
 
-// Parse organization metadata from JSON string
-function parseOrgMetadata(metadataStr: string | null): GoogleSheetsMetadata {
-  if (!metadataStr) return {};
+// Parse app settings metadata to extract Google Sheets config
+function parseAppMetadata(
+  metadata: Record<string, unknown> | null,
+): GoogleSheetsMetadata {
+  if (!metadata) return {};
   try {
-    const parsed = JSON.parse(metadataStr);
-    return googleSheetsMetadata.parse(parsed);
+    return googleSheetsMetadata.parse(metadata);
   } catch {
     return {};
   }
 }
 
 // Merge new metadata with existing, preserving other fields
-function mergeOrgMetadata(
-  existing: string | null,
+function mergeAppMetadata(
+  existing: Record<string, unknown> | null,
   updates: Partial<GoogleSheetsMetadata>,
 ): string {
-  const current = existing ? JSON.parse(existing) : {};
+  const current = existing ?? {};
   return JSON.stringify({ ...current, ...updates });
 }
 
@@ -175,15 +175,14 @@ type ParseSheetResult = {
 
 // Helper context type for procedures that need sheet access
 type SheetContext = {
-  db: Parameters<typeof getOrganizationMetadata>[0];
-  organizationId: OrganizationId;
+  db: Parameters<typeof getAppSettings>[0];
 };
 
 // Get configured client and validated sheet ID, or throw appropriate error
 async function getClientAndSheetId(ctx: SheetContext): Promise<{
   client: ReturnType<typeof getGoogleSheetsClient>;
   sheetId: string;
-  orgMetadata: string | null;
+  appMetadata: Record<string, unknown> | null;
 }> {
   return withTrace(
     TraceNames.api("googleSheets", "getClientAndSheetId"),
@@ -197,9 +196,9 @@ async function getClientAndSheetId(ctx: SheetContext): Promise<{
         });
       }
 
-      const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
+      const settings = await getAppSettings(ctx.db);
 
-      const metadata = parseOrgMetadata(org?.metadata ?? null);
+      const metadata = parseAppMetadata(settings.metadata);
       const sheetId = metadata.googleSheetId;
 
       if (!sheetId) {
@@ -209,21 +208,21 @@ async function getClientAndSheetId(ctx: SheetContext): Promise<{
         });
       }
 
-      return { client, sheetId, orgMetadata: org?.metadata ?? null };
+      return { client, sheetId, appMetadata: settings.metadata };
     },
   );
 }
 
-// Update organization's last sync timestamp
+// Update app settings' last sync timestamp
 async function updateLastSyncTimestamp(
   ctx: SheetContext,
-  existingMetadata: string | null,
+  existingMetadata: Record<string, unknown> | null,
 ): Promise<void> {
-  const newMetadata = mergeOrgMetadata(existingMetadata, {
+  const newMetadata = mergeAppMetadata(existingMetadata, {
     googleSheetLastSync: new Date().toISOString(),
   });
 
-  await updateOrganizationMetadata(ctx.db, ctx.organizationId, newMetadata);
+  await updateAppSettingsMetadata(ctx.db, newMetadata);
 }
 
 // Convert sheet rows (2D array) to InventoryCSVRow[]
@@ -374,10 +373,10 @@ const getConnectionStatus = protectedProcedure
     const configured = client.isConfigured();
     const serviceAccountEmail = client.getServiceAccountEmail() ?? null;
 
-    // Get org metadata
-    const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
+    // Get app settings metadata
+    const settings = await getAppSettings(ctx.db);
 
-    const metadata = parseOrgMetadata(org?.metadata ?? null);
+    const metadata = parseAppMetadata(settings.metadata);
     const sheetId = metadata.googleSheetId ?? null;
     const lastSync = metadata.googleSheetLastSync ?? null;
 
@@ -472,15 +471,15 @@ const updateSheetConnection = protectedProcedure
       : null;
 
     // Get current metadata
-    const org = await getOrganizationMetadata(ctx.db, ctx.organizationId);
+    const settings = await getAppSettings(ctx.db);
 
     // Update metadata with new sheet ID
-    const newMetadata = mergeOrgMetadata(org?.metadata ?? null, {
+    const newMetadata = mergeAppMetadata(settings.metadata, {
       googleSheetId: sheetId,
       googleSheetLastSync: null, // Reset last sync when changing sheet
     });
 
-    await updateOrganizationMetadata(ctx.db, ctx.organizationId, newMetadata);
+    await updateAppSettingsMetadata(ctx.db, newMetadata);
 
     return { success: true };
   });
@@ -832,8 +831,7 @@ async function updateProductFromSheetData(
 async function processImportsToApp(
   ctx: {
     db: Parameters<typeof importLocationsFromCSV>[0];
-    organizationId: OrganizationId;
-    actorContext: Parameters<typeof importInventoryFromCSV>[3]["actor"];
+    actorContext: Parameters<typeof importInventoryFromCSV>[2]["actor"];
   },
   locationItems: LocationSyncItem[],
   inventoryItems: InventorySyncItem[],
@@ -850,12 +848,9 @@ async function processImportsToApp(
   if (locationsToImport.length > 0) {
     const rows = syncItemsToLocationCSVRows(locationsToImport);
     if (rows.length > 0) {
-      const result = await importLocationsFromCSV(
-        ctx.db,
-        ctx.organizationId,
-        rows,
-        { dryRun: false },
-      );
+      const result = await importLocationsFromCSV(ctx.db, rows, {
+        dryRun: false,
+      });
       results.locations.created += result.created;
       results.locations.updated += result.updated;
       results.locations.errors += result.errors;
@@ -918,15 +913,10 @@ async function processImportsToApp(
   if (inventoryToImport.length > 0) {
     const rows = syncItemsToInventoryCSVRows(inventoryToImport);
     if (rows.length > 0) {
-      const result = await importInventoryFromCSV(
-        ctx.db,
-        ctx.organizationId,
-        rows,
-        {
-          dryRun: false,
-          actor: { ...ctx.actorContext, source: "sheets_import" },
-        },
-      );
+      const result = await importInventoryFromCSV(ctx.db, rows, {
+        dryRun: false,
+        actor: { ...ctx.actorContext, source: "sheets_import" },
+      });
       results.inventory.created += result.created;
       results.inventory.updated += result.updated;
       results.inventory.errors += result.errors;
@@ -1250,7 +1240,7 @@ async function pushInventoryToSheet(
 
 // Shared helper for syncPreview and applySync
 const fetchAndCompareData = async (
-  ctx: { db: Database; organizationId: OrganizationId },
+  ctx: { db: Database },
   client: ReturnType<typeof getGoogleSheetsClient>,
   sheetId: string,
 ) => {
@@ -1262,8 +1252,8 @@ const fetchAndCompareData = async (
       // Fetch all data in parallel - DB and Sheets calls are independent
       const [appLocations, appInventory, sheetLocations, inventorySheetData] =
         await Promise.all([
-          exportLocationsToCSV(ctx.db, ctx.organizationId),
-          exportInventoryToCSV(ctx.db, ctx.organizationId),
+          exportLocationsToCSV(ctx.db),
+          exportInventoryToCSV(ctx.db),
           fetchSheetLocations(client, sheetId),
           client.readSheet(sheetId, SHEET_NAMES.INVENTORY),
         ]);
@@ -1376,7 +1366,7 @@ const applySync = protectedProcedure
     return withTrace(
       TraceNames.trpc("mutation", "googleSheets.applySync"),
       async (span) => {
-        const { client, sheetId, orgMetadata } = await getClientAndSheetId(ctx);
+        const { client, sheetId, appMetadata } = await getClientAndSheetId(ctx);
         const {
           locationItems,
           inventoryItems,
@@ -1415,7 +1405,6 @@ const applySync = protectedProcedure
         await processImportsToApp(
           {
             db: ctx.db,
-            organizationId: ctx.organizationId,
             actorContext: ctx.actorContext,
           },
           locationItems,
@@ -1444,8 +1433,8 @@ const applySync = protectedProcedure
           // "Refresh Timestamps" mode: export ALL app data directly (with timestamps)
           // This bypasses sync comparison data and writes fresh exports to the sheet
           const [appLocations, appInventory] = await Promise.all([
-            exportLocationsToCSV(ctx.db, ctx.organizationId),
-            exportInventoryToCSV(ctx.db, ctx.organizationId),
+            exportLocationsToCSV(ctx.db),
+            exportInventoryToCSV(ctx.db),
           ]);
 
           // Write locations directly
@@ -1507,7 +1496,7 @@ const applySync = protectedProcedure
           );
         }
 
-        await updateLastSyncTimestamp(ctx, orgMetadata);
+        await updateLastSyncTimestamp(ctx, appMetadata);
 
         span.setAttributes({
           "sync.locationsCreated": results.locations.created,

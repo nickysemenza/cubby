@@ -5,7 +5,6 @@ import {
   inventoryId as inventoryIdSchema,
   type LocationId,
   locationId as locationIdSchema,
-  type OrganizationId,
   productId as productIdSchema,
 } from "~/schemas/identifiers";
 import {
@@ -69,19 +68,20 @@ function buildProductExportFields(p: ProductExportFields): {
 
 export const exportInventoryToCSV = async (
   db: Database,
-  organizationId: OrganizationId,
   locationIdFilter?: LocationId,
 ): Promise<InventoryCSVExportRow[]> => {
   // Build where conditions for inventory entries
-  const conditions = [eq(inventoryEntry.organizationId, organizationId)];
+  const conditions: ReturnType<typeof eq>[] = [];
 
   if (locationIdFilter) {
     conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
   }
 
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
   // Fetch all inventory entries with their product (including unit mappings and ingredient) and location
   const entries = await getDb(db).query.inventoryEntry.findMany({
-    where: and(...conditions),
+    where: whereClause,
     with: {
       Product: {
         with: {
@@ -134,11 +134,8 @@ export const exportInventoryToCSV = async (
   const productsWithoutInventory = await getDb(db).query.product.findMany({
     where:
       productIdsWithInventory.length > 0
-        ? and(
-            eq(product.organizationId, organizationId),
-            notInArray(product.id, productIdsWithInventory),
-          )
-        : eq(product.organizationId, organizationId),
+        ? notInArray(product.id, productIdsWithInventory)
+        : undefined,
     with: {
       unitMappings: true,
       Ingredient: true,

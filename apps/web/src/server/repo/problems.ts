@@ -1,5 +1,5 @@
 import { upc as upcSchema } from "@recipehub/usda-schemas";
-import { and, eq, notExists, sql } from "drizzle-orm";
+import { and, eq, isNull, notExists, sql } from "drizzle-orm";
 import { isMiscProduct } from "~/lib/constants";
 import type { Database } from "~/server/db";
 import {
@@ -119,10 +119,9 @@ export interface InventoryWithStaleValuation {
 // Find products with expectedQuantity=1 that appear in multiple locations
 const findDuplicateUniqueProducts = async (
   db: Database,
-  organizationId: string,
 ): Promise<DuplicateUniqueProduct[]> => {
   const duplicates = await getDb(db).query.product.findMany({
-    where: eq(product.organizationId, organizationId),
+    where: isNull(product.deletedAt),
     columns: {
       id: true,
       name: true,
@@ -166,7 +165,6 @@ const findDuplicateUniqueProducts = async (
 // Find products that have no inventory entries
 const findOrphanedProducts = async (
   db: Database,
-  organizationId: string,
 ): Promise<OrphanedProduct[]> => {
   const dbClient = getDb(db);
 
@@ -180,7 +178,7 @@ const findOrphanedProducts = async (
     .from(product)
     .where(
       and(
-        eq(product.organizationId, organizationId),
+        isNull(product.deletedAt),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -194,15 +192,12 @@ const findOrphanedProducts = async (
 };
 
 // Find products with invalid or duplicate UPC codes
-const findInvalidUPCs = async (
-  db: Database,
-  organizationId: string,
-): Promise<InvalidUPC[]> => {
+const findInvalidUPCs = async (db: Database): Promise<InvalidUPC[]> => {
   const problems: InvalidUPC[] = [];
 
   // Find products with UPCs
   const productsWithUPCs = await getDb(db).query.product.findMany({
-    where: sql`${product.organizationId} = ${organizationId} AND ${product.upc} IS NOT NULL`,
+    where: sql`${product.deletedAt} IS NULL AND ${product.upc} IS NOT NULL`,
     columns: {
       id: true,
       name: true,
@@ -254,7 +249,6 @@ const findInvalidUPCs = async (
 // Excludes misc products since they don't need pricing
 const findProductsWithoutMappings = async (
   db: Database,
-  organizationId: string,
 ): Promise<ProductWithoutMappings[]> => {
   const dbClient = getDb(db);
 
@@ -268,7 +262,7 @@ const findProductsWithoutMappings = async (
     .from(product)
     .where(
       and(
-        eq(product.organizationId, organizationId),
+        isNull(product.deletedAt),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -285,10 +279,9 @@ const findProductsWithoutMappings = async (
 // Find inventory entries with zero or negative amounts
 const findInvalidInventoryAmounts = async (
   db: Database,
-  organizationId: string,
 ): Promise<InvalidInventoryAmount[]> => {
   const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: eq(inventoryEntry.organizationId, organizationId),
+    where: isNull(inventoryEntry.deletedAt),
     columns: {
       id: true,
       amount: true,
@@ -328,10 +321,7 @@ const findInvalidInventoryAmounts = async (
 };
 
 // Find leaf locations with no inventory entries (excludes parent locations)
-const findEmptyLocations = async (
-  db: Database,
-  organizationId: string,
-): Promise<EmptyLocation[]> => {
+const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
   const dbClient = getDb(db);
 
   // Alias for checking child locations
@@ -351,7 +341,7 @@ const findEmptyLocations = async (
     .from(location)
     .where(
       and(
-        eq(location.organizationId, organizationId),
+        isNull(location.deletedAt),
         // No inventory entries
         notExists(
           dbClient
@@ -383,10 +373,7 @@ const getFoodIndicator = (product: {
 };
 
 // Main function to get all problems
-export const findAllProblems = async (
-  db: Database,
-  organizationId: string,
-): Promise<AllProblems> => {
+export const findAllProblems = async (db: Database): Promise<AllProblems> => {
   // Run all checks in parallel for better performance
   const [
     duplicateUniqueProducts,
@@ -400,16 +387,16 @@ export const findAllProblems = async (
     productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
   ] = await Promise.all([
-    findDuplicateUniqueProducts(db, organizationId),
-    findOrphanedProducts(db, organizationId),
-    findInvalidUPCs(db, organizationId),
-    findProductsWithoutMappings(db, organizationId),
-    findInvalidInventoryAmounts(db, organizationId),
-    findEmptyLocations(db, organizationId),
-    findProductsWithUPCNoImages(db, organizationId as never),
-    findProductsNeedingFoodCategory(db, organizationId as never),
-    findProductsWithStalePrices(db, organizationId as never),
-    findInventoryWithStaleValuations(db, organizationId as never),
+    findDuplicateUniqueProducts(db),
+    findOrphanedProducts(db),
+    findInvalidUPCs(db),
+    findProductsWithoutMappings(db),
+    findInvalidInventoryAmounts(db),
+    findEmptyLocations(db),
+    findProductsWithUPCNoImages(db),
+    findProductsNeedingFoodCategory(db),
+    findProductsWithStalePrices(db),
+    findInventoryWithStaleValuations(db),
   ]);
 
   // Transform to problem types

@@ -26,8 +26,6 @@ export const bulkProcessInventoryEntries = async (
   items: InventoryBulkOperationItem[],
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
-
   // Use a transaction to ensure all operations are processed atomically
   const processedItems = await withTransaction(
     db,
@@ -74,7 +72,6 @@ export const bulkProcessInventoryEntries = async (
             throw new Error("productId and amount are required for new items");
           }
           const created = await insertAndReturn(tx, inventoryEntry, {
-            organizationId: organizationId,
             productId: item.productId,
             locationId: locationId,
             amount: item.amount,
@@ -174,8 +171,6 @@ export const bulkMoveInventoryEntries = async (
   payload: BulkMovePayload,
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
-
   // Validate source and target are different
   if (payload.sourceLocationId === payload.targetLocationId) {
     throw new Error("Source and target locations must be different");
@@ -189,10 +184,7 @@ export const bulkMoveInventoryEntries = async (
       for (const item of payload.items) {
         // 1. Get source entry
         const sourceEntry = await tx.query.inventoryEntry.findFirst({
-          where: and(
-            eq(inventoryEntry.id, item.inventoryEntryId),
-            eq(inventoryEntry.organizationId, organizationId),
-          ),
+          where: eq(inventoryEntry.id, item.inventoryEntryId),
           ...relations.inventory.full,
         });
 
@@ -222,7 +214,6 @@ export const bulkMoveInventoryEntries = async (
           where: and(
             eq(inventoryEntry.productId, sourceEntry.productId),
             eq(inventoryEntry.locationId, payload.targetLocationId),
-            eq(inventoryEntry.organizationId, organizationId),
           ),
           ...relations.inventory.full,
         });
@@ -378,7 +369,6 @@ export const bulkMoveInventoryEntries = async (
           } else {
             // Create new entry at target
             const created = await insertAndReturn(tx, inventoryEntry, {
-              organizationId: organizationId,
               productId: sourceEntry.productId,
               locationId: payload.targetLocationId,
               amount: item.quantity,

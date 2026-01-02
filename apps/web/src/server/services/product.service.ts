@@ -2,7 +2,7 @@ import { foodSummary } from "@recipehub/usda-schemas";
 import type { z } from "zod";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
-import type { OrganizationId, ProductId } from "~/schemas/identifiers";
+import type { ProductId } from "~/schemas/identifiers";
 import type { PaginationParams, SortParams } from "~/schemas/pagination";
 import type { ProductCategory, ProductCreateInput } from "~/schemas/product";
 import type { Database } from "~/server/db";
@@ -30,11 +30,8 @@ export class ProductService {
     private usdaClient: USDAClient,
   ) {}
 
-  async getProductByID(
-    id: ProductId,
-    organizationId: OrganizationId,
-  ): Promise<ProductWithFoodOut> {
-    const product = await getProductByIDRepo(this.db, id, organizationId);
+  async getProductByID(id: ProductId): Promise<ProductWithFoodOut> {
+    const product = await getProductByIDRepo(this.db, id);
     const lookupParam = foodLookupParamFromProduct(product);
     const food = lookupParam
       ? await this.usdaClient.findFood(lookupParam)
@@ -47,7 +44,6 @@ export class ProductService {
   }
 
   async productList(
-    organizationId: OrganizationId,
     nameFilter: string | undefined,
     manufacturerFilter: string | undefined,
     upcFilter: string | undefined,
@@ -57,7 +53,6 @@ export class ProductService {
   ) {
     const { data: products, count } = await productListRepo(
       this.db,
-      organizationId,
       nameFilter,
       manufacturerFilter,
       upcFilter,
@@ -80,7 +75,7 @@ export class ProductService {
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     const product = await createProductRepo(this.db, data, actor);
-    return this.getProductByID(product.id, actor.organizationId);
+    return this.getProductByID(product.id);
   }
 
   async updateProduct(
@@ -89,6 +84,6 @@ export class ProductService {
     actor: ActorContext,
   ): Promise<ProductWithFoodOut> {
     await updateProductRepo(this.db, id, data, actor);
-    return this.getProductByID(id, actor.organizationId);
+    return this.getProductByID(id);
   }
 }

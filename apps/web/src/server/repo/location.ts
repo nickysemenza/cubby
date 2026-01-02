@@ -5,7 +5,6 @@ import { extractDbTimestampsFromDBRec } from "~/schemas/common";
 import type { ActorContext } from "~/schemas/context";
 import {
   type LocationId,
-  type OrganizationId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
@@ -56,13 +55,17 @@ export const createLocation = async (
   data: LocationCreateInput,
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
   // Create the location
+  // Explicitly handle empty string, undefined, and falsy values for parentId
+  // Using undefined to completely omit the field from the insert when there's no parent
+  // This ensures Drizzle sends SQL NULL rather than an empty string
+  const parentIdValue =
+    data.parentId && data.parentId.trim() !== "" ? data.parentId : undefined;
+
   const newLocation = await insertAndReturnDb(db, location, {
-    organizationId: organizationId,
     name: data.name,
     type: data.type,
-    parentId: data.parentId ?? null,
+    ...(parentIdValue !== undefined && { parentId: parentIdValue }),
   });
 
   // Associate images if provided
@@ -83,7 +86,7 @@ export const createLocation = async (
     action: "create",
   });
 
-  return getLocationById(db, unsafeLocationId(newLocation.id), organizationId);
+  return getLocationById(db, unsafeLocationId(newLocation.id));
 };
 
 // Update an existing location
@@ -93,7 +96,6 @@ export const updateLocation = async (
   data: LocationUpdateInput["data"],
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
   // Make sure we're not setting a location as its own parent
   if (data.parentId === id) {
     throw new Error("A location cannot be its own parent");
@@ -123,10 +125,7 @@ export const updateLocation = async (
 
   // Fetch current state for audit logging
   const before = await getDb(db).query.location.findFirst({
-    where: and(
-      eq(location.id, id),
-      eq(location.organizationId, organizationId),
-    ),
+    where: eq(location.id, id),
   });
 
   return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
@@ -142,7 +141,7 @@ export const updateLocation = async (
       tx,
       location,
       updateValues,
-      and(eq(location.id, id), eq(location.organizationId, organizationId)),
+      eq(location.id, id),
     );
 
     // Add new images using shared helper
@@ -185,7 +184,7 @@ export const updateLocation = async (
       }
     }
 
-    return getLocationById(tx, unsafeLocationId(updated.id), organizationId);
+    return getLocationById(tx, unsafeLocationId(updated.id));
   });
 };
 
@@ -311,17 +310,13 @@ const buildLocationWithChildren = (
   };
 };
 
-export const buildLocationTypeCount = async (
-  db: Database,
-  organizationId: OrganizationId,
-) => {
+export const buildLocationTypeCount = async (db: Database) => {
   const types = await getDb(db)
     .select({
       type: location.type,
       count: count(),
     })
     .from(location)
-    .where(eq(location.organizationId, organizationId))
     .groupBy(location.type)
     .orderBy(desc(count()));
 
@@ -337,10 +332,7 @@ export const buildLocationTypeCount = async (
   return full as Record<(typeof allKeys)[number], number>;
 };
 
-export const buildLocationTree = async (
-  db: Database,
-  organizationId: OrganizationId,
-) => {
+export const buildLocationTree = async (db: Database) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
   const res = await getDb(db).execute<LocationWithParentChild>(sql`
@@ -350,8 +342,7 @@ export const buildLocationTree = async (
         l.*,
         0 as depth
       FROM ${location} l
-      WHERE l."organizationId" = ${organizationId}
-        AND l."parentId" IS NULL
+      WHERE l."parentId" IS NULL
 
       UNION ALL
 
@@ -496,12 +487,11 @@ interface LocationFilters {
 
 export const locationList = async (
   db: Database,
-  organizationId: OrganizationId,
   filters: LocationFilters,
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  const conditions = [eq(location.organizationId, organizationId)];
+  const conditions: ReturnType<typeof eq>[] = [];
 
   if (filters.nameFilter) {
     const nameCondition = formatSearchTerm(location.name, filters.nameFilter);
@@ -514,7 +504,7 @@ export const locationList = async (
     conditions.push(eq(location.type, filters.itemTypeFilter));
   }
 
-  const whereClause = and(...conditions);
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Build order by using central sortableFields config
   const orderByClause = buildOrderBy(location, sort, [
@@ -545,14 +535,10 @@ export const locationList = async (
  */
 export const findLocationByName = async (
   db: Database,
-  organizationId: OrganizationId,
   name: string,
 ): Promise<LocationId | null> => {
   const loc = await getDb(db).query.location.findFirst({
-    where: and(
-      eq(location.organizationId, organizationId),
-      ilike(location.name, name),
-    ),
+    where: ilike(location.name, name),
   });
   return loc ? unsafeLocationId(loc.id) : null;
 };
@@ -564,7 +550,6 @@ export const findLocationByName = async (
  */
 export const findOrCreateLocationByName = async (
   db: Database,
-  organizationId: OrganizationId,
   name: string,
   parentId: LocationId | null,
   type: LocationType,
@@ -575,14 +560,13 @@ export const findOrCreateLocationByName = async (
   },
 ): Promise<{ locationId: LocationId; created: boolean }> => {
   // Check if location already exists
-  const existingId = await findLocationByName(db, organizationId, name);
+  const existingId = await findLocationByName(db, name);
   if (existingId) {
     return { locationId: existingId, created: false };
   }
 
   // Create new location (with optional timestamps for sheet import)
   const created = await insertAndReturnDb(db, location, {
-    organizationId,
     name,
     type,
     parentId,
@@ -715,8 +699,6 @@ export const deleteLocation = async (
   id: LocationId,
   actor: ActorContext,
 ): Promise<boolean> => {
-  const { organizationId } = actor;
-
   // Safety check: don't delete if location has inventory
   const hasInventory = await locationHasInventory(db, id);
   if (hasInventory) {
@@ -732,9 +714,7 @@ export const deleteLocation = async (
   // Delete the location
   const result = await getDb(db)
     .delete(location)
-    .where(
-      and(eq(location.id, id), eq(location.organizationId, organizationId)),
-    )
+    .where(eq(location.id, id))
     .returning();
 
   if (result.length > 0) {
@@ -757,14 +737,11 @@ export const deleteLocation = async (
 export const touchLastBulkInventory = async (
   db: Database,
   id: LocationId,
-  organizationId: OrganizationId,
 ): Promise<void> => {
   const result = await getDb(db)
     .update(location)
     .set({ lastBulkInventory: new Date() })
-    .where(
-      and(eq(location.id, id), eq(location.organizationId, organizationId)),
-    )
+    .where(eq(location.id, id))
     .returning();
 
   if (result.length === 0) {
@@ -775,14 +752,10 @@ export const touchLastBulkInventory = async (
 export const getLocationById = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
-  organizationId: OrganizationId,
 ) => {
   // Fetch the location with parent chain and immediate children
   const res = await unwrapDb(db).query.location.findFirst({
-    where: and(
-      eq(location.id, id),
-      eq(location.organizationId, organizationId),
-    ),
+    where: eq(location.id, id),
     ...relations.location.full,
   });
 

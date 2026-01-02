@@ -18,6 +18,11 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+
+  /* Global setup/teardown - starts dev server with fresh IntegresQL database */
+  globalSetup: "./tests/e2e/e2e-global-setup.ts",
+  globalTeardown: "./tests/e2e/e2e-global-teardown.ts",
+
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
@@ -56,36 +61,22 @@ export default defineConfig({
   /* Configure projects for major browsers */
   projects: [
     {
-      name: "global setup",
-      testMatch: /global\.setup\.ts/,
-    },
-    {
       name: "Unauthenticated tests",
       testMatch: /unauth\..*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
       },
-      dependencies: ["global setup"],
     },
     {
       name: "Authenticated tests",
       testMatch: /(?!unauth\.).*\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
-        // Use prepared better-auth state
+        // Use prepared better-auth state (saved by globalSetup)
         storageState: "playwright/.auth/user.json",
       },
-      dependencies: ["global setup"],
     },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: {
-    // Use a built server on CI for stability; dev server locally for faster iteration
-    command: isCI ? "pnpm run preview" : "pnpm run dev",
-    // command: "npm run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !isCI,
-    timeout: isCI ? 180_000 : 60_000,
-  },
+  /* Note: webServer is handled by globalSetup with IntegresQL fresh database */
 });

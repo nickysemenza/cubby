@@ -25,9 +25,7 @@ import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
 import { buildActorContext } from "~/schemas/context";
 import {
-  type OrganizationId,
   type UserId,
-  unsafeOrganizationId,
   unsafeProductId,
   unsafeUserId,
 } from "~/schemas/identifiers";
@@ -102,7 +100,7 @@ export function createAppError(
 
 /**
  * Map database product record to ProductTopLevelOut format
- * Excludes DB-only fields (deletedAt, organizationId, ingredientId)
+ * Excludes DB-only fields (deletedAt, ingredientId)
  */
 const mapProductToTopLevelOut = (
   dbProduct: Awaited<ReturnType<typeof findProductsByFoodIdentifier>>[number],
@@ -168,52 +166,10 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
       headers: opts.headers,
     });
 
-    // Determine organization ID from header or session
-    let organizationId: OrganizationId | null = null;
-
-    // Check for organization ID or slug in header (for API key usage)
-    const orgIdOrSlug = opts.headers.get("x-organization-id");
-    if (orgIdOrSlug && betterSession?.user?.id) {
-      // Fetch user's organizations to validate membership
-      const userOrganizations = await betterAuth.api.listOrganizations({
-        headers: opts.headers,
-      });
-
-      if (!userOrganizations) {
-        throw createAppError(
-          "ORGANIZATION_FETCH_FAILED",
-          "Unable to fetch organization membership",
-        );
-      }
-
-      // Try to find organization by ID or slug
-      const matchedOrg = userOrganizations.find(
-        (org) => org.id === orgIdOrSlug || org.slug === orgIdOrSlug,
-      );
-
-      if (!matchedOrg) {
-        throw createAppError(
-          "NOT_ORGANIZATION_MEMBER",
-          `You are not a member of organization '${orgIdOrSlug}'`,
-        );
-      }
-
-      organizationId = unsafeOrganizationId(matchedOrg.id);
-    } else {
-      // Fall back to active organization from session
-      organizationId = betterSession?.session?.activeOrganizationId
-        ? unsafeOrganizationId(betterSession.session.activeOrganizationId)
-        : null;
-    }
-
-    // Build actor context if we have both user and org
     const userId = betterSession?.user?.id
       ? unsafeUserId(betterSession.user.id)
       : null;
-    const actorContext =
-      userId && organizationId
-        ? buildActorContext(userId, organizationId, "ui")
-        : null;
+    const actorContext = userId ? buildActorContext(userId, "ui") : null;
 
     return {
       ...crudServices,
@@ -221,7 +177,6 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
         userId,
         sessionId: betterSession?.session?.id ?? null,
       },
-      organizationId,
       actorContext,
       ...opts,
     };
@@ -355,27 +310,11 @@ const tracingMiddleWare = t.middleware(async (opts) => {
   );
 });
 
-// Check if the user is signed in
+// Check if the user is signed in and has actorContext
 // Otherwise, throw an UNAUTHORIZED code
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.auth?.userId) {
     throw createAppError("UNAUTHORIZED", "Unauthorized");
-  }
-  return next({
-    ctx: {
-      auth: ctx.auth,
-    },
-  });
-});
-
-// Check if an organization is selected and actorContext is present
-// Otherwise, throw a PRECONDITION_FAILED code
-const requireOrganization = t.middleware(({ next, ctx }) => {
-  if (!ctx.organizationId) {
-    throw createAppError(
-      "NO_ORGANIZATION_SELECTED",
-      "Please select an organization to continue",
-    );
   }
   if (!ctx.actorContext) {
     throw createAppError(
@@ -383,11 +322,9 @@ const requireOrganization = t.middleware(({ next, ctx }) => {
       "Actor context required for this operation",
     );
   }
-  // Narrow the context type to guarantee organizationId and actorContext are non-null
   return next({
     ctx: {
-      ...ctx,
-      organizationId: ctx.organizationId,
+      auth: ctx.auth,
       actorContext: ctx.actorContext,
     },
   });
@@ -404,27 +341,14 @@ export const publicProcedure = t.procedure
   .use(timingMiddleware)
   .use(tracingMiddleWare);
 
-export const protectedProcedure = publicProcedure
-  .use(isAuthed)
-  .use(requireOrganization);
+export const protectedProcedure = publicProcedure.use(isAuthed);
 
 /**
  * System procedure for operations that can be authenticated with API key
  * Used for scripts and system-level operations
  * API keys automatically create sessions via better-auth plugin
  */
-const isSystemOrAuth = t.middleware(({ next, ctx }) => {
-  if (!ctx.auth?.userId) {
-    throw createAppError("UNAUTHORIZED", "Unauthorized");
-  }
-  return next({
-    ctx,
-  });
-});
-
-export const systemProcedure = publicProcedure
-  .use(isSystemOrAuth)
-  .use(requireOrganization);
+export const systemProcedure = publicProcedure.use(isAuthed);
 
 /**
  * Helper to create a minimal auth object for testing
@@ -436,33 +360,28 @@ const createTestAuth = (userId: UserId) => ({
 
 /**
  * Test helper to create a TRPC context for testing purposes
- *
  */
 export const createTestTRPCContext = (
   db: Database,
   opts: {
     headers?: Headers;
     auth?: { userId: UserId };
-    organizationId?: OrganizationId;
   } = {},
 ) => {
   const crudServices = buildCrudServices(db);
   const auth = opts.auth
     ? createTestAuth(opts.auth.userId)
     : { userId: null, sessionId: null };
-  const organizationId = opts.organizationId ?? null;
 
-  // Build actorContext if we have both auth and organizationId
-  const actorContext =
-    auth.userId && organizationId
-      ? buildActorContext(auth.userId, organizationId, "ui")
-      : null;
+  // Build actorContext if we have auth
+  const actorContext = auth.userId
+    ? buildActorContext(auth.userId, "ui")
+    : null;
 
   return {
     ...crudServices,
     auth,
     isSystemRequest: false, // Test contexts are not system requests by default
-    organizationId,
     actorContext,
     headers: opts.headers ?? new Headers(),
   };

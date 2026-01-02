@@ -1,11 +1,7 @@
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
-import {
-  type OrganizationId,
-  unsafeOrganizationId,
-  unsafeUserId,
-} from "~/schemas/identifiers";
+import { unsafeUserId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { exampleRecipesCompact } from "~/testdata/fakeRecipes";
 import { seedRealRecipes } from "~/testdata/seed";
@@ -14,7 +10,6 @@ import { recipeRouter } from "./recipe";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
-  organizationId: unsafeOrganizationId("test-org-id"),
   source: "ui",
 };
 
@@ -23,10 +18,9 @@ const TEST_USER_ID = TEST_ACTOR.userId;
 
 describe("recipe router", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
     return teardown;
   });
   it("recipe insert and retrieve", async () => {
@@ -36,7 +30,6 @@ describe("recipe router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
     const recipeList = await caller.list({ filters: {} });

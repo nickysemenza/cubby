@@ -1,7 +1,6 @@
 import { and, desc, eq, lt } from "drizzle-orm";
 import type { AuditEntityType } from "~/schemas/audit";
 import type { ActorContext } from "~/schemas/context";
-import type { OrganizationId } from "~/schemas/identifiers";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";
@@ -66,7 +65,6 @@ export async function logAuditEntry(
   entry: AuditEntryInput,
 ): Promise<void> {
   await unwrapDb(db).insert(auditLog).values({
-    organizationId: actor.organizationId,
     entityType: entry.entityType,
     entityId: entry.entityId,
     action: entry.action,
@@ -82,14 +80,13 @@ export async function logAuditEntry(
 export async function getAuditLog(
   db: Database,
   params: {
-    organizationId: OrganizationId;
     entityType?: AuditEntityType;
     entityId?: string;
     limit: number;
     cursor?: string; // ISO date string for cursor-based pagination
   },
 ): Promise<{ entries: AuditLogRow[]; nextCursor?: string }> {
-  const conditions = [eq(auditLog.organizationId, params.organizationId)];
+  const conditions: ReturnType<typeof eq>[] = [];
 
   if (params.entityType) {
     conditions.push(eq(auditLog.entityType, params.entityType));
@@ -105,7 +102,7 @@ export async function getAuditLog(
   }
 
   const entries = await unwrapDb(db).query.auditLog.findMany({
-    where: and(...conditions),
+    where: conditions.length > 0 ? and(...conditions) : undefined,
     orderBy: desc(auditLog.createdAt),
     limit: params.limit + 1, // Fetch one extra to determine if there's more
     with: {

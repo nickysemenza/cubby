@@ -1,4 +1,3 @@
-import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Bug, BugOff, Menu, PackageOpen } from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
@@ -232,12 +231,7 @@ export function MainNav({
             Sign In
           </Link>
         ) : (
-          <>
-            <div className="hidden md:block">
-              <OrganizationSwitcher />
-            </div>
-            <UserAvatarDropdown />
-          </>
+          <UserAvatarDropdown />
         )}
 
         {/* Mobile menu button */}
@@ -258,14 +252,6 @@ export function MainNav({
               <SheetTitle>Navigation</SheetTitle>
             </SheetHeader>
             <nav className="flex flex-1 flex-col space-y-1 overflow-y-auto px-4 pb-4">
-              {/* Organization Switcher for Mobile */}
-              {session.data?.user && (
-                <div className="flex min-h-[44px] items-center justify-between px-3 py-2">
-                  <span className="font-medium text-sm">Organization</span>
-                  <OrganizationSwitcher />
-                </div>
-              )}
-
               {/* Debug Toggle for Mobile */}
               <SheetClose
                 render={

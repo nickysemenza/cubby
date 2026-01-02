@@ -30,7 +30,8 @@ export const env = createEnv({
   },
 
   runtimeEnv: {
-    DATABASE_URL: process.env.DATABASE_URL,
+    // E2E_DATABASE_URL takes precedence - it won't be overwritten by Vite's .env loading
+    DATABASE_URL: process.env.E2E_DATABASE_URL || process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,

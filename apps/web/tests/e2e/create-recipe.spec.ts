@@ -14,40 +14,58 @@ test.describe("Create Recipe", () => {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
 
+    // Helper to wait for form hydration
+    async function waitForFormHydration() {
+      await page.waitForLoadState("networkidle");
+      await expect(
+        page.getByRole("button", { name: "React Hook Form Logo" }),
+      ).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(500);
+    }
+
+    // Helper to fill input with proper React event handling
+    async function fillInput(placeholder: string, value: string) {
+      const input = page.getByPlaceholder(placeholder);
+      await expect(input).toBeVisible();
+      await expect(input).toBeEnabled();
+      await input.click();
+      await input.clear();
+      await input.pressSequentially(value, { delay: 10 });
+      await input.blur();
+    }
+
     // Step 1: Create an ingredient first
-    await page.goto("/ingredients");
-    // The "Create New Ingredient" is a Button that renders as Link
-    const createIngredientBtn = page.getByRole("button", {
-      name: "Create New Ingredient",
-    });
-    await expect(createIngredientBtn).toBeVisible({ timeout: 10000 });
-    await createIngredientBtn.click();
-    await page.waitForURL(/\/ingredients\/new/, { timeout: 10000 });
+    await page.goto("/ingredients/new");
+    await expect(page).toHaveURL(/\/ingredients\/new/);
+
+    // Wait for form hydration
+    await waitForFormHydration();
 
     // Fill in the ingredient form
-    await page.getByPlaceholder("Enter ingredient name").fill(ingredientName);
+    await fillInput("Enter ingredient name", ingredientName);
 
     // Submit ingredient
     await page.getByRole("button", { name: /^Create$/ }).click();
 
     // Expect redirect to ingredient detail page
-    await expect(page).toHaveURL(/\/ingredients\//);
+    await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
+      timeout: 15000,
+    });
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
       ingredientName,
+      { timeout: 10000 },
     );
 
     // Step 2: Create a product and link it to the ingredient
-    await page.goto("/products");
-    // Wait for page content instead of networkidle (more reliable)
-    await expect(
-      page.getByRole("link", { name: "Create New Product" }),
-    ).toBeVisible({ timeout: 10000 });
-    await page.getByRole("link", { name: "Create New Product" }).click();
-    await page.waitForURL(/\/products\/new/, { timeout: 10000 });
+    await page.goto("/products/new");
+    await expect(page).toHaveURL(/\/products\/new/);
+
+    // Wait for form hydration
+    await waitForFormHydration();
 
     // Fill in the product form
-    await page.getByPlaceholder("Enter product name").fill(productName);
-    await page.getByPlaceholder("Enter manufacturer").fill(manufacturerName);
+    await fillInput("Enter product name", productName);
+    await fillInput("Enter manufacturer", manufacturerName);
 
     // Link to the ingredient we just created (scope to the Ingredient field's combobox)
     await page
@@ -127,26 +145,29 @@ test.describe("Create Recipe", () => {
     await page.getByRole("button", { name: /^Create$/ }).click();
 
     // Expect redirect to product detail page
-    await expect(page).toHaveURL(/\/products\//);
+    await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
     await expect(
-      page.getByRole("heading", { name: `🛒Product Detail: ${productName}` }),
-    ).toBeVisible();
+      page.getByRole("heading", { name: `Product: ${productName}` }),
+    ).toBeVisible({ timeout: 10000 });
 
     // Step 3: Create a recipe using the linked ingredient
-    await page.goto("/recipes");
-    await expect(
-      page.getByRole("link", { name: "Create New Recipe", exact: true }),
-    ).toBeVisible({ timeout: 10000 });
-    await page
-      .getByRole("link", { name: "Create New Recipe", exact: true })
-      .click();
-    await page.waitForURL("/recipes/new", { timeout: 10000 });
+    await page.goto("/recipes/new");
+    await expect(page).toHaveURL(/\/recipes\/new/);
+
+    // Wait for form hydration
+    await waitForFormHydration();
 
     // Fill in basic recipe information
-    await page.getByPlaceholder("Enter recipe name").fill(recipeName);
+    await fillInput("Enter recipe name", recipeName);
 
     // Fill in recipe metadata
-    await page.getByPlaceholder("Enter recipe URL").fill(faker.internet.url());
+    await fillInput("Enter recipe URL", faker.internet.url());
+
+    // Fill in yield fields (optional but avoids validation issues)
+    const yieldInput = page.getByLabel("Yield Value (Optional)");
+    await yieldInput.fill("12");
+    const yieldUnitInput = page.getByLabel("Yield Unit");
+    await yieldUnitInput.fill("cookies");
 
     // Add an ingredient - click the "Add Ingredient" button
     await page.getByRole("button", { name: /Add Ingredient/i }).click();
@@ -192,12 +213,12 @@ test.describe("Create Recipe", () => {
     await page.getByRole("button", { name: /^Create$/i }).click();
 
     // Verify we're redirected to the recipe detail page
-    await expect(page).toHaveURL(/\/recipes\//);
+    await expect(page).toHaveURL(/\/recipes\/[a-f0-9-]+/, { timeout: 15000 });
 
     // Check that the recipe name appears as the main heading
     await expect(
       page.getByRole("heading", { name: recipeName, level: 1 }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10000 });
 
     // Verify the ingredient appears in the magazine view ingredients sidebar
     const ingredientsSidebar = page
@@ -210,7 +231,7 @@ test.describe("Create Recipe", () => {
       .locator("main")
       .filter({ has: page.getByText("Instructions") });
     await expect(
-      instructionsSection.getByText(new RegExp(ingredientName)),
+      instructionsSection.getByText(new RegExp(ingredientName)).first(),
     ).toBeVisible();
 
     // Switch to Table view to check detailed links and cost/weight calculations

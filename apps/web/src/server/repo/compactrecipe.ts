@@ -1,6 +1,6 @@
 import type { ParsedCompactRecipe } from "~/codec/codec";
 import type { ActorContext } from "~/schemas/context";
-import { type OrganizationId, unsafeIngredientId } from "~/schemas/identifiers";
+import { unsafeIngredientId } from "~/schemas/identifiers";
 import type { RecipeCreateInput } from "~/schemas/recipe";
 import type { Database } from "../db";
 import { withTransaction } from "./database-helpers";
@@ -11,7 +11,6 @@ import { upsertRecipe } from "./recipe";
 const convertParsedCompactToRecipeInput = async (
   recipe: ParsedCompactRecipe,
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<RecipeCreateInput> => {
   return await withTransaction(db, async (tx) => {
     return {
@@ -29,8 +28,6 @@ const convertParsedCompactToRecipeInput = async (
               const newIngredient = await findOrCreateIngredient(
                 tx,
                 ingredient.name,
-                undefined,
-                organizationId,
               );
               return {
                 type: "ingredient" as const,
@@ -51,13 +48,8 @@ export const upsertRecipeFromCompact = async (
   db: Database,
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
   // Convert compact recipe format to standard recipe input format
-  const recipeInput = await convertParsedCompactToRecipeInput(
-    recipe,
-    db,
-    organizationId,
-  );
+  const recipeInput = await convertParsedCompactToRecipeInput(recipe, db);
 
   // Use the centralized upsert logic
   return await upsertRecipe(recipeInput, db, actor);

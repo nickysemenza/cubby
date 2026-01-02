@@ -10,11 +10,6 @@ program
   .name("load-data")
   .description("Load configuration data from CSV into the database")
   .requiredOption(
-    "--organization-id <id>",
-    "Organization ID (UUID) or slug (e.g., 'acme-corp')",
-    process.env.ORGANIZATION_ID || process.env.PROJECT_ID,
-  )
-  .requiredOption(
     "--api-key <key>",
     "Better-Auth API key for authentication",
     process.env.API_KEY,
@@ -25,7 +20,6 @@ program
 program.parse();
 
 const options = program.opts<{
-  organizationId: string;
   apiKey: string;
   file: string;
   seedRecipes: boolean;
@@ -39,7 +33,6 @@ const client = createTRPCClient<AppRouter>({
       headers: () => {
         return {
           "x-api-key": options.apiKey,
-          "x-organization-id": options.organizationId,
         };
       },
     }),

@@ -15,7 +15,6 @@ import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
 import {
   type IngredientId,
-  type OrganizationId,
   unsafeIngredientId,
   unsafeProductId,
 } from "~/schemas/identifiers";
@@ -144,16 +143,9 @@ const dbIngredientToAPI = async (
   };
 };
 
-export const getIngredientByID = async (
-  db: Database,
-  id: IngredientId,
-  organizationId: OrganizationId,
-) => {
+export const getIngredientByID = async (db: Database, id: IngredientId) => {
   const ingredientData = await getDb(db).query.ingredient.findFirst({
-    where: and(
-      eq(ingredient.id, id),
-      eq(ingredient.organizationId, organizationId),
-    ),
+    where: eq(ingredient.id, id),
     ...relations.ingredient.full,
   });
 
@@ -177,11 +169,9 @@ export const createIngredient = async (
   data: z.infer<typeof ingredientBase>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const { organizationId } = actor;
   const [newIngredient] = await unwrapDb(db)
     .insert(ingredient)
     .values({
-      organizationId: organizationId,
       name: data.name,
       aliases: data.aliases || [],
     })
@@ -216,20 +206,16 @@ export const updateIngredient = async (
   data: Partial<z.infer<typeof ingredientBase>>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const { organizationId } = actor;
   // Capture before state for audit logging
   const beforeState = await getDb(db).query.ingredient.findFirst({
-    where: and(
-      eq(ingredient.id, id),
-      eq(ingredient.organizationId, organizationId),
-    ),
+    where: eq(ingredient.id, id),
   });
 
   const updated = await updateAndReturnDb(
     db,
     ingredient,
     data,
-    and(eq(ingredient.id, id), eq(ingredient.organizationId, organizationId)),
+    eq(ingredient.id, id),
   );
 
   // Log audit entry with changes
@@ -261,11 +247,10 @@ export const findOrCreateIngredient = async (
   db: Database | DrizzleTransaction,
   name: string,
   aliases?: string[],
-  organizationId?: string,
 ) => {
   const findOrCreate = async (): Promise<typeof ingredient.$inferSelect> => {
     const existing = await unwrapDb(db).query.ingredient.findFirst({
-      where: buildIngredientWhere(true, name, aliases, organizationId),
+      where: buildIngredientWhere(true, name, aliases),
     });
     if (existing) {
       return existing;
@@ -274,7 +259,6 @@ export const findOrCreateIngredient = async (
     const [newIngredient] = await unwrapDb(db)
       .insert(ingredient)
       .values({
-        organizationId: organizationId || "default-org",
         name: name,
         aliases: aliases || [],
       })
@@ -321,7 +305,6 @@ const buildIngredientWhere = (
   exact: boolean,
   name: string,
   otherSearchNames?: string[],
-  organizationId?: string,
 ) => {
   const list = [name, ...(otherSearchNames ?? [])];
 
@@ -352,26 +335,17 @@ const buildIngredientWhere = (
   // Filter for standalone ingredients only, not recipe ingredients
   conditions.push(isNull(ingredient.recipeId));
 
-  // Add organization filter if provided
-  if (organizationId) {
-    conditions.push(eq(ingredient.organizationId, organizationId));
-  }
-
   return and(...conditions);
 };
 
 export const ingredientList = async (
   db: Database,
-  organizationId: OrganizationId,
   name: string | undefined,
   sort: SortParams,
   pagination: PaginationParams,
   missingProductsOnly: boolean = false,
 ) => {
-  const conditions = [
-    eq(ingredient.organizationId, organizationId),
-    isNull(ingredient.recipeId),
-  ];
+  const conditions = [isNull(ingredient.recipeId)];
 
   // Add name filter if provided
   if (name) {

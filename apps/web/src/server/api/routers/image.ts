@@ -32,7 +32,6 @@ export const imageRouter = createTRPCRouter({
       try {
         const { data, count } = await imageList(
           ctx.db,
-          ctx.organizationId,
           input.filters.searchFilter,
           input.sort,
           input.pagination,
@@ -55,11 +54,9 @@ export const imageRouter = createTRPCRouter({
     .output(initiateUploadWithoutEntityResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        // organizationId is guaranteed by protectedProcedure
         const uploadData = await initiateImageUploadWithoutEntity(
           ctx.db,
           input,
-          ctx.organizationId,
         );
 
         return {
@@ -85,7 +82,7 @@ export const imageRouter = createTRPCRouter({
     .output(imageWithEntitySchema)
     .query(async ({ ctx, input }) => {
       try {
-        return await getImageById(ctx.db, ctx.organizationId, input.id);
+        return await getImageById(ctx.db, input.id);
       } catch (error) {
         throw createAppError("IMAGE_GET_FAILED", "Failed to get image", error);
       }
@@ -99,11 +96,7 @@ export const imageRouter = createTRPCRouter({
     .output(cullPendingImagesResponseSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        const result = await cullPendingImages(
-          ctx.db,
-          ctx.organizationId,
-          input.olderThanHours,
-        );
+        const result = await cullPendingImages(ctx.db, input.olderThanHours);
 
         return result;
       } catch (error) {

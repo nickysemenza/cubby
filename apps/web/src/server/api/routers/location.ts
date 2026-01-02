@@ -44,13 +44,7 @@ const { list } = createEntityListProcedure({
   },
   repository: {
     list: async (services, filters, sort, pagination) => {
-      return await locationList(
-        services.db,
-        services.organizationId,
-        filters,
-        sort,
-        pagination,
-      );
+      return await locationList(services.db, filters, sort, pagination);
     },
   },
   entityName: "location",
@@ -66,7 +60,7 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
   },
   repository: {
     getByID: async (services, id: LocationId) => {
-      return await getLocationById(services.db, id, services.organizationId);
+      return await getLocationById(services.db, id);
     },
     create: async (services, data) => {
       return await createLocation(services.db, data, services.actorContext);
@@ -80,21 +74,19 @@ const { getByID, create, update } = createEntityCrudWithoutListProcedures({
 const getLocationTypesCount = protectedProcedure
   .output(z.record(locationType, z.number()))
   .query(async ({ ctx }) => {
-    return await buildLocationTypeCount(ctx.db, ctx.organizationId);
+    return await buildLocationTypeCount(ctx.db);
   });
 
 const makeTree = protectedProcedure
   .output(z.array(infLocation))
-  .query(
-    async ({ ctx }) => await buildLocationTree(ctx.db, ctx.organizationId),
-  );
+  .query(async ({ ctx }) => await buildLocationTree(ctx.db));
 
 // Touch lastBulkInventory timestamp (for Scanner page "Mark Complete" button)
 const touchLastBulkInventory = protectedProcedure
   .input(z.object({ id: locationId }))
   .output(z.object({ success: z.boolean() }))
   .mutation(async ({ ctx, input }) => {
-    await touchLastBulkInventoryRepo(ctx.db, input.id, ctx.organizationId);
+    await touchLastBulkInventoryRepo(ctx.db, input.id);
     return { success: true };
   });
 

@@ -1,5 +1,4 @@
 import { and, eq, ilike, isNull, or, sql } from "drizzle-orm";
-import type { OrganizationId } from "~/schemas/identifiers";
 import type {
   IngredientSearchResult,
   InventorySearchResult,
@@ -24,7 +23,6 @@ import { getDb } from "./database-helpers";
  */
 export async function globalSearch(
   db: Database,
-  organizationId: OrganizationId,
   query: string,
   limitPerType = 5,
 ): Promise<SearchResultItem[]> {
@@ -61,7 +59,6 @@ export async function globalSearch(
         .from(product)
         .where(
           and(
-            eq(product.organizationId, organizationId),
             isNull(product.deletedAt),
             or(
               ilike(product.name, searchPattern),
@@ -96,13 +93,7 @@ export async function globalSearch(
           )`.as("ingredientCount"),
         })
         .from(recipe)
-        .where(
-          and(
-            eq(recipe.organizationId, organizationId),
-            isNull(recipe.deletedAt),
-            ilike(recipe.name, searchPattern),
-          ),
-        )
+        .where(and(isNull(recipe.deletedAt), ilike(recipe.name, searchPattern)))
         .limit(limitPerType) as Promise<RecipeSearchResult[]>,
 
       // Ingredient: search name
@@ -124,7 +115,6 @@ export async function globalSearch(
         .from(ingredient)
         .where(
           and(
-            eq(ingredient.organizationId, organizationId),
             isNull(ingredient.deletedAt),
             ilike(ingredient.name, searchPattern),
           ),
@@ -161,11 +151,7 @@ export async function globalSearch(
         })
         .from(location)
         .where(
-          and(
-            eq(location.organizationId, organizationId),
-            isNull(location.deletedAt),
-            ilike(location.name, searchPattern),
-          ),
+          and(isNull(location.deletedAt), ilike(location.name, searchPattern)),
         )
         .limit(limitPerType) as Promise<LocationSearchResult[]>,
 
@@ -193,7 +179,6 @@ export async function globalSearch(
         .innerJoin(location, eq(inventoryEntry.locationId, location.id))
         .where(
           and(
-            eq(inventoryEntry.organizationId, organizationId),
             isNull(inventoryEntry.deletedAt),
             or(
               ilike(product.name, searchPattern),

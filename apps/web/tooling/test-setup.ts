@@ -6,11 +6,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
 import type { ActorContext } from "../src/schemas/context";
-import {
-  type OrganizationId,
-  unsafeOrganizationId,
-  unsafeUserId,
-} from "../src/schemas/identifiers";
+import { unsafeUserId } from "../src/schemas/identifiers";
 import type { Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
 
@@ -19,7 +15,6 @@ const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 let hash = "";
 
 // Standard test IDs used across all tests
-export const TEST_ORG_ID = "test-org-id";
 export const TEST_USER_ID = "test-user-id";
 
 export async function setup() {
@@ -69,40 +64,17 @@ export async function buildTestDB() {
     .returning()
     .then((rows) => rows[0]!);
 
-  // Automatically create a test organization
-  const testOrg = await rawDb
-    .insert(schema.organization)
-    .values({
-      id: TEST_ORG_ID,
-      name: "Test Organization",
-      slug: "test-organization",
-      createdAt: new Date(),
-    })
-    .returning()
-    .then((rows) => rows[0]!);
-
-  // Create member relationship between user and org
-  await rawDb.insert(schema.organizationMember).values({
-    id: "test-member-id",
-    userId: TEST_USER_ID,
-    organizationId: TEST_ORG_ID,
-    role: "owner",
-    createdAt: new Date(),
-  });
-
   const teardown = async () => {
     await pool.end();
   };
 
   const actor: ActorContext = {
     userId: unsafeUserId(TEST_USER_ID),
-    organizationId: unsafeOrganizationId(testOrg.id),
     source: "ui",
   };
 
   return {
     db: rawDb as unknown as Database,
-    organizationId: unsafeOrganizationId(testOrg.id),
     actor,
     teardown,
   };
@@ -156,7 +128,7 @@ export interface SeedResult {
  *
  * @example
  * ```ts
- * const seed = await seedFromCSV(db, organizationId, [
+ * const seed = await seedFromCSV(db, [
  *   { product_name: "Flour", manufacturer: "Brand", location_name: "Pantry", quantity: 5, unit: "lbs" },
  *   { product_name: "Blender", manufacturer: "KitchenAid" }, // product-only (no inventory)
  * ], actor);
@@ -168,7 +140,6 @@ export interface SeedResult {
  */
 export async function seedFromCSV(
   db: Database,
-  organizationId: OrganizationId,
   rows: Array<Partial<InventoryCSVRow> & { product_name: string }>,
   actor: ActorContext,
 ): Promise<SeedResult> {
@@ -189,7 +160,6 @@ export async function seedFromCSV(
   for (const locationName of uniqueLocationNames) {
     await findOrCreateLocationByName(
       db,
-      organizationId,
       locationName,
       null, // parentId - test locations are roots
       "room", // type - default to room for test locations
@@ -214,15 +184,10 @@ export async function seedFromCSV(
     aliases: row.aliases,
   }));
 
-  const result = await importInventoryFromCSV(
-    db,
-    organizationId,
-    normalizedRows,
-    {
-      dryRun: false,
-      actor,
-    },
-  );
+  const result = await importInventoryFromCSV(db, normalizedRows, {
+    dryRun: false,
+    actor,
+  });
 
   // Check for errors
   if (result.errors > 0) {
@@ -257,7 +222,6 @@ export async function seedFromCSV(
   // (import doesn't return inventoryEntryId for created entries)
   const inventoryEntries = await inventoryentryList(
     db,
-    organizationId,
     {},
     { orderBy: "createdAt", direction: "asc" },
     { pageIndex: 0, pageSize: 1000 },
@@ -272,7 +236,5 @@ export async function seedFromCSV(
 
   return { result, productIds, locationIds, inventoryIds };
 }
-
-export type { OrganizationId } from "../src/schemas/identifiers";
 // Re-export types for convenience
 export type { InventoryCSVRow } from "../src/schemas/inventory";

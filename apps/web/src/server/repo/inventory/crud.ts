@@ -4,7 +4,6 @@ import type { ActorContext } from "~/schemas/context";
 import {
   type InventoryId,
   type LocationId,
-  type OrganizationId,
   type ProductId,
   unsafeProductId,
 } from "~/schemas/identifiers";
@@ -97,7 +96,6 @@ export const syncInventoryValuationsForProduct = async (
  */
 export const findInventoryWithStaleValuations = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<
   Array<{
     id: InventoryId;
@@ -108,7 +106,6 @@ export const findInventoryWithStaleValuations = async (
   }>
 > => {
   const entries = await getDb(db).query.inventoryEntry.findMany({
-    where: eq(inventoryEntry.organizationId, organizationId),
     columns: { id: true, amount: true, valuation: true },
     with: {
       Product: { columns: { name: true, price: true } },
@@ -154,15 +151,13 @@ export const findInventoryWithStaleValuations = async (
 };
 
 /**
- * Backfill valuations for all inventory entries in an organization.
+ * Backfill valuations for all inventory entries.
  * Returns count of updated entries.
  */
 export const backfillInventoryValuations = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<{ updated: number; skipped: number }> => {
   const entries = await getDb(db).query.inventoryEntry.findMany({
-    where: eq(inventoryEntry.organizationId, organizationId),
     columns: { id: true, amount: true, valuation: true },
     with: {
       Product: { columns: { price: true } },
@@ -237,16 +232,9 @@ export const checkUniqueProductDuplicate = async (
   return null;
 };
 
-export const getInventoryEntryByID = async (
-  db: Database,
-  id: InventoryId,
-  organizationId: OrganizationId,
-) => {
+export const getInventoryEntryByID = async (db: Database, id: InventoryId) => {
   const res = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(
-      eq(inventoryEntry.id, id),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
+    where: eq(inventoryEntry.id, id),
     ...relations.inventory.full,
   });
 
@@ -262,7 +250,6 @@ interface InventoryFilters {
 
 export const inventoryentryList = async (
   db: Database,
-  organizationId: OrganizationId,
   filters: InventoryFilters,
   sort: SortParams,
   pagination: PaginationParams,
@@ -278,7 +265,7 @@ export const inventoryentryList = async (
 
   if (needsJoins) {
     // Build conditions for join-based query
-    const conditions = [eq(inventoryEntry.organizationId, organizationId)];
+    const conditions: ReturnType<typeof eq>[] = [];
     if (filters.productNameFilter) {
       conditions.push(ilike(product.name, `%${filters.productNameFilter}%`));
     }
@@ -288,7 +275,8 @@ export const inventoryentryList = async (
     if (filters.locationIdFilter) {
       conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
     }
-    const whereCondition = and(...conditions);
+    const whereCondition =
+      conditions.length > 0 ? and(...conditions) : undefined;
 
     // Query with joins for name filtering
     const [results, [countResult]] = await Promise.all([
@@ -326,12 +314,9 @@ export const inventoryentryList = async (
   }
 
   // Simple path: no name filters, use relational query
-  const conditions = [eq(inventoryEntry.organizationId, organizationId)];
-  if (filters.locationIdFilter) {
-    conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
-  }
-  const whereClause =
-    conditions.length === 1 ? conditions[0] : and(...conditions);
+  const whereClause = filters.locationIdFilter
+    ? eq(inventoryEntry.locationId, filters.locationIdFilter)
+    : undefined;
 
   const [results, [countResult]] = await Promise.all([
     getDb(db).query.inventoryEntry.findMany({
@@ -357,14 +342,9 @@ export const updateInventoryEntry = async (
   data: UpdateInventoryEntryData,
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
-
   // Fetch current state for audit logging and valuation computation
   const before = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(
-      eq(inventoryEntry.id, id),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
+    where: eq(inventoryEntry.id, id),
   });
 
   // Recompute valuation if amount or productId changed
@@ -400,10 +380,7 @@ export const updateInventoryEntry = async (
     db,
     inventoryEntry,
     updateValues,
-    and(
-      eq(inventoryEntry.id, id),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
+    eq(inventoryEntry.id, id),
   );
 
   // Log audit entry with changes
@@ -444,8 +421,6 @@ export const createInventoryEntry = async (
   data: CreateInventoryEntryData,
   actor: ActorContext,
 ) => {
-  const { organizationId } = actor;
-
   // Compute valuation based on amount and product price
   const amountValue =
     typeof data.amount === "object" && data.amount !== null
@@ -458,7 +433,6 @@ export const createInventoryEntry = async (
   );
 
   const created = await insertAndReturnDb(db, inventoryEntry, {
-    organizationId: organizationId,
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,
@@ -493,16 +467,7 @@ export const deleteInventoryEntry = async (
   id: InventoryId,
   actor: ActorContext,
 ): Promise<void> => {
-  const { organizationId } = actor;
-
-  await getDb(db)
-    .delete(inventoryEntry)
-    .where(
-      and(
-        eq(inventoryEntry.id, id),
-        eq(inventoryEntry.organizationId, organizationId),
-      ),
-    );
+  await getDb(db).delete(inventoryEntry).where(eq(inventoryEntry.id, id));
 
   // Log audit entry
   await logAuditEntry(db, actor, {

@@ -2,7 +2,7 @@ import { type ZodSchema, z } from "zod";
 import type { Entity } from "~/entities/types";
 import { IDInput } from "~/schemas/common";
 import type { ActorContext } from "~/schemas/context";
-import type { OrganizationId, UserId } from "~/schemas/identifiers";
+import type { UserId } from "~/schemas/identifiers";
 import {
   buildPaginatedResponse,
   createPaginatedResponseSchemaWithContext,
@@ -30,7 +30,6 @@ const updateInputSchema = <T extends ZodSchema>(dataSchema: T) =>
  */
 export interface CrudServices {
   db: Database;
-  organizationId: OrganizationId | null;
   actorContext: ActorContext | null;
   services: {
     product: ProductService;
@@ -47,10 +46,9 @@ export interface CrudServices {
 /**
  * Extended interface for protected procedures where organization is guaranteed.
  * Use this type for repository callbacks in protected procedures to avoid
- * non-null assertions (!) on organizationId and actorContext.
+ * non-null assertions (!) on actorContext.
  */
 export interface ProtectedCrudServices extends CrudServices {
-  organizationId: OrganizationId;
   actorContext: ActorContext;
 }
 

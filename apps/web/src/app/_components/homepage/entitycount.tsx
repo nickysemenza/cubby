@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
-import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import type { SortParams } from "~/schemas/pagination";
 import { useTRPC } from "~/trpc/react";
@@ -76,7 +75,6 @@ function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
 
 export default function EntityCount() {
   const api = useTRPC();
-  const { data: activeOrg } = authClient.useActiveOrganization();
 
   const sort: SortParams = { orderBy: "name", direction: "asc" };
   const opts = {
@@ -87,13 +85,13 @@ export default function EntityCount() {
 
   const results = useQueries({
     queries: [
-      { ...api.location.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.product.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.inventory.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.recipe.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.ingredient.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.image.list.queryOptions(opts), enabled: !!activeOrg },
-      { ...api.usda.list.queryOptions(opts), enabled: !!activeOrg },
+      api.location.list.queryOptions(opts),
+      api.product.list.queryOptions(opts),
+      api.inventory.list.queryOptions(opts),
+      api.recipe.list.queryOptions(opts),
+      api.ingredient.list.queryOptions(opts),
+      api.image.list.queryOptions(opts),
+      api.usda.list.queryOptions(opts),
     ],
   });
 
@@ -107,14 +105,6 @@ export default function EntityCount() {
     "image",
     "usda-food",
   ];
-
-  if (!activeOrg) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        Select an organization to view entity counts
-      </p>
-    );
-  }
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">

@@ -1,11 +1,7 @@
 import { buildTestDB, seedFromCSV } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
-import {
-  type OrganizationId,
-  unsafeOrganizationId,
-  unsafeUserId,
-} from "~/schemas/identifiers";
+import { unsafeUserId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
@@ -15,7 +11,6 @@ import { inventoryRouter } from "./inventory";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
-  organizationId: unsafeOrganizationId("test-org-id"),
   source: "ui",
 };
 
@@ -24,10 +19,9 @@ const TEST_USER_ID = TEST_ACTOR.userId;
 
 describe("inventory router", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -37,7 +31,6 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -104,14 +97,12 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
     // Seed test data using CSV import (creates locations, products, and inventory)
     const seed = await seedFromCSV(
       db,
-      organizationId,
       [
         {
           product_name: "Flour",
@@ -201,14 +192,12 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
     // Seed initial inventory
     const seed = await seedFromCSV(
       db,
-      organizationId,
       [
         {
           product_name: "Test Product",
@@ -252,14 +241,12 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
     // Seed: Product 1 with inventory, Product 2 without (to avoid unique constraint when switching)
     const seed = await seedFromCSV(
       db,
-      organizationId,
       [
         {
           product_name: "Product 1",
@@ -317,14 +304,12 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
     // Seed: 3 products, one with existing inventory
     const seed = await seedFromCSV(
       db,
-      organizationId,
       [
         {
           product_name: "Bulk Product 1",
@@ -410,7 +395,6 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -428,14 +412,12 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       // Seed source with inventory, create empty target
       const seed = await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Move Product",
@@ -485,13 +467,11 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       const seed = await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Split Product",
@@ -535,7 +515,6 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
@@ -608,13 +587,11 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       const seed = await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Error Product",
@@ -649,13 +626,11 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       const seed = await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Limited Product",
@@ -696,7 +671,6 @@ describe("inventory router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -714,7 +688,6 @@ describe("inventory router", () => {
     // Seed a valid entry
     const seed = await seedFromCSV(
       db,
-      organizationId,
       [
         {
           product_name: "Test Product",
@@ -743,7 +716,6 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
@@ -795,14 +767,12 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       // Create inventory without price mapping
       const seed = await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Unpriced Product",
@@ -828,14 +798,12 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       // Create some inventory
       await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Product A",
@@ -858,14 +826,12 @@ describe("inventory router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
       // Create some inventory with price - valuations auto-synced
       await seedFromCSV(
         db,
-        organizationId,
         [
           {
             product_name: "Synced Product",

@@ -49,20 +49,14 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: RecipeId) => {
-      const res = await getRecipeByID(services.db, id, services.organizationId);
+      const res = await getRecipeByID(services.db, id);
       if (res === null) {
         throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
       }
       return res;
     },
     list: async (services, filters, sort, pagination) => {
-      return await recipeList(
-        services.db,
-        services.organizationId,
-        filters,
-        sort,
-        pagination,
-      );
+      return await recipeList(services.db, filters, sort, pagination);
     },
     create: async (services, data) => {
       return await createRecipe(services.db, data, services.actorContext);
@@ -98,17 +92,13 @@ const getIngredientCooccurrenceEndpoint = protectedProcedure
   .input(z.object({ minEdgeWeight: z.number().min(1).default(2) }).optional())
   .output(ingredientCooccurrenceSchema)
   .query(async ({ ctx, input }): Promise<IngredientCooccurrence> => {
-    return await getIngredientCooccurrence(
-      ctx.db,
-      ctx.organizationId,
-      input?.minEdgeWeight ?? 2,
-    );
+    return await getIngredientCooccurrence(ctx.db, input?.minEdgeWeight ?? 2);
   });
 
 const getAllTagsEndpoint = protectedProcedure
   .output(z.array(z.string()))
   .query(async ({ ctx }) => {
-    return await getAllTags(ctx.db, ctx.organizationId);
+    return await getAllTags(ctx.db);
   });
 
 export const recipeRouter = createTRPCRouter({

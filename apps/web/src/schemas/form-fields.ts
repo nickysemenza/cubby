@@ -60,32 +60,36 @@ export function getLocationId(
 
 /**
  * Extracts an optional ProductId from a nullable product combobox field.
- * Returns undefined if the combobox is empty.
+ * Returns undefined if the combobox is empty or has an empty id.
  */
 export function getOptionalProductId(
   item: ComboboxItem | null | undefined,
 ): ProductId | undefined {
-  return item?.id as ProductId | undefined;
+  if (!item?.id) return undefined;
+  return item.id as ProductId;
 }
 
 /**
  * Extracts an optional LocationId from a nullable location combobox field.
- * Returns undefined if the combobox is empty.
+ * Returns undefined if the combobox is empty or has an empty id.
  */
 export function getOptionalLocationId(
   item: ComboboxItem | null | undefined,
 ): LocationId | undefined {
-  return item?.id as LocationId | undefined;
+  // Handle null/undefined item, or item with empty id
+  if (!item?.id) return undefined;
+  return item.id as LocationId;
 }
 
 /**
  * Extracts an optional IngredientId from a nullable ingredient combobox field.
- * Returns undefined if the combobox is empty.
+ * Returns undefined if the combobox is empty or has an empty id.
  */
 export function getOptionalIngredientId(
   item: ComboboxItem | null | undefined,
 ): IngredientId | undefined {
-  return item?.id as IngredientId | undefined;
+  if (!item?.id) return undefined;
+  return item.id as IngredientId;
 }
 
 /**

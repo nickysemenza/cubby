@@ -17,12 +17,7 @@ const global = protectedProcedure
   .input(globalSearchInputSchema)
   .output(z.array(searchResultItemSchema))
   .query(async ({ ctx, input }): Promise<SearchResultItem[]> => {
-    return await globalSearch(
-      ctx.db,
-      ctx.organizationId,
-      input.query,
-      input.limit,
-    );
+    return await globalSearch(ctx.db, input.query, input.limit);
   });
 
 export const searchRouter = createTRPCRouter({

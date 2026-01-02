@@ -8,7 +8,6 @@ import { parseWithContext } from "~/lib/zod-utils";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
 import {
-  type OrganizationId,
   type ProductId,
   unsafeLocationId,
   unsafeProductId,
@@ -168,13 +167,9 @@ const dbProductToAPI = (
   );
 };
 
-export const getProductByID = async (
-  db: Database,
-  id: ProductId,
-  organizationId: OrganizationId,
-) => {
+export const getProductByID = async (db: Database, id: ProductId) => {
   const res = await getDb(db).query.product.findFirst({
-    where: and(eq(product.id, id), eq(product.organizationId, organizationId)),
+    where: eq(product.id, id),
     ...relations.product.full,
   });
 
@@ -187,7 +182,6 @@ export const getProductByID = async (
 
 export const productList = async (
   db: Database,
-  organizationId: OrganizationId,
   name: string | undefined,
   manufacturer: string | undefined,
   upc: string | undefined,
@@ -196,7 +190,7 @@ export const productList = async (
   pagination: PaginationParams,
 ) => {
   // Build where conditions
-  const conditions = [eq(product.organizationId, organizationId)];
+  const conditions: ReturnType<typeof eq>[] = [];
 
   if (name !== undefined) {
     const nameCondition = formatSearchTerm(product.name, name);
@@ -227,7 +221,7 @@ export const productList = async (
     conditions.push(eq(product.category, category));
   }
 
-  const whereClause = and(...conditions);
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Build order by using central sortableFields config
   const orderByArray = buildOrderBy(product, sort, [
@@ -259,7 +253,6 @@ export const createProduct = async (
   data: ProductCreateInput,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
-  const { organizationId } = actor;
   const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
 
   // Auto-correct category to "food" if product has food indicators
@@ -271,7 +264,6 @@ export const createProduct = async (
   return await withTransaction(db, async (tx) => {
     // Create the product first
     const newProduct = await insertAndReturn(tx, product, {
-      organizationId: organizationId,
       ...productData,
       category,
       ingredientId: ingredientId ?? null,
@@ -337,7 +329,6 @@ export const updateProduct = async (
   data: Partial<ProductCreateInput>,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
-  const { organizationId } = actor;
   const {
     ingredientId,
     unitMappings,
@@ -350,10 +341,7 @@ export const updateProduct = async (
   return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
     // Fetch current state for audit logging
     const beforeProduct = await tx.query.product.findFirst({
-      where: and(
-        eq(product.id, id),
-        eq(product.organizationId, organizationId),
-      ),
+      where: eq(product.id, id),
     });
 
     if (!beforeProduct) {
@@ -395,7 +383,7 @@ export const updateProduct = async (
       tx,
       product,
       updateData,
-      and(eq(product.id, id), eq(product.organizationId, organizationId)),
+      eq(product.id, id),
     );
 
     const productId = id;
@@ -526,17 +514,13 @@ export const updateProduct = async (
   });
 };
 
-// Find a product by UPC code within an organization
+// Find a product by UPC code
 export const findProductByUPC = async (
   db: Database,
   upcCode: string,
-  organizationId: OrganizationId,
 ): Promise<ProductTopLevelOut | null> => {
   const res = await getDb(db).query.product.findFirst({
-    where: and(
-      eq(product.upc, upcCode),
-      eq(product.organizationId, organizationId),
-    ),
+    where: eq(product.upc, upcCode),
     with: {
       images: {
         with: {
@@ -563,18 +547,16 @@ export const findProductByUPC = async (
   );
 };
 
-// Find a product by name and manufacturer within an organization (internal helper)
+// Find a product by name and manufacturer (internal helper)
 const findProductByNameAndManufacturer = async (
   db: Database,
   name: string,
   manufacturer: string,
-  organizationId: OrganizationId,
 ): Promise<ProductTopLevelOut | null> => {
   const res = await getDb(db).query.product.findFirst({
     where: and(
       ilike(product.name, name),
       ilike(product.manufacturer, manufacturer),
-      eq(product.organizationId, organizationId),
     ),
     with: {
       images: {
@@ -618,15 +600,11 @@ export const findProductByNameFuzzyManufacturer = async (
   db: Database,
   name: string,
   manufacturer: string | null | undefined,
-  organizationId: OrganizationId,
 ): Promise<ProductTopLevelOut | null> => {
   // If incoming manufacturer is unspecified, match by name only
   if (isUnspecifiedManufacturer(manufacturer)) {
     const res = await getDb(db).query.product.findFirst({
-      where: and(
-        ilike(product.name, name),
-        eq(product.organizationId, organizationId),
-      ),
+      where: ilike(product.name, name),
       with: {
         images: {
           with: {
@@ -658,7 +636,6 @@ export const findProductByNameFuzzyManufacturer = async (
     db,
     name,
     manufacturer!,
-    organizationId,
   );
 
   if (exactMatch) {
@@ -670,7 +647,6 @@ export const findProductByNameFuzzyManufacturer = async (
     where: and(
       ilike(product.name, name),
       ilike(product.manufacturer, UNSPECIFIED_MANUFACTURER),
-      eq(product.organizationId, organizationId),
     ),
     with: {
       images: {
@@ -717,13 +693,10 @@ export const quickCreateProduct = async (
   },
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
-  const { organizationId } = actor;
-
   // Auto-correct category to "food" if product has food indicators
   const category = hasFoodIndicators(data) ? "food" : (data.category ?? null);
 
   const newProduct = await insertAndReturnDb(db, product, {
-    organizationId: organizationId,
     name: data.name,
     manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
     upc: data.upc ?? null,
@@ -768,15 +741,9 @@ export const quickCreateProduct = async (
 };
 
 // Find products with expectedQuantity=1 that appear in multiple locations
-export const findDuplicateUniqueProducts = async (
-  db: Database,
-  organizationId: OrganizationId,
-) => {
+export const findDuplicateUniqueProducts = async (db: Database) => {
   const duplicates = await getDb(db).query.product.findMany({
-    where: and(
-      eq(product.organizationId, organizationId),
-      eq(product.expectedQuantity, 1),
-    ),
+    where: eq(product.expectedQuantity, 1),
     with: {
       InventoryEntry: {
         with: {
@@ -796,7 +763,6 @@ export const findDuplicateUniqueProducts = async (
  */
 export const findProductsWithUPCNoImages = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<
   Array<{ id: string; name: string; manufacturer: string; upc: string }>
 > => {
@@ -814,13 +780,7 @@ export const findProductsWithUPCNoImages = async (
     .from(product)
     .leftJoin(productImage, eq(productImage.productId, product.id))
     .leftJoin(image, eq(productImage.imageId, image.id))
-    .where(
-      and(
-        eq(product.organizationId, organizationId),
-        isNotNull(product.upc),
-        isNull(product.deletedAt),
-      ),
-    );
+    .where(and(isNotNull(product.upc), isNull(product.deletedAt)));
 
   // Group by product and check for UPC images
   const productMap = new Map<
@@ -876,7 +836,6 @@ export const findProductsWithUPCNoImages = async (
  */
 export const findProductsNeedingFoodCategory = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<
   Array<{
     id: string;
@@ -892,12 +851,7 @@ export const findProductsNeedingFoodCategory = async (
 
   // Find products with food indicators but wrong category
   const products = await dbClient.query.product.findMany({
-    where: and(
-      eq(product.organizationId, organizationId),
-      isNull(product.deletedAt),
-      // Has at least one food indicator: UPC, NDB, or ingredient
-      // AND category is not "food" (either null or something else)
-    ),
+    where: isNull(product.deletedAt),
     columns: {
       id: true,
       name: true,
@@ -919,7 +873,6 @@ export const findProductsNeedingFoodCategory = async (
  */
 export const getCategoryDistribution = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<
   Array<{
     category: ProductCategory | null;
@@ -931,10 +884,7 @@ export const getCategoryDistribution = async (
 
   // Get all products with their inventory locations
   const productsWithInventory = await dbClient.query.product.findMany({
-    where: and(
-      eq(product.organizationId, organizationId),
-      isNull(product.deletedAt),
-    ),
+    where: isNull(product.deletedAt),
     columns: {
       id: true,
       category: true,
@@ -1023,16 +973,12 @@ export const getCategoryDistribution = async (
  */
 export const backfillFoodCategories = async (
   db: Database,
-  organizationId: OrganizationId,
   actor: ActorContext,
 ): Promise<{
   updated: number;
   products: Array<{ id: string; name: string }>;
 }> => {
-  const productsToUpdate = await findProductsNeedingFoodCategory(
-    db,
-    organizationId,
-  );
+  const productsToUpdate = await findProductsNeedingFoodCategory(db);
 
   if (productsToUpdate.length === 0) {
     return { updated: 0, products: [] };
@@ -1096,7 +1042,6 @@ export const syncProductPrice = async (
  */
 export const findProductsWithStalePrices = async (
   db: Database,
-  organizationId: OrganizationId,
 ): Promise<
   Array<{
     id: string;
@@ -1111,10 +1056,7 @@ export const findProductsWithStalePrices = async (
 
   // Get all products with their unit mappings
   const productsWithMappings = await dbClient.query.product.findMany({
-    where: and(
-      eq(product.organizationId, organizationId),
-      isNull(product.deletedAt),
-    ),
+    where: isNull(product.deletedAt),
     columns: {
       id: true,
       name: true,
@@ -1179,7 +1121,6 @@ export const findProductsWithStalePrices = async (
  */
 export const backfillProductPrices = async (
   db: Database,
-  organizationId: OrganizationId,
   actor: ActorContext,
 ): Promise<{
   updated: number;
@@ -1190,10 +1131,7 @@ export const backfillProductPrices = async (
     newPrice: number | null;
   }>;
 }> => {
-  const productsToUpdate = await findProductsWithStalePrices(
-    db,
-    organizationId,
-  );
+  const productsToUpdate = await findProductsWithStalePrices(db);
 
   if (productsToUpdate.length === 0) {
     return { updated: 0, products: [] };

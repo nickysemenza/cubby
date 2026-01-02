@@ -5,7 +5,7 @@ import {
   type ProductWithMappingsOut,
 } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
-import type { IngredientId, OrganizationId } from "~/schemas/identifiers";
+import type { IngredientId } from "~/schemas/identifiers";
 import type { ingredientBase } from "~/schemas/ingredient";
 import type { PaginationParams, SortParams } from "~/schemas/pagination";
 // Extended schemas that include food data
@@ -54,11 +54,8 @@ export class IngredientService {
     );
   }
 
-  async getIngredientByID(
-    id: IngredientId,
-    organizationId: OrganizationId,
-  ): Promise<IngredientWithFoodOut> {
-    const ingredient = await getIngredientByIDRepo(this.db, id, organizationId);
+  async getIngredientByID(id: IngredientId): Promise<IngredientWithFoodOut> {
+    const ingredient = await getIngredientByIDRepo(this.db, id);
     const enrichedProducts = await this.enrichProductsWithFood(
       ingredient.product,
     );
@@ -86,7 +83,6 @@ export class IngredientService {
   }
 
   async ingredientList(
-    organizationId: OrganizationId,
     nameFilter: string | undefined,
     sort: SortParams,
     pagination: PaginationParams,
@@ -94,7 +90,6 @@ export class IngredientService {
   ) {
     const { data: ingredients, count } = await ingredientListRepo(
       this.db,
-      organizationId,
       nameFilter,
       sort,
       pagination,

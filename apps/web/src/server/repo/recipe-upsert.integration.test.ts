@@ -1,13 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
-import {
-  type OrganizationId,
-  unsafeIngredientId,
-  unsafeOrganizationId,
-  unsafeUserId,
-} from "~/schemas/identifiers";
+import { unsafeIngredientId, unsafeUserId } from "~/schemas/identifiers";
 import type { RecipeCreateInput } from "~/schemas/recipe";
 import type { Database } from "~/server/db";
 import { recipe } from "~/server/db/schema";
@@ -17,18 +12,16 @@ import { upsertRecipe } from "./recipe";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
-  organizationId: unsafeOrganizationId("test-org-id"),
   source: "ui",
 };
 
 describe("upsertRecipe", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
 
   let testIngredients: { id: string; name: string }[] = [];
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
 
     // Create the required ingredients for the tests and store their IDs
     const ingredient1 = await createIngredient(
@@ -131,10 +124,7 @@ describe("upsertRecipe", () => {
 
     // Verify recipe was created
     const foundRecipe = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe Direct"),
-      ),
+      where: eq(recipe.name, "Test Recipe Direct"),
       with: {
         sections: {
           with: {
@@ -172,10 +162,7 @@ describe("upsertRecipe", () => {
 
     // Verify the recipe was updated
     const updatedRecipe = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe Direct"),
-      ),
+      where: eq(recipe.name, "Test Recipe Direct"),
       with: {
         sections: {
           with: {
@@ -213,10 +200,7 @@ describe("upsertRecipe", () => {
 
     // Should only be one recipe in the database
     const allRecipes = await getDb(db).query.recipe.findMany({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe Direct"),
-      ),
+      where: eq(recipe.name, "Test Recipe Direct"),
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -239,10 +223,7 @@ describe("upsertRecipe", () => {
     await upsertRecipe(recipeNoUrl, db, TEST_ACTOR);
 
     const foundRecipe = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Manual Recipe"),
-      ),
+      where: eq(recipe.name, "Manual Recipe"),
     });
 
     expect(foundRecipe!.SourceType).toBe("Other");

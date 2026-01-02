@@ -60,11 +60,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: InventoryId) => {
-      const res = await getInventoryEntryByID(
-        services.db,
-        id,
-        services.organizationId,
-      );
+      const res = await getInventoryEntryByID(services.db, id);
       if (res === null) {
         throw createAppError(
           "INVENTORY_NOT_FOUND",
@@ -74,13 +70,7 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
       return res;
     },
     list: async (services, filters, sort, pagination) => {
-      return await inventoryentryList(
-        services.db,
-        services.organizationId,
-        filters,
-        sort,
-        pagination,
-      );
+      return await inventoryentryList(services.db, filters, sort, pagination);
     },
     create: async (services, data) => {
       // Check if this is a unique product that already exists elsewhere
@@ -170,10 +160,7 @@ const findDuplicates = protectedProcedure
     ),
   )
   .query(async ({ ctx }) => {
-    const duplicates = await findDuplicateUniqueProducts(
-      ctx.db,
-      ctx.organizationId,
-    );
+    const duplicates = await findDuplicateUniqueProducts(ctx.db);
 
     return duplicates.map((product) => ({
       id: product.id,
@@ -192,15 +179,10 @@ const importCSV = protectedProcedure
   .input(z.object({ rows: z.array(inventoryCSVRow) }))
   .output(csvImportResult)
   .mutation(async ({ ctx, input }) => {
-    const result = await importInventoryFromCSV(
-      ctx.db,
-      ctx.organizationId,
-      input.rows,
-      {
-        dryRun: false,
-        actor: { ...ctx.actorContext, source: "csv_import" },
-      },
-    );
+    const result = await importInventoryFromCSV(ctx.db, input.rows, {
+      dryRun: false,
+      actor: { ...ctx.actorContext, source: "csv_import" },
+    });
 
     // Import UPC images for newly created products after successful import
     const productsToImportImages = result.items.filter(
@@ -216,7 +198,6 @@ const importCSV = protectedProcedure
         try {
           await importImageFromUPC(
             ctx.db,
-            ctx.organizationId,
             ctx.upcLookupClient,
             item.upc!,
             unsafeProductId(item.productId!),
@@ -237,10 +218,7 @@ const importCSV = protectedProcedure
 const getStaleValuationsCount = protectedProcedure
   .output(z.number())
   .query(async ({ ctx }) => {
-    const staleEntries = await findInventoryWithStaleValuations(
-      ctx.db,
-      ctx.organizationId,
-    );
+    const staleEntries = await findInventoryWithStaleValuations(ctx.db);
     return staleEntries.length;
   });
 
@@ -253,7 +231,7 @@ const backfillInventoryValuationsEndpoint = protectedProcedure
     }),
   )
   .mutation(async ({ ctx }) => {
-    return await backfillInventoryValuations(ctx.db, ctx.organizationId);
+    return await backfillInventoryValuations(ctx.db);
   });
 
 export const inventoryRouter = createTRPCRouter({

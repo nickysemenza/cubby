@@ -1,6 +1,6 @@
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+import { unsafeUserId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";
 import { productRouter } from "./product";
@@ -9,10 +9,9 @@ const TEST_USER_ID = unsafeUserId("test-user-id");
 
 describe("product router", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
 
     return teardown;
   });
@@ -23,7 +22,6 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -68,7 +66,6 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -163,7 +160,6 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -227,7 +223,6 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -268,7 +263,6 @@ describe("product router", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId: organizationId,
       }),
     );
 
@@ -284,7 +278,6 @@ describe("product router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
@@ -324,7 +317,6 @@ describe("product router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 
@@ -353,7 +345,6 @@ describe("product router", () => {
       const caller = createCaller(
         createTestTRPCContext(db, {
           auth: { userId: TEST_USER_ID },
-          organizationId: organizationId,
         }),
       );
 

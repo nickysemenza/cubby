@@ -5,7 +5,7 @@
  */
 
 import { env } from "~/env";
-import type { OrganizationId, ProductId } from "~/schemas/identifiers";
+import type { ProductId } from "~/schemas/identifiers";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
@@ -22,7 +22,6 @@ import {
  * 3. Associates the image with the product
  *
  * @param db Database client
- * @param organizationId Organization ID for the image
  * @param upcLookupClient UPC lookup client instance
  * @param upc UPC code to look up
  * @param productId Product ID to associate the image with
@@ -30,7 +29,6 @@ import {
  */
 export const importImageFromUPC = async (
   db: Database,
-  organizationId: OrganizationId,
   upcLookupClient: UPCLookupClient,
   upc: string,
   productId: ProductId,
@@ -51,7 +49,7 @@ export const importImageFromUPC = async (
     ).toString();
 
     // 3. Import the image to R2 and create image record
-    const imported = await importImageFromUrl(db, organizationId, {
+    const imported = await importImageFromUrl(db, {
       sourceUrl: fullImageUrl,
       filenamePrefix: `upc-${upc}`,
     });

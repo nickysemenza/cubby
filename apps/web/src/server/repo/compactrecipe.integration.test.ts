@@ -1,13 +1,9 @@
-import { and, eq, ne } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ParsedCompactRecipe } from "~/codec/codec";
 import type { ActorContext } from "~/schemas/context";
-import {
-  type OrganizationId,
-  unsafeOrganizationId,
-  unsafeUserId,
-} from "~/schemas/identifiers";
+import { unsafeUserId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { recipe, recipeSection } from "~/server/db/schema";
 import { upsertRecipeFromCompact } from "./compactrecipe";
@@ -15,16 +11,14 @@ import { getDb } from "./database-helpers";
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
-  organizationId: unsafeOrganizationId("test-org-id"),
   source: "ui",
 };
 
 describe("upsertRecipeFromCompact", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -88,10 +82,7 @@ describe("upsertRecipeFromCompact", () => {
 
     // Verify recipe was created
     const foundRecipe = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe"),
-      ),
+      where: eq(recipe.name, "Test Recipe"),
       with: {
         sections: {
           with: {
@@ -119,10 +110,7 @@ describe("upsertRecipeFromCompact", () => {
 
     // Verify initial state
     const initialRecipe = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe"),
-      ),
+      where: eq(recipe.name, "Test Recipe"),
       with: {
         sections: {
           with: {
@@ -147,10 +135,7 @@ describe("upsertRecipeFromCompact", () => {
 
     // Verify the recipe was updated
     const updatedRecipe = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe"),
-      ),
+      where: eq(recipe.name, "Test Recipe"),
       with: {
         sections: {
           with: {
@@ -188,10 +173,7 @@ describe("upsertRecipeFromCompact", () => {
 
     // Should only be one recipe in the database
     const allRecipes = await getDb(db).query.recipe.findMany({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe"),
-      ),
+      where: eq(recipe.name, "Test Recipe"),
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -202,10 +184,7 @@ describe("upsertRecipeFromCompact", () => {
     await upsertRecipeFromCompact(mockRecipeUpdated, db, TEST_ACTOR);
 
     const beforeUpdate = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe"),
-      ),
+      where: eq(recipe.name, "Test Recipe"),
       with: { sections: { with: { ingredients: true } } },
     });
 
@@ -220,10 +199,7 @@ describe("upsertRecipeFromCompact", () => {
     await upsertRecipeFromCompact(mockRecipe, db, TEST_ACTOR);
 
     const afterUpdate = await getDb(db).query.recipe.findFirst({
-      where: and(
-        eq(recipe.organizationId, organizationId),
-        eq(recipe.name, "Test Recipe"),
-      ),
+      where: eq(recipe.name, "Test Recipe"),
       with: { sections: { with: { ingredients: true } } },
     });
 

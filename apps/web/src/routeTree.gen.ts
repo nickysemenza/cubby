@@ -31,7 +31,6 @@ import { Route as RecipesCompareRouteImport } from './routes/recipes.compare'
 import { Route as RecipesIdRouteImport } from './routes/recipes.$id'
 import { Route as ProductsNewRouteImport } from './routes/products.new'
 import { Route as ProductsIdRouteImport } from './routes/products.$id'
-import { Route as OrganizationOrganizationViewRouteImport } from './routes/organization.$organizationView'
 import { Route as LocationsNewRouteImport } from './routes/locations.new'
 import { Route as LocationsIdRouteImport } from './routes/locations.$id'
 import { Route as InventoryScannerRouteImport } from './routes/inventory.scanner'
@@ -162,12 +161,6 @@ const ProductsIdRoute = ProductsIdRouteImport.update({
   path: '/products/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrganizationOrganizationViewRoute =
-  OrganizationOrganizationViewRouteImport.update({
-    id: '/organization/$organizationView',
-    path: '/organization/$organizationView',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const LocationsNewRoute = LocationsNewRouteImport.update({
   id: '/locations/new',
   path: '/locations/new',
@@ -286,7 +279,6 @@ export interface FileRoutesByFullPath {
   '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/new': typeof LocationsNewRoute
-  '/organization/$organizationView': typeof OrganizationOrganizationViewRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
@@ -330,7 +322,6 @@ export interface FileRoutesByTo {
   '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/new': typeof LocationsNewRoute
-  '/organization/$organizationView': typeof OrganizationOrganizationViewRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
@@ -375,7 +366,6 @@ export interface FileRoutesById {
   '/inventory/scanner': typeof InventoryScannerRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/new': typeof LocationsNewRoute
-  '/organization/$organizationView': typeof OrganizationOrganizationViewRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
@@ -421,7 +411,6 @@ export interface FileRouteTypes {
     | '/inventory/scanner'
     | '/locations/$id'
     | '/locations/new'
-    | '/organization/$organizationView'
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
@@ -465,7 +454,6 @@ export interface FileRouteTypes {
     | '/inventory/scanner'
     | '/locations/$id'
     | '/locations/new'
-    | '/organization/$organizationView'
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
@@ -509,7 +497,6 @@ export interface FileRouteTypes {
     | '/inventory/scanner'
     | '/locations/$id'
     | '/locations/new'
-    | '/organization/$organizationView'
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
@@ -554,7 +541,6 @@ export interface RootRouteChildren {
   InventoryScannerRoute: typeof InventoryScannerRoute
   LocationsIdRoute: typeof LocationsIdRoute
   LocationsNewRoute: typeof LocationsNewRoute
-  OrganizationOrganizationViewRoute: typeof OrganizationOrganizationViewRoute
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsNewRoute: typeof ProductsNewRoute
   RecipesIdRoute: typeof RecipesIdRoute
@@ -733,13 +719,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/organization/$organizationView': {
-      id: '/organization/$organizationView'
-      path: '/organization/$organizationView'
-      fullPath: '/organization/$organizationView'
-      preLoaderRoute: typeof OrganizationOrganizationViewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/locations/new': {
       id: '/locations/new'
       path: '/locations/new'
@@ -908,7 +887,6 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryScannerRoute: InventoryScannerRoute,
   LocationsIdRoute: LocationsIdRoute,
   LocationsNewRoute: LocationsNewRoute,
-  OrganizationOrganizationViewRoute: OrganizationOrganizationViewRoute,
   ProductsIdRoute: ProductsIdRoute,
   ProductsNewRoute: ProductsNewRoute,
   RecipesIdRoute: RecipesIdRoute,

@@ -19,7 +19,6 @@
  */
 
 import type { ActorContext } from "~/schemas/context";
-import type { OrganizationId } from "~/schemas/identifiers";
 import type {
   CSVImportResult,
   CSVImportResultItem,
@@ -47,14 +46,12 @@ interface ImportOptions {
  * Import inventory data from CSV rows
  *
  * @param db - Database connection
- * @param organizationId - Organization to import into
  * @param rows - Parsed CSV rows to import
  * @param options - Import options including userId and source for audit logging
  * @returns Import result with counts and per-row details
  */
 export const importInventoryFromCSV = async (
   db: Database,
-  organizationId: OrganizationId,
   rows: InventoryCSVRow[],
   options: ImportOptions,
 ): Promise<CSVImportResult> => {
@@ -66,11 +63,7 @@ export const importInventoryFromCSV = async (
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     try {
-      const result = await processRow(
-        { db, organizationId, dryRun, actor },
-        row,
-        i,
-      );
+      const result = await processRow({ db, dryRun, actor }, row, i);
 
       items.push(result);
       incrementCounter(counters, result.action);

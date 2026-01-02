@@ -7,11 +7,7 @@
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import type { ActorContext } from "~/schemas/context";
 import type { FieldChange } from "~/schemas/csv";
-import type {
-  LocationId,
-  OrganizationId,
-  ProductId,
-} from "~/schemas/identifiers";
+import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type {
   CSVImportResultItem,
   InventoryCSVRow,
@@ -48,7 +44,6 @@ import {
 
 interface RowProcessorContext {
   db: Database;
-  organizationId: OrganizationId;
   dryRun: boolean;
   actor: ActorContext;
 }
@@ -204,13 +199,11 @@ interface ProductProcessingResult {
  */
 async function previewProduct(
   db: Database,
-  organizationId: OrganizationId,
   row: InventoryCSVRow,
   manufacturer: string,
 ): Promise<ProductProcessingResult> {
   const preview = await previewProductForImport(
     db,
-    organizationId,
     row.product_name,
     manufacturer,
     row.upc,
@@ -292,7 +285,6 @@ interface ProductOperationsResult {
  */
 async function executeProductOperations(
   db: Database,
-  organizationId: OrganizationId,
   row: InventoryCSVRow,
   manufacturer: string,
   actor: ActorContext,
@@ -300,7 +292,6 @@ async function executeProductOperations(
 ): Promise<ProductOperationsResult> {
   const { productData, productWasCreated } = await processProductForImport(
     db,
-    organizationId,
     row.product_name,
     manufacturer,
     row.upc,
@@ -331,7 +322,6 @@ async function executeProductOperations(
   if (row.product_image) {
     const imageResult = await importProductImages(
       db,
-      organizationId,
       productData.id,
       row.product_image,
       row.product_name,
@@ -359,14 +349,9 @@ interface LocationResolutionResult {
  */
 async function resolveTargetLocation(
   db: Database,
-  organizationId: OrganizationId,
   locationName: string,
 ): Promise<LocationResolutionResult> {
-  const targetLocationId = await findLocationByName(
-    db,
-    organizationId,
-    locationName,
-  );
+  const targetLocationId = await findLocationByName(db, locationName);
   return {
     targetLocationId,
     locationNotFound: targetLocationId === null,
@@ -391,14 +376,12 @@ interface MoveCheckResult {
  */
 async function checkMoveConditions(
   db: Database,
-  organizationId: OrganizationId,
   productData: ProductTopLevelOut,
   inventoryExists: boolean,
 ): Promise<MoveCheckResult> {
   // Get all locations where this product has inventory
   const existingLocations = await getExistingInventoryLocations(
     db,
-    organizationId,
     productData.id,
   );
 
@@ -508,7 +491,7 @@ export const processRow = async (
   row: InventoryCSVRow,
   rowIndex: number,
 ): Promise<CSVImportResultItem> => {
-  const { db, organizationId, dryRun, actor } = ctx;
+  const { db, dryRun, actor } = ctx;
   const manufacturer = row.manufacturer ?? UNSPECIFIED_MANUFACTURER;
   const isProductOnly = !row.location_name || row.location_name.trim() === "";
 
@@ -524,14 +507,13 @@ export const processRow = async (
   let imageImportError: string | undefined;
 
   if (dryRun) {
-    const result = await previewProduct(db, organizationId, row, manufacturer);
+    const result = await previewProduct(db, row, manufacturer);
     productData = result.productData;
     productWillBeCreated = result.productWillBeCreated;
     productChanges = result.productChanges;
   } else {
     const result = await executeProductOperations(
       db,
-      organizationId,
       row,
       manufacturer,
       actor,
@@ -570,7 +552,6 @@ export const processRow = async (
   // -------------------------------------------------------------------------
   const { targetLocationId, locationNotFound } = await resolveTargetLocation(
     db,
-    organizationId,
     locationName,
   );
 
@@ -616,7 +597,6 @@ export const processRow = async (
     // Auto-create the location as a root with default type "room"
     const createResult = await findOrCreateLocationByName(
       db,
-      organizationId,
       locationName,
       null, // no parent
       "room", // default type for auto-created locations
@@ -638,7 +618,6 @@ export const processRow = async (
   // -------------------------------------------------------------------------
   const inventoryCheck = await checkInventoryMatch(
     db,
-    organizationId,
     productData.id,
     resolvedLocationId,
     newAmount,
@@ -646,7 +625,6 @@ export const processRow = async (
 
   const moveCheck = await checkMoveConditions(
     db,
-    organizationId,
     productData,
     inventoryCheck.exists,
   );
@@ -661,7 +639,6 @@ export const processRow = async (
   ) {
     return handleMoveCase(
       db,
-      organizationId,
       base,
       productData,
       resolvedLocationId,
@@ -681,7 +658,6 @@ export const processRow = async (
   // -------------------------------------------------------------------------
   return handleInventoryResult(
     db,
-    organizationId,
     base,
     productData,
     resolvedLocationId,
@@ -747,7 +723,6 @@ function handleProductOnlyRow(
  */
 async function handleMoveCase(
   db: Database,
-  organizationId: OrganizationId,
   base: BaseResultFields,
   productData: ProductTopLevelOut,
   targetLocationId: LocationId,
@@ -773,7 +748,6 @@ async function handleMoveCase(
 
   const fromLocations = await moveInventoryEntries(
     db,
-    organizationId,
     productData.id,
     targetLocationId,
     newAmount,
@@ -805,7 +779,6 @@ async function handleMoveCase(
  */
 async function handleInventoryResult(
   db: Database,
-  organizationId: OrganizationId,
   base: BaseResultFields,
   productData: ProductTopLevelOut,
   targetLocationId: LocationId,
@@ -878,7 +851,6 @@ async function handleInventoryResult(
 
   const action = await createOrUpdateInventoryAtLocation(
     db,
-    organizationId,
     productData.id,
     targetLocationId,
     newAmount,

@@ -2,9 +2,7 @@ import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ActorContext } from "~/schemas/context";
 import {
-  type OrganizationId,
   unsafeIngredientId,
-  unsafeOrganizationId,
   unsafeProductId,
   unsafeUserId,
 } from "~/schemas/identifiers";
@@ -20,16 +18,14 @@ import {
 
 const TEST_ACTOR: ActorContext = {
   userId: unsafeUserId("test-user-id"),
-  organizationId: unsafeOrganizationId("test-org-id"),
   source: "ui",
 };
 
 describe("product repository", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -60,7 +56,6 @@ describe("product repository", () => {
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      organizationId,
     );
 
     // Verify the retrieved product matches the created product
@@ -113,7 +108,6 @@ describe("product repository", () => {
     // Test listing with pagination - first page
     const firstPage = await productList(
       db,
-      organizationId,
       undefined,
       undefined,
       undefined,
@@ -131,7 +125,6 @@ describe("product repository", () => {
     // Test listing with pagination - second page
     const secondPage = await productList(
       db,
-      organizationId,
       undefined,
       undefined,
       undefined,
@@ -148,7 +141,6 @@ describe("product repository", () => {
     // Test listing with filtering by manufacturer
     const filteredList = await productList(
       db,
-      organizationId,
       undefined,
       "Manufacturer X",
       undefined,
@@ -209,7 +201,6 @@ describe("product repository", () => {
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      organizationId,
     );
 
     // Verify unit mappings were created
@@ -255,7 +246,6 @@ describe("product repository", () => {
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      organizationId,
     );
 
     // Verify the ingredient association
@@ -313,7 +303,6 @@ describe("product repository", () => {
     const retrievedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      organizationId,
     );
 
     // Verify the ingredient association was updated
@@ -335,7 +324,6 @@ describe("product repository", () => {
     const updatedProduct = await getProductByID(
       db,
       unsafeProductId(createdProduct.id),
-      organizationId,
     );
 
     // Verify the ingredient association was removed
@@ -365,7 +353,6 @@ describe("product repository", () => {
         db,
         "Power Drill",
         "DeWalt",
-        organizationId,
       );
 
       expect(found).not.toBeNull();
@@ -395,7 +382,6 @@ describe("product repository", () => {
         db,
         "Router Table",
         "(unspecified)",
-        organizationId,
       );
 
       expect(found).not.toBeNull();
@@ -425,7 +411,6 @@ describe("product repository", () => {
         db,
         "Table Saw",
         "",
-        organizationId,
       );
 
       expect(found).not.toBeNull();
@@ -454,7 +439,6 @@ describe("product repository", () => {
         db,
         "Circular Saw",
         null,
-        organizationId,
       );
 
       expect(found).not.toBeNull();
@@ -483,7 +467,6 @@ describe("product repository", () => {
         db,
         "Hammer",
         "Stanley",
-        organizationId,
       );
 
       expect(found).not.toBeNull();
@@ -513,7 +496,6 @@ describe("product repository", () => {
         db,
         "Jigsaw",
         "Bosch",
-        organizationId,
       );
 
       expect(found).toBeNull();
@@ -556,7 +538,6 @@ describe("product repository", () => {
         db,
         "Screwdriver",
         "Stanley",
-        organizationId,
       );
 
       expect(found).not.toBeNull();
@@ -568,7 +549,6 @@ describe("product repository", () => {
         db,
         "Non-existent Product",
         "Any Manufacturer",
-        organizationId,
       );
 
       expect(found).toBeNull();
@@ -595,7 +575,6 @@ describe("product repository", () => {
         db,
         "POWER DRILL PRO",
         "dewalt", // also lowercase
-        organizationId,
       );
 
       expect(found).not.toBeNull();

@@ -31,14 +31,10 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
   },
   repository: {
     getByID: async (services, id: IngredientId) => {
-      return await services.services.ingredient.getIngredientByID(
-        id,
-        services.organizationId,
-      );
+      return await services.services.ingredient.getIngredientByID(id);
     },
     list: async (services, filters, sort, pagination) => {
       return await services.services.ingredient.ingredientList(
-        services.organizationId,
         filters.nameFilter,
         sort,
         pagination,
@@ -72,10 +68,7 @@ const merge = protectedProcedure
   .output(ingredientWithFoodOut)
   .mutation(async ({ ctx, input }) => {
     await mergeIngredients(ctx.db, input.target, input.aliases);
-    return await ctx.services.ingredient.getIngredientByID(
-      input.target,
-      ctx.organizationId,
-    );
+    return await ctx.services.ingredient.getIngredientByID(input.target);
   });
 
 const getByName = protectedProcedure

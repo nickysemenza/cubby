@@ -7,11 +7,7 @@
 
 import { count, eq } from "drizzle-orm";
 import { getErrorMessage } from "~/lib/error-utils";
-import type {
-  LocationId,
-  OrganizationId,
-  ProductId,
-} from "~/schemas/identifiers";
+import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { locationImage, productImage } from "~/server/db/schema";
 import { associatePendingImages, getDb } from "~/server/repo/database-helpers";
@@ -59,7 +55,6 @@ interface ImageImportResult {
  */
 export async function importProductImages(
   db: Database,
-  organizationId: OrganizationId,
   productId: ProductId,
   imageUrlString: string,
   productName: string,
@@ -91,7 +86,7 @@ export async function importProductImages(
     const filenamePrefix = `product-${sanitizedName}-${i + 1}`;
 
     try {
-      const imported = await importImageFromUrl(db, organizationId, {
+      const imported = await importImageFromUrl(db, {
         sourceUrl: url,
         filenamePrefix,
       });
@@ -145,7 +140,6 @@ export async function locationHasImages(
  */
 export async function importLocationImages(
   db: Database,
-  organizationId: OrganizationId,
   locationId: LocationId,
   imageUrlString: string,
   locationName: string,
@@ -177,7 +171,7 @@ export async function importLocationImages(
     const filenamePrefix = `location-${sanitizedName}-${i + 1}`;
 
     try {
-      const imported = await importImageFromUrl(db, organizationId, {
+      const imported = await importImageFromUrl(db, {
         sourceUrl: url,
         filenamePrefix,
       });

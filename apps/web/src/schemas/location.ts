@@ -71,10 +71,17 @@ export type LocationOutWithParentChildren = z.infer<
   typeof locationOutWithParentChildrenAndInventoryOut
 >;
 
+// Helper to coerce empty strings to null for optional ID fields
+const optionalLocationId = z
+  .string()
+  .nullable()
+  .transform((val) => (val === "" ? null : val))
+  .pipe(locationId.nullable());
+
 // Input schema for creating locations
 export const locationCreateInput = locationBase
   .extend({
-    parentId: locationId.nullable(),
+    parentId: optionalLocationId,
   })
   .merge(createInputImages);
 

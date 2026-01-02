@@ -106,7 +106,7 @@ const allProblemsSchema = z.object({
 const getAllProblems = protectedProcedure
   .output(allProblemsSchema)
   .query(async ({ ctx }) => {
-    return await findAllProblems(ctx.db, ctx.organizationId);
+    return await findAllProblems(ctx.db);
   });
 
 export const problemsRouter = createTRPCRouter({

@@ -5,7 +5,6 @@ import { parseCompactRecipe } from "~/codec/parser";
 import { getSortableFields } from "~/entities/entities";
 import type { ActorContext } from "~/schemas/context";
 import {
-  type OrganizationId,
   type RecipeId,
   unsafeIngredientId,
   unsafeRecipeId,
@@ -52,10 +51,9 @@ import { upsertRecipeFromCompact } from "./compactrecipe";
 export const getRecipeByID = async (
   db: Database | DrizzleTransaction,
   id: RecipeId,
-  organizationId: OrganizationId,
 ): Promise<RecipeOut | null> => {
   const res = await unwrapDb(db).query.recipe.findFirst({
-    where: and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
+    where: eq(recipe.id, id),
     ...relations.recipe.full,
   });
   return res === null || res === undefined ? null : dbRecipeToAPI(res);
@@ -160,7 +158,6 @@ interface RecipeFilters {
 
 export const recipeList = async (
   db: Database,
-  organizationId: OrganizationId,
   filters: RecipeFilters,
   sort: SortParams,
   pagination: PaginationParams,
@@ -169,7 +166,6 @@ export const recipeList = async (
 
   // Build where conditions
   const whereConditions = [
-    eq(recipe.organizationId, organizationId),
     filters.nameFilter
       ? formatSearchTerm(recipe.name, filters.nameFilter)
       : undefined,
@@ -209,7 +205,6 @@ export const createRecipe = async (
   recipeInput: RecipeCreateInput,
   actor: ActorContext,
 ): Promise<RecipeOut> => {
-  const { organizationId } = actor;
   const sourceType = recipeInput.meta?.url ? "Website" : "Other";
   const sourceData = recipeInput.meta?.url || null;
   const { pendingImageIds } = recipeInput;
@@ -220,7 +215,7 @@ export const createRecipe = async (
     const processedSections = await Promise.all(
       recipeInput.sections.map(async (section) => {
         const processedIngredients = section.ingredients
-          ? await processIngredients(tx, section.ingredients, organizationId)
+          ? await processIngredients(tx, section.ingredients)
           : [];
 
         return {
@@ -233,7 +228,6 @@ export const createRecipe = async (
 
     // Create the main recipe
     const createdRecipe = await insertAndReturn(tx, recipe, {
-      organizationId: organizationId,
       name: recipeInput.name,
       SourceType: sourceType,
       SourceData: sourceData,
@@ -285,11 +279,7 @@ export const createRecipe = async (
       action: "create",
     });
 
-    const fullRecipe = await getRecipeByID(
-      tx,
-      createdRecipe.id as RecipeId,
-      organizationId,
-    );
+    const fullRecipe = await getRecipeByID(tx, createdRecipe.id as RecipeId);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve created recipe");
     }
@@ -301,7 +291,6 @@ export const createRecipe = async (
 const processIngredient = async (
   tx: DrizzleTransaction,
   ingredientInput: z.infer<typeof recipeIngredientInput>,
-  organizationId: OrganizationId,
 ): Promise<{
   ingredientId: string;
   amounts: z.infer<typeof amount>[];
@@ -341,7 +330,6 @@ const processIngredient = async (
 
   // Create a new ingredient that points to this recipe
   const newIngredient = await insertAndReturn(tx, ingredient, {
-    organizationId: organizationId,
     name: `Recipe: ${recipeRecord.name}`,
     aliases: [],
     recipeId: ingredientInput.recipeId,
@@ -357,10 +345,9 @@ const processIngredient = async (
 const processIngredients = async (
   tx: DrizzleTransaction,
   ingredients: z.infer<typeof recipeIngredientInput>[],
-  organizationId: OrganizationId,
 ): Promise<{ ingredientId: string; amounts: z.infer<typeof amount>[] }[]> => {
   return await Promise.all(
-    ingredients.map((ing) => processIngredient(tx, ing, organizationId)),
+    ingredients.map((ing) => processIngredient(tx, ing)),
   );
 };
 
@@ -369,15 +356,11 @@ export const upsertRecipe = async (
   db: Database,
   actor: ActorContext,
 ): Promise<{ id: string }> => {
-  const { organizationId } = actor;
   const dbClient = getDb(db);
 
-  // Check if recipe already exists
+  // Check if recipe already exists by name
   const existingRecipe = await dbClient.query.recipe.findFirst({
-    where: and(
-      eq(recipe.organizationId, organizationId),
-      eq(recipe.name, input.name),
-    ),
+    where: eq(recipe.name, input.name),
   });
 
   if (existingRecipe) {
@@ -487,7 +470,6 @@ type ExistingRecipeWithSections = typeof recipe.$inferSelect & {
 async function updateRecipeBasicProperties(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
-  organizationId: OrganizationId,
   updates: RecipeUpdateInput["data"],
   existingRecipe: ExistingRecipeWithSections,
 ): Promise<void> {
@@ -534,12 +516,7 @@ async function updateRecipeBasicProperties(
     updateData.tags = updates.tags;
   }
 
-  await tx
-    .update(recipe)
-    .set(updateData)
-    .where(
-      and(eq(recipe.id, recipeId), eq(recipe.organizationId, organizationId)),
-    );
+  await tx.update(recipe).set(updateData).where(eq(recipe.id, recipeId));
 }
 
 /** Add new images and remove requested images */
@@ -593,10 +570,9 @@ async function createSectionWithIngredients(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   sectionInput: NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
-  organizationId: OrganizationId,
 ): Promise<void> {
   const processedIngredients = sectionInput.ingredients
-    ? await processIngredients(tx, sectionInput.ingredients, organizationId)
+    ? await processIngredients(tx, sectionInput.ingredients)
     : [];
 
   const createdSection = await insertAndReturn(tx, recipeSection, {
@@ -626,15 +602,10 @@ async function updateSectionIngredients(
     NonNullable<RecipeUpdateInput["data"]["sections"]>[number]["ingredients"]
   >,
   existingIngredients: Array<typeof recipeSectionIngredient.$inferSelect>,
-  organizationId: OrganizationId,
 ): Promise<void> {
   // Process each ingredient in the update
   for (const ingredientUpdate of ingredientUpdates) {
-    const processedIngredient = await processIngredient(
-      tx,
-      ingredientUpdate,
-      organizationId,
-    );
+    const processedIngredient = await processIngredient(tx, ingredientUpdate);
 
     if (!ingredientUpdate.id) {
       // Create new ingredient
@@ -678,7 +649,6 @@ async function updateExistingSection(
     id: string;
   },
   existingSection: ExistingRecipeWithSections["sections"][number],
-  organizationId: OrganizationId,
 ): Promise<void> {
   // Update section name if provided
   if (sectionUpdate.name !== undefined) {
@@ -695,7 +665,6 @@ async function updateExistingSection(
       sectionUpdate.id,
       sectionUpdate.ingredients,
       existingSection.ingredients,
-      organizationId,
     );
   }
 
@@ -717,7 +686,6 @@ async function handleSectionUpdates(
   recipeId: RecipeId,
   sectionUpdates: NonNullable<RecipeUpdateInput["data"]["sections"]>,
   existingRecipe: ExistingRecipeWithSections,
-  organizationId: OrganizationId,
 ): Promise<void> {
   const sectionIdsInUpdate = sectionUpdates
     .map((s) => s.id)
@@ -734,12 +702,7 @@ async function handleSectionUpdates(
   for (const sectionUpdate of sectionUpdates) {
     if (!sectionUpdate.id) {
       // Create new section
-      await createSectionWithIngredients(
-        tx,
-        recipeId,
-        sectionUpdate,
-        organizationId,
-      );
+      await createSectionWithIngredients(tx, recipeId, sectionUpdate);
     } else {
       // Update existing section
       const existingSection = existingRecipe.sections.find(
@@ -756,7 +719,6 @@ async function handleSectionUpdates(
         tx,
         { ...sectionUpdate, id: sectionUpdate.id },
         existingSection,
-        organizationId,
       );
     }
   }
@@ -791,14 +753,12 @@ import type {
  */
 export const getIngredientCooccurrence = async (
   db: Database,
-  organizationId: OrganizationId,
   minEdgeWeight: number = 2,
 ): Promise<IngredientCooccurrence> => {
   const dbClient = getDb(db);
 
-  // Get all recipes with their ingredients for this organization
+  // Get all recipes with their ingredients
   const recipes = await dbClient.query.recipe.findMany({
-    where: eq(recipe.organizationId, organizationId),
     with: {
       sections: {
         with: {
@@ -909,18 +869,14 @@ export const getIngredientCooccurrence = async (
 };
 
 /**
- * Get all unique tags used across recipes in the organization.
+ * Get all unique tags used across recipes.
  * Used for tag autocomplete suggestions.
  */
-export const getAllTags = async (
-  db: Database,
-  organizationId: OrganizationId,
-): Promise<string[]> => {
+export const getAllTags = async (db: Database): Promise<string[]> => {
   const dbClient = getDb(db);
 
   // Get all recipes with tags
   const recipesWithTags = await dbClient.query.recipe.findMany({
-    where: eq(recipe.organizationId, organizationId),
     columns: { tags: true },
   });
 
@@ -944,11 +900,9 @@ export const updateRecipe = async (
   updates: RecipeUpdateInput["data"],
   actor: ActorContext,
 ): Promise<RecipeOut> => {
-  const { organizationId } = actor;
-
-  // Check if recipe exists and belongs to organization
+  // Check if recipe exists
   const existingRecipe = await getDb(db).query.recipe.findFirst({
-    where: and(eq(recipe.id, id), eq(recipe.organizationId, organizationId)),
+    where: eq(recipe.id, id),
     with: {
       sections: {
         with: {
@@ -967,26 +921,14 @@ export const updateRecipe = async (
 
   // Update in a transaction
   return await withTransaction(db, async (tx) => {
-    await updateRecipeBasicProperties(
-      tx,
-      id,
-      organizationId,
-      updates,
-      existingRecipe,
-    );
+    await updateRecipeBasicProperties(tx, id, updates, existingRecipe);
     await updateRecipeImages(tx, id, updates);
 
     if (updates.sections) {
-      await handleSectionUpdates(
-        tx,
-        id,
-        updates.sections,
-        existingRecipe,
-        organizationId,
-      );
+      await handleSectionUpdates(tx, id, updates.sections, existingRecipe);
     }
 
-    const fullRecipe = await getRecipeByID(tx, id, organizationId);
+    const fullRecipe = await getRecipeByID(tx, id);
     if (!fullRecipe) {
       throw new Error("Failed to retrieve updated recipe");
     }

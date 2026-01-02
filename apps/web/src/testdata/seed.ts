@@ -10,11 +10,7 @@ export const seedRealRecipes = async (db: Database, actor: ActorContext) => {
   for (const recipe of exampleRecipesCompact) {
     const parsed = parseCompactRecipe(recipe);
     const recipeOut = await upsertRecipeFromCompact(parsed, db, actor);
-    const res = await getRecipeByID(
-      db,
-      unsafeRecipeId(recipeOut.id),
-      actor.organizationId,
-    );
+    const res = await getRecipeByID(db, unsafeRecipeId(recipeOut.id));
 
     if (res === null) {
       throw new Error("Recipe not found");

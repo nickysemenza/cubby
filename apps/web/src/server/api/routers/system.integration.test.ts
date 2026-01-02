@@ -1,6 +1,6 @@
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import { type OrganizationId, unsafeUserId } from "~/schemas/identifiers";
+import { unsafeUserId } from "~/schemas/identifiers";
 import type { InventoryCSVRow } from "~/schemas/inventory";
 import type { Database } from "~/server/db";
 import { appRouter } from "../root";
@@ -61,10 +61,9 @@ const testCSVRows: InventoryCSVRow[] = [
 
 describe("CSV import test", () => {
   let db: Database;
-  let organizationId: OrganizationId;
   let teardown: () => Promise<void>;
   beforeEach(async () => {
-    ({ db, organizationId, teardown } = await buildTestDB());
+    ({ db, teardown } = await buildTestDB());
     return teardown;
   });
 
@@ -73,7 +72,6 @@ describe("CSV import test", () => {
     const caller = createCaller(
       createTestTRPCContext(db, {
         auth: { userId: TEST_USER_ID },
-        organizationId,
       }),
     );
 

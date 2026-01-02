@@ -5,11 +5,7 @@
  */
 
 import { and, eq } from "drizzle-orm";
-import type {
-  LocationId,
-  OrganizationId,
-  ProductId,
-} from "~/schemas/identifiers";
+import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
@@ -31,17 +27,13 @@ export interface InventoryTimestamps {
  */
 export const moveInventoryEntries = async (
   db: Database,
-  organizationId: OrganizationId,
   productId: ProductId,
   targetLocationId: LocationId,
   newAmount: { value: number; unit: string },
   timestamps?: InventoryTimestamps,
 ): Promise<string[]> => {
   const existingEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.productId, productId),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
+    where: and(eq(inventoryEntry.productId, productId)),
     with: {
       location: true,
     },
@@ -63,7 +55,6 @@ export const moveInventoryEntries = async (
     where: and(
       eq(inventoryEntry.productId, productId),
       eq(inventoryEntry.locationId, targetLocationId),
-      eq(inventoryEntry.organizationId, organizationId),
     ),
   });
 
@@ -71,7 +62,6 @@ export const moveInventoryEntries = async (
     await getDb(db)
       .insert(inventoryEntry)
       .values({
-        organizationId,
         productId,
         locationId: targetLocationId,
         amount: newAmount,
@@ -92,7 +82,6 @@ export const moveInventoryEntries = async (
  */
 export const createOrUpdateInventoryAtLocation = async (
   db: Database,
-  organizationId: OrganizationId,
   productId: ProductId,
   targetLocationId: LocationId,
   newAmount: { value: number; unit: string },
@@ -102,7 +91,6 @@ export const createOrUpdateInventoryAtLocation = async (
     where: and(
       eq(inventoryEntry.productId, productId),
       eq(inventoryEntry.locationId, targetLocationId),
-      eq(inventoryEntry.organizationId, organizationId),
     ),
   });
 
@@ -126,7 +114,6 @@ export const createOrUpdateInventoryAtLocation = async (
   await getDb(db)
     .insert(inventoryEntry)
     .values({
-      organizationId,
       productId,
       locationId: targetLocationId,
       amount: newAmount,
@@ -142,14 +129,10 @@ export const createOrUpdateInventoryAtLocation = async (
  */
 export const getExistingInventoryLocations = async (
   db: Database,
-  organizationId: OrganizationId,
   productId: ProductId,
 ): Promise<string[]> => {
   const existingEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.productId, productId),
-      eq(inventoryEntry.organizationId, organizationId),
-    ),
+    where: and(eq(inventoryEntry.productId, productId)),
     with: {
       location: true,
     },
@@ -163,7 +146,6 @@ export const getExistingInventoryLocations = async (
  */
 export const checkInventoryMatch = async (
   db: Database,
-  organizationId: OrganizationId,
   productId: ProductId,
   targetLocationId: LocationId,
   expectedAmount: { value: number; unit: string },
@@ -172,7 +154,6 @@ export const checkInventoryMatch = async (
     where: and(
       eq(inventoryEntry.productId, productId),
       eq(inventoryEntry.locationId, targetLocationId),
-      eq(inventoryEntry.organizationId, organizationId),
     ),
   });
   if (!existing) return { exists: false, matches: false };

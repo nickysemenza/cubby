@@ -16,32 +16,14 @@ import type { AuditEntityType } from "~/schemas/audit";
 import { imageStatusValues } from "~/schemas/image";
 import { productCategoryValues } from "~/schemas/product";
 import { type RecipeYield, recipeSourceValues } from "~/schemas/recipe";
-import {
-  account,
-  apikey,
-  invitation,
-  organization,
-  member as organizationMember,
-  session,
-  user,
-  verification,
-} from "./auth.schema";
+import { account, apikey, session, user, verification } from "./auth.schema";
 
 // JSON types for JSONB columns
 export type { Amount };
 export type Instruction = { text: string };
 
 // Re-export Better-Auth tables for use throughout the app
-export {
-  user,
-  organization,
-  organizationMember,
-  session,
-  account,
-  verification,
-  invitation,
-  apikey,
-};
+export { user, session, account, verification, apikey };
 
 // Enums - values derived from Zod schemas
 export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
@@ -52,9 +34,6 @@ export const recipe = pgTable(
   "Recipe",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -69,11 +48,9 @@ export const recipe = pgTable(
     tags: text("tags").array(),
   },
   (table) => ({
-    projectNameUnique: uniqueIndex("Recipe_organizationId_name_key").on(
-      table.organizationId,
-      table.name,
-    ),
-    projectIdIdx: index("Recipe_organizationId_idx").on(table.organizationId),
+    nameUnique: uniqueIndex("Recipe_name_key")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
     createdAtIdx: index("Recipe_createdAt_idx").on(table.createdAt),
     sourceTypeIdx: index("Recipe_SourceType_idx").on(table.SourceType),
     // GIN index for full-text search on name
@@ -118,9 +95,6 @@ export const ingredient = pgTable(
   "Ingredient",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     name: text("name").notNull(),
     aliases: text("aliases").array().notNull().default(sql`'{}'::text[]`),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -132,14 +106,10 @@ export const ingredient = pgTable(
     recipeId: uuid("recipeId").references(() => recipe.id),
   },
   (table) => ({
-    projectNameUnique: uniqueIndex("Ingredient_organizationId_name_key").on(
-      table.organizationId,
-      table.name,
-    ),
+    nameUnique: uniqueIndex("Ingredient_name_key")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
     recipeIdUnique: uniqueIndex("Ingredient_recipeId_key").on(table.recipeId),
-    projectIdIdx: index("Ingredient_organizationId_idx").on(
-      table.organizationId,
-    ),
     recipeIdIdx: index("Ingredient_recipeId_idx").on(table.recipeId),
     createdAtIdx: index("Ingredient_createdAt_idx").on(table.createdAt),
     // GIN indexes for full-text search
@@ -191,9 +161,6 @@ export const product = pgTable(
   "Product",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     name: text("name").notNull(),
     manufacturer: text("manufacturer").notNull(),
     upc: text("upc"),
@@ -214,12 +181,11 @@ export const product = pgTable(
   },
   (table) => ({
     categoryIdx: index("Product_category_idx").on(table.category),
-    projectNameMfgUnique: uniqueIndex(
-      "Product_organizationId_name_manufacturer_key",
-    ).on(table.organizationId, table.name, table.manufacturer),
+    nameMfgUnique: uniqueIndex("Product_name_manufacturer_key")
+      .on(table.name, table.manufacturer)
+      .where(sql`${table.deletedAt} IS NULL`),
     upcUnique: uniqueIndex("Product_upc_key").on(table.upc),
     ndbUnique: uniqueIndex("Product_ndb_number_key").on(table.ndb_number),
-    projectIdIdx: index("Product_organizationId_idx").on(table.organizationId),
     ingredientIdIdx: index("Product_ingredientId_idx").on(table.ingredientId),
     createdAtIdx: index("Product_createdAt_idx").on(table.createdAt),
     nameIdx: index("Product_name_idx").on(table.name),
@@ -269,9 +235,6 @@ export const location = pgTable(
   "Location",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -284,11 +247,9 @@ export const location = pgTable(
     type: text("type").notNull(),
   },
   (table) => ({
-    projectNameUnique: uniqueIndex("Location_organizationId_name_key").on(
-      table.organizationId,
-      table.name,
-    ),
-    projectIdIdx: index("Location_organizationId_idx").on(table.organizationId),
+    nameUnique: uniqueIndex("Location_name_key")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
     nameIdx: index("Location_name_idx").on(table.name),
     typeIdx: index("Location_type_idx").on(table.type),
     parentIdIdx: index("Location_parentId_idx").on(table.parentId),
@@ -310,9 +271,6 @@ export const inventoryEntry = pgTable(
   "InventoryEntry",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     productId: uuid("productId")
       .notNull()
       .references(() => product.id),
@@ -332,9 +290,6 @@ export const inventoryEntry = pgTable(
     productLocationUnique: uniqueIndex(
       "InventoryEntry_productId_locationId_key",
     ).on(table.productId, table.locationId),
-    projectIdIdx: index("InventoryEntry_organizationId_idx").on(
-      table.organizationId,
-    ),
     productIdIdx: index("InventoryEntry_productId_idx").on(table.productId),
     locationIdIdx: index("InventoryEntry_locationId_idx").on(table.locationId),
     createdAtIdx: index("InventoryEntry_createdAt_idx").on(table.createdAt),
@@ -346,9 +301,6 @@ export const image = pgTable(
   "Image",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     url: text("url").notNull(),
     key: text("key").notNull().unique(),
     filename: text("filename").notNull(),
@@ -363,7 +315,6 @@ export const image = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
   (table) => ({
-    projectIdIdx: index("Image_organizationId_idx").on(table.organizationId),
     createdAtIdx: index("Image_createdAt_idx").on(table.createdAt),
     statusIdx: index("Image_status_idx").on(table.status),
   }),
@@ -454,21 +405,7 @@ export const recipeImage = pgTable(
 );
 
 // Relations
-export const organizationRelations = relations(organization, ({ many }) => ({
-  members: many(organizationMember),
-  recipes: many(recipe),
-  products: many(product),
-  ingredients: many(ingredient),
-  locations: many(location),
-  inventoryEntries: many(inventoryEntry),
-  images: many(image),
-}));
-
 export const recipeRelations = relations(recipe, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [recipe.organizationId],
-    references: [organization.id],
-  }),
   sections: many(recipeSection),
   pointerIngredient: one(ingredient, {
     fields: [recipe.id],
@@ -489,10 +426,6 @@ export const recipeSectionRelations = relations(
 );
 
 export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [ingredient.organizationId],
-    references: [organization.id],
-  }),
   Recipe: one(recipe, {
     fields: [ingredient.recipeId],
     references: [recipe.id],
@@ -516,10 +449,6 @@ export const recipeSectionIngredientRelations = relations(
 );
 
 export const productRelations = relations(product, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [product.organizationId],
-    references: [organization.id],
-  }),
   Ingredient: one(ingredient, {
     fields: [product.ingredientId],
     references: [ingredient.id],
@@ -540,10 +469,6 @@ export const productUnitMappingsRelations = relations(
 );
 
 export const locationRelations = relations(location, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [location.organizationId],
-    references: [organization.id],
-  }),
   parent: one(location, {
     fields: [location.parentId],
     references: [location.id],
@@ -557,10 +482,6 @@ export const locationRelations = relations(location, ({ one, many }) => ({
 }));
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
-  organization: one(organization, {
-    fields: [inventoryEntry.organizationId],
-    references: [organization.id],
-  }),
   Product: one(product, {
     fields: [inventoryEntry.productId],
     references: [product.id],
@@ -571,11 +492,7 @@ export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
   }),
 }));
 
-export const imageRelations = relations(image, ({ one, many }) => ({
-  organization: one(organization, {
-    fields: [image.organizationId],
-    references: [organization.id],
-  }),
+export const imageRelations = relations(image, ({ many }) => ({
   productImages: many(productImage),
   locationImages: many(locationImage),
   recipeImages: many(recipeImage),
@@ -619,9 +536,6 @@ export const auditLog = pgTable(
   "AuditLog",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    organizationId: text("organizationId")
-      .notNull()
-      .references(() => organization.id),
     entityType: text("entityType").notNull().$type<AuditEntityType>(),
     entityId: uuid("entityId").notNull(),
     action: text("action").notNull(), // 'create', 'update', 'delete'
@@ -634,10 +548,7 @@ export const auditLog = pgTable(
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    index("AuditLog_organizationId_createdAt_idx").on(
-      table.organizationId,
-      table.createdAt.desc(),
-    ),
+    index("AuditLog_createdAt_idx").on(table.createdAt.desc()),
     index("AuditLog_entityType_entityId_createdAt_idx").on(
       table.entityType,
       table.entityId,
@@ -647,12 +558,20 @@ export const auditLog = pgTable(
 );
 
 export const auditLogRelations = relations(auditLog, ({ one }) => ({
-  organization: one(organization, {
-    fields: [auditLog.organizationId],
-    references: [organization.id],
-  }),
   user: one(user, {
     fields: [auditLog.userId],
     references: [user.id],
   }),
 }));
+
+// App Settings table - singleton table for app-wide configuration
+// (replaces organization metadata for Google Sheets config, etc.)
+export const appSettings = pgTable("AppSettings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt", { mode: "date" })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
