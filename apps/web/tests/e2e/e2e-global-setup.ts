@@ -79,12 +79,12 @@ async function globalSetup(config: FullConfig): Promise<void> {
   console.log(`[E2E Setup] Using database: ${databaseConfig.database}`);
 
   // 2. Start dev server with this database
-  const command = isCI ? "pnpm run preview" : "pnpm run dev";
-  console.log(`[E2E Setup] Starting server with: ${command}`);
+  // Always use dev mode - preview requires a build step we don't have in E2E setup
+  console.log("[E2E Setup] Starting server with: pnpm run dev");
 
   // Important: Use E2E_DATABASE_URL which takes precedence in env.ts and won't
   // be overwritten by Vite's .env loading mechanism.
-  const serverProcess = spawn("pnpm", ["run", isCI ? "preview" : "dev"], {
+  const serverProcess = spawn("pnpm", ["run", "dev"], {
     env: {
       ...process.env,
       // Use E2E_DATABASE_URL to bypass Vite's .env loading which would override DATABASE_URL
