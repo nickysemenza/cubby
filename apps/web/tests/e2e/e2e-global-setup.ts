@@ -80,11 +80,11 @@ async function globalSetup(config: FullConfig): Promise<void> {
 
   // 2. Start dev server with this database
   // Always use dev mode - preview requires a build step we don't have in E2E setup
-  console.log("[E2E Setup] Starting server with: pnpm run dev");
+  console.log("[E2E Setup] Starting server with: pnpm run dev --port 3001");
 
   // Important: Use E2E_DATABASE_URL which takes precedence in env.ts and won't
   // be overwritten by Vite's .env loading mechanism.
-  const serverProcess = spawn("pnpm", ["run", "dev"], {
+  const serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {
     env: {
       ...process.env,
       // Use E2E_DATABASE_URL to bypass Vite's .env loading which would override DATABASE_URL
@@ -114,7 +114,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
   (globalThis as Record<string, unknown>).__E2E_DB_URL__ = databaseUrl;
 
   // 3. Wait for server to be ready
-  const baseURL = config.projects[0]?.use?.baseURL || "http://localhost:3000";
+  const baseURL = config.projects[0]?.use?.baseURL || "http://localhost:3001";
   console.log(`[E2E Setup] Waiting for server at ${baseURL}...`);
   await waitForServer(baseURL, isCI ? 180_000 : 60_000);
   console.log("[E2E Setup] Server is ready");
