@@ -31,13 +31,13 @@ Replace the existing `CompactRecipe` TypeScript type with a unified `RecipeText`
 
 ### Rust Struct
 
+Minimal core fields + extensible metadata map. Rust handles markdown parsing; TypeScript handles field semantics.
+
 ```rust
 pub struct RecipeText {
-    pub shortcode: String,           // R-XXXX format, canonical identifier
-    pub updated_at: Option<String>,
-    pub name: String,
-    pub url: Option<String>,
-    pub sections: Vec<RecipeSection>,
+    pub name: String,                                   // Extracted from H1
+    pub sections: Vec<RecipeSection>,                   // Recipe content
+    pub metadata: HashMap<String, serde_json::Value>,   // All YAML frontmatter
 }
 
 pub struct RecipeSection {
@@ -46,6 +46,11 @@ pub struct RecipeSection {
     pub instructions: Vec<String>,
 }
 ```
+
+**Why metadata map instead of explicit fields:**
+- Add new fields in TypeScript without WASM rebuild
+- `shortcode` is a RecipeHub sync concern, not ingredient-parser
+- Rust just parses/serializes markdown structure
 
 ### WASM Exports
 
@@ -62,6 +67,10 @@ pub fn serialize_recipe_markdown(recipe: &RecipeText) -> String
 shortcode: R-A3F2
 updatedAt: 2025-01-15T10:25:00Z
 url: https://example.com/pancakes
+yield: 12 pancakes
+servings: 4
+tags: [breakfast, quick, cuisine:american]
+sourceType: Website
 ---
 
 # Pancakes
@@ -79,6 +88,9 @@ url: https://example.com/pancakes
 ---
 shortcode: R-X7K9
 updatedAt: 2025-01-15T10:25:00Z
+servings: 2
+tags: [breakfast, cuisine:mexican, author:kenji]
+sourceType: Other
 ---
 
 # Breakfast Tacos
@@ -104,12 +116,24 @@ updatedAt: 2025-01-15T10:25:00Z
 
 ### Parsing Rules
 
-- `---` delimiters = YAML frontmatter (shortcode, updatedAt, url)
-- `# ` = recipe title
+**Structure:**
+- `---` delimiters = YAML frontmatter (all metadata)
+- `# ` = recipe title (extracted to `name` field)
 - `## ` = section name (if present, multi-section mode)
 - `- ` = ingredient line
 - `1. `, `2. `, etc. = instruction line
 - No `## ` headers = single implicit section
+
+**Frontmatter fields (all go in `metadata` map):**
+- `shortcode` = R-XXXX format identifier
+- `updatedAt` = ISO timestamp
+- `url` = source URL (optional)
+- `yield` = string like "12 pancakes" (TypeScript parses to `{ value: 12, unit: "pancakes" }`)
+- `servings` = integer
+- `tags` = YAML array (supports prefixes: `cuisine:*`, `author:*`, `cookbook:*`)
+- `sourceType` = "Book" | "Website" | "Other"
+
+**Extensibility:** New fields can be added to frontmatter without updating Rust/WASM.
 
 ## Storage
 
@@ -285,3 +309,12 @@ Add to `/settings/integrations`:
 - Version history (keep previous versions in R2)
 - Auto-sync on save
 - Periodic background sync
+
+### Future Metadata Fields
+
+When the DB supports these, add to frontmatter with human-readable strings:
+- `prepTime: "15 minutes"`
+- `cookTime: "30 minutes"`
+- `totalTime: "45 minutes"`
+- `difficulty: "easy"` / `"medium"` / `"hard"`
+- `description: "Fluffy pancakes perfect for Sunday brunch"`
