@@ -1,5 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, MapPin, Package, Search } from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -11,7 +12,9 @@ import {
   CommandSeparator,
 } from "~/components/ui/command";
 import { EntityIcon, entities } from "~/entities/entities";
+import { parseShortcode } from "~/lib/shortcode";
 import type { SearchableEntity } from "~/schemas/search";
+import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { Pill } from "./Pill";
 import {
@@ -27,6 +30,39 @@ export function GlobalCommandMenu() {
 
   const { results, filteredActions, isLoading, isEmpty } =
     useGlobalSearch(search);
+
+  // Shortcode detection and lookup
+  const trpc = useTRPC();
+  const parsedShortcode = parseShortcode(search);
+  const locationQuery = useQuery({
+    ...trpc.location.getByShortcode.queryOptions({
+      shortcode: search.toUpperCase(),
+    }),
+    enabled: !!parsedShortcode && parsedShortcode.type === "location",
+  });
+  const productQuery = useQuery({
+    ...trpc.product.getByShortcode.queryOptions({
+      shortcode: search.toUpperCase(),
+    }),
+    enabled: !!parsedShortcode && parsedShortcode.type === "product",
+  });
+
+  const shortcodeResult =
+    parsedShortcode?.type === "location"
+      ? locationQuery.data
+      : parsedShortcode?.type === "product"
+        ? productQuery.data
+        : null;
+
+  const goToShortcode = () => {
+    if (parsedShortcode?.type === "location" && locationQuery.data) {
+      navigate({ to: `/locations/${locationQuery.data.id}` });
+      setOpen(false);
+    } else if (parsedShortcode?.type === "product" && productQuery.data) {
+      navigate({ to: `/products/${productQuery.data.id}` });
+      setOpen(false);
+    }
+  };
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -85,8 +121,28 @@ export function GlobalCommandMenu() {
         )}
 
         {/* Empty state */}
-        {isEmpty && !isLoading && (
+        {isEmpty && !isLoading && !shortcodeResult && (
           <CommandEmpty>No results found.</CommandEmpty>
+        )}
+
+        {/* Shortcode result - appears at top when typing a valid shortcode */}
+        {parsedShortcode && shortcodeResult && (
+          <CommandGroup heading="Shortcode">
+            <CommandItem
+              onSelect={goToShortcode}
+              className="flex items-center gap-2"
+            >
+              {parsedShortcode.type === "location" ? (
+                <MapPin className="h-4 w-4" />
+              ) : (
+                <Package className="h-4 w-4" />
+              )}
+              <span>{shortcodeResult.name}</span>
+              <span className="ml-auto font-mono text-muted-foreground text-xs">
+                {search.toUpperCase()}
+              </span>
+            </CommandItem>
+          </CommandGroup>
         )}
 
         {/* Search Results - flat list with type pills */}
