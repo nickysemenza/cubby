@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Loader2, MapPin, Package, Search } from "lucide-react";
+import { BookOpen, Loader2, MapPin, Package, Search } from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -46,13 +46,21 @@ export function GlobalCommandMenu() {
     }),
     enabled: !!parsedShortcode && parsedShortcode.type === "product",
   });
+  const recipeQuery = useQuery({
+    ...trpc.recipe.getByShortcode.queryOptions({
+      shortcode: search.toUpperCase(),
+    }),
+    enabled: !!parsedShortcode && parsedShortcode.type === "recipe",
+  });
 
   const shortcodeResult =
     parsedShortcode?.type === "location"
       ? locationQuery.data
       : parsedShortcode?.type === "product"
         ? productQuery.data
-        : null;
+        : parsedShortcode?.type === "recipe"
+          ? recipeQuery.data
+          : null;
 
   const goToShortcode = () => {
     if (parsedShortcode?.type === "location" && locationQuery.data) {
@@ -60,6 +68,9 @@ export function GlobalCommandMenu() {
       setOpen(false);
     } else if (parsedShortcode?.type === "product" && productQuery.data) {
       navigate({ to: `/products/${productQuery.data.id}` });
+      setOpen(false);
+    } else if (parsedShortcode?.type === "recipe" && recipeQuery.data) {
+      navigate({ to: `/recipes/${recipeQuery.data.id}` });
       setOpen(false);
     }
   };
@@ -134,8 +145,10 @@ export function GlobalCommandMenu() {
             >
               {parsedShortcode.type === "location" ? (
                 <MapPin className="h-4 w-4" />
-              ) : (
+              ) : parsedShortcode.type === "product" ? (
                 <Package className="h-4 w-4" />
+              ) : (
+                <BookOpen className="h-4 w-4" />
               )}
               <span>{shortcodeResult.name}</span>
               <span className="ml-auto font-mono text-muted-foreground text-xs">

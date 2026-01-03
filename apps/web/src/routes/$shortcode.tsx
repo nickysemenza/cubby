@@ -1,7 +1,7 @@
 /**
  * Shortcode redirect route
  *
- * Handles URLs like /L-A3F2 or /P-X7K9 and redirects to the appropriate entity page.
+ * Handles URLs like /L-A3F2, /P-X7K9, or /R-Y8M3 and redirects to the appropriate entity page.
  * Used for QR code labels that encode the shortcode URL.
  */
 
@@ -45,6 +45,20 @@ export const Route = createFileRoute("/$shortcode")({
       throw redirect({
         to: "/products/$id",
         params: { id: product.id },
+        replace: true,
+      });
+    }
+
+    if (parsed.type === "recipe") {
+      const recipe = await context.queryClient.fetchQuery(
+        context.trpc.recipe.getByShortcode.queryOptions({ shortcode }),
+      );
+      if (!recipe) {
+        throw new Error("Recipe not found");
+      }
+      throw redirect({
+        to: "/recipes/$id",
+        params: { id: recipe.id },
         replace: true,
       });
     }

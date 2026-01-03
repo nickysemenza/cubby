@@ -4,11 +4,16 @@
  * Format: {PREFIX}-{4 chars}
  *   - Locations: L-XXXX
  *   - Products: P-XXXX
+ *   - Recipes: R-XXXX
  *
  * Character set excludes ambiguous characters (0/O, 1/I/L) for readability.
  */
 
-import { locationShortcode, productShortcode } from "~/schemas/identifiers";
+import {
+  locationShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "~/schemas/identifiers";
 
 // Character set: 32 chars (no 0/O, 1/I/L for clarity)
 const CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -39,13 +44,20 @@ export function generateProductShortcode(): string {
 }
 
 /**
+ * Generate a recipe shortcode (R-XXXX format).
+ */
+export function generateRecipeShortcode(): string {
+  return `R-${generateShortcodeId()}`;
+}
+
+/**
  * Parse a shortcode to extract entity type and ID.
  * Returns null if the shortcode is invalid.
  * Uses Zod schemas for validation.
  */
 export function parseShortcode(
   code: string,
-): { type: "location" | "product"; id: string } | null {
+): { type: "location" | "product" | "recipe"; id: string } | null {
   const normalized = code.trim().toUpperCase();
 
   if (locationShortcode.safeParse(normalized).success) {
@@ -53,6 +65,9 @@ export function parseShortcode(
   }
   if (productShortcode.safeParse(normalized).success) {
     return { type: "product", id: normalized.slice(2) };
+  }
+  if (recipeShortcode.safeParse(normalized).success) {
+    return { type: "recipe", id: normalized.slice(2) };
   }
   return null;
 }

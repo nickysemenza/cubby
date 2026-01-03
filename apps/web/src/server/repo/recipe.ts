@@ -3,6 +3,7 @@ import type { z } from "zod";
 import type { amount, CompactRecipe } from "~/codec/codec";
 import { parseCompactRecipe } from "~/codec/parser";
 import { getSortableFields } from "~/entities/entities";
+import { generateRecipeShortcode } from "~/lib/shortcode";
 import type { ActorContext } from "~/schemas/context";
 import {
   type RecipeId,
@@ -57,6 +58,56 @@ export const getRecipeByID = async (
     ...relations.recipe.full,
   });
   return res === null || res === undefined ? null : dbRecipeToAPI(res);
+};
+
+/**
+ * Generate a unique recipe shortcode, with collision retry.
+ */
+const generateUniqueRecipeShortcode = async (
+  db: Database | DrizzleTransaction,
+): Promise<string> => {
+  const MAX_RETRIES = 10;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const code = generateRecipeShortcode();
+    const existing = await unwrapDb(db).query.recipe.findFirst({
+      where: eq(recipe.shortcode, code),
+      columns: { id: true },
+    });
+    if (!existing) {
+      return code;
+    }
+  }
+  throw new Error(
+    "Failed to generate unique recipe shortcode after max retries",
+  );
+};
+
+/**
+ * Find a recipe by shortcode and return its ID.
+ */
+export const findRecipeByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<RecipeId | null> => {
+  const rec = await getDb(db).query.recipe.findFirst({
+    where: eq(recipe.shortcode, shortcode.toUpperCase()),
+    columns: { id: true },
+  });
+  return rec ? unsafeRecipeId(rec.id) : null;
+};
+
+/**
+ * Get a recipe by shortcode.
+ */
+export const getRecipeByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<RecipeOut | null> => {
+  const recipeId = await findRecipeByShortcode(db, shortcode);
+  if (!recipeId) {
+    return null;
+  }
+  return getRecipeByID(db, recipeId);
 };
 
 type RecipeDeepDB = typeof recipe.$inferSelect & {
@@ -211,6 +262,9 @@ export const createRecipe = async (
 
   // Create the recipe in a transaction
   return await withTransaction(db, async (tx) => {
+    // Generate unique shortcode
+    const shortcode = await generateUniqueRecipeShortcode(tx);
+
     // Process all ingredients first
     const processedSections = await Promise.all(
       recipeInput.sections.map(async (section) => {
@@ -229,6 +283,7 @@ export const createRecipe = async (
     // Create the main recipe
     const createdRecipe = await insertAndReturn(tx, recipe, {
       name: recipeInput.name,
+      shortcode,
       SourceType: sourceType,
       SourceData: sourceData,
       yield: recipeInput.yield ?? null,

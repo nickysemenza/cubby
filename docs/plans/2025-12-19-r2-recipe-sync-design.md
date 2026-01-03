@@ -8,6 +8,18 @@ Two-way sync for recipes between RecipeHub and Cloudflare R2, similar to the exi
 - **Cross-Device Sync** — Use R2 as a sync backend for offline-first or multi-instance scenarios
 - All-or-nothing sync (no selective per-recipe sync for v1)
 
+## Canonical Identifier
+
+Recipes use **shortcodes** (e.g., `R-A3F2`) as the canonical sync identifier, not UUIDs:
+
+- **UUID** = internal DB primary key (regenerated on fresh import)
+- **Shortcode** = portable identifier that survives export/import
+
+This means:
+- R2 filenames use shortcode: `recipes/R-A3F2.md`
+- Sync matching uses shortcode, not UUID
+- Importing to a fresh database works (shortcode matches, new UUID assigned)
+
 ## Format
 
 ### Consolidate CompactRecipe → RecipeText
@@ -21,7 +33,7 @@ Replace the existing `CompactRecipe` TypeScript type with a unified `RecipeText`
 
 ```rust
 pub struct RecipeText {
-    pub id: Option<String>,
+    pub shortcode: String,           // R-XXXX format, canonical identifier
     pub updated_at: Option<String>,
     pub name: String,
     pub url: Option<String>,
@@ -47,7 +59,7 @@ pub fn serialize_recipe_markdown(recipe: &RecipeText) -> String
 **Simple recipe (no sections):**
 ```markdown
 ---
-id: 550e8400-e29b-41d4-a716-446655440000
+shortcode: R-A3F2
 updatedAt: 2025-01-15T10:25:00Z
 url: https://example.com/pancakes
 ---
@@ -65,7 +77,7 @@ url: https://example.com/pancakes
 **Multi-section recipe:**
 ```markdown
 ---
-id: 550e8400-e29b-41d4-a716-446655440000
+shortcode: R-X7K9
 updatedAt: 2025-01-15T10:25:00Z
 ---
 
@@ -92,7 +104,7 @@ updatedAt: 2025-01-15T10:25:00Z
 
 ### Parsing Rules
 
-- `---` delimiters = YAML frontmatter (id, updatedAt, url)
+- `---` delimiters = YAML frontmatter (shortcode, updatedAt, url)
 - `# ` = recipe title
 - `## ` = section name (if present, multi-section mode)
 - `- ` = ingredient line
@@ -104,10 +116,12 @@ updatedAt: 2025-01-15T10:25:00Z
 ### R2 Structure
 
 ```
-{R2_KEY_PREFIX}/recipes/{recipe-id}.md
+{R2_KEY_PREFIX}/recipes/{shortcode}.md
 ```
 
-Uses the existing R2 bucket (same as images), with a `recipes/` prefix.
+Example: `recipes/R-A3F2.md`
+
+Uses the existing R2 bucket (same as images), with a `recipes/` prefix. The filename **is** the shortcode, making files easy to browse and identify.
 
 ### Org Metadata
 
@@ -124,9 +138,9 @@ Uses the existing R2 bucket (same as images), with a `recipes/` prefix.
 
 1. User clicks "Push"
 2. Preview phase:
-   - List all local recipes
-   - List all R2 files
-   - Compare by ID:
+   - List all local recipes (with shortcodes)
+   - List all R2 files (shortcode = filename)
+   - Compare by shortcode:
      - Local only → **Add** (new file to R2)
      - Both, local newer → **Update**
      - Both, R2 newer → **Conflict**
@@ -139,10 +153,10 @@ Uses the existing R2 bucket (same as images), with a `recipes/` prefix.
 
 1. User clicks "Pull"
 2. Preview phase:
-   - List all R2 files
+   - List all R2 files (parse shortcode from filename)
    - List all local recipes
-   - Compare by ID:
-     - R2 only → **Create**
+   - Compare by shortcode:
+     - R2 only → **Create** (new recipe with matching shortcode)
      - Both, R2 newer → **Update**
      - Both, local newer → **Conflict**
      - Local only → **Remove** (delete from app)
@@ -176,14 +190,14 @@ pushToR2: () => { pushed: number, deleted: number }
 previewPull: () => RecipeSyncResult
 applyPull: () => RecipeSyncResult
 
-resolveConflict: (recipeId, resolution: "keep_local" | "keep_r2" | "skip") => void
+resolveConflict: (shortcode, resolution: "keep_local" | "keep_r2" | "skip") => void
 ```
 
 ### Schemas
 
 ```typescript
 const recipeSyncResultItem = z.object({
-  recipeId: z.string(),
+  shortcode: z.string(),  // R-XXXX format
   recipeName: z.string(),
   action: z.enum(["create", "update", "remove", "skip", "conflict"]),
   localUpdatedAt: z.string().nullable(),
@@ -244,10 +258,10 @@ Add to `/settings/integrations`:
 ### Phase 3: R2 Sync Infrastructure
 
 1. Create `server/utils/r2-recipes.ts`:
-   - `listRecipeFiles()`
-   - `getRecipeFile(id)`
-   - `putRecipeFile(recipe)`
-   - `deleteRecipeFile(id)`
+   - `listRecipeFiles()` — returns shortcodes from filenames
+   - `getRecipeFile(shortcode)`
+   - `putRecipeFile(recipe)` — uses shortcode for filename
+   - `deleteRecipeFile(shortcode)`
 
 2. Create `server/repo/recipe-sync.ts`:
    - `compareForPush(localRecipes, r2Files)`

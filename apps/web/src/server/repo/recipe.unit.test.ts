@@ -6,6 +6,7 @@ describe("recipe repository helpers", () => {
     test("converts website recipe with URL", () => {
       const recipe = {
         id: "recipe-1",
+        shortcode: "R-A3F2",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
@@ -21,6 +22,7 @@ describe("recipe repository helpers", () => {
 
       expect(result).toEqual({
         id: "recipe-1",
+        shortcode: "R-A3F2",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
@@ -37,6 +39,7 @@ describe("recipe repository helpers", () => {
     test("converts non-website recipe without URL", () => {
       const recipe = {
         id: "recipe-1",
+        shortcode: "R-X7K9",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),
@@ -52,6 +55,7 @@ describe("recipe repository helpers", () => {
 
       expect(result).toEqual({
         id: "recipe-1",
+        shortcode: "R-X7K9",
         name: "Test Recipe",
         createdAt: new Date("2023-01-01"),
         updatedAt: new Date("2023-01-02"),

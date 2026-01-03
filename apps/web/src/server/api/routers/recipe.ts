@@ -19,6 +19,7 @@ import {
   getAllTags,
   getIngredientCooccurrence,
   getRecipeByID,
+  getRecipeByShortcode,
   insertCompactRecipe,
   recipeList,
   updateRecipe,
@@ -101,11 +102,20 @@ const getAllTagsEndpoint = protectedProcedure
     return await getAllTags(ctx.db);
   });
 
+// Get recipe by shortcode (e.g., R-X7K9)
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: z.string() }))
+  .output(recipeOut.nullable())
+  .query(async ({ ctx, input }) => {
+    return await getRecipeByShortcode(ctx.db, input.shortcode);
+  });
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   scrape,
   seed,
   getByID,
+  getByShortcode,
   list,
   create,
   update,

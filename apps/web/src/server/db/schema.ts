@@ -34,6 +34,7 @@ export const recipe = pgTable(
   "Recipe",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    shortcode: text("shortcode").unique(),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
