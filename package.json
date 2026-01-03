@@ -2,7 +2,7 @@
   "name": "recipehub",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.26.0",
+  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "dev": "pnpm -r dev",
     "dev:log": "pnpm -r --reporter append-only dev",
