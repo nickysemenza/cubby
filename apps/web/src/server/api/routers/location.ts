@@ -20,6 +20,7 @@ import {
   buildLocationTypeCount,
   createLocation,
   getLocationById,
+  getLocationByShortcode,
   locationList,
   touchLastBulkInventory as touchLastBulkInventoryRepo,
   updateLocation,
@@ -90,9 +91,18 @@ const touchLastBulkInventory = protectedProcedure
     return { success: true };
   });
 
+// Get location by shortcode (e.g., L-A3F2)
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: z.string() }))
+  .output(infLocation.nullable())
+  .query(async ({ ctx, input }) => {
+    return await getLocationByShortcode(ctx.db, input.shortcode);
+  });
+
 export const locationRouter = createTRPCRouter({
   list,
   getByID,
+  getByShortcode,
   getLocationTypesCount,
   makeTree,
   create,

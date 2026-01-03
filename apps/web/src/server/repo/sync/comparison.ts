@@ -29,9 +29,11 @@ import type { LocationCSVExportRow } from "~/server/repo/location/types";
  */
 type InventoryRowLike = {
   product_name: string;
+  product_shortcode?: string | null; // P-XXXX format
   manufacturer?: string | null;
   category?: ProductCategory | null;
   location_name?: string | null;
+  location_shortcode?: string | null; // L-XXXX format
   quantity?: number | null;
   unit?: string | null;
   upc?: string | null;
@@ -52,9 +54,11 @@ type InventoryRowLike = {
 
 const buildInventorySyncFields = (row: InventoryRowLike) => ({
   productName: row.product_name,
+  productShortcode: row.product_shortcode ?? null,
   manufacturer: row.manufacturer ?? null,
   category: row.category ?? null,
   locationName: row.location_name ?? null,
+  locationShortcode: row.location_shortcode ?? null,
   quantity: row.quantity ?? null,
   unit: row.unit ?? null,
   upc: row.upc ?? null,
@@ -85,6 +89,7 @@ const buildInventorySheetData = (row: InventoryCSVRow) =>
 /** Common location row fields (snake_case → camelCase) */
 type LocationRowLike = {
   location_name: string;
+  location_shortcode?: string | null; // L-XXXX format
   parent_name?: string | null;
   location_type?: string;
   description?: string | null;
@@ -94,6 +99,7 @@ type LocationRowLike = {
 
 const buildLocationSyncFields = (row: LocationRowLike) => ({
   locationName: row.location_name,
+  locationShortcode: row.location_shortcode ?? null,
   parentName: row.parent_name ?? null,
   locationType: row.location_type ?? "other",
   description: row.description ?? null,
@@ -190,6 +196,14 @@ export function compareLocationsForSync(
       const appName = normalizeForComparison(appRow.location_name);
       const sheetName = normalizeForComparison(sheetRow.location_name);
       if (appName === sheetName) continue;
+
+      // Heuristic 0: Shortcode match (highest - definitive identifier)
+      const appShortcode = appRow.location_shortcode?.trim();
+      const sheetShortcode = sheetRow.location_shortcode?.trim();
+      if (appShortcode && sheetShortcode && appShortcode === sheetShortcode) {
+        score += 200;
+        reasons.push("shortcode");
+      }
 
       // Heuristic 1: Description match (strong signal if non-empty)
       const appDesc = (appRow.description ?? "").trim().toLowerCase();
@@ -573,6 +587,14 @@ export function compareInventoryForSync(
       const sheetName = normalizeForComparison(sheetRow.product_name);
       if (appName === sheetName) continue;
 
+      // Heuristic 0: Product shortcode match (highest - definitive identifier)
+      const appShortcode = appRow.product_shortcode?.trim();
+      const sheetShortcode = sheetRow.product_shortcode?.trim();
+      if (appShortcode && sheetShortcode && appShortcode === sheetShortcode) {
+        score += 200;
+        reasons.push("shortcode");
+      }
+
       // Heuristic 1: UPC match (highest weight - definitive identifier)
       const appUpc = appRow.upc?.trim();
       const sheetUpc = sheetRow.upc?.trim();
@@ -592,7 +614,9 @@ export function compareInventoryForSync(
       }
 
       // Track if we have a definitive identifier match
-      const hasDefinitiveIdentifier = upcMatch || modelMatch;
+      const shortcodeMatch =
+        appShortcode && sheetShortcode && appShortcode === sheetShortcode;
+      const hasDefinitiveIdentifier = shortcodeMatch || upcMatch || modelMatch;
 
       // Heuristic 3: Name containment
       const appNameLower = appRow.product_name.toLowerCase();
@@ -760,6 +784,7 @@ const locationSheetDataToCSVRow = (
   sheetData: NonNullable<LocationSyncItem["sheetData"]>,
 ): LocationCSVRow => ({
   location_name: sheetData.locationName,
+  location_shortcode: sheetData.locationShortcode ?? undefined,
   parent_name: sheetData.parentName ?? undefined,
   location_type: sheetData.locationType as LocationCSVRow["location_type"],
   description: sheetData.description ?? undefined,
@@ -774,6 +799,7 @@ const locationAppDataToCSVRow = (
   appData: NonNullable<LocationSyncItem["appData"]>,
 ): LocationCSVRow => ({
   location_name: appData.locationName,
+  location_shortcode: appData.locationShortcode ?? undefined,
   parent_name: appData.parentName ?? undefined,
   location_type: appData.locationType as LocationCSVRow["location_type"],
   description: appData.description ?? undefined,
@@ -789,9 +815,11 @@ const inventorySheetDataToCSVRow = (
   sheetData: NonNullable<InventorySyncItem["sheetData"]>,
 ): InventoryCSVRow => ({
   product_name: sheetData.productName ?? "",
+  product_shortcode: sheetData.productShortcode ?? undefined,
   manufacturer: sheetData.manufacturer ?? undefined,
   category: sheetData.category ?? undefined,
   location_name: sheetData.locationName ?? undefined,
+  location_shortcode: sheetData.locationShortcode ?? undefined,
   quantity: sheetData.quantity ?? 1,
   unit: sheetData.unit ?? "each",
   upc: sheetData.upc ?? undefined,
@@ -813,9 +841,11 @@ const inventoryAppDataToCSVRow = (
   appData: NonNullable<InventorySyncItem["appData"]>,
 ): InventoryCSVRow => ({
   product_name: appData.productName,
+  product_shortcode: appData.productShortcode ?? undefined,
   manufacturer: appData.manufacturer ?? undefined,
   category: appData.category ?? undefined,
   location_name: appData.locationName ?? undefined,
+  location_shortcode: appData.locationShortcode ?? undefined,
   quantity: appData.quantity ?? 1,
   unit: appData.unit ?? "each",
   upc: appData.upc ?? undefined,

@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   unsafeInventoryId,
   unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import {
   calculateInventoryValuation,
@@ -31,6 +33,7 @@ function makeInventoryItem(params: {
     valuation: params.valuation,
     location: {
       id: unsafeLocationId("loc-1"),
+      shortcode: unsafeLocationShortcode("L-TEST"),
       name: "Test Location",
       type: "room",
       images: [],
@@ -40,6 +43,7 @@ function makeInventoryItem(params: {
     },
     product: {
       id: unsafeProductId(params.product.id),
+      shortcode: unsafeProductShortcode("P-TEST"),
       name: params.product.name,
       manufacturer: params.product.manufacturer ?? "Generic",
       category: null,

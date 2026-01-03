@@ -2,7 +2,7 @@ import { ndb, upc } from "@recipehub/usda-schemas";
 import { z } from "zod";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { dbTimestampsOut } from "./common";
-import { ingredientId, productId } from "./identifiers";
+import { ingredientId, productId, productShortcode } from "./identifiers";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 
@@ -79,6 +79,7 @@ export const productUpdateInput = z.object({
 export const productTopLevelOut = z
   .object({
     id: productId,
+    shortcode: productShortcode,
     images: z.array(imageOut).default([]),
     price: z.number().nullable(), // Denormalized price from unit mappings
   })

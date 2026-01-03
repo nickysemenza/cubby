@@ -17,6 +17,7 @@ import {
   type IngredientId,
   unsafeIngredientId,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import type { ingredientBase } from "~/schemas/ingredient";
 import {
@@ -127,6 +128,7 @@ const dbIngredientToAPI = async (
     return {
       ...prodRest,
       id: unsafeProductId(prod.id),
+      shortcode: unsafeProductShortcode(prod.shortcode),
       images: extractImagesFromJoinTable(prod.images),
       unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
     };

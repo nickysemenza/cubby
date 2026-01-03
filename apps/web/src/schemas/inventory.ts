@@ -70,6 +70,10 @@ export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 
 // CSV Import/Export schemas
 export const inventoryCSVRow = z.object({
+  // Shortcodes (used for matching existing entities - takes priority over name)
+  product_shortcode: z.string().nullable().optional(), // P-XXXX format
+  location_shortcode: z.string().nullable().optional(), // L-XXXX format
+  // Core fields
   product_name: z.string().min(1),
   manufacturer: z.string().optional(), // defaults to "(unspecified)"
   category: productCategory.nullable().optional(), // product category (food, tools, etc.)

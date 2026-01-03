@@ -57,6 +57,13 @@
       "when": 1767312000001,
       "tag": "0007_drop_organizationId",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1767398400000,
+      "tag": "0008_add_shortcodes",
+      "breakpoints": true
     }
   ]
 }

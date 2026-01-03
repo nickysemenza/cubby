@@ -1,5 +1,6 @@
 import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
+import { generateLocationShortcode } from "~/lib/shortcode";
 import { parseWithContext } from "~/lib/zod-utils";
 import { extractDbTimestampsFromDBRec } from "~/schemas/common";
 import type { ActorContext } from "~/schemas/context";
@@ -7,7 +8,9 @@ import {
   type LocationId,
   unsafeInventoryId,
   unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import {
   type InfLocation,
@@ -49,6 +52,27 @@ import {
   updateAndReturn,
 } from "~/server/repo/database-helpers";
 
+/**
+ * Generate a unique location shortcode with collision retry.
+ * Retries up to 10 times if collision detected.
+ */
+const generateUniqueLocationShortcode = async (
+  db: Database,
+): Promise<string> => {
+  const MAX_RETRIES = 10;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const code = generateLocationShortcode();
+    const existing = await getDb(db).query.location.findFirst({
+      where: eq(location.shortcode, code),
+      columns: { id: true },
+    });
+    if (!existing) {
+      return code;
+    }
+  }
+  throw new Error("Failed to generate unique shortcode after max retries");
+};
+
 // Create a new location
 export const createLocation = async (
   db: Database,
@@ -62,9 +86,13 @@ export const createLocation = async (
   const parentIdValue =
     data.parentId && data.parentId.trim() !== "" ? data.parentId : undefined;
 
+  // Generate unique shortcode with collision retry
+  const shortcode = await generateUniqueLocationShortcode(db);
+
   const newLocation = await insertAndReturnDb(db, location, {
     name: data.name,
     type: data.type,
+    shortcode,
     ...(parentIdValue !== undefined && { parentId: parentIdValue }),
   });
 
@@ -221,6 +249,7 @@ const dbLocationToAPIWithChildren = (
         updatedAt: rest.updatedAt,
         product: {
           id: unsafeProductId(Product.id),
+          shortcode: unsafeProductShortcode(Product.shortcode),
           name: Product.name,
           manufacturer: Product.manufacturer,
           category: Product.category,
@@ -247,6 +276,7 @@ const dbLocationToAPI = (
 ): LocationOut => {
   return {
     id: unsafeLocationId(locationData.id),
+    shortcode: unsafeLocationShortcode(locationData.shortcode),
     lastBulkInventory: locationData.lastBulkInventory,
     name: locationData.name,
     type: parseWithContext(locationType, locationData.type, {
@@ -292,6 +322,7 @@ const buildLocationWithChildren = (
   return {
     name: x.name,
     id: unsafeLocationId(x.id),
+    shortcode: unsafeLocationShortcode(x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     type: parseWithContext(locationType, x.type, {
       entityType: "Location",
@@ -544,6 +575,34 @@ export const findLocationByName = async (
 };
 
 /**
+ * Find a location by its shortcode
+ * Returns null if not found
+ */
+export const findLocationByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<LocationId | null> => {
+  const loc = await getDb(db).query.location.findFirst({
+    where: eq(location.shortcode, shortcode.toUpperCase()),
+  });
+  return loc ? unsafeLocationId(loc.id) : null;
+};
+
+/**
+ * Get full location details by shortcode
+ */
+export const getLocationByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<InfLocation | null> => {
+  const locationId = await findLocationByShortcode(db, shortcode);
+  if (!locationId) {
+    return null;
+  }
+  return getLocationById(db, locationId);
+};
+
+/**
  * Find or create a location by name with optional parent
  * If location exists, returns its ID (does not update type/parent)
  * If location doesn't exist, creates it with the given type and parent
@@ -565,11 +624,15 @@ export const findOrCreateLocationByName = async (
     return { locationId: existingId, created: false };
   }
 
+  // Generate unique shortcode
+  const shortcode = await generateUniqueLocationShortcode(db);
+
   // Create new location (with optional timestamps for sheet import)
   const created = await insertAndReturnDb(db, location, {
     name,
     type,
     parentId,
+    shortcode,
     ...(options?.createdAt && { createdAt: options.createdAt }),
     ...(options?.updatedAt && { updatedAt: options.updatedAt }),
   });

@@ -1,7 +1,11 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import type { Amount } from "~/codec/codec";
 import { ensureWasm } from "~/lib/wasm";
-import { unsafeIngredientId, unsafeProductId } from "~/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeProductId,
+  unsafeProductShortcode,
+} from "~/schemas/identifiers";
 import type { SectionIngredientOut } from "~/schemas/recipe";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -541,6 +545,7 @@ describe("calculateTotals", () => {
           {
             id: unsafeProductId("prod1"),
             name: "chicken",
+            shortcode: unsafeProductShortcode("P-TEST"),
             food: {
               legacyFoodInfo: null,
               nutritionInfo: {
@@ -617,6 +622,7 @@ describe("calculateTotals", () => {
           {
             id: unsafeProductId("prod2"),
             name: "rice",
+            shortcode: unsafeProductShortcode("P-TEST"),
             food: {
               legacyFoodInfo: null,
               nutritionInfo: {
@@ -789,6 +795,7 @@ describe("calculateTotals", () => {
           {
             id: unsafeProductId("prod1"),
             name: "chicken",
+            shortcode: unsafeProductShortcode("P-TEST"),
             food: {
               legacyFoodInfo: null,
               nutritionInfo: {
@@ -910,6 +917,7 @@ describe("calculateTotals", () => {
           {
             id: unsafeProductId("prod1"),
             name: "ingredient with weight only",
+            shortcode: unsafeProductShortcode("P-TEST"),
             food: null, // No nutrition data
             upc: null,
             ndb_number: null,

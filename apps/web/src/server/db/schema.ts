@@ -161,6 +161,7 @@ export const product = pgTable(
   "Product",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    shortcode: text("shortcode").unique().notNull(), // Human-readable ID (P-XXXX format)
     name: text("name").notNull(),
     manufacturer: text("manufacturer").notNull(),
     upc: text("upc"),
@@ -235,6 +236,7 @@ export const location = pgTable(
   "Location",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    shortcode: text("shortcode").unique().notNull(), // Human-readable ID (L-XXXX format)
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })

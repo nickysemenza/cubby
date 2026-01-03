@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
+import { Download } from "lucide-react";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { downloadLabel } from "~/lib/label-generator";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
@@ -18,6 +21,19 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
 }) => {
   const fields: BasicInfoField[] = [
     { label: "Name", value: product.name },
+    // Shortcode (if assigned)
+    ...(product.shortcode
+      ? [
+          {
+            label: "Shortcode",
+            value: (
+              <Badge variant="secondary" className="font-mono">
+                {product.shortcode}
+              </Badge>
+            ),
+          },
+        ]
+      : []),
     { label: "Manufacturer", value: product.manufacturer },
     { label: "Model", value: product.model },
     {
@@ -87,7 +103,25 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   return (
     <BasicInfo
       fields={fields}
-      actions={<Button onClick={onEdit}>Edit</Button>}
+      actions={
+        <div className="flex gap-2">
+          <Button onClick={onEdit}>Edit</Button>
+          {product.shortcode && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadLabel({
+                  shortcode: product.shortcode!,
+                  name: product.name,
+                })
+              }
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Label
+            </Button>
+          )}
+        </div>
+      }
     />
   );
 };

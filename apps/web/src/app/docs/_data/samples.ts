@@ -1,6 +1,10 @@
 import { z } from "zod";
 import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
-import { unsafeLocationId } from "~/schemas/identifiers";
+import { generateLocationShortcode } from "~/lib/shortcode";
+import {
+  unsafeLocationId,
+  unsafeLocationShortcode,
+} from "~/schemas/identifiers";
 import type { infLocation, LocationType } from "~/schemas/location";
 import type { recipeOut } from "~/schemas/recipe";
 import type { unitMappingWithMetadata } from "~/schemas/unitmapping";
@@ -31,6 +35,7 @@ const makeLocation = (
   children?: z.infer<typeof infLocation>[],
 ): z.infer<typeof infLocation> => ({
   id: unsafeLocationId(uuid()),
+  shortcode: unsafeLocationShortcode(generateLocationShortcode()),
   name,
   type,
   lastBulkInventory: null,

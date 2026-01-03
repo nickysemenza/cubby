@@ -1,4 +1,4 @@
-import type { LocationId } from "~/schemas/identifiers";
+import type { LocationId, LocationShortcode } from "~/schemas/identifiers";
 import type { LocationType } from "~/schemas/location";
 
 /**
@@ -6,6 +6,7 @@ import type { LocationType } from "~/schemas/location";
  * Contains all fields needed for round-trip import/export
  */
 export interface LocationCSVExportRow {
+  location_shortcode: LocationShortcode | null; // Human-readable shortcode (L-XXXX)
   location_name: string; // Unique location name
   parent_name: string | null; // Parent location name (null for root)
   location_type: LocationType;

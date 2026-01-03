@@ -18,12 +18,14 @@ const makeAppRow = (
 ): InventoryCSVExportRow => {
   const { product_name, manufacturer, ...rest } = overrides;
   return {
+    product_shortcode: null,
     product_name,
     manufacturer,
     category: null,
     upc: "",
     model: null,
     ndb_number: null,
+    location_shortcode: null,
     location_name: "",
     location_id: null,
     inventory_entry_id: null,

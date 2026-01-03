@@ -1,6 +1,12 @@
 import type { z } from "zod";
 import type { Amount } from "~/codec/codec";
-import type { InventoryId, LocationId, ProductId } from "~/schemas/identifiers";
+import type {
+  InventoryId,
+  LocationId,
+  LocationShortcode,
+  ProductId,
+  ProductShortcode,
+} from "~/schemas/identifiers";
 import type { ProductCategory } from "~/schemas/product";
 import type {
   image,
@@ -37,12 +43,14 @@ export interface CreateInventoryEntryData {
 }
 
 export interface InventoryCSVExportRow {
+  product_shortcode: ProductShortcode | null; // Human-readable shortcode (P-XXXX)
   product_name: string;
   manufacturer: string;
   category: ProductCategory | null;
   upc: string;
   model: string | null;
   ndb_number: number | null;
+  location_shortcode: LocationShortcode | null; // Human-readable shortcode (L-XXXX)
   location_name: string; // empty string for product-only rows
   location_id: LocationId | null; // null for product-only rows
   inventory_entry_id: InventoryId | null; // null for product-only rows (used for deletion)
@@ -66,6 +74,7 @@ export interface InventoryCSVExportRow {
  * Product with related data needed for CSV export field building
  */
 export interface ProductExportFields {
+  shortcode: string | null; // Human-readable shortcode (P-XXXX)
   name: string;
   manufacturer: string;
   category: ProductCategory | null;

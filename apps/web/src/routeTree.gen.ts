@@ -14,6 +14,7 @@ import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ActivityRouteImport } from './routes/activity'
+import { Route as ShortcodeRouteImport } from './routes/$shortcode'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UsdaIndexRouteImport } from './routes/usda.index'
 import { Route as SearchIndexRouteImport } from './routes/search.index'
@@ -74,6 +75,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const ActivityRoute = ActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShortcodeRoute = ShortcodeRouteImport.update({
+  id: '/$shortcode',
+  path: '/$shortcode',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -260,6 +266,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$shortcode': typeof ShortcodeRoute
   '/activity': typeof ActivityRoute
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
@@ -303,6 +310,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$shortcode': typeof ShortcodeRoute
   '/activity': typeof ActivityRoute
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
@@ -347,6 +355,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$shortcode': typeof ShortcodeRoute
   '/activity': typeof ActivityRoute
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
@@ -392,6 +401,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$shortcode'
     | '/activity'
     | '/dashboard'
     | '/docs'
@@ -435,6 +445,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$shortcode'
     | '/activity'
     | '/dashboard'
     | '/docs'
@@ -478,6 +489,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/$shortcode'
     | '/activity'
     | '/dashboard'
     | '/docs'
@@ -522,6 +534,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ShortcodeRoute: typeof ShortcodeRoute
   ActivityRoute: typeof ActivityRoute
   DashboardRoute: typeof DashboardRoute
   DocsRoute: typeof DocsRoute
@@ -598,6 +611,13 @@ declare module '@tanstack/react-router' {
       path: '/activity'
       fullPath: '/activity'
       preLoaderRoute: typeof ActivityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$shortcode': {
+      id: '/$shortcode'
+      path: '/$shortcode'
+      fullPath: '/$shortcode'
+      preLoaderRoute: typeof ShortcodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -868,6 +888,7 @@ const SettingsIntegrationsRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ShortcodeRoute: ShortcodeRoute,
   ActivityRoute: ActivityRoute,
   DashboardRoute: DashboardRoute,
   DocsRoute: DocsRoute,

@@ -1,7 +1,12 @@
 import { z } from "zod";
 import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { dbTimestampsOut } from "./common";
-import { inventoryId, locationId, productId } from "./identifiers";
+import {
+  inventoryId,
+  locationId,
+  locationShortcode,
+  productId,
+} from "./identifiers";
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
 export const locationType = z
@@ -31,6 +36,7 @@ const locationBase = z.object({
 export const locationOut = z
   .object({
     id: locationId,
+    shortcode: locationShortcode,
     lastBulkInventory: z.date().nullable(),
     images: z.array(imageOut),
   })
@@ -107,6 +113,7 @@ import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
  */
 export const locationCSVRow = z.object({
   location_name: z.string().min(1), // Required: unique location name
+  location_shortcode: z.string().nullable().optional(), // L-XXXX format (for matching)
   parent_name: z.string().nullable().optional(), // Parent location name (null for root)
   location_type: locationType.optional(), // Optional: defaults to "room" for root, "shelf" for children
   description: z.string().nullable().optional(),

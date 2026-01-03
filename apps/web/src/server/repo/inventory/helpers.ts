@@ -4,7 +4,9 @@ import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   unsafeInventoryId,
   unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import { locationType } from "~/schemas/location";
 import {
@@ -33,6 +35,7 @@ export const dbInventoryEntryToAPI: (
     location: {
       ...restOfLocation,
       id: unsafeLocationId(restOfLocation.id),
+      shortcode: unsafeLocationShortcode(restOfLocation.shortcode),
       type: parseWithContext(locationType, type, {
         entityType: "Location",
         identifier: { id: restOfLocation.id, name: restOfLocation.name },
@@ -45,6 +48,7 @@ export const dbInventoryEntryToAPI: (
         return rest;
       })(),
       id: unsafeProductId(Product.id),
+      shortcode: unsafeProductShortcode(Product.shortcode),
       unitMappings: addProductSourceMetadata(Product.id, Product.unitMappings),
       images: extractImagesFromJoinTable(Product.images),
     },

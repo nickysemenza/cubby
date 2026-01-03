@@ -23,6 +23,7 @@ import {
 } from "~/server/repo/inventory/csv-import/image-handler";
 import {
   findLocationByName,
+  findLocationByShortcode,
   findOrCreateLocationByName,
   updateLocationFromImport,
 } from "~/server/repo/location";
@@ -50,8 +51,13 @@ async function processLocationRow(
   const { dryRun } = options;
 
   try {
-    // Check if location already exists
-    const existingLocationId = await findLocationByName(db, row.location_name);
+    // Check if location already exists - try shortcode first (takes priority), then name
+    let existingLocationId = row.location_shortcode
+      ? await findLocationByShortcode(db, row.location_shortcode)
+      : null;
+    if (!existingLocationId) {
+      existingLocationId = await findLocationByName(db, row.location_name);
+    }
 
     // Resolve parent if specified
     let parentId: LocationId | null = null;

@@ -18,6 +18,7 @@ import type { Database } from "~/server/db";
 import { parseCSVDate } from "~/server/repo/csv/date-utils";
 import {
   findLocationByName,
+  findLocationByShortcode,
   findOrCreateLocationByName,
 } from "~/server/repo/location";
 import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
@@ -214,6 +215,7 @@ async function previewProduct(
     row.ndb_number,
     row.aliases,
     row.category,
+    row.product_shortcode,
   );
 
   const productData = preview.existingProduct;
@@ -304,6 +306,7 @@ async function executeProductOperations(
     row.category,
     actor,
     productTimestamps,
+    row.product_shortcode,
   );
 
   if (row.price != null) {
@@ -344,13 +347,31 @@ interface LocationResolutionResult {
 }
 
 /**
- * Find the target location for an inventory row by name
+ * Find the target location for an inventory row by shortcode or name
+ * Shortcode takes priority if provided, then falls back to name.
  * Locations must exist (created via Locations sheet)
  */
 async function resolveTargetLocation(
   db: Database,
   locationName: string,
+  locationShortcode: string | null | undefined,
 ): Promise<LocationResolutionResult> {
+  // Try shortcode first if provided
+  if (locationShortcode) {
+    const idFromShortcode = await findLocationByShortcode(
+      db,
+      locationShortcode,
+    );
+    if (idFromShortcode) {
+      return {
+        targetLocationId: idFromShortcode,
+        locationNotFound: false,
+      };
+    }
+    // Shortcode provided but not found - fall through to name lookup
+  }
+
+  // Fall back to name lookup
   const targetLocationId = await findLocationByName(db, locationName);
   return {
     targetLocationId,
@@ -553,6 +574,7 @@ export const processRow = async (
   const { targetLocationId, locationNotFound } = await resolveTargetLocation(
     db,
     locationName,
+    row.location_shortcode,
   );
 
   const newAmount = { value: row.quantity, unit: row.unit };

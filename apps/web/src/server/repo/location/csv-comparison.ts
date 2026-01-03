@@ -28,6 +28,12 @@ const LOCATION_FIELD_SPECS: readonly ComparisonFieldSpec<
   LocationCSVExportRow,
   LocationCSVRow
 >[] = [
+  // Shortcode - sync from app to sheet (sheet won't have this initially)
+  {
+    field: "location_shortcode",
+    appKey: "location_shortcode",
+    sheetKey: "location_shortcode",
+  },
   {
     field: "parent_name",
     appKey: "parent_name",

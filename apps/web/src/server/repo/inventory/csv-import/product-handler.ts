@@ -20,6 +20,7 @@ import { getDb } from "~/server/repo/database-helpers";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import {
   findProductByNameFuzzyManufacturer,
+  getProductByShortcode,
   quickCreateProduct,
 } from "~/server/repo/product";
 import {
@@ -76,7 +77,7 @@ export interface ProcessProductResult {
  * Process a product for CSV import (find, create, or update)
  *
  * Handles:
- * - Finding existing products by name/manufacturer
+ * - Finding existing products by shortcode (priority) or name/manufacturer
  * - Creating new products with all CSV fields
  * - Updating existing products with new data from CSV
  * - Creating/linking ingredients when specified
@@ -95,6 +96,7 @@ export const processProductForImport = async (
   category: ProductCategory | null | undefined,
   actor: ActorContext,
   timestamps?: ProductTimestamps,
+  productShortcode?: string | null,
 ): Promise<ProcessProductResult> => {
   // Parse aliases from semicolon-separated string
   const aliases = parseAliasesString(aliasesStr);
@@ -114,13 +116,20 @@ export const processProductForImport = async (
     ingredientId = unsafeIngredientId(ingredientData.id);
   }
 
-  // Try to find existing product by name with fuzzy manufacturer matching
-  // This allows sheet rows with "(unspecified)" to match existing products
-  const existingProductData = await findProductByNameFuzzyManufacturer(
-    db,
-    productName,
-    manufacturer,
-  );
+  // Try to find existing product by shortcode first (takes priority)
+  let existingProductData: ProductTopLevelOut | null = null;
+  if (productShortcode) {
+    existingProductData = await getProductByShortcode(db, productShortcode);
+  }
+
+  // Fall back to name/manufacturer fuzzy matching
+  if (!existingProductData) {
+    existingProductData = await findProductByNameFuzzyManufacturer(
+      db,
+      productName,
+      manufacturer,
+    );
+  }
 
   let productData: ProductTopLevelOut;
   let productWasCreated = false;
@@ -244,17 +253,26 @@ export const previewProductForImport = async (
   ndbNumber: number | undefined,
   aliasesStr: string | null | undefined,
   category: ProductCategory | null | undefined,
+  productShortcode?: string | null,
 ): Promise<ProductPreviewResult> => {
   const aliases = parseAliasesString(aliasesStr);
   const effectiveIngredientName =
     ingredientName ?? (ingredientFlag ? productName : null);
 
-  // Use fuzzy matching to find existing product (consistent with actual import behavior)
-  const existingProduct = await findProductByNameFuzzyManufacturer(
-    db,
-    productName,
-    manufacturer,
-  );
+  // Try shortcode first (takes priority)
+  let existingProduct: ProductTopLevelOut | null = null;
+  if (productShortcode) {
+    existingProduct = await getProductByShortcode(db, productShortcode);
+  }
+
+  // Fall back to fuzzy matching (consistent with actual import behavior)
+  if (!existingProduct) {
+    existingProduct = await findProductByNameFuzzyManufacturer(
+      db,
+      productName,
+      manufacturer,
+    );
+  }
 
   if (!existingProduct) {
     // Product will be created - use shared logic for new product preview

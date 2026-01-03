@@ -6,6 +6,8 @@ import {
   type LocationId,
   locationId as locationIdSchema,
   productId as productIdSchema,
+  unsafeLocationShortcode,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import {
   extractPriceFromMappings,
@@ -28,6 +30,7 @@ function formatTimestamp(date: Date | null): string | null {
  * Build common product export fields from a product with unit mappings and ingredient
  */
 function buildProductExportFields(p: ProductExportFields): {
+  product_shortcode: ReturnType<typeof unsafeProductShortcode> | null;
   product_name: string;
   manufacturer: string;
   category: ProductCategory | null;
@@ -46,6 +49,7 @@ function buildProductExportFields(p: ProductExportFields): {
   // Extract price from unit mappings (source of truth, as denormalized price may be stale)
   const priceAmount = extractPriceFromMappings(p.unitMappings);
   return {
+    product_shortcode: p.shortcode ? unsafeProductShortcode(p.shortcode) : null,
     product_name: p.name,
     manufacturer: p.manufacturer,
     category: p.category,
@@ -107,6 +111,9 @@ export const exportInventoryToCSV = async (
       });
       return {
         ...productFields,
+        location_shortcode: entry.location.shortcode
+          ? unsafeLocationShortcode(entry.location.shortcode)
+          : null,
         location_name: entry.location.name,
         location_id: locationIdSchema.parse(entry.locationId),
         inventory_entry_id: inventoryIdSchema.parse(entry.id),
@@ -156,6 +163,7 @@ export const exportInventoryToCSV = async (
       });
       return {
         ...productFields,
+        location_shortcode: null, // No location for product-only rows
         location_name: "", // Empty for product-only rows
         location_id: null, // No location for product-only rows
         inventory_entry_id: null, // No inventory entry for product-only rows

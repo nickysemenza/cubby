@@ -1,7 +1,10 @@
 import { Link } from "@tanstack/react-router";
+import { Download } from "lucide-react";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { downloadLabel } from "~/lib/label-generator";
 import type { InfLocation } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
 import { LocationTypeBadge } from "./LocationTypeBadge";
@@ -17,6 +20,19 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
   onEdit,
 }) => {
   const fields: BasicInfoField[] = [
+    // Shortcode (if assigned)
+    ...(location.shortcode
+      ? [
+          {
+            label: "Shortcode",
+            value: (
+              <Badge variant="secondary" className="font-mono">
+                {location.shortcode}
+              </Badge>
+            ),
+          },
+        ]
+      : []),
     { label: "Type", value: <LocationTypeBadge type={location.type} /> },
     {
       label: "Parent Location",
@@ -41,6 +57,20 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
       actions={
         <div className="flex gap-2">
           <Button onClick={onEdit}>Edit</Button>
+          {location.shortcode && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                downloadLabel({
+                  shortcode: location.shortcode!,
+                  name: location.name,
+                })
+              }
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Label
+            </Button>
+          )}
           <Button
             variant="outline"
             render={

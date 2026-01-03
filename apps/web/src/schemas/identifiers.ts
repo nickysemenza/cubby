@@ -12,6 +12,21 @@ export const productId = z.uuid().brand("ProductId");
 export const locationId = z.uuid().brand("LocationId");
 export const inventoryId = z.uuid().brand("InventoryId");
 
+// Shortcode branded types with format validation (L-XXXX, P-XXXX format)
+// Character set excludes ambiguous characters: 0/O, 1/I/L
+const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const shortcodePattern = `[${SHORTCODE_CHARS}]{4}`;
+
+export const locationShortcode = z
+  .string()
+  .regex(new RegExp(`^L-${shortcodePattern}$`), "Invalid location shortcode")
+  .brand("LocationShortcode");
+
+export const productShortcode = z
+  .string()
+  .regex(new RegExp(`^P-${shortcodePattern}$`), "Invalid product shortcode")
+  .brand("ProductShortcode");
+
 // Type exports
 export type UserId = z.infer<typeof _userId>;
 export type RecipeId = z.infer<typeof recipeId>;
@@ -19,6 +34,8 @@ export type IngredientId = z.infer<typeof ingredientId>;
 export type ProductId = z.infer<typeof productId>;
 export type LocationId = z.infer<typeof locationId>;
 export type InventoryId = z.infer<typeof inventoryId>;
+export type LocationShortcode = z.infer<typeof locationShortcode>;
+export type ProductShortcode = z.infer<typeof productShortcode>;
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid)
 // These are useful in tests and when working with external data that you know is valid
@@ -30,3 +47,7 @@ export const unsafeIngredientId = (id: string) => unsafeId<IngredientId>(id);
 export const unsafeProductId = (id: string) => unsafeId<ProductId>(id);
 export const unsafeLocationId = (id: string) => unsafeId<LocationId>(id);
 export const unsafeInventoryId = (id: string) => unsafeId<InventoryId>(id);
+export const unsafeLocationShortcode = (code: string) =>
+  unsafeId<LocationShortcode>(code);
+export const unsafeProductShortcode = (code: string) =>
+  unsafeId<ProductShortcode>(code);

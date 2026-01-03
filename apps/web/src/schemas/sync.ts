@@ -60,6 +60,7 @@ const locationSyncItem = baseSyncItem.extend({
     .object({
       locationId: locationId,
       locationName: z.string(),
+      locationShortcode: z.string().nullable(),
       parentName: z.string().nullable(),
       locationType: z.string(),
       description: z.string().nullable(),
@@ -70,6 +71,7 @@ const locationSyncItem = baseSyncItem.extend({
   sheetData: z
     .object({
       locationName: z.string(),
+      locationShortcode: z.string().nullable().optional(),
       parentName: z.string().nullable().optional(),
       locationType: z.string().optional(),
       description: z.string().nullable().optional(),
@@ -90,9 +92,11 @@ export type LocationSyncItem = z.infer<typeof locationSyncItem>;
  */
 const inventorySyncFields = z.object({
   productName: z.string(),
+  productShortcode: z.string().nullable(),
   manufacturer: z.string().nullable(),
   category: productCategory.nullable(),
   locationName: z.string().nullable(),
+  locationShortcode: z.string().nullable(),
   quantity: z.number().nullable(),
   unit: z.string().nullable(),
   upc: z.string().nullable(),

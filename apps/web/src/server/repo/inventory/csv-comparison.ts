@@ -25,6 +25,17 @@ const INVENTORY_FIELD_SPECS: readonly ComparisonFieldSpec<
   InventoryCSVExportRow,
   InventoryCSVRow
 >[] = [
+  // Shortcodes - sync from app to sheet (sheet won't have these initially)
+  {
+    field: "product_shortcode",
+    appKey: "product_shortcode",
+    sheetKey: "product_shortcode",
+  },
+  {
+    field: "location_shortcode",
+    appKey: "location_shortcode",
+    sheetKey: "location_shortcode",
+  },
   {
     field: "manufacturer",
     appKey: "manufacturer",

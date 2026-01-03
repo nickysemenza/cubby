@@ -5,7 +5,10 @@
 import dayjs from "dayjs";
 import { isNull } from "drizzle-orm";
 import { joinImageUrls } from "~/lib/image-utils";
-import { locationId as locationIdSchema } from "~/schemas/identifiers";
+import {
+  locationId as locationIdSchema,
+  unsafeLocationShortcode,
+} from "~/schemas/identifiers";
 import type { LocationType } from "~/schemas/location";
 import type { Database } from "~/server/db";
 import { location } from "~/server/db/schema";
@@ -51,6 +54,9 @@ export const exportLocationsToCSV = async (
   const locations = await getLocationsWithParent(db);
 
   return locations.map((loc) => ({
+    location_shortcode: loc.shortcode
+      ? unsafeLocationShortcode(loc.shortcode)
+      : null,
     location_name: loc.name,
     parent_name: loc.parent?.name ?? null,
     location_type: loc.type as LocationType,

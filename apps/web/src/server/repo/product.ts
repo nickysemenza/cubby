@@ -4,13 +4,16 @@ import type { z } from "zod";
 import { getSortableFields } from "~/entities/entities";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { generateProductShortcode } from "~/lib/shortcode";
 import { parseWithContext } from "~/lib/zod-utils";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
 import {
   type ProductId,
   unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import { locationType } from "~/schemas/location";
 import {
@@ -55,6 +58,29 @@ import {
 } from "~/server/repo/database-helpers";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { createOrUpdatePriceMapping } from "./inventory";
+
+/**
+ * Generate a unique product shortcode with collision retry.
+ * Retries up to 10 times if collision detected.
+ */
+const generateUniqueProductShortcode = async (
+  db: Database,
+): Promise<string> => {
+  const MAX_RETRIES = 10;
+  for (let i = 0; i < MAX_RETRIES; i++) {
+    const code = generateProductShortcode();
+    const existing = await getDb(db).query.product.findFirst({
+      where: eq(product.shortcode, code),
+      columns: { id: true },
+    });
+    if (!existing) {
+      return code;
+    }
+  }
+  throw new Error(
+    "Failed to generate unique product shortcode after max retries",
+  );
+};
 
 // Type for deeply nested product query
 type ProductDeepDB = typeof product.$inferSelect & {
@@ -122,6 +148,7 @@ export const findProductsByFoodIdentifier = async (
 
   return res.map((p) => ({
     ...p,
+    shortcode: unsafeProductShortcode(p.shortcode),
     images: extractImagesFromJoinTable(p.images),
   }));
 };
@@ -129,11 +156,18 @@ export const findProductsByFoodIdentifier = async (
 const dbProductToAPI = (
   productData: ProductDeepDB,
 ): z.infer<typeof productWithIngredientAndInventoryAndMappingsOut> => {
-  const { Ingredient, unitMappings, InventoryEntry, images, ...restOfProduct } =
-    productData;
+  const {
+    Ingredient,
+    unitMappings,
+    InventoryEntry,
+    images,
+    shortcode,
+    ...restOfProduct
+  } = productData;
 
   const result = {
     ...restOfProduct,
+    shortcode: shortcode ? unsafeProductShortcode(shortcode) : null,
     ingredient: Ingredient,
     unitMappings: addProductSourceMetadata(productData.id, unitMappings),
     images: extractImagesFromJoinTable(images),
@@ -150,6 +184,9 @@ const dbProductToAPI = (
         location: {
           ...restOfLocation,
           id: unsafeLocationId(restOfLocation.id),
+          shortcode: restOfLocation.shortcode
+            ? unsafeLocationShortcode(restOfLocation.shortcode)
+            : null,
           type: locationType.parse(type),
           images: extractImagesFromJoinTable(locationImages),
         },
@@ -178,6 +215,34 @@ export const getProductByID = async (db: Database, id: ProductId) => {
   }
 
   return dbProductToAPI(res);
+};
+
+/**
+ * Find a product by its shortcode
+ * Returns null if not found
+ */
+export const findProductByShortcode = async (
+  db: Database,
+  shortcode: string,
+): Promise<ProductId | null> => {
+  const prod = await getDb(db).query.product.findFirst({
+    where: eq(product.shortcode, shortcode.toUpperCase()),
+  });
+  return prod ? unsafeProductId(prod.id) : null;
+};
+
+/**
+ * Get full product details by shortcode
+ */
+export const getProductByShortcode = async (
+  db: Database,
+  shortcode: string,
+) => {
+  const productId = await findProductByShortcode(db, shortcode);
+  if (!productId) {
+    return null;
+  }
+  return getProductByID(db, productId);
 };
 
 export const productList = async (
@@ -260,12 +325,16 @@ export const createProduct = async (
     ? "food"
     : (data.category ?? null);
 
+  // Generate unique shortcode
+  const shortcode = await generateUniqueProductShortcode(db);
+
   // Use a transaction to ensure atomicity
   return await withTransaction(db, async (tx) => {
     // Create the product first
     const newProduct = await insertAndReturn(tx, product, {
       ...productData,
       category,
+      shortcode,
       ingredientId: ingredientId ?? null,
     });
 
@@ -696,6 +765,9 @@ export const quickCreateProduct = async (
   // Auto-correct category to "food" if product has food indicators
   const category = hasFoodIndicators(data) ? "food" : (data.category ?? null);
 
+  // Generate unique shortcode
+  const shortcode = await generateUniqueProductShortcode(db);
+
   const newProduct = await insertAndReturnDb(db, product, {
     name: data.name,
     manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
@@ -705,6 +777,7 @@ export const quickCreateProduct = async (
     expectedQuantity: data.expectedQuantity ?? null,
     ingredientId: data.ingredientId ?? null,
     category,
+    shortcode,
     // Preserve timestamps if provided (for sync restore)
     ...(data.createdAt && { createdAt: data.createdAt }),
     ...(data.updatedAt && { updatedAt: data.updatedAt }),

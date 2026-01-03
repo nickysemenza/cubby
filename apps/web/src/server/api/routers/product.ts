@@ -29,6 +29,7 @@ import {
   findProductsWithStalePrices,
   findProductsWithUPCNoImages,
   getCategoryDistribution,
+  getProductByShortcode,
   quickCreateProduct,
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
@@ -400,8 +401,17 @@ const categoryDistribution = protectedProcedure
     return await getCategoryDistribution(ctx.db);
   });
 
+// Get product by shortcode (e.g., P-X7K9)
+const getByShortcode = protectedProcedure
+  .input(z.object({ shortcode: z.string() }))
+  .output(productTopLevelOut.nullable())
+  .query(async ({ ctx, input }) => {
+    return await getProductByShortcode(ctx.db, input.shortcode);
+  });
+
 export const productRouter = createTRPCRouter({
   getByID,
+  getByShortcode,
   list,
   create,
   update,

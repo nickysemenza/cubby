@@ -100,6 +100,7 @@ function mergeAppMetadata(
 // To reorder columns, just reorder these arrays - headers are derived automatically
 const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "product_name", type: { kind: "text" } },
+  { header: "product_shortcode", type: { kind: "text" } },
   { header: "manufacturer", type: { kind: "text" } },
   {
     header: "category",
@@ -109,6 +110,7 @@ const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "model", type: { kind: "text" } },
   { header: "ndb_number", type: { kind: "number" } },
   { header: "location_name", type: { kind: "text" } },
+  { header: "location_shortcode", type: { kind: "text" } },
   { header: "quantity", type: { kind: "number", decimals: 2 } },
   { header: "unit", type: { kind: "text" } },
   { header: "expected_qty", type: { kind: "number" } },
@@ -130,6 +132,7 @@ const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
 
 const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
   { header: "location_name", type: { kind: "text" } },
+  { header: "location_shortcode", type: { kind: "text" } },
   { header: "parent_name", type: { kind: "text" } },
   {
     header: "location_type",
@@ -254,12 +257,14 @@ function parseSheetRows(rows: string[][]): ParseSheetResult {
 
     const result = inventoryCSVRow.safeParse({
       product_name: productName,
+      product_shortcode: rowObj.product_shortcode || undefined,
       manufacturer: rowObj.manufacturer || undefined,
       category: rowObj.category || undefined,
       upc: rowObj.upc || rowObj.barcode || undefined,
       model: rowObj.model || undefined,
       ndb_number: rowObj.ndb_number || rowObj.ndbnumber || undefined,
       location_name: rowObj.location_name || rowObj.location || undefined,
+      location_shortcode: rowObj.location_shortcode || undefined,
       quantity: rowObj.quantity || rowObj.qty || 1,
       unit: rowObj.unit || "each",
       expected_qty: rowObj.expected_qty || rowObj.expectedqty || undefined,
@@ -331,6 +336,7 @@ function parseLocationSheetRows(rows: string[][]): ParseLocationSheetResult {
 
     const result = locationCSVRow.safeParse({
       location_name: locationName,
+      location_shortcode: rowObj.location_shortcode || undefined,
       parent_name: rowObj.parent_name || rowObj.parent || null,
       location_type: rowObj.location_type || rowObj.type || undefined,
       description: rowObj.description || undefined,
