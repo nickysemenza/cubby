@@ -26,7 +26,6 @@ import { Route as IngredientsIndexRouteImport } from './routes/ingredients.index
 import { Route as ImagesIndexRouteImport } from './routes/images.index'
 import { Route as UsdaIdRouteImport } from './routes/usda.$id'
 import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
-import { Route as RecipesNewCompactRouteImport } from './routes/recipes.new-compact'
 import { Route as RecipesNewRouteImport } from './routes/recipes.new'
 import { Route as RecipesCompareRouteImport } from './routes/recipes.compare'
 import { Route as RecipesIdRouteImport } from './routes/recipes.$id'
@@ -135,11 +134,6 @@ const UsdaIdRoute = UsdaIdRouteImport.update({
 const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
   id: '/settings/integrations',
   path: '/settings/integrations',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecipesNewCompactRoute = RecipesNewCompactRouteImport.update({
-  id: '/recipes/new-compact',
-  path: '/recipes/new-compact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecipesNewRoute = RecipesNewRouteImport.update({
@@ -291,7 +285,6 @@ export interface FileRoutesByFullPath {
   '/recipes/$id': typeof RecipesIdRoute
   '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
-  '/recipes/new-compact': typeof RecipesNewCompactRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
   '/images': typeof ImagesIndexRoute
@@ -335,7 +328,6 @@ export interface FileRoutesByTo {
   '/recipes/$id': typeof RecipesIdRoute
   '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
-  '/recipes/new-compact': typeof RecipesNewCompactRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
   '/images': typeof ImagesIndexRoute
@@ -380,7 +372,6 @@ export interface FileRoutesById {
   '/recipes/$id': typeof RecipesIdRoute
   '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
-  '/recipes/new-compact': typeof RecipesNewCompactRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
   '/images/': typeof ImagesIndexRoute
@@ -426,7 +417,6 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
-    | '/recipes/new-compact'
     | '/settings/integrations'
     | '/usda/$id'
     | '/images'
@@ -470,7 +460,6 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
-    | '/recipes/new-compact'
     | '/settings/integrations'
     | '/usda/$id'
     | '/images'
@@ -514,7 +503,6 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
-    | '/recipes/new-compact'
     | '/settings/integrations'
     | '/usda/$id'
     | '/images/'
@@ -559,7 +547,6 @@ export interface RootRouteChildren {
   RecipesIdRoute: typeof RecipesIdRoute
   RecipesCompareRoute: typeof RecipesCompareRoute
   RecipesNewRoute: typeof RecipesNewRoute
-  RecipesNewCompactRoute: typeof RecipesNewCompactRoute
   SettingsIntegrationsRoute: typeof SettingsIntegrationsRouteWithChildren
   UsdaIdRoute: typeof UsdaIdRoute
   ImagesIndexRoute: typeof ImagesIndexRoute
@@ -695,13 +682,6 @@ declare module '@tanstack/react-router' {
       path: '/settings/integrations'
       fullPath: '/settings/integrations'
       preLoaderRoute: typeof SettingsIntegrationsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recipes/new-compact': {
-      id: '/recipes/new-compact'
-      path: '/recipes/new-compact'
-      fullPath: '/recipes/new-compact'
-      preLoaderRoute: typeof RecipesNewCompactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recipes/new': {
@@ -913,7 +893,6 @@ const rootRouteChildren: RootRouteChildren = {
   RecipesIdRoute: RecipesIdRoute,
   RecipesCompareRoute: RecipesCompareRoute,
   RecipesNewRoute: RecipesNewRoute,
-  RecipesNewCompactRoute: RecipesNewCompactRoute,
   SettingsIntegrationsRoute: SettingsIntegrationsRouteWithChildren,
   UsdaIdRoute: UsdaIdRoute,
   ImagesIndexRoute: ImagesIndexRoute,

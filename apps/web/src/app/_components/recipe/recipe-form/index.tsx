@@ -1,12 +1,28 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronDown, ChevronUp, Plus, Trash } from "lucide-react";
-import { type FC, useId } from "react";
+import { useMutation } from "@tanstack/react-query";
+import {
+  ChevronDown,
+  ChevronUp,
+  Import,
+  Loader2,
+  Plus,
+  Trash,
+} from "lucide-react";
+import { type FC, useId, useMemo, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { Textarea } from "~/components/ui/textarea";
+import useDebounce from "~/hooks/useDebounce";
 import { useImageState } from "~/hooks/useImageState";
+import { wasm } from "~/lib/wasm";
 import {
   getOptionalIngredientId,
   getOptionalRecipeId,
@@ -19,6 +35,7 @@ import type {
   recipeInstructionInput,
   recipeSectionInput,
 } from "~/schemas/recipe";
+import { useTRPC } from "~/trpc/react";
 import {
   buildUpdateObject,
   FormWrapper,
@@ -28,7 +45,12 @@ import {
   UnifiedTextField,
 } from "../../form-utils";
 import { PendingImageUpload } from "../../PendingImageUpload";
+import { formatRichText } from "../richtext";
 import { IngredientFieldArray } from "./ingredient-field-array";
+import {
+  IngredientPreviewTable,
+  useIngredientImport,
+} from "./ingredient-preview-table";
 import { InstructionFieldArray } from "./instruction-field-array";
 import { TagInput } from "./tag-input";
 import {
@@ -113,12 +135,64 @@ const mapIngredientToApiFormat = (ing: IngItem): RecipeIngredientInput => {
 
 export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
+  const api = useTRPC();
   const {
     handlePendingImagesChange,
     handleRemovedImagesChange,
     getImageData,
     hasImageChanges,
   } = useImageState();
+
+  // Import section state
+  const [textImportOpen, setTextImportOpen] = useState(false);
+  const [textImportIngredients, setTextImportIngredients] = useState("");
+  const [textImportInstructions, setTextImportInstructions] = useState("");
+
+  // Debounced ingredient lines for live preview
+  const debouncedIngredients = useDebounce(textImportIngredients, 200);
+  const ingredientLines = useMemo(
+    () =>
+      debouncedIngredients
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0),
+    [debouncedIngredients],
+  );
+
+  // Instruction lines for preview
+  const debouncedInstructions = useDebounce(textImportInstructions, 200);
+  const instructionLines = useMemo(
+    () =>
+      debouncedInstructions
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0),
+    [debouncedInstructions],
+  );
+
+  // Hook for importing ingredients with auto-create
+  const ingredientImport = useIngredientImport(ingredientLines);
+
+  // Parse instructions with rich text highlighting
+  // Uses namesForHighlighting which includes parsed names + matched DB names + aliases
+  const richInstructions = useMemo(
+    () =>
+      instructionLines.map((line) => {
+        try {
+          return wasm.parse_rich_text(
+            line,
+            ingredientImport.namesForHighlighting,
+          );
+        } catch {
+          // Fallback to plain text if parsing fails
+          return [{ kind: "Text" as const, value: line }];
+        }
+      }),
+    [instructionLines, ingredientImport.namesForHighlighting],
+  );
+
+  // Scrape mutation
+  const scrapeMutation = useMutation(api.recipe.scrape.mutationOptions());
 
   // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;
@@ -184,6 +258,64 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     control: form.control,
     name: "sections",
   });
+
+  // Watch URL field for scrape button
+  const urlValue = useWatch({ control: form.control, name: "meta.url" });
+
+  // Handle URL scraping - opens collapsible and populates textareas
+  const handleScrape = async () => {
+    if (!urlValue) return;
+    try {
+      const result = await scrapeMutation.mutateAsync(urlValue);
+      if (result?.sections[0]) {
+        // Set recipe name if empty
+        if (!form.getValues("name")) {
+          form.setValue("name", result.name);
+        }
+        // Populate textareas and open collapsible
+        setTextImportIngredients(result.sections[0].ingredients.join("\n"));
+        setTextImportInstructions(result.sections[0].instructions.join("\n"));
+        setTextImportOpen(true);
+      }
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
+  // Handle import - auto-creates missing ingredients and populates form
+  const handleImportAll = async () => {
+    try {
+      // Import all ingredients (auto-creates missing ones)
+      const structuredIngredients = await ingredientImport.importAll();
+
+      // Build structured instructions
+      const structuredInstructions = instructionLines.map((inst) => ({
+        instruction: inst,
+      }));
+
+      // Populate form
+      const currentSections = form.getValues("sections");
+      if (currentSections.length > 0) {
+        form.setValue("sections.0.ingredients", structuredIngredients);
+        form.setValue("sections.0.instructions", structuredInstructions);
+      } else {
+        form.setValue("sections", [
+          {
+            name: null,
+            ingredients: structuredIngredients,
+            instructions: structuredInstructions,
+          },
+        ]);
+      }
+
+      // Clear and close import section
+      setTextImportIngredients("");
+      setTextImportInstructions("");
+      setTextImportOpen(false);
+    } catch (error) {
+      console.error("Import failed:", error);
+    }
+  };
 
   const handleSubmit = (values: RecipeFormValues) => {
     if (mode === "create") {
@@ -316,14 +448,146 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           nullable={false}
         />
 
-        <UnifiedTextField
-          form={form}
-          name="meta.url"
-          label="URL (Optional)"
-          placeholder="Enter recipe URL"
-          nullable={true}
-        />
+        <Field>
+          <FieldLabel>URL (Optional)</FieldLabel>
+          <div className="flex gap-2">
+            <Controller
+              control={form.control}
+              name="meta.url"
+              render={({ field }) => (
+                <Input
+                  placeholder="Enter recipe URL"
+                  value={field.value ?? ""}
+                  onChange={(e) => field.onChange(e.target.value || null)}
+                  className="flex-1"
+                />
+              )}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleScrape}
+              disabled={!urlValue || scrapeMutation.isPending}
+              className="shrink-0"
+            >
+              {scrapeMutation.isPending ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Import className="mr-1 h-4 w-4" />
+              )}
+              Scrape
+            </Button>
+          </div>
+        </Field>
       </SideBySideFields>
+
+      {/* Import from Text */}
+      <Collapsible open={textImportOpen} onOpenChange={setTextImportOpen}>
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="flex items-center gap-1 text-muted-foreground"
+          >
+            {textImportOpen ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+            Import from Text
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2 space-y-4 rounded border border-border p-3">
+          {/* Ingredients: textarea + pills preview */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Field>
+              <FieldLabel>Ingredients (one per line)</FieldLabel>
+              <Textarea
+                placeholder="1 cup flour&#10;2 eggs&#10;1/2 tsp salt"
+                value={textImportIngredients}
+                onChange={(e) => setTextImportIngredients(e.target.value)}
+                rows={6}
+              />
+            </Field>
+            <div>
+              <FieldLabel>Parsed Ingredients</FieldLabel>
+              <div className="mt-1.5 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                <IngredientPreviewTable ingredientLines={ingredientLines} />
+              </div>
+            </div>
+          </div>
+
+          {/* Instructions: textarea + preview */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Field>
+              <FieldLabel>Instructions (one per line)</FieldLabel>
+              <Textarea
+                placeholder="Preheat oven to 350°F&#10;Mix dry ingredients&#10;Add wet ingredients"
+                value={textImportInstructions}
+                onChange={(e) => setTextImportInstructions(e.target.value)}
+                rows={6}
+              />
+            </Field>
+            <div>
+              <FieldLabel>Instructions Preview</FieldLabel>
+              <div className="mt-1.5 min-h-[120px] rounded border border-border bg-muted/30 p-2">
+                {richInstructions.length > 0 ? (
+                  <ol className="list-decimal space-y-1.5 pl-4 text-sm">
+                    {richInstructions.map((richItems, idx) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
+                      <li key={idx}>{formatRichText(richItems)}</li>
+                    ))}
+                  </ol>
+                ) : (
+                  <div className="text-muted-foreground text-sm">
+                    Enter instructions to see preview
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Import button */}
+          <div className="flex items-center justify-between">
+            <div className="text-muted-foreground text-sm">
+              {ingredientImport.totalCount > 0 && (
+                <>
+                  {ingredientImport.matchedCount}/{ingredientImport.totalCount}{" "}
+                  ingredients matched
+                  {ingredientImport.missingCount > 0 && (
+                    <span className="text-amber-600">
+                      {" "}
+                      ({ingredientImport.missingCount} will be created)
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              onClick={handleImportAll}
+              disabled={
+                ingredientImport.isLoading ||
+                ingredientImport.isImporting ||
+                (ingredientLines.length === 0 && instructionLines.length === 0)
+              }
+            >
+              {ingredientImport.isImporting ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Import className="mr-1 h-4 w-4" />
+              )}
+              {ingredientImport.missingCount > 0
+                ? `Import All (create ${ingredientImport.missingCount})`
+                : "Import All"}
+            </Button>
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Yield and Servings */}
       <YieldServingsFields form={form} />
