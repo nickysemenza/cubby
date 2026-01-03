@@ -64,6 +64,13 @@
       "when": 1767398400000,
       "tag": "0008_add_shortcodes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1767484800000,
+      "tag": "0009_add_recipe_shortcode",
+      "breakpoints": true
     }
   ]
 }
