@@ -51,7 +51,10 @@ export const UserAvatarDropdown = () => {
           </DropdownMenuLabel>
           <DropdownMenuItem
             render={
-              <Link to="/account/$accountView" params={{ accountView: "" }} />
+              <Link
+                to="/account/$accountView"
+                params={{ accountView: "settings" }}
+              />
             }
           >
             <User className="h-4 w-4" />

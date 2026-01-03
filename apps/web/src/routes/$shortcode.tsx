@@ -5,7 +5,7 @@
  * Used for QR code labels that encode the shortcode URL.
  */
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { parseShortcode } from "~/lib/shortcode";
 
 export const Route = createFileRoute("/$shortcode")({
@@ -16,8 +16,8 @@ export const Route = createFileRoute("/$shortcode")({
     // Parse shortcode to determine entity type
     const parsed = parseShortcode(shortcode);
     if (!parsed) {
-      // Not a valid shortcode format - let it fall through to 404
-      throw new Error("Invalid shortcode format");
+      // Not a valid shortcode format - show 404
+      throw notFound();
     }
 
     // Look up the entity by shortcode
