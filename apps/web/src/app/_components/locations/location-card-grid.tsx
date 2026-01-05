@@ -1,11 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
-import { Calendar, ExternalLink } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
@@ -160,15 +158,8 @@ function LocationCard({
       titleIcon={getLocationIcon(location.type)}
       subtitle={subtitle}
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
-      className="card-hover h-full border-l border-l-border p-4"
-      actions={
-        <Link to="/locations/$id" params={{ id: location.id }}>
-          <Button variant="outline" size="sm">
-            <ExternalLink className="mr-1 h-4 w-4" />
-            View
-          </Button>
-        </Link>
-      }
+      className="card-hover h-full"
+      detailsHref={`/locations/${location.id}`}
     >
       {/* Details */}
       {details.length > 0 && <div className="space-y-1">{details}</div>}

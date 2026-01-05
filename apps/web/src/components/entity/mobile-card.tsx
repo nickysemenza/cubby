@@ -87,36 +87,46 @@ export function MobileCard({
 
       {/* Content */}
       <div className="min-w-0 flex-1 space-y-2">
-        {/* Structured header when title is provided */}
-        {title && (
-          <div>
-            <h5 className="flex items-center gap-2 font-medium">
-              {TitleIcon && <TitleIcon className="h-4 w-4" />}
-              <span className="truncate">{title}</span>
-            </h5>
-            {subtitle && (
-              <p className="text-muted-foreground text-sm">{subtitle}</p>
+        {/* Header row: title + actions together */}
+        {(title || detailsHref || actions) && (
+          <div className="flex items-start gap-2">
+            {/* Title section */}
+            {title && (
+              <div className="min-w-0 flex-1">
+                <h5 className="flex min-w-0 items-center gap-2 font-medium">
+                  {TitleIcon && (
+                    <TitleIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate" title={title}>
+                    {title}
+                  </span>
+                </h5>
+                {subtitle && (
+                  <p className="truncate text-muted-foreground text-sm">
+                    {subtitle}
+                  </p>
+                )}
+              </div>
+            )}
+            {/* Actions - compact, next to title */}
+            {(detailsHref || actions) && (
+              <div className="flex shrink-0 items-center gap-1">
+                {detailsHref && (
+                  <Link
+                    to={detailsHref}
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    aria-label="View details"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Link>
+                )}
+                {actions}
+              </div>
             )}
           </div>
         )}
         {children}
       </div>
-
-      {/* View button and actions - larger touch targets for mobile */}
-      {(detailsHref || actions) && (
-        <div className="flex shrink-0 items-center gap-1">
-          {detailsHref && (
-            <Link
-              to={detailsHref}
-              className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="View details"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </Link>
-          )}
-          {actions}
-        </div>
-      )}
     </div>
   );
 }
