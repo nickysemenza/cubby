@@ -276,6 +276,19 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         setTextImportIngredients(result.sections[0].ingredients.join("\n"));
         setTextImportInstructions(result.sections[0].instructions.join("\n"));
         setTextImportOpen(true);
+
+        // Set servings if available from scraper
+        if (result.servings) {
+          form.setValue("servings", result.servings);
+        }
+
+        // Set yield if available from scraper (already parsed by Rust)
+        if (result.recipe_yield) {
+          form.setValue("yield", {
+            value: result.recipe_yield.value,
+            unit: result.recipe_yield.unit,
+          });
+        }
       }
     } catch {
       // Error handled by mutation

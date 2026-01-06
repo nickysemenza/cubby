@@ -205,12 +205,21 @@ interface WUnitMapping {
     source?: string | null;
 }
 
+interface WRecipeYield {
+    value: number;
+    unit: string;
+}
+
 interface WCompactRecipe {
     ingredients: string[];
     instructions: string[];
     name?: string;
     url?: string;
     image?: string;
+    /** Parsed yield (e.g., { value: 12, unit: "pancakes" }) */
+    recipe_yield?: WRecipeYield;
+    /** Servings as integer (extracted from yield if unit is "serving(s)") */
+    servings?: number;
 }
 
 type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;

@@ -29,5 +29,8 @@ const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
         instructions: wCompact.instructions,
       },
     ],
+    // Pass through yield and servings from scraper (already parsed by Rust)
+    recipe_yield: wCompact.recipe_yield,
+    servings: wCompact.servings,
   };
 };
