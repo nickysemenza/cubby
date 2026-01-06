@@ -1,6 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { BookOpen, Loader2, MapPin, Package, Search } from "lucide-react";
+import {
+  BookOpen,
+  Loader2,
+  MapPin,
+  Package,
+  Search,
+  Settings,
+} from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -12,6 +19,7 @@ import {
   CommandSeparator,
 } from "~/components/ui/command";
 import { EntityIcon, entities } from "~/entities/entities";
+import { useDebug } from "~/hooks/useDebug";
 import { parseShortcode } from "~/lib/shortcode";
 import type { SearchableEntity } from "~/schemas/search";
 import { useTRPC } from "~/trpc/react";
@@ -27,6 +35,7 @@ export function GlobalCommandMenu() {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const navigate = useNavigate();
+  const { isDevtoolsVisible, toggleDevtools } = useDebug();
 
   const { results, filteredActions, isLoading, isEmpty } =
     useGlobalSearch(search);
@@ -246,6 +255,18 @@ export function GlobalCommandMenu() {
                   <span>{entity.pluralLabel}</span>
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandSeparator />
+            <CommandGroup heading="Settings">
+              <CommandItem
+                onSelect={() => {
+                  toggleDevtools();
+                  setOpen(false);
+                }}
+              >
+                <Settings className="h-4 w-4" />
+                <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
+              </CommandItem>
             </CommandGroup>
           </>
         )}

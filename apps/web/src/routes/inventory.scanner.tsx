@@ -1,22 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Camera, Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { ArrowLeft, Camera, Check, Loader2 } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { ScannerForm } from "~/app/_components/inventory/scanner-form";
+import { PersistentScanner } from "~/app/_components/inventory/persistent-scanner";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
-import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { getErrorMessage } from "~/lib/error-utils";
+import { queryKeys } from "~/lib/query-keys";
+import type { ProductId } from "~/schemas/identifiers";
 import { unsafeLocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 
@@ -29,6 +23,12 @@ export const Route = createFileRoute("/inventory/scanner")({
   component: ScannerPage,
 });
 
+interface RecentItem {
+  id: string;
+  productName: string;
+  timestamp: Date;
+}
+
 function ScannerPage() {
   const { locationId } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
@@ -38,6 +38,7 @@ function ScannerPage() {
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([]);
 
   // Fetch all locations for the dropdown
   const { data: locationsData, isLoading: isLoadingLocations } = useQuery(
@@ -53,12 +54,71 @@ function ScannerPage() {
     enabled: !!locationId,
   });
 
-  // Mutations for image upload
+  // Mutations
   const uploadImageMutation = useMutation(
     api.image.uploadImage.mutationOptions(),
   );
   const updateLocationMutation = useMutation(
     api.location.update.mutationOptions(),
+  );
+  const findOrCreateByUPCMutation = useMutation(
+    api.product.findOrCreateByUPC.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+      },
+    }),
+  );
+  const createInventoryMutation = useMutation(
+    api.inventory.create.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list });
+      },
+    }),
+  );
+
+  // Add item to inventory
+  const addInventory = useCallback(
+    async (productId: ProductId, productName: string) => {
+      if (!locationId) return;
+
+      try {
+        await createInventoryMutation.mutateAsync({
+          productId,
+          locationId: unsafeLocationId(locationId),
+          amount: { value: 1, unit: "each" },
+        });
+
+        setRecentItems((prev) => [
+          { id: crypto.randomUUID(), productName, timestamp: new Date() },
+          ...prev.slice(0, 9),
+        ]);
+
+        toast.success(`Added: ${productName}`);
+      } catch (error) {
+        toast.error(`Failed to add: ${getErrorMessage(error)}`);
+      }
+    },
+    [createInventoryMutation, locationId],
+  );
+
+  // Handle barcode scan
+  const handleBarcodeScan = useCallback(
+    async (barcode: string) => {
+      if (!locationId) {
+        toast.error("Select a location first");
+        return;
+      }
+
+      try {
+        const product = await findOrCreateByUPCMutation.mutateAsync({
+          upc: barcode,
+        });
+        await addInventory(product.id, product.name);
+      } catch (error) {
+        toast.error(`UPC lookup failed: ${getErrorMessage(error)}`);
+      }
+    },
+    [findOrCreateByUPCMutation, addInventory, locationId],
   );
 
   const handleCameraCapture = async (
@@ -69,7 +129,6 @@ function ScannerPage() {
 
     setIsUploading(true);
     try {
-      // Step 1: Get presigned URL
       const result = await uploadImageMutation.mutateAsync({
         filename: file.name,
         contentType: file.type,
@@ -77,46 +136,30 @@ function ScannerPage() {
         entityType: "LOCATION",
       });
 
-      // Step 2: Upload to storage
-      try {
-        const uploadResponse = await fetch(result.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
+      const uploadResponse = await fetch(result.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
 
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text().catch(() => "");
-          throw new Error(
-            `Storage upload failed (${uploadResponse.status}): ${errorText}`,
-          );
-        }
-      } catch (fetchError) {
-        // CORS or network error
-        console.error("Storage upload error:", fetchError);
-        throw new Error(
-          `Storage upload failed - check CORS settings: ${getErrorMessage(fetchError)}`,
-        );
+      if (!uploadResponse.ok) {
+        throw new Error(`Storage upload failed (${uploadResponse.status})`);
       }
 
-      // Step 3: Attach to location
       await updateLocationMutation.mutateAsync({
         id: unsafeLocationId(locationId),
         data: { pendingImageIds: [result.imageId] },
       });
 
-      // Refresh location data
       await queryClient.invalidateQueries({
         queryKey: trpc.location.getByID.queryKey({ id: locationId }),
       });
 
       toast.success("Photo added to location");
     } catch (error) {
-      console.error("Photo upload error:", error);
       toast.error(`Failed to upload photo: ${getErrorMessage(error)}`);
     } finally {
       setIsUploading(false);
-      // Reset input so same file can be selected again
       if (cameraInputRef.current) {
         cameraInputRef.current.value = "";
       }
@@ -137,86 +180,135 @@ function ScannerPage() {
     }
   };
 
+  const isPending =
+    findOrCreateByUPCMutation.isPending || createInventoryMutation.isPending;
+
   return (
-    <PageWrapper>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={handleBack}>
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex-1">
-                <CardTitle>Scanner</CardTitle>
-                <CardDescription>
-                  Scan barcodes or type product names to add inventory
-                </CardDescription>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-full sm:w-64">
-                <FilterableCombobox
-                  items={
-                    locationsData?.items.map((location) => ({
-                      value: location.id,
-                      label: `${location.name} (${location.type})`,
-                      icon: (
-                        <LocationIcon
-                          type={location.type}
-                          size={14}
-                          className="text-muted-foreground"
-                        />
-                      ),
-                    })) ?? []
-                  }
-                  value={locationId ?? null}
-                  onValueChange={handleLocationChange}
-                  placeholder="Select location..."
-                  disabled={isLoadingLocations}
-                />
-              </div>
-              {/* Camera button for location photos */}
-              {locationId && (
-                <>
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleCameraCapture}
-                    hidden
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => cameraInputRef.current?.click()}
-                    disabled={isUploading}
-                    title="Take photo of location"
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Camera className="h-4 w-4" />
-                    )}
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {locationId && selectedLocation ? (
-            <ScannerForm
-              locationId={unsafeLocationId(locationId)}
-              locationName={selectedLocation.name}
+    <div className="-mx-4 -mt-4 flex min-h-[calc(100vh-8rem)] flex-col md:mx-0 md:mt-0">
+      {/* Floating header with location picker */}
+      <div className="sticky top-0 z-20 bg-background/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleBack}
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+
+          <div className="flex-1">
+            <FilterableCombobox
+              items={
+                locationsData?.items.map((location) => ({
+                  value: location.id,
+                  label: `${location.name} (${location.type})`,
+                  icon: (
+                    <LocationIcon
+                      type={location.type}
+                      size={14}
+                      className="text-muted-foreground"
+                    />
+                  ),
+                })) ?? []
+              }
+              value={locationId ?? null}
+              onValueChange={handleLocationChange}
+              placeholder="Select location..."
+              disabled={isLoadingLocations}
             />
-          ) : (
-            <div className="py-8 text-center text-muted-foreground">
-              Select a location to start scanning
-            </div>
+          </div>
+
+          {/* Camera button for location photos */}
+          {locationId && (
+            <>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleCameraCapture}
+                hidden
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={isUploading}
+                title="Take photo of location"
+                className="shrink-0"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Camera className="h-4 w-4" />
+                )}
+              </Button>
+            </>
           )}
-        </CardContent>
-      </Card>
-    </PageWrapper>
+        </div>
+
+        {/* Location name indicator */}
+        {selectedLocation && (
+          <div className="mt-1 text-center text-muted-foreground text-xs">
+            Adding to{" "}
+            <span className="font-medium text-foreground">
+              {selectedLocation.name}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Scanner view */}
+      <div className="flex-1 px-3">
+        {locationId ? (
+          <>
+            <PersistentScanner
+              onScan={handleBarcodeScan}
+              enabled={!!locationId && !isPending}
+            />
+
+            {/* Loading indicator during UPC lookup */}
+            {isPending && (
+              <div className="mt-2 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Looking up product...
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex aspect-square items-center justify-center rounded-lg bg-muted">
+            <p className="text-center text-muted-foreground">
+              Select a location to start scanning
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Recent items */}
+      {recentItems.length > 0 && (
+        <div className="border-t bg-background p-3">
+          <h4 className="mb-2 font-medium text-sm">Recently Added</h4>
+          <div className="flex flex-wrap gap-2">
+            {recentItems.slice(0, 5).map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-green-800 text-xs dark:bg-green-900/30 dark:text-green-400"
+              >
+                <Check className="h-3 w-3" />
+                <span className="max-w-[120px] truncate">
+                  {item.productName}
+                </span>
+              </div>
+            ))}
+            {recentItems.length > 5 && (
+              <span className="px-2 py-1 text-muted-foreground text-xs">
+                +{recentItems.length - 5} more
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

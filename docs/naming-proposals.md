@@ -5,7 +5,7 @@
 ### 1. cubby
 
 - **Strengths**: Perfect household storage feel, works for both inventory and recipes, friendly and memorable, specific enough to not be generic
-- **Usage**: "Recipe cubby", "pantry cubby", "garage cubby" - natural bridge between recipes and inventory
+- **Usage**: "Recipe RecipeHub", "pantry RecipeHub", "garage RecipeHub" - natural bridge between recipes and inventory
 - **Feel**: Cozy, personal, organized storage spaces that everyone understands
 
 ### 2. stash

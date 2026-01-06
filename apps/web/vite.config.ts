@@ -25,7 +25,9 @@ export default defineConfig({
   },
   plugins: [
     wasm(),
-    devtools(),
+    devtools({
+      injectSource: { enabled: false },
+    }),
     viteTsConfigPaths({
       projects: ["./tsconfig.json"],
     }),

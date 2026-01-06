@@ -10,10 +10,10 @@
 @theme {
   /* Fraunces - warm serif with personality for headings */
   --font-heading: "Fraunces Variable", Georgia, "Times New Roman", serif;
-  /* Source Sans 3 - readable, slightly warm for body text */
+  /* Nunito - friendly rounded sans-serif for body text */
   --font-sans:
-    "Source Sans 3 Variable", ui-sans-serif, system-ui, sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Nunito Variable", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --font-mono:
     "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
     "Roboto Mono", Consolas, "Courier New", monospace;
@@ -70,65 +70,99 @@
 
 /*
   ---break---
-  "Warm Clay" Theme - Modern/refined with warm organic touch
+  iOS Safe Area support for PWA
+*/
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .safe-y {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .safe-all {
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+      env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+}
+
+/*
+  ---break---
+  Cubby Theme - Warm, organic palette from brand colors
 */
 :root {
-  /* Backgrounds - warm cream tones */
-  --background: oklch(0.985 0.008 75); /* Warm off-white with cream tint */
-  --foreground: oklch(0.22 0.02 50); /* Warm charcoal (not pure black) */
+  /* Brand tokens (hex) */
+  --brand-foreground: #3a3530;
+  --brand-terracotta: #c2603d;
+  --brand-terra-light: #d98a68;
+  --brand-cream: #fdfbf7;
+  --brand-shelf: #5c5550;
 
-  /* Card surfaces - slightly warmer than background */
-  --card: oklch(0.99 0.006 70); /* Warm cream card surface */
-  --card-foreground: oklch(0.22 0.02 50); /* Warm charcoal text */
+  /* Core colors */
+  --background: var(--brand-cream);
+  --foreground: var(--brand-foreground);
+  --card: var(--brand-cream);
+  --card-foreground: var(--brand-foreground);
+  --popover: var(--brand-cream);
+  --popover-foreground: var(--brand-foreground);
 
-  /* Popovers - same as card */
-  --popover: oklch(0.99 0.006 70);
-  --popover-foreground: oklch(0.22 0.02 50);
-
-  /* Primary - Terracotta/rust orange for actions */
-  --primary: oklch(0.58 0.16 38); /* Rich terracotta */
-  --primary-foreground: oklch(0.98 0.01 75); /* Light cream for contrast */
+  /* Primary - Terracotta for actions */
+  --primary: var(--brand-terracotta);
+  --primary-foreground: var(--brand-cream);
 
   /* Secondary - Warm sage green */
-  --secondary: oklch(0.94 0.025 145); /* Light sage green */
-  --secondary-foreground: oklch(0.35 0.04 145); /* Dark sage for text */
+  --secondary: oklch(0.94 0.025 145);
+  --secondary-foreground: oklch(0.35 0.04 145);
 
-  /* Muted - Warm gray with pink tint */
-  --muted: oklch(0.94 0.012 50); /* Warm beige-gray */
-  --muted-foreground: oklch(0.52 0.02 50); /* Mid-gray with warmth */
+  /* Muted - Warm beige */
+  --muted: oklch(0.94 0.015 55);
+  --muted-foreground: var(--brand-shelf);
 
-  /* Accent - Golden amber highlights */
-  --accent: oklch(0.88 0.12 85); /* Golden amber */
-  --accent-foreground: oklch(0.28 0.04 50); /* Dark warm text */
+  /* Accent - Terra light */
+  --accent: var(--brand-terra-light);
+  --accent-foreground: var(--brand-foreground);
 
-  /* Destructive - Warm red (not harsh) */
-  --destructive: oklch(0.55 0.2 28); /* Earthy brick red */
-  --destructive-foreground: oklch(0.98 0.01 75); /* Light text on destructive */
+  /* Destructive - Deep burgundy */
+  --destructive: oklch(0.45 0.18 15);
+  --destructive-foreground: var(--brand-cream);
 
   /* Borders and inputs */
-  --border: oklch(0.88 0.015 70); /* Warm tan border */
-  --input: oklch(0.94 0.012 50); /* Same as muted */
-  --ring: oklch(0.58 0.16 38); /* Primary color for focus rings */
+  --border: oklch(0.88 0.02 55);
+  --input: oklch(0.94 0.015 55);
+  --ring: var(--brand-terracotta);
 
-  /* Extended palette - warm semantic colors */
-  --highlight: oklch(0.58 0.16 38); /* Terracotta - data emphasis */
-  --subtle: oklch(0.65 0.12 145); /* Sage green - supporting text */
-  --glow: oklch(0.75 0.14 85); /* Golden amber - decorative */
-  --plum: oklch(0.55 0.14 320); /* Warm plum - recipes, renames */
-  --slate: oklch(0.62 0.1 200); /* Slate blue - locations, updates */
+  /* Extended palette */
+  --highlight: var(--brand-terracotta);
+  --subtle: oklch(0.65 0.08 90); /* Warm olive */
+  --glow: var(--brand-terra-light);
+  --plum: oklch(0.55 0.14 320); /* Warm plum - recipes */
+  --slate: oklch(0.55 0.06 55); /* Warm brown-slate */
 
   /* Refined border radius (6px base) */
   --radius: 0.375rem;
 
-  /* Sidebar - slightly warmer */
-  --sidebar: oklch(0.98 0.01 70);
-  --sidebar-foreground: oklch(0.22 0.02 50);
-  --sidebar-primary: oklch(0.58 0.16 38);
-  --sidebar-primary-foreground: oklch(0.98 0.01 75);
-  --sidebar-accent: oklch(0.94 0.012 50);
-  --sidebar-accent-foreground: oklch(0.28 0.04 50);
-  --sidebar-border: oklch(0.88 0.015 70);
-  --sidebar-ring: oklch(0.58 0.16 38);
+  /* Sidebar */
+  --sidebar: var(--brand-cream);
+  --sidebar-foreground: var(--brand-foreground);
+  --sidebar-primary: var(--brand-terracotta);
+  --sidebar-primary-foreground: var(--brand-cream);
+  --sidebar-accent: oklch(0.94 0.015 55);
+  --sidebar-accent-foreground: var(--brand-foreground);
+  --sidebar-border: oklch(0.88 0.02 55);
+  --sidebar-ring: var(--brand-terracotta);
 }
 /*
   ---break---

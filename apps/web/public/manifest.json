@@ -1,20 +1,19 @@
 {
-  "short_name": "RecipeHub",
-  "name": "RecipeHub",
+  "short_name": "Cubby",
+  "name": "Cubby",
+  "description": "Recipe and inventory management",
   "icons": [
     {
-      "src": "favicon.ico",
-      "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "favicon-96x96.png",
-      "type": "image/png",
-      "sizes": "96x96"
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
     }
   ],
-  "start_url": ".",
+  "start_url": "/inventory/scanner",
+  "scope": "/",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "orientation": "portrait",
+  "theme_color": "#3a3530",
+  "background_color": "#FAF8F5",
+  "categories": ["food", "lifestyle", "utilities"]
 }

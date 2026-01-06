@@ -4,6 +4,8 @@ import { useLocalStorage } from "./useLocalStorage";
 interface DebugContextType {
   isDebugEnabled: boolean;
   toggleDebug: () => void;
+  isDevtoolsVisible: boolean;
+  toggleDevtools: () => void;
 }
 
 const DebugContext = createContext<DebugContextType | undefined>(undefined);
@@ -17,13 +19,23 @@ export function DebugContextProvider({ children }: DebugContextProviderProps) {
     "debugTablesEnabled",
     false,
   );
+  const [isDevtoolsVisible, setIsDevtoolsVisible] = useLocalStorage(
+    "devtoolsVisible",
+    false,
+  );
 
   const toggleDebug = () => {
     setIsDebugEnabled((prev: boolean) => !prev);
   };
 
+  const toggleDevtools = () => {
+    setIsDevtoolsVisible((prev: boolean) => !prev);
+  };
+
   return (
-    <DebugContext.Provider value={{ isDebugEnabled, toggleDebug }}>
+    <DebugContext.Provider
+      value={{ isDebugEnabled, toggleDebug, isDevtoolsVisible, toggleDevtools }}
+    >
       {children}
     </DebugContext.Provider>
   );
