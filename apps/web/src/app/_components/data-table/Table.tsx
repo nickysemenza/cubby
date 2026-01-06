@@ -5,7 +5,7 @@ import {
   type Row,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { SpacedContainer } from "~/components/layout/spaced-container";
@@ -33,6 +33,8 @@ interface TTableProps<TItem> {
   table: ITable<TItem>;
   /** Slot for additional toolbar content like summaries (e.g., "Value: $5,845.91") */
   additionalToolbarContent?: ReactNode;
+  /** Primary actions for the toolbar (e.g., "Create New" button) */
+  actions?: ReactNode;
   isLoading?: boolean;
   error?: unknown;
   ariaLabel?: string;
@@ -58,6 +60,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const {
     table,
     additionalToolbarContent,
+    actions,
     additionalFilters, // deprecated, fallback
     isLoading = false,
     error,
@@ -73,111 +76,154 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   const { isDebugEnabled } = useDebug();
 
-  // Dense table styles with warm accents
+  // Clean table styles with warm accents
   const styles = {
-    table: "text-[11px] leading-tight",
-    header:
-      "h-6 px-1.5 py-0.5 border-x border-border/50 text-[10px] font-medium bg-muted/50 text-muted-foreground",
-    cell: "px-1.5 py-0.5 min-h-[22px] border-x border-border/30 align-middle",
-    row: "even:bg-muted/20 hover:bg-primary/5 hover:border-l-2 hover:border-l-primary/50 transition-colors",
-    sortIcon: "h-2.5 w-2.5",
+    table: "text-xs leading-tight",
+    header: "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80",
+    filterRow: "h-7 px-2 py-0.5 bg-muted/40 border-b border-border/50",
+    cell: "px-2 py-1 min-h-[28px] align-middle",
+    row: "even:bg-muted/20 hover:bg-primary/5 hover:border-l-2 hover:border-l-primary/50 transition-colors border-b border-border/30",
+    sortIcon: "h-3 w-3",
   };
 
   return (
     <SpacedContainer space={4}>
-      <DataTableToolbar table={table} additionalContent={toolbarContent} />
+      {/* Desktop Table View - Unified wrapper */}
+      <div className="hidden overflow-hidden rounded-lg border border-border/50 lg:block">
+        {/* Attached Toolbar */}
+        <DataTableToolbar
+          table={table}
+          additionalContent={toolbarContent}
+          actions={actions}
+          className="border-border/50 border-b bg-muted/30 px-3 py-2"
+        />
 
-      {/* Desktop Table View */}
-      <div className="hidden lg:block">
         <Table aria-label={ariaLabel} className={cn(styles.table)}>
-          <TableHeader className="sticky top-0 z-20 bg-background shadow-sm">
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className={cn(styles.row)}>
-                {headerGroup.headers.map((header) => {
-                  const sortDirection = header.column.getIsSorted();
-                  const canSort = header.column.getCanSort();
-                  const sortingArrows =
-                    sortDirection === "desc" ? (
-                      <ArrowDown
-                        className={styles.sortIcon}
-                        aria-hidden="true"
-                      />
-                    ) : sortDirection === "asc" ? (
-                      <ArrowUp className={styles.sortIcon} aria-hidden="true" />
-                    ) : (
-                      <ArrowUpDown
-                        className={styles.sortIcon}
-                        aria-hidden="true"
-                      />
-                    );
+          <TableHeader className="sticky top-0 z-20 bg-background">
+            {table.getHeaderGroups().map((headerGroup) => {
+              // Check if any column has a filter config
+              const hasAnyFilters = headerGroup.headers.some(
+                (h) => h.column.columnDef.meta?.filterConfig,
+              );
 
-                  const filterConfig =
-                    header.column.columnDef.meta?.filterConfig;
-
-                  const titleContent = (
-                    <>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                      {canSort && sortingArrows}
-                    </>
-                  );
-
-                  return (
-                    <TableHead
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      aria-sort={
-                        sortDirection === "asc"
-                          ? "ascending"
-                          : sortDirection === "desc"
-                            ? "descending"
-                            : "none"
-                      }
-                      className={cn(
-                        header.column.columnDef.meta?.className,
-                        styles.header,
-                        "align-top",
-                      )}
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        {/* Column title with sort */}
-                        {canSort ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-4 w-full justify-start px-0.5 text-[10px]"
-                            onClick={() =>
-                              header.column.toggleSorting(
-                                header.column.getIsSorted() === "asc",
-                              )
-                            }
-                          >
-                            {titleContent}
-                          </Button>
-                        ) : (
-                          <span className="px-1">{titleContent}</span>
-                        )}
-                        {/* Inline filter */}
-                        {filterConfig && (
-                          <HeaderFilter
-                            column={header.column}
-                            filterConfig={filterConfig}
+              return (
+                <Fragment key={headerGroup.id}>
+                  {/* Title Row */}
+                  <TableRow className="border-border/50 border-b">
+                    {headerGroup.headers.map((header) => {
+                      const sortDirection = header.column.getIsSorted();
+                      const canSort = header.column.getCanSort();
+                      const sortingArrows =
+                        sortDirection === "desc" ? (
+                          <ArrowDown
+                            className={styles.sortIcon}
+                            aria-hidden="true"
                           />
-                        )}
-                      </div>
-                    </TableHead>
-                  );
-                })}
-                {/* Add debug header when debug mode is enabled */}
-                {isDebugEnabled && (
-                  <TableHead className={cn(styles.header)}>Debug</TableHead>
-                )}
-              </TableRow>
-            ))}
+                        ) : sortDirection === "asc" ? (
+                          <ArrowUp
+                            className={styles.sortIcon}
+                            aria-hidden="true"
+                          />
+                        ) : canSort ? (
+                          <ArrowUpDown
+                            className={cn(
+                              styles.sortIcon,
+                              "opacity-40 group-hover:opacity-100",
+                            )}
+                            aria-hidden="true"
+                          />
+                        ) : null;
+
+                      const titleContent = (
+                        <>
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext(),
+                              )}
+                          {sortingArrows}
+                        </>
+                      );
+
+                      return (
+                        <TableHead
+                          key={header.id}
+                          colSpan={header.colSpan}
+                          aria-sort={
+                            sortDirection === "asc"
+                              ? "ascending"
+                              : sortDirection === "desc"
+                                ? "descending"
+                                : "none"
+                          }
+                          className={cn(
+                            header.column.columnDef.meta?.className,
+                            styles.header,
+                          )}
+                        >
+                          {canSort ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="group -ml-2 h-6 justify-start gap-1 px-2 font-medium text-[11px] hover:bg-muted/60"
+                              onClick={() =>
+                                header.column.toggleSorting(
+                                  header.column.getIsSorted() === "asc",
+                                )
+                              }
+                            >
+                              {titleContent}
+                            </Button>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              {titleContent}
+                            </span>
+                          )}
+                        </TableHead>
+                      );
+                    })}
+                    {isDebugEnabled && (
+                      <TableHead className={cn(styles.header)}>Debug</TableHead>
+                    )}
+                  </TableRow>
+
+                  {/* Filter Row - only render if any column has filters */}
+                  {hasAnyFilters && (
+                    <TableRow
+                      key={`${headerGroup.id}-filters`}
+                      className={styles.filterRow}
+                    >
+                      {headerGroup.headers.map((header) => {
+                        const filterConfig =
+                          header.column.columnDef.meta?.filterConfig;
+
+                        return (
+                          <TableHead
+                            key={`${header.id}-filter`}
+                            colSpan={header.colSpan}
+                            className={cn(
+                              header.column.columnDef.meta?.className,
+                              styles.filterRow,
+                            )}
+                          >
+                            {filterConfig && (
+                              <HeaderFilter
+                                column={header.column}
+                                filterConfig={filterConfig}
+                              />
+                            )}
+                          </TableHead>
+                        );
+                      })}
+                      {isDebugEnabled && (
+                        <TableHead className={cn(styles.filterRow)} />
+                      )}
+                    </TableRow>
+                  )}
+                </Fragment>
+              );
+            })}
           </TableHeader>
           <TableBody
             className={
@@ -276,22 +322,28 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         </Table>
       </div>
 
-      {/* Mobile Card View */}
-      {isLoading ? (
-        <div className="lg:hidden">
-          <SimpleLoading />
-        </div>
-      ) : error ? (
-        <div className="block py-8 lg:hidden">
-          <ErrorDisplay error={error} />
-        </div>
-      ) : (
-        <MobileCardView
+      {/* Mobile Toolbar + Card View */}
+      <div className="lg:hidden">
+        <DataTableToolbar
           table={table}
-          entity={entity}
-          renderMobileCard={renderMobileCard}
+          additionalContent={toolbarContent}
+          actions={actions}
+          className="mb-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
         />
-      )}
+        {isLoading ? (
+          <SimpleLoading />
+        ) : error ? (
+          <div className="py-8">
+            <ErrorDisplay error={error} />
+          </div>
+        ) : (
+          <MobileCardView
+            table={table}
+            entity={entity}
+            renderMobileCard={renderMobileCard}
+          />
+        )}
+      </div>
 
       <DataTablePagination table={table} timing={timing} />
     </SpacedContainer>

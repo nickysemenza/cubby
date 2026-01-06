@@ -1,7 +1,14 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Bug, BugOff } from "lucide-react";
+import {
+  Bug,
+  BugOff,
+  Home,
+  LayoutDashboard,
+  MoreHorizontal,
+} from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
+import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
@@ -15,6 +22,15 @@ import {
   reportsItems,
 } from "./navigation/nav-items";
 import { SyncStatusBadge } from "./sync/sync-status-badge";
+
+// Icons for desktop nav
+const HomeIcon = Home;
+const ProductsIcon = entities.product.lucideIcon;
+const LocationsIcon = entities.location.lucideIcon;
+const InventoryIcon = entities.inventory.lucideIcon;
+const KitchenIcon = entities.recipe.lucideIcon;
+const ReportsIcon = LayoutDashboard;
+const MoreIcon = MoreHorizontal;
 
 // cf https://github.com/shadcn-ui/ui/blob/main/apps/www/app/(app)/examples/dashboard/components/main-nav.tsx
 export function MainNav({
@@ -47,54 +63,62 @@ export function MainNav({
         <Link
           to="/"
           className={cn(
-            "font-medium text-sm transition-colors hover:text-primary",
+            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             pathName !== "/" && "text-muted-foreground",
           )}
           aria-current={pathName === "/" ? "page" : undefined}
         >
+          <HomeIcon className="h-4 w-4" />
           Home
         </Link>
 
         <Link
           to="/products"
           className={cn(
-            "font-medium text-sm transition-colors hover:text-primary",
+            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/products") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/products") ? "page" : undefined}
         >
+          <ProductsIcon className="h-4 w-4" />
           Products
         </Link>
 
-        <NavDropdown label="Kitchen" items={kitchenItems} />
+        <NavDropdown label="Kitchen" items={kitchenItems} icon={KitchenIcon} />
 
         <Link
           to="/locations"
           className={cn(
-            "font-medium text-sm transition-colors hover:text-primary",
+            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/locations") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/locations") ? "page" : undefined}
         >
+          <LocationsIcon className="h-4 w-4" />
           Locations
         </Link>
 
         <Link
           to="/inventory"
           className={cn(
-            "font-medium text-sm transition-colors hover:text-primary",
+            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/inventory") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/inventory") ? "page" : undefined}
         >
+          <InventoryIcon className="h-4 w-4" />
           Inventory
         </Link>
 
         {session.data?.user && (
-          <NavDropdown label="Reports" items={reportsItems} />
+          <NavDropdown
+            label="Reports"
+            items={reportsItems}
+            icon={ReportsIcon}
+          />
         )}
 
-        <NavDropdown label="More" items={desktopMoreItems} />
+        <NavDropdown label="More" items={desktopMoreItems} icon={MoreIcon} />
       </nav>
 
       <FlexContainer align="center" gap={2}>

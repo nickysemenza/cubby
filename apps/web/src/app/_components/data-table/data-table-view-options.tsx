@@ -22,10 +22,14 @@ export function DataTableViewOptions<TData>({
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" size="sm" className="ml-auto flex h-8" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-muted-foreground text-xs hover:text-foreground"
+          />
         }
       >
-        <Settings2 />
+        <Settings2 className="h-3.5 w-3.5" />
         View
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[150px]">

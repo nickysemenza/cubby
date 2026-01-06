@@ -1,3 +1,4 @@
+import { AlertTriangle, Apple, Scale } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
 import { LocationTree } from "~/app/_components/inventory/location-tree-view";
@@ -8,8 +9,15 @@ import {
   EntitySummaryCard,
   entitySummaryDataSchema,
 } from "~/components/entity/entity-summary-card";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
+import { entities } from "~/entities/entities";
 import { wasm } from "~/lib/wasm";
-import { infLocation, locationType } from "~/schemas/location";
+import { infLocation } from "~/schemas/location";
 import { recipeOut } from "~/schemas/recipe";
 import { unitMappingWithMetadata } from "~/schemas/unitmapping";
 import { EditableComponentDemo } from "./_components/EditableComponentDemo";
@@ -51,61 +59,76 @@ export function DocsPage() {
         <p>
           RecipeHub is built around five key entity types that work together:
         </p>
-
-        <h3>Ingredients</h3>
-        <p>
-          The building blocks of recipes. Generic items like &ldquo;flour&rdquo;
-          or &ldquo;butter&rdquo; that appear across multiple recipes.
-        </p>
-
-        <h3>Products</h3>
-        <p>
-          Specific purchasable items linked to ingredients. For example,
-          &ldquo;King Arthur All-Purpose Flour 5lb&rdquo; links to the
-          &ldquo;flour&rdquo; ingredient. Products can have unit mappings
-          (conversions between volume, weight, and price) and optional USDA
-          nutrition data.
-        </p>
-
-        <h3>Locations</h3>
-        <p>
-          Hierarchical storage areas like Kitchen → Pantry → Top Shelf. Used to
-          organize where inventory is stored.
-        </p>
-
-        <h4>Location Types</h4>
-        <p>
-          Each location has a <strong>type</strong> that describes what kind of
-          storage it is. Valid types:{" "}
-          <code>{locationType.options.join(", ")}</code>
-        </p>
-
-        <h4>CSV Format</h4>
-        <p>
-          When importing/exporting via CSV or Google Sheets, locations use a
-          simple name-based format. Each location has a unique{" "}
-          <code>location_name</code> and optionally references its parent via{" "}
-          <code>parent_name</code>.
-        </p>
-        <p>
-          <strong>Default types:</strong> Root locations (no parent) default to{" "}
-          <code>room</code>, and child locations default to <code>shelf</code>.
-          You can specify a different type via the <code>location_type</code>{" "}
-          column.
-        </p>
-
-        <h3>Recipes</h3>
-        <p>
-          Collections of ingredients with amounts, organized into sections with
-          step-by-step instructions.
-        </p>
-
-        <h3>Inventory</h3>
-        <p>
-          Tracks what products you have and where. Links products to locations
-          with quantities.
-        </p>
       </Prose>
+
+      <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.ingredient.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Ingredients</CardTitle>
+            </div>
+            <CardDescription>
+              The building blocks of recipes. Generic items like "flour" or
+              "butter" that appear across multiple recipes.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.product.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Products</CardTitle>
+            </div>
+            <CardDescription>
+              Specific purchasable items linked to ingredients. Products can
+              have unit mappings, UPC barcodes, and optional USDA nutrition
+              data.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.location.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Locations</CardTitle>
+            </div>
+            <CardDescription>
+              Hierarchical storage areas (Kitchen → Pantry → Top Shelf).
+              Supports types like room, shelf, drawer, and CSV import/export
+              with parent references.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.recipe.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Recipes</CardTitle>
+            </div>
+            <CardDescription>
+              Collections of ingredients with amounts, organized into sections
+              with step-by-step instructions.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.inventory.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Inventory</CardTitle>
+            </div>
+            <CardDescription>
+              Tracks what products you have and where. Links products to
+              locations with quantities.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
 
       <div className="my-8">
         <div className="mb-3 font-medium">Entity Relationships</div>
@@ -126,63 +149,88 @@ export function DocsPage() {
 
       <Prose>
         <h2>Features</h2>
-
-        <h3>Recipes</h3>
-        <ul>
-          <li>Create recipes with multiple sections (e.g., Dough, Filling)</li>
-          <li>Each section has its own ingredients and instructions</li>
-          <li>Import recipes directly from URLs</li>
-          <li>Nest recipes within other recipes as sub-components</li>
-        </ul>
-
-        <h3>Products</h3>
-        <ul>
-          <li>Link products to ingredients for inventory tracking</li>
-          <li>Add unit mappings for volume, weight, and price conversions</li>
-          <li>Connect to USDA database via UPC barcode or NDB number</li>
-          <li>Pull in nutrition data from linked USDA entries</li>
-          <li>
-            <strong>Misc products:</strong> Name a product starting with{" "}
-            <code>misc:</code> (e.g., &ldquo;misc: assorted cables&rdquo;) to
-            skip validation for pricing, UPC, etc. Useful for bulk bins or items
-            not worth individually tracking.
-          </li>
-        </ul>
-
-        <h3>Inventory Management</h3>
-        <ul>
-          <li>Track product quantities at specific locations</li>
-          <li>Bulk edit multiple items at once</li>
-          <li>Bulk move items between locations</li>
-          <li>Automatic detection of duplicate unique products</li>
-        </ul>
-
-        <h3>USDA Integration</h3>
-        <ul>
-          <li>Search FoodData Central by name, UPC, or NDB number</li>
-          <li>View detailed nutrition information</li>
-          <li>Link products to USDA entries for enriched data</li>
-        </ul>
-
-        <h3>Unit Conversions</h3>
-        <ul>
-          <li>WASM-powered conversion engine</li>
-          <li>
-            Chain conversions through multiple units (cups &rarr; grams &rarr;
-            dollars)
-          </li>
-          <li>Conversion graphs built automatically from product mappings</li>
-        </ul>
-
-        <h3>Problems Dashboard</h3>
-        <ul>
-          <li>Duplicate unique products across locations</li>
-          <li>Products missing inventory entries</li>
-          <li>Invalid UPC codes</li>
-          <li>Products without unit mappings</li>
-          <li>Empty locations</li>
-        </ul>
       </Prose>
+
+      <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.recipe.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Recipes</CardTitle>
+            </div>
+            <CardDescription>
+              Create recipes with multiple sections, import from URLs, and nest
+              recipes within other recipes as sub-components.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.product.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Products</CardTitle>
+            </div>
+            <CardDescription>
+              Link to ingredients, add unit mappings, connect to USDA for
+              nutrition. Use <code className="text-xs">misc:</code> prefix for
+              items not worth tracking individually.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <entities.inventory.lucideIcon className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Inventory Management</CardTitle>
+            </div>
+            <CardDescription>
+              Track quantities at locations, bulk edit/move items, and
+              automatically detect duplicate unique products.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Apple className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>USDA Integration</CardTitle>
+            </div>
+            <CardDescription>
+              Search FoodData Central by name, UPC, or NDB number. View detailed
+              nutrition and link products to USDA entries.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Scale className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Unit Conversions</CardTitle>
+            </div>
+            <CardDescription>
+              WASM-powered engine that chains conversions through multiple units
+              (cups → grams → dollars) using product mappings.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+              <CardTitle>Problems Dashboard</CardTitle>
+            </div>
+            <CardDescription>
+              Find duplicate products, missing inventory, invalid UPCs, products
+              without unit mappings, and empty locations.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
 
       <Prose>
         <h2>Component Demos</h2>

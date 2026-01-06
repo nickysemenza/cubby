@@ -5,7 +5,7 @@ import {
   type RowSelectionState,
 } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/utils";
@@ -24,7 +24,12 @@ import {
   calculateTotals,
 } from "../_components/units/univ-conversion";
 
-export function RecipeList() {
+interface RecipeListProps {
+  /** Actions to display in the table toolbar (e.g., "Create New" button) */
+  actions?: ReactNode;
+}
+
+export function RecipeList({ actions }: RecipeListProps) {
   const api = useTRPC();
   const trpcClient = useTRPCClient();
   const navigate = useNavigate();
@@ -265,6 +270,7 @@ export function RecipeList() {
         timing={timing}
         entity="recipe"
         onRowClick={onRowClick}
+        actions={actions}
         additionalToolbarContent={
           selectedCount > 0 ? (
             <div className="flex items-center gap-2">

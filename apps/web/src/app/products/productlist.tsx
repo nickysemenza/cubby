@@ -1,5 +1,6 @@
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
@@ -20,9 +21,11 @@ import { productCategoryOptionsWithTheme } from "../_components/products/product
 
 interface ProductListProps {
   initialCategory?: string;
+  /** Actions to display in the table toolbar (e.g., "Create New" button) */
+  actions?: ReactNode;
 }
 
-export function ProductList({ initialCategory }: ProductListProps) {
+export function ProductList({ initialCategory, actions }: ProductListProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<ProductWithFoodOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("product");
@@ -117,6 +120,7 @@ export function ProductList({ initialCategory }: ProductListProps) {
         timing={timing}
         entity="product"
         onRowClick={onRowClick}
+        actions={actions}
       />
       <PreviewSheet />
     </div>

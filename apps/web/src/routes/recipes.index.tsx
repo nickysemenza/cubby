@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
@@ -10,15 +11,17 @@ export const Route = createFileRoute("/recipes/")({
 
 function RecipesPage() {
   return (
-    <EntityLayout
-      title="Recipes"
-      actions={
-        <Link to="/recipes/new">
-          <Button>Create New Recipe</Button>
-        </Link>
-      }
-    >
-      <RecipeList />
+    <EntityLayout title="Recipes">
+      <RecipeList
+        actions={
+          <Link to="/recipes/new">
+            <Button size="sm" className="h-7 gap-1 text-xs">
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </Button>
+          </Link>
+        }
+      />
     </EntityLayout>
   );
 }

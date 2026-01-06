@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { z } from "zod";
 import { ProductList } from "~/app/products/productlist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
@@ -18,15 +19,18 @@ function ProductsPage() {
   const { category } = Route.useSearch();
 
   return (
-    <EntityLayout
-      title="Products"
-      actions={
-        <Link to="/products/new">
-          <Button>Create New Product</Button>
-        </Link>
-      }
-    >
-      <ProductList initialCategory={category} />
+    <EntityLayout title="Products">
+      <ProductList
+        initialCategory={category}
+        actions={
+          <Link to="/products/new">
+            <Button size="sm" className="h-7 gap-1 text-xs">
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </Button>
+          </Link>
+        }
+      />
     </EntityLayout>
   );
 }

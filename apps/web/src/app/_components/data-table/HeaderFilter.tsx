@@ -36,7 +36,8 @@ export function HeaderFilter<TData>({
     }
   }
 
-  const inputClassName = "h-4 text-[9px] px-0.5";
+  const inputClassName =
+    "h-5 text-[10px] px-1.5 bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
 
   if (filterConfig.filterType === "select") {
     return (
