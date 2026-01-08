@@ -497,20 +497,22 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
       {/* Import from Text */}
       <Collapsible open={textImportOpen} onOpenChange={setTextImportOpen}>
-        <CollapsibleTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="flex items-center gap-1 text-muted-foreground"
-          >
-            {textImportOpen ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-            Import from Text
-          </Button>
+        <CollapsibleTrigger
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-1 text-muted-foreground"
+            />
+          }
+        >
+          {textImportOpen ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
+          Import from Text
         </CollapsibleTrigger>
         <CollapsibleContent className="mt-2 space-y-4 rounded border border-border p-3">
           {/* Ingredients: textarea + pills preview */}

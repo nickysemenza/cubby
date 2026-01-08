@@ -59,23 +59,25 @@ export function BottomNav() {
 
         {/* More button with sheet */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
-          <SheetTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
-                isMoreActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-              aria-label="More options"
-            >
-              <Menu
-                className={cn("h-5 w-5", isMoreActive && "scale-110")}
-                aria-hidden="true"
+          <SheetTrigger
+            render={
+              <button
+                type="button"
+                className={cn(
+                  "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+                  isMoreActive
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+                aria-label="More options"
               />
-              <span className="font-medium text-[10px]">More</span>
-            </button>
+            }
+          >
+            <Menu
+              className={cn("h-5 w-5", isMoreActive && "scale-110")}
+              aria-hidden="true"
+            />
+            <span className="font-medium text-[10px]">More</span>
           </SheetTrigger>
           <SheetContent
             side="bottom"
@@ -116,19 +118,22 @@ export function BottomNav() {
                 }
 
                 return (
-                  <SheetClose key={item.href} asChild>
-                    <Link
-                      to={item.href}
-                      className={cn(
-                        "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
-                        !active && "text-muted-foreground",
-                        active && "bg-muted text-foreground",
-                      )}
-                      aria-current={active ? "page" : undefined}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {item.label}
-                    </Link>
+                  <SheetClose
+                    key={item.href}
+                    render={
+                      <Link
+                        to={item.href}
+                        className={cn(
+                          "flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 font-medium text-sm transition-colors hover:bg-muted hover:text-primary",
+                          !active && "text-muted-foreground",
+                          active && "bg-muted text-foreground",
+                        )}
+                        aria-current={active ? "page" : undefined}
+                      />
+                    }
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
                   </SheetClose>
                 );
               })}

@@ -74,9 +74,10 @@ export function getContext() {
     },
     queryCache: new QueryCache({
       onError: (error) => {
-        // Don't toast NOT_FOUND errors - these are expected and handled by UI
         const details = getAppErrorDetails(error);
-        if (details.code === "NOT_FOUND") return;
+        const isExpectedError =
+          details.code === "NOT_FOUND" || details.code === "UNAUTHORIZED";
+        if (isExpectedError) return;
         toast.error(getErrorMessage(error));
       },
     }),

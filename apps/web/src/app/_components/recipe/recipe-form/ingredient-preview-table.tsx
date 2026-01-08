@@ -20,6 +20,7 @@ import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
 import { EntityPillLink } from "../../EntityPill";
+import { NoneState } from "../../NoneState";
 import type { IngItem } from "./types";
 
 // Format a single amount like "2 cups" or "2-3 cups" (for ranges)
@@ -228,12 +229,14 @@ function IngredientRow({
         </div>
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {item.parsed.amounts.length > 0
-          ? formatAmounts(item.parsed.amounts)
-          : "—"}
+        {item.parsed.amounts.length > 0 ? (
+          formatAmounts(item.parsed.amounts)
+        ) : (
+          <NoneState />
+        )}
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {item.parsed.modifier || "—"}
+        {item.parsed.modifier || <NoneState />}
       </TableCell>
     </TableRow>
   );

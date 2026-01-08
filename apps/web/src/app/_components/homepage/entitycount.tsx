@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Card } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
+import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import type { SortParams } from "~/schemas/pagination";
 import { useTRPC } from "~/trpc/react";
@@ -75,6 +76,8 @@ function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
 
 export default function EntityCount() {
   const api = useTRPC();
+  const session = authClient.useSession();
+  const isAuthenticated = !!session.data?.user;
 
   const sort: SortParams = { orderBy: "name", direction: "asc" };
   const opts = {
@@ -85,13 +88,13 @@ export default function EntityCount() {
 
   const results = useQueries({
     queries: [
-      api.location.list.queryOptions(opts),
-      api.product.list.queryOptions(opts),
-      api.inventory.list.queryOptions(opts),
-      api.recipe.list.queryOptions(opts),
-      api.ingredient.list.queryOptions(opts),
-      api.image.list.queryOptions(opts),
-      api.usda.list.queryOptions(opts),
+      { ...api.location.list.queryOptions(opts), enabled: isAuthenticated },
+      { ...api.product.list.queryOptions(opts), enabled: isAuthenticated },
+      { ...api.inventory.list.queryOptions(opts), enabled: isAuthenticated },
+      { ...api.recipe.list.queryOptions(opts), enabled: isAuthenticated },
+      { ...api.ingredient.list.queryOptions(opts), enabled: isAuthenticated },
+      { ...api.image.list.queryOptions(opts), enabled: isAuthenticated },
+      { ...api.usda.list.queryOptions(opts), enabled: isAuthenticated },
     ],
   });
 

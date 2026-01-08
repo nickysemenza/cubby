@@ -129,7 +129,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
     id: "createdAt",
     cell: (info) => {
       const value = info.getValue();
-      return value ? <HoverableTimestamp timestamp={value} /> : "";
+      return value ? <HoverableTimestamp timestamp={value} /> : <NoneState />;
     },
   });
 }
@@ -739,7 +739,7 @@ export function createTimestampColumn<
     className?: string;
   },
 ) {
-  const fallback = options?.fallback ?? "";
+  const fallback = options?.fallback ?? <NoneState />;
 
   return columnHelper.accessor((row) => row[accessor] as string | Date | null, {
     id: String(accessor),
