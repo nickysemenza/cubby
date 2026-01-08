@@ -20,7 +20,10 @@ export function RecipeInstructions({ recipe }: RecipeInstructionsProps) {
   return (
     <div className="space-y-8">
       {recipe.sections.map((section, sectionIndex) => (
-        <div key={section.id} className="animate-slide-up">
+        <div
+          key={section.id}
+          className="fade-in slide-in-from-bottom-2 animate-in duration-300"
+        >
           {/* Section header - only show if there are multiple sections or section has a name */}
           {(recipe.sections.length > 1 || section.name) && (
             <h3 className="mb-4 font-semibold text-xl">

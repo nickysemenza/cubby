@@ -125,8 +125,8 @@ export function MainNav({
         {/* Quick Actions */}
         {session.data?.user && <QuickActionsMenu />}
 
-        {/* Status Badges - stacked on mobile */}
-        <div className="flex flex-col gap-0.5 md:flex-row md:gap-2">
+        {/* Status Badges */}
+        <div className="flex flex-row gap-2">
           {session.data?.user && <ProblemsBadge />}
           <SyncStatusBadge />
         </div>

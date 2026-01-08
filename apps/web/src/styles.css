@@ -66,6 +66,15 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  input:focus,
+  textarea:focus,
+  [data-slot="combobox-trigger"]:focus {
+    box-shadow:
+      0 0 0 2px var(--background),
+      0 0 0 4px oklch(from var(--brand-terracotta) l c h / 0.2),
+      0 0 12px -2px oklch(from var(--brand-terracotta) l c h / 0.15);
+  }
 }
 
 /*
@@ -110,6 +119,18 @@
   --brand-terra-light: #d98a68;
   --brand-cream: #fdfbf7;
   --brand-shelf: #5c5550;
+
+  /* Warm shadows - earthy tones for depth */
+  --shadow-warm-sm:
+    0 1px 3px 0 rgba(58, 53, 48, 0.06), 0 1px 2px -1px rgba(58, 53, 48, 0.08);
+  --shadow-warm-md:
+    0 4px 12px -2px rgba(58, 53, 48, 0.12), 0 2px 4px -1px
+    rgba(58, 53, 48, 0.08);
+  --shadow-warm-lg:
+    0 8px 24px -4px rgba(58, 53, 48, 0.15), 0 4px 8px -2px rgba(58, 53, 48, 0.1);
+  --shadow-warm-xl:
+    0 20px 40px -8px rgba(58, 53, 48, 0.2), 0 8px 16px -4px
+    rgba(58, 53, 48, 0.12);
 
   /* Core colors */
   --background: var(--brand-cream);
@@ -238,38 +259,18 @@
     @apply [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 
-  /*
-    ---break---
-    Motion utilities - entrance animations and hover effects
-  */
-
-  /* Slide up entrance animation */
-  .animate-slide-up {
-    animation: slideUp 0.4s ease-out forwards;
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
+  /* Stagger children - custom keyframe required for nth-child animation delays */
   @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
     to {
       opacity: 1;
       transform: translateY(0);
     }
   }
 
-  /* Fade in entrance animation */
-  .animate-fade-in {
-    animation: fadeIn 0.4s ease-out forwards;
-    opacity: 0;
-  }
-
-  @keyframes fadeIn {
-    to {
-      opacity: 1;
-    }
-  }
-
-  /* Stagger children - applies slide-up with delays to child elements */
   .stagger-children > * {
     animation: slideUp 0.4s ease-out forwards;
     opacity: 0;
@@ -303,14 +304,6 @@
   }
   .stagger-children > *:nth-child(10) {
     animation-delay: 450ms;
-  }
-
-  /* Card hover effect - subtle lift with shadow */
-  .card-hover {
-    @apply transition-all duration-200;
-  }
-  .card-hover:hover {
-    @apply -translate-y-0.5 shadow-md;
   }
 
   /* Link underline animation */
@@ -390,5 +383,79 @@
   .noise-texture > * {
     position: relative;
     z-index: 1;
+  }
+
+  /* Table row hover - warm gradient accent */
+  .table-row-hover {
+    @apply transition-all duration-150;
+  }
+  .table-row-hover:hover {
+    background: linear-gradient(
+      90deg,
+      oklch(0.96 0.02 55) 0%,
+      transparent 100%
+    );
+    box-shadow: inset 3px 0 0 var(--brand-terracotta);
+  }
+
+  /* Zebra striping with warmth */
+  .table-zebra tr:nth-child(even) {
+    background-color: oklch(0.988 0.004 55);
+  }
+
+  /* Nav link animated underline */
+  .nav-link-animated {
+    @apply relative;
+  }
+  .nav-link-animated::after {
+    content: "";
+    @apply absolute -bottom-0.5 left-1 right-1 h-0.5 rounded-full;
+    background: var(--brand-terracotta);
+    transform: scaleX(0);
+    transition: transform 200ms ease-out;
+  }
+  .nav-link-animated:hover::after,
+  .nav-link-animated[data-status="active"]::after {
+    transform: scaleX(1);
+  }
+
+  /* Image thumbnail ring overlay - requires ::after for inset ring */
+  .thumbnail-ring::after {
+    content: "";
+    @apply absolute inset-0 rounded-lg ring-1 ring-inset ring-black/5 transition-all;
+  }
+  .thumbnail-ring:hover::after {
+    @apply ring-2 ring-primary/30;
+  }
+
+  /* Page header accent bar */
+  .page-header-accent {
+    @apply relative;
+  }
+  .page-header-accent::after {
+    content: "";
+    @apply absolute -bottom-2 left-0 h-1 w-16 rounded-full;
+    background: linear-gradient(
+      90deg,
+      var(--brand-terracotta) 0%,
+      var(--brand-terra-light) 100%
+    );
+  }
+
+  /* Stat card hover glow */
+  .stat-card-glow {
+    @apply relative overflow-hidden;
+  }
+  .stat-card-glow::before {
+    content: "";
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    background: radial-gradient(
+      circle at 80% 20%,
+      oklch(from var(--brand-terra-light) l c h / 0.15) 0%,
+      transparent 50%
+    );
+  }
+  .stat-card-glow:hover::before {
+    @apply opacity-100;
   }
 }

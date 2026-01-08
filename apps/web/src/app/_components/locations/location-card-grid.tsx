@@ -158,7 +158,7 @@ function LocationCard({
       titleIcon={getLocationIcon(location.type)}
       subtitle={subtitle}
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
-      className="card-hover h-full"
+      className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
       detailsHref={`/locations/${location.id}`}
     >
       {/* Details */}

@@ -30,29 +30,25 @@ function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
     <Link to={def.routes.list}>
       <Card
         className={cn(
-          "group relative overflow-hidden p-3 transition-all duration-200",
-          "hover:-translate-y-0.5 hover:shadow-md",
+          "stat-card-glow group relative overflow-hidden p-3 transition-all duration-200",
+          "hover:-translate-y-0.5 hover:shadow-[var(--shadow-warm-lg)]",
           "cursor-pointer border-l-4",
           "fade-in slide-in-from-bottom-2 animate-in",
           def.color.text.replace("text-", "border-l-"),
         )}
         style={{ animationDelay: `${index * 50}ms`, animationFillMode: "both" }}
       >
-        {/* Subtle background tint on hover */}
-        <div
-          className={cn(
-            "absolute inset-0 opacity-0 transition-opacity group-hover:opacity-50",
-            def.color.bg,
-          )}
-        />
-
         <div className="relative flex items-center gap-3">
           <div
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105",
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br transition-all duration-200 group-hover:rotate-3 group-hover:scale-110",
               def.color.bg,
               def.color.text,
             )}
+            style={{
+              boxShadow:
+                "inset 0 1px 2px rgba(255,255,255,0.3), inset 0 -1px 2px rgba(0,0,0,0.1)",
+            }}
           >
             <Icon className="h-5 w-5" />
           </div>

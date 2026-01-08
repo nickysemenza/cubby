@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 
 const emptyVariants = cva(
-  "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl p-6 text-center text-balance animate-fade-in",
+  "flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl p-6 text-center text-balance animate-in fade-in duration-300",
   {
     variants: {
       variant: {

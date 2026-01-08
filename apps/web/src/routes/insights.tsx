@@ -11,7 +11,7 @@ export const Route = createFileRoute("/insights")({
 
 function InsightsPage() {
   return (
-    <div className="container mx-auto animate-fade-in space-y-8 py-6">
+    <div className="fade-in container mx-auto animate-in space-y-8 py-6 duration-300">
       <div className="flex items-center gap-3">
         <BarChart3 className="h-8 w-8" />
         <h1 className="font-bold font-heading text-3xl">Insights</h1>

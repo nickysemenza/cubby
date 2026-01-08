@@ -103,13 +103,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
-  // Clean table styles with warm accents
   const styles = {
-    table: "text-xs leading-tight",
+    table: "text-xs leading-tight table-zebra",
     header: "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80",
     filterRow: "h-7 px-2 py-0.5 bg-muted/40 border-b border-border/50",
     cell: "px-2 py-1 min-h-[28px] align-middle",
-    row: "even:bg-muted/20 hover:bg-primary/5 hover:border-l-2 hover:border-l-primary/50 transition-colors border-b border-border/30",
+    row: "table-row-hover border-b border-border/30",
     sortIcon: "h-3 w-3",
   };
 

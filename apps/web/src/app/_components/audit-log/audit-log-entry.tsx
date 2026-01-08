@@ -63,8 +63,9 @@ export function AuditLogEntryComponent({
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <div className="flex items-start gap-3 border-b py-3 last:border-b-0">
-        {/* User Avatar */}
+      <div className="group/entry relative flex items-start gap-3 py-3 pl-6 last:border-b-0">
+        <div className="absolute top-5 left-0 h-3 w-3 rounded-full bg-primary ring-4 ring-background" />
+        <div className="absolute top-8 bottom-0 left-[5px] w-0.5 bg-gradient-to-b from-border to-transparent group-last/entry:hidden" />
         <Avatar className="h-8 w-8 flex-shrink-0">
           {entry.user?.image ? (
             <AvatarImage src={entry.user.image} alt={entry.user.name ?? ""} />

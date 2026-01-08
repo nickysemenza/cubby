@@ -65,7 +65,7 @@ export function MobileCard({
   return (
     <div
       className={cn(
-        "flex animate-fade-in items-start gap-3 rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all hover:shadow-md",
+        "fade-in flex animate-in items-start gap-3 rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all duration-300 hover:shadow-md",
         borderColor,
         onClick && "cursor-pointer",
         className,

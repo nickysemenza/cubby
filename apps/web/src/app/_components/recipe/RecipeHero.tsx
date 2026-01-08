@@ -26,7 +26,6 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     <div
       className={`relative overflow-hidden rounded-xl ${hasImage ? "h-64 sm:h-80 md:h-96" : "bg-muted py-12"}`}
     >
-      {/* Background image with gradient overlay */}
       {hasImage && (
         <>
           <Image
@@ -35,6 +34,10 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
             className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ boxShadow: "inset 0 0 120px 40px rgba(0,0,0,0.4)" }}
+          />
         </>
       )}
 
@@ -43,7 +46,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         className={`relative z-10 flex h-full flex-col justify-end p-6 sm:p-8 ${!hasImage ? "items-start" : ""}`}
       >
         <h2
-          className={`font-bold text-3xl tracking-tight sm:text-4xl md:text-5xl ${hasImage ? "text-white" : ""}`}
+          className={`font-bold text-3xl tracking-tight sm:text-4xl md:text-5xl ${hasImage ? "text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)]" : ""}`}
         >
           {recipe.name}
         </h2>
