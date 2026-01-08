@@ -1,4 +1,4 @@
-import { and, count, eq, ilike, not } from "drizzle-orm";
+import { and, count, eq, inArray, not } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { ActorContext } from "~/schemas/context";
 import {
@@ -20,6 +20,7 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   buildOrderBy,
   buildPartialUpdateValues,
+  formatSearchTerm,
   getDb,
   insertAndReturnDb,
   relations,
@@ -266,11 +267,19 @@ export const inventoryentryList = async (
   if (needsJoins) {
     // Build conditions for join-based query
     const conditions: ReturnType<typeof eq>[] = [];
-    if (filters.productNameFilter) {
-      conditions.push(ilike(product.name, `%${filters.productNameFilter}%`));
+    const productNameCondition = formatSearchTerm(
+      product.name,
+      filters.productNameFilter,
+    );
+    if (productNameCondition) {
+      conditions.push(productNameCondition);
     }
-    if (filters.locationNameFilter) {
-      conditions.push(ilike(location.name, `%${filters.locationNameFilter}%`));
+    const locationNameCondition = formatSearchTerm(
+      location.name,
+      filters.locationNameFilter,
+    );
+    if (locationNameCondition) {
+      conditions.push(locationNameCondition);
     }
     if (filters.locationIdFilter) {
       conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
@@ -297,17 +306,20 @@ export const inventoryentryList = async (
         .where(whereCondition),
     ]);
 
-    // Fetch full data with relations for each result
-    const fullResults = await Promise.all(
-      results.map((row) =>
-        getDb(db).query.inventoryEntry.findFirst({
-          where: eq(inventoryEntry.id, row.inventoryEntry.id),
-          ...relations.inventory.full,
-        }),
-      ),
-    );
+    // Fetch full data with relations in a single batched query (avoids N+1)
+    const ids = results.map((row) => row.inventoryEntry.id);
+    const fullResults =
+      ids.length > 0
+        ? await getDb(db).query.inventoryEntry.findMany({
+            where: inArray(inventoryEntry.id, ids),
+            ...relations.inventory.full,
+          })
+        : [];
 
-    const inventoryEntries = fullResults
+    // Preserve original order from the filtered query
+    const resultsById = new Map(fullResults.map((r) => [r.id, r]));
+    const inventoryEntries = ids
+      .map((id) => resultsById.get(id))
       .filter((r) => r !== undefined)
       .map((r) => dbInventoryEntryToAPI(r));
     return { data: inventoryEntries, count: countResult?.count ?? 0 };

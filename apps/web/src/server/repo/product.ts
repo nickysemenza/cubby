@@ -407,7 +407,7 @@ export const updateProduct = async (
   } = data;
 
   // Use a transaction to ensure atomicity
-  return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
+  return await withTransaction(db, async (tx) => {
     // Fetch current state for audit logging
     const beforeProduct = await tx.query.product.findFirst({
       where: eq(product.id, id),

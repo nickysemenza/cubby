@@ -48,6 +48,7 @@ import {
   relations,
   unwrapDb,
   updateAndReturnDb,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
 
@@ -56,7 +57,7 @@ export const mergeIngredients = async (
   target: IngredientId,
   aliases: IngredientId[],
 ) => {
-  return await getDb(db).transaction(async (tx) => {
+  return await withTransaction(db, async (tx) => {
     const targetRec = await tx.query.ingredient.findFirst({
       where: eq(ingredient.id, target),
     });

@@ -50,6 +50,7 @@ import {
   relations,
   unwrapDb,
   updateAndReturn,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 
 /**
@@ -156,7 +157,7 @@ export const updateLocation = async (
     where: eq(location.id, id),
   });
 
-  return await getDb(db).transaction(async (tx: DrizzleTransaction) => {
+  return await withTransaction(db, async (tx) => {
     // Build update values using helper to filter undefined
     const updateValues = buildPartialUpdateValues({
       name: data.name,

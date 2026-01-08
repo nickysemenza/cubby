@@ -14,6 +14,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { formatCurrency } from "~/lib/utils";
+import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -77,13 +78,11 @@ function RecipeComparePage() {
 
   // Extract unique ingredient IDs - stringify to use as stable dependency key
   const uniqueIngredientIds = useMemo(() => {
-    return [
-      ...new Set(
-        allIngredients
-          .filter((i) => i.type === "ingredient")
-          .map((i) => i.ingredient.id),
-      ),
-    ];
+    return dedupe(
+      allIngredients
+        .filter((i) => i.type === "ingredient")
+        .map((i) => i.ingredient.id),
+    );
   }, [allIngredients]);
 
   // Create stable key for dependency tracking

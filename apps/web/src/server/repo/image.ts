@@ -1,4 +1,4 @@
-import { and, eq, ilike, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type {
   ImageWithEntity,
@@ -15,6 +15,7 @@ import {
 import {
   associatePendingImages,
   buildOrderBy,
+  formatSearchTerm,
   getDb,
   insertAndReturnDb,
 } from "~/server/repo/database-helpers";
@@ -193,8 +194,9 @@ export const imageList = async (
 
   // Build where conditions
   const whereConditions: ReturnType<typeof eq>[] = [];
-  if (filterText && filterText.trim() !== "") {
-    whereConditions.push(ilike(image.filename, `%${filterText}%`));
+  const filenameCondition = formatSearchTerm(image.filename, filterText);
+  if (filenameCondition) {
+    whereConditions.push(filenameCondition);
   }
 
   const whereClause =
