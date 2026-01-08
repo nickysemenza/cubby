@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("Key pages render (unauthenticated)", () => {
   test("home page renders and has title", async ({ page }) => {
     await page.goto("/");
-    await expect(page).toHaveTitle(/RecipeHub/i);
+    await expect(page).toHaveTitle(/Cubby/i);
   });
 
   test("ingredients page renders list container", async ({ page }) => {

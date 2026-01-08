@@ -45,16 +45,16 @@ test.describe("Main navigation", () => {
     ).toBeVisible();
   });
 
-  test("mobile menu toggles and links work", async ({ page }) => {
+  test("mobile bottom nav links work", async ({ page }) => {
     await page.goto("/");
     await page.setViewportSize({ width: 375, height: 812 });
 
-    // Open mobile menu
-    const menuButton = page.getByRole("button", { name: /toggle menu/i });
-    await menuButton.click();
+    // Bottom nav should be visible on mobile
+    const bottomNav = page.getByRole("navigation", { name: "Main navigation" });
+    await expect(bottomNav).toBeVisible();
 
-    // Wait for menu to be visible
-    const inventoryLink = page.getByRole("link", { name: "Inventory" });
+    // Inventory link should be directly visible in bottom nav
+    const inventoryLink = bottomNav.getByRole("link", { name: "Inventory" });
     await expect(inventoryLink).toBeVisible({ timeout: 5000 });
 
     // Click the link and wait for navigation
