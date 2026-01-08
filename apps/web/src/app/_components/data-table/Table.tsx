@@ -59,11 +59,8 @@ interface TTableProps<TItem> {
   renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
   /** Callback when a row is clicked */
   onRowClick?: (row: Row<TItem>) => void;
-  // Deprecated props - kept for backward compatibility during migration
-  /** @deprecated Use column meta.filterConfig instead */
-  filterableColumns?: unknown[];
-  /** @deprecated Use additionalToolbarContent instead */
-  additionalFilters?: ReactNode;
+  /** Bulk action bar (rendered in toolbar when rows are selected) */
+  bulkActionBar?: ReactNode;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -71,7 +68,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     table,
     additionalToolbarContent,
     actions,
-    additionalFilters, // deprecated, fallback
+    bulkActionBar,
     isLoading = false,
     error,
     ariaLabel = "Data Table",
@@ -80,9 +77,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     renderMobileCard,
     onRowClick,
   } = props;
-
-  // Support deprecated additionalFilters prop
-  const toolbarContent = additionalToolbarContent ?? additionalFilters;
 
   const { isDebugEnabled } = useDebug();
 
@@ -215,8 +209,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         {/* Attached Toolbar */}
         <DataTableToolbar
           table={table}
-          additionalContent={toolbarContent}
+          additionalContent={additionalToolbarContent}
           actions={actions}
+          bulkActionBar={bulkActionBar}
           className="border-border/50 border-b bg-muted/30 px-3 py-2"
         />
 
@@ -368,8 +363,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       <div className="lg:hidden">
         <DataTableToolbar
           table={table}
-          additionalContent={toolbarContent}
+          additionalContent={additionalToolbarContent}
           actions={actions}
+          bulkActionBar={bulkActionBar}
           className="mb-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
         />
         {isLoading ? (

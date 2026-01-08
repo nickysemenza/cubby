@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { createColumnHelper, type Row } from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
 import { createImageColumn } from "~/app/_components/data-table/columnHelpers";
 import RTable from "~/app/_components/data-table/Table";
 import { EntityPillLink } from "~/app/_components/EntityPill";
@@ -16,7 +16,7 @@ export default function ImageList() {
   const columnHelper = createColumnHelper<ImageWithEntity>();
   const { onRowClick, PreviewSheet } = useEntityPreview("image");
 
-  const { table, isLoading, error, timing, data } = useEntityList({
+  const { table, isLoading, error, timing } = useEntityList({
     entity: "image",
     queryOptions: api.image.list.queryOptions,
     buildFilters: (ts) => ({
@@ -109,11 +109,6 @@ export default function ImageList() {
     ],
   });
 
-  // Show empty state when no images and not loading
-  if (!isLoading && (!data || data.length === 0)) {
-    return <NoneState />;
-  }
-
   return (
     <div>
       <RTable
@@ -123,9 +118,7 @@ export default function ImageList() {
         ariaLabel="Images Table"
         timing={timing}
         entity="image"
-        onRowClick={
-          onRowClick as unknown as (row: Row<ImageWithEntity>) => void
-        }
+        onRowClick={onRowClick}
       />
       <PreviewSheet />
     </div>

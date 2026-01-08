@@ -1,12 +1,8 @@
 import { getNutrientValueByKey } from "@recipehub/usda-schemas";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  createColumnHelper,
-  type RowSelectionState,
-} from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "~/components/ui/button";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/utils";
 import type { RecipeOut } from "~/schemas/recipe";
@@ -15,6 +11,7 @@ import { useTRPC, useTRPCClient } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useStableColumnState } from "../_components/hooks/useStableColumnState";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
 import { getIngredientName } from "../_components/recipe/recipeutils";
@@ -35,7 +32,6 @@ export function RecipeList({ actions }: RecipeListProps) {
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("recipe");
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   // State for async computed data (cost/calories)
   const [ingredientMap, setIngredientMap] = useState<Record<
@@ -47,12 +43,15 @@ export function RecipeList({ actions }: RecipeListProps) {
   >({});
   const [isLoadingTotals, setIsLoadingTotals] = useState(false);
 
-  // Use ref to avoid stale closures in column cell renderers
-  // TanStack Table caches columns, so closures capture old state values
-  const stateRef = useRef({ ingredientMap, recipeTotalsMap, isLoadingTotals });
-  stateRef.current = { ingredientMap, recipeTotalsMap, isLoadingTotals };
+  // Use stable ref to avoid stale closures in column cell renderers
+  const stateRef = useStableColumnState({
+    ingredientMap,
+    recipeTotalsMap,
+    isLoadingTotals,
+  });
 
   // Define columns with access to state (columns re-create when state changes, but IDs stay stable)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stateRef is a ref - intentionally excluded to avoid re-renders
   const columns = useMemo(
     () => [
       // Tags column
@@ -150,7 +149,7 @@ export function RecipeList({ actions }: RecipeListProps) {
     [columnHelper],
   );
 
-  const { table, filterableColumns, isLoading, error, timing, data } =
+  const { table, isLoading, error, timing, data, bulkActionBar } =
     useEntityList({
       entity: "recipe",
       queryOptions: api.recipe.list.queryOptions,
@@ -162,9 +161,23 @@ export function RecipeList({ actions }: RecipeListProps) {
         { id: "name", placeholder: "Filter by recipe name..." },
         { id: "meta", placeholder: "Filter by source..." },
       ],
-      enableRowSelection: true,
-      rowSelection,
-      onRowSelectionChange: setRowSelection,
+      bulkActions: {
+        actions: [
+          {
+            id: "compare",
+            label: "Compare",
+            icon: <Scale className="h-4 w-4" />,
+            minSelection: 2,
+            maxSelection: 4,
+            onExecute: async (rows) => {
+              const ids = rows.map((r) => r.original.id).join(",");
+              navigate({ to: "/recipes/compare", search: { ids } });
+              return { success: true };
+            },
+          },
+        ],
+        clearSelectionOnComplete: false, // Don't clear selection after navigating
+      },
     });
 
   // Load ingredient data and calculate totals in a single effect
@@ -249,21 +262,10 @@ export function RecipeList({ actions }: RecipeListProps) {
     };
   }, [trpcClient, data]);
 
-  // Get selected rows using the same pattern as ingredients
-  const selectedRows = table.getFilteredSelectedRowModel().rows;
-  const selectedCount = selectedRows.length;
-  const canCompare = selectedCount >= 2 && selectedCount <= 4;
-
-  const handleCompare = () => {
-    const ids = selectedRows.map((row) => row.original.id).join(",");
-    navigate({ to: "/recipes/compare", search: { ids } });
-  };
-
   return (
     <div>
       <RTable
         table={table}
-        filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
         ariaLabel="Recipes Table"
@@ -271,30 +273,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         entity="recipe"
         onRowClick={onRowClick}
         actions={actions}
-        additionalToolbarContent={
-          selectedCount > 0 ? (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground text-sm">
-                {selectedCount} selected
-              </span>
-              <Button
-                size="sm"
-                onClick={handleCompare}
-                disabled={!canCompare}
-                title={
-                  selectedCount < 2
-                    ? "Select at least 2 recipes to compare"
-                    : selectedCount > 4
-                      ? "Select at most 4 recipes to compare"
-                      : "Compare selected recipes"
-                }
-              >
-                <Scale className="mr-2 h-4 w-4" />
-                Compare
-              </Button>
-            </div>
-          ) : null
-        }
+        bulkActionBar={bulkActionBar}
       />
       <PreviewSheet />
     </div>

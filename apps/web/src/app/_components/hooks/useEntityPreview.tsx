@@ -48,15 +48,21 @@ export function useEntityPreview(
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const idField = options?.idField ?? "id";
 
-  const onRowClick = (row: {
-    original: Record<string, unknown> & { entityType?: Entity };
+  // Accept any row with an 'original' property that has at least an id field
+  // This is compatible with TanStack's Row<T> for any T
+  // Note: entityType is handled separately to avoid conflicts with data that has its own entityType field
+  const onRowClick = <T extends Record<string, unknown>>(row: {
+    original: T;
   }) => {
-    const entityType = fixedEntity ?? row.original.entityType;
+    // Cast to access entityType which may be present on some rows (like search results)
+    const rowData = row.original as T & { entityType?: Entity | string | null };
+    const entityType =
+      fixedEntity ?? (rowData.entityType as Entity | undefined);
     if (!entityType) {
       console.warn("useEntityPreview: No entity type provided");
       return;
     }
-    const id = row.original[idField];
+    const id = rowData[idField];
     if (id === undefined || id === null) {
       console.warn(`useEntityPreview: No ${idField} field in row`);
       return;

@@ -55,13 +55,26 @@ export function USDAFoodList() {
       ),
     }),
     columnHelper.accessor("foodInfo.data_type", {
-      meta: { className: "w-32 max-w-32" },
+      meta: {
+        className: "w-32 max-w-32",
+        filterConfig: {
+          placeholder: "Filter by type...",
+          filterType: "select" as const,
+          options: Object.values(dataTypeEnum.enum).map((type) => ({
+            value: type,
+            label: type,
+          })),
+        },
+      },
       id: "foodInfo-data_type",
       header: "Type",
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("foodInfo.description", {
-      meta: { className: "w-92 max-w-92" },
+      meta: {
+        className: "w-92 max-w-92",
+        filterConfig: { placeholder: "Filter by description..." },
+      },
       id: "foodinfo-description",
       header: "Description",
       cell: (info) => info.getValue(),
@@ -138,24 +151,10 @@ export function USDAFoodList() {
     totalCount: foodsResp?.meta.totalCount || 0,
   });
 
-  const filterableColumns = [
-    { id: "foodinfo-description", placeholder: "Filter by description..." },
-    {
-      id: "foodInfo-data_type",
-      placeholder: "Filter by type...",
-      filterType: "select" as const,
-      options: Object.values(dataTypeEnum.enum).map((type) => ({
-        value: type,
-        label: type,
-      })),
-    },
-  ];
-
   return (
     <div>
       <RTable
         table={table}
-        filterableColumns={filterableColumns}
         isLoading={isLoading}
         error={error}
         ariaLabel="USDA Foods Table"

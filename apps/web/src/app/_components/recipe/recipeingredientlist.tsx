@@ -219,7 +219,6 @@ export const RecipeIngredientList: React.FC<{
       )}
       <RTable
         table={table}
-        filterableColumns={[]}
         isLoading={data.length === 0}
         error={undefined}
         ariaLabel="Recipe Ingredients Table"

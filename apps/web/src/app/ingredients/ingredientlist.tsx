@@ -1,27 +1,29 @@
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { Merge } from "lucide-react";
 import { useId, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useTRPC } from "~/trpc/react";
+import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {
   createCreatedAtColumn,
   createEntityPillColumn,
   createImageColumn,
   createNameColumn,
 } from "../_components/data-table/columnHelpers";
-import { buildSelectColumn } from "../_components/data-table/row-selection";
 import RTable from "../_components/data-table/Table";
+import { EntityPillLink } from "../_components/EntityPill";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { TruncatedList } from "../_components/TruncatedList";
-import { IngredientMerger } from "./ingredient-merger";
 
 export function IngredientList() {
   const missingProductsId = useId();
   const api = useTRPC();
+  const trpcClient = useTRPCClient();
   const columnHelper = createColumnHelper<IngredientWithFoodOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("ingredient");
 
@@ -30,7 +32,7 @@ export function IngredientList() {
     missingProductsOnly: false,
   });
 
-  const { table, isLoading, error, timing } = useEntityList({
+  const { table, isLoading, error, timing, bulkActionBar } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
     buildFilters: (ts) => ({
@@ -38,10 +40,8 @@ export function IngredientList() {
       missingProductsOnly: globalFilter.missingProductsOnly,
     }),
     getMappings: getIngredientMappings,
-    // Ingredient has custom column order (selection first), so we define all columns
-    // Unit mappings column is added automatically by hook via hasUnitMappings config
+    // Ingredient has custom columns - unit mappings column added automatically via hasUnitMappings
     columns: [
-      buildSelectColumn<IngredientWithFoodOut>(),
       createImageColumn(columnHelper),
       createNameColumn(columnHelper, "ingredient", "name", {
         filterConfig: { placeholder: "Filter by ingredient name..." },
@@ -74,20 +74,66 @@ export function IngredientList() {
     filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
     globalFilter,
     onGlobalFilterChange: setGlobalFilter as (value: unknown) => void,
+    bulkActions: {
+      actions: [
+        {
+          id: "merge",
+          label: "Merge",
+          icon: <Merge className="h-4 w-4" />,
+          minSelection: 2,
+          requiresConfirmation: true,
+          renderConfirmation: (rows) => {
+            const target = rows[0]?.original;
+            const aliases = rows.slice(1).map((r) => r.original);
+            return (
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1 font-medium text-muted-foreground text-sm">
+                    Keep (target):
+                  </div>
+                  {target && (
+                    <EntityPillLink
+                      entity="ingredient"
+                      data={{ name: target.name, id: target.id }}
+                    />
+                  )}
+                </div>
+                <div>
+                  <div className="mb-1 font-medium text-muted-foreground text-sm">
+                    Merge into aliases:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {aliases.map((a) => (
+                      <EntityPillLink
+                        key={a.id}
+                        entity="ingredient"
+                        data={{ name: a.name, id: a.id }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          },
+          onExecute: async (rows) => {
+            const [target, ...aliasRows] = rows.map((r) => r.original);
+            if (!target) return { success: false };
+            await trpcClient.ingredient.merge.mutate({
+              target: target.id,
+              aliases: aliasRows.map((a) => a.id),
+            });
+            toast.success(
+              `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
+            );
+            return { success: true };
+          },
+        },
+      ],
+    },
   });
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between">
-        <IngredientMerger table={table} />
-        <Button
-          variant="default"
-          render={<Link to="/ingredients/new" />}
-          nativeButton={false}
-        >
-          Create New Ingredient
-        </Button>
-      </div>
       <RTable
         table={table}
         isLoading={isLoading}
@@ -96,6 +142,16 @@ export function IngredientList() {
         timing={timing}
         entity="ingredient"
         onRowClick={onRowClick}
+        bulkActionBar={bulkActionBar}
+        actions={
+          <Button
+            variant="default"
+            render={<Link to="/ingredients/new" />}
+            nativeButton={false}
+          >
+            Create New Ingredient
+          </Button>
+        }
         additionalToolbarContent={
           <div className="flex items-center space-x-2">
             <Checkbox

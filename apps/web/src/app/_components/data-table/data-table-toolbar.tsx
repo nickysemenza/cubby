@@ -11,6 +11,8 @@ interface DataTableToolbarProps<TData> {
   additionalContent?: ReactNode;
   /** Primary actions (e.g., "Create New" button) */
   actions?: ReactNode;
+  /** Bulk action bar (rendered when rows selected, replaces view options) */
+  bulkActionBar?: ReactNode;
   /** Additional className for styling */
   className?: string;
 }
@@ -19,6 +21,7 @@ export function DataTableToolbar<TData>({
   table,
   additionalContent,
   actions,
+  bulkActionBar,
   className,
 }: DataTableToolbarProps<TData>) {
   const isFiltered =
@@ -26,12 +29,14 @@ export function DataTableToolbar<TData>({
 
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
-      <DataTableViewOptions table={table} />
+      {/* Show bulk action bar when present, otherwise show view options */}
+      {bulkActionBar ?? <DataTableViewOptions table={table} />}
 
       <div className="flex flex-1 items-center justify-end gap-2">
         {additionalContent}
 
-        {isFiltered && (
+        {/* Hide reset when bulk action bar is active to reduce clutter */}
+        {isFiltered && !bulkActionBar && (
           <Button
             variant="ghost"
             size="sm"

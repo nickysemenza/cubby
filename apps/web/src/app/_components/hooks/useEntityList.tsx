@@ -5,12 +5,15 @@ import type {
   Table,
 } from "@tanstack/react-table";
 import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { entities, getSortableFields } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { UnitMapping } from "~/schemas/unitmapping";
+import { BulkActionBar } from "../data-table/BulkActionBar";
+import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import {
   createActionsColumn,
   createCreatedAtColumn,
@@ -20,17 +23,10 @@ import {
   type FilterConfig,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
+import { useBulkActions } from "../data-table/useBulkActions";
 import { useTableConfig } from "../data-table/useTableConfig";
 
 import { type UseTableListOptions, useTableList } from "./useTableList";
-
-/** Filter column definition - string expands to text filter */
-interface FilterableColumn {
-  id: string;
-  placeholder: string;
-  filterType?: "text" | "select";
-  options?: Array<{ value: string; label: string }>;
-}
 
 /** Base interface for entities in list views */
 interface BaseListRow {
@@ -40,8 +36,16 @@ interface BaseListRow {
   images?: Array<{ id: string; url: string; filename: string }>;
 }
 
+/** Filter definition for use in useEntityList options */
+interface FilterDef {
+  id: string;
+  placeholder: string;
+  filterType?: "text" | "select";
+  options?: Array<{ value: string; label: string }>;
+}
+
 /** Simple filter definition - string expands to text filter with placeholder */
-type FilterDef = string | FilterableColumn;
+type FilterInput = string | FilterDef;
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData> = ColumnDef<TData, any>;
@@ -55,8 +59,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   buildFilters: UseTableListOptions<TFilters>["buildFilters"];
   /** Custom columns (inserted between standard columns) - accepts any accessor type */
   columns: AnyColumnDef<TData>[];
-  /** Filter definitions - string shorthand or full FilterableColumn config */
-  filters: FilterDef[];
+  /** Filter definitions - string shorthand or full FilterDef config */
+  filters: FilterInput[];
   /** For unit mappings - function to extract mappings from each row (sync or async) */
   getMappings?: (item: TData) => UnitMapping[] | Promise<UnitMapping[]>;
   /** Override table state options */
@@ -65,19 +69,19 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   globalFilter?: unknown;
   /** Global filter change handler */
   onGlobalFilterChange?: (value: unknown) => void;
-  /** Enable row selection with checkbox column */
+  /** Enable row selection with checkbox column (for manual row selection management) */
   enableRowSelection?: boolean;
   /** Current row selection state (required if enableRowSelection is true) */
   rowSelection?: RowSelectionState;
   /** Callback when row selection changes */
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+  /** Bulk actions configuration - automatically enables row selection */
+  bulkActions?: BulkActionsConfig<TData>;
 }
 
 interface UseEntityListReturn<TData> {
   /** Configured table instance */
   table: Table<TData>;
-  /** Expanded filterable columns config */
-  filterableColumns: FilterableColumn[];
   /** Loaded unit mappings map (id -> mappings) */
   mappingsMap: Record<string, UnitMapping[]>;
   /** Raw data array (for edge cases like card view) */
@@ -88,20 +92,8 @@ interface UseEntityListReturn<TData> {
   error: Error | null;
   /** Query timing info */
   timing: QueryTiming;
-}
-
-/**
- * Expand a simple filter definition to full FilterableColumn config.
- * String "name" becomes { id: "name", placeholder: "Filter by name..." }
- */
-function expandFilterDef(filter: FilterDef): FilterableColumn {
-  if (typeof filter === "string") {
-    return {
-      id: filter,
-      placeholder: `Filter by ${filter}...`,
-    };
-  }
-  return filter;
+  /** Bulk action bar element to render in RTable (null if no bulk actions configured) */
+  bulkActionBar: ReactNode | null;
 }
 
 /**
@@ -115,7 +107,7 @@ function expandFilterDef(filter: FilterDef): FilterableColumn {
  *
  * @example
  * ```tsx
- * const { table, filterableColumns, isLoading, error } = useEntityList({
+ * const { table, isLoading, error } = useEntityList({
  *   entity: "product",
  *   queryOptions: api.product.list.queryOptions,
  *   buildFilters: (ts) => ({
@@ -130,7 +122,7 @@ function expandFilterDef(filter: FilterDef): FilterableColumn {
  *   filters: ["name", "manufacturer"],
  * });
  *
- * return <RTable table={table} filterableColumns={filterableColumns} ... />;
+ * return <RTable table={table} isLoading={isLoading} error={error} />;
  * ```
  */
 export function useEntityList<TData extends BaseListRow, TFilters>({
@@ -146,7 +138,22 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   enableRowSelection,
   rowSelection,
   onRowSelectionChange,
+  bulkActions,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
+  // Use bulk actions hook if config is provided
+  const bulkActionsState = bulkActions
+    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
+      useBulkActions({ config: bulkActions })
+    : null;
+
+  // Determine effective row selection state - bulk actions takes precedence
+  const effectiveRowSelection =
+    bulkActionsState?.rowSelection ?? rowSelection ?? {};
+  const effectiveOnRowSelectionChange =
+    bulkActionsState?.onRowSelectionChange ?? onRowSelectionChange;
+  const effectiveEnableRowSelection = bulkActions
+    ? true
+    : (enableRowSelection ?? false);
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
   const filtersKey = JSON.stringify(filters);
@@ -223,7 +230,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     const cols: AnyColumnDef<TData>[] = [];
 
     // Prepend select column if row selection is enabled
-    if (enableRowSelection) {
+    if (effectiveEnableRowSelection) {
       cols.push(buildSelectColumn<TData>());
     }
 
@@ -278,7 +285,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     standardColumns,
     effectiveMappingsMap,
     stableFilters,
-    enableRowSelection,
+    effectiveEnableRowSelection,
   ]);
 
   // Configure the table
@@ -289,25 +296,35 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     totalCount,
     globalFilter,
     onGlobalFilterChange,
-    getRowId: enableRowSelection ? (row) => row.id : undefined,
-    enableRowSelection,
-    rowSelection,
-    onRowSelectionChange,
+    getRowId: effectiveEnableRowSelection ? (row) => row.id : undefined,
+    enableRowSelection: effectiveEnableRowSelection,
+    rowSelection: effectiveRowSelection,
+    onRowSelectionChange: effectiveOnRowSelectionChange,
   });
 
-  // Expand filter definitions - memoized to prevent unnecessary re-renders
-  const filterableColumns = useMemo(
-    () => stableFilters.map(expandFilterDef),
-    [stableFilters],
-  );
+  // Build bulk action bar element if bulk actions configured
+  const bulkActionBar =
+    bulkActionsState && bulkActions ? (
+      <BulkActionBar
+        selectedCount={bulkActionsState.selectedCount}
+        selectedRows={table.getFilteredSelectedRowModel().rows}
+        actions={bulkActionsState.getAvailableActions(
+          table.getFilteredSelectedRowModel().rows,
+        )}
+        onExecute={bulkActionsState.executeAction}
+        onClearSelection={bulkActionsState.clearSelection}
+        isExecuting={bulkActionsState.isExecuting}
+        currentAction={bulkActionsState.currentAction}
+      />
+    ) : null;
 
   return {
     table,
-    filterableColumns,
     mappingsMap,
     data,
     isLoading,
     error,
     timing,
+    bulkActionBar,
   };
 }
