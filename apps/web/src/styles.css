@@ -441,4 +441,15 @@
   .stat-card-glow:hover::before {
     @apply opacity-100;
   }
+
+  /* Auth page background with warm gradient */
+  .auth-background {
+    @apply bg-background;
+    background-image: linear-gradient(
+      135deg,
+      oklch(from var(--brand-terracotta) l c h / 0.03) 0%,
+      oklch(from var(--brand-sage) l c h / 0.02) 50%,
+      oklch(from var(--brand-terra-light) l c h / 0.03) 100%
+    );
+  }
 }

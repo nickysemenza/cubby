@@ -12,6 +12,7 @@ import { type LocationId, locationId } from "~/schemas/identifiers";
 import {
   infLocation,
   locationCreateInput,
+  locationOut,
   locationType,
   locationUpdateInput,
 } from "~/schemas/location";
@@ -21,6 +22,7 @@ import {
   createLocation,
   getLocationById,
   getLocationByShortcode,
+  getRecentlyActiveLocations,
   locationList,
   touchLastBulkInventory as touchLastBulkInventoryRepo,
   updateLocation,
@@ -99,10 +101,19 @@ const getByShortcode = protectedProcedure
     return await getLocationByShortcode(ctx.db, input.shortcode);
   });
 
+// Get recently active locations for scanner quick-select
+const getRecentlyActive = protectedProcedure
+  .input(z.object({ limit: z.number().min(1).max(10).default(5) }).optional())
+  .output(z.array(locationOut))
+  .query(async ({ ctx, input }) => {
+    return await getRecentlyActiveLocations(ctx.db, input?.limit ?? 5);
+  });
+
 export const locationRouter = createTRPCRouter({
   list,
   getByID,
   getByShortcode,
+  getRecentlyActive,
   getLocationTypesCount,
   makeTree,
   create,

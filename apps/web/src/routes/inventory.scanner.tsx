@@ -5,6 +5,7 @@ import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { PersistentScanner } from "~/app/_components/inventory/persistent-scanner";
+import { RecentLocations } from "~/app/_components/inventory/recent-locations";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
@@ -274,10 +275,13 @@ function ScannerPage() {
             )}
           </>
         ) : (
-          <div className="flex aspect-square items-center justify-center rounded-lg bg-muted">
+          <div className="flex aspect-square flex-col items-center justify-center gap-6 rounded-lg bg-muted p-6">
             <p className="text-center text-muted-foreground">
               Select a location to start scanning
             </p>
+            <RecentLocations
+              onSelect={(location) => handleLocationChange(location.id)}
+            />
           </div>
         )}
       </div>

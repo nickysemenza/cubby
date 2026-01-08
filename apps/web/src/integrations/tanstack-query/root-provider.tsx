@@ -14,11 +14,7 @@ import superjson from "superjson";
 import { TRPCProvider } from "~/integrations/trpc/react";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
-import {
-  getAppErrorDetails,
-  getErrorMessage,
-  shouldRetryQuery,
-} from "~/lib/error-utils";
+import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
 const Link = ({
@@ -67,7 +63,7 @@ export function getContext() {
     defaultOptions: {
       queries: {
         staleTime: 60 * 1000,
-        retry: shouldRetryQuery,
+        retry: false,
       },
       dehydrate: { serializeData: superjson.serialize },
       hydrate: { deserializeData: superjson.deserialize },

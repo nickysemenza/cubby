@@ -1,11 +1,5 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import {
-  Bug,
-  BugOff,
-  Home,
-  LayoutDashboard,
-  MoreHorizontal,
-} from "lucide-react";
+import { Bug, BugOff, Home, LayoutDashboard, Settings } from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
@@ -30,7 +24,7 @@ const LocationsIcon = entities.location.lucideIcon;
 const InventoryIcon = entities.inventory.lucideIcon;
 const KitchenIcon = entities.recipe.lucideIcon;
 const ReportsIcon = LayoutDashboard;
-const MoreIcon = MoreHorizontal;
+const SettingsIcon = Settings;
 
 // cf https://github.com/shadcn-ui/ui/blob/main/apps/www/app/(app)/examples/dashboard/components/main-nav.tsx
 export function MainNav({
@@ -118,7 +112,11 @@ export function MainNav({
           />
         )}
 
-        <NavDropdown label="More" items={desktopMoreItems} icon={MoreIcon} />
+        <NavDropdown
+          label="Settings"
+          items={desktopMoreItems}
+          icon={SettingsIcon}
+        />
       </nav>
 
       <FlexContainer align="center" gap={2}>

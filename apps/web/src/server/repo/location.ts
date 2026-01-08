@@ -2,6 +2,7 @@ import { and, count, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { generateLocationShortcode } from "~/lib/shortcode";
 import { parseWithContext } from "~/lib/zod-utils";
+import { dedupe } from "~/misc/array-helpers";
 import { extractDbTimestampsFromDBRec } from "~/schemas/common";
 import type { ActorContext } from "~/schemas/context";
 import {
@@ -811,6 +812,51 @@ export const touchLastBulkInventory = async (
   if (result.length === 0) {
     throw createAppError("LOCATION_NOT_FOUND", `Location ${id} not found`);
   }
+};
+
+/**
+ * Get recently active locations for the scanner.
+ * Combines two data sources:
+ * 1. Locations sorted by updatedAt DESC (catches new locations + bulk inventory)
+ * 2. Locations with recent inventory activity
+ */
+export const getRecentlyActiveLocations = async (
+  db: Database,
+  limit = 5,
+): Promise<LocationOut[]> => {
+  // Part 1: Recently updated locations
+  const recentLocations = await getDb(db)
+    .select({ id: location.id })
+    .from(location)
+    .orderBy(desc(location.updatedAt))
+    .limit(limit);
+
+  // Part 2: Locations with recent inventory activity
+  // Use subquery to get distinct location IDs ordered by most recent activity
+  const inventoryLocations = await getDb(db)
+    .select({ id: inventoryEntry.locationId })
+    .from(inventoryEntry)
+    .groupBy(inventoryEntry.locationId)
+    .orderBy(desc(sql`max(${inventoryEntry.updatedAt})`))
+    .limit(10);
+
+  // Merge and dedupe by ID, take first N
+  const finalIds = dedupe([
+    ...recentLocations.map((l) => l.id),
+    ...inventoryLocations.map((l) => l.id),
+  ]).slice(0, limit);
+
+  if (finalIds.length === 0) {
+    return [];
+  }
+
+  // Fetch full location data
+  const locations = await getDb(db).query.location.findMany({
+    where: inArray(location.id, finalIds),
+    ...relations.location.withImages,
+  });
+
+  return locations.map(dbLocationToAPI);
 };
 
 export const getLocationById = async (

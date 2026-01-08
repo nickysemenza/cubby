@@ -36,6 +36,7 @@ import {
 } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
+import { RecentLocations } from "~/app/_components/inventory/recent-locations";
 import {
   LocationBreadcrumb,
   locationToSegments,
@@ -45,6 +46,7 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Empty, EmptyTitle } from "~/components/ui/empty";
 import { Kbd } from "~/components/ui/kbd";
+import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
@@ -124,10 +126,11 @@ export default function QuickCaptureForm({
   }, [initialLocation, form, items]);
 
   // Fetch focused location with hierarchy for breadcrumbs
-  const { data: focusedLocation } = useQuery({
-    ...api.location.getByID.queryOptions({ id: focusedLocationId! }),
-    enabled: !!focusedLocationId,
-  });
+  const { data: focusedLocation, isLoading: isLoadingFocusedLocation } =
+    useQuery({
+      ...api.location.getByID.queryOptions({ id: focusedLocationId! }),
+      enabled: !!focusedLocationId,
+    });
 
   // Fetch inventory at focused location
   const { data: inventoryAtLocation } = useQuery({
@@ -323,7 +326,7 @@ export default function QuickCaptureForm({
       submitButtonText={getSubmitButtonText("create", isSubmitting)}
     >
       {/* Location Context Section */}
-      {focusedLocation && (
+      {focusedLocationId ? (
         <Card className="mb-4">
           <CardHeader className="pb-2">
             <CardTitle className="font-medium text-sm">
@@ -331,41 +334,63 @@ export default function QuickCaptureForm({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {/* Breadcrumb navigation */}
-            <LocationBreadcrumb
-              segments={locationToSegments(focusedLocation)}
-              linkable
-              showHome
-            />
+            {isLoadingFocusedLocation ? (
+              <div className="flex items-center justify-center py-4">
+                <Spinner />
+              </div>
+            ) : focusedLocation ? (
+              <>
+                {/* Breadcrumb navigation */}
+                <LocationBreadcrumb
+                  segments={locationToSegments(focusedLocation)}
+                  linkable
+                  showHome
+                />
 
-            {/* Children quick navigation */}
-            {focusedLocation.children &&
-              focusedLocation.children.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-muted-foreground text-xs">
-                    Drill into child location:
-                  </p>
-                  <div className="flex flex-wrap gap-1">
-                    {focusedLocation.children.map((child) => (
-                      <Button
-                        key={child.id}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => handleChildLocationClick(child)}
-                      >
-                        <LocationIcon
-                          type={child.type}
-                          size={12}
-                          className="mr-1"
-                        />
-                        {child.name}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {/* Children quick navigation */}
+                {focusedLocation.children &&
+                  focusedLocation.children.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground text-xs">
+                        Drill into child location:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {focusedLocation.children.map((child) => (
+                          <Button
+                            key={child.id}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => handleChildLocationClick(child)}
+                          >
+                            <LocationIcon
+                              type={child.type}
+                              size={12}
+                              className="mr-1"
+                            />
+                            {child.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mb-4">
+          <CardContent className="pt-4">
+            <RecentLocations
+              onSelect={(location) => {
+                form.setValue(
+                  `items.${focusedRowIndex}.location`,
+                  buildLocationComboboxItem(location),
+                  { shouldDirty: true },
+                );
+              }}
+            />
           </CardContent>
         </Card>
       )}
