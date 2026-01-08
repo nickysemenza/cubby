@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Spinner } from "~/components/ui/spinner";
 import type { AuditEntityType } from "~/schemas/audit";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "./EntityPill";
@@ -65,7 +65,7 @@ export function EntityPillById({
 
   const query = queries[entityType as keyof typeof queries];
   if (query?.isLoading) {
-    return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
+    return <Spinner className="text-muted-foreground" />;
   }
 
   if (query?.data) {

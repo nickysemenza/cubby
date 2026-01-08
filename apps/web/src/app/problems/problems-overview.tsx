@@ -6,7 +6,6 @@ import {
   CheckCircle,
   DollarSign,
   ImageOff,
-  Loader2,
   Utensils,
   Zap,
 } from "lucide-react";
@@ -22,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
 import { formatCurrency } from "~/lib/utils";
 import type {
@@ -332,7 +332,7 @@ function ProductsWithoutUPCImagesList({
         >
           {backfillMutation.isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Spinner className="mr-2" />
               Fetching...
             </>
           ) : (
@@ -409,7 +409,7 @@ function ProductsWithWrongCategoryList({
         >
           {backfillMutation.isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Spinner className="mr-2" />
               Fixing...
             </>
           ) : (
@@ -480,7 +480,7 @@ function ProductsWithStalePricesList({
         >
           {backfillMutation.isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Spinner className="mr-2" />
               Syncing...
             </>
           ) : (
@@ -560,7 +560,7 @@ function InventoryWithStaleValuationsList({
         >
           {backfillMutation.isPending ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Spinner className="mr-2" />
               Syncing...
             </>
           ) : (

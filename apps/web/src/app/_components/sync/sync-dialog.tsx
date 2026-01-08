@@ -5,7 +5,6 @@ import {
   ArrowRightLeft,
   CheckCircle2,
   GitCompare,
-  Loader2,
   MapPin,
   Pencil,
   Plus,
@@ -34,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { Spinner } from "~/components/ui/spinner";
 import { queryKeys } from "~/lib/query-keys";
 import type {
   InventorySyncItem,
@@ -413,7 +413,7 @@ export const SyncDialog = ({
             <DialogTitle>Loading Sync Preview...</DialogTitle>
           </DialogHeader>
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <Spinner size="lg" className="text-muted-foreground" />
           </div>
         </DialogContent>
       </Dialog>
@@ -553,7 +553,7 @@ export const SyncDialog = ({
               >
                 {isApplying ? (
                   <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Spinner size="sm" />
                     Applying...
                   </>
                 ) : (
@@ -583,7 +583,7 @@ export const SyncDialog = ({
               <AlertDialogAction onClick={handleRefreshTimestamps}>
                 {refreshTimestampsMutation.isPending ? (
                   <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Spinner size="sm" />
                     Refreshing...
                   </>
                 ) : (

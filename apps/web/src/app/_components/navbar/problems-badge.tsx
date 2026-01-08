@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Check, Loader2 } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import {
   Tooltip,
   TooltipContent,
@@ -22,7 +23,7 @@ export const ProblemsBadge = () => {
   if (isLoading) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Spinner />
       </Button>
     );
   }

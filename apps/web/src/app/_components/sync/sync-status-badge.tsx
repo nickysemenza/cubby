@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import { AlertTriangle, Check, Loader2, RefreshCw } from "lucide-react";
+import { AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import {
   Tooltip,
   TooltipContent,
@@ -42,7 +43,7 @@ export const SyncStatusBadge = () => {
   if (isLoadingConnection) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Spinner />
       </Button>
     );
   }

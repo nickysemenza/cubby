@@ -1,10 +1,11 @@
 import type { WAmount, WIngredient } from "@recipehub/recipebridge";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, Plus } from "lucide-react";
+import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import type { Amount } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import {
   Table,
   TableBody,
@@ -169,7 +170,7 @@ export function IngredientPreviewTable({
             <TableRow>
               <TableCell colSpan={3} className="text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Spinner />
                   Matching ingredients...
                 </div>
               </TableCell>
@@ -203,7 +204,7 @@ function IngredientRow({
         <div className="flex items-center gap-2">
           {isLoading ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <Spinner className="text-muted-foreground" />
               <span>{item.parsed.name}</span>
             </>
           ) : isMatched && item.match ? (

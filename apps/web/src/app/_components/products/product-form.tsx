@@ -1,12 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ndb, upc } from "@recipehub/usda-schemas";
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { type FC, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
+import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
 import { isMiscProduct, UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { getOptionalIngredientId } from "~/schemas/form-fields";
@@ -365,11 +366,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
                 disabled={isLookingUp || !form.watch("upc")}
                 className="mb-[2px]"
               >
-                {isLookingUp ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Search className="h-4 w-4" />
-                )}
+                {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
                 <span className="ml-1">Lookup</span>
               </Button>
             </div>

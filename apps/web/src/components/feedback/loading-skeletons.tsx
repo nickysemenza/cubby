@@ -1,5 +1,5 @@
-import { Loader2 } from "lucide-react";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Spinner } from "~/components/ui/spinner";
 import { cn } from "~/lib/utils";
 
 // Reusable skeleton patterns built on shadcn Skeleton
@@ -44,7 +44,7 @@ export function ListLoadingSkeleton({ count = 6 }: { count?: number }) {
 export function SimpleLoading({ text = "Loading..." }: { text?: string }) {
   return (
     <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground">
-      <Loader2 className="h-4 w-4 animate-spin" />
+      <Spinner />
       {text}
     </div>
   );

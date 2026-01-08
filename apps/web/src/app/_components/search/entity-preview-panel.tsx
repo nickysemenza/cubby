@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
+import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { useTRPC } from "~/trpc/react";
@@ -84,7 +85,7 @@ export function EntityPreviewPanel({
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Spinner size="md" className="text-muted-foreground" />
       </div>
     );
   }

@@ -1,13 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  BookOpen,
-  Loader2,
-  MapPin,
-  Package,
-  Search,
-  Settings,
-} from "lucide-react";
+import { BookOpen, MapPin, Package, Search, Settings } from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -18,6 +11,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "~/components/ui/command";
+import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { parseShortcode } from "~/lib/shortcode";
@@ -136,7 +130,7 @@ export function GlobalCommandMenu() {
         {/* Loading state */}
         {isLoading && (
           <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <Spinner className="text-muted-foreground" />
           </div>
         )}
 

@@ -1,13 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import {
-  ChevronDown,
-  ChevronUp,
-  Import,
-  Loader2,
-  Plus,
-  Trash,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Import, Plus, Trash } from "lucide-react";
 import { type FC, useId, useMemo, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
@@ -19,6 +12,7 @@ import {
 } from "~/components/ui/collapsible";
 import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import useDebounce from "~/hooks/useDebounce";
 import { useImageState } from "~/hooks/useImageState";
@@ -485,7 +479,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               className="shrink-0"
             >
               {scrapeMutation.isPending ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                <Spinner className="mr-1" />
               ) : (
                 <Import className="mr-1 h-4 w-4" />
               )}
@@ -592,7 +586,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               }
             >
               {ingredientImport.isImporting ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                <Spinner className="mr-1" />
               ) : (
                 <Import className="mr-1 h-4 w-4" />
               )}

@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
 import JsonRenderer from "~/app/_components/json-renderer";
 import { ColoredAlert } from "~/components/common/colored-alert";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/settings/integrations/debug")({
@@ -22,7 +22,7 @@ function GoogleSheetsDebugPage() {
     return (
       <div className="container mx-auto py-6">
         <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Spinner />
           Loading sheet data...
         </div>
       </div>

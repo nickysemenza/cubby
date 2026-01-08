@@ -4,7 +4,6 @@ import {
   Bug,
   CheckCircle,
   ExternalLink,
-  Loader2,
   Unlink,
   Wrench,
   XCircle,
@@ -22,6 +21,7 @@ import {
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
 
 export function IntegrationsPage() {
@@ -167,7 +167,7 @@ export function IntegrationsPage() {
           {/* Current connection status */}
           {statusLoading ? (
             <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Spinner />
               Checking connection...
             </div>
           ) : status?.connected ? (
@@ -205,7 +205,7 @@ export function IntegrationsPage() {
                   disabled={repairSchemaMutation.isPending}
                 >
                   {repairSchemaMutation.isPending ? (
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <Spinner size="sm" />
                   ) : (
                     <Wrench className="h-3 w-3" />
                   )}
@@ -291,18 +291,14 @@ export function IntegrationsPage() {
                   onClick={handleTestConnection}
                   disabled={isConnecting || !sheetUrl}
                 >
-                  {testConnectionMutation.isPending && (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  )}
+                  {testConnectionMutation.isPending && <Spinner size="sm" />}
                   Test Connection
                 </Button>
                 <Button
                   onClick={handleSaveConnection}
                   disabled={isConnecting || !sheetUrl}
                 >
-                  {updateConnectionMutation.isPending && (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  )}
+                  {updateConnectionMutation.isPending && <Spinner size="sm" />}
                   Connect Sheet
                 </Button>
               </div>

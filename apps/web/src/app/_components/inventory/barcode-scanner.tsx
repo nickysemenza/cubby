@@ -3,8 +3,8 @@ import {
   Html5QrcodeScannerState,
   Html5QrcodeSupportedFormats,
 } from "html5-qrcode";
-import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Spinner } from "~/components/ui/spinner";
 
 const SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.UPC_A,
@@ -114,7 +114,7 @@ export function BarcodeScanner({ onScan, onError }: BarcodeScannerProps) {
     <div className="relative min-h-[300px]">
       {isLoading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Spinner size="lg" />
         </div>
       )}
       <div

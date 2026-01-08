@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Camera, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Camera, Check } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { PersistentScanner } from "~/app/_components/inventory/persistent-scanne
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
+import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import type { ProductId } from "~/schemas/identifiers";
@@ -238,11 +239,7 @@ function ScannerPage() {
                 title="Take photo of location"
                 className="shrink-0"
               >
-                {isUploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Camera className="h-4 w-4" />
-                )}
+                {isUploading ? <Spinner /> : <Camera className="h-4 w-4" />}
               </Button>
             </>
           )}
@@ -271,7 +268,7 @@ function ScannerPage() {
             {/* Loading indicator during UPC lookup */}
             {isPending && (
               <div className="mt-2 flex items-center justify-center gap-2 text-muted-foreground text-sm">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Spinner />
                 Looking up product...
               </div>
             )}
