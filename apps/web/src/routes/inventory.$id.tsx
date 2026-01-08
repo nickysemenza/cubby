@@ -5,6 +5,7 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/inventory/$id")({
   ssr: false,
@@ -19,9 +20,9 @@ export const Route = createFileRoute("/inventory/$id")({
 
 function InventoryDetailPage() {
   const { id } = Route.useParams();
-  const { trpc } = Route.useRouteContext();
+  const api = useTRPC();
   const { data: inventory } = useQuery(
-    trpc.inventory.getByID.queryOptions({ id }),
+    api.inventory.getByID.queryOptions({ id }),
   );
 
   useDocumentTitle(inventory?.product?.name);

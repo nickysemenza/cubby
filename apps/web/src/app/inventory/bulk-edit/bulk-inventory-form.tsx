@@ -41,7 +41,7 @@ const formSchema = z.object({
   items: z.array(inventoryItemSchema),
 });
 
-type BulkInventoryFormValues = z.infer<typeof formSchema>;
+type BulkInventoryFormValues = z.input<typeof formSchema>;
 
 export default function BulkInventoryForm() {
   const api = useTRPC();

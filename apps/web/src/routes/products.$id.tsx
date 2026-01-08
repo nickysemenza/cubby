@@ -5,6 +5,7 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/products/$id")({
   ssr: false,
@@ -19,8 +20,8 @@ export const Route = createFileRoute("/products/$id")({
 
 function ProductDetailPage() {
   const { id } = Route.useParams();
-  const { trpc } = Route.useRouteContext();
-  const { data: product } = useQuery(trpc.product.getByID.queryOptions({ id }));
+  const api = useTRPC();
+  const { data: product } = useQuery(api.product.getByID.queryOptions({ id }));
 
   useDocumentTitle(product?.name);
 

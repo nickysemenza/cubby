@@ -5,6 +5,7 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/usda/$id")({
   ssr: false,
@@ -19,11 +20,11 @@ export const Route = createFileRoute("/usda/$id")({
 
 function USDAFoodDetailPage() {
   const { id } = Route.useParams();
-  const { trpc } = Route.useRouteContext();
+  const api = useTRPC();
   const numericId = parseInt(id, 10);
 
   const { data: food } = useQuery(
-    trpc.usda.getByID.queryOptions({ id: numericId }),
+    api.usda.getByID.queryOptions({ id: numericId }),
   );
 
   useDocumentTitle(

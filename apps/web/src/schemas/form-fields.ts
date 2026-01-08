@@ -17,6 +17,9 @@ import type {
 /**
  * Required combobox field for product selection.
  * Use with ComboboxFieldWithSearch searchType="product"
+ *
+ * Note: The type remains `ComboboxItem | null` for form compatibility.
+ * Use `getProductId(values.product)` after validation to extract the ID.
  */
 export const requiredProductField = ComboboxItem.nullable().refine(
   (item) => item !== null,
@@ -26,6 +29,9 @@ export const requiredProductField = ComboboxItem.nullable().refine(
 /**
  * Required combobox field for location selection.
  * Use with ComboboxFieldWithSearch searchType="location"
+ *
+ * Note: The type remains `ComboboxItem | null` for form compatibility.
+ * Use `getLocationId(values.location)` after validation to extract the ID.
  */
 export const requiredLocationField = ComboboxItem.nullable().refine(
   (item) => item !== null,
@@ -43,7 +49,7 @@ export const requiredLocationField = ComboboxItem.nullable().refine(
  * Use after form validation when product is guaranteed to be non-null.
  */
 export function getProductId(
-  item: z.infer<typeof requiredProductField>,
+  item: z.input<typeof requiredProductField>,
 ): ProductId {
   return item!.id as ProductId;
 }
@@ -53,7 +59,7 @@ export function getProductId(
  * Use after form validation when location is guaranteed to be non-null.
  */
 export function getLocationId(
-  item: z.infer<typeof requiredLocationField>,
+  item: z.input<typeof requiredLocationField>,
 ): LocationId {
   return item!.id as LocationId;
 }

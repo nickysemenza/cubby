@@ -53,14 +53,16 @@ function RecipeComparePage() {
     () =>
       ids
         ?.split(",")
-        .map((id) => id.trim())
+        .map((id: string) => id.trim())
         .filter(Boolean) ?? [],
     [ids],
   );
 
   // Fetch all recipes in parallel
   const recipeQueries = useQueries({
-    queries: recipeIds.map((id) => api.recipe.getByID.queryOptions({ id })),
+    queries: recipeIds.map((id: string) =>
+      api.recipe.getByID.queryOptions({ id }),
+    ),
   });
 
   const recipes = recipeQueries
@@ -142,7 +144,7 @@ function RecipeComparePage() {
 
   // Remove a recipe from comparison
   const handleRemove = (recipeId: string) => {
-    const newIds = recipeIds.filter((id) => id !== recipeId).join(",");
+    const newIds = recipeIds.filter((id: string) => id !== recipeId).join(",");
     if (newIds) {
       navigate({ to: "/recipes/compare", search: { ids: newIds } });
     } else {

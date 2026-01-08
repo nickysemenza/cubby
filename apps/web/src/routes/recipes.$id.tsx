@@ -9,6 +9,7 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
   edit: z.boolean().optional(),
@@ -30,9 +31,9 @@ function RecipeDetailPage() {
   const { id } = Route.useParams();
   const { edit: isEditing } = Route.useSearch();
   const navigate = useNavigate();
-  const { trpc } = Route.useRouteContext();
+  const api = useTRPC();
 
-  const { data: recipe } = useQuery(trpc.recipe.getByID.queryOptions({ id }));
+  const { data: recipe } = useQuery(api.recipe.getByID.queryOptions({ id }));
 
   useDocumentTitle(recipe?.name ? `Recipe: ${recipe.name}` : undefined);
 

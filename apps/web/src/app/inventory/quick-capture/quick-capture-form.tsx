@@ -66,7 +66,7 @@ const quickCaptureFormSchema = z.object({
   items: z.array(inventoryItemWithLocationFields),
 });
 
-type QuickCaptureFormValues = z.infer<typeof quickCaptureFormSchema>;
+type QuickCaptureFormValues = z.input<typeof quickCaptureFormSchema>;
 
 interface QuickCaptureFormProps {
   initialLocationId?: string;

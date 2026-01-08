@@ -34,7 +34,6 @@ interface RecentItem {
 function ScannerPage() {
   const { locationId } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const { trpc } = Route.useRouteContext();
   const api = useTRPC();
   const queryClient = useQueryClient();
 
@@ -44,7 +43,7 @@ function ScannerPage() {
 
   // Fetch all locations for the dropdown
   const { data: locationsData, isLoading: isLoadingLocations } = useQuery(
-    trpc.location.list.queryOptions({
+    api.location.list.queryOptions({
       filters: {},
       pagination: { pageIndex: 0, pageSize: 100 },
     }),
@@ -52,7 +51,7 @@ function ScannerPage() {
 
   // Fetch the selected location details if we have a locationId
   const { data: selectedLocation } = useQuery({
-    ...trpc.location.getByID.queryOptions({ id: locationId ?? "" }),
+    ...api.location.getByID.queryOptions({ id: locationId ?? "" }),
     enabled: !!locationId,
   });
 
@@ -154,7 +153,7 @@ function ScannerPage() {
       });
 
       await queryClient.invalidateQueries({
-        queryKey: trpc.location.getByID.queryKey({ id: locationId }),
+        queryKey: api.location.getByID.queryKey({ id: locationId }),
       });
 
       toast.success("Photo added to location");

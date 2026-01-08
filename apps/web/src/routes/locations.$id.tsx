@@ -5,6 +5,7 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/locations/$id")({
   ssr: false,
@@ -19,9 +20,9 @@ export const Route = createFileRoute("/locations/$id")({
 
 function LocationDetailPage() {
   const { id } = Route.useParams();
-  const { trpc } = Route.useRouteContext();
+  const api = useTRPC();
   const { data: location } = useQuery(
-    trpc.location.getByID.queryOptions({ id }),
+    api.location.getByID.queryOptions({ id }),
   );
 
   useDocumentTitle(location?.name);

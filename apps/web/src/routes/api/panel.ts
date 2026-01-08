@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { appRouter } from "~/server/api/root";
 
 export const Route = createFileRoute("/api/panel")({
+  // @ts-expect-error - TanStack Start server handlers type not yet in @tanstack/react-router
   server: {
     handlers: {
       GET: async () => {

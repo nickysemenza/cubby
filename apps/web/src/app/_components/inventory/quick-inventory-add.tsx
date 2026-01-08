@@ -39,7 +39,7 @@ const formSchema = z.object({
   amount: amount,
 });
 
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = z.input<typeof formSchema>;
 
 export function QuickInventoryAdd({
   locationId,

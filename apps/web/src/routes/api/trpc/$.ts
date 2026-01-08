@@ -20,6 +20,7 @@ const handler = async ({ request }: { request: Request }) => {
 };
 
 export const Route = createFileRoute("/api/trpc/$")({
+  // @ts-expect-error - TanStack Start server handlers type not yet in @tanstack/react-router
   server: {
     handlers: {
       GET: handler,
