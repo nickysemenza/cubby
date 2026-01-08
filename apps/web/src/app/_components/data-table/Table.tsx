@@ -104,7 +104,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const totalSize = rowVirtualizer.getTotalSize();
 
   const styles = {
-    table: "text-xs leading-tight table-zebra",
+    table:
+      "text-xs leading-tight [&_tr:nth-child(even)]:bg-[oklch(0.988_0.004_55)]",
     header: "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80",
     filterRow: "h-7 px-2 py-0.5 bg-muted/40 border-b border-border/50",
     cell: "px-2 py-1 min-h-[28px] align-middle",

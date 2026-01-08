@@ -306,18 +306,6 @@
     animation-delay: 450ms;
   }
 
-  /* Link underline animation */
-  .link-underline {
-    @apply relative;
-  }
-  .link-underline::after {
-    content: "";
-    @apply bg-primary absolute bottom-0 left-0 h-0.5 w-0 transition-all duration-200;
-  }
-  .link-underline:hover::after {
-    @apply w-full;
-  }
-
   /* Skeleton shimmer loading effect */
   .skeleton-shimmer {
     background: linear-gradient(
@@ -396,11 +384,6 @@
       transparent 100%
     );
     box-shadow: inset 3px 0 0 var(--brand-terracotta);
-  }
-
-  /* Zebra striping with warmth */
-  .table-zebra tr:nth-child(even) {
-    background-color: oklch(0.988 0.004 55);
   }
 
   /* Nav link animated underline */
