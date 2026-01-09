@@ -174,7 +174,10 @@ describe("haveIngredientsChanged", () => {
 });
 
 describe("haveInstructionsChanged", () => {
-  const baseInstruction = { id: "inst-1", instruction: "Preheat oven to 350°F" };
+  const baseInstruction = {
+    id: "inst-1",
+    instruction: "Preheat oven to 350°F",
+  };
 
   it("returns false for identical instruction arrays", () => {
     const original = [baseInstruction];
@@ -203,7 +206,9 @@ describe("haveInstructionsChanged", () => {
 
   it("returns true when instruction text changes", () => {
     const original = [baseInstruction];
-    const updated = [{ ...baseInstruction, instruction: "Preheat oven to 400°F" }];
+    const updated = [
+      { ...baseInstruction, instruction: "Preheat oven to 400°F" },
+    ];
 
     expect(haveInstructionsChanged(original, updated)).toBe(true);
   });
