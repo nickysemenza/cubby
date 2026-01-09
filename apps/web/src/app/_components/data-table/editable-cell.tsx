@@ -85,7 +85,7 @@ export function EditableCell<T>({
     return (
       // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
       <div
-        className="flex items-center gap-1"
+        className="inline-flex items-center gap-1"
         onClick={(e) => e.stopPropagation()}
       >
         {prefix && (
@@ -127,7 +127,7 @@ export function EditableCell<T>({
   return (
     <button
       type="button"
-      className="group flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
+      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
       onClick={(e) => {
         e.stopPropagation(); // Prevent row click
         startEditing();

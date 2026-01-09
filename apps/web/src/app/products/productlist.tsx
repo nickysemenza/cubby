@@ -80,7 +80,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         ],
         renderCell: (category) => <CategoryBadge category={category} />,
       }),
-      createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient"),
+      createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
+        header: "Ingredient",
+      }),
       columnHelper.accessor("manufacturer", {
         meta: {
           mobileCategory: "compact",
@@ -128,6 +130,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         },
       }),
       createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
+        header: "USDA Food",
         mobileCategory: "compact",
       }),
       createInventoryEntriesColumn(
