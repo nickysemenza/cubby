@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { type Amount, amount } from "~/codec/codec";
-import { wasm } from "~/lib/wasm";
+import { amount } from "~/codec/codec";
 import { dbTimestampsOut } from "./common";
 import { productId } from "./identifiers";
 
@@ -29,36 +28,6 @@ const unitMappingBase = z.object({
 export const unitMappingWithMetadata = unitMappingBase.extend({
   sourceMetadata: sourceMetadata,
 });
-
-// Raw result from WASM (source can be undefined)
-interface WasmUnitMappingResult {
-  a: Amount;
-  b: Amount;
-  source?: string;
-}
-
-// Parsed unit mapping result (source normalized to null)
-interface ParsedUnitMappingResult {
-  a: Amount;
-  b: Amount;
-  source: string | null;
-}
-
-/**
- * Parse a unit mapping string using WASM.
- * Supports formats: "4 lb = $5", "$5/4lb", "4 lb = $5 @ store"
- */
-export const parseUnitMappingString = (
-  input: string,
-): ParsedUnitMappingResult => {
-  const result = wasm.parse_unit_mapping(input) as WasmUnitMappingResult;
-  // Normalize undefined to null for source field
-  return {
-    a: result.a,
-    b: result.b,
-    source: result.source ?? null,
-  };
-};
 
 export const unitMappingInput = unitMappingBase.extend({
   id: z.uuid().optional(),

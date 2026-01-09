@@ -10,7 +10,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import type { ProductId } from "~/schemas/identifiers";
 import { findPriceMapping, isMoneyUnit } from "~/schemas/price-mapping-utils";
-import { parseUnitMappingString } from "~/schemas/unitmapping";
+import { parseUnitMappingString } from "~/schemas/unit-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productUnitMappings } from "~/server/db/schema";
 import { getDb, unwrapDb } from "~/server/repo/database-helpers";

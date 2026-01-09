@@ -1,3 +1,4 @@
+import type { WUnitMapping } from "@recipehub/recipebridge";
 import {
   type BrandedFoodServingSizeUnit,
   branded_food_serving_size_unit,
@@ -9,6 +10,27 @@ import {
 } from "@recipehub/usda-schemas";
 import { wasm } from "~/lib/wasm";
 import type { UnitMapping } from "./unitmapping";
+
+// Parsed unit mapping result (source normalized from undefined to null)
+interface ParsedUnitMappingResult extends Omit<WUnitMapping, "source"> {
+  source: string | null;
+}
+
+/**
+ * Parse a unit mapping string using WASM.
+ * Supports formats: "4 lb = $5", "$5/4lb", "4 lb = $5 @ store"
+ */
+export const parseUnitMappingString = (
+  input: string,
+): ParsedUnitMappingResult => {
+  const result = wasm.parse_unit_mapping(input);
+  // Normalize undefined to null for source field
+  return {
+    a: result.a,
+    b: result.b,
+    source: result.source ?? null,
+  };
+};
 
 /**
  * Normalizes USDA branded food serving size units to standard units
