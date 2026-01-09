@@ -3,6 +3,75 @@
  *
  * Compares app and sheet data to classify items into sync states.
  * Used by the omnidirectional sync feature.
+ *
+ * ## Algorithm Overview
+ *
+ * The sync algorithm uses a multi-pass approach to classify items into states:
+ * - `matched`: Identical in both app and sheet
+ * - `conflict`: Same item exists in both but with different field values
+ * - `app_only`: Exists only in the app database
+ * - `sheet_only`: Exists only in the Google Sheet
+ * - `renamed`: Item was renamed (detected by matching identifiers)
+ * - `moved`: Item location changed (inventory only)
+ *
+ * ### Location Comparison (`compareLocationsForSync`)
+ *
+ * Pass 1: Exact matches by normalized name
+ *   - Build maps keyed by normalized location name
+ *   - Items in both → compare fields → "matched" or "conflict"
+ *
+ * Pass 2: Rename detection using heuristic scoring
+ *   - For unmatched app+sheet pairs, score potential renames:
+ *     - Shortcode match: +200 (definitive identifier)
+ *     - Description match: +100 (strong signal if non-empty)
+ *     - Parent + type match: +60 (structural similarity)
+ *     - Name containment: +40 (likely variant names)
+ *   - Minimum score of 40 required; greedy matching by highest score
+ *
+ * Pass 3: Remaining app items → "app_only"
+ * Pass 4: Remaining sheet items → "sheet_only"
+ *
+ * ### Inventory Comparison (`compareInventoryForSync`)
+ *
+ * Key structure: `productName|manufacturer|locationName` (normalized)
+ *
+ * Pass 1: Exact key matches
+ *   - Items with matching keys → compare fields → "matched" or "conflict"
+ *
+ * Pass 2: Move detection for single-entry products
+ *   - If a product appears exactly once in app and once in sheet with different keys:
+ *     - Different location → "moved"
+ *     - Same location, different manufacturer → "conflict"
+ *
+ * Pass 2.5: UPC-based matching
+ *   - For items with matching UPCs and same product name but different keys:
+ *     - Enables detection of manufacturer changes or location moves
+ *
+ * Pass 3: Rename detection using heuristic scoring
+ *   - Score potential rename pairs:
+ *     - Product shortcode match: +200 (definitive)
+ *     - UPC match: +100 (definitive identifier)
+ *     - Model match: +80 (strong identifier)
+ *     - Name containment: +50 (likely variant)
+ *     - Same location: +25 (co-located items)
+ *     - Same manufacturer: +10 (same brand)
+ *     - Different specific manufacturers: -60 (strong negative signal)
+ *   - Minimum score of 50 required; greedy matching by highest score
+ *
+ * Pass 4: Remaining app items → "app_only"
+ * Pass 5: Remaining sheet items → "sheet_only"
+ *
+ * ### Default Resolutions
+ *
+ * Each state has a default resolution action:
+ * - matched: null (no action needed)
+ * - conflict: depends on field differences (uses heuristics)
+ * - app_only: "add_to_sheet"
+ * - sheet_only: "add_to_app"
+ * - renamed: "rename_in_app"
+ * - moved: "move_in_app"
+ *
+ * Users can override these defaults in the sync preview UI.
  */
 
 import {
