@@ -15,11 +15,11 @@ import {
   createFilterableSelectColumn,
   createInventoryEntriesColumn,
   createSingleEntityPillColumn,
+  createTextColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
-import { NoneState } from "../_components/NoneState";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 
@@ -91,26 +91,49 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
         header: "Ingredient",
       }),
-      columnHelper.accessor("manufacturer", {
-        meta: {
-          mobileCategory: "compact",
-          filterConfig: { placeholder: "Filter manufacturer..." },
+      createTextColumn(columnHelper, "manufacturer", {
+        mobileCategory: "compact",
+        filterConfig: { placeholder: "Filter manufacturer..." },
+        editable: {
+          onSave: async (newValue, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { manufacturer: newValue ?? "" },
+            });
+          },
         },
-        cell: (info) => info.getValue(),
       }),
       createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
         filterConfig: { placeholder: "Filter UPC..." },
+        editable: {
+          onSave: async (newValue, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { upc: newValue },
+            });
+          },
+        },
       }),
       createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", {
         header: "NDB",
+        editable: {
+          onSave: async (newValue, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { ndb_number: newValue ? Number(newValue) : null },
+            });
+          },
+        },
       }),
-      columnHelper.accessor("model", {
-        cell: (info) =>
-          info.getValue() ? (
-            <code className="text-xs">{info.getValue()}</code>
-          ) : (
-            <NoneState />
-          ),
+      createTextColumn(columnHelper, "model", {
+        editable: {
+          onSave: async (newValue, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { model: newValue },
+            });
+          },
+        },
       }),
       createCurrencyColumn(columnHelper, "price", {
         header: "Price",

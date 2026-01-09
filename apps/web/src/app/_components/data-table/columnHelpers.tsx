@@ -66,7 +66,21 @@ interface ImageRow extends BaseRow {
 }
 
 /**
- * Creates a standard name column that links to the detail page
+ * Creates a standard name column that links to the detail page.
+ * Optionally supports inline editing when `editable` option is provided.
+ *
+ * @example
+ * // Read-only
+ * createNameColumn(columnHelper, "product")
+ *
+ * // With inline editing
+ * createNameColumn(columnHelper, "ingredient", "name", {
+ *   editable: {
+ *     onSave: async (newName, row) => {
+ *       await updateMutation.mutateAsync({ id: row.id, data: { name: newName } });
+ *     },
+ *   },
+ * })
  */
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
@@ -75,6 +89,10 @@ export function createNameColumn<T extends BaseRow>(
   options?: {
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
+    /** Enable inline editing */
+    editable?: {
+      onSave: (newValue: string, row: T) => Promise<void>;
+    };
   },
 ) {
   const config = {
@@ -86,6 +104,35 @@ export function createNameColumn<T extends BaseRow>(
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       const value = String(info.getValue());
+
+      // If editable, show EditableCell instead of link
+      if (options?.editable) {
+        return (
+          <EditableCell
+            value={value}
+            onSave={(newVal) =>
+              options.editable!.onSave(newVal ?? "", info.row.original)
+            }
+            config={{ type: "text" }}
+            renderValue={(v) => (
+              <Tooltip>
+                <TooltipTrigger render={<span className="block truncate" />}>
+                  <TableLink
+                    to={entities[entity].routes.detail}
+                    params={{ id: String(info.row.original.id) }}
+                  >
+                    {v ?? ""}
+                  </TableLink>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  {v ?? ""}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          />
+        );
+      }
+
       return (
         <Tooltip>
           <TooltipTrigger render={<span className="block truncate" />}>
@@ -490,6 +537,74 @@ export function createActionsColumnBase<T>(
 }
 
 // ============================================================================
+// Text Column
+// ============================================================================
+
+/**
+ * Creates a simple text column with optional inline editing.
+ *
+ * @example
+ * // Read-only
+ * createTextColumn(columnHelper, "manufacturer")
+ *
+ * // With inline editing
+ * createTextColumn(columnHelper, "manufacturer", {
+ *   header: "Manufacturer",
+ *   editable: {
+ *     onSave: async (newValue, row) => {
+ *       await updateMutation.mutateAsync({ id: row.id, data: { manufacturer: newValue } });
+ *     },
+ *   },
+ * })
+ */
+export function createTextColumn<
+  T extends Record<string, unknown>,
+  K extends keyof T,
+>(
+  columnHelper: ColumnHelper<T>,
+  accessor: K,
+  options?: {
+    header?: string;
+    placeholder?: string;
+    className?: string;
+    mobileCategory?: "hero" | "compact" | "medium" | "wide";
+    filterConfig?: FilterConfig;
+    /** Enable inline editing */
+    editable?: {
+      onSave: (newValue: string | null, row: T) => Promise<void>;
+    };
+  },
+) {
+  return columnHelper.accessor((row) => row[accessor] as string | null, {
+    id: String(accessor),
+    header: options?.header,
+    meta: {
+      className: options?.className,
+      mobileCategory: options?.mobileCategory,
+      filterConfig: options?.filterConfig,
+    },
+    cell: (info) => {
+      const value = info.getValue();
+
+      if (options?.editable) {
+        return (
+          <EditableCell
+            value={value}
+            onSave={(newVal) =>
+              options.editable!.onSave(newVal, info.row.original)
+            }
+            config={{ type: "text", placeholder: options?.placeholder }}
+            renderValue={(v) => (v ? v : <NoneState />)}
+          />
+        );
+      }
+
+      return value ?? <NoneState />;
+    },
+  });
+}
+
+// ============================================================================
 // Currency Column
 // ============================================================================
 
@@ -726,13 +841,23 @@ export function createFilterableSelectColumn<
 /**
  * Creates a column that displays a value as a link to an external/internal page.
  * Shows NoneState when the value is null/undefined.
+ * Optionally supports inline editing when `editable` option is provided.
  *
  * @example
- * // UPC link to USDA lookup
+ * // Read-only UPC link to USDA lookup
  * createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code")
  *
- * // NDB number link
+ * // Read-only NDB number link
  * createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", { header: "NDB" })
+ *
+ * // With inline editing
+ * createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
+ *   editable: {
+ *     onSave: async (newValue, row) => {
+ *       await updateMutation.mutateAsync({ id: row.id, data: { upc: newValue } });
+ *     },
+ *   },
+ * })
  */
 export function createExternalLinkColumn<
   T extends Record<string, unknown>,
@@ -748,6 +873,10 @@ export function createExternalLinkColumn<
     variant?: "mono" | "default";
     className?: string;
     filterConfig?: FilterConfig;
+    /** Enable inline editing */
+    editable?: {
+      onSave: (newValue: string | null, row: T) => Promise<void>;
+    };
   },
 ) {
   const paramName = options?.paramName ?? "code";
@@ -764,6 +893,35 @@ export function createExternalLinkColumn<
       },
       cell: (info) => {
         const value = info.getValue();
+
+        if (options?.editable) {
+          return (
+            <EditableCell
+              value={
+                value !== null && value !== undefined ? String(value) : null
+              }
+              onSave={(newVal) =>
+                options.editable!.onSave(newVal, info.row.original)
+              }
+              config={{ type: "text" }}
+              renderValue={(v) => {
+                if (v === null || v === undefined || v === "") {
+                  return <NoneState />;
+                }
+                return (
+                  <TableLink
+                    to={linkTo as "/usda/upc/$code"}
+                    params={{ [paramName]: String(v) } as { code: string }}
+                    variant={variant}
+                  >
+                    {v}
+                  </TableLink>
+                );
+              }}
+            />
+          );
+        }
+
         if (value === null || value === undefined) return <NoneState />;
         return (
           <TableLink

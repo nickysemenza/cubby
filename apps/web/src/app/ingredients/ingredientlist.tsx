@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Merge } from "lucide-react";
@@ -5,6 +6,7 @@ import { useId, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
+import { queryKeys } from "~/lib/query-keys";
 import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -23,9 +25,25 @@ import { TruncatedList } from "../_components/TruncatedList";
 export function IngredientList() {
   const missingProductsId = useId();
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const trpcClient = useTRPCClient();
   const columnHelper = createColumnHelper<IngredientWithFoodOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("ingredient");
+
+  // Mutation for inline editing (name)
+  const updateIngredientMutation = useMutation(
+    api.ingredient.update.mutationOptions({
+      onSuccess: () => {
+        toast.success("Ingredient updated");
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.ingredient.list,
+        });
+      },
+      onError: (err) => {
+        toast.error(err.message || "Failed to update ingredient");
+      },
+    }),
+  );
 
   // Global filter for missing products
   const [globalFilter, setGlobalFilter] = useState({
@@ -45,6 +63,14 @@ export function IngredientList() {
       createImageColumn(columnHelper),
       createNameColumn(columnHelper, "ingredient", "name", {
         filterConfig: { placeholder: "Filter by ingredient name..." },
+        editable: {
+          onSave: async (newName, ingredient) => {
+            await updateIngredientMutation.mutateAsync({
+              id: ingredient.id,
+              data: { name: newName },
+            });
+          },
+        },
       }),
       columnHelper.accessor("aliases", {
         header: "Aliases",

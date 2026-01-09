@@ -1,4 +1,7 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
+import { toast } from "sonner";
+import { queryKeys } from "~/lib/query-keys";
 import type {
   LocationOutWithParentChildren,
   LocationType,
@@ -23,8 +26,24 @@ import { locationTypeOptionsWithTheme } from "../_components/locations/location-
 
 export function LocationList() {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const columnHelper = createColumnHelper<LocationOutWithParentChildren>();
   const { onRowClick, PreviewSheet } = useEntityPreview("location");
+
+  // Mutation for inline editing (name, type)
+  const updateLocationMutation = useMutation(
+    api.location.update.mutationOptions({
+      onSuccess: () => {
+        toast.success("Location updated");
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.location.list,
+        });
+      },
+      onError: (err) => {
+        toast.error(err.message || "Failed to update location");
+      },
+    }),
+  );
 
   const { table, isLoading, error, timing } = useEntityList({
     entity: "location",
@@ -38,6 +57,14 @@ export function LocationList() {
       createImageColumn(columnHelper),
       createNameColumn(columnHelper, "location", "name", {
         filterConfig: { placeholder: "Filter by location name..." },
+        editable: {
+          onSave: async (newName, location) => {
+            await updateLocationMutation.mutateAsync({
+              id: location.id,
+              data: { name: newName },
+            });
+          },
+        },
       }),
       createEntityPillColumn(columnHelper, "children", "location"),
       createSingleEntityPillColumn(columnHelper, "parent", "location"),
@@ -45,6 +72,14 @@ export function LocationList() {
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
         renderCell: (type) => <LocationTypeBadge type={type} />,
+        editable: {
+          onSave: async (newType, location) => {
+            await updateLocationMutation.mutateAsync({
+              id: location.id,
+              data: { type: newType },
+            });
+          },
+        },
       }),
       columnHelper.display({
         id: "inventory_value",
