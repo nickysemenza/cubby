@@ -3,7 +3,6 @@
  */
 
 import dayjs from "dayjs";
-import { isNull } from "drizzle-orm";
 import { joinImageUrls } from "~/lib/image-utils";
 import {
   locationId as locationIdSchema,
@@ -12,7 +11,7 @@ import {
 import type { LocationType } from "~/schemas/location";
 import type { Database } from "~/server/db";
 import { location } from "~/server/db/schema";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import type { LocationCSVExportRow } from "./types";
 
@@ -27,7 +26,7 @@ function formatTimestamp(date: Date | null): string | null {
  */
 async function getLocationsWithParent(db: Database) {
   return getDb(db).query.location.findMany({
-    where: isNull(location.deletedAt),
+    where: notDeleted(location),
     with: {
       images: {
         with: { image: true },

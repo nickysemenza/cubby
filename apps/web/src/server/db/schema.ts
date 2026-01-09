@@ -62,6 +62,10 @@ export const recipe = pgTable(
     createdAtDescIdx: index("Recipe_created_at_desc_idx").on(
       table.createdAt.desc(),
     ),
+    // Partial index for soft delete queries
+    nameActiveIdx: index("Recipe_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -122,6 +126,10 @@ export const ingredient = pgTable(
       "gin",
       table.aliases,
     ),
+    // Partial index for soft delete queries
+    nameActiveIdx: index("Ingredient_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -204,6 +212,13 @@ export const product = pgTable(
       table.name,
       table.manufacturer,
     ),
+    // Partial indexes for soft delete queries
+    nameActiveIdx: index("Product_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    manufacturerActiveIdx: index("Product_manufacturer_active_idx")
+      .on(table.manufacturer)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -266,6 +281,13 @@ export const location = pgTable(
       sql`${table.name} gin_trgm_ops`,
     ),
     typeNameIdx: index("Location_type_name_idx").on(table.type, table.name),
+    // Partial indexes for soft delete queries
+    nameActiveIdx: index("Location_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    typeActiveIdx: index("Location_type_active_idx")
+      .on(table.type)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 

@@ -54,17 +54,17 @@ export interface ProtectedCrudServices extends CrudServices {
 
 // Reusable procedure builders
 const createDeleteProcedure = <TId extends string = string>(
-  deleteFn: (ctx: ProtectedCrudServices, id: TId) => Promise<void>,
+  deleteFn: (ctx: ProtectedCrudServices, ids: TId[]) => Promise<void>,
   idSchema?: z.ZodType<unknown>,
 ) =>
   protectedProcedure
-    .input(idSchema ? z.object({ id: idSchema }) : IDInput)
+    .input(z.object({ ids: z.array(idSchema ?? z.string()).max(100) }))
     .output(z.void())
     .mutation(async ({ ctx, input }) => {
-      const id = idSchema
-        ? (idSchema.parse(input.id) as TId)
-        : (input.id as TId);
-      await deleteFn(ctx, id);
+      const ids = input.ids.map((id) =>
+        idSchema ? (idSchema.parse(id) as TId) : (id as TId),
+      );
+      await deleteFn(ctx, ids);
     });
 
 const createGetByIdProcedure = <T, TId extends string = string>(

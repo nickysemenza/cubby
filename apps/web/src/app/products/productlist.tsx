@@ -56,129 +56,141 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     return [{ id: "category", value: initialCategory }];
   }, [initialCategory]);
 
-  const { table, isLoading, error, timing } = useEntityList({
-    entity: "product",
-    queryOptions: api.product.list.queryOptions,
-    buildFilters: (ts) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      manufacturerFilter: ts.getColumnFilter("manufacturer"),
-      upcFilter: ts.getColumnFilter("upc"),
-      categoryFilter: ts.getColumnFilter("category"),
-    }),
-    getMappings: getAllUnitMappingsFromProduct,
-    tableStateOptions: {
-      initialFilter,
-    },
-    columns: [
-      // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
-      createFilterableSelectColumn(columnHelper, "category", {
-        header: "Category",
-        placeholder: "Filter by category...",
-        selectOptions: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
-        renderCell: (cat) => <CategoryBadge category={cat} />,
-        editable: {
-          onSave: async (newCategory, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { category: newCategory },
-            });
-          },
-        },
+  const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
+    useEntityList({
+      entity: "product",
+      queryOptions: api.product.list.queryOptions,
+      buildFilters: (ts) => ({
+        nameFilter: ts.getColumnFilter("name"),
+        manufacturerFilter: ts.getColumnFilter("manufacturer"),
+        upcFilter: ts.getColumnFilter("upc"),
+        categoryFilter: ts.getColumnFilter("category"),
       }),
-      createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
-        header: "Ingredient",
-      }),
-      createTextColumn(columnHelper, "manufacturer", {
-        mobileCategory: "compact",
-        filterConfig: { placeholder: "Filter manufacturer..." },
-        editable: {
-          onSave: async (newValue, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { manufacturer: newValue ?? "" },
-            });
-          },
-        },
-      }),
-      createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
-        filterConfig: { placeholder: "Filter UPC..." },
-        editable: {
-          onSave: async (newValue, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { upc: newValue },
-            });
-          },
-        },
-      }),
-      createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", {
-        header: "NDB",
-        editable: {
-          onSave: async (newValue, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { ndb_number: newValue ? Number(newValue) : null },
-            });
-          },
-        },
-      }),
-      createTextColumn(columnHelper, "model", {
-        editable: {
-          onSave: async (newValue, product) => {
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { model: newValue },
-            });
-          },
-        },
-      }),
-      createCurrencyColumn(columnHelper, "price", {
-        header: "Price",
-        editable: {
-          onSave: async (newPrice, product) => {
-            // Sync price to unitMappings (canonical way to set price)
-            const updatedMappings = syncPriceToMappings(
-              product.unitMappings,
-              newPrice !== null ? { value: newPrice, unit: "dollar" } : null,
-              "inline-edit",
-            );
-            await updateProductMutation.mutateAsync({
-              id: product.id,
-              data: { unitMappings: updatedMappings },
-            });
-          },
-        },
-      }),
-      createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
-        header: "USDA Food",
-        mobileCategory: "compact",
-      }),
-      createInventoryEntriesColumn(
-        columnHelper,
-        "inventoryEntry",
-        "location",
-        (e) => e.location,
-        {},
-      ),
-    ],
-    filters: [
-      "name",
-      "manufacturer",
-      "upc",
-      {
-        id: "category",
-        placeholder: "Filter by category...",
-        filterType: "select",
-        options: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
+      getMappings: getAllUnitMappingsFromProduct,
+      tableStateOptions: {
+        initialFilter,
       },
-    ],
-  });
+      columns: [
+        // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
+        createFilterableSelectColumn(columnHelper, "category", {
+          header: "Category",
+          placeholder: "Filter by category...",
+          selectOptions: [
+            { value: "", label: "All categories" },
+            ...productCategoryOptionsWithTheme,
+          ],
+          renderCell: (cat) => <CategoryBadge category={cat} />,
+          editable: {
+            onSave: async (newCategory, product) => {
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { category: newCategory },
+              });
+            },
+          },
+        }),
+        createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
+          header: "Ingredient",
+        }),
+        createTextColumn(columnHelper, "manufacturer", {
+          mobileCategory: "compact",
+          filterConfig: { placeholder: "Filter manufacturer..." },
+          editable: {
+            onSave: async (newValue, product) => {
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { manufacturer: newValue ?? "" },
+              });
+            },
+          },
+        }),
+        createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
+          filterConfig: { placeholder: "Filter UPC..." },
+          editable: {
+            onSave: async (newValue, product) => {
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { upc: newValue },
+              });
+            },
+          },
+        }),
+        createExternalLinkColumn(
+          columnHelper,
+          "ndb_number",
+          "/usda/ndb/$code",
+          {
+            header: "NDB",
+            editable: {
+              onSave: async (newValue, product) => {
+                await updateProductMutation.mutateAsync({
+                  id: product.id,
+                  data: { ndb_number: newValue ? Number(newValue) : null },
+                });
+              },
+            },
+          },
+        ),
+        createTextColumn(columnHelper, "model", {
+          editable: {
+            onSave: async (newValue, product) => {
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { model: newValue },
+              });
+            },
+          },
+        }),
+        createCurrencyColumn(columnHelper, "price", {
+          header: "Price",
+          editable: {
+            onSave: async (newPrice, product) => {
+              // Sync price to unitMappings (canonical way to set price)
+              const updatedMappings = syncPriceToMappings(
+                product.unitMappings,
+                newPrice !== null ? { value: newPrice, unit: "dollar" } : null,
+                "inline-edit",
+              );
+              await updateProductMutation.mutateAsync({
+                id: product.id,
+                data: { unitMappings: updatedMappings },
+              });
+            },
+          },
+        }),
+        createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
+          header: "USDA Food",
+          mobileCategory: "compact",
+        }),
+        createInventoryEntriesColumn(
+          columnHelper,
+          "inventoryEntry",
+          "location",
+          (e) => e.location,
+          {},
+        ),
+      ],
+      filters: [
+        "name",
+        "manufacturer",
+        "upc",
+        {
+          id: "category",
+          placeholder: "Filter by category...",
+          filterType: "select",
+          options: [
+            { value: "", label: "All categories" },
+            ...productCategoryOptionsWithTheme,
+          ],
+        },
+      ],
+      deletable: {
+        mutationOptions: (callbacks) =>
+          api.product.delete.mutationOptions(callbacks),
+        entityLabel: "Product",
+        invalidateKeys: [queryKeys.product.list],
+      },
+    });
 
   return (
     <div>
@@ -191,8 +203,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         entity="product"
         onRowClick={onRowClick}
         actions={actions}
+        bulkActionBar={bulkActionBar}
       />
       <PreviewSheet />
+      {deleteDialog}
     </div>
   );
 }

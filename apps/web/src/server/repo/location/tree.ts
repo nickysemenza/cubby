@@ -3,7 +3,7 @@
  * Build location trees, type counts, and import updates.
  */
 
-import { count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 
 import {
   type LocationId,
@@ -24,6 +24,7 @@ import {
 import {
   buildPartialUpdateValues,
   getDb,
+  notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
 
@@ -40,6 +41,7 @@ export const buildLocationTypeCount = async (db: Database) => {
       count: count(),
     })
     .from(location)
+    .where(notDeleted(location))
     .groupBy(location.type)
     .orderBy(desc(count()));
 
@@ -58,24 +60,25 @@ export const buildLocationTypeCount = async (db: Database) => {
 export const buildLocationTree = async (db: Database) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
+  // Excludes soft-deleted locations
   const res = await getDb(db).execute<LocationWithParentChild>(sql`
     WITH RECURSIVE location_tree AS (
-      -- Base case: locations with no parent
+      -- Base case: locations with no parent (excludes soft-deleted)
       SELECT
         l.*,
         0 as depth
       FROM ${location} l
-      WHERE l."parentId" IS NULL
+      WHERE l."parentId" IS NULL AND l."deletedAt" IS NULL
 
       UNION ALL
 
-      -- Recursive case: children of locations in the tree
+      -- Recursive case: children of locations in the tree (excludes soft-deleted)
       SELECT
         l.*,
         lt.depth + 1 as depth
       FROM ${location} l
       INNER JOIN location_tree lt ON l."parentId" = lt.id
-      WHERE lt.depth < 10  -- Limit recursion depth
+      WHERE lt.depth < 10 AND l."deletedAt" IS NULL
     )
     SELECT * FROM location_tree
     ORDER BY depth, name
@@ -109,7 +112,7 @@ export const buildLocationTree = async (db: Database) => {
     imagesByLocationId.set(locImg.locationId, existing);
   }
 
-  // Batch fetch inventory entries with product names for all locations
+  // Batch fetch inventory entries with product names for all locations (excludes soft-deleted)
   const allInventoryEntries =
     locationIds.length > 0
       ? await getDb(db)
@@ -122,7 +125,12 @@ export const buildLocationTree = async (db: Database) => {
           })
           .from(inventoryEntry)
           .innerJoin(product, eq(inventoryEntry.productId, product.id))
-          .where(inArray(inventoryEntry.locationId, locationIds))
+          .where(
+            and(
+              inArray(inventoryEntry.locationId, locationIds),
+              notDeleted(inventoryEntry),
+            ),
+          )
           .orderBy(product.name)
       : [];
 

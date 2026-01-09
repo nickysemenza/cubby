@@ -4,11 +4,15 @@
  */
 
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { asc, ilike, sql } from "drizzle-orm";
+import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { createAppError } from "~/lib/error-utils";
 import type { SortParams } from "~/schemas/pagination";
+import type { DrizzleTransaction } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
+
+import { getDb } from "./core";
 
 /**
  * Helper function to format search terms for PostgreSQL pattern matching.
@@ -26,6 +30,25 @@ export const formatSearchTerm = (
   }
   return ilike(column, `%${term}%`);
 };
+
+/**
+ * Helper to filter out soft-deleted records.
+ * Use this in where clauses to exclude records where deletedAt is set.
+ *
+ * @param table - Any table with a deletedAt column
+ * @returns SQL condition for deletedAt IS NULL
+ *
+ * @example
+ * ```typescript
+ * // Single condition
+ * where: notDeleted(product)
+ *
+ * // Combined with other conditions
+ * where: and(eq(product.id, id), notDeleted(product))
+ * ```
+ */
+export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
+  isNull(table.deletedAt);
 
 /**
  * Build order by clause from sort parameters.
@@ -98,4 +121,55 @@ export async function executeListQueryWithCount<T>(
     });
     return { data, count: countResult?.count ?? 0 };
   });
+}
+
+/**
+ * Locks entity records for update and validates they exist and aren't deleted.
+ * Prevents race conditions by acquiring row-level locks before safety checks.
+ *
+ * Use this at the start of delete operations to ensure:
+ * 1. Records are locked (prevents concurrent modifications)
+ * 2. All requested IDs exist and aren't already deleted
+ * 3. Other transactions wait until our transaction completes
+ *
+ * @param tx - Transaction to execute in
+ * @param table - Table to lock records from
+ * @param ids - Array of IDs to lock
+ * @param entityName - Human-readable entity name for error messages (e.g., "Product")
+ * @throws {AppError} If any IDs are not found or already deleted
+ *
+ * @example
+ * ```typescript
+ * await withTransaction(db, async (tx) => {
+ *   // Lock products and validate they exist
+ *   await lockAndValidateForDelete(tx, product, ids, "Product");
+ *
+ *   // Now safely check dependencies (other transactions will wait)
+ *   const withInventory = await tx.query.inventoryEntry.findMany(...);
+ *   if (withInventory.length > 0) throw error;
+ *
+ *   // Proceed with deletion
+ * });
+ * ```
+ */
+export async function lockAndValidateForDelete<TId extends string>(
+  tx: DrizzleTransaction,
+  table: PgTable & { id: AnyColumn; deletedAt: AnyColumn },
+  ids: TId[],
+  entityName: string,
+): Promise<void> {
+  const locked = await getDb(tx)
+    .select({ id: table.id })
+    .from(table)
+    .where(and(inArray(table.id, ids), notDeleted(table)))
+    .for("update"); // 🔒 Acquires row-level lock
+
+  if (locked.length !== ids.length) {
+    const foundIds = locked.map((e) => e.id as TId);
+    const missingIds = ids.filter((id) => !foundIds.includes(id));
+    throw createAppError(
+      `${entityName.toUpperCase()}_NOT_FOUND`,
+      `${entityName}s not found or already deleted: ${missingIds.join(", ")}`,
+    );
+  }
 }

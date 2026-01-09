@@ -15,6 +15,7 @@ import { useTRPC } from "~/trpc/react";
 import { EditableCell } from "../data-table/editable-cell";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
+import { useEntityDelete } from "../hooks/useEntityDelete";
 import { NoneState } from "../NoneState";
 import { CategoryBadge } from "./CategoryBadge";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
@@ -45,6 +46,16 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       },
     }),
   );
+
+  const { DeleteButton, DeleteDialog } = useEntityDelete({
+    id: product.id,
+    name: product.name,
+    entityLabel: "Product",
+    mutationOptions: (callbacks) =>
+      api.product.delete.mutationOptions(callbacks),
+    invalidateKeys: [queryKeys.product.list],
+    redirectTo: "/products",
+  });
 
   const fields: BasicInfoField[] = [
     { label: "Name", value: product.name },
@@ -166,27 +177,31 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   ];
 
   return (
-    <BasicInfo
-      fields={fields}
-      actions={
-        <div className="flex gap-2">
-          <Button onClick={onEdit}>Edit</Button>
-          {product.shortcode && (
-            <Button
-              variant="outline"
-              onClick={() =>
-                downloadLabel({
-                  shortcode: product.shortcode!,
-                  name: product.name,
-                })
-              }
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download Label
-            </Button>
-          )}
-        </div>
-      }
-    />
+    <>
+      <BasicInfo
+        fields={fields}
+        actions={
+          <div className="flex gap-2">
+            <Button onClick={onEdit}>Edit</Button>
+            {product.shortcode && (
+              <Button
+                variant="outline"
+                onClick={() =>
+                  downloadLabel({
+                    shortcode: product.shortcode!,
+                    name: product.name,
+                  })
+                }
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download Label
+              </Button>
+            )}
+            <DeleteButton />
+          </div>
+        }
+      />
+      <DeleteDialog />
+    </>
   );
 };

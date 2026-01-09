@@ -2,79 +2,6 @@
  * Row processor for CSV import
  *
  * Handles processing a single CSV row, both for dry-run preview and actual execution.
- *
- * ## Algorithm Overview
- *
- * Each CSV row is processed through an 8-step pipeline that handles both dry-run
- * (preview) and execution modes. The processor determines the appropriate action
- * (created, updated, skipped, moved, product_only) based on database state.
- *
- * ### Processing Steps
- *
- * Step 1: Product Processing
- *   - Preview mode: Check what changes would occur (UPC, model, price, etc.)
- *   - Execution mode: Create/update product with all field values
- *   - Handles price mappings, unit conversions, image imports
- *
- * Step 2: Product-Only Rows
- *   - If no location_name provided, row is "product_only"
- *   - No inventory entry created, only product data imported
- *   - Returns early with "product_only" or "skipped" action
- *
- * Step 3: Location Resolution
- *   - First tries location_shortcode (L-XXXX format) for exact match
- *   - Falls back to location_name lookup
- *   - Location must exist (created via Locations sheet import)
- *
- * Step 4: New Product Creation (dry-run)
- *   - If product doesn't exist yet, return "created" action early
- *   - Preview shows what would be created
- *
- * Step 5: Missing Location Handling
- *   - If location not found, auto-create as root "room" type
- *   - This ensures import doesn't fail for new locations
- *   - Logs message indicating auto-creation
- *
- * Step 6: Move Detection
- *   - Checks if product has existing inventory elsewhere
- *   - Move condition: exactly 1 entry in app, not at target location
- *   - This handles the "user changed location in sheet" scenario
- *
- * Step 7: Move Execution
- *   - If move detected, consolidate all entries to target location
- *   - Returns "moved" action with source location(s)
- *
- * Step 8: Standard Inventory Result
- *   - "skipped": Inventory already exists with same quantity
- *   - "updated": Inventory exists but quantity differs
- *   - "created": New inventory entry at location
- *
- * ### Dry-Run vs Execution Mode
- *
- * The processor supports two modes via the `dryRun` flag:
- *
- * **Dry-run (preview)**:
- * - Returns what would happen without making changes
- * - Includes `productChanges`, `fieldChanges`, `productWillBeCreated` flags
- * - Used by sync preview UI to show pending changes
- *
- * **Execution**:
- * - Actually creates/updates/moves database records
- * - Returns success/failure with action taken
- * - Reports image import errors as warnings
- *
- * ### Field Change Tracking
- *
- * The processor tracks changes at two levels:
- * - `ProductChangesPreview`: Product-level changes (UPC, price, model, etc.)
- * - `FieldChange[]`: Granular field-by-field changes for UI display
- *
- * ### Timestamp Handling
- *
- * When SYNC_TIMESTAMPS feature is enabled:
- * - Parses product_created_at, product_updated_at from CSV
- * - Parses inventory_created_at, inventory_updated_at from CSV
- * - These are only written via "Refresh Timestamps" button, not regular sync
  */
 
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
@@ -125,7 +52,7 @@ interface RowProcessorContext {
 /**
  * Parse timestamps from CSV row if SYNC_TIMESTAMPS is enabled
  */
-export function parseRowTimestamps(row: InventoryCSVRow): {
+function parseRowTimestamps(row: InventoryCSVRow): {
   product: ProductTimestamps | undefined;
   inventory: InventoryTimestamps | undefined;
 } {
@@ -158,7 +85,7 @@ export function parseRowTimestamps(row: InventoryCSVRow): {
 /**
  * Helper to add a field change if the value is defined
  */
-export function addFieldChange(
+function addFieldChange(
   result: FieldChange[],
   field: string,
   willBeSet: unknown,
@@ -172,7 +99,7 @@ export function addFieldChange(
 /**
  * Convert ProductChangesPreview to FieldChange[] for consistent display
  */
-export function productChangesToFieldChanges(
+function productChangesToFieldChanges(
   changes: ProductChangesPreview,
 ): FieldChange[] {
   const result: FieldChange[] = [];
@@ -233,7 +160,7 @@ export function productChangesToFieldChanges(
 /**
  * Build fieldChanges array from productChanges and optional inventory changes
  */
-export function buildFieldChanges(
+function buildFieldChanges(
   productChanges: ProductChangesPreview,
   inventoryFieldChanges?: FieldChange[],
 ): FieldChange[] | undefined {
@@ -245,14 +172,14 @@ export function buildFieldChanges(
 /**
  * Check if productChanges has any entries
  */
-export function hasChanges(productChanges: ProductChangesPreview): boolean {
+function hasChanges(productChanges: ProductChangesPreview): boolean {
   return Object.keys(productChanges).length > 0;
 }
 
 /**
  * Wrap productChanges for result if non-empty
  */
-export function wrapChanges(
+function wrapChanges(
   productChanges: ProductChangesPreview,
 ): ProductChangesPreview | undefined {
   return hasChanges(productChanges) ? productChanges : undefined;

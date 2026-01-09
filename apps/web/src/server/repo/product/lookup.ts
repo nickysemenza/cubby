@@ -16,6 +16,7 @@ import { product } from "~/server/db/schema";
 import {
   extractImagesFromJoinTable,
   getDb,
+  notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
 
@@ -33,12 +34,14 @@ export const findProductsByFoodIdentifier = async (
   // validate that lookup zod schema is good
   const lookup = foodLookupParam.parse(rawLookup);
 
-  // Find all matching products
+  // Find all matching products (exclude soft-deleted)
   const res = await getDb(db).query.product.findMany({
-    where:
+    where: and(
       lookup.kind === "upc"
         ? eq(product.upc, lookup.gtin_upc)
         : eq(product.ndb_number, lookup.ndb_number),
+      notDeleted(product),
+    ),
     ...relations.product.full,
   });
 
@@ -49,13 +52,13 @@ export const findProductsByFoodIdentifier = async (
   }));
 };
 
-// Find a product by UPC code
+// Find a product by UPC code (excludes soft-deleted)
 export const findProductByUPC = async (
   db: Database,
   upcCode: string,
 ): Promise<ProductTopLevelOut | null> => {
   const res = await getDb(db).query.product.findFirst({
-    where: eq(product.upc, upcCode),
+    where: and(eq(product.upc, upcCode), notDeleted(product)),
     with: {
       images: {
         with: {
@@ -82,7 +85,7 @@ export const findProductByUPC = async (
   );
 };
 
-// Find a product by name and manufacturer (internal helper)
+// Find a product by name and manufacturer (internal helper, excludes soft-deleted)
 const findProductByNameAndManufacturer = async (
   db: Database,
   name: string,
@@ -92,6 +95,7 @@ const findProductByNameAndManufacturer = async (
     where: and(
       ilike(product.name, name),
       ilike(product.manufacturer, manufacturer),
+      notDeleted(product),
     ),
     with: {
       images: {
@@ -136,10 +140,10 @@ export const findProductByNameFuzzyManufacturer = async (
   name: string,
   manufacturer: string | null | undefined,
 ): Promise<ProductTopLevelOut | null> => {
-  // If incoming manufacturer is unspecified, match by name only
+  // If incoming manufacturer is unspecified, match by name only (excludes soft-deleted)
   if (isUnspecifiedManufacturer(manufacturer)) {
     const res = await getDb(db).query.product.findFirst({
-      where: ilike(product.name, name),
+      where: and(ilike(product.name, name), notDeleted(product)),
       with: {
         images: {
           with: {
@@ -177,11 +181,12 @@ export const findProductByNameFuzzyManufacturer = async (
     return exactMatch;
   }
 
-  // Fallback: try to match a product with "(unspecified)" manufacturer
+  // Fallback: try to match a product with "(unspecified)" manufacturer (excludes soft-deleted)
   const unspecifiedMatch = await getDb(db).query.product.findFirst({
     where: and(
       ilike(product.name, name),
       ilike(product.manufacturer, UNSPECIFIED_MANUFACTURER),
+      notDeleted(product),
     ),
     with: {
       images: {

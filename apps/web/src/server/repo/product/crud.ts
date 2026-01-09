@@ -26,11 +26,16 @@ import { createAppError } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import {
   image,
+  inventoryEntry,
   product,
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   buildOrderBy,
@@ -40,6 +45,8 @@ import {
   getDb,
   insertAndReturn,
   insertAndReturnDb,
+  lockAndValidateForDelete,
+  notDeleted,
   relations,
   updateAndReturn,
   withTransaction,
@@ -53,7 +60,7 @@ import type { ProductDeepDB } from "./types";
 
 export const getProductByID = async (db: Database, id: ProductId) => {
   const res = await getDb(db).query.product.findFirst({
-    where: eq(product.id, id),
+    where: and(eq(product.id, id), notDeleted(product)),
     ...relations.product.full,
   });
 
@@ -73,7 +80,10 @@ export const findProductByShortcode = async (
   shortcode: string,
 ): Promise<ProductId | null> => {
   const prod = await getDb(db).query.product.findFirst({
-    where: eq(product.shortcode, shortcode.toUpperCase()),
+    where: and(
+      eq(product.shortcode, shortcode.toUpperCase()),
+      notDeleted(product),
+    ),
   });
   return prod ? unsafeProductId(prod.id) : null;
 };
@@ -101,8 +111,8 @@ export const productList = async (
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  // Build where conditions
-  const conditions: ReturnType<typeof eq>[] = [];
+  // Build where conditions - always filter out deleted items
+  const conditions: ReturnType<typeof eq>[] = [notDeleted(product)];
 
   if (name !== undefined) {
     const nameCondition = formatSearchTerm(product.name, name);
@@ -498,4 +508,120 @@ export const quickCreateProduct = async (
       identifier: { id: newProduct.id, name: newProduct.name },
     },
   );
+};
+
+/**
+ * Soft delete products by setting deletedAt timestamp.
+ * Also soft deletes related unit mappings and images.
+ * Throws if any product has inventory entries.
+ */
+export const deleteProducts = async (
+  db: Database,
+  ids: ProductId[],
+  actor: ActorContext,
+): Promise<void> => {
+  if (ids.length === 0) return;
+
+  await withTransaction(db, async (tx) => {
+    // Lock products and validate they exist and aren't already deleted
+    // Prevents race conditions by acquiring row-level locks
+    await lockAndValidateForDelete(tx, product, ids, "Product");
+
+    // Safety check: don't delete if any product has inventory entries
+    const withInventory = await tx.query.inventoryEntry.findMany({
+      where: and(
+        inArray(inventoryEntry.productId, ids),
+        notDeleted(inventoryEntry),
+      ),
+      columns: { productId: true },
+    });
+
+    if (withInventory.length > 0) {
+      const failedProductIds = Array.from(
+        new Set(withInventory.map((e) => e.productId)),
+      );
+      const failedProducts = await tx.query.product.findMany({
+        where: inArray(product.id, failedProductIds),
+        columns: { id: true, name: true },
+      });
+      const names = failedProducts.map((p) => p.name).join(", ");
+      const count = failedProducts.length;
+      throw createAppError(
+        "PRODUCT_HAS_INVENTORY",
+        `Cannot delete ${count} product(s): ${names} have inventory entries. Remove inventory items first.`,
+      );
+    }
+
+    const now = new Date();
+
+    // Get counts of cascaded items for audit trail
+    const cascadedMappings = await tx.query.productUnitMappings.findMany({
+      where: inArray(productUnitMappings.productId, ids),
+      columns: { id: true, productId: true },
+    });
+
+    const cascadedImages = await tx.query.productImage.findMany({
+      where: inArray(productImage.productId, ids),
+      columns: { id: true, productId: true },
+    });
+
+    // Group cascaded items by product ID for audit logging
+    const mappingsByProduct = new Map<string, number>();
+    const imagesByProduct = new Map<string, number>();
+
+    for (const mapping of cascadedMappings) {
+      mappingsByProduct.set(
+        mapping.productId,
+        (mappingsByProduct.get(mapping.productId) ?? 0) + 1,
+      );
+    }
+
+    for (const img of cascadedImages) {
+      imagesByProduct.set(
+        img.productId,
+        (imagesByProduct.get(img.productId) ?? 0) + 1,
+      );
+    }
+
+    // Soft delete unit mappings
+    await tx
+      .update(productUnitMappings)
+      .set({ deletedAt: now })
+      .where(inArray(productUnitMappings.productId, ids));
+
+    // Soft delete product images
+    await tx
+      .update(productImage)
+      .set({ deletedAt: now })
+      .where(inArray(productImage.productId, ids));
+
+    // Soft delete products
+    await tx
+      .update(product)
+      .set({ deletedAt: now })
+      .where(inArray(product.id, ids));
+
+    // Log audit entries with cascaded item counts (batch operation)
+    const auditEntries = ids.map((id) => {
+      const mappingCount = mappingsByProduct.get(id) ?? 0;
+      const imageCount = imagesByProduct.get(id) ?? 0;
+
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (mappingCount > 0) {
+        changes.cascadedUnitMappings = { from: mappingCount, to: 0 };
+      }
+      if (imageCount > 0) {
+        changes.cascadedImages = { from: imageCount, to: 0 };
+      }
+
+      return {
+        entityType: "product" as const,
+        entityId: id,
+        action: "delete" as const,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      };
+    });
+
+    await logAuditEntries(tx, actor, auditEntries);
+  });
 };

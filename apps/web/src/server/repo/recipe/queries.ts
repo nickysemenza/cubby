@@ -10,7 +10,8 @@ import type {
   IngredientNode,
 } from "~/schemas/ingredient-cooccurrence";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/repo/database-helpers";
+import { recipe } from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 /**
  * Get ingredient co-occurrence data for building a network graph.
@@ -22,8 +23,9 @@ export const getIngredientCooccurrence = async (
 ): Promise<IngredientCooccurrence> => {
   const dbClient = getDb(db);
 
-  // Get all recipes with their ingredients
+  // Get all recipes with their ingredients (excludes soft-deleted)
   const recipes = await dbClient.query.recipe.findMany({
+    where: notDeleted(recipe),
     with: {
       sections: {
         with: {
@@ -135,13 +137,14 @@ export const getIngredientCooccurrence = async (
 
 /**
  * Get all unique tags used across recipes.
- * Used for tag autocomplete suggestions.
+ * Used for tag autocomplete suggestions. Excludes soft-deleted recipes.
  */
 export const getAllTags = async (db: Database): Promise<string[]> => {
   const dbClient = getDb(db);
 
-  // Get all recipes with tags
+  // Get all recipes with tags (excludes soft-deleted)
   const recipesWithTags = await dbClient.query.recipe.findMany({
+    where: notDeleted(recipe),
     columns: { tags: true },
   });
 

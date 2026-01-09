@@ -8,7 +8,7 @@
 // CRUD operations
 export {
   createLocation,
-  deleteLocation,
+  deleteLocations,
   getLocationById,
   locationList,
   updateLocation,

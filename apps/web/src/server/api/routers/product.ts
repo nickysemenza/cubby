@@ -24,6 +24,7 @@ import {
 import {
   backfillFoodCategories,
   backfillProductPrices,
+  deleteProducts,
   findProductByUPC,
   findProductsNeedingFoodCategory,
   findProductsWithStalePrices,
@@ -34,7 +35,10 @@ import {
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
 import { productWithFoodOut } from "~/server/services/product.service";
-import { createEntityCrudProcedures } from "../crud-factory";
+import {
+  createDeleteProcedure,
+  createEntityCrudProcedures,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Define filters schema for products
@@ -409,12 +413,18 @@ const getByShortcode = protectedProcedure
     return await getProductByShortcode(ctx.db, input.shortcode);
   });
 
+// Delete procedure using standalone factory
+const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
+  await deleteProducts(services.db, ids, services.actorContext);
+}, productId);
+
 export const productRouter = createTRPCRouter({
   getByID,
   getByShortcode,
   list,
   create,
   update,
+  delete: deleteItem,
   quickCreate,
   findOrCreateByUPC,
   backfillUPCImages,

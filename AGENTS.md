@@ -19,6 +19,17 @@ The `Database` type is opaque (branded) - you can't call methods on it outside r
 - **Repos** call `getDb(db)` to unwrap and access the actual DrizzleClient
 - **Transactions** use `withTransaction(db, async (tx) => {...})` - `tx` is unwrapped and can be used directly
 
+## Soft Delete
+
+All major entities (products, recipes, locations, ingredients, inventory) use soft delete with a `deletedAt` timestamp column. Deleted items are retained in the database but hidden from normal queries.
+
+**Key points:**
+- Always use `notDeleted(table)` helper to filter out deleted records in queries
+- Delete operations cascade to related entities (e.g., deleting a product soft-deletes its images and unit mappings)
+- All deletions are wrapped in transactions and logged to audit trail
+- Safety checks prevent deletion of entities with dependencies (e.g., products with inventory)
+- **Restore functionality is intentionally not implemented** - treat soft deletes as permanent from a user perspective
+
 ## Required Helpers
 
 Use these instead of inline patterns:
@@ -31,6 +42,7 @@ Use these instead of inline patterns:
 | Manual `.update().set().where().returning()` + null check | `updateAndReturn(tx, table, values, where)` | `~/server/repo/database-helpers` |
 | `getDb(db).transaction(async (tx) => {...})` | `withTransaction(db, async (tx) => {...})` | `~/server/repo/database-helpers` |
 | `ilike(column, \`%${term}%\`)` | `formatSearchTerm(column, term)` | `~/server/repo/database-helpers` |
+| `isNull(table.deletedAt)` | `notDeleted(table)` | `~/server/repo/database-helpers` |
 | `ComboboxItem.refine()` for required product | `requiredProductField` | `~/schemas/form-fields` |
 | `ComboboxItem.refine()` for required location | `requiredLocationField` | `~/schemas/form-fields` |
 | `as ProductId`, `as LocationId`, etc. | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers` |
@@ -41,13 +53,11 @@ Use these instead of inline patterns:
 ## Authentication (Better-Auth)
 
 - Server config: `apps/web/src/lib/auth.ts` (TanStack Start via `better-auth/tanstack-start`)
-- Client: `apps/web/src/lib/auth-client.ts` (hooks: `useSession`, `useListOrganizations`, `useActiveOrganization`)
+- Client: `apps/web/src/lib/auth-client.ts` (hooks: `useSession`)
 - API route: `apps/web/src/routes/api/auth/$.ts`
-- Organization plugin enabled for scoping
 - UI routes use `@daveyplate/better-auth-ui`:
   - Auth: `apps/web/src/routes/auth.$authView.tsx`
   - Account: `apps/web/src/routes/account.$accountView.tsx`
-  - Organization: `apps/web/src/routes/organization.$organizationView.tsx`
 
 ## Product Types
 

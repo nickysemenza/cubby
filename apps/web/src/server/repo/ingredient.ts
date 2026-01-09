@@ -36,7 +36,11 @@ import {
   type recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   addProductSourceMetadata,
   buildOrderBy,
@@ -44,7 +48,9 @@ import {
   extractImagesFromJoinTable,
   formatSearchTerm,
   getDb,
+  lockAndValidateForDelete,
   mapRelation,
+  notDeleted,
   relations,
   unwrapDb,
   updateAndReturnDb,
@@ -148,7 +154,7 @@ const dbIngredientToAPI = async (
 
 export const getIngredientByID = async (db: Database, id: IngredientId) => {
   const ingredientData = await getDb(db).query.ingredient.findFirst({
-    where: eq(ingredient.id, id),
+    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
     ...relations.ingredient.full,
   });
 
@@ -338,6 +344,9 @@ const buildIngredientWhere = (
   // Filter for standalone ingredients only, not recipe ingredients
   conditions.push(isNull(ingredient.recipeId));
 
+  // Filter out deleted items
+  conditions.push(notDeleted(ingredient));
+
   return and(...conditions);
 };
 
@@ -348,7 +357,8 @@ export const ingredientList = async (
   pagination: PaginationParams,
   missingProductsOnly: boolean = false,
 ) => {
-  const conditions = [isNull(ingredient.recipeId)];
+  // Always filter out deleted items and recipe ingredients
+  const conditions = [isNull(ingredient.recipeId), notDeleted(ingredient)];
 
   // Add name filter if provided
   if (name) {
@@ -427,4 +437,84 @@ export const ingredientList = async (
 
     return { data: ingredients, count: totalCount };
   }
+};
+
+/**
+ * Soft delete ingredients by setting deletedAt timestamp.
+ * Throws if any ingredient is used in recipes or linked to products.
+ */
+export const deleteIngredients = async (
+  db: Database,
+  ids: IngredientId[],
+  actor: ActorContext,
+): Promise<void> => {
+  if (ids.length === 0) return;
+
+  // Perform safety checks and soft delete in a transaction for atomicity
+  await withTransaction(db, async (tx) => {
+    // Lock ingredients and validate they exist and aren't already deleted
+    // Prevents race conditions by acquiring row-level locks
+    await lockAndValidateForDelete(tx, ingredient, ids, "Ingredient");
+
+    // Safety check: don't delete if any are used in recipes
+    const usedInRecipes = await tx.query.recipeSectionIngredient.findMany({
+      where: and(
+        inArray(recipeSectionIngredient.ingredientId, ids),
+        notDeleted(recipeSectionIngredient),
+      ),
+      columns: { ingredientId: true },
+    });
+    if (usedInRecipes.length > 0) {
+      const failedIngredientIds = Array.from(
+        new Set(usedInRecipes.map((r) => r.ingredientId)),
+      );
+      const failedIngredients = await tx.query.ingredient.findMany({
+        where: inArray(ingredient.id, failedIngredientIds),
+        columns: { id: true, name: true },
+      });
+      const names = failedIngredients.map((i) => i.name).join(", ");
+      const count = failedIngredients.length;
+      throw createAppError(
+        "INGREDIENT_IN_USE",
+        `Cannot delete ${count} ingredient(s): ${names} are used in recipes.`,
+      );
+    }
+
+    // Safety check: don't delete if any are linked to products
+    const linkedProducts = await tx.query.product.findMany({
+      where: and(inArray(product.ingredientId, ids), notDeleted(product)),
+      columns: { ingredientId: true },
+    });
+    if (linkedProducts.length > 0) {
+      const failedIngredientIds = Array.from(
+        new Set(linkedProducts.map((p) => p.ingredientId)),
+      );
+      const failedIngredients = await tx.query.ingredient.findMany({
+        where: inArray(ingredient.id, failedIngredientIds),
+        columns: { id: true, name: true },
+      });
+      const names = failedIngredients.map((i) => i.name).join(", ");
+      const count = failedIngredients.length;
+      throw createAppError(
+        "INGREDIENT_HAS_PRODUCTS",
+        `Cannot delete ${count} ingredient(s): ${names} have linked products.`,
+      );
+    }
+
+    const now = new Date();
+
+    await tx
+      .update(ingredient)
+      .set({ deletedAt: now })
+      .where(inArray(ingredient.id, ids));
+
+    // Log audit entries - no cascaded items for ingredients (batch operation)
+    const auditEntries = ids.map((id) => ({
+      entityType: "ingredient" as const,
+      entityId: id,
+      action: "delete" as const,
+    }));
+
+    await logAuditEntries(tx, actor, auditEntries);
+  });
 };

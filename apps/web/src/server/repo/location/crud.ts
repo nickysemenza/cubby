@@ -26,7 +26,11 @@ import {
   location,
   locationImage,
 } from "~/server/db/schema";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   buildOrderBy,
@@ -34,6 +38,8 @@ import {
   executeListQueryWithCount,
   getDb,
   insertAndReturnDb,
+  lockAndValidateForDelete,
+  notDeleted,
   relations,
   unwrapDb,
   updateAndReturn,
@@ -194,58 +200,115 @@ export const updateLocation = async (
 };
 
 /**
- * Check if a location has any inventory entries (internal helper)
+ * Soft delete locations by setting deletedAt timestamp.
+ * Also soft deletes related images.
+ * Throws if any location has inventory or child locations.
  */
-const locationHasInventory = async (
+export const deleteLocations = async (
   db: Database,
-  locationId: LocationId,
-): Promise<boolean> => {
-  const result = await getDb(db)
-    .select({ count: count() })
-    .from(inventoryEntry)
-    .where(eq(inventoryEntry.locationId, locationId));
-  return (result[0]?.count ?? 0) > 0;
-};
-
-/**
- * Delete a location by ID
- * Returns true if deleted, false if not found
- * Throws if location has inventory (safety check)
- */
-export const deleteLocation = async (
-  db: Database,
-  id: LocationId,
+  ids: LocationId[],
   actor: ActorContext,
-): Promise<boolean> => {
-  // Safety check: don't delete if location has inventory
-  const hasInventory = await locationHasInventory(db, id);
-  if (hasInventory) {
-    throw createAppError(
-      "LOCATION_HAS_INVENTORY",
-      `Cannot delete location ${id}: it still has inventory items`,
-    );
-  }
+): Promise<void> => {
+  if (ids.length === 0) return;
 
-  // Delete location images first (cascade doesn't handle this)
-  await getDb(db).delete(locationImage).where(eq(locationImage.locationId, id));
+  await withTransaction(db, async (tx) => {
+    // Lock locations and validate they exist and aren't already deleted
+    // Prevents race conditions by acquiring row-level locks
+    await lockAndValidateForDelete(tx, location, ids, "Location");
 
-  // Delete the location
-  const result = await getDb(db)
-    .delete(location)
-    .where(eq(location.id, id))
-    .returning();
-
-  if (result.length > 0) {
-    // Log audit entry
-    await logAuditEntry(db, actor, {
-      entityType: "location",
-      entityId: id,
-      action: "delete",
+    // Safety check: don't delete if any location has inventory
+    const withInventory = await tx.query.inventoryEntry.findMany({
+      where: and(
+        inArray(inventoryEntry.locationId, ids),
+        notDeleted(inventoryEntry),
+      ),
+      columns: { locationId: true },
     });
-    return true;
-  }
+    if (withInventory.length > 0) {
+      const failedLocationIds = Array.from(
+        new Set(withInventory.map((e) => e.locationId)),
+      );
+      const failedLocations = await tx.query.location.findMany({
+        where: inArray(location.id, failedLocationIds),
+        columns: { id: true, name: true },
+      });
+      const names = failedLocations.map((l) => l.name).join(", ");
+      const count = failedLocations.length;
+      throw createAppError(
+        "LOCATION_HAS_INVENTORY",
+        `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
+      );
+    }
 
-  return false;
+    // Safety check: don't delete if any location has non-deleted children
+    const withChildren = await tx.query.location.findMany({
+      where: and(inArray(location.parentId, ids), notDeleted(location)),
+      columns: { parentId: true },
+    });
+    if (withChildren.length > 0) {
+      const failedLocationIds = Array.from(
+        new Set(withChildren.map((l) => l.parentId)),
+      );
+      const failedLocations = await tx.query.location.findMany({
+        where: inArray(location.id, failedLocationIds),
+        columns: { id: true, name: true },
+      });
+      const names = failedLocations.map((l) => l.name).join(", ");
+      const count = failedLocations.length;
+      throw createAppError(
+        "LOCATION_HAS_CHILDREN",
+        `Cannot delete ${count} location(s): ${names} have child locations. Delete children first.`,
+      );
+    }
+
+    const now = new Date();
+
+    // Get counts of cascaded items for audit trail
+    const cascadedImages = await tx.query.locationImage.findMany({
+      where: inArray(locationImage.locationId, ids),
+      columns: { id: true, locationId: true },
+    });
+
+    // Group cascaded images by location ID for audit logging
+    const imagesByLocation = new Map<string, number>();
+    for (const img of cascadedImages) {
+      imagesByLocation.set(
+        img.locationId,
+        (imagesByLocation.get(img.locationId) ?? 0) + 1,
+      );
+    }
+
+    // Soft delete location images
+    await tx
+      .update(locationImage)
+      .set({ deletedAt: now })
+      .where(inArray(locationImage.locationId, ids));
+
+    // Soft delete locations
+    await tx
+      .update(location)
+      .set({ deletedAt: now })
+      .where(inArray(location.id, ids));
+
+    // Log audit entries with cascaded item counts (batch operation)
+    const auditEntries = ids.map((id) => {
+      const imageCount = imagesByLocation.get(id) ?? 0;
+
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (imageCount > 0) {
+        changes.cascadedImages = { from: imageCount, to: 0 };
+      }
+
+      return {
+        entityType: "location" as const,
+        entityId: id,
+        action: "delete" as const,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      };
+    });
+
+    await logAuditEntries(tx, actor, auditEntries);
+  });
 };
 
 export const locationList = async (
@@ -254,7 +317,8 @@ export const locationList = async (
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  const conditions: ReturnType<typeof eq>[] = [];
+  // Always filter out deleted items
+  const conditions: ReturnType<typeof eq>[] = [notDeleted(location)];
 
   if (filters.nameFilter) {
     const { formatSearchTerm } = await import("~/server/repo/database-helpers");
@@ -299,7 +363,7 @@ export const getLocationById = async (
 ): Promise<InfLocation> => {
   // Fetch the location with parent chain and immediate children
   const res = await unwrapDb(db).query.location.findFirst({
-    where: eq(location.id, id),
+    where: and(eq(location.id, id), notDeleted(location)),
     ...relations.location.full,
   });
 

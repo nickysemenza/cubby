@@ -43,7 +43,7 @@ import {
 } from "~/server/repo/app-settings";
 import { withTransaction } from "~/server/repo/database-helpers";
 import {
-  deleteInventoryEntry,
+  deleteInventoryEntries,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
@@ -51,7 +51,7 @@ import {
   createOrUpdatePriceMapping,
   importInventoryFromCSV,
 } from "~/server/repo/inventory/csv-import";
-import { deleteLocation, updateLocation } from "~/server/repo/location";
+import { deleteLocations, updateLocation } from "~/server/repo/location";
 // Note: csv-comparison is now only used by the sync repo module
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
 import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
@@ -940,56 +940,54 @@ async function processImportsToApp(
 /** Process deletions from app */
 async function processAppDeletions(
   ctx: {
-    db: Parameters<typeof deleteInventoryEntry>[0];
-    actorContext: Parameters<typeof deleteInventoryEntry>[2];
+    db: Parameters<typeof deleteInventoryEntries>[0];
+    actorContext: Parameters<typeof deleteInventoryEntries>[2];
   },
   locationItems: LocationSyncItem[],
   inventoryItems: InventorySyncItem[],
   results: SyncResults,
 ): Promise<void> {
-  // Delete inventory from app
-  const inventoryToDelete = inventoryItems.filter(
-    (i) => i.state === "app_only" && i.resolution === "delete_from_app",
-  );
+  // Collect inventory IDs to delete
+  const inventoryIds = inventoryItems
+    .filter((i) => i.state === "app_only" && i.resolution === "delete_from_app")
+    .map((i) => i.appData?.inventoryEntryId)
+    .filter((id): id is string => id !== undefined)
+    .map((id) => unsafeInventoryId(id));
 
-  for (const item of inventoryToDelete) {
-    if (item.appData?.inventoryEntryId) {
-      try {
-        await deleteInventoryEntry(
-          ctx.db,
-          unsafeInventoryId(item.appData.inventoryEntryId),
-          { ...ctx.actorContext, source: "sheets_import" },
-        );
-        results.inventory.deleted++;
-      } catch (err) {
-        results.inventory.errors++;
-        results.errorMessages.push(
-          `Failed to delete inventory: ${getErrorMessage(err)}`,
-        );
-      }
+  if (inventoryIds.length > 0) {
+    try {
+      await deleteInventoryEntries(ctx.db, inventoryIds, {
+        ...ctx.actorContext,
+        source: "sheets_import",
+      });
+      results.inventory.deleted += inventoryIds.length;
+    } catch (err) {
+      results.inventory.errors += inventoryIds.length;
+      results.errorMessages.push(
+        `Failed to delete ${inventoryIds.length} inventory entries: ${getErrorMessage(err)}`,
+      );
     }
   }
 
-  // Delete locations from app
-  const locationsToDelete = locationItems.filter(
-    (i) => i.state === "app_only" && i.resolution === "delete_from_app",
-  );
+  // Collect location IDs to delete
+  const locationIds = locationItems
+    .filter((i) => i.state === "app_only" && i.resolution === "delete_from_app")
+    .map((i) => i.appData?.locationId)
+    .filter((id): id is string => id !== undefined)
+    .map((id) => unsafeLocationId(id));
 
-  for (const item of locationsToDelete) {
-    if (item.appData?.locationId) {
-      try {
-        await deleteLocation(
-          ctx.db,
-          unsafeLocationId(item.appData.locationId),
-          { ...ctx.actorContext, source: "sheets_import" },
-        );
-        results.locations.deleted++;
-      } catch (err) {
-        results.locations.errors++;
-        results.errorMessages.push(
-          `Failed to delete location: ${getErrorMessage(err)}`,
-        );
-      }
+  if (locationIds.length > 0) {
+    try {
+      await deleteLocations(ctx.db, locationIds, {
+        ...ctx.actorContext,
+        source: "sheets_import",
+      });
+      results.locations.deleted += locationIds.length;
+    } catch (err) {
+      results.locations.errors += locationIds.length;
+      results.errorMessages.push(
+        `Failed to delete ${locationIds.length} locations: ${getErrorMessage(err)}`,
+      );
     }
   }
 }

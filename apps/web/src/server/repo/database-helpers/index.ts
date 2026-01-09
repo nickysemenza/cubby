@@ -21,6 +21,8 @@ export {
   buildOrderBy,
   executeListQueryWithCount,
   formatSearchTerm,
+  lockAndValidateForDelete,
+  notDeleted,
 } from "./query";
 // Relation loaders
 export { relations } from "./relations";

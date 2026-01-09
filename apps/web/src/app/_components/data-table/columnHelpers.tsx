@@ -66,33 +66,6 @@ interface ImageRow extends BaseRow {
 }
 
 /**
- * Renders a truncated link with tooltip showing full text.
- * Used by name columns and other columns that need truncation with tooltip.
- */
-function TruncatedLinkWithTooltip({
-  to,
-  params,
-  children,
-}: {
-  to: EntityDetailRoute;
-  params: { id: string };
-  children: string;
-}): ReactNode {
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span className="block truncate" />}>
-        <TableLink to={to} params={params}>
-          {children}
-        </TableLink>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs">
-        {children}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
-/**
  * Creates a standard name column that links to the detail page.
  * Optionally supports inline editing when `editable` option is provided.
  *
@@ -131,11 +104,8 @@ export function createNameColumn<T extends BaseRow>(
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       const value = String(info.getValue());
-      const linkProps = {
-        to: entities[entity].routes.detail,
-        params: { id: String(info.row.original.id) },
-      };
 
+      // If editable, show EditableCell instead of link
       if (options?.editable) {
         return (
           <EditableCell
@@ -145,18 +115,38 @@ export function createNameColumn<T extends BaseRow>(
             }
             config={{ type: "text" }}
             renderValue={(v) => (
-              <TruncatedLinkWithTooltip {...linkProps}>
-                {v ?? ""}
-              </TruncatedLinkWithTooltip>
+              <Tooltip>
+                <TooltipTrigger render={<span className="block truncate" />}>
+                  <TableLink
+                    to={entities[entity].routes.detail}
+                    params={{ id: String(info.row.original.id) }}
+                  >
+                    {v ?? ""}
+                  </TableLink>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  {v ?? ""}
+                </TooltipContent>
+              </Tooltip>
             )}
           />
         );
       }
 
       return (
-        <TruncatedLinkWithTooltip {...linkProps}>
-          {value}
-        </TruncatedLinkWithTooltip>
+        <Tooltip>
+          <TooltipTrigger render={<span className="block truncate" />}>
+            <TableLink
+              to={entities[entity].routes.detail}
+              params={{ id: String(info.row.original.id) }}
+            >
+              {value}
+            </TableLink>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            {value}
+          </TooltipContent>
+        </Tooltip>
       );
     },
   };

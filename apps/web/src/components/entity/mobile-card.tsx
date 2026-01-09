@@ -63,6 +63,7 @@ export function MobileCard({
     : "border-l-primary/30";
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
     <div
       className={cn(
         "fade-in flex animate-in items-start gap-3 rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all duration-300 hover:shadow-md",

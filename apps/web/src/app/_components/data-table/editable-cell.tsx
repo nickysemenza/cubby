@@ -10,7 +10,6 @@ import {
   type FilterableComboboxItem,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
-import { getErrorMessage } from "~/lib/error-utils";
 import { formatCurrency } from "~/lib/utils";
 import { NoneState } from "../NoneState";
 
@@ -44,69 +43,6 @@ export type EditableConfig =
   | EditableSelectConfig;
 
 // ============================================================================
-// Shared Hook: useOptimisticEditing
-// ============================================================================
-
-/**
- * Shared hook for optimistic editing state management.
- * Used by both text input and select cell implementations.
- */
-function useOptimisticEditing<T>(
-  value: T | null,
-  onSave: (value: T | null) => Promise<void>,
-) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [isPending, setIsPending] = useState(false);
-  const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
-    undefined,
-  );
-
-  const displayValue = optimisticValue !== undefined ? optimisticValue : value;
-
-  const cancel = useCallback(() => {
-    setIsEditing(false);
-  }, []);
-
-  const saveValue = useCallback(
-    async (newValue: T | null, skipIfUnchanged: boolean) => {
-      if (skipIfUnchanged && newValue === value) {
-        setIsEditing(false);
-        return;
-      }
-
-      setIsPending(true);
-      try {
-        await onSave(newValue);
-        setOptimisticValue(newValue);
-        setIsEditing(false);
-      } catch (err) {
-        toast.error(getErrorMessage(err));
-      } finally {
-        setIsPending(false);
-      }
-    },
-    [value, onSave],
-  );
-
-  // Clear optimistic value when real value catches up
-  useEffect(() => {
-    if (optimisticValue !== undefined && value === optimisticValue) {
-      setOptimisticValue(undefined);
-    }
-  }, [value, optimisticValue]);
-
-  return {
-    isEditing,
-    setIsEditing,
-    isPending,
-    displayValue,
-    optimisticValue,
-    cancel,
-    saveValue,
-  };
-}
-
-// ============================================================================
 // Hook: useEditableCell
 // ============================================================================
 
@@ -129,17 +65,16 @@ export function useEditableCell<T>({
   parse,
   format,
 }: UseEditableCellOptions<T>) {
+  const [isEditing, setIsEditing] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  // undefined = no optimistic value, use prop; T | null = optimistic value to display
+  const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
+    undefined,
+  );
 
-  const {
-    isEditing,
-    setIsEditing,
-    isPending,
-    displayValue,
-    optimisticValue,
-    cancel,
-    saveValue,
-  } = useOptimisticEditing(value, onSave);
+  // Display value: optimistic takes precedence when set
+  const displayValue = optimisticValue !== undefined ? optimisticValue : value;
 
   const startEditing = useCallback(() => {
     const v = optimisticValue !== undefined ? optimisticValue : value;
@@ -149,16 +84,40 @@ export function useEditableCell<T>({
       setInputValue(v !== null ? String(v) : "");
     }
     setIsEditing(true);
-  }, [value, optimisticValue, format, setIsEditing]);
+  }, [value, optimisticValue, format]);
+
+  const cancel = useCallback(() => {
+    setIsEditing(false);
+  }, []);
 
   const save = useCallback(async () => {
     const trimmed = inputValue.trim();
     const parsed = trimmed === "" ? null : parse ? parse(trimmed) : null;
 
     // Skip if value hasn't changed
-    const skipIfUnchanged = parsed === null && value === null;
-    await saveValue(parsed, skipIfUnchanged || parsed === value);
-  }, [inputValue, parse, value, saveValue]);
+    if (parsed === value || (parsed === null && value === null)) {
+      setIsEditing(false);
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      await onSave(parsed);
+      setOptimisticValue(parsed); // Show immediately
+      setIsEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setIsPending(false);
+    }
+  }, [inputValue, parse, value, onSave]);
+
+  // Clear optimistic value when real value catches up
+  useEffect(() => {
+    if (optimisticValue !== undefined && value === optimisticValue) {
+      setOptimisticValue(undefined);
+    }
+  }, [value, optimisticValue]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -182,6 +141,7 @@ export function useEditableCell<T>({
     cancel,
     save,
     handleKeyDown,
+    setOptimisticValue,
   };
 }
 
@@ -198,27 +158,48 @@ function useEditableSelectCell({
   value,
   onSave,
 }: UseEditableSelectCellOptions) {
+  const [isEditing, setIsEditing] = useState(false);
   const [selectedValue, setSelectedValue] = useState<string | null>(value);
+  const [isPending, setIsPending] = useState(false);
+  const [optimisticValue, setOptimisticValue] = useState<
+    string | null | undefined
+  >(undefined);
 
-  const {
-    isEditing,
-    setIsEditing,
-    isPending,
-    displayValue,
-    optimisticValue,
-    cancel,
-    saveValue,
-  } = useOptimisticEditing(value, onSave);
+  const displayValue = optimisticValue !== undefined ? optimisticValue : value;
 
   const startEditing = useCallback(() => {
     const v = optimisticValue !== undefined ? optimisticValue : value;
     setSelectedValue(v);
     setIsEditing(true);
-  }, [value, optimisticValue, setIsEditing]);
+  }, [value, optimisticValue]);
+
+  const cancel = useCallback(() => {
+    setIsEditing(false);
+  }, []);
 
   const save = useCallback(async () => {
-    await saveValue(selectedValue, selectedValue === value);
-  }, [selectedValue, value, saveValue]);
+    if (selectedValue === value) {
+      setIsEditing(false);
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      await onSave(selectedValue);
+      setOptimisticValue(selectedValue);
+      setIsEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setIsPending(false);
+    }
+  }, [selectedValue, value, onSave]);
+
+  useEffect(() => {
+    if (optimisticValue !== undefined && value === optimisticValue) {
+      setOptimisticValue(undefined);
+    }
+  }, [value, optimisticValue]);
 
   return {
     isEditing,
