@@ -11,6 +11,8 @@ export const ingredientId = z.uuid().brand("IngredientId");
 export const productId = z.uuid().brand("ProductId");
 export const locationId = z.uuid().brand("LocationId");
 export const inventoryId = z.uuid().brand("InventoryId");
+export const activityTypeId = z.uuid().brand("ActivityTypeId");
+export const activityEntryId = z.uuid().brand("ActivityEntryId");
 
 // Shortcode branded types with format validation (L-XXXX, P-XXXX format)
 // Character set excludes ambiguous characters: 0/O, 1/I/L
@@ -42,6 +44,8 @@ export type InventoryId = z.infer<typeof inventoryId>;
 export type LocationShortcode = z.infer<typeof locationShortcode>;
 export type ProductShortcode = z.infer<typeof productShortcode>;
 export type RecipeShortcode = z.infer<typeof recipeShortcode>;
+export type ActivityTypeId = z.infer<typeof activityTypeId>;
+export type ActivityEntryId = z.infer<typeof activityEntryId>;
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid)
 // These are useful in tests and when working with external data that you know is valid
@@ -59,3 +63,7 @@ export const unsafeProductShortcode = (code: string) =>
   unsafeId<ProductShortcode>(code);
 export const unsafeRecipeShortcode = (code: string) =>
   unsafeId<RecipeShortcode>(code);
+export const unsafeActivityTypeId = (id: string) =>
+  unsafeId<ActivityTypeId>(id);
+export const unsafeActivityEntryId = (id: string) =>
+  unsafeId<ActivityEntryId>(id);

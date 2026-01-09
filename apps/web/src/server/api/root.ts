@@ -1,4 +1,6 @@
 import { createTRPCRouter } from "~/server/api/trpc";
+import { activityEntryRouter } from "./routers/activity-entry";
+import { activityTypeRouter } from "./routers/activity-type";
 import { auditLogRouter } from "./routers/audit-log";
 import { googleSheetsRouter } from "./routers/google-sheets";
 import { imageRouter } from "./routers/image";
@@ -30,6 +32,8 @@ export const appRouter = createTRPCRouter({
   auditLog: auditLogRouter,
   googleSheets: googleSheetsRouter,
   search: searchRouter,
+  activityType: activityTypeRouter,
+  activityEntry: activityEntryRouter,
 });
 
 // export type definition of API

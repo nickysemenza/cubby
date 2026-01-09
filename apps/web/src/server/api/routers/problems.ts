@@ -87,6 +87,16 @@ const inventoryWithStaleValuationSchema = z.object({
   expectedValuation: z.number().nullable(),
 });
 
+const overdueActivitySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  productId: z.string(),
+  productName: z.string(),
+  productShortcode: z.string(),
+  daysOverdue: z.number(),
+  lastCompletedAt: z.date().nullable(),
+});
+
 // Combined output schema for all problems
 const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
@@ -99,6 +109,7 @@ const allProblemsSchema = z.object({
   emptyLocations: z.array(emptyLocationSchema),
   productsWithoutUPCImages: z.array(productWithoutUPCImageSchema),
   productsWithWrongCategory: z.array(productWithWrongCategorySchema),
+  overdueActivities: z.array(overdueActivitySchema),
   totalProblems: z.number(),
 });
 

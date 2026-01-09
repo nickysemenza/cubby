@@ -1,4 +1,4 @@
-import { Apple, Info } from "lucide-react";
+import { Activity, Apple, Info } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
 import type { ProductInputPayload } from "~/schemas/product";
@@ -8,6 +8,7 @@ import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { NutritionInfoTable } from "../usda/nutrition";
+import { ProductActivitiesTab } from "./product-activities-tab";
 import { ProductBasicInfo } from "./product-basic-info";
 import { ProductForm } from "./product-form";
 
@@ -44,6 +45,12 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       ) : (
         <ProductBasicInfo product={product} onEdit={editMode.startEditing} />
       ),
+    },
+    // Custom section: Activities
+    {
+      title: "Activities",
+      icon: Activity,
+      content: <ProductActivitiesTab productId={product.id} />,
     },
     // Custom section: Nutrition (only if available)
     ...(product.food?.nutritionInfo

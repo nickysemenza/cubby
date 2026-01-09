@@ -8,6 +8,7 @@ import {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
+import { listDueActivityTypes } from "~/server/repo/activity-type";
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
 import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
@@ -28,6 +29,7 @@ interface AllProblems {
   productsWithWrongCategory: ProductWithWrongCategory[];
   productsWithStalePrices: ProductWithStalePrice[];
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
+  overdueActivities: OverdueActivity[];
   totalProblems: number;
 }
 
@@ -115,6 +117,39 @@ export interface InventoryWithStaleValuation {
   storedValuation: number | null;
   expectedValuation: number | null;
 }
+
+export interface OverdueActivity {
+  id: string;
+  name: string;
+  productId: string;
+  productName: string;
+  productShortcode: string;
+  daysOverdue: number;
+  lastCompletedAt: Date | null;
+}
+
+// Find overdue activities
+const findOverdueActivities = async (
+  db: Database,
+): Promise<OverdueActivity[]> => {
+  const dueTypes = await listDueActivityTypes(db, { overdueOnly: true });
+
+  return dueTypes.map((t) => {
+    const daysOverdue = t.nextDueAt
+      ? Math.floor((Date.now() - t.nextDueAt.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    return {
+      id: t.id,
+      name: t.name,
+      productId: t.product.id,
+      productName: t.product.name,
+      productShortcode: t.product.shortcode,
+      daysOverdue,
+      lastCompletedAt: t.lastCompletedAt,
+    };
+  });
+};
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 const findDuplicateUniqueProducts = async (
@@ -386,6 +421,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsNeedingFoodCategory,
     productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
+    overdueActivities,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
@@ -397,6 +433,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findProductsNeedingFoodCategory(db),
     findProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db),
+    findOverdueActivities(db),
   ]);
 
   // Transform to problem types
@@ -428,7 +465,8 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithoutUPCImages.length +
     productsWithWrongCategory.length +
     productsWithStalePrices.length +
-    inventoryWithStaleValuations.length;
+    inventoryWithStaleValuations.length +
+    overdueActivities.length;
 
   return {
     duplicateUniqueProducts,
@@ -441,6 +479,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithWrongCategory,
     productsWithStalePrices,
     inventoryWithStaleValuations,
+    overdueActivities,
     totalProblems,
   };
 };

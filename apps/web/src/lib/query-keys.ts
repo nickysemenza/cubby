@@ -21,4 +21,13 @@ export const queryKeys = {
     getByID: ["recipe", "getByID"] as const,
     all: ["recipe"] as const,
   },
+  activityType: {
+    list: ["activityType", "list"] as const,
+    listDue: ["activityType", "listDue"] as const,
+    byProduct: ["activityType", "byProduct"] as const,
+    autocomplete: ["activityType", "autocomplete"] as const,
+  },
+  activityEntry: {
+    list: ["activityEntry", "list"] as const,
+  },
 } as const;

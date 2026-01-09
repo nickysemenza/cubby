@@ -1,15 +1,16 @@
-import type { z } from "zod";
-import { entitySchema } from "~/entities/types";
+import { z } from "zod";
 
 /**
  * Audit log schemas and types.
- * Auditable entities are a subset of all entities (excludes usda-food, image).
+ * Auditable entities include UI entities plus activity_type and activity_entry.
  */
-export const auditEntitySchema = entitySchema.extract([
+export const auditEntitySchema = z.enum([
   "product",
   "location",
   "inventory",
   "recipe",
   "ingredient",
+  "activity_type",
+  "activity_entry",
 ]);
 export type AuditEntityType = z.infer<typeof auditEntitySchema>;

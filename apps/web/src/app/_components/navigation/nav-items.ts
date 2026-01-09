@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  Calendar,
   ExternalLink,
   Home,
   LayoutDashboard,
@@ -88,6 +89,13 @@ const activity: NavItem = {
   isActive: (p) => p.startsWith("/activity"),
 };
 
+const activities: NavItem = {
+  href: "/activities",
+  label: "Activities",
+  icon: Calendar,
+  isActive: (p) => p.startsWith("/activities"),
+};
+
 const insights: NavItem = {
   href: "/insights",
   label: "Insights",
@@ -138,6 +146,7 @@ export const moreNavItems: NavItem[] = [
   usda,
   dashboard,
   activity,
+  activities,
   insights,
   problems,
   images,
@@ -149,6 +158,7 @@ export const kitchenItems: NavItem[] = [ingredients, recipes, usda];
 export const reportsItems: NavItem[] = [
   dashboard,
   activity,
+  activities,
   insights,
   problems,
 ];

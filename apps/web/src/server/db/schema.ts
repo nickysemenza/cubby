@@ -459,6 +459,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
   unitMappings: many(productUnitMappings),
   InventoryEntry: many(inventoryEntry),
   images: many(productImage),
+  activityTypes: many(activityType),
 }));
 
 export const productUnitMappingsRelations = relations(
@@ -578,3 +579,111 @@ export const appSettings = pgTable("AppSettings", {
     .defaultNow()
     .$onUpdate(() => new Date()),
 });
+
+// Activity Type table - defines activities that can be performed on products
+export const activityType = pgTable(
+  "ActivityType",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    productId: uuid("productId")
+      .notNull()
+      .references(() => product.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    intervalDays: integer("intervalDays"), // null = event-based (no schedule)
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    productNameUnique: uniqueIndex("ActivityType_productId_name_key").on(
+      table.productId,
+      table.name,
+    ),
+    productIdIdx: index("ActivityType_productId_idx").on(table.productId),
+  }),
+);
+
+// Activity Entry table - logs when activities were completed
+export const activityEntry = pgTable(
+  "ActivityEntry",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    activityTypeId: uuid("activityTypeId")
+      .notNull()
+      .references(() => activityType.id, { onDelete: "cascade" }),
+    completedAt: timestamp("completedAt", { mode: "date" }).notNull(),
+    notes: text("notes"),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    activityTypeIdIdx: index("ActivityEntry_activityTypeId_idx").on(
+      table.activityTypeId,
+    ),
+    completedAtIdx: index("ActivityEntry_completedAt_idx").on(
+      table.completedAt.desc(),
+    ),
+  }),
+);
+
+// Activity Entry Image join table
+export const activityEntryImage = pgTable(
+  "ActivityEntryImage",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    activityEntryId: uuid("activityEntryId")
+      .notNull()
+      .references(() => activityEntry.id, { onDelete: "cascade" }),
+    imageId: uuid("imageId")
+      .notNull()
+      .references(() => image.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => ({
+    entryImageUnique: uniqueIndex(
+      "ActivityEntryImage_activityEntryId_imageId_key",
+    ).on(table.activityEntryId, table.imageId),
+    activityEntryIdIdx: index("ActivityEntryImage_activityEntryId_idx").on(
+      table.activityEntryId,
+    ),
+    imageIdIdx: index("ActivityEntryImage_imageId_idx").on(table.imageId),
+  }),
+);
+
+// Activity relations
+export const activityTypeRelations = relations(
+  activityType,
+  ({ one, many }) => ({
+    product: one(product, {
+      fields: [activityType.productId],
+      references: [product.id],
+    }),
+    entries: many(activityEntry),
+  }),
+);
+
+export const activityEntryRelations = relations(
+  activityEntry,
+  ({ one, many }) => ({
+    activityType: one(activityType, {
+      fields: [activityEntry.activityTypeId],
+      references: [activityType.id],
+    }),
+    images: many(activityEntryImage),
+  }),
+);
+
+export const activityEntryImageRelations = relations(
+  activityEntryImage,
+  ({ one }) => ({
+    activityEntry: one(activityEntry, {
+      fields: [activityEntryImage.activityEntryId],
+      references: [activityEntry.id],
+    }),
+    image: one(image, {
+      fields: [activityEntryImage.imageId],
+      references: [image.id],
+    }),
+  }),
+);
