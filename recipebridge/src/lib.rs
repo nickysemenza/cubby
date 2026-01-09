@@ -38,6 +38,8 @@ extern "C" {
     pub type RichItems;
     #[wasm_bindgen(typescript_type = "AmountKind")]
     pub type WAmountKind;
+    #[wasm_bindgen(typescript_type = "NutrientConversionResult")]
+    pub type NutrientConversionResult;
 }
 
 // JS <-> Rust serde boundary
@@ -105,7 +107,7 @@ pub fn conv_amount_to_nutrients(
     mappings: Vec<WUnitMapping>,
     nutrient_targets: Vec<String>, // ["g protein", "mg sodium", "kcal kcal"]
     amount_w: WAmount,
-) -> Result<JsValue, String> {
+) -> Result<NutrientConversionResult, String> {
     let pairs = parse_mappings(mappings)?;
     let measure: Measure = from_js(&amount_w, "amount")?;
 
@@ -126,7 +128,7 @@ pub fn conv_amount_to_nutrients(
             .map_err(|_| "Failed to set property on result object")?;
     }
 
-    Ok(result.into())
+    Ok(JsValue::from(result).into())
 }
 
 /// Convert an amount to a specific unit target (e.g., "g protein")
@@ -179,8 +181,8 @@ pub fn amount_kind(amount: &WAmount) -> Result<WAmountKind, String> {
 /// - "$5/4lb" (price-per format)
 /// - "4 lb = $5 @ costco" (with source)
 #[wasm_bindgen]
-pub fn parse_unit_mapping(input: String) -> Result<JsValue, String> {
-    to_js(&parse_unit_mapping_internal(&input)?, "parsed unit mapping")
+pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
+    to_js(&parse_unit_mapping_internal(&input)?, "parsed unit mapping").map(Into::into)
 }
 
 // TypeScript type definitions

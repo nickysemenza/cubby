@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "vitest";
 import { ensureWasm } from "~/lib/wasm";
-import { parseUnitMappingString } from "./unitmapping";
+import { parseUnitMappingString } from "./unit-mapping-utils";
 
 // Initialize WASM before all tests
 beforeAll(async () => {
