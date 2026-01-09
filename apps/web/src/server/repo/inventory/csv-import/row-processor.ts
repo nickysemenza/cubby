@@ -52,7 +52,7 @@ interface RowProcessorContext {
 /**
  * Parse timestamps from CSV row if SYNC_TIMESTAMPS is enabled
  */
-function parseRowTimestamps(row: InventoryCSVRow): {
+export function parseRowTimestamps(row: InventoryCSVRow): {
   product: ProductTimestamps | undefined;
   inventory: InventoryTimestamps | undefined;
 } {
@@ -85,7 +85,7 @@ function parseRowTimestamps(row: InventoryCSVRow): {
 /**
  * Helper to add a field change if the value is defined
  */
-function addFieldChange(
+export function addFieldChange(
   result: FieldChange[],
   field: string,
   willBeSet: unknown,
@@ -99,7 +99,7 @@ function addFieldChange(
 /**
  * Convert ProductChangesPreview to FieldChange[] for consistent display
  */
-function productChangesToFieldChanges(
+export function productChangesToFieldChanges(
   changes: ProductChangesPreview,
 ): FieldChange[] {
   const result: FieldChange[] = [];
@@ -160,7 +160,7 @@ function productChangesToFieldChanges(
 /**
  * Build fieldChanges array from productChanges and optional inventory changes
  */
-function buildFieldChanges(
+export function buildFieldChanges(
   productChanges: ProductChangesPreview,
   inventoryFieldChanges?: FieldChange[],
 ): FieldChange[] | undefined {
@@ -172,14 +172,14 @@ function buildFieldChanges(
 /**
  * Check if productChanges has any entries
  */
-function hasChanges(productChanges: ProductChangesPreview): boolean {
+export function hasChanges(productChanges: ProductChangesPreview): boolean {
   return Object.keys(productChanges).length > 0;
 }
 
 /**
  * Wrap productChanges for result if non-empty
  */
-function wrapChanges(
+export function wrapChanges(
   productChanges: ProductChangesPreview,
 ): ProductChangesPreview | undefined {
   return hasChanges(productChanges) ? productChanges : undefined;

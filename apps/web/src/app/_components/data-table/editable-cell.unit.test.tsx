@@ -424,7 +424,7 @@ describe("EditableCell component", () => {
   it("stops event propagation on click", async () => {
     const parentClick = vi.fn();
     render(
-      // biome-ignore lint/a11y/useKeyWithClickEvents: test only
+      // biome-ignore lint/a11y/noStaticElementInteractions: test only
       <div onClick={parentClick}>
         <EditableCell
           value="Test"
