@@ -57,7 +57,6 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
-import { createOrUpdatePriceMapping } from "./inventory";
 
 /**
  * Generate a unique product shortcode with collision retry.

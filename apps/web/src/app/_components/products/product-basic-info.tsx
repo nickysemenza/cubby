@@ -1,11 +1,17 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Download } from "lucide-react";
 import type { FC } from "react";
+import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { downloadLabel } from "~/lib/label-generator";
+import { queryKeys } from "~/lib/query-keys";
+import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
+import { useTRPC } from "~/trpc/react";
+import { EditableCurrencyCell } from "../data-table/editable-cell";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { CategoryBadge } from "./CategoryBadge";
@@ -19,6 +25,24 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   product,
   onEdit,
 }) => {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  // Mutation for inline price editing
+  const updateProductMutation = useMutation(
+    api.product.update.mutationOptions({
+      onSuccess: () => {
+        toast.success("Price updated");
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.product.list,
+        });
+      },
+      onError: (err) => {
+        toast.error(err.message || "Failed to update price");
+      },
+    }),
+  );
+
   const fields: BasicInfoField[] = [
     { label: "Name", value: product.name },
     // Shortcode (if assigned)
@@ -36,6 +60,26 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       : []),
     { label: "Manufacturer", value: product.manufacturer },
     { label: "Model", value: product.model },
+    {
+      label: "Price",
+      value: (
+        <EditableCurrencyCell
+          value={product.price}
+          onSave={async (newPrice) => {
+            // Sync price to unitMappings (canonical way to set price)
+            const updatedMappings = syncPriceToMappings(
+              product.unitMappings,
+              newPrice !== null ? { value: newPrice, unit: "dollar" } : null,
+              "inline-edit",
+            );
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { unitMappings: updatedMappings },
+            });
+          }}
+        />
+      ),
+    },
     {
       label: "Category",
       value: <CategoryBadge category={product.category} />,

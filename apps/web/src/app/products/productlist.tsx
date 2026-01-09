@@ -1,17 +1,21 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
+import { toast } from "sonner";
+import { queryKeys } from "~/lib/query-keys";
+import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {
-  createCurrencyColumn,
   createExternalLinkColumn,
   createFilterableSelectColumn,
   createInventoryEntriesColumn,
   createSingleEntityPillColumn,
 } from "../_components/data-table/columnHelpers";
+import { EditableCurrencyCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -27,8 +31,24 @@ interface ProductListProps {
 
 export function ProductList({ initialCategory, actions }: ProductListProps) {
   const api = useTRPC();
+  const queryClient = useQueryClient();
   const columnHelper = createColumnHelper<ProductWithFoodOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("product");
+
+  // Mutation for inline price editing
+  const updateProductMutation = useMutation(
+    api.product.update.mutationOptions({
+      onSuccess: () => {
+        toast.success("Price updated");
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.product.list,
+        });
+      },
+      onError: (err) => {
+        toast.error(err.message || "Failed to update price");
+      },
+    }),
+  );
 
   // Build initial filter from URL params
   const initialFilter = useMemo((): ColumnFiltersState => {
@@ -82,7 +102,31 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
             <NoneState />
           ),
       }),
-      createCurrencyColumn(columnHelper, "price"),
+      columnHelper.accessor("price", {
+        header: "Price",
+        cell: (info) => {
+          const product = info.row.original;
+          return (
+            <EditableCurrencyCell
+              value={info.getValue()}
+              onSave={async (newPrice) => {
+                // Sync price to unitMappings (canonical way to set price)
+                const updatedMappings = syncPriceToMappings(
+                  product.unitMappings,
+                  newPrice !== null
+                    ? { value: newPrice, unit: "dollar" }
+                    : null,
+                  "inline-edit",
+                );
+                await updateProductMutation.mutateAsync({
+                  id: product.id,
+                  data: { unitMappings: updatedMappings },
+                });
+              }}
+            />
+          );
+        },
+      }),
       createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
         mobileCategory: "compact",
       }),
