@@ -10,12 +10,12 @@ import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {
+  createCurrencyColumn,
   createExternalLinkColumn,
   createFilterableSelectColumn,
   createInventoryEntriesColumn,
   createSingleEntityPillColumn,
 } from "../_components/data-table/columnHelpers";
-import { EditableCurrencyCell } from "../_components/data-table/editable-cell";
 import RTable from "../_components/data-table/Table";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -35,17 +35,17 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const columnHelper = createColumnHelper<ProductWithFoodOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("product");
 
-  // Mutation for inline price editing
+  // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useMutation(
     api.product.update.mutationOptions({
       onSuccess: () => {
-        toast.success("Price updated");
+        toast.success("Product updated");
         void queryClient.invalidateQueries({
           queryKey: queryKeys.product.list,
         });
       },
       onError: (err) => {
-        toast.error(err.message || "Failed to update price");
+        toast.error(err.message || "Failed to update product");
       },
     }),
   );
@@ -78,7 +78,15 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           { value: "", label: "All categories" },
           ...productCategoryOptionsWithTheme,
         ],
-        renderCell: (category) => <CategoryBadge category={category} />,
+        renderCell: (cat) => <CategoryBadge category={cat} />,
+        editable: {
+          onSave: async (newCategory, product) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { category: newCategory },
+            });
+          },
+        },
       }),
       createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
         header: "Ingredient",
@@ -104,29 +112,21 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
             <NoneState />
           ),
       }),
-      columnHelper.accessor("price", {
+      createCurrencyColumn(columnHelper, "price", {
         header: "Price",
-        cell: (info) => {
-          const product = info.row.original;
-          return (
-            <EditableCurrencyCell
-              value={info.getValue()}
-              onSave={async (newPrice) => {
-                // Sync price to unitMappings (canonical way to set price)
-                const updatedMappings = syncPriceToMappings(
-                  product.unitMappings,
-                  newPrice !== null
-                    ? { value: newPrice, unit: "dollar" }
-                    : null,
-                  "inline-edit",
-                );
-                await updateProductMutation.mutateAsync({
-                  id: product.id,
-                  data: { unitMappings: updatedMappings },
-                });
-              }}
-            />
-          );
+        editable: {
+          onSave: async (newPrice, product) => {
+            // Sync price to unitMappings (canonical way to set price)
+            const updatedMappings = syncPriceToMappings(
+              product.unitMappings,
+              newPrice !== null ? { value: newPrice, unit: "dollar" } : null,
+              "inline-edit",
+            );
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { unitMappings: updatedMappings },
+            });
+          },
         },
       }),
       createSingleEntityPillColumn(columnHelper, "food", "usda-food", {

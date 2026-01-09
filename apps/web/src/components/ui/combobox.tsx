@@ -296,7 +296,7 @@ function useComboboxAnchor() {
  * />
  * ```
  */
-interface FilterableComboboxItem {
+export interface FilterableComboboxItem {
   value: string;
   label: string;
   icon?: React.ReactNode;

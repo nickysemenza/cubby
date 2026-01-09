@@ -29,17 +29,13 @@ import { TruncatedList } from "../TruncatedList";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
+import { EditableCell, type FilterableComboboxItem } from "./editable-cell";
 
 /** Configuration for inline column header filters */
 export interface FilterConfig {
   placeholder: string;
   filterType?: "text" | "select";
-  options?: Array<{
-    value: string;
-    label: string;
-    icon?: React.ReactNode;
-    color?: string;
-  }>;
+  options?: FilterableComboboxItem[];
 }
 
 // Extend TanStack Table's meta type to include our custom properties
@@ -499,10 +495,22 @@ export function createActionsColumnBase<T>(
 
 /**
  * Creates a column that displays a currency value with proper formatting.
+ * Optionally supports inline editing when `editable` option is provided.
  *
  * @example
+ * // Read-only
  * createCurrencyColumn(columnHelper, "price")
  * createCurrencyColumn(columnHelper, "valuation", { header: "Valuation" })
+ *
+ * // With inline editing
+ * createCurrencyColumn(columnHelper, "price", {
+ *   header: "Price",
+ *   editable: {
+ *     onSave: async (newPrice, row) => {
+ *       await updateMutation.mutateAsync({ id: row.id, price: newPrice });
+ *     },
+ *   },
+ * })
  */
 export function createCurrencyColumn<
   T extends Record<string, unknown>,
@@ -513,6 +521,10 @@ export function createCurrencyColumn<
   options?: {
     header?: string;
     className?: string;
+    /** Enable inline editing */
+    editable?: {
+      onSave: (newValue: number | null, row: T) => Promise<void>;
+    };
   },
 ) {
   return columnHelper.accessor((row) => row[accessor] as number | null, {
@@ -521,6 +533,22 @@ export function createCurrencyColumn<
     meta: options?.className ? { className: options.className } : undefined,
     cell: (info) => {
       const val = info.getValue();
+
+      if (options?.editable) {
+        return (
+          <EditableCell
+            value={val}
+            onSave={(newVal) =>
+              options.editable!.onSave(newVal, info.row.original)
+            }
+            config={{ type: "currency" }}
+            renderValue={(v) =>
+              v !== null ? formatCurrency(v) : <NoneState />
+            }
+          />
+        );
+      }
+
       if (val === null || val === undefined) return <NoneState />;
       return formatCurrency(val);
     },
@@ -613,13 +641,28 @@ export function createSingleEntityPillColumn<
 
 /**
  * Creates a column with a select-based inline filter.
+ * Optionally supports inline editing when `editable` option is provided.
  *
  * @example
+ * // Read-only with filter
  * createFilterableSelectColumn(columnHelper, "category", {
  *   header: "Category",
  *   placeholder: "Filter by category...",
  *   selectOptions: productCategoryOptionsWithTheme,
  *   renderCell: (category) => <CategoryBadge category={category} />,
+ * })
+ *
+ * // With inline editing
+ * createFilterableSelectColumn(columnHelper, "category", {
+ *   header: "Category",
+ *   placeholder: "Filter by category...",
+ *   selectOptions: productCategoryOptionsWithTheme,
+ *   renderCell: (category) => <CategoryBadge category={category} />,
+ *   editable: {
+ *     onSave: async (newValue, row) => {
+ *       await updateMutation.mutateAsync({ id: row.id, data: { category: newValue } });
+ *     },
+ *   },
  * })
  */
 export function createFilterableSelectColumn<
@@ -631,14 +674,13 @@ export function createFilterableSelectColumn<
   options: {
     header?: string;
     placeholder: string;
-    selectOptions: Array<{
-      value: string;
-      label: string;
-      icon?: ReactNode;
-      color?: string;
-    }>;
+    selectOptions: FilterableComboboxItem[];
     renderCell: (value: T[K]) => ReactNode;
     className?: string;
+    /** Enable inline editing */
+    editable?: {
+      onSave: (newValue: T[K], row: T) => Promise<void>;
+    };
   },
 ) {
   return columnHelper.accessor((row) => row[accessor], {
@@ -652,7 +694,28 @@ export function createFilterableSelectColumn<
         options: options.selectOptions,
       },
     },
-    cell: (info) => options.renderCell(info.getValue() as T[K]),
+    cell: (info) => {
+      const value = info.getValue() as T[K];
+
+      if (options.editable) {
+        return (
+          <EditableCell
+            value={value as string | null}
+            onSave={(newVal) =>
+              options.editable!.onSave(newVal as T[K], info.row.original)
+            }
+            config={{
+              type: "select",
+              options: options.selectOptions,
+              placeholder: options.placeholder,
+            }}
+            renderValue={(v) => options.renderCell(v as T[K])}
+          />
+        );
+      }
+
+      return options.renderCell(value);
+    },
   });
 }
 

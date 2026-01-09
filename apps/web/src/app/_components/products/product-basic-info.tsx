@@ -8,13 +8,16 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { downloadLabel } from "~/lib/label-generator";
 import { queryKeys } from "~/lib/query-keys";
+import { formatCurrency } from "~/lib/utils";
 import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
-import { EditableCurrencyCell } from "../data-table/editable-cell";
+import { EditableCell } from "../data-table/editable-cell";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
+import { NoneState } from "../NoneState";
 import { CategoryBadge } from "./CategoryBadge";
+import { productCategoryOptionsWithTheme } from "./product-category-icons";
 
 interface ProductBasicInfoProps {
   product: ProductWithFoodOut;
@@ -28,17 +31,17 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   const api = useTRPC();
   const queryClient = useQueryClient();
 
-  // Mutation for inline price editing
+  // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useMutation(
     api.product.update.mutationOptions({
       onSuccess: () => {
-        toast.success("Price updated");
+        toast.success("Product updated");
         void queryClient.invalidateQueries({
           queryKey: queryKeys.product.list,
         });
       },
       onError: (err) => {
-        toast.error(err.message || "Failed to update price");
+        toast.error(err.message || "Failed to update product");
       },
     }),
   );
@@ -63,7 +66,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     {
       label: "Price",
       value: (
-        <EditableCurrencyCell
+        <EditableCell
           value={product.price}
           onSave={async (newPrice) => {
             // Sync price to unitMappings (canonical way to set price)
@@ -77,12 +80,30 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
               data: { unitMappings: updatedMappings },
             });
           }}
+          config={{ type: "currency" }}
+          renderValue={(v) => (v !== null ? formatCurrency(v) : <NoneState />)}
         />
       ),
     },
     {
       label: "Category",
-      value: <CategoryBadge category={product.category} />,
+      value: (
+        <EditableCell
+          value={product.category}
+          onSave={async (newCategory) => {
+            await updateProductMutation.mutateAsync({
+              id: product.id,
+              data: { category: newCategory },
+            });
+          }}
+          config={{
+            type: "select",
+            options: productCategoryOptionsWithTheme,
+            placeholder: "Select category...",
+          }}
+          renderValue={(cat) => <CategoryBadge category={cat} />}
+        />
+      ),
     },
     {
       label: "UPC",
