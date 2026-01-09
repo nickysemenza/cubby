@@ -57,6 +57,7 @@ function AuthPage() {
             const scale = 0.7 + seededRandom(i * 17) * 0.5;
             return (
               <Icon
+                // biome-ignore lint/suspicious/noArrayIndexKey: static decorative pattern, order never changes
                 key={i}
                 className="h-5 w-5 text-foreground"
                 style={{

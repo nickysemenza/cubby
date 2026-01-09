@@ -81,6 +81,23 @@ export const getS3ObjectUrl = (key: string): string => {
 };
 
 /**
+ * Check if a URL is from our R2 bucket
+ */
+export const isOurBucketUrl = (url: string): boolean => {
+  return url.startsWith(env.R2_PUBLIC_URL);
+};
+
+/**
+ * Extract the S3 key from one of our bucket URLs
+ * Returns null if URL is not from our bucket
+ */
+export const extractKeyFromUrl = (url: string): string | null => {
+  const prefix = `${env.R2_PUBLIC_URL}/`;
+  if (!url.startsWith(prefix)) return null;
+  return url.slice(prefix.length);
+};
+
+/**
  * Delete an object from S3/R2 storage
  * @param key The key of the object to delete
  */

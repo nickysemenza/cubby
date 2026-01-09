@@ -27,8 +27,9 @@ export function DeleteInventoryDialog({
   const deleteMutation = useMutation(
     api.inventory.delete.mutationOptions({
       onSuccess: () => {
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: queryKeys.inventory.list,
+          queryKey: [queryKeys.inventory.list],
         });
       },
     }),

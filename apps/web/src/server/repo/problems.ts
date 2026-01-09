@@ -1,5 +1,5 @@
 import { upc as upcSchema } from "@recipehub/usda-schemas";
-import { and, eq, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, notExists, sql } from "drizzle-orm";
 import { isMiscProduct } from "~/lib/constants";
 import type { Database } from "~/server/db";
 import {
@@ -8,7 +8,11 @@ import {
   product,
   productUnitMappings,
 } from "~/server/db/schema";
-import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  parseInventoryAmount,
+} from "~/server/repo/database-helpers";
 import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
   findProductsNeedingFoodCategory,
@@ -121,7 +125,7 @@ const findDuplicateUniqueProducts = async (
   db: Database,
 ): Promise<DuplicateUniqueProduct[]> => {
   const duplicates = await getDb(db).query.product.findMany({
-    where: isNull(product.deletedAt),
+    where: notDeleted(product),
     columns: {
       id: true,
       name: true,
@@ -178,7 +182,7 @@ const findOrphanedProducts = async (
     .from(product)
     .where(
       and(
-        isNull(product.deletedAt),
+        notDeleted(product),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -262,7 +266,7 @@ const findProductsWithoutMappings = async (
     .from(product)
     .where(
       and(
-        isNull(product.deletedAt),
+        notDeleted(product),
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -281,7 +285,7 @@ const findInvalidInventoryAmounts = async (
   db: Database,
 ): Promise<InvalidInventoryAmount[]> => {
   const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: isNull(inventoryEntry.deletedAt),
+    where: notDeleted(inventoryEntry),
     columns: {
       id: true,
       amount: true,
@@ -341,7 +345,7 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
     .from(location)
     .where(
       and(
-        isNull(location.deletedAt),
+        notDeleted(location),
         // No inventory entries
         notExists(
           dbClient

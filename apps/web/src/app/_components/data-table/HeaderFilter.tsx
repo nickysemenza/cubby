@@ -24,9 +24,12 @@ export function HeaderFilter<TData>({
   const lastExternalRef = useRef(externalValue);
 
   // Apply debounced value to column filter
+  // CRITICAL: column is NOT in deps - it's a stable API reference from TanStack Table
+  // Including it causes infinite rerenders when table recreates column objects
+  // biome-ignore lint/correctness/useExhaustiveDependencies: column is intentionally excluded to prevent infinite rerenders
   useEffect(() => {
     column.setFilterValue(debouncedValue || undefined);
-  }, [debouncedValue, column]);
+  }, [debouncedValue]);
 
   // Sync external changes (e.g., reset button clears filters)
   if (externalValue !== lastExternalRef.current) {

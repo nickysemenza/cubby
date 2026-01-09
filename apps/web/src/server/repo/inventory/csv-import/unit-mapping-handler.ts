@@ -106,14 +106,12 @@ export const createUnitMappingsFromString = async (
       if (isMoneyUnit(parsed.a.unit) || isMoneyUnit(parsed.b.unit)) {
         continue;
       }
-      await getDb(db)
-        .insert(productUnitMappings)
-        .values({
-          productId,
-          a: parsed.a,
-          b: parsed.b,
-          source: parsed.source ?? "csv-import",
-        });
+      await getDb(db).insert(productUnitMappings).values({
+        productId,
+        a: parsed.a,
+        b: parsed.b,
+        source: parsed.source,
+      });
     } catch (e) {
       // Log warning but continue with other mappings
       console.warn(`Failed to parse unit mapping: ${part}`, e);

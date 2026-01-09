@@ -89,7 +89,8 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
       },
     }),
   );
@@ -98,7 +99,8 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
   const quickCreateMutation = useMutation(
     api.product.quickCreate.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
       },
     }),
   );
@@ -107,8 +109,9 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
   const createInventoryMutation = useMutation(
     api.inventory.create.mutationOptions({
       onSuccess: () => {
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: queryKeys.inventory.list,
+          queryKey: [queryKeys.inventory.list],
         });
       },
     }),
@@ -119,7 +122,8 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
     api.location.touchLastBulkInventory.mutationOptions({
       onSuccess: () => {
         toast.success("Marked inventory complete");
-        queryClient.invalidateQueries({ queryKey: queryKeys.location.list });
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({ queryKey: [queryKeys.location.list] });
       },
     }),
   );

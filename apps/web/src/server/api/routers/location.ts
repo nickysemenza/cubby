@@ -20,6 +20,7 @@ import {
   buildLocationTree,
   buildLocationTypeCount,
   createLocation,
+  deleteLocations,
   getLocationById,
   getLocationByShortcode,
   getRecentlyActiveLocations,
@@ -28,6 +29,7 @@ import {
   updateLocation,
 } from "~/server/repo/location";
 import {
+  createDeleteProcedure,
   createEntityCrudWithoutListProcedures,
   createEntityListProcedure,
 } from "../crud-factory";
@@ -109,6 +111,11 @@ const getRecentlyActive = protectedProcedure
     return await getRecentlyActiveLocations(ctx.db, input?.limit ?? 5);
   });
 
+// Delete procedure using standalone factory
+const deleteItem = createDeleteProcedure<LocationId>(async (services, ids) => {
+  await deleteLocations(services.db, ids, services.actorContext);
+}, locationId);
+
 export const locationRouter = createTRPCRouter({
   list,
   getByID,
@@ -118,5 +125,6 @@ export const locationRouter = createTRPCRouter({
   makeTree,
   create,
   update,
+  delete: deleteItem,
   touchLastBulkInventory,
 });

@@ -46,10 +46,13 @@ export function getSubmitButtonText(
   mode: "create" | "edit",
   isPending: boolean,
 ): string {
-  if (mode === "create") {
-    return isPending ? "Creating..." : "Create";
-  }
-  return isPending ? "Saving..." : "Save";
+  return mode === "create"
+    ? isPending
+      ? "Creating..."
+      : "Create"
+    : isPending
+      ? "Saving..."
+      : "Save";
 }
 
 // Form wrapper component with common layout and buttons

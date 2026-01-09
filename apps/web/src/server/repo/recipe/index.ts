@@ -8,6 +8,7 @@
 // CRUD operations
 export {
   createRecipe,
+  deleteRecipes,
   findRecipeByShortcode,
   getRecipeByID,
   getRecipeByShortcode,

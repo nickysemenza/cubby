@@ -148,6 +148,7 @@ export const processProductForImport = async (
         ndb_number: ndbNumber ?? null,
         ingredientId,
         category: category ?? null,
+        shortcode: productShortcode ?? undefined, // Preserve shortcode from sheet
         // Preserve timestamps if provided (for sync restore)
         createdAt: timestamps?.createdAt,
         updatedAt: timestamps?.updatedAt,

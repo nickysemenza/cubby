@@ -18,14 +18,17 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturnDb,
+  notDeleted,
 } from "~/server/repo/database-helpers";
 import {
   contentTypeToExtension,
   deleteS3Object,
+  extractKeyFromUrl,
   fetchAndStoreImage,
   generateImageKey,
   generatePresignedUploadUrl,
   getS3ObjectUrl,
+  isOurBucketUrl,
 } from "../utils/s3";
 
 /**
@@ -65,30 +68,34 @@ export const initiateImageUploadWithoutEntity = async (
 };
 
 // Type for image with pre-loaded entity relations
+// Note: Association deletedAt is filtered at query time, but we still need to check entity deletedAt
 type ImageWithRelations = typeof image.$inferSelect & {
   productImages: Array<{
     productId: string;
-    product: { name: string };
+    product: { name: string; deletedAt: Date | null };
   }>;
   locationImages: Array<{
     locationId: string;
-    location: { name: string };
+    location: { name: string; deletedAt: Date | null };
   }>;
   recipeImages: Array<{
     recipeId: string;
-    recipe: { name: string };
+    recipe: { name: string; deletedAt: Date | null };
   }>;
 };
 
 /**
  * Transform image with pre-loaded relations to API format.
  * Expects relations to be loaded via `with` clause - no additional queries.
+ * Note: Soft-deleted join table records filtered at query time, but we still check entity deletedAt.
  */
 const imageWithRelationsToAPI = (
   imageData: ImageWithRelations,
 ): ImageWithEntity => {
-  // Check product associations (pre-loaded)
-  const productAssoc = imageData.productImages[0];
+  // Check product associations (join table filtered, but still check entity)
+  const productAssoc = imageData.productImages.find(
+    (assoc) => !assoc.product.deletedAt,
+  );
   if (productAssoc) {
     return {
       id: imageData.id,
@@ -106,8 +113,10 @@ const imageWithRelationsToAPI = (
     };
   }
 
-  // Check location associations (pre-loaded)
-  const locationAssoc = imageData.locationImages[0];
+  // Check location associations (join table filtered, but still check entity)
+  const locationAssoc = imageData.locationImages.find(
+    (assoc) => !assoc.location.deletedAt,
+  );
   if (locationAssoc) {
     return {
       id: imageData.id,
@@ -125,8 +134,10 @@ const imageWithRelationsToAPI = (
     };
   }
 
-  // Check recipe associations (pre-loaded)
-  const recipeAssoc = imageData.recipeImages[0];
+  // Check recipe associations (join table filtered, but still check entity)
+  const recipeAssoc = imageData.recipeImages.find(
+    (assoc) => !assoc.recipe.deletedAt,
+  );
   if (recipeAssoc) {
     return {
       id: imageData.id,
@@ -161,22 +172,34 @@ const imageWithRelationsToAPI = (
   };
 };
 
-/** Shared relation config for loading entity associations */
+/** Shared relation config for loading entity associations with soft-delete filtering */
 const imageEntityRelations = {
   productImages: {
-    with: { product: { columns: { name: true } } },
+    where: notDeleted(productImage),
+    with: {
+      product: {
+        columns: { name: true, deletedAt: true },
+      },
+    },
     columns: { productId: true },
-    limit: 1,
   },
   locationImages: {
-    with: { location: { columns: { name: true } } },
+    where: notDeleted(locationImage),
+    with: {
+      location: {
+        columns: { name: true, deletedAt: true },
+      },
+    },
     columns: { locationId: true },
-    limit: 1,
   },
   recipeImages: {
-    with: { recipe: { columns: { name: true } } },
+    where: notDeleted(recipeImage),
+    with: {
+      recipe: {
+        columns: { name: true, deletedAt: true },
+      },
+    },
     columns: { recipeId: true },
-    limit: 1,
   },
 } as const;
 
@@ -253,6 +276,26 @@ export const getImageById = async (
   }
 
   return imageWithRelationsToAPI(imageRecord);
+};
+
+/**
+ * Get an image by its S3 key
+ * Returns null if not found (used for checking if image already exists in DB)
+ */
+export const getImageByKey = async (
+  db: Database,
+  key: string,
+): Promise<{ id: string; url: string; key: string } | null> => {
+  const imageRecord = await getDb(db).query.image.findFirst({
+    where: eq(image.key, key),
+    columns: {
+      id: true,
+      url: true,
+      key: true,
+    },
+  });
+
+  return imageRecord ?? null;
 };
 
 /**
@@ -353,7 +396,41 @@ export const importImageFromUrl = async (
   db: Database,
   params: { sourceUrl: string; filenamePrefix: string },
 ): Promise<{ imageId: string; key: string; url: string } | null> => {
-  // Fetch and store the image in R2
+  // Check if source URL is from our own R2 bucket
+  // If so, reuse the existing image instead of re-downloading
+  if (isOurBucketUrl(params.sourceUrl)) {
+    const key = extractKeyFromUrl(params.sourceUrl);
+    if (key) {
+      const existing = await getImageByKey(db, key);
+      if (existing) {
+        // Image already exists in DB - reuse it
+        return {
+          imageId: existing.id,
+          key: existing.key,
+          url: existing.url,
+        };
+      }
+      // URL is from our bucket but not in DB
+      // This can happen after DB wipe - the S3 file exists but DB record doesn't
+      // In this case, just create a new DB record pointing to the existing S3 object
+      // without re-downloading/re-uploading
+      const createdImage = await insertAndReturnDb(db, image, {
+        key,
+        filename: params.filenamePrefix, // Use prefix as filename since we don't have the original
+        size: 0, // Unknown size - could fetch metadata if needed
+        contentType: "application/octet-stream", // Unknown type
+        url: params.sourceUrl,
+        status: "UPLOADED",
+      });
+      return {
+        imageId: createdImage.id,
+        key,
+        url: params.sourceUrl,
+      };
+    }
+  }
+
+  // For external URLs, do the normal fetch+store
   const stored = await fetchAndStoreImage(
     params.sourceUrl,
     params.filenamePrefix,

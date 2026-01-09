@@ -84,8 +84,9 @@ export function useEditMode<TData, TResult = unknown>({
       if (useRouterRefresh) {
         if (invalidateKeys && invalidateKeys.length > 0) {
           // Invalidate specific query keys
+          // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
           for (const key of invalidateKeys) {
-            queryClient.invalidateQueries({ queryKey: key });
+            queryClient.invalidateQueries({ queryKey: [key] });
           }
         } else {
           // Fall back to invalidating all queries

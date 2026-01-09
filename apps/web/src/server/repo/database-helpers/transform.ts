@@ -13,9 +13,10 @@ import type { productUnitMappings } from "~/server/db/schema";
 /**
  * Extract image records from join table results.
  * Common pattern: join tables have { image: typeof image.$inferSelect }
+ * Automatically filters out soft-deleted join table records.
  *
  * @param joinTableRecords - Array of join table records with image field
- * @returns Array of image records, or empty array if input is null/undefined
+ * @returns Array of image records (excluding soft-deleted), or empty array if input is null/undefined
  *
  * @example
  * ```typescript
@@ -26,19 +27,26 @@ import type { productUnitMappings } from "~/server/db/schema";
  * const productImages = extractImagesFromJoinTable(images);
  * ```
  */
-export const extractImagesFromJoinTable = <T extends { image: { id: string } }>(
+export const extractImagesFromJoinTable = <
+  T extends { image: { id: string }; deletedAt?: Date | null },
+>(
   joinTableRecords: T[] | undefined | null,
 ): T["image"][] => {
-  return joinTableRecords?.map((record) => record.image) ?? [];
+  return (
+    joinTableRecords
+      ?.filter((record) => !record.deletedAt || record.deletedAt === null)
+      .map((record) => record.image) ?? []
+  );
 };
 
 /**
  * Map an array of DB records through a transformation function.
  * Handles null/undefined and returns empty array by default.
+ * Automatically filters out soft-deleted records if they have a deletedAt field.
  *
  * @param records - Array of database records to transform
  * @param mapper - Transformation function for each record
- * @returns Transformed array, or empty array if input is null/undefined
+ * @returns Transformed array (excluding soft-deleted), or empty array if input is null/undefined
  *
  * @example
  * ```typescript
@@ -49,20 +57,34 @@ export const extractImagesFromJoinTable = <T extends { image: { id: string } }>(
  * const products = mapRelation(Product, (prod) => ({ ...transform }));
  * ```
  */
-export const mapRelation = <TIn, TOut>(
+export const mapRelation = <
+  TIn extends { deletedAt?: Date | null } | Record<string, unknown>,
+  TOut,
+>(
   records: TIn[] | undefined | null,
   mapper: (record: TIn) => TOut,
 ): TOut[] => {
-  return records?.map(mapper) ?? [];
+  if (!records) return [];
+
+  // Filter out soft-deleted records if deletedAt field exists
+  const filtered = records.filter((record) => {
+    if ("deletedAt" in record) {
+      return record.deletedAt === null;
+    }
+    return true;
+  });
+
+  return filtered.map(mapper);
 };
 
 /**
  * Add sourceMetadata to unit mappings for a product.
  * Injects { type: "product", productId } into each mapping's sourceMetadata field.
+ * Automatically filters out soft-deleted unit mappings.
  *
  * @param productId - The product ID (raw string from database)
  * @param unitMappings - Array of product unit mappings
- * @returns Unit mappings with sourceMetadata injected
+ * @returns Unit mappings with sourceMetadata injected (excluding soft-deleted)
  *
  * @example
  * ```typescript
@@ -83,13 +105,15 @@ export const addProductSourceMetadata = (
   productId: string,
   unitMappings: Array<typeof productUnitMappings.$inferSelect>,
 ) => {
-  return unitMappings.map((mapping) => ({
-    ...mapping,
-    sourceMetadata: {
-      type: "product" as const,
-      productId: unsafeProductId(productId),
-    },
-  }));
+  return unitMappings
+    .filter((mapping) => mapping.deletedAt === null)
+    .map((mapping) => ({
+      ...mapping,
+      sourceMetadata: {
+        type: "product" as const,
+        productId: unsafeProductId(productId),
+      },
+    }));
 };
 
 /**

@@ -19,18 +19,75 @@ The `Database` type is opaque (branded) - you can't call methods on it outside r
 - **Repos** call `getDb(db)` to unwrap and access the actual DrizzleClient
 - **Transactions** use `withTransaction(db, async (tx) => {...})` - `tx` is unwrapped and can be used directly
 
+## Soft Delete
+
+All major entities (products, recipes, locations, ingredients, inventory) use soft delete with a `deletedAt` timestamp column. Deleted items are retained in the database but hidden from normal queries.
+
+**Key points:**
+- Always use `notDeleted(table)` helper to filter out deleted records in queries
+- Delete operations cascade to related entities (e.g., deleting a product soft-deletes its images and unit mappings)
+- All deletions are wrapped in transactions and logged to audit trail
+- Safety checks prevent deletion of entities with dependencies (e.g., products with inventory)
+- **Restore functionality is intentionally not implemented** - treat soft deletes as permanent from a user perspective
+
+## React Hooks: Preventing Infinite Render Loops
+
+**CRITICAL**: Never pass inline object literals, arrays, or functions to hooks with dependencies. This creates new references on every render, triggering infinite loops.
+
+### Bad (causes infinite re-renders):
+```typescript
+const { table } = useEntityList({
+  deletable: {
+    mutationOptions: (callbacks) => api.product.delete.mutationOptions(callbacks),
+    entityLabel: "Product",
+    invalidateKeys: [queryKeys.product.list],
+  },
+});
+```
+
+### Good (stable reference):
+```typescript
+const deletableConfig = useDeletableConfig({
+  mutationFn: api.product.delete.mutationOptions,
+  entityLabel: "Product",
+  invalidateKeys: [queryKeys.product.list],
+});
+
+const { table } = useEntityList({
+  deletable: deletableConfig,
+});
+```
+
+**Rule**: If you're passing configuration objects to `useEntityList`, `useMemo`, `useEffect`, or any hook with dependencies, either:
+1. Use `useDeletableConfig` helper for deletable configs
+2. Wrap in `useMemo` with proper dependencies
+3. Extract to a stable reference outside the component
+
+### Optimistic Updates
+
+All entity deletions use **optimistic updates** for instant UI feedback:
+
+1. **onMutate**: Items are removed from the cache immediately (before the server responds)
+2. **onSuccess**: Queries are invalidated to refetch and ensure consistency
+3. **onError**: Previous data is restored if the mutation fails
+
+This pattern is built into `useEntityList` - no additional code needed for list pages. Items disappear instantly when deleted, providing excellent UX while maintaining data integrity.
+
 ## Required Helpers
 
 Use these instead of inline patterns:
 
 | Pattern to avoid | Use instead | Import from |
 |-----------------|-------------|-------------|
+| Inline deletable config object | `useDeletableConfig({ ... })` | `~/app/_components/hooks/useDeletableConfig` |
+| Inline update mutation with `useMemo` + `useMutation` | `useUpdateMutation({ ... })` | `~/app/_components/hooks/useUpdateMutation` |
 | `error instanceof Error ? error.message : "Unknown error"` | `getErrorMessage(error)` | `~/lib/error-utils` |
 | Manual `.insert().values().returning()` + null check | `insertAndReturn(tx, table, values)` | `~/server/repo/database-helpers` |
 | Same for `Database` type (not transaction) | `insertAndReturnDb(db, table, values)` | `~/server/repo/database-helpers` |
 | Manual `.update().set().where().returning()` + null check | `updateAndReturn(tx, table, values, where)` | `~/server/repo/database-helpers` |
 | `getDb(db).transaction(async (tx) => {...})` | `withTransaction(db, async (tx) => {...})` | `~/server/repo/database-helpers` |
 | `ilike(column, \`%${term}%\`)` | `formatSearchTerm(column, term)` | `~/server/repo/database-helpers` |
+| `isNull(table.deletedAt)` | `notDeleted(table)` | `~/server/repo/database-helpers` |
 | `ComboboxItem.refine()` for required product | `requiredProductField` | `~/schemas/form-fields` |
 | `ComboboxItem.refine()` for required location | `requiredLocationField` | `~/schemas/form-fields` |
 | `as ProductId`, `as LocationId`, etc. | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers` |
@@ -41,13 +98,11 @@ Use these instead of inline patterns:
 ## Authentication (Better-Auth)
 
 - Server config: `apps/web/src/lib/auth.ts` (TanStack Start via `better-auth/tanstack-start`)
-- Client: `apps/web/src/lib/auth-client.ts` (hooks: `useSession`, `useListOrganizations`, `useActiveOrganization`)
+- Client: `apps/web/src/lib/auth-client.ts` (hooks: `useSession`)
 - API route: `apps/web/src/routes/api/auth/$.ts`
-- Organization plugin enabled for scoping
 - UI routes use `@daveyplate/better-auth-ui`:
   - Auth: `apps/web/src/routes/auth.$authView.tsx`
   - Account: `apps/web/src/routes/account.$accountView.tsx`
-  - Organization: `apps/web/src/routes/organization.$organizationView.tsx`
 
 ## Product Types
 

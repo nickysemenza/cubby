@@ -27,7 +27,7 @@ import {
   bulkProcessInventoryEntries,
   checkUniqueProductDuplicate,
   createInventoryEntry,
-  deleteInventoryEntry,
+  deleteInventoryEntries,
   findInventoryWithStaleValuations,
   getInventoryEntryByID,
   importInventoryFromCSV,
@@ -106,8 +106,8 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
 });
 
 // Delete procedure using standalone factory
-const deleteItem = createDeleteProcedure<InventoryId>(async (services, id) => {
-  await deleteInventoryEntry(services.db, id, services.actorContext);
+const deleteItem = createDeleteProcedure<InventoryId>(async (services, ids) => {
+  await deleteInventoryEntries(services.db, ids, services.actorContext);
 }, inventoryId);
 
 // Bulk process inventory entries (creates and updates in one call)

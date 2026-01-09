@@ -23,9 +23,11 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturnDb,
+  notDeleted,
   relations,
   unwrapDb,
   updateAndReturnDb,
+  withTransaction,
 } from "~/server/repo/database-helpers";
 import { dbInventoryEntryToAPI } from "./helpers";
 import type {
@@ -67,9 +69,12 @@ export const syncInventoryValuationsForProduct = async (
   });
   const productPrice = productData?.price ?? null;
 
-  // Get all inventory entries for this product
+  // Get all non-deleted inventory entries for this product
   const entries = await client.query.inventoryEntry.findMany({
-    where: eq(inventoryEntry.productId, productId),
+    where: and(
+      eq(inventoryEntry.productId, productId),
+      notDeleted(inventoryEntry),
+    ),
     columns: { id: true, amount: true },
   });
 
@@ -107,6 +112,7 @@ export const findInventoryWithStaleValuations = async (
   }>
 > => {
   const entries = await getDb(db).query.inventoryEntry.findMany({
+    where: notDeleted(inventoryEntry),
     columns: { id: true, amount: true, valuation: true },
     with: {
       Product: { columns: { name: true, price: true } },
@@ -159,6 +165,7 @@ export const backfillInventoryValuations = async (
   db: Database,
 ): Promise<{ updated: number; skipped: number }> => {
   const entries = await getDb(db).query.inventoryEntry.findMany({
+    where: notDeleted(inventoryEntry),
     columns: { id: true, amount: true, valuation: true },
     with: {
       Product: { columns: { price: true } },
@@ -208,12 +215,13 @@ export const checkUniqueProductDuplicate = async (
     columns: { expectedQuantity: true, name: true },
   });
 
-  // If it's a unique item, check for duplicates
+  // If it's a unique item, check for duplicates (excluding soft-deleted entries)
   if (productData?.expectedQuantity === 1) {
     const existingEntry = await getDb(db).query.inventoryEntry.findFirst({
       where: and(
         eq(inventoryEntry.productId, productId),
         not(eq(inventoryEntry.locationId, locationId)),
+        notDeleted(inventoryEntry),
       ),
       with: {
         location: {
@@ -235,7 +243,7 @@ export const checkUniqueProductDuplicate = async (
 
 export const getInventoryEntryByID = async (db: Database, id: InventoryId) => {
   const res = await getDb(db).query.inventoryEntry.findFirst({
-    where: eq(inventoryEntry.id, id),
+    where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
     ...relations.inventory.full,
   });
 
@@ -266,7 +274,7 @@ export const inventoryentryList = async (
 
   if (needsJoins) {
     // Build conditions for join-based query
-    const conditions: ReturnType<typeof eq>[] = [];
+    const conditions: ReturnType<typeof eq>[] = [notDeleted(inventoryEntry)];
     const productNameCondition = formatSearchTerm(
       product.name,
       filters.productNameFilter,
@@ -284,16 +292,21 @@ export const inventoryentryList = async (
     if (filters.locationIdFilter) {
       conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
     }
-    const whereCondition =
-      conditions.length > 0 ? and(...conditions) : undefined;
+    const whereCondition = and(...conditions);
 
     // Query with joins for name filtering
     const [results, [countResult]] = await Promise.all([
       getDb(db)
         .select({ inventoryEntry })
         .from(inventoryEntry)
-        .innerJoin(product, eq(inventoryEntry.productId, product.id))
-        .innerJoin(location, eq(inventoryEntry.locationId, location.id))
+        .innerJoin(
+          product,
+          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+        )
+        .innerJoin(
+          location,
+          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+        )
         .where(whereCondition)
         .orderBy(...orderByArray)
         .limit(take)
@@ -301,8 +314,14 @@ export const inventoryentryList = async (
       getDb(db)
         .select({ count: count() })
         .from(inventoryEntry)
-        .innerJoin(product, eq(inventoryEntry.productId, product.id))
-        .innerJoin(location, eq(inventoryEntry.locationId, location.id))
+        .innerJoin(
+          product,
+          and(eq(inventoryEntry.productId, product.id), notDeleted(product)),
+        )
+        .innerJoin(
+          location,
+          and(eq(inventoryEntry.locationId, location.id), notDeleted(location)),
+        )
         .where(whereCondition),
     ]);
 
@@ -327,8 +346,11 @@ export const inventoryentryList = async (
 
   // Simple path: no name filters, use relational query
   const whereClause = filters.locationIdFilter
-    ? eq(inventoryEntry.locationId, filters.locationIdFilter)
-    : undefined;
+    ? and(
+        eq(inventoryEntry.locationId, filters.locationIdFilter),
+        notDeleted(inventoryEntry),
+      )
+    : notDeleted(inventoryEntry);
 
   const [results, [countResult]] = await Promise.all([
     getDb(db).query.inventoryEntry.findMany({
@@ -472,19 +494,30 @@ export const createInventoryEntry = async (
 };
 
 /**
- * Delete an inventory entry by ID
+ * Soft delete inventory entries by IDs
  */
-export const deleteInventoryEntry = async (
+export const deleteInventoryEntries = async (
   db: Database,
-  id: InventoryId,
+  ids: InventoryId[],
   actor: ActorContext,
 ): Promise<void> => {
-  await getDb(db).delete(inventoryEntry).where(eq(inventoryEntry.id, id));
+  if (ids.length === 0) return;
 
-  // Log audit entry
-  await logAuditEntry(db, actor, {
-    entityType: "inventory",
-    entityId: id,
-    action: "delete",
+  // Perform soft delete and audit logging in a transaction for atomicity
+  await withTransaction(db, async (tx) => {
+    const now = new Date();
+    await tx
+      .update(inventoryEntry)
+      .set({ deletedAt: now })
+      .where(inArray(inventoryEntry.id, ids));
+
+    // Log audit entries
+    for (const id of ids) {
+      await logAuditEntry(tx, actor, {
+        entityType: "inventory",
+        entityId: id,
+        action: "delete",
+      });
+    }
   });
 };

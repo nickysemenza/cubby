@@ -16,6 +16,7 @@ export {
 // CRUD operations
 export {
   createProduct,
+  deleteProducts,
   findProductByShortcode,
   getProductByID,
   getProductByShortcode,

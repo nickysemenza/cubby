@@ -65,14 +65,16 @@ function ScannerPage() {
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
       },
     }),
   );
   const createInventoryMutation = useMutation(
     api.inventory.create.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.inventory.list });
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({ queryKey: [queryKeys.inventory.list] });
       },
     }),
   );

@@ -1,7 +1,10 @@
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Button } from "~/components/ui/button";
+import { queryKeys } from "~/lib/query-keys";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { useTRPC } from "~/trpc/react";
+import { useEntityDelete } from "../hooks/useEntityDelete";
 
 interface IngredientBasicInfoProps {
   ingredient: IngredientWithFoodOut;
@@ -12,6 +15,17 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
   ingredient,
   onEdit,
 }) => {
+  const api = useTRPC();
+  const { DeleteButton, DeleteDialog } = useEntityDelete({
+    id: ingredient.id,
+    name: ingredient.name,
+    entityLabel: "Ingredient",
+    mutationOptions: (callbacks) =>
+      api.ingredient.delete.mutationOptions(callbacks),
+    invalidateKeys: [queryKeys.ingredient.list],
+    redirectTo: "/ingredients",
+  });
+
   const fields: BasicInfoField[] = [
     { label: "Name", value: ingredient.name },
     {
@@ -24,13 +38,19 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
   ];
 
   return (
-    <BasicInfo
-      fields={fields}
-      actions={
-        <Button onClick={onEdit} variant="outline" size="sm">
-          Edit Ingredient
-        </Button>
-      }
-    />
+    <>
+      <BasicInfo
+        fields={fields}
+        actions={
+          <div className="flex gap-2">
+            <Button onClick={onEdit} variant="outline" size="sm">
+              Edit Ingredient
+            </Button>
+            <DeleteButton size="sm" />
+          </div>
+        }
+      />
+      <DeleteDialog />
+    </>
   );
 };

@@ -150,23 +150,27 @@ async function processLocationRow(
       row.location_name,
       parentId,
       locationType,
-      // Pass timestamps for restore on create (only used when creating new location)
-      createdAt || updatedAt ? { createdAt, updatedAt } : undefined,
+      // Pass timestamps and shortcode for restore on create (only used when creating new location)
+      createdAt || updatedAt || row.location_shortcode
+        ? {
+            createdAt,
+            updatedAt,
+            shortcode: row.location_shortcode ?? undefined,
+          }
+        : undefined,
     );
 
-    // If location exists, update all sync fields from CSV
+    // Update all sync fields from CSV (both for new and existing locations)
     let updated = false;
     let cycleSkipped = false;
-    if (!created) {
-      const updateResult = await updateLocationFromImport(db, locationId, {
-        description: row.description,
-        lastInventoryDate: parseCSVDate(row.last_inventory_date),
-        locationType: row.location_type,
-        parentId, // Already resolved from row.parent_name above
-      });
-      updated = updateResult.updated;
-      cycleSkipped = updateResult.cycleSkipped ?? false;
-    }
+    const updateResult = await updateLocationFromImport(db, locationId, {
+      description: row.description,
+      lastInventoryDate: parseCSVDate(row.last_inventory_date),
+      locationType: row.location_type,
+      parentId, // Already resolved from row.parent_name above
+    });
+    updated = updateResult.updated;
+    cycleSkipped = updateResult.cycleSkipped ?? false;
 
     // Import images if provided and location doesn't already have any
     let imageImportError: string | undefined;
@@ -215,6 +219,7 @@ async function processLocationRow(
         action === "skipped" ? (message ?? "Location already exists") : message,
     };
   } catch (error) {
+    console.error("Location import error:", error);
     return {
       rowIndex,
       action: "error",

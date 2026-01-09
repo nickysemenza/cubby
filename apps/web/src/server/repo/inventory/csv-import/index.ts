@@ -35,7 +35,10 @@ import {
 import { processRow } from "./row-processor";
 
 // Re-export utilities that may be used externally
-export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
+export {
+  createOrUpdatePriceMapping,
+  createUnitMappingsFromString,
+} from "./unit-mapping-handler";
 
 interface ImportOptions {
   dryRun?: boolean;
@@ -100,6 +103,7 @@ export const importInventoryFromCSV = async (
         }
       }
     } catch (error) {
+      console.error("Product import error:", error);
       // Extract meaningful error message from database errors
       let message = "Unknown error";
       if (error instanceof Error) {

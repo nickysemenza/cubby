@@ -170,8 +170,9 @@ export default function QuickCaptureForm({
   const bulkProcessMutation = useMutation(
     api.inventory.bulkProcess.mutationOptions({
       onSuccess: () => {
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: queryKeys.inventory.list,
+          queryKey: [queryKeys.inventory.list],
         });
       },
     }),
@@ -181,7 +182,8 @@ export default function QuickCaptureForm({
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: queryKeys.product.list });
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
       },
     }),
   );

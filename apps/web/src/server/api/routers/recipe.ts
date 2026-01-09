@@ -16,6 +16,7 @@ import {
 } from "~/schemas/recipe";
 import {
   createRecipe,
+  deleteRecipes,
   getAllTags,
   getIngredientCooccurrence,
   getRecipeByID,
@@ -25,7 +26,10 @@ import {
   updateRecipe,
 } from "~/server/repo/recipe";
 import { seedRealRecipes } from "~/testdata/seed";
-import { createEntityCrudProcedures } from "../crud-factory";
+import {
+  createDeleteProcedure,
+  createEntityCrudProcedures,
+} from "../crud-factory";
 import {
   createAppError,
   createTRPCRouter,
@@ -110,6 +114,11 @@ const getByShortcode = protectedProcedure
     return await getRecipeByShortcode(ctx.db, input.shortcode);
   });
 
+// Delete procedure using standalone factory
+const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
+  await deleteRecipes(services.db, ids, services.actorContext);
+}, recipeId);
+
 export const recipeRouter = createTRPCRouter({
   insertCompact,
   scrape,
@@ -119,6 +128,7 @@ export const recipeRouter = createTRPCRouter({
   list,
   create,
   update,
+  delete: deleteItem,
   getIngredientCooccurrence: getIngredientCooccurrenceEndpoint,
   getAllTags: getAllTagsEndpoint,
 });

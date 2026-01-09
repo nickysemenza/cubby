@@ -304,11 +304,12 @@ function ProductsWithoutUPCImagesList({
         } else {
           toast.info(`No images found for ${result.skipped} product(s)`);
         }
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: api.problems.getAllProblems.queryKey(),
+          queryKey: [api.problems.getAllProblems.queryKey()],
         });
         queryClient.invalidateQueries({
-          queryKey: api.product.list.queryKey(),
+          queryKey: [api.product.list.queryKey()],
         });
       },
       onError: (error) => {
@@ -372,11 +373,12 @@ function ProductsWithWrongCategoryList({
         } else {
           toast.info("No products need category update");
         }
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: api.problems.getAllProblems.queryKey(),
+          queryKey: [api.problems.getAllProblems.queryKey()],
         });
         queryClient.invalidateQueries({
-          queryKey: api.product.list.queryKey(),
+          queryKey: [api.product.list.queryKey()],
         });
       },
       onError: (error) => {
@@ -452,11 +454,12 @@ function ProductsWithStalePricesList({
         } else {
           toast.info("No products need price sync");
         }
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: api.problems.getAllProblems.queryKey(),
+          queryKey: [api.problems.getAllProblems.queryKey()],
         });
         queryClient.invalidateQueries({
-          queryKey: api.product.list.queryKey(),
+          queryKey: [api.product.list.queryKey()],
         });
       },
       onError: (error) => {
@@ -532,11 +535,12 @@ function InventoryWithStaleValuationsList({
         } else {
           toast.info("No inventory entries need valuation sync");
         }
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: api.problems.getAllProblems.queryKey(),
+          queryKey: [api.problems.getAllProblems.queryKey()],
         });
         queryClient.invalidateQueries({
-          queryKey: api.inventory.list.queryKey(),
+          queryKey: [api.inventory.list.queryKey()],
         });
       },
       onError: (error) => {

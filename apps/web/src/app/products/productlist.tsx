@@ -1,9 +1,7 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
-import { toast } from "sonner";
+import { useCallback, useMemo } from "react";
 import { queryKeys } from "~/lib/query-keys";
 import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
@@ -18,8 +16,10 @@ import {
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { CategoryBadge } from "../_components/products/CategoryBadge";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
 
@@ -31,24 +31,24 @@ interface ProductListProps {
 
 export function ProductList({ initialCategory, actions }: ProductListProps) {
   const api = useTRPC();
-  const queryClient = useQueryClient();
-  const columnHelper = createColumnHelper<ProductWithFoodOut>();
+  const columnHelper = useMemo(
+    () => createColumnHelper<ProductWithFoodOut>(),
+    [],
+  );
   const { onRowClick, PreviewSheet } = useEntityPreview("product");
 
+  // Memoize invalidate keys to prevent recreating on every render
+  const invalidateKeys = useMemo(() => [queryKeys.product.list] as const, []);
+
+  // Memoize mutation function to prevent recreating on every render
+  const mutationFn = useMemo(() => api.product.update.mutationOptions, [api]);
+
   // Mutation for inline editing (price, category, etc.)
-  const updateProductMutation = useMutation(
-    api.product.update.mutationOptions({
-      onSuccess: () => {
-        toast.success("Product updated");
-        void queryClient.invalidateQueries({
-          queryKey: queryKeys.product.list,
-        });
-      },
-      onError: (err) => {
-        toast.error(err.message || "Failed to update product");
-      },
-    }),
-  );
+  const updateProductMutation = useUpdateMutation({
+    mutationFn,
+    entity: "product",
+    invalidateKeys,
+  });
 
   // Build initial filter from URL params
   const initialFilter = useMemo((): ColumnFiltersState => {
@@ -56,20 +56,30 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     return [{ id: "category", value: initialCategory }];
   }, [initialCategory]);
 
-  const { table, isLoading, error, timing } = useEntityList({
-    entity: "product",
-    queryOptions: api.product.list.queryOptions,
-    buildFilters: (ts) => ({
-      nameFilter: ts.getColumnFilter("name"),
-      manufacturerFilter: ts.getColumnFilter("manufacturer"),
-      upcFilter: ts.getColumnFilter("upc"),
-      categoryFilter: ts.getColumnFilter("category"),
-    }),
-    getMappings: getAllUnitMappingsFromProduct,
-    tableStateOptions: {
+  // Memoize table state options to prevent recreating on every render
+  const tableStateOptions = useMemo(
+    () => ({
       initialFilter,
-    },
-    columns: [
+    }),
+    [initialFilter],
+  );
+
+  // Memoize delete mutation function to prevent recreating on every render
+  const deleteMutationFn = useMemo(
+    () => api.product.delete.mutationOptions,
+    [api],
+  );
+
+  // Use stable deletable config hook to prevent infinite render loop
+  const deletableConfig = useDeletableConfig({
+    mutationFn: deleteMutationFn,
+    entityLabel: "Product",
+    invalidateKeys: [queryKeys.product.list],
+  });
+
+  // Memoize columns to prevent recreating on every render
+  const columns = useMemo(
+    () => [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
       createFilterableSelectColumn(columnHelper, "category", {
         header: "Category",
@@ -164,21 +174,55 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         {},
       ),
     ],
-    filters: [
-      "name",
-      "manufacturer",
-      "upc",
-      {
-        id: "category",
-        placeholder: "Filter by category...",
-        filterType: "select",
-        options: [
-          { value: "", label: "All categories" },
-          ...productCategoryOptionsWithTheme,
-        ],
-      },
-    ],
-  });
+    [columnHelper, updateProductMutation],
+  );
+
+  // Memoize filters to prevent recreating on every render
+  const filters = useMemo(
+    () =>
+      [
+        "name",
+        "manufacturer",
+        "upc",
+        {
+          id: "category",
+          placeholder: "Filter by category...",
+          filterType: "select",
+          options: [
+            { value: "", label: "All categories" },
+            ...productCategoryOptionsWithTheme,
+          ],
+        },
+      ] as const,
+    [],
+  );
+
+  // Memoize buildFilters to prevent recreating on every render
+  const buildFilters = useCallback(
+    (ts: { getColumnFilter: (id: string) => unknown }) => ({
+      nameFilter: ts.getColumnFilter("name"),
+      manufacturerFilter: ts.getColumnFilter("manufacturer"),
+      upcFilter: ts.getColumnFilter("upc"),
+      categoryFilter: ts.getColumnFilter("category"),
+    }),
+    [],
+  );
+
+  // Capture queryOptions ONCE - tRPC Proxy might return new reference on each access!
+  // Store the actual function, not a getter
+  const queryOptions = api.product.list.queryOptions;
+
+  const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
+    useEntityList({
+      entity: "product",
+      queryOptions,
+      buildFilters,
+      getMappings: getAllUnitMappingsFromProduct,
+      tableStateOptions,
+      columns,
+      filters,
+      deletable: deletableConfig,
+    });
 
   return (
     <div>
@@ -191,8 +235,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         entity="product"
         onRowClick={onRowClick}
         actions={actions}
+        bulkActionBar={bulkActionBar}
       />
       <PreviewSheet />
+      {deleteDialog}
     </div>
   );
 }
