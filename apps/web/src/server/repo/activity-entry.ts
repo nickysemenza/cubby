@@ -11,7 +11,7 @@ import { activityEntry, activityEntryImage } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   getDb,
-  insertAndReturnDb,
+  insertAndReturn,
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -120,7 +120,7 @@ export const createActivityEntry = async (
   actorContext: ActorContext,
 ): Promise<ActivityEntryOut> => {
   return withTransaction(db, async (tx) => {
-    const entry = await insertAndReturnDb(db, activityEntry, {
+    const entry = await insertAndReturn(tx, activityEntry, {
       activityTypeId: data.activityTypeId,
       completedAt: data.completedAt,
       notes: data.notes ?? null,

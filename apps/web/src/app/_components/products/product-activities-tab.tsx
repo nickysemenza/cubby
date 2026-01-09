@@ -15,7 +15,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { queryKeys } from "~/lib/query-keys";
-import type { ProductId } from "~/schemas/identifiers";
+import { type ProductId, unsafeActivityTypeId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 import type { PendingImage } from "../PendingImageUpload";
 import { PendingImageUpload } from "../PendingImageUpload";
@@ -59,7 +59,7 @@ export const ProductActivitiesTab: FC<ProductActivitiesTabProps> = ({
 
     // Create entry
     await createEntryMutation.mutateAsync({
-      activityTypeId: activityType.id as never,
+      activityTypeId: unsafeActivityTypeId(activityType.id),
       notes: notes.trim() || null,
       imageIds:
         pendingImages.length > 0
