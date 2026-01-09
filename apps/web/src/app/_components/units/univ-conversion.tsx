@@ -6,6 +6,7 @@ import {
   TIER1_NUTRIENTS,
 } from "@recipehub/usda-schemas";
 import type { Amount } from "~/codec/codec";
+import { isMiscProduct } from "~/lib/constants";
 import { wasm } from "~/lib/wasm";
 import { type Result, withFailure, withSuccess } from "~/misc/result-types";
 import type { SectionIngredientOut } from "~/schemas/recipe";
@@ -169,10 +170,24 @@ const getIngredientMeasures = async (
     ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
-  const mappingArrays = await Promise.all(
+
+  // Filter out misc products for pricing (they're just placeholders)
+  const productsForPricing = (product ?? []).filter(
+    (p) => !isMiscProduct(p.name),
+  );
+
+  // Get all mappings from non-misc products for pricing
+  const pricingMappingArrays = await Promise.all(
+    productsForPricing.map((p) => getAllUnitMappingsFromProduct(p)),
+  );
+  const pricingMappings = pricingMappingArrays.flat();
+
+  // Use all products (including misc) for weight and nutrient conversions
+  const allMappingArrays = await Promise.all(
     (product ?? []).map((p) => getAllUnitMappingsFromProduct(p)),
   );
-  const mappings = mappingArrays.flat();
+  const allMappings = allMappingArrays.flat();
+
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {
@@ -184,8 +199,15 @@ const getIngredientMeasures = async (
     };
   }
 
-  const price = convertAmountToPrice(firstAmount, mappings);
-  const { gram, nutrient } = getGramAndNutrient(firstAmount, mappings, product);
+  // Use pricing mappings (excluding misc) for price conversion
+  const price = convertAmountToPrice(firstAmount, pricingMappings);
+
+  // Use all mappings (including misc) for weight and nutrient conversions
+  const { gram, nutrient } = getGramAndNutrient(
+    firstAmount,
+    allMappings,
+    product,
+  );
 
   return { price, gram, nutrient };
 };

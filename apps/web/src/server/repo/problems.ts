@@ -3,6 +3,7 @@ import { and, eq, isNull, notExists, sql } from "drizzle-orm";
 import { isMiscProduct } from "~/lib/constants";
 import type { Database } from "~/server/db";
 import {
+  ingredient,
   inventoryEntry,
   location,
   product,
@@ -28,6 +29,7 @@ interface AllProblems {
   productsWithWrongCategory: ProductWithWrongCategory[];
   productsWithStalePrices: ProductWithStalePrice[];
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
+  ingredientsWithoutProducts: IngredientWithoutProducts[];
   totalProblems: number;
 }
 
@@ -114,6 +116,12 @@ export interface InventoryWithStaleValuation {
   locationName: string;
   storedValuation: number | null;
   expectedValuation: number | null;
+}
+
+export interface IngredientWithoutProducts {
+  id: string;
+  name: string;
+  createdAt: Date;
 }
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -362,6 +370,34 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
   return emptyLocations;
 };
 
+// Find ingredients that have no products linked to them
+const findIngredientsWithoutProducts = async (
+  db: Database,
+): Promise<IngredientWithoutProducts[]> => {
+  const dbClient = getDb(db);
+
+  const ingredientsWithoutProducts = await dbClient
+    .select({
+      id: ingredient.id,
+      name: ingredient.name,
+      createdAt: ingredient.createdAt,
+    })
+    .from(ingredient)
+    .where(
+      and(
+        isNull(ingredient.deletedAt),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(product)
+            .where(eq(product.ingredientId, ingredient.id)),
+        ),
+      ),
+    );
+
+  return ingredientsWithoutProducts;
+};
+
 // Helper to determine the primary food indicator for a product
 // Note: hasFoodIndicators only checks NDB and ingredient, not UPC
 const getFoodIndicator = (product: {
@@ -386,6 +422,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsNeedingFoodCategory,
     productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
+    ingredientsWithoutProducts,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
@@ -397,6 +434,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findProductsNeedingFoodCategory(db),
     findProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db),
+    findIngredientsWithoutProducts(db),
   ]);
 
   // Transform to problem types
@@ -428,7 +466,8 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithoutUPCImages.length +
     productsWithWrongCategory.length +
     productsWithStalePrices.length +
-    inventoryWithStaleValuations.length;
+    inventoryWithStaleValuations.length +
+    ingredientsWithoutProducts.length;
 
   return {
     duplicateUniqueProducts,
@@ -441,6 +480,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithWrongCategory,
     productsWithStalePrices,
     inventoryWithStaleValuations,
+    ingredientsWithoutProducts,
     totalProblems,
   };
 };

@@ -27,6 +27,7 @@ import { formatCurrency } from "~/lib/utils";
 import type {
   DuplicateUniqueProduct,
   EmptyLocation,
+  IngredientWithoutProducts,
   InvalidInventoryAmount,
   InvalidUPC,
   InventoryWithStaleValuation,
@@ -596,6 +597,41 @@ function InventoryWithStaleValuationsList({
   );
 }
 
+function IngredientsWithoutProductsList({
+  ingredients,
+}: {
+  ingredients: IngredientWithoutProducts[];
+}) {
+  return (
+    <ProblemSection
+      title="Ingredients Without Products"
+      description="Ingredients with no linked products. These cannot be used for pricing or conversions until products are configured."
+      entity="ingredient"
+      items={ingredients}
+      emptyMessage="All ingredients have linked products."
+      renderItem={(ingredient) => ({
+        title: ingredient.name,
+        details: [
+          <div
+            key="created"
+            className="flex items-center gap-1 text-muted-foreground text-sm"
+          >
+            <Calendar className="h-3 w-3" />
+            Created {formatDistanceToNow(ingredient.createdAt)} ago
+          </div>,
+        ],
+        badges: [
+          <Badge key="no-products" variant="outline" className="w-fit">
+            No products
+          </Badge>,
+        ],
+        route: { to: "/ingredients/$id" as const, params: { id: ingredient.id } },
+        editLabel: "Add Products",
+      })}
+    />
+  );
+}
+
 export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -675,6 +711,11 @@ export function ProblemsOverview() {
       id: "categories",
       label: "Categories",
       count: problems.productsWithWrongCategory.length,
+    },
+    {
+      id: "ingredients-no-products",
+      label: "Ingredients",
+      count: problems.ingredientsWithoutProducts.length,
     },
   ].filter((cat) => cat.count > 0);
 
@@ -808,6 +849,15 @@ export function ProblemsOverview() {
       >
         <ProductsWithWrongCategoryList
           products={problems.productsWithWrongCategory}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["ingredients-no-products"] = el;
+        }}
+      >
+        <IngredientsWithoutProductsList
+          ingredients={problems.ingredientsWithoutProducts}
         />
       </div>
     </div>
