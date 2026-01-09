@@ -47,13 +47,23 @@ import { NoneState } from "../NoneState";
 import { ValueChange } from "../value-change";
 
 // Convert resolution to which side is selected (for visual feedback)
-const getSelectedSide = (
-  resolution: SyncResolution | undefined,
-): "from" | "to" | undefined => {
-  if (resolution === "use_app") return "to";
-  if (resolution === "use_sheet") return "from";
-  return undefined;
+const RESOLUTION_TO_SIDE: Record<SyncResolution, "from" | "to" | undefined> = {
+  use_app: "to",
+  use_sheet: "from",
+  add_to_sheet: undefined,
+  add_to_app: undefined,
+  delete_from_app: undefined,
+  delete_from_sheet: undefined,
+  rename_in_app: undefined,
+  apply_move: undefined,
 };
+
+function getSelectedSide(
+  resolution: SyncResolution | undefined,
+): "from" | "to" | undefined {
+  if (!resolution) return undefined;
+  return RESOLUTION_TO_SIDE[resolution];
+}
 
 // State styles and labels - using theme colors
 const getSyncStateStyles = (state: SyncState) => {
@@ -142,10 +152,16 @@ const LOCATION_STATES: SyncState[] = [
 ];
 const INVENTORY_STATES: SyncState[] = [...LOCATION_STATES, "moved"];
 
-type LocationCounts = SyncPreviewResult["locations"];
-type InventoryCounts = SyncPreviewResult["inventory"];
+type SyncCounts = {
+  matched: number;
+  conflicts: number;
+  appOnly: number;
+  sheetOnly: number;
+  renamed: number;
+  moved?: number;
+};
 
-const getLocationCount = (counts: LocationCounts, state: SyncState): number => {
+function getSyncCount(counts: SyncCounts, state: SyncState): number {
   switch (state) {
     case "matched":
       return counts.matched;
@@ -158,29 +174,9 @@ const getLocationCount = (counts: LocationCounts, state: SyncState): number => {
     case "renamed":
       return counts.renamed;
     case "moved":
-      return 0;
+      return counts.moved ?? 0;
   }
-};
-
-const getInventoryCount = (
-  counts: InventoryCounts,
-  state: SyncState,
-): number => {
-  switch (state) {
-    case "matched":
-      return counts.matched;
-    case "conflict":
-      return counts.conflicts;
-    case "app_only":
-      return counts.appOnly;
-    case "sheet_only":
-      return counts.sheetOnly;
-    case "renamed":
-      return counts.renamed;
-    case "moved":
-      return counts.moved;
-  }
-};
+}
 
 type SyncDialogProps = {
   open: boolean;
@@ -472,7 +468,7 @@ export const SyncDialog = ({
                 {LOCATION_STATES.map((state) => (
                   <StateSummaryCard
                     key={state}
-                    count={getLocationCount(previewResult.locations, state)}
+                    count={getSyncCount(previewResult.locations, state)}
                     state={state}
                     isHidden={hiddenStates.has(state)}
                     onClick={() => toggleStateVisibility(state)}
@@ -497,7 +493,7 @@ export const SyncDialog = ({
                 {INVENTORY_STATES.map((state) => (
                   <StateSummaryCard
                     key={state}
-                    count={getInventoryCount(previewResult.inventory, state)}
+                    count={getSyncCount(previewResult.inventory, state)}
                     state={state}
                     isHidden={hiddenStates.has(state)}
                     onClick={() => toggleStateVisibility(state)}
