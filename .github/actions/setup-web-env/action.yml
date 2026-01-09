@@ -1,0 +1,12 @@
+name: "Setup Web Environment"
+description: "Sets up environment variables for web app testing"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup environment variables
+      run: |
+        cp apps/web/.env.example apps/web/.env
+        echo "NEXTAUTH_SECRET=supersecret" >> apps/web/.env
+        echo "USDA_API_URL=https://usda-db.fly.dev/" >> apps/web/.env
+      shell: bash
