@@ -125,13 +125,13 @@ jobs:
         with:
           download-wasm: ${{ matrix.package.needs-wasm && 'true' || 'false' }}
 
-      - name: Setup environment for web
+      - name: Setup web environment
         if: matrix.package.needs-db
-        run: |
-          cp apps/web/.env.example apps/web/.env
-          echo "NEXTAUTH_SECRET=supersecret" >> apps/web/.env
-          echo "USDA_API_URL=https://usda-db.fly.dev/" >> apps/web/.env
-          pnpm --filter @recipehub/web db:push
+        uses: ./.github/actions/setup-web-env
+
+      - name: Push database schema
+        if: matrix.package.needs-db
+        run: pnpm --filter @recipehub/web db:push
 
       - name: Create test results directory
         run: mkdir -p ${{ matrix.package.path }}/test-results
@@ -202,11 +202,8 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           download-wasm: 'true'
-      - name: Setup environment variables
-        run: |
-          cp apps/web/.env.example apps/web/.env
-          echo "NEXTAUTH_SECRET=supersecret" >> apps/web/.env
-          echo "USDA_API_URL=https://usda-db.fly.dev/" >> apps/web/.env
+      - name: Setup web environment
+        uses: ./.github/actions/setup-web-env
       - name: Push schema to database
         run: pnpm --filter @recipehub/web db:push
 
@@ -232,11 +229,11 @@ jobs:
           reporter: java-junit
           fail-on-error: false
       - uses: actions/upload-artifact@v6
-        if: ${{ !cancelled() }}
+        if: failure()
         with:
           name: playwright-report
           path: apps/web/playwright-report/
-          retention-days: 30
+          retention-days: 7
 
   check-tests:
     name: Check All Tests Passed
