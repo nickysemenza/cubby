@@ -17,6 +17,8 @@ import { Textarea } from "~/components/ui/textarea";
 import { queryKeys } from "~/lib/query-keys";
 import type { ProductId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
+import type { PendingImage } from "../PendingImageUpload";
+import { PendingImageUpload } from "../PendingImageUpload";
 
 interface ProductActivitiesTabProps {
   productId: ProductId;
@@ -31,6 +33,7 @@ export const ProductActivitiesTab: FC<ProductActivitiesTabProps> = ({
   const [activityName, setActivityName] = useState("");
   const [notes, setNotes] = useState("");
   const [intervalDays, setIntervalDays] = useState<string>("");
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
 
   const { data: activityTypes, isLoading } = useQuery(
     api.activityType.listByProduct.queryOptions({ productId }),
@@ -58,6 +61,10 @@ export const ProductActivitiesTab: FC<ProductActivitiesTabProps> = ({
     await createEntryMutation.mutateAsync({
       activityTypeId: activityType.id as never,
       notes: notes.trim() || null,
+      imageIds:
+        pendingImages.length > 0
+          ? pendingImages.map((img) => img.id)
+          : undefined,
     });
 
     // Invalidate queries
@@ -69,6 +76,7 @@ export const ProductActivitiesTab: FC<ProductActivitiesTabProps> = ({
     setActivityName("");
     setNotes("");
     setIntervalDays("");
+    setPendingImages([]);
     setIsDialogOpen(false);
   };
 
@@ -122,6 +130,10 @@ export const ProductActivitiesTab: FC<ProductActivitiesTabProps> = ({
                   placeholder="e.g., 90"
                 />
               </div>
+              <PendingImageUpload
+                entityType="PRODUCT"
+                onImagesChange={setPendingImages}
+              />
               <Button
                 onClick={handleLogActivity}
                 disabled={
