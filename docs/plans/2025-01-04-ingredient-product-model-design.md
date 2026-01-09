@@ -31,9 +31,10 @@ Trigger implementation when:
 - Filter out `misc:` products from pricing calculations (they're just placeholders)
 
 ### Unit Mapping Averaging
-- Add `averageUnitMappings()` helper in `schemas/unit-mapping-utils.ts`
+- When needed, add `averageUnitMappings()` helper in `schemas/unit-mapping-utils.ts`
 - Group by unit pair (e.g., "cup → g"), average values, filter outliers if needed
 - Example: Product A "1 cup = 240g" + Product B "1 cup = 250g" → "1 cup = 245g"
+- Note: Not currently needed since we use all product mappings together (WASM handles conflicts)
 
 ### Ingredients Without Products
 - Add `findIngredientsWithoutProducts()` in `problems.ts`
