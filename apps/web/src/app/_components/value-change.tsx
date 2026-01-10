@@ -57,9 +57,11 @@ export function ValueChange({
     md: "text-sm",
   };
 
-  // When a side is selected, dim the other side
-  const fromDimmed = selectedSide === "to";
-  const toDimmed = selectedSide === "from";
+  // When a side is selected, dim and strike through the OTHER side
+  const fromSelected = selectedSide === "from";
+  const toSelected = selectedSide === "to";
+  const fromRejected = toSelected;
+  const toRejected = fromSelected;
 
   return (
     <span className={cn("inline-flex items-center gap-1", className)}>
@@ -75,7 +77,7 @@ export function ValueChange({
           className={cn(
             "font-medium",
             sizeClasses[size],
-            fromDimmed ? "text-muted-foreground/50" : "text-muted-foreground",
+            fromRejected ? "text-muted-foreground/50" : "text-muted-foreground",
           )}
         >
           Sheet:
@@ -83,9 +85,13 @@ export function ValueChange({
       )}
       <span
         className={cn(
-          strikethrough && "line-through",
+          strikethrough && fromRejected && "line-through",
           sizeClasses[size],
-          fromDimmed ? "text-destructive/40" : "text-destructive",
+          fromRejected
+            ? "text-destructive/40"
+            : fromSelected
+              ? "text-emerald-600"
+              : "text-foreground",
         )}
       >
         {formatValue(from)}
@@ -96,7 +102,7 @@ export function ValueChange({
           className={cn(
             "font-medium",
             sizeClasses[size],
-            toDimmed ? "text-muted-foreground/50" : "text-muted-foreground",
+            toRejected ? "text-muted-foreground/50" : "text-muted-foreground",
           )}
         >
           App:
@@ -104,10 +110,13 @@ export function ValueChange({
       )}
       <span
         className={cn(
+          strikethrough && toRejected && "line-through",
           sizeClasses[size],
-          toDimmed
-            ? "text-secondary-foreground/40"
-            : "text-secondary-foreground",
+          toRejected
+            ? "text-destructive/40"
+            : toSelected
+              ? "text-emerald-600"
+              : "text-foreground",
         )}
       >
         {formatValue(to)}

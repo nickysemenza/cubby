@@ -5,6 +5,7 @@
  */
 
 import { z } from "zod";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { parseCSVDateToUnix } from "~/server/repo/csv/date-utils";
 import { fieldChange } from "./csv";
 import { inventoryId, locationId, productId } from "./identifiers";
@@ -201,10 +202,17 @@ export const applySyncResult = z.object({
 });
 
 /**
- * Check if a value is empty (null, undefined, or empty string)
+ * Check if a value is empty (null, undefined, empty string, or "(unspecified)")
  */
 function isEmpty(value: unknown): boolean {
-  return value === null || value === undefined || value === "";
+  if (value === null || value === undefined || value === "") {
+    return true;
+  }
+  // Treat "(unspecified)" as empty for manufacturer/category fields
+  if (typeof value === "string" && isUnspecifiedManufacturer(value)) {
+    return true;
+  }
+  return false;
 }
 
 /**
