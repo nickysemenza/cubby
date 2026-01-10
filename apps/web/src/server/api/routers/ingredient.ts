@@ -9,9 +9,12 @@
 import { z } from "zod";
 import { type IngredientId, ingredientId } from "~/schemas/identifiers";
 import { ingredientBase } from "~/schemas/ingredient";
-import { mergeIngredients } from "~/server/repo/ingredient";
+import { deleteIngredients, mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
-import { createEntityCrudProcedures } from "../crud-factory";
+import {
+  createDeleteProcedure,
+  createEntityCrudProcedures,
+} from "../crud-factory";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Define filters schema for ingredients
@@ -82,6 +85,14 @@ const getByName = protectedProcedure
     return await ctx.services.ingredient.getIngredientByName(input.nameFilter);
   });
 
+// Delete procedure using standalone factory
+const deleteItem = createDeleteProcedure<IngredientId>(
+  async (services, ids) => {
+    await deleteIngredients(services.db, ids, services.actorContext);
+  },
+  ingredientId,
+);
+
 export const ingredientRouter = createTRPCRouter({
   getByName,
   getByID,
@@ -89,4 +100,5 @@ export const ingredientRouter = createTRPCRouter({
   merge,
   create,
   update,
+  delete: deleteItem,
 });

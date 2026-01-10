@@ -9,7 +9,7 @@ export const auditLogRouter = createTRPCRouter({
       z.object({
         entityType: auditEntitySchema.optional(),
         entityId: z.string().uuid().optional(),
-        limit: z.number().min(1).max(100).default(50),
+        limit: z.number().min(1).max(500).default(50),
         cursor: z.string().optional(),
       }),
     )

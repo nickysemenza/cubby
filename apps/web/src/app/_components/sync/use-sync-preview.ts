@@ -75,8 +75,9 @@ export const useSyncPreview = () => {
 
   // Invalidate and refetch (after sync applied)
   const invalidateAndRefetch = useCallback(() => {
+    // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
     queryClient.invalidateQueries({
-      queryKey: api.googleSheets.getConnectionStatus.queryKey(),
+      queryKey: [api.googleSheets.getConnectionStatus.queryKey()],
     });
     setPreviewResult(null);
     // Will refetch on next fetchPreview call

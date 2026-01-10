@@ -1,6 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { useMemo } from "react";
 import type { z } from "zod";
+import { queryKeys } from "~/lib/query-keys";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
 import {
@@ -26,73 +28,90 @@ export function InventoryItemList() {
   const columnHelper = createColumnHelper<InventoryListItem>();
   const { onRowClick, PreviewSheet } = useEntityPreview("inventory");
 
-  const { table, data, isLoading, error, timing } = useEntityList({
-    entity: "inventory",
-    queryOptions: api.inventory.list.queryOptions,
-    buildFilters: (ts) => ({
-      productNameFilter: ts.getColumnFilter("product"),
-      locationNameFilter: ts.getColumnFilter("location"),
+  // Memoize deletable config to prevent infinite render loop
+  const deletableConfig = useMemo(
+    () => ({
+      mutationOptions: (callbacks: {
+        onSuccess: () => void;
+        onError: (err: Error) => void;
+      }) => api.inventory.delete.mutationOptions(callbacks),
+      entityLabel: "Inventory Entry" as const,
+      invalidateKeys: [queryKeys.inventory.list] as const,
     }),
-    // Inventory has custom columns (product image, amount instead of name)
-    columns: [
-      createImageColumn(columnHelper, {
-        getImages: (row) => row.product.images,
+    [api],
+  );
+
+  const { table, data, isLoading, error, timing, bulkActionBar, deleteDialog } =
+    useEntityList({
+      entity: "inventory",
+      queryOptions: api.inventory.list.queryOptions,
+      buildFilters: (ts) => ({
+        productNameFilter: ts.getColumnFilter("product"),
+        locationNameFilter: ts.getColumnFilter("location"),
       }),
-      columnHelper.accessor("amount", {
-        header: "Qty",
-        cell: (info) => {
-          return (
-            <Link
-              className="block max-w-64"
-              to="/inventory/$id"
-              params={{ id: info.row.original.id }}
-            >
-              {tryFormatAmount(info.getValue())}
-            </Link>
-          );
-        },
-      }),
-      createCurrencyColumn(columnHelper, "valuation", { header: "Valuation" }),
-      columnHelper.accessor("product", {
-        enableSorting: false,
-        meta: {
-          className: "min-w-0 w-56 max-w-72",
-          mobileCategory: "wide",
-          filterConfig: { placeholder: "Filter product..." },
-        },
-        cell: (info) => {
-          const product = info.getValue();
-          const { upc, unitMappings } = product;
-          return (
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <EntityPillLink entity="product" data={product} compact />
-                {upc && (
-                  <div className="text-muted-foreground text-xs">
-                    <TableLink
-                      to="/usda/upc/$code"
-                      params={{ code: upc }}
-                      variant="mono"
-                    >
-                      {upc}
-                    </TableLink>
-                  </div>
-                )}
+      // Inventory has custom columns (product image, amount instead of name)
+      columns: [
+        createImageColumn(columnHelper, {
+          getImages: (row) => row.product.images,
+        }),
+        columnHelper.accessor("amount", {
+          header: "Qty",
+          cell: (info) => {
+            return (
+              <Link
+                className="block max-w-64"
+                to="/inventory/$id"
+                params={{ id: info.row.original.id }}
+              >
+                {tryFormatAmount(info.getValue())}
+              </Link>
+            );
+          },
+        }),
+        createCurrencyColumn(columnHelper, "valuation", {
+          header: "Valuation",
+        }),
+        columnHelper.accessor("product", {
+          enableSorting: false,
+          meta: {
+            className: "min-w-0 w-56 max-w-72",
+            mobileCategory: "wide",
+            filterConfig: { placeholder: "Filter product..." },
+          },
+          cell: (info) => {
+            const product = info.getValue();
+            const { upc, unitMappings } = product;
+            return (
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <EntityPillLink entity="product" data={product} compact />
+                  {upc && (
+                    <div className="text-muted-foreground text-xs">
+                      <TableLink
+                        to="/usda/upc/$code"
+                        params={{ code: upc }}
+                        variant="mono"
+                      >
+                        {upc}
+                      </TableLink>
+                    </div>
+                  )}
+                </div>
+                <UnitMappingGraph unitMapping={unitMappings} compact />
               </div>
-              <UnitMappingGraph unitMapping={unitMappings} compact />
-            </div>
-          );
-        },
-      }),
-      createSingleEntityPillColumn(columnHelper, "location", "location", {
-        className: "min-w-0 w-40 max-w-56",
-        mobileCategory: "wide",
-        filterConfig: { placeholder: "Filter location..." },
-      }),
-      createCreatedAtColumn(columnHelper),
-    ],
-    filters: ["product", "location"],
-  });
+            );
+          },
+        }),
+        createSingleEntityPillColumn(columnHelper, "location", "location", {
+          className: "min-w-0 w-40 max-w-56",
+          mobileCategory: "wide",
+          filterConfig: { placeholder: "Filter location..." },
+        }),
+        createCreatedAtColumn(columnHelper),
+      ],
+      filters: ["product", "location"],
+      deletable: deletableConfig,
+    });
 
   return (
     <div>
@@ -110,8 +129,10 @@ export function InventoryItemList() {
         timing={timing}
         entity="inventory"
         onRowClick={onRowClick}
+        bulkActionBar={bulkActionBar}
       />
       <PreviewSheet />
+      {deleteDialog}
     </div>
   );
 }

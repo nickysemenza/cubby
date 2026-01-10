@@ -3,19 +3,19 @@
  * Category distribution, duplicate detection, and backfill operations.
  */
 
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { ActorContext } from "~/schemas/context";
 import { hasFoodIndicators, type ProductCategory } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import { image, product, productImage } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { getDb } from "~/server/repo/database-helpers";
+import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 // Find products with expectedQuantity=1 that appear in multiple locations
 export const findDuplicateUniqueProducts = async (db: Database) => {
   const duplicates = await getDb(db).query.product.findMany({
-    where: eq(product.expectedQuantity, 1),
+    where: and(eq(product.expectedQuantity, 1), notDeleted(product)),
     with: {
       InventoryEntry: {
         with: {
@@ -52,7 +52,7 @@ export const findProductsWithUPCNoImages = async (
     .from(product)
     .leftJoin(productImage, eq(productImage.productId, product.id))
     .leftJoin(image, eq(productImage.imageId, image.id))
-    .where(and(isNotNull(product.upc), isNull(product.deletedAt)));
+    .where(and(isNotNull(product.upc), notDeleted(product)));
 
   // Group by product and check for UPC images
   const productMap = new Map<
@@ -123,7 +123,7 @@ export const findProductsNeedingFoodCategory = async (
 
   // Find products with food indicators but wrong category
   const products = await dbClient.query.product.findMany({
-    where: isNull(product.deletedAt),
+    where: notDeleted(product),
     columns: {
       id: true,
       name: true,
@@ -156,7 +156,7 @@ export const getCategoryDistribution = async (
 
   // Get all products with their inventory locations
   const productsWithInventory = await dbClient.query.product.findMany({
-    where: isNull(product.deletedAt),
+    where: notDeleted(product),
     columns: {
       id: true,
       category: true,

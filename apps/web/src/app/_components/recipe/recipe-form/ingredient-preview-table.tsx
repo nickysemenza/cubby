@@ -115,8 +115,9 @@ export function IngredientPreviewTable({
   const createIngredient = useMutation(
     api.ingredient.create.mutationOptions({
       onSuccess: () => {
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
-          queryKey: queryKeys.ingredient.getByName,
+          queryKey: [queryKeys.ingredient.getByName],
         });
         toast.success("Ingredient created!");
         setCreateDialogOpen(false);
@@ -355,8 +356,9 @@ export function useIngredientImport(ingredientLines: string[]) {
     }
 
     // Invalidate queries to refresh matches
+    // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.ingredient.getByName,
+      queryKey: [queryKeys.ingredient.getByName],
     });
 
     // Build structured ingredients

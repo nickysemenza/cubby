@@ -38,7 +38,7 @@ export function DataTablePagination<TData>({
         <div className="flex items-center justify-between space-x-2 sm:justify-start">
           <p className="font-medium text-sm">Rows per page</p>
           <FilterableCombobox
-            items={[10, 50, 100].map((pageSize) => ({
+            items={[10, 50, 100, 1000].map((pageSize) => ({
               value: `${pageSize}`,
               label: `${pageSize}`,
             }))}

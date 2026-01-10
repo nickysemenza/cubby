@@ -3,7 +3,7 @@ import type {
   ColumnFiltersState,
   PaginationState,
 } from "@tanstack/react-table";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { QueryTiming } from "~/lib/query-timing";
 import { useTableState } from "../data-table/useTableState";
 
@@ -89,20 +89,40 @@ export function useTableList<TFilters, TData = unknown>({
 }: UseTableListOptions<TFilters>): UseTableListReturn<TData> {
   const tableState = useTableState(tableStateOptions);
 
-  const filters = buildFilters(tableState);
+  // Memoize filters to prevent recreating on every render
+  const filters = useMemo(
+    () => buildFilters(tableState),
+    [buildFilters, tableState],
+  );
+
+  // Memoize sortParams to prevent recreating on every render
+  const sortParams = useMemo(() => tableState.getSortParams(), [tableState]);
+
+  const { pagination } = tableState;
+
+  // Memoize query params to prevent recreating on every render - CRITICAL for performance
+  const queryParams = useMemo(
+    () => ({
+      sort: sortParams,
+      pagination,
+      filters,
+    }),
+    [sortParams, pagination, filters],
+  );
+
+  // CRITICAL: Memoize the result of calling queryOptions(queryParams)
+  // Otherwise React Query sees a new options object on every render and refetches!
+  const memoizedQueryOptions = useMemo(
+    () => queryOptions(queryParams),
+    [queryOptions, queryParams],
+  );
 
   const {
     data: response,
     isLoading,
     error,
     isFetching,
-  } = useQuery(
-    queryOptions({
-      sort: tableState.getSortParams(),
-      pagination: tableState.pagination,
-      filters,
-    }),
-  ) as {
+  } = useQuery(memoizedQueryOptions) as {
     data: ListQueryResponse<TData> | undefined;
     isLoading: boolean;
     error: Error | null;
@@ -111,34 +131,36 @@ export function useTableList<TFilters, TData = unknown>({
 
   // Track query timing
   const startTimeRef = useRef<number | null>(null);
-  const [timing, setTiming] = useState<QueryTiming>({
+  const timingRef = useRef<QueryTiming>({
     durationMs: null,
     isFresh: false,
   });
 
-  // Start timing when fetch begins
+  // Start timing when fetch begins - use ref instead of state to avoid rerenders
   useEffect(() => {
     if (isFetching && startTimeRef.current === null) {
       startTimeRef.current = performance.now();
     }
   }, [isFetching]);
 
-  // Calculate duration when fetch completes
+  // Calculate duration when fetch completes - use ref instead of state
   useEffect(() => {
     if (!isFetching && startTimeRef.current !== null) {
       const duration = Math.round(performance.now() - startTimeRef.current);
-      setTiming({ durationMs: duration, isFresh: true });
+      timingRef.current = { durationMs: duration, isFresh: true };
       startTimeRef.current = null;
     }
   }, [isFetching]);
 
+  const dataArray = response?.items ?? [];
+
   // useQuery returns error as Error | null when throwOnError is false (default)
   return {
-    data: response?.items ?? [],
+    data: dataArray,
     totalCount: response?.meta?.totalCount ?? response?.count ?? 0,
     isLoading,
     error: error instanceof Error ? error : null,
     tableState,
-    timing,
+    timing: timingRef.current, // Use ref instead of state to avoid triggering rerenders
   };
 }

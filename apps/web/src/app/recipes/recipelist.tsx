@@ -4,6 +4,7 @@ import { createColumnHelper } from "@tanstack/react-table";
 import { Scale } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
+import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
@@ -149,7 +150,7 @@ export function RecipeList({ actions }: RecipeListProps) {
     [columnHelper],
   );
 
-  const { table, isLoading, error, timing, data, bulkActionBar } =
+  const { table, isLoading, error, timing, data, bulkActionBar, deleteDialog } =
     useEntityList({
       entity: "recipe",
       queryOptions: api.recipe.list.queryOptions,
@@ -177,6 +178,12 @@ export function RecipeList({ actions }: RecipeListProps) {
           },
         ],
         clearSelectionOnComplete: false, // Don't clear selection after navigating
+      },
+      deletable: {
+        mutationOptions: (callbacks) =>
+          api.recipe.delete.mutationOptions(callbacks),
+        entityLabel: "Recipe",
+        invalidateKeys: [queryKeys.recipe.list],
       },
     });
 
@@ -276,6 +283,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         bulkActionBar={bulkActionBar}
       />
       <PreviewSheet />
+      {deleteDialog}
     </div>
   );
 }

@@ -34,7 +34,7 @@ export const recipe = pgTable(
   "Recipe",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    shortcode: text("shortcode").unique(),
+    shortcode: text("shortcode"),
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -49,6 +49,9 @@ export const recipe = pgTable(
     tags: text("tags").array(),
   },
   (table) => ({
+    shortcodeUnique: uniqueIndex("Recipe_shortcode_unique")
+      .on(table.shortcode)
+      .where(sql`${table.deletedAt} IS NULL`),
     nameUnique: uniqueIndex("Recipe_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -62,6 +65,10 @@ export const recipe = pgTable(
     createdAtDescIdx: index("Recipe_created_at_desc_idx").on(
       table.createdAt.desc(),
     ),
+    // Partial index for soft delete queries
+    nameActiveIdx: index("Recipe_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -110,7 +117,9 @@ export const ingredient = pgTable(
     nameUnique: uniqueIndex("Ingredient_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
-    recipeIdUnique: uniqueIndex("Ingredient_recipeId_key").on(table.recipeId),
+    recipeIdUnique: uniqueIndex("Ingredient_recipeId_key")
+      .on(table.recipeId)
+      .where(sql`${table.deletedAt} IS NULL`),
     recipeIdIdx: index("Ingredient_recipeId_idx").on(table.recipeId),
     createdAtIdx: index("Ingredient_createdAt_idx").on(table.createdAt),
     // GIN indexes for full-text search
@@ -122,6 +131,10 @@ export const ingredient = pgTable(
       "gin",
       table.aliases,
     ),
+    // Partial index for soft delete queries
+    nameActiveIdx: index("Ingredient_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -162,7 +175,7 @@ export const product = pgTable(
   "Product",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    shortcode: text("shortcode").unique().notNull(), // Human-readable ID (P-XXXX format)
+    shortcode: text("shortcode").notNull(), // Human-readable ID (P-XXXX format)
     name: text("name").notNull(),
     manufacturer: text("manufacturer").notNull(),
     upc: text("upc"),
@@ -182,12 +195,19 @@ export const product = pgTable(
     price: real("price"), // Unit price in dollars, null if no price mapping
   },
   (table) => ({
+    shortcodeUnique: uniqueIndex("Product_shortcode_unique")
+      .on(table.shortcode)
+      .where(sql`${table.deletedAt} IS NULL`),
     categoryIdx: index("Product_category_idx").on(table.category),
     nameMfgUnique: uniqueIndex("Product_name_manufacturer_key")
       .on(table.name, table.manufacturer)
       .where(sql`${table.deletedAt} IS NULL`),
-    upcUnique: uniqueIndex("Product_upc_key").on(table.upc),
-    ndbUnique: uniqueIndex("Product_ndb_number_key").on(table.ndb_number),
+    upcUnique: uniqueIndex("Product_upc_key")
+      .on(table.upc)
+      .where(sql`${table.deletedAt} IS NULL`),
+    ndbUnique: uniqueIndex("Product_ndb_number_key")
+      .on(table.ndb_number)
+      .where(sql`${table.deletedAt} IS NULL`),
     ingredientIdIdx: index("Product_ingredientId_idx").on(table.ingredientId),
     createdAtIdx: index("Product_createdAt_idx").on(table.createdAt),
     nameIdx: index("Product_name_idx").on(table.name),
@@ -204,6 +224,13 @@ export const product = pgTable(
       table.name,
       table.manufacturer,
     ),
+    // Partial indexes for soft delete queries
+    nameActiveIdx: index("Product_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    manufacturerActiveIdx: index("Product_manufacturer_active_idx")
+      .on(table.manufacturer)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -237,7 +264,7 @@ export const location = pgTable(
   "Location",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-    shortcode: text("shortcode").unique().notNull(), // Human-readable ID (L-XXXX format)
+    shortcode: text("shortcode").notNull(), // Human-readable ID (L-XXXX format)
     name: text("name").notNull(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
@@ -250,6 +277,9 @@ export const location = pgTable(
     type: text("type").notNull(),
   },
   (table) => ({
+    shortcodeUnique: uniqueIndex("Location_shortcode_unique")
+      .on(table.shortcode)
+      .where(sql`${table.deletedAt} IS NULL`),
     nameUnique: uniqueIndex("Location_name_key")
       .on(table.name)
       .where(sql`${table.deletedAt} IS NULL`),
@@ -266,6 +296,13 @@ export const location = pgTable(
       sql`${table.name} gin_trgm_ops`,
     ),
     typeNameIdx: index("Location_type_name_idx").on(table.type, table.name),
+    // Partial indexes for soft delete queries
+    nameActiveIdx: index("Location_name_active_idx")
+      .on(table.name)
+      .where(sql`${table.deletedAt} IS NULL`),
+    typeActiveIdx: index("Location_type_active_idx")
+      .on(table.type)
+      .where(sql`${table.deletedAt} IS NULL`),
   }),
 );
 
@@ -292,7 +329,9 @@ export const inventoryEntry = pgTable(
   (table) => ({
     productLocationUnique: uniqueIndex(
       "InventoryEntry_productId_locationId_key",
-    ).on(table.productId, table.locationId),
+    )
+      .on(table.productId, table.locationId)
+      .where(sql`${table.deletedAt} IS NULL`),
     productIdIdx: index("InventoryEntry_productId_idx").on(table.productId),
     locationIdIdx: index("InventoryEntry_locationId_idx").on(table.locationId),
     createdAtIdx: index("InventoryEntry_createdAt_idx").on(table.createdAt),
@@ -305,7 +344,7 @@ export const image = pgTable(
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
     url: text("url").notNull(),
-    key: text("key").notNull().unique(),
+    key: text("key").notNull(),
     filename: text("filename").notNull(),
     size: integer("size").notNull(),
     contentType: text("contentType").notNull(),
@@ -318,6 +357,9 @@ export const image = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
   (table) => ({
+    keyUnique: uniqueIndex("Image_key_key")
+      .on(table.key)
+      .where(sql`${table.deletedAt} IS NULL`),
     createdAtIdx: index("Image_createdAt_idx").on(table.createdAt),
     statusIdx: index("Image_status_idx").on(table.status),
   }),
@@ -342,10 +384,9 @@ export const productImage = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
   (table) => ({
-    productImageUnique: uniqueIndex("ProductImage_productId_imageId_key").on(
-      table.productId,
-      table.imageId,
-    ),
+    productImageUnique: uniqueIndex("ProductImage_productId_imageId_key")
+      .on(table.productId, table.imageId)
+      .where(sql`${table.deletedAt} IS NULL`),
     productIdIdx: index("ProductImage_productId_idx").on(table.productId),
     imageIdIdx: index("ProductImage_imageId_idx").on(table.imageId),
   }),
@@ -370,10 +411,9 @@ export const locationImage = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
   (table) => ({
-    locationImageUnique: uniqueIndex("LocationImage_locationId_imageId_key").on(
-      table.locationId,
-      table.imageId,
-    ),
+    locationImageUnique: uniqueIndex("LocationImage_locationId_imageId_key")
+      .on(table.locationId, table.imageId)
+      .where(sql`${table.deletedAt} IS NULL`),
     locationIdIdx: index("LocationImage_locationId_idx").on(table.locationId),
     imageIdIdx: index("LocationImage_imageId_idx").on(table.imageId),
   }),
@@ -398,10 +438,9 @@ export const recipeImage = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
   },
   (table) => ({
-    recipeImageUnique: uniqueIndex("RecipeImage_recipeId_imageId_key").on(
-      table.recipeId,
-      table.imageId,
-    ),
+    recipeImageUnique: uniqueIndex("RecipeImage_recipeId_imageId_key")
+      .on(table.recipeId, table.imageId)
+      .where(sql`${table.deletedAt} IS NULL`),
     recipeIdIdx: index("RecipeImage_recipeId_idx").on(table.recipeId),
     imageIdIdx: index("RecipeImage_imageId_idx").on(table.imageId),
   }),

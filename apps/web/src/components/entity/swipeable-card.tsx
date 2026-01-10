@@ -110,6 +110,7 @@ export function SwipeableCard({
       </div>
 
       {/* Swipeable content */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: handlers include touch/mouse events for swipe gesture */}
       <div
         {...handlers}
         onClick={offset < -10 ? handleReset : undefined}

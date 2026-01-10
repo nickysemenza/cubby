@@ -11,7 +11,10 @@ import type {
   SectionIngredient,
 } from "~/schemas/recipe";
 import type { recipe } from "~/server/db/schema";
-import { extractImagesFromJoinTable } from "~/server/repo/database-helpers";
+import {
+  extractImagesFromJoinTable,
+  mapRelation,
+} from "~/server/repo/database-helpers";
 
 import type { RecipeDeepDB, SectionIngredientDB } from "./internal-types";
 
@@ -72,11 +75,11 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
       url: SourceType === "Website" ? SourceData : null,
     },
     images: extractImagesFromJoinTable(images),
-    sections: sections.map((section) => {
+    sections: mapRelation(sections, (section) => {
       const { ingredients, instructions, ...restOfSection } = section;
       return {
         ...restOfSection,
-        ingredients: ingredients.map(sectionIngredientToAPI),
+        ingredients: mapRelation(ingredients, sectionIngredientToAPI),
         // Map JSON instructions array to the expected format
         instructions: Array.isArray(instructions)
           ? instructions.map((instruction: { text: string }) => {

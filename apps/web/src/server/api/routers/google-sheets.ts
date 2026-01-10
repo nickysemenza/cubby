@@ -42,16 +42,18 @@ import {
   updateAppSettingsMetadata,
 } from "~/server/repo/app-settings";
 import { withTransaction } from "~/server/repo/database-helpers";
+import { getIngredientByName } from "~/server/repo/ingredient";
 import {
-  deleteInventoryEntry,
+  deleteInventoryEntries,
   updateInventoryEntry,
 } from "~/server/repo/inventory";
 import { exportInventoryToCSV } from "~/server/repo/inventory/csv-export";
 import {
   createOrUpdatePriceMapping,
+  createUnitMappingsFromString,
   importInventoryFromCSV,
 } from "~/server/repo/inventory/csv-import";
-import { deleteLocation, updateLocation } from "~/server/repo/location";
+import { deleteLocations, updateLocation } from "~/server/repo/location";
 // Note: csv-comparison is now only used by the sync repo module
 import { exportLocationsToCSV } from "~/server/repo/location/csv-export";
 import { importLocationsFromCSV } from "~/server/repo/location/csv-import";
@@ -741,12 +743,12 @@ async function updateProductFromSheetData(
     ndbNumber?: number | null;
     expectedQty?: number | null;
     price?: number | null;
+    unitMappings?: string | null;
+    ingredientName?: string | null;
   },
   actorContext: Parameters<typeof updateProduct>[3],
 ): Promise<void> {
   // Map sheet data fields to ProductInputPayload fields
-  // Note: We don't update ingredientId or unitMappings from sheet data -
-  // those require more complex handling that's not needed for basic field sync
   const updateData: {
     name?: string;
     manufacturer?: string;
@@ -765,6 +767,7 @@ async function updateProductFromSheetData(
     model?: string | null;
     ndb_number?: number | null;
     expectedQuantity?: number | null;
+    ingredientId?: string | null;
   } = {};
 
   if (sheetData.productName !== undefined) {
@@ -808,6 +811,32 @@ async function updateProductFromSheetData(
     updateData.expectedQuantity = sheetData.expectedQty;
   }
 
+  // Handle ingredient linking by name lookup
+  if (sheetData.ingredientName !== undefined) {
+    if (sheetData.ingredientName === null || sheetData.ingredientName === "") {
+      // Clear ingredient link if sheet has empty ingredient name
+      updateData.ingredientId = null;
+    } else {
+      // Look up ingredient by name
+      try {
+        const ingredient = await getIngredientByName(
+          db,
+          sheetData.ingredientName,
+        );
+        if (ingredient) {
+          updateData.ingredientId = ingredient.id;
+        }
+        // If ingredient not found, leave ingredientId unchanged (don't clear existing link)
+      } catch (error) {
+        // Ingredient lookup failed - log but don't fail the entire sync
+        console.warn(
+          `Failed to link ingredient "${sheetData.ingredientName}" for product ${productId}:`,
+          error,
+        );
+      }
+    }
+  }
+
   // Update product fields if any changed
   if (Object.keys(updateData).length > 0) {
     await updateProduct(db, unsafeProductId(productId), updateData, {
@@ -830,6 +859,16 @@ async function updateProductFromSheetData(
       // Sync the product.price column from the unit mapping
       await syncProductPrice(tx, unsafeProductId(productId));
     });
+  }
+
+  // Handle unit mappings if provided
+  // Parse and update unit conversions (e.g., "1 whole = 2 oz; 1 cup = 120g")
+  if (sheetData.unitMappings) {
+    await createUnitMappingsFromString(
+      db,
+      unsafeProductId(productId),
+      sheetData.unitMappings,
+    );
   }
 }
 
@@ -860,6 +899,14 @@ async function processImportsToApp(
       results.locations.created += result.created;
       results.locations.updated += result.updated;
       results.locations.errors += result.errors;
+      // Collect error messages from failed items
+      for (const item of result.items) {
+        if (item.action === "error" && item.message) {
+          results.errorMessages.push(
+            `Location "${item.locationName}": ${item.message}`,
+          );
+        }
+      }
     }
   }
 
@@ -903,6 +950,9 @@ async function processImportsToApp(
       } catch (error) {
         console.error("Failed to update from sheet data:", error);
         results.inventory.errors++;
+        results.errorMessages.push(
+          `Inventory "${item.appData.productName}": ${getErrorMessage(error)}`,
+        );
       }
     }
   }
@@ -926,6 +976,14 @@ async function processImportsToApp(
       results.inventory.created += result.created;
       results.inventory.updated += result.updated;
       results.inventory.errors += result.errors;
+      // Collect error messages from failed items
+      for (const item of result.items) {
+        if (item.action === "error" && item.message) {
+          results.errorMessages.push(
+            `Inventory "${item.productName}": ${item.message}`,
+          );
+        }
+      }
     }
   }
 
@@ -940,56 +998,54 @@ async function processImportsToApp(
 /** Process deletions from app */
 async function processAppDeletions(
   ctx: {
-    db: Parameters<typeof deleteInventoryEntry>[0];
-    actorContext: Parameters<typeof deleteInventoryEntry>[2];
+    db: Parameters<typeof deleteInventoryEntries>[0];
+    actorContext: Parameters<typeof deleteInventoryEntries>[2];
   },
   locationItems: LocationSyncItem[],
   inventoryItems: InventorySyncItem[],
   results: SyncResults,
 ): Promise<void> {
-  // Delete inventory from app
-  const inventoryToDelete = inventoryItems.filter(
-    (i) => i.state === "app_only" && i.resolution === "delete_from_app",
-  );
+  // Collect inventory IDs to delete
+  const inventoryIds = inventoryItems
+    .filter((i) => i.state === "app_only" && i.resolution === "delete_from_app")
+    .map((i) => i.appData?.inventoryEntryId)
+    .filter((id): id is string => id !== undefined)
+    .map((id) => unsafeInventoryId(id));
 
-  for (const item of inventoryToDelete) {
-    if (item.appData?.inventoryEntryId) {
-      try {
-        await deleteInventoryEntry(
-          ctx.db,
-          unsafeInventoryId(item.appData.inventoryEntryId),
-          { ...ctx.actorContext, source: "sheets_import" },
-        );
-        results.inventory.deleted++;
-      } catch (err) {
-        results.inventory.errors++;
-        results.errorMessages.push(
-          `Failed to delete inventory: ${getErrorMessage(err)}`,
-        );
-      }
+  if (inventoryIds.length > 0) {
+    try {
+      await deleteInventoryEntries(ctx.db, inventoryIds, {
+        ...ctx.actorContext,
+        source: "sheets_import",
+      });
+      results.inventory.deleted += inventoryIds.length;
+    } catch (err) {
+      results.inventory.errors += inventoryIds.length;
+      results.errorMessages.push(
+        `Failed to delete ${inventoryIds.length} inventory entries: ${getErrorMessage(err)}`,
+      );
     }
   }
 
-  // Delete locations from app
-  const locationsToDelete = locationItems.filter(
-    (i) => i.state === "app_only" && i.resolution === "delete_from_app",
-  );
+  // Collect location IDs to delete
+  const locationIds = locationItems
+    .filter((i) => i.state === "app_only" && i.resolution === "delete_from_app")
+    .map((i) => i.appData?.locationId)
+    .filter((id): id is string => id !== undefined)
+    .map((id) => unsafeLocationId(id));
 
-  for (const item of locationsToDelete) {
-    if (item.appData?.locationId) {
-      try {
-        await deleteLocation(
-          ctx.db,
-          unsafeLocationId(item.appData.locationId),
-          { ...ctx.actorContext, source: "sheets_import" },
-        );
-        results.locations.deleted++;
-      } catch (err) {
-        results.locations.errors++;
-        results.errorMessages.push(
-          `Failed to delete location: ${getErrorMessage(err)}`,
-        );
-      }
+  if (locationIds.length > 0) {
+    try {
+      await deleteLocations(ctx.db, locationIds, {
+        ...ctx.actorContext,
+        source: "sheets_import",
+      });
+      results.locations.deleted += locationIds.length;
+    } catch (err) {
+      results.locations.errors += locationIds.length;
+      results.errorMessages.push(
+        `Failed to delete ${locationIds.length} locations: ${getErrorMessage(err)}`,
+      );
     }
   }
 }

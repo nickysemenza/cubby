@@ -8,6 +8,7 @@ import {
   type Table,
   useReactTable,
 } from "@tanstack/react-table";
+import { useMemo } from "react";
 import type { TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
@@ -58,37 +59,63 @@ export function useTableConfig<TData, GlobalFilterData>({
     setPagination,
   } = tableState;
 
-  return useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    onPaginationChange: (updater) =>
-      setPagination(
-        typeof updater === "function" ? updater(pagination) : updater,
-      ),
-    onSortingChange: (updater) =>
-      setSorting(typeof updater === "function" ? updater(sorting) : updater),
-    onColumnFiltersChange: (updater) =>
-      setColumnFilters(
-        typeof updater === "function" ? updater(columnFilters) : updater,
-      ),
-    manualSorting,
-    manualFiltering,
-    manualPagination,
-    rowCount: totalCount,
-    // Row selection
-    ...(getRowId ? { getRowId } : {}),
-    ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
-    ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
-    state: {
+  // Memoize row models - these are stable functions
+  const coreRowModel = useMemo(() => getCoreRowModel(), []);
+  const paginationRowModel = useMemo(() => getPaginationRowModel(), []);
+  const sortedRowModel = useMemo(() => getSortedRowModel(), []);
+
+  // Memoize table options to prevent recreating on every render
+  const tableOptions = useMemo(
+    () => ({
+      data,
+      columns,
+      getCoreRowModel: coreRowModel,
+      getPaginationRowModel: paginationRowModel,
+      getSortedRowModel: sortedRowModel,
+      onPaginationChange: setPagination,
+      onSortingChange: setSorting,
+      onColumnFiltersChange: setColumnFilters,
+      manualSorting,
+      manualFiltering,
+      manualPagination,
+      rowCount: totalCount,
+      // Row selection
+      ...(getRowId ? { getRowId } : {}),
+      ...(enableRowSelection !== undefined ? { enableRowSelection } : {}),
+      ...(onRowSelectionChange ? { onRowSelectionChange } : {}),
+      state: {
+        sorting,
+        columnFilters,
+        pagination,
+        ...(globalFilter ? { globalFilter } : {}),
+        ...(rowSelection ? { rowSelection } : {}),
+      },
+      ...(onGlobalFilterChange ? { onGlobalFilterChange } : {}),
+    }),
+    [
+      data,
+      columns,
+      coreRowModel,
+      paginationRowModel,
+      sortedRowModel,
       sorting,
+      setSorting,
       columnFilters,
+      setColumnFilters,
       pagination,
-      ...(globalFilter ? { globalFilter } : {}),
-      ...(rowSelection ? { rowSelection } : {}),
-    },
-    ...(onGlobalFilterChange ? { onGlobalFilterChange } : {}),
-  });
+      setPagination,
+      manualSorting,
+      manualFiltering,
+      manualPagination,
+      totalCount,
+      getRowId,
+      enableRowSelection,
+      rowSelection,
+      onRowSelectionChange,
+      globalFilter,
+      onGlobalFilterChange,
+    ],
+  );
+
+  return useReactTable(tableOptions);
 }

@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ColumnDef,
   OnChangeFn,
@@ -5,8 +6,15 @@ import type {
   Table,
 } from "@tanstack/react-table";
 import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
+import { Trash } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "~/components/ui/dropdown-menu";
 import { entities, getSortableFields } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
@@ -77,6 +85,20 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
   /** Bulk actions configuration - automatically enables row selection */
   bulkActions?: BulkActionsConfig<TData>;
+  /** Extra actions to render in the row action menu (after "View Details") */
+  extraActions?: (row: TData) => ReactNode;
+  /** Enable delete functionality - adds row menu item, bulk action, and dialog */
+  deletable?: {
+    /** tRPC delete mutation options factory */
+    mutationOptions: (callbacks: {
+      onSuccess: () => void;
+      onError: (err: Error) => void;
+    }) => Parameters<typeof useMutation>[0];
+    /** Entity type label for dialog (e.g., "Product", "Ingredient") */
+    entityLabel: string;
+    /** Query keys to invalidate on success */
+    invalidateKeys: readonly unknown[][];
+  };
 }
 
 interface UseEntityListReturn<TData> {
@@ -94,6 +116,8 @@ interface UseEntityListReturn<TData> {
   timing: QueryTiming;
   /** Bulk action bar element to render in RTable (null if no bulk actions configured) */
   bulkActionBar: ReactNode | null;
+  /** Delete dialog element - render in component if deletable is enabled */
+  deleteDialog: ReactNode | null;
 }
 
 /**
@@ -139,11 +163,128 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   rowSelection,
   onRowSelectionChange,
   bulkActions,
+  extraActions,
+  deletable,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
-  // Use bulk actions hook if config is provided
-  const bulkActionsState = bulkActions
+  const queryClient = useQueryClient();
+  const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
+
+  // Create columnHelper once - CRITICAL to prevent infinite re-renders
+  const columnHelper = useMemo(
+    () => createColumnHelper<TData>() as ColumnHelper<TData>,
+    [],
+  );
+
+  // Memoize the mutation options to prevent infinite re-renders
+  const deleteMutationOptions = useMemo(() => {
+    if (!deletable) return null;
+
+    return deletable.mutationOptions({
+      onMutate: async (variables: { ids: string[] }) => {
+        // Cancel any outgoing refetches to prevent them from overwriting optimistic update
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        for (const key of deletable.invalidateKeys) {
+          await queryClient.cancelQueries({ queryKey: [key] });
+        }
+
+        // Snapshot the previous value for rollback
+        const previousData: Array<unknown> = [];
+        for (const key of deletable.invalidateKeys) {
+          const currentData = queryClient.getQueryData([key]);
+          previousData.push(currentData);
+        }
+
+        // Optimistically remove deleted items from all relevant queries
+        for (const key of deletable.invalidateKeys) {
+          queryClient.setQueryData([key], (old: unknown) => {
+            if (!old || typeof old !== "object") {
+              return old;
+            }
+            if (
+              !("data" in old) ||
+              !Array.isArray((old as { data?: unknown }).data)
+            ) {
+              return old;
+            }
+
+            const oldData = old as { data: Array<{ id: string }> };
+            const newData = {
+              ...oldData,
+              data: oldData.data.filter(
+                (item) => !variables.ids.includes(item.id),
+              ),
+            };
+            return newData;
+          });
+        }
+
+        return { previousData };
+      },
+      onSuccess: () => {
+        toast.success(`${deletable.entityLabel} deleted`);
+        // Refetch to ensure data is in sync with server
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        for (const key of deletable.invalidateKeys) {
+          void queryClient.invalidateQueries({ queryKey: [key] });
+        }
+      },
+      onError: (err, _variables, context) => {
+        // Roll back optimistic update on error
+        if (context?.previousData) {
+          deletable.invalidateKeys.forEach((key, index) => {
+            // Wrap key in array to match tRPC's nested structure
+            queryClient.setQueryData([key], context.previousData[index]);
+          });
+        }
+        toast.error(
+          err.message ||
+            `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
+        );
+      },
+    });
+  }, [deletable, queryClient]);
+
+  // Delete mutation (only created if deletable is provided)
+  const deleteMutation = deleteMutationOptions
     ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
-      useBulkActions({ config: bulkActions })
+      useMutation(deleteMutationOptions)
+    : null;
+  // Combine user's bulk actions with delete bulk action if deletable is provided
+  const effectiveBulkActions = useMemo(():
+    | BulkActionsConfig<TData>
+    | undefined => {
+    if (!deletable && !bulkActions) return undefined;
+
+    const deleteAction = deletable
+      ? {
+          id: "delete" as const,
+          label: "Delete",
+          icon: <Trash className="h-4 w-4" />,
+          requiresConfirmation: true,
+          onExecute: async (selectedRows: { original: TData }[]) => {
+            await deleteMutation!.mutateAsync({
+              ids: selectedRows.map((row) => row.original.id),
+            });
+            return { success: true };
+          },
+        }
+      : null;
+
+    const userActions = bulkActions?.actions ?? [];
+    const combinedActions = deleteAction
+      ? [...userActions, deleteAction]
+      : userActions;
+
+    return {
+      ...bulkActions,
+      actions: combinedActions,
+    };
+  }, [deletable, bulkActions, deleteMutation]);
+
+  // Use bulk actions hook if config is provided
+  const bulkActionsState = effectiveBulkActions
+    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
+      useBulkActions({ config: effectiveBulkActions })
     : null;
 
   // Determine effective row selection state - bulk actions takes precedence
@@ -151,9 +292,35 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     bulkActionsState?.rowSelection ?? rowSelection ?? {};
   const effectiveOnRowSelectionChange =
     bulkActionsState?.onRowSelectionChange ?? onRowSelectionChange;
-  const effectiveEnableRowSelection = bulkActions
+  const effectiveEnableRowSelection = effectiveBulkActions
     ? true
     : (enableRowSelection ?? false);
+
+  // Combine user's extra actions with delete action if deletable is provided
+  const combinedExtraActions = useMemo(() => {
+    if (!deletable && !extraActions) return undefined;
+
+    return (row: TData) => (
+      <>
+        {extraActions?.(row)}
+        {deletable && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteTarget(row);
+              }}
+            >
+              <Trash className="mr-2 h-4 w-4" />
+              Delete
+            </DropdownMenuItem>
+          </>
+        )}
+      </>
+    );
+  }, [deletable, extraActions]);
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
   const filtersKey = JSON.stringify(filters);
@@ -176,15 +343,21 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     };
   }, [entity]);
 
+  // Memoize table state options to prevent recreating on every render
+  const mergedTableStateOptions = useMemo(
+    () => ({
+      initialSort: defaultSort,
+      ...tableStateOptions,
+    }),
+    [defaultSort, tableStateOptions],
+  );
+
   // Use the base table list hook
   const { data, totalCount, isLoading, error, tableState, timing } =
     useTableList<TFilters, TData>({
       queryOptions,
       buildFilters,
-      tableStateOptions: {
-        initialSort: defaultSort,
-        ...tableStateOptions,
-      },
+      tableStateOptions: mergedTableStateOptions,
     });
 
   // Load unit mappings asynchronously if getMappings is provided
@@ -226,7 +399,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       };
     };
 
-    const columnHelper = createColumnHelper<TData>() as ColumnHelper<TData>;
     const cols: AnyColumnDef<TData>[] = [];
 
     // Prepend select column if row selection is enabled
@@ -275,10 +447,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     }
 
     // Append actions column (always last)
-    cols.push(createActionsColumn(columnHelper, entity));
+    cols.push(
+      createActionsColumn(columnHelper, entity, {
+        extraActions: combinedExtraActions,
+      }),
+    );
 
     return cols;
   }, [
+    columnHelper,
     stableColumns,
     entity,
     shouldUseMappings,
@@ -286,7 +463,14 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     effectiveMappingsMap,
     stableFilters,
     effectiveEnableRowSelection,
+    combinedExtraActions,
   ]);
+
+  // Memoize getRowId to prevent recreating on every render
+  const getRowId = useMemo(
+    () => (effectiveEnableRowSelection ? (row: TData) => row.id : undefined),
+    [effectiveEnableRowSelection],
+  );
 
   // Configure the table
   const table = useTableConfig({
@@ -296,27 +480,51 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     totalCount,
     globalFilter,
     onGlobalFilterChange,
-    getRowId: effectiveEnableRowSelection ? (row) => row.id : undefined,
+    getRowId,
     enableRowSelection: effectiveEnableRowSelection,
     rowSelection: effectiveRowSelection,
     onRowSelectionChange: effectiveOnRowSelectionChange,
   });
 
   // Build bulk action bar element if bulk actions configured
-  const bulkActionBar =
-    bulkActionsState && bulkActions ? (
-      <BulkActionBar
-        selectedCount={bulkActionsState.selectedCount}
-        selectedRows={table.getFilteredSelectedRowModel().rows}
-        actions={bulkActionsState.getAvailableActions(
-          table.getFilteredSelectedRowModel().rows,
-        )}
-        onExecute={bulkActionsState.executeAction}
-        onClearSelection={bulkActionsState.clearSelection}
-        isExecuting={bulkActionsState.isExecuting}
-        currentAction={bulkActionsState.currentAction}
-      />
-    ) : null;
+  const bulkActionBar = useMemo(
+    () =>
+      bulkActionsState && effectiveBulkActions ? (
+        <BulkActionBar
+          selectedCount={bulkActionsState.selectedCount}
+          selectedRows={table.getFilteredSelectedRowModel().rows}
+          actions={bulkActionsState.getAvailableActions(
+            table.getFilteredSelectedRowModel().rows,
+          )}
+          onExecute={bulkActionsState.executeAction}
+          onClearSelection={bulkActionsState.clearSelection}
+          isExecuting={bulkActionsState.isExecuting}
+          currentAction={bulkActionsState.currentAction}
+        />
+      ) : null,
+    [bulkActionsState, effectiveBulkActions, table],
+  );
+
+  // Build delete dialog element if deletable is enabled
+  const deleteDialog = useMemo(
+    () =>
+      deletable ? (
+        <DeleteEntityDialog
+          open={deleteTarget !== null}
+          onOpenChange={(open) => !open && setDeleteTarget(null)}
+          items={deleteTarget ? [deleteTarget] : []}
+          entityType={deletable.entityLabel}
+          onDelete={async () => {
+            if (deleteTarget) {
+              await deleteMutation!.mutateAsync({ ids: [deleteTarget.id] });
+              setDeleteTarget(null);
+            }
+          }}
+          isPending={deleteMutation?.isPending ?? false}
+        />
+      ) : null,
+    [deletable, deleteTarget, deleteMutation],
+  );
 
   return {
     table,
@@ -326,5 +534,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     error,
     timing,
     bulkActionBar,
+    deleteDialog,
   };
 }

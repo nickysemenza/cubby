@@ -1,4 +1,4 @@
-import { and, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { and, eq, ilike, or, sql } from "drizzle-orm";
 import type {
   IngredientSearchResult,
   InventorySearchResult,
@@ -15,7 +15,7 @@ import {
   product,
   recipe,
 } from "~/server/db/schema";
-import { getDb } from "./database-helpers";
+import { getDb, notDeleted } from "./database-helpers";
 
 /**
  * Global search across all entity types using parallel queries.
@@ -59,7 +59,7 @@ export async function globalSearch(
         .from(product)
         .where(
           and(
-            isNull(product.deletedAt),
+            notDeleted(product),
             or(
               ilike(product.name, searchPattern),
               ilike(product.manufacturer, searchPattern),
@@ -93,7 +93,7 @@ export async function globalSearch(
           )`.as("ingredientCount"),
         })
         .from(recipe)
-        .where(and(isNull(recipe.deletedAt), ilike(recipe.name, searchPattern)))
+        .where(and(notDeleted(recipe), ilike(recipe.name, searchPattern)))
         .limit(limitPerType) as Promise<RecipeSearchResult[]>,
 
       // Ingredient: search name
@@ -114,10 +114,7 @@ export async function globalSearch(
         })
         .from(ingredient)
         .where(
-          and(
-            isNull(ingredient.deletedAt),
-            ilike(ingredient.name, searchPattern),
-          ),
+          and(notDeleted(ingredient), ilike(ingredient.name, searchPattern)),
         )
         .limit(limitPerType) as Promise<IngredientSearchResult[]>,
 
@@ -150,9 +147,7 @@ export async function globalSearch(
           )`.as("childCount"),
         })
         .from(location)
-        .where(
-          and(isNull(location.deletedAt), ilike(location.name, searchPattern)),
-        )
+        .where(and(notDeleted(location), ilike(location.name, searchPattern)))
         .limit(limitPerType) as Promise<LocationSearchResult[]>,
 
       // Inventory: join with product and location
@@ -179,7 +174,7 @@ export async function globalSearch(
         .innerJoin(location, eq(inventoryEntry.locationId, location.id))
         .where(
           and(
-            isNull(inventoryEntry.deletedAt),
+            notDeleted(inventoryEntry),
             or(
               ilike(product.name, searchPattern),
               ilike(location.name, searchPattern),

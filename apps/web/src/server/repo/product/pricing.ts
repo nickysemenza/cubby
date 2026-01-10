@@ -3,7 +3,7 @@
  * Price sync, stale price detection, and price backfill.
  */
 
-import { eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import type { ActorContext } from "~/schemas/context";
 import type { ProductId } from "~/schemas/identifiers";
@@ -11,7 +11,11 @@ import { computeProductPrice } from "~/schemas/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, productUnitMappings } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
-import { getDb, withTransaction } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 
 /**
@@ -59,7 +63,7 @@ export const findProductsWithStalePrices = async (
 
   // Get all products with their unit mappings
   const productsWithMappings = await dbClient.query.product.findMany({
-    where: isNull(product.deletedAt),
+    where: notDeleted(product),
     columns: {
       id: true,
       name: true,

@@ -3,7 +3,7 @@ import type {
   PaginationState,
   SortingState,
 } from "@tanstack/react-table";
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import type { SortParams } from "~/schemas/pagination";
 import {
   buildSortParams,
@@ -62,24 +62,42 @@ export function useTableState(
     [],
   );
 
-  const getColumnFilter = (columnId: string) => {
-    return columnFilters.find((filter) => filter.id === columnId)?.value as
-      | string
-      | undefined;
-  };
+  // Memoize getColumnFilter to prevent recreating on every render - CRITICAL
+  const getColumnFilter = useCallback(
+    (columnId: string) => {
+      return columnFilters.find((filter) => filter.id === columnId)?.value as
+        | string
+        | undefined;
+    },
+    [columnFilters],
+  );
 
-  const getSortParams = () => {
+  // Memoize getSortParams to prevent recreating on every render - CRITICAL
+  const getSortParams = useCallback(() => {
     return buildSortParams(sorting, initialSort);
-  };
+  }, [sorting, initialSort]);
 
-  return {
-    sorting,
-    setSorting,
-    columnFilters,
-    setColumnFilters,
-    pagination,
-    setPagination,
-    getColumnFilter,
-    getSortParams,
-  };
+  // Memoize the entire return object to prevent recreating on every render - CRITICAL
+  return useMemo(
+    () => ({
+      sorting,
+      setSorting,
+      columnFilters,
+      setColumnFilters,
+      pagination,
+      setPagination,
+      getColumnFilter,
+      getSortParams,
+    }),
+    [
+      sorting,
+      setSorting,
+      columnFilters,
+      setColumnFilters,
+      pagination,
+      setPagination,
+      getColumnFilter,
+      getSortParams,
+    ],
+  );
 }

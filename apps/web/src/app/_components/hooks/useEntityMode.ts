@@ -1,9 +1,10 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
 import { getErrorMessage } from "~/lib/error-utils";
+import { queryKeys } from "~/lib/query-keys";
 
 type EntityMutationCallbacks<TResult> = {
   onSuccess?: (result: TResult) => void;
@@ -32,11 +33,19 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
   callbacks?: EntityMutationCallbacks<TResult>,
 ) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [error, setError] = useState<string | undefined>();
 
   const mutation = useMutation<TResult, unknown, TData>({
     ...mutationOptions,
     onSuccess: (result: TResult) => {
+      // Invalidate the list query for this entity type so it refetches with the new item
+      const listKey = queryKeys[entityKey]?.list;
+      if (listKey) {
+        // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        void queryClient.invalidateQueries({ queryKey: [listKey] });
+      }
+
       callbacks?.onSuccess?.(result);
       navigate({ to: `/${entities[entityKey].basePath}/${result.id}` });
     },

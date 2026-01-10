@@ -27,7 +27,11 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import { upsertRecipeFromCompact } from "~/server/repo/compactrecipe";
 import {
   associatePendingImages,
@@ -37,6 +41,8 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturn,
+  lockAndValidateForDelete,
+  notDeleted,
   relations,
   unwrapDb,
   withTransaction,
@@ -60,7 +66,7 @@ export const getRecipeByID = async (
   id: RecipeId,
 ): Promise<RecipeOut | null> => {
   const res = await unwrapDb(db).query.recipe.findFirst({
-    where: eq(recipe.id, id),
+    where: and(eq(recipe.id, id), notDeleted(recipe)),
     ...relations.recipe.full,
   });
   return res === null || res === undefined ? null : dbRecipeToAPI(res);
@@ -74,7 +80,10 @@ export const findRecipeByShortcode = async (
   shortcode: string,
 ): Promise<RecipeId | null> => {
   const rec = await getDb(db).query.recipe.findFirst({
-    where: eq(recipe.shortcode, shortcode.toUpperCase()),
+    where: and(
+      eq(recipe.shortcode, shortcode.toUpperCase()),
+      notDeleted(recipe),
+    ),
     columns: { id: true },
   });
   return rec ? unsafeRecipeId(rec.id) : null;
@@ -117,8 +126,9 @@ export const recipeList = async (
 ) => {
   const dbClient = getDb(db);
 
-  // Build where conditions
+  // Build where conditions - always filter out deleted items
   const whereConditions = [
+    notDeleted(recipe),
     filters.nameFilter
       ? formatSearchTerm(recipe.name, filters.nameFilter)
       : undefined,
@@ -257,14 +267,14 @@ export const upsertRecipe = async (
 ): Promise<{ id: string }> => {
   const dbClient = getDb(db);
 
-  // Check if recipe already exists by name
+  // Check if recipe already exists by name (excludes soft-deleted)
   const existingRecipe = await dbClient.query.recipe.findFirst({
-    where: eq(recipe.name, input.name),
+    where: and(eq(recipe.name, input.name), notDeleted(recipe)),
   });
 
   if (existingRecipe) {
-    // Recipe exists - delete existing sections and recreate with new data
-    // First delete ingredients that reference the sections
+    // Recipe exists - soft delete existing sections and recreate with new data
+    // First soft delete ingredients that reference the sections
     const existingSections = await dbClient.query.recipeSection.findMany({
       where: eq(recipeSection.recipeId, existingRecipe.id),
       columns: { id: true },
@@ -272,13 +282,16 @@ export const upsertRecipe = async (
 
     if (existingSections.length > 0) {
       const sectionIds = existingSections.map((s) => s.id);
+      const now = new Date();
       await dbClient
-        .delete(recipeSectionIngredient)
+        .update(recipeSectionIngredient)
+        .set({ deletedAt: now })
         .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
 
-      // Now safe to delete the sections
+      // Now soft delete the sections
       await dbClient
-        .delete(recipeSection)
+        .update(recipeSection)
+        .set({ deletedAt: now })
         .where(eq(recipeSection.recipeId, existingRecipe.id));
     }
 
@@ -408,5 +421,134 @@ export const updateRecipe = async (
     }
 
     return fullRecipe;
+  });
+};
+
+/**
+ * Soft delete recipes by setting deletedAt timestamp.
+ * Also soft deletes related sections, ingredients, and images.
+ */
+export const deleteRecipes = async (
+  db: Database,
+  ids: RecipeId[],
+  actor: ActorContext,
+): Promise<void> => {
+  if (ids.length === 0) return;
+
+  await withTransaction(db, async (tx) => {
+    // Lock recipes and validate they exist and aren't already deleted
+    // Prevents race conditions by acquiring row-level locks
+    await lockAndValidateForDelete(tx, recipe, ids, "Recipe");
+
+    const now = new Date();
+
+    // Get all sections for these recipes
+    const sections = await tx.query.recipeSection.findMany({
+      where: inArray(recipeSection.recipeId, ids),
+      columns: { id: true, recipeId: true },
+    });
+
+    const sectionIds = sections.map((s) => s.id);
+
+    // Get counts of cascaded items for audit trail
+    const cascadedImages = await tx.query.recipeImage.findMany({
+      where: inArray(recipeImage.recipeId, ids),
+      columns: { id: true, recipeId: true },
+    });
+
+    let cascadedIngredients: Array<{ recipeSectionId: string }> = [];
+    if (sectionIds.length > 0) {
+      cascadedIngredients = await tx.query.recipeSectionIngredient.findMany({
+        where: inArray(recipeSectionIngredient.recipeSectionId, sectionIds),
+        columns: { recipeSectionId: true },
+      });
+    }
+
+    // Group cascaded items by recipe ID for audit logging
+    const sectionsByRecipe = new Map<string, number>();
+    const ingredientsByRecipe = new Map<string, number>();
+    const imagesByRecipe = new Map<string, number>();
+
+    // Map sections to recipes
+    const sectionToRecipe = new Map<string, string>();
+    for (const section of sections) {
+      sectionToRecipe.set(section.id, section.recipeId);
+      sectionsByRecipe.set(
+        section.recipeId,
+        (sectionsByRecipe.get(section.recipeId) ?? 0) + 1,
+      );
+    }
+
+    // Count ingredients per recipe (via section mapping)
+    for (const ing of cascadedIngredients) {
+      const recipeId = sectionToRecipe.get(ing.recipeSectionId);
+      if (recipeId) {
+        ingredientsByRecipe.set(
+          recipeId,
+          (ingredientsByRecipe.get(recipeId) ?? 0) + 1,
+        );
+      }
+    }
+
+    // Count images per recipe
+    for (const img of cascadedImages) {
+      imagesByRecipe.set(
+        img.recipeId,
+        (imagesByRecipe.get(img.recipeId) ?? 0) + 1,
+      );
+    }
+
+    // Soft delete recipe section ingredients
+    if (sectionIds.length > 0) {
+      await tx
+        .update(recipeSectionIngredient)
+        .set({ deletedAt: now })
+        .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
+    }
+
+    // Soft delete recipe sections
+    await tx
+      .update(recipeSection)
+      .set({ deletedAt: now })
+      .where(inArray(recipeSection.recipeId, ids));
+
+    // Soft delete recipe images
+    await tx
+      .update(recipeImage)
+      .set({ deletedAt: now })
+      .where(inArray(recipeImage.recipeId, ids));
+
+    // Soft delete recipes
+    await tx
+      .update(recipe)
+      .set({ deletedAt: now })
+      .where(inArray(recipe.id, ids));
+
+    // Log audit entries with cascaded item counts (batch operation)
+    const auditEntries = ids.map((id) => {
+      const sectionCount = sectionsByRecipe.get(id) ?? 0;
+      const ingredientCount = ingredientsByRecipe.get(id) ?? 0;
+      const imageCount = imagesByRecipe.get(id) ?? 0;
+
+      const changes: Record<string, { from: unknown; to: unknown }> = {};
+      if (sectionCount > 0) {
+        changes.cascadedSections = { from: sectionCount, to: 0 };
+      }
+      if (ingredientCount > 0) {
+        changes.cascadedIngredients = { from: ingredientCount, to: 0 };
+      }
+      if (imageCount > 0) {
+        changes.cascadedImages = { from: imageCount, to: 0 };
+      }
+
+      return {
+        entityType: "recipe" as const,
+        entityId: id,
+        action: "delete" as const,
+        changes: Object.keys(changes).length > 0 ? changes : undefined,
+      };
+    });
+
+    await logAuditEntries(tx, actor, auditEntries);
   });
 };

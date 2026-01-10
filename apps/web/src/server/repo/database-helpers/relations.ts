@@ -4,6 +4,14 @@
  *
  * Usage: spread into query options
  * Example: db.query.ingredient.findFirst({ where: ..., ...relations.ingredient.full })
+ *
+ * IMPORTANT: Drizzle's relational queries don't support WHERE clauses in `with` blocks,
+ * so soft-deleted related items will be included in query results. You MUST filter them
+ * out in transformation functions using helpers like:
+ * - extractImagesFromJoinTable() for image join tables
+ * - mapRelation() for general relation arrays
+ * - addProductSourceMetadata() for unit mappings
+ * - filterDeleted() for simple arrays with deletedAt
  */
 
 export const relations = {

@@ -3,7 +3,7 @@
  * Find locations by various identifiers (name, shortcode).
  */
 
-import { desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 
 import { dedupe } from "~/misc/array-helpers";
 import type { LocationId } from "~/schemas/identifiers";
@@ -18,6 +18,7 @@ import { inventoryEntry, location } from "~/server/db/schema";
 import {
   getDb,
   insertAndReturnDb,
+  notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
 import { generateUniqueLocationShortcode } from "~/server/repo/shortcode-utils";
@@ -27,28 +28,31 @@ import { dbLocationToAPI } from "./helpers";
 
 /**
  * Find a location by its unique name (case-insensitive)
- * Returns null if not found
+ * Returns null if not found (excludes soft-deleted)
  */
 export const findLocationByName = async (
   db: Database,
   name: string,
 ): Promise<LocationId | null> => {
   const loc = await getDb(db).query.location.findFirst({
-    where: ilike(location.name, name),
+    where: and(ilike(location.name, name), notDeleted(location)),
   });
   return loc ? unsafeLocationId(loc.id) : null;
 };
 
 /**
  * Find a location by its shortcode
- * Returns null if not found
+ * Returns null if not found (excludes soft-deleted)
  */
 export const findLocationByShortcode = async (
   db: Database,
   shortcode: string,
 ): Promise<LocationId | null> => {
   const loc = await getDb(db).query.location.findFirst({
-    where: eq(location.shortcode, shortcode.toUpperCase()),
+    where: and(
+      eq(location.shortcode, shortcode.toUpperCase()),
+      notDeleted(location),
+    ),
   });
   return loc ? unsafeLocationId(loc.id) : null;
 };
@@ -81,6 +85,8 @@ export const findOrCreateLocationByName = async (
     /** Optional timestamps to restore from sheet import */
     createdAt?: Date | null;
     updatedAt?: Date | null;
+    /** Optional shortcode from import (preserves sheet shortcodes) */
+    shortcode?: string;
   },
 ): Promise<{ locationId: LocationId; created: boolean }> => {
   // Check if location already exists
@@ -89,8 +95,9 @@ export const findOrCreateLocationByName = async (
     return { locationId: existingId, created: false };
   }
 
-  // Generate unique shortcode
-  const shortcode = await generateUniqueLocationShortcode(db);
+  // Generate unique shortcode only if not provided
+  const shortcode =
+    options?.shortcode ?? (await generateUniqueLocationShortcode(db));
 
   // Create new location (with optional timestamps for sheet import)
   const created = await insertAndReturnDb(db, location, {
@@ -110,23 +117,26 @@ export const findOrCreateLocationByName = async (
  * Combines two data sources:
  * 1. Locations sorted by updatedAt DESC (catches new locations + bulk inventory)
  * 2. Locations with recent inventory activity
+ * Excludes soft-deleted locations and inventory entries.
  */
 export const getRecentlyActiveLocations = async (
   db: Database,
   limit = 5,
 ): Promise<LocationOut[]> => {
-  // Part 1: Recently updated locations
+  // Part 1: Recently updated locations (excludes soft-deleted)
   const recentLocations = await getDb(db)
     .select({ id: location.id })
     .from(location)
+    .where(notDeleted(location))
     .orderBy(desc(location.updatedAt))
     .limit(limit);
 
-  // Part 2: Locations with recent inventory activity
+  // Part 2: Locations with recent inventory activity (excludes soft-deleted inventory)
   // Use subquery to get distinct location IDs ordered by most recent activity
   const inventoryLocations = await getDb(db)
     .select({ id: inventoryEntry.locationId })
     .from(inventoryEntry)
+    .where(notDeleted(inventoryEntry))
     .groupBy(inventoryEntry.locationId)
     .orderBy(desc(sql`max(${inventoryEntry.updatedAt})`))
     .limit(10);
@@ -141,9 +151,9 @@ export const getRecentlyActiveLocations = async (
     return [];
   }
 
-  // Fetch full location data
+  // Fetch full location data (excludes soft-deleted)
   const locations = await getDb(db).query.location.findMany({
-    where: inArray(location.id, finalIds),
+    where: and(inArray(location.id, finalIds), notDeleted(location)),
     ...relations.location.withImages,
   });
 

@@ -6,7 +6,7 @@ export {
   backfillInventoryValuations,
   checkUniqueProductDuplicate,
   createInventoryEntry,
-  deleteInventoryEntry,
+  deleteInventoryEntries,
   findInventoryWithStaleValuations,
   getInventoryEntryByID,
   inventoryentryList,

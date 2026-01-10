@@ -16,7 +16,11 @@ import {
 import type { ProductCategory } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import { inventoryEntry, product } from "~/server/db/schema";
-import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";
+import {
+  getDb,
+  notDeleted,
+  parseInventoryAmount,
+} from "~/server/repo/database-helpers";
 import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import type { InventoryCSVExportRow, ProductExportFields } from "./types";
 
@@ -74,14 +78,14 @@ export const exportInventoryToCSV = async (
   db: Database,
   locationIdFilter?: LocationId,
 ): Promise<InventoryCSVExportRow[]> => {
-  // Build where conditions for inventory entries
-  const conditions: ReturnType<typeof eq>[] = [];
+  // Build where conditions for inventory entries (always exclude soft-deleted)
+  const conditions: ReturnType<typeof eq>[] = [notDeleted(inventoryEntry)];
 
   if (locationIdFilter) {
     conditions.push(eq(inventoryEntry.locationId, locationIdFilter));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = and(...conditions);
 
   // Fetch all inventory entries with their product (including unit mappings and ingredient) and location
   const entries = await getDb(db).query.inventoryEntry.findMany({
@@ -137,12 +141,14 @@ export const exportInventoryToCSV = async (
   // Collect product IDs that have inventory entries
   const productIdsWithInventory = entries.map((e) => e.productId);
 
-  // Fetch products without any inventory entries
+  // Fetch products without any inventory entries (excludes soft-deleted)
   const productsWithoutInventory = await getDb(db).query.product.findMany({
-    where:
+    where: and(
+      notDeleted(product),
       productIdsWithInventory.length > 0
         ? notInArray(product.id, productIdsWithInventory)
         : undefined,
+    ),
     with: {
       unitMappings: true,
       Ingredient: true,

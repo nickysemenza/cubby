@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
 import type { Entity } from "~/entities/types";
 import { EntityPreviewPanel } from "../search/entity-preview-panel";
@@ -51,26 +51,29 @@ export function useEntityPreview(
   // Accept any row with an 'original' property that has at least an id field
   // This is compatible with TanStack's Row<T> for any T
   // Note: entityType is handled separately to avoid conflicts with data that has its own entityType field
-  const onRowClick = <T extends Record<string, unknown>>(row: {
-    original: T;
-  }) => {
-    // Cast to access entityType which may be present on some rows (like search results)
-    const rowData = row.original as T & { entityType?: Entity | string | null };
-    const entityType =
-      fixedEntity ?? (rowData.entityType as Entity | undefined);
-    if (!entityType) {
-      console.warn("useEntityPreview: No entity type provided");
-      return;
-    }
-    const id = rowData[idField];
-    if (id === undefined || id === null) {
-      console.warn(`useEntityPreview: No ${idField} field in row`);
-      return;
-    }
-    setPreview({ entityType, id: String(id) });
-  };
+  const onRowClick = useCallback(
+    <T extends Record<string, unknown>>(row: { original: T }) => {
+      // Cast to access entityType which may be present on some rows (like search results)
+      const rowData = row.original as T & {
+        entityType?: Entity | string | null;
+      };
+      const entityType =
+        fixedEntity ?? (rowData.entityType as Entity | undefined);
+      if (!entityType) {
+        console.warn("useEntityPreview: No entity type provided");
+        return;
+      }
+      const id = rowData[idField];
+      if (id === undefined || id === null) {
+        console.warn(`useEntityPreview: No ${idField} field in row`);
+        return;
+      }
+      setPreview({ entityType, id: String(id) });
+    },
+    [fixedEntity, idField],
+  );
 
-  const closePreview = () => setPreview(null);
+  const closePreview = useCallback(() => setPreview(null), []);
 
   const PreviewSheet = () => (
     <Sheet open={!!preview} onOpenChange={(open) => !open && closePreview()}>
