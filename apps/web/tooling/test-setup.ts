@@ -17,14 +17,20 @@ let hash = "";
 // Standard test IDs used across all tests
 export const TEST_USER_ID = "test-user-id";
 
-export async function setup() {
-  console.log("TEST GLOBAL SETUP");
-  // Include both schema and migrations journal in hash to detect migration changes
-  // This ensures template is recreated when migrations change, not just schema
-  hash = await integreSQL.hashFiles([
+/**
+ * Generate a hash for IntegreSSQL template identification
+ * Includes both schema and migrations journal to detect any DB changes
+ */
+async function getTemplateHash(): Promise<string> {
+  return integreSQL.hashFiles([
     "./src/server/db/schema.ts",
     "./drizzle/meta/_journal.json",
   ]);
+}
+
+export async function setup() {
+  console.log("TEST GLOBAL SETUP");
+  hash = await getTemplateHash();
 
   // Initialize the template database
   await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
@@ -37,9 +43,6 @@ export async function setup() {
     const db = drizzle(pool);
 
     try {
-      // Enable required PostgreSQL extensions
-      await pool.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
-
       await migrate(db, { migrationsFolder: "./drizzle" });
       console.log("Template database migrated");
     } catch (err) {
@@ -52,10 +55,7 @@ export async function setup() {
 }
 export async function buildTestDB() {
   const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
-  const hash = await integreSQL.hashFiles([
-    "./src/server/db/schema.ts",
-    "./drizzle/meta/_journal.json",
-  ]);
+  const hash = await getTemplateHash();
   const databaseConfig = await integreSQL.getTestDatabase(hash);
   console.log("testdb:", databaseConfig.database);
   const connectionUrl = integreSQL.databaseConfigToConnectionUrl(

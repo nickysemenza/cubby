@@ -1,3 +1,5 @@
+-- Enable required PostgreSQL extensions
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
 CREATE TYPE "public"."ImageStatus" AS ENUM('PENDING', 'UPLOADED', 'FAILED');--> statement-breakpoint
 CREATE TYPE "public"."RecipeSource" AS ENUM('Book', 'Website', 'Other');--> statement-breakpoint
 CREATE TABLE "account" (
