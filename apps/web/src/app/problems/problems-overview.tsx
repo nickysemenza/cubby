@@ -75,7 +75,7 @@ function OrphanedProductsList({ products }: { products: OrphanedProduct[] }) {
   return (
     <ProblemSection
       title="Orphaned Products"
-      description="Products with no inventory entries. These may be unused and can potentially be deleted."
+      description="Products with no inventory entries and not linked to any recipe ingredients. These may be unused and can potentially be deleted."
       entity="product"
       items={products}
       emptyMessage="No orphaned products found. All products have inventory entries."

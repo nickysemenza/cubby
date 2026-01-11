@@ -17,6 +17,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { computeValuationForEntry } from "./crud";
 import { dbInventoryEntryToAPI } from "./helpers";
 import type { InventoryEntryDeepDB } from "./types";
 
@@ -71,10 +72,23 @@ export const bulkProcessInventoryEntries = async (
           if (!item.productId || !item.amount) {
             throw new Error("productId and amount are required for new items");
           }
+
+          // Compute valuation based on amount and product price
+          const amountValue =
+            typeof item.amount === "object" && item.amount !== null
+              ? (item.amount as { value: number }).value
+              : 0;
+          const valuation = await computeValuationForEntry(
+            tx,
+            item.productId,
+            amountValue,
+          );
+
           const created = await insertAndReturn(tx, inventoryEntry, {
             productId: item.productId,
             locationId: locationId,
             amount: item.amount,
+            valuation,
           });
 
           // Log create audit entry
@@ -100,13 +114,40 @@ export const bulkProcessInventoryEntries = async (
             productId: item.productId,
           });
 
+          // Recompute valuation if amount or productId changed
+          let valuation: number | null | undefined;
+          if (item.amount !== undefined || item.productId !== undefined) {
+            const before = existingItemsMap.get(item.id);
+            // Use new values if provided, otherwise use existing values
+            const effectiveProductId = item.productId ?? before?.productId;
+            const effectiveAmount = item.amount ?? before?.amount;
+            const amountValue =
+              typeof effectiveAmount === "object" && effectiveAmount !== null
+                ? (effectiveAmount as { value: number }).value
+                : 0;
+
+            if (effectiveProductId) {
+              valuation = await computeValuationForEntry(
+                tx,
+                effectiveProductId,
+                amountValue,
+              );
+            }
+          }
+
+          // Add valuation to update values
+          const finalUpdateValues = buildPartialUpdateValues({
+            ...updateValues,
+            valuation,
+          });
+
           // Only process if there are actual updates
-          if (Object.keys(updateValues).length > 0) {
+          if (Object.keys(finalUpdateValues).length > 0) {
             const before = existingItemsMap.get(item.id);
             const updated = await updateAndReturn(
               tx,
               inventoryEntry,
-              updateValues,
+              finalUpdateValues,
               eq(inventoryEntry.id, item.id),
             );
 
@@ -229,11 +270,21 @@ export const bulkMoveInventoryEntries = async (
             const existingQuantity = existingAmount.value;
             const newQuantity = existingQuantity + moveQuantity;
 
+            // Recompute valuation for updated quantity
+            const valuation = await computeValuationForEntry(
+              tx,
+              sourceEntry.productId,
+              newQuantity,
+            );
+
             // Update target entry with combined quantity
             const updatedTargetEntry = await updateAndReturn(
               tx,
               inventoryEntry,
-              { amount: { value: newQuantity, unit: item.quantity.unit } },
+              {
+                amount: { value: newQuantity, unit: item.quantity.unit },
+                valuation,
+              },
               eq(inventoryEntry.id, existingAtTarget.id),
             );
 
@@ -303,6 +354,13 @@ export const bulkMoveInventoryEntries = async (
           // Partial move - reduce source and create/update target
           const remainingQuantity = sourceQuantity - moveQuantity;
 
+          // Recompute valuation for reduced quantity
+          const sourceValuation = await computeValuationForEntry(
+            tx,
+            sourceEntry.productId,
+            remainingQuantity,
+          );
+
           // Reduce source quantity
           const updatedSource = await updateAndReturn(
             tx,
@@ -312,6 +370,7 @@ export const bulkMoveInventoryEntries = async (
                 value: remainingQuantity,
                 unit: parsedSourceAmount.unit,
               },
+              valuation: sourceValuation,
             },
             eq(inventoryEntry.id, item.inventoryEntryId),
           );
@@ -338,10 +397,20 @@ export const bulkMoveInventoryEntries = async (
             const existingQuantity = existingAmount.value;
             const newQuantity = existingQuantity + moveQuantity;
 
+            // Recompute valuation for updated quantity
+            const targetValuation = await computeValuationForEntry(
+              tx,
+              sourceEntry.productId,
+              newQuantity,
+            );
+
             const updatedTargetEntry = await updateAndReturn(
               tx,
               inventoryEntry,
-              { amount: { value: newQuantity, unit: item.quantity.unit } },
+              {
+                amount: { value: newQuantity, unit: item.quantity.unit },
+                valuation: targetValuation,
+              },
               eq(inventoryEntry.id, existingAtTarget.id),
             );
 
@@ -368,10 +437,19 @@ export const bulkMoveInventoryEntries = async (
             if (updatedTarget) results.push(updatedTarget);
           } else {
             // Create new entry at target
+            // Compute valuation based on amount and product price
+            const amountValue = item.quantity.value;
+            const valuation = await computeValuationForEntry(
+              tx,
+              sourceEntry.productId,
+              amountValue,
+            );
+
             const created = await insertAndReturn(tx, inventoryEntry, {
               productId: sourceEntry.productId,
               locationId: payload.targetLocationId,
               amount: item.quantity,
+              valuation,
             });
 
             // Log create audit for new target entry

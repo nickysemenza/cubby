@@ -1,5 +1,5 @@
 import { upc as upcSchema } from "@recipehub/usda-schemas";
-import { and, eq, notExists, sql } from "drizzle-orm";
+import { and, eq, isNull, notExists, sql } from "drizzle-orm";
 import { isMiscProduct } from "~/lib/constants";
 import type { Database } from "~/server/db";
 import {
@@ -183,6 +183,7 @@ const findOrphanedProducts = async (
     .where(
       and(
         notDeleted(product),
+        isNull(product.ingredientId),
         notExists(
           dbClient
             .select({ id: sql`1` })

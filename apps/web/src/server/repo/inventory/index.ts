@@ -5,6 +5,7 @@ export { bulkMoveInventoryEntries, bulkProcessInventoryEntries } from "./bulk";
 export {
   backfillInventoryValuations,
   checkUniqueProductDuplicate,
+  computeValuationForEntry,
   createInventoryEntry,
   deleteInventoryEntries,
   findInventoryWithStaleValuations,

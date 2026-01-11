@@ -38,13 +38,15 @@ import type {
 /**
  * Compute valuation for an inventory entry based on amount and product price.
  * Returns the valuation value to store.
+ * Accepts both Database and DrizzleTransaction for use within transactions.
  */
-const computeValuationForEntry = async (
-  db: Database,
+export const computeValuationForEntry = async (
+  db: Database | DrizzleTransaction,
   productId: ProductId,
   amountValue: number,
 ): Promise<number | null> => {
-  const productData = await getDb(db).query.product.findFirst({
+  const client = unwrapDb(db);
+  const productData = await client.query.product.findFirst({
     where: eq(product.id, productId),
     columns: { price: true },
   });
