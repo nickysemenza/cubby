@@ -959,11 +959,16 @@ async function processImportsToApp(
 
   // Inventory to add/update in app (excluding conflicts which are handled above)
   // For "moved" items: both "apply_move" and "use_sheet" mean: use sheet's location
+  // BUT: if moved to empty location (movedTo is empty/undefined), treat as deletion instead
   const inventoryToImport = inventoryItems.filter(
     (i) =>
       (i.state === "sheet_only" && i.resolution === "add_to_app") ||
       (i.state === "moved" &&
-        (i.resolution === "apply_move" || i.resolution === "use_sheet")),
+        (i.resolution === "apply_move" || i.resolution === "use_sheet") &&
+        // Only import moves that have a destination location
+        // Moves to "(none)" will be handled as deletions below
+        i.sheetData?.locationName &&
+        i.sheetData.locationName.trim() !== ""),
   );
 
   if (inventoryToImport.length > 0) {
@@ -987,11 +992,13 @@ async function processImportsToApp(
     }
   }
 
-  // Count moves that were applied
+  // Count moves that were applied (excluding moves to empty location, which are deletions)
   results.inventory.moved = inventoryItems.filter(
     (i) =>
       i.state === "moved" &&
-      (i.resolution === "apply_move" || i.resolution === "use_sheet"),
+      (i.resolution === "apply_move" || i.resolution === "use_sheet") &&
+      i.sheetData?.locationName &&
+      i.sheetData.locationName.trim() !== "",
   ).length;
 }
 
@@ -1007,7 +1014,16 @@ async function processAppDeletions(
 ): Promise<void> {
   // Collect inventory IDs to delete
   const inventoryIds = inventoryItems
-    .filter((i) => i.state === "app_only" && i.resolution === "delete_from_app")
+    .filter(
+      (i) =>
+        // Explicit deletions
+        (i.state === "app_only" && i.resolution === "delete_from_app") ||
+        // Moves to empty location (no location = no inventory, since locationId is NOT NULL)
+        (i.state === "moved" &&
+          (i.resolution === "apply_move" || i.resolution === "use_sheet") &&
+          (!i.sheetData?.locationName ||
+            i.sheetData.locationName.trim() === "")),
+    )
     .map((i) => i.appData?.inventoryEntryId)
     .filter((id): id is string => id !== undefined)
     .map((id) => unsafeInventoryId(id));
