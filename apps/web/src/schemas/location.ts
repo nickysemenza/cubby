@@ -19,6 +19,7 @@ export const locationType = z
     "shelf",
     "crate",
     "half-crate",
+    "quarter-crate",
     "milk-crate",
     "tote-bin",
     "table",

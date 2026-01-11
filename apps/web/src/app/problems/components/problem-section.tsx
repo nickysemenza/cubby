@@ -107,7 +107,7 @@ export function ProblemSection<T>({
                   <Badge variant="outline">{groupItems.length}</Badge>
                 </h4>
               )}
-              <GridContainer cols="cards3" className="stagger-children">
+              <GridContainer cols="cards3">
                 {groupItems.map((item) => {
                   const {
                     title: itemTitle,

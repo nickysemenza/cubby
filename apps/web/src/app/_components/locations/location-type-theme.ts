@@ -92,6 +92,7 @@ export const getLocationIcon = (type: LocationType): LucideIcon => {
       return Layers;
     case "crate":
     case "half-crate":
+    case "quarter-crate":
     case "milk-crate":
     case "tote-bin":
       return Box;

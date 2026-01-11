@@ -104,7 +104,7 @@ export const buildLocationWithChildren = (
   const children =
     x.children && x.children.length > 0
       ? x.children
-          .filter((child) => child.id !== excludeId)
+          .filter((child) => child.id !== excludeId && child.deletedAt === null)
           .map((child) =>
             buildLocationWithChildren(child, excludeId, includeParent),
           )

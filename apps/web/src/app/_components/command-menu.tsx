@@ -25,8 +25,20 @@ import {
   SearchResultItemIcon,
 } from "./search/search-utils";
 
-export function GlobalCommandMenu() {
-  const [open, setOpen] = React.useState(false);
+interface GlobalCommandMenuProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function GlobalCommandMenu({
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
+}: GlobalCommandMenuProps = {}) {
+  const [internalOpen, setInternalOpen] = React.useState(false);
+
+  // Use external control if provided, otherwise use internal state
+  const open = externalOpen ?? internalOpen;
+  const setOpen = externalOnOpenChange ?? setInternalOpen;
   const [search, setSearch] = React.useState("");
   const navigate = useNavigate();
   const { isDevtoolsVisible, toggleDevtools } = useDebug();
@@ -88,7 +100,7 @@ export function GlobalCommandMenu() {
 
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, []);
+  }, [setOpen]);
 
   // Reset search when dialog closes
   React.useEffect(() => {

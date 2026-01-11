@@ -9,6 +9,7 @@ import { Spinner } from "~/components/ui/spinner";
 const SUPPORTED_FORMATS = [
   Html5QrcodeSupportedFormats.UPC_A,
   Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.UPC_EAN_EXTENSION,
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
 ];

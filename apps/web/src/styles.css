@@ -259,53 +259,6 @@
     @apply [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group]]:px-2 [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5;
   }
 
-  /* Stagger children - custom keyframe required for nth-child animation delays */
-  @keyframes slideUp {
-    from {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .stagger-children > * {
-    animation: slideUp 0.4s ease-out forwards;
-    opacity: 0;
-  }
-  .stagger-children > *:nth-child(1) {
-    animation-delay: 0ms;
-  }
-  .stagger-children > *:nth-child(2) {
-    animation-delay: 50ms;
-  }
-  .stagger-children > *:nth-child(3) {
-    animation-delay: 100ms;
-  }
-  .stagger-children > *:nth-child(4) {
-    animation-delay: 150ms;
-  }
-  .stagger-children > *:nth-child(5) {
-    animation-delay: 200ms;
-  }
-  .stagger-children > *:nth-child(6) {
-    animation-delay: 250ms;
-  }
-  .stagger-children > *:nth-child(7) {
-    animation-delay: 300ms;
-  }
-  .stagger-children > *:nth-child(8) {
-    animation-delay: 350ms;
-  }
-  .stagger-children > *:nth-child(9) {
-    animation-delay: 400ms;
-  }
-  .stagger-children > *:nth-child(10) {
-    animation-delay: 450ms;
-  }
-
   /* Skeleton shimmer loading effect */
   .skeleton-shimmer {
     background: linear-gradient(

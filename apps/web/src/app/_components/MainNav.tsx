@@ -1,5 +1,12 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Bug, BugOff, Home, LayoutDashboard, Settings } from "lucide-react";
+import {
+  Bug,
+  BugOff,
+  Home,
+  LayoutDashboard,
+  Search,
+  Settings,
+} from "lucide-react";
 import { FlexContainer } from "~/components/layout/flex-container";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
@@ -26,11 +33,12 @@ const KitchenIcon = entities.recipe.lucideIcon;
 const ReportsIcon = LayoutDashboard;
 const SettingsIcon = Settings;
 
+interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
+  onSearchClick?: () => void;
+}
+
 // cf https://github.com/shadcn-ui/ui/blob/main/apps/www/app/(app)/examples/dashboard/components/main-nav.tsx
-export function MainNav({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLElement>) {
+export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   const pathName = useLocation().pathname;
   const { isDebugEnabled, toggleDebug } = useDebug();
   const session = authClient.useSession();
@@ -120,6 +128,20 @@ export function MainNav({
       </nav>
 
       <FlexContainer align="center" gap={2}>
+        {/* Search Button */}
+        {onSearchClick && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSearchClick}
+            className="h-8 px-2"
+            title="Search"
+          >
+            <Search className="h-4 w-4" />
+            <span className="sr-only">Search</span>
+          </Button>
+        )}
+
         {/* Quick Actions */}
         {session.data?.user && <QuickActionsMenu />}
 

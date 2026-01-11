@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
+import * as React from "react";
 import { GlobalCommandMenu } from "~/app/_components/command-menu";
 import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
@@ -74,6 +75,7 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const [commandMenuOpen, setCommandMenuOpen] = React.useState(false);
 
   return (
     <Provider queryClient={queryClient}>
@@ -81,7 +83,10 @@ function RootComponent() {
         <div className="flex flex-col">
           <div className="border-b">
             <div className="flex h-16 items-center px-4">
-              <MainNav className="mx-0" />
+              <MainNav
+                className="mx-0"
+                onSearchClick={() => setCommandMenuOpen(true)}
+              />
             </div>
           </div>
         </div>
@@ -91,7 +96,10 @@ function RootComponent() {
         </main>
         {/* Bottom navigation for mobile */}
         <BottomNav />
-        <GlobalCommandMenu />
+        <GlobalCommandMenu
+          open={commandMenuOpen}
+          onOpenChange={setCommandMenuOpen}
+        />
         <Toaster />
         <DevtoolsWrapper />
       </DebugContextProvider>

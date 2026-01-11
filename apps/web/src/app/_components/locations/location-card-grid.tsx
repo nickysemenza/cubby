@@ -5,7 +5,6 @@ import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
 import { EntityIcon } from "~/entities/entities";
-import { cn } from "~/lib/utils";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
@@ -27,7 +26,7 @@ export function LocationCardGrid({
   onLocationSelect,
 }: LocationCardGridProps) {
   return (
-    <GridContainer cols="cards3" className={cn("stagger-children", className)}>
+    <GridContainer cols="cards3" className={className}>
       {locations.map((location) => (
         <LocationCard
           key={location.id}
