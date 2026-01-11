@@ -65,6 +65,10 @@ async function globalSetup(config: FullConfig): Promise<void> {
     console.log("[E2E Setup] Migrating template database...");
     const pool = new Pool({ connectionString: connectionUrl });
     const db = drizzle(pool);
+
+    // Enable required PostgreSQL extensions
+    await pool.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
+
     await migrate(db, { migrationsFolder: "./drizzle" });
     console.log("[E2E Setup] Template database migrated");
     await pool.end();
