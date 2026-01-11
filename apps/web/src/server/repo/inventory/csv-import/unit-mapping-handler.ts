@@ -69,7 +69,9 @@ export const createOrUpdatePriceMapping = async (
  * Sync unit mappings from a semicolon-separated string
  *
  * Parses format like "4 lb = $5; 1 cup = 120g"
- * Replaces existing non-price mappings with the new ones from the string.
+ * Replaces existing non-canonical-price mappings with the new ones from the string.
+ * Preserves the canonical price mapping (1 each = $X) which is handled separately
+ * via the price column. Non-canonical price mappings like "2 oz = $8" are imported.
  */
 export const createUnitMappingsFromString = async (
   db: Database,
@@ -81,13 +83,19 @@ export const createUnitMappingsFromString = async (
     where: eq(productUnitMappings.productId, productId),
   });
 
-  // Find IDs of non-price mappings to delete
-  const nonPriceMappingIds = existingMappings
-    .filter((m) => !isMoneyUnit(m.a.unit) && !isMoneyUnit(m.b.unit))
+  // Find IDs of non-canonical-price mappings to delete
+  // Keep ONLY the canonical price mapping (1 each = $X), delete everything else
+  const nonCanonicalPriceMappingIds = existingMappings
+    .filter((m) => {
+      const isCanonicalPrice =
+        (m.a.value === 1 && m.a.unit === "each" && isMoneyUnit(m.b.unit)) ||
+        (m.b.value === 1 && m.b.unit === "each" && isMoneyUnit(m.a.unit));
+      return !isCanonicalPrice; // Delete if NOT canonical price
+    })
     .map((m) => m.id);
 
-  // Delete existing non-price mappings
-  for (const id of nonPriceMappingIds) {
+  // Delete existing non-canonical-price mappings
+  for (const id of nonCanonicalPriceMappingIds) {
     await getDb(db)
       .delete(productUnitMappings)
       .where(eq(productUnitMappings.id, id));
@@ -102,10 +110,21 @@ export const createUnitMappingsFromString = async (
   for (const part of mappingParts) {
     try {
       const parsed = parseUnitMappingString(part);
-      // Skip price mappings (those are handled separately)
-      if (isMoneyUnit(parsed.a.unit) || isMoneyUnit(parsed.b.unit)) {
-        continue;
+
+      // Skip ONLY canonical price mappings (1 each = $X) - those are handled by price column
+      // Non-canonical price mappings like "2 oz = $8" should be imported
+      const isCanonicalPrice =
+        (parsed.a.value === 1 &&
+          parsed.a.unit === "each" &&
+          isMoneyUnit(parsed.b.unit)) ||
+        (parsed.b.value === 1 &&
+          parsed.b.unit === "each" &&
+          isMoneyUnit(parsed.a.unit));
+
+      if (isCanonicalPrice) {
+        continue; // Skip - handled by createOrUpdatePriceMapping
       }
+
       await getDb(db).insert(productUnitMappings).values({
         productId,
         a: parsed.a,

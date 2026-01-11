@@ -296,7 +296,7 @@ describe("serializeUnitMappings", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when only price mappings exist", () => {
+  it("returns null when only canonical price mappings exist", () => {
     const mappings = [
       {
         a: { value: 1, unit: "each" },
@@ -306,5 +306,56 @@ describe("serializeUnitMappings", () => {
     ];
     const result = serializeUnitMappings(mappings);
     expect(result).toBeNull();
+  });
+
+  it("includes non-canonical price mappings in serialization", () => {
+    const mappings = [
+      {
+        a: { value: 2, unit: "oz" },
+        b: { value: 8, unit: "dollar" },
+        source: null,
+      },
+    ];
+    const result = serializeUnitMappings(mappings);
+    expect(result).toBe("2 oz = 8 dollar");
+  });
+
+  it("excludes canonical price but includes other mappings", () => {
+    const mappings = [
+      {
+        a: { value: 1, unit: "each" },
+        b: { value: 5, unit: "dollar" },
+        source: null,
+      },
+      {
+        a: { value: 1, unit: "cup" },
+        b: { value: 120, unit: "g" },
+        source: null,
+      },
+    ];
+    const result = serializeUnitMappings(mappings);
+    expect(result).toBe("1 cup = 120 g");
+  });
+
+  it("includes all non-canonical mappings including non-canonical prices", () => {
+    const mappings = [
+      {
+        a: { value: 1, unit: "each" },
+        b: { value: 5, unit: "dollar" },
+        source: null,
+      },
+      {
+        a: { value: 1, unit: "cup" },
+        b: { value: 120, unit: "g" },
+        source: null,
+      },
+      {
+        a: { value: 4, unit: "lb" },
+        b: { value: 20, unit: "dollar" },
+        source: null,
+      },
+    ];
+    const result = serializeUnitMappings(mappings);
+    expect(result).toBe("1 cup = 120 g; 4 lb = 20 dollar");
   });
 });

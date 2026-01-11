@@ -18,6 +18,20 @@ export const isMoneyUnit = (unit: string): boolean => {
 const isSingleEach = (amount: Amount): boolean =>
   amount.value === 1 && amount.unit === "each";
 
+/**
+ * Checks if a mapping is a canonical price mapping (1 each <-> $X)
+ * Works in either direction (a or b can be the price).
+ */
+export const isCanonicalPriceMapping = (mapping: {
+  a: Amount;
+  b: Amount;
+}): boolean => {
+  return (
+    (isSingleEach(mapping.a) && isMoneyUnit(mapping.b.unit)) ||
+    (isSingleEach(mapping.b) && isMoneyUnit(mapping.a.unit))
+  );
+};
+
 interface PriceMappingMatch<T> {
   /** The matched mapping object */
   match: T;
@@ -40,13 +54,10 @@ export const findPriceMapping = <T extends { a: Amount; b: Amount }>(
 ): PriceMappingMatch<T> | null => {
   for (let i = 0; i < mappings.length; i++) {
     const m = mappings[i]!;
-    // Check if b is money and a is "1 each"
-    if (isSingleEach(m.a) && isMoneyUnit(m.b.unit)) {
-      return { match: m, index: i, price: m.b };
-    }
-    // Check if a is money and b is "1 each"
-    if (isSingleEach(m.b) && isMoneyUnit(m.a.unit)) {
-      return { match: m, index: i, price: m.a };
+    if (isCanonicalPriceMapping(m)) {
+      // Determine which side has the price
+      const price = isMoneyUnit(m.b.unit) ? m.b : m.a;
+      return { match: m, index: i, price };
     }
   }
   return null;
@@ -137,14 +148,23 @@ export const syncPriceToMappings = <
 };
 
 /**
- * Serializes non-price unit mappings to a semicolon-separated string
+ * Serializes non-canonical-price unit mappings to a semicolon-separated string
+ *
+ * Filters out ONLY the canonical price mapping (1 each = $X) which is exported
+ * to the price column. All other mappings, including non-canonical price mappings
+ * like "2 oz = $8", are included in the output.
  */
 export const serializeUnitMappings = (
   mappings: Array<{ a: Amount; b: Amount; source: string | null }>,
 ): string | null => {
-  const nonPriceMappings = mappings.filter(
-    (m) => !isMoneyUnit(m.a.unit) && !isMoneyUnit(m.b.unit),
-  );
+  // Filter out ONLY the canonical price mapping (1 each = $X)
+  // Keep all other mappings, including non-canonical price mappings like "2 oz = $8"
+  const canonicalPriceMapping = findPriceMapping(mappings);
+
+  const nonPriceMappings = canonicalPriceMapping
+    ? mappings.filter((_, index) => index !== canonicalPriceMapping.index)
+    : mappings;
+
   if (nonPriceMappings.length === 0) return null;
 
   // Round to 6 decimal places to avoid floating point precision churn
