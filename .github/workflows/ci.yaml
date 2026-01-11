@@ -259,14 +259,31 @@ jobs:
             echo "all-passed=false" >> $GITHUB_OUTPUT
           fi
 
+  build:
+    name: Build Application
+    needs: [build-wasm, lint-format]
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: '--max-old-space-size=4096'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          download-wasm: 'true'
+      - name: Build web app
+        run: pnpm --filter @recipehub/web build
+        env:
+          NODE_ENV: production
+
   deploy:
     name: Deploy to Vercel
-    needs: [build-wasm, lint-format, check-tests]
+    needs: [build-wasm, lint-format, check-tests, build]
     runs-on: ubuntu-latest
     if: |
       always() &&
       needs.lint-format.result == 'success' &&
-      needs.check-tests.outputs.all-passed == 'true'
+      needs.check-tests.outputs.all-passed == 'true' &&
+      needs.build.result == 'success'
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
       url: ${{ steps.deploy.outputs.url }}

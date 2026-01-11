@@ -6,9 +6,8 @@
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-
-import { createAppError } from "~/lib/error-utils";
 import type { SortParams } from "~/schemas/pagination";
+import { createAppError } from "~/server/api/trpc";
 import type { DrizzleTransaction } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
 
