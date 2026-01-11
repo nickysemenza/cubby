@@ -5,14 +5,13 @@ Main technologies: TanStack Start, React w/ TailwindCSS, tRPC w/ React Query, an
 
 ## Authentication
 
-- Better‑Auth powers authentication and organizations.
+- Better‑Auth powers authentication.
 - Server config: `apps/web/src/lib/auth.ts`
 - Client hooks: `apps/web/src/lib/auth-client.ts`
 - API route: `apps/web/src/routes/api/auth/$.ts`
 - UI: `@daveyplate/better-auth-ui` with dynamic routes
   - Auth pages: `apps/web/src/routes/auth.$authView.tsx`
   - Account pages: `apps/web/src/routes/account.$accountView.tsx`
-  - Organization pages: `apps/web/src/routes/organization.$organizationView.tsx`
   - CSS import in layout: `apps/web/src/routes/__root.tsx`
 
 Visit `http://localhost:3000/api/auth/session` while running the app to inspect the current session.

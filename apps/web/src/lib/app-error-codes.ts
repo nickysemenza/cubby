@@ -5,11 +5,8 @@ import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
  * Adding a new error requires only one entry here.
  */
 export const AppErrors = {
-  // Auth/Organization
+  // Auth
   UNAUTHORIZED: "UNAUTHORIZED",
-  NO_ORGANIZATION_SELECTED: "PRECONDITION_FAILED",
-  NOT_ORGANIZATION_MEMBER: "FORBIDDEN",
-  ORGANIZATION_FETCH_FAILED: "FORBIDDEN",
 
   // Entity not found
   RECIPE_NOT_FOUND: "NOT_FOUND",

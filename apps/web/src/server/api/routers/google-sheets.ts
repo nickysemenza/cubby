@@ -68,7 +68,7 @@ import {
 import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-// Schema for organization metadata with Google Sheets config
+// Schema for app settings with Google Sheets config
 const googleSheetsMetadata = z.object({
   googleSheetId: z.string().nullable().optional(),
   googleSheetLastSync: z.string().nullable().optional(),
@@ -465,7 +465,7 @@ const testConnection = protectedProcedure
     };
   });
 
-// Save sheet connection to organization
+// Save sheet connection to app settings
 const updateSheetConnection = protectedProcedure
   .input(
     z.object({

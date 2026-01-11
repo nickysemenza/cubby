@@ -1,4 +1,3 @@
-import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import {
   type ErrorComponentProps,
   Link,
@@ -20,17 +19,10 @@ import {
 } from "~/components/ui/collapsible";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
 
-type ErrorCategory =
-  | "auth"
-  | "organization"
-  | "notFound"
-  | "validation"
-  | "network"
-  | "generic";
+type ErrorCategory = "auth" | "notFound" | "validation" | "network" | "generic";
 
 const FRIENDLY_MESSAGES: Record<ErrorCategory, string> = {
   auth: "You need to sign in to view this page",
-  organization: "Please select an organization to continue",
   notFound: "The item you're looking for doesn't exist or has been deleted",
   validation: "The request contained invalid data",
   network: "Unable to connect to the server. Please check your connection.",
@@ -45,15 +37,6 @@ const categorizeError = (
   // Auth errors
   if (code === "UNAUTHORIZED" || reason === "UNAUTHORIZED") {
     return "auth";
-  }
-
-  // Organization errors
-  if (
-    code === "PRECONDITION_FAILED" ||
-    reason === "NO_ORGANIZATION_SELECTED" ||
-    reason === "NOT_ORGANIZATION_MEMBER"
-  ) {
-    return "organization";
   }
 
   // Not found errors
@@ -135,15 +118,8 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
         </Button>
       )}
 
-      {/* Organization-specific: Org switcher */}
-      {category === "organization" && (
-        <div className="flex items-center gap-3">
-          <OrganizationSwitcher />
-        </div>
-      )}
-
       {/* Action buttons for non-auth errors */}
-      {category !== "auth" && category !== "organization" && (
+      {category !== "auth" && (
         <div className="flex gap-2">
           <Button
             variant="outline"

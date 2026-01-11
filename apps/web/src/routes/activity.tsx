@@ -12,7 +12,7 @@ function ActivityPage() {
       <div className="max-w-3xl">
         <p className="mb-6 text-muted-foreground">
           Recent changes to products, locations, inventory, recipes, and
-          ingredients across your organization.
+          ingredients.
         </p>
         <AuditLogList showEntityLink={true} />
       </div>

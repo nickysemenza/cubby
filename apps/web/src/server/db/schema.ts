@@ -607,7 +607,7 @@ export const auditLogRelations = relations(auditLog, ({ one }) => ({
 }));
 
 // App Settings table - singleton table for app-wide configuration
-// (replaces organization metadata for Google Sheets config, etc.)
+// Stores app-wide configuration (Google Sheets connection, etc.)
 export const appSettings = pgTable("AppSettings", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),

@@ -1,4 +1,3 @@
-import { OrganizationSwitcher } from "@daveyplate/better-auth-ui";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "~/components/ui/alert";
@@ -30,12 +29,6 @@ export function ErrorDisplay({ error, className }: ErrorDisplayProps) {
             >
               Sign in
             </Button>
-          </div>
-        ) : code === "PRECONDITION_FAILED" ||
-          reason === "NO_ORGANIZATION_SELECTED" ? (
-          <div className="flex items-center gap-3">
-            <span>Please select an organization to continue</span>
-            <OrganizationSwitcher />
           </div>
         ) : (
           <span>

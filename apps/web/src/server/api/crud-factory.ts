@@ -44,7 +44,7 @@ export interface CrudServices {
 }
 
 /**
- * Extended interface for protected procedures where organization is guaranteed.
+ * Extended interface for protected procedures where user is authenticated.
  * Use this type for repository callbacks in protected procedures to avoid
  * non-null assertions (!) on actorContext.
  */
