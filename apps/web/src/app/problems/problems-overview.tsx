@@ -6,6 +6,7 @@ import {
   CheckCircle,
   DollarSign,
   ImageOff,
+  Network,
   Utensils,
   Zap,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import type {
   InvalidUPC,
   InventoryWithStaleValuation,
   OrphanedProduct,
+  ProductWithIslandedMappings,
   ProductWithoutMappings,
   ProductWithoutUPCImage,
   ProductWithStalePrice,
@@ -600,6 +602,50 @@ function InventoryWithStaleValuationsList({
   );
 }
 
+function ProductsWithIslandedMappingsList({
+  products,
+}: {
+  products: ProductWithIslandedMappings[];
+}) {
+  return (
+    <ProblemSection
+      title="Disconnected Unit Mappings"
+      description="Products with unit mappings split into isolated groups that can't convert between each other. Add connecting mappings to enable full conversions."
+      icon={Network}
+      items={products}
+      emptyMessage="All products have connected unit mapping graphs."
+      renderItem={(product) => ({
+        title: product.name,
+        subtitle: `by ${product.manufacturer}`,
+        badges: [
+          <Badge key="islands" variant="destructive">
+            {product.islandCount} islands
+          </Badge>,
+          ...product.islands.map((island) => (
+            <Badge
+              key={island.exampleUnit}
+              variant="outline"
+              className="text-xs"
+            >
+              {island.exampleUnit}
+            </Badge>
+          )),
+        ],
+        details: product.islands.map((island, i) => (
+          <div
+            key={island.exampleUnit}
+            className="text-muted-foreground text-sm"
+          >
+            Island {i + 1}: {island.units.join(", ")}
+          </div>
+        )),
+        route: { to: "/products/$id" as const, params: { id: product.id } },
+        editLabel: "View",
+      })}
+    />
+  );
+}
+
 export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -649,6 +695,11 @@ export function ProblemsOverview() {
       id: "pricing",
       label: "Pricing",
       count: problems.productsWithoutMappings.length,
+    },
+    {
+      id: "islands",
+      label: "Disconnected Mappings",
+      count: problems.productsWithIslandedMappings.length,
     },
     {
       id: "stale-prices",
@@ -812,6 +863,15 @@ export function ProblemsOverview() {
       >
         <ProductsWithWrongCategoryList
           products={problems.productsWithWrongCategory}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current.islands = el;
+        }}
+      >
+        <ProductsWithIslandedMappingsList
+          products={problems.productsWithIslandedMappings}
         />
       </div>
     </div>

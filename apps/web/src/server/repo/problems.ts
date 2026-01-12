@@ -32,6 +32,7 @@ interface AllProblems {
   productsWithWrongCategory: ProductWithWrongCategory[];
   productsWithStalePrices: ProductWithStalePrice[];
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
+  productsWithIslandedMappings: ProductWithIslandedMappings[];
   totalProblems: number;
 }
 
@@ -118,6 +119,17 @@ export interface InventoryWithStaleValuation {
   locationName: string;
   storedValuation: number | null;
   expectedValuation: number | null;
+}
+
+export interface ProductWithIslandedMappings {
+  id: string;
+  name: string;
+  manufacturer: string;
+  islandCount: number;
+  islands: Array<{
+    units: string[]; // Up to 3 representative units from this island
+    exampleUnit: string; // Most important unit for badge display
+  }>;
 }
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -377,6 +389,76 @@ const getFoodIndicator = (product: {
   return "ingredient";
 };
 
+// Find products with disconnected unit mapping graphs (islands)
+const findProductsWithIslandedMappings = async (
+  db: Database,
+): Promise<ProductWithIslandedMappings[]> => {
+  const dbClient = getDb(db);
+
+  // Fetch all products with their unit mappings
+  const productsWithMappings = await dbClient.query.product.findMany({
+    where: notDeleted(product),
+    columns: {
+      id: true,
+      name: true,
+      manufacturer: true,
+    },
+    with: {
+      unitMappings: {
+        where: notDeleted(productUnitMappings),
+        columns: {
+          a: true,
+          b: true,
+          source: true,
+        },
+      },
+    },
+  });
+
+  const problems: ProductWithIslandedMappings[] = [];
+
+  // Import WASM
+  const { wasm } = await import("~/lib/wasm");
+
+  // Use WASM to detect islands for each product
+  for (const prod of productsWithMappings) {
+    // Skip products with insufficient mappings (need at least 2 to form islands)
+    if (prod.unitMappings.length < 2) continue;
+
+    // Skip misc products
+    if (isMiscProduct(prod.name)) continue;
+
+    try {
+      // Detect islands using WASM
+      const islands = wasm.detect_unit_mapping_islands(
+        prod.unitMappings,
+      ) as string[][];
+
+      // Only flag if there are 2+ islands
+      if (islands.length >= 2) {
+        problems.push({
+          id: prod.id,
+          name: prod.name,
+          manufacturer: prod.manufacturer,
+          islandCount: islands.length,
+          islands: islands.map((units) => ({
+            units: units.slice(0, 3), // Limit to first 3 units for display
+            exampleUnit: units[0] ?? "unknown",
+          })),
+        });
+      }
+    } catch (error) {
+      // Log but don't fail - skip products with graph errors
+      console.error(
+        `Failed to detect islands for product ${prod.id} (${prod.name}):`,
+        error,
+      );
+    }
+  }
+
+  return problems;
+};
+
 // Main function to get all problems
 export const findAllProblems = async (db: Database): Promise<AllProblems> => {
   // Run all checks in parallel for better performance
@@ -391,6 +473,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsNeedingFoodCategory,
     productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
+    productsWithIslandedMappings,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
@@ -402,6 +485,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findProductsNeedingFoodCategory(db),
     findProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db),
+    findProductsWithIslandedMappings(db),
   ]);
 
   // Transform to problem types
@@ -433,7 +517,8 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithoutUPCImages.length +
     productsWithWrongCategory.length +
     productsWithStalePrices.length +
-    inventoryWithStaleValuations.length;
+    inventoryWithStaleValuations.length +
+    productsWithIslandedMappings.length;
 
   return {
     duplicateUniqueProducts,
@@ -446,6 +531,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithWrongCategory,
     productsWithStalePrices,
     inventoryWithStaleValuations,
+    productsWithIslandedMappings,
     totalProblems,
   };
 };

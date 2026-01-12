@@ -87,6 +87,19 @@ const inventoryWithStaleValuationSchema = z.object({
   expectedValuation: z.number().nullable(),
 });
 
+const productWithIslandedMappingsSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  manufacturer: z.string(),
+  islandCount: z.number(),
+  islands: z.array(
+    z.object({
+      units: z.array(z.string()),
+      exampleUnit: z.string(),
+    }),
+  ),
+});
+
 // Combined output schema for all problems
 const allProblemsSchema = z.object({
   duplicateUniqueProducts: z.array(duplicateUniqueProductSchema),
@@ -99,6 +112,7 @@ const allProblemsSchema = z.object({
   emptyLocations: z.array(emptyLocationSchema),
   productsWithoutUPCImages: z.array(productWithoutUPCImageSchema),
   productsWithWrongCategory: z.array(productWithWrongCategorySchema),
+  productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   totalProblems: z.number(),
 });
 
