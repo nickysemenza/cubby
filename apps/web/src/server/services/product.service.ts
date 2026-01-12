@@ -1,4 +1,4 @@
-import { foodSummary } from "@recipehub/usda-schemas";
+import { foodLookupParam, foodSummary } from "@recipehub/usda-schemas";
 import type { z } from "zod";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";
@@ -32,10 +32,21 @@ export class ProductService {
 
   async getProductByID(id: ProductId): Promise<ProductWithFoodOut> {
     const product = await getProductByIDRepo(this.db, id);
+
+    // Try UPC lookup first (prioritized by foodLookupParamFromProduct)
     const lookupParam = foodLookupParamFromProduct(product);
-    const food = lookupParam
-      ? await this.usdaClient.findFood(lookupParam)
-      : null;
+    let food = lookupParam ? await this.usdaClient.findFood(lookupParam) : null;
+
+    // If UPC failed and product has NDB, try NDB as fallback
+    if (!food && product.upc && product.ndb_number) {
+      const ndbParam = foodLookupParam.safeParse({
+        kind: "ndb",
+        ndb_number: product.ndb_number,
+      });
+      if (ndbParam.success) {
+        food = await this.usdaClient.findFood(ndbParam.data);
+      }
+    }
 
     return {
       ...product,
