@@ -1,7 +1,7 @@
 import { getNutrientValueByKey } from "@recipehub/usda-schemas";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Scale } from "lucide-react";
+import { ExternalLink, Scale } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { queryKeys } from "~/lib/query-keys";
@@ -144,7 +144,22 @@ export function RecipeList({ actions }: RecipeListProps) {
       columnHelper.accessor("meta", {
         header: "Source",
         enableSorting: false,
-        cell: (info) => info.getValue()?.url ?? <NoneState />,
+        cell: (info) => {
+          const url = info.getValue()?.url;
+          if (!url) return <NoneState />;
+          return (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink size={14} />
+              <span className="max-w-[200px] truncate">{url}</span>
+            </a>
+          );
+        },
       }),
     ],
     [columnHelper],
