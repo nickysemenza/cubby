@@ -1,4 +1,8 @@
-import type { FoodLookupParam, FoodSummary } from "@recipehub/usda-schemas";
+import {
+  type FoodLookupParam,
+  type FoodSummary,
+  foodLookupParam,
+} from "@recipehub/usda-schemas";
 import type { USDAClient } from "../clients/usda";
 
 /**
@@ -30,28 +34,74 @@ export async function batchEnrichWithFood<T>(
     return [];
   }
 
-  // Collect all lookup parameters
+  // Phase 1: Try primary lookups (UPC prioritized by getLookupParam)
   const lookupParams = items.map((item) => getLookupParam(item));
   const validLookups = lookupParams.filter(
     (param): param is NonNullable<typeof param> => param !== null,
   );
 
-  // Batch fetch food data
-  const foodResults =
+  const primaryResults =
     validLookups.length > 0
       ? await usdaClient.findFoodsBatch(validLookups)
       : [];
 
-  // Map foods back to items
-  let foodIndex = 0;
-  return items.map((item) => {
+  // Map primary results back to items
+  const resultsMap = new Map<number, FoodSummary | null>();
+  let resultIndex = 0;
+  items.forEach((item, itemIndex) => {
     const lookupParam = getLookupParam(item);
-    const food = lookupParam ? foodResults[foodIndex++] : null;
-    return {
-      ...item,
-      food,
-    };
+    if (lookupParam) {
+      resultsMap.set(itemIndex, primaryResults[resultIndex++] || null);
+    } else {
+      resultsMap.set(itemIndex, null);
+    }
   });
+
+  // Phase 2: Identify failures that have NDB fallback available
+  type ItemWithIndex = { item: T; itemIndex: number };
+  const failedItems: ItemWithIndex[] = [];
+  const fallbackLookups: FoodLookupParam[] = [];
+
+  items.forEach((item, itemIndex) => {
+    const result = resultsMap.get(itemIndex);
+    const primaryLookup = getLookupParam(item);
+
+    // Check if: (1) primary failed, (2) primary was UPC, (3) item has NDB
+    if (
+      result === null &&
+      primaryLookup?.kind === "upc" &&
+      "ndb_number" in item &&
+      item.ndb_number !== null
+    ) {
+      const ndbParam = foodLookupParam.safeParse({
+        kind: "ndb",
+        ndb_number: item.ndb_number,
+      });
+      if (ndbParam.success) {
+        failedItems.push({ item, itemIndex });
+        fallbackLookups.push(ndbParam.data);
+      }
+    }
+  });
+
+  // Batch retry with NDB if any failures have fallback available
+  if (fallbackLookups.length > 0) {
+    const fallbackResults = await usdaClient.findFoodsBatch(fallbackLookups);
+
+    // Update results map with successful fallbacks
+    fallbackResults.forEach((food, i) => {
+      if (food) {
+        const { itemIndex } = failedItems[i]!;
+        resultsMap.set(itemIndex, food);
+      }
+    });
+  }
+
+  // Return items with food data
+  return items.map((item, itemIndex) => ({
+    ...item,
+    food: resultsMap.get(itemIndex) || null,
+  }));
 }
 
 /**
