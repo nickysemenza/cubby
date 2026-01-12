@@ -75,6 +75,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
       : []),
     { label: "Manufacturer", value: product.manufacturer },
     { label: "Model", value: product.model },
+    { label: "Notes", value: product.notes },
     {
       label: "Price",
       value: (

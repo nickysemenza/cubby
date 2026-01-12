@@ -62,6 +62,7 @@ export interface InventoryCSVExportRow {
   unit_mappings: string | null;
   ingredient_name: string | null;
   aliases: string | null;
+  notes: string | null;
   product_image: string | null;
   // Timestamps (optional, controlled by SYNC_TIMESTAMPS flag)
   product_created_at?: string | null;
@@ -85,6 +86,7 @@ export interface ProductExportFields {
   price: number | null;
   unitMappings: Array<{ a: Amount; b: Amount; source: string | null }>;
   Ingredient: { name: string; aliases: string[] } | null;
+  notes: string | null;
   images: Array<{ image: { url: string } }>;
   // Timestamps (for SYNC_TIMESTAMPS feature)
   createdAt: Date | null;

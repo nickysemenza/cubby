@@ -49,6 +49,7 @@ const formSchema = z
     name: z.string().min(1, "Name is required"),
     manufacturer: z.string().min(1, "Manufacturer is required"),
     model: z.string().nullable(),
+    notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(), // Allow empty string and transform to null
     ndb_number: ndb.nullable(), // Allow empty string and transform to null
@@ -124,6 +125,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       name: product ? product.name : (initialName ?? ""),
       manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
       model: product ? product.model : null,
+      notes: product ? product.notes : null,
       category: product?.category ?? null,
       upc: product ? product.upc : null,
       ndb_number: product ? product.ndb_number : null,
@@ -211,6 +213,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           "name",
           "manufacturer",
           "model",
+          "notes",
           "category",
           "upc",
           "ndb_number",
@@ -299,6 +302,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
           nullable={false}
         />
       </SideBySideFields>
+
+      <UnifiedTextField
+        form={form}
+        name="notes"
+        label="Notes"
+        placeholder="Notes, URLs, etc."
+        nullable={true}
+      />
 
       {/* Hide manufacturer, pricing, UPC, NDB, ingredient for misc products */}
       {!isMisc && (

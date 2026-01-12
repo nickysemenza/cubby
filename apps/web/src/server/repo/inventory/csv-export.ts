@@ -46,6 +46,7 @@ function buildProductExportFields(p: ProductExportFields): {
   unit_mappings: string | null;
   ingredient_name: string | null;
   aliases: string | null;
+  notes: string | null;
   product_image: string | null;
   product_created_at?: string | null;
   product_updated_at?: string | null;
@@ -65,6 +66,7 @@ function buildProductExportFields(p: ProductExportFields): {
     unit_mappings: serializeUnitMappings(p.unitMappings),
     ingredient_name: p.Ingredient?.name ?? null,
     aliases: p.Ingredient?.aliases?.join("; ") ?? null,
+    notes: p.notes ?? null,
     product_image: joinImageUrls(p.images),
     // Timestamps (only if feature flag enabled)
     ...(SYNC_TIMESTAMPS && {

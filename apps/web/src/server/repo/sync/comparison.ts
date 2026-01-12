@@ -44,6 +44,7 @@ type InventoryRowLike = {
   unit_mappings?: string | null;
   ingredient_name?: string | null;
   aliases?: string | null;
+  notes?: string | null;
   product_image?: string | null;
   // Timestamps (for SYNC_TIMESTAMPS feature, NOT used in comparison)
   product_created_at?: string | null;
@@ -69,6 +70,7 @@ const buildInventorySyncFields = (row: InventoryRowLike) => ({
   unitMappings: row.unit_mappings ?? null,
   ingredientName: row.ingredient_name ?? null,
   aliases: row.aliases ?? null,
+  notes: row.notes ?? null,
   productImage: row.product_image ?? null,
   // Note: Timestamps intentionally excluded from normal sync
   // They are only written via "Refresh Timestamps" button
@@ -830,6 +832,7 @@ const inventorySheetDataToCSVRow = (
   unit_mappings: sheetData.unitMappings ?? undefined,
   ingredient_name: sheetData.ingredientName ?? undefined,
   aliases: sheetData.aliases ?? undefined,
+  notes: sheetData.notes ?? undefined,
   product_image: sheetData.productImage ?? undefined,
 });
 
@@ -856,6 +859,7 @@ const inventoryAppDataToCSVRow = (
   unit_mappings: appData.unitMappings ?? undefined,
   ingredient_name: appData.ingredientName ?? undefined,
   aliases: appData.aliases ?? undefined,
+  notes: appData.notes ?? undefined,
   product_image: appData.productImage ?? undefined,
 });
 

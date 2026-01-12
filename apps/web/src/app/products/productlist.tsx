@@ -145,6 +145,19 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           },
         },
       }),
+      columnHelper.accessor("notes", {
+        header: "Notes",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const notes = row.original.notes;
+          if (!notes) return null;
+          return (
+            <span className="text-muted-foreground text-sm">
+              {notes.length > 60 ? `${notes.substring(0, 60)}...` : notes}
+            </span>
+          );
+        },
+      }),
       createCurrencyColumn(columnHelper, "price", {
         header: "Price",
         editable: {

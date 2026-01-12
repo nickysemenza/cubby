@@ -69,6 +69,7 @@ const INVENTORY_FIELD_SPECS: readonly ComparisonFieldSpec<
     sheetKey: "ingredient_name",
   },
   { field: "aliases", appKey: "aliases", sheetKey: "aliases" },
+  { field: "notes", appKey: "notes", sheetKey: "notes" },
   {
     field: "product_image",
     appKey: "product_image",

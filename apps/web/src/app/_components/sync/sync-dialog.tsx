@@ -325,9 +325,11 @@ export const SyncDialog = ({
       locationResolutions,
       inventoryResolutions,
     });
+    if (!previewResult) return;
     applySyncMutation.mutate({
       locationResolutions,
       inventoryResolutions,
+      snapshotHash: previewResult.snapshotHash,
     });
   };
 
@@ -362,9 +364,11 @@ export const SyncDialog = ({
 
   const handleRefreshTimestamps = () => {
     // Just refresh timestamps for matched items - use current resolutions for everything else
+    if (!previewResult) return;
     refreshTimestampsMutation.mutate({
       locationResolutions,
       inventoryResolutions,
+      snapshotHash: previewResult.snapshotHash,
       forceOverwrite: true,
     });
     setShowForcePushConfirm(false);

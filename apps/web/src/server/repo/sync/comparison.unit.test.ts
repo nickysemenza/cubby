@@ -37,6 +37,7 @@ const makeAppRow = (
     unit_mappings: null,
     ingredient_name: null,
     aliases: null,
+    notes: null,
     product_image: null,
     ...rest,
   };

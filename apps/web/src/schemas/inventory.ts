@@ -91,6 +91,7 @@ export const inventoryCSVRow = z.object({
     .preprocess((val) => val === "true" || val === true, z.boolean())
     .optional(), // true = create ingredient with same name as product
   aliases: z.string().nullable().optional(), // semicolon-separated: "sugar;granulated sugar"
+  notes: z.string().nullable().optional(), // product notes, URLs, or other details
   product_image: z.string().url().nullable().optional(), // URL of product's primary image
   // Timestamps (optional - old exports won't have them, controlled by SYNC_TIMESTAMPS)
   product_created_at: z.string().nullable().optional(),

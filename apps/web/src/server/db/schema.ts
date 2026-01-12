@@ -182,6 +182,7 @@ export const product = pgTable(
     ndb_number: integer("ndb_number"),
     model: text("model"),
     expectedQuantity: integer("expectedQuantity"),
+    notes: text("notes"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()

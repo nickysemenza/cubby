@@ -131,6 +131,7 @@ const INVENTORY_COLUMN_SCHEMA: ColumnSchema[] = [
         { header: "inventory_updated_at", type: { kind: "datetime" } } as const,
       ]
     : []),
+  { header: "notes", type: { kind: "text" } },
 ];
 
 const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
@@ -276,6 +277,7 @@ function parseSheetRows(rows: string[][]): ParseSheetResult {
       ingredient_name: rowObj.ingredient_name || undefined,
       ingredient: rowObj.ingredient,
       aliases: rowObj.aliases || undefined,
+      notes: rowObj.notes || undefined,
       // Timestamps (optional - only parsed if present in sheet)
       product_created_at: rowObj.product_created_at || undefined,
       product_updated_at: rowObj.product_updated_at || undefined,

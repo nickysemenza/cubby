@@ -46,7 +46,8 @@ const productBase = z.object({
   upc: upc.nullable(),
   ndb_number: ndb.nullable(),
   manufacturer: z.string().describe("Manufacturer or 'generic'"),
-  model: z.string().nullable().describe("model number"),
+  model: z.string().nullish().describe("model number"),
+  notes: z.string().nullish().describe("product notes, URLs, or other details"),
   expectedQuantity: z
     .number()
     .int()
@@ -104,5 +105,6 @@ export const productQuickCreatePayload = z.object({
   upc: upc.nullable().optional(),
   expectedQuantity: z.number().int().positive().nullable().optional(),
   model: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
   price: z.number().positive().nullable().optional(),
 });

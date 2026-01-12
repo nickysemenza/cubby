@@ -108,6 +108,7 @@ const inventorySyncFields = z.object({
   unitMappings: z.string().nullable(),
   ingredientName: z.string().nullable(),
   aliases: z.string().nullable(),
+  notes: z.string().nullable(),
   productImage: z.string().nullable(),
 });
 
