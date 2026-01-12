@@ -166,6 +166,8 @@ export const syncPreviewResult = z.object({
     }),
   ),
   canApply: z.boolean(), // False if there are unresolved conflicts or validation errors
+  // Snapshot hash for race condition prevention
+  snapshotHash: z.string(), // SHA-256 hash of raw data snapshot
 });
 
 export type SyncPreviewResult = z.infer<typeof syncPreviewResult>;
@@ -178,6 +180,8 @@ export const applySyncInput = z.object({
   inventoryResolutions: z.record(z.string(), syncResolution), // key -> resolution
   // When true, rebuilds entire sheet from app data (including matched items for timestamp refresh)
   forceOverwrite: z.boolean().optional(),
+  // Snapshot hash for race condition prevention
+  snapshotHash: z.string(), // SHA-256 hash from preview response
 });
 
 /**

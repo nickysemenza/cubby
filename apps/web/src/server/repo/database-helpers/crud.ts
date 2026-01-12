@@ -4,12 +4,12 @@
  */
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { getTableName, inArray } from "drizzle-orm";
+import { getTableName, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { image } from "~/server/db/schema";
+import { image, inventoryEntry } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { getDb } from "./core";
@@ -224,4 +224,67 @@ export async function associatePendingImages<T extends PgTable>(
     .update(image)
     .set({ status: "UPLOADED" })
     .where(inArray(image.id, pendingImageIds));
+}
+
+/**
+ * Batch upsert inventory entries using PostgreSQL's ON CONFLICT.
+ * More efficient than individual inserts/updates.
+ *
+ * Creates new inventory entries or updates existing ones based on the
+ * unique constraint (productId, locationId).
+ *
+ * @param dbOrTx - Database client or transaction
+ * @param entries - Array of inventory entries to upsert
+ * @returns Array of upserted inventory entries
+ *
+ * @example
+ * ```typescript
+ * await batchUpsertInventory(tx, [
+ *   {
+ *     productId: "...",
+ *     locationId: "...",
+ *     amount: { value: 5, unit: "each" },
+ *     valuation: 10.50
+ *   }
+ * ]);
+ * ```
+ */
+export async function batchUpsertInventory<
+  T extends {
+    productId: string;
+    locationId: string;
+    amount: { value: number; unit: string };
+    valuation: number | null;
+  },
+>(dbOrTx: DrizzleClient | DrizzleTransaction, entries: T[]): Promise<void> {
+  if (entries.length === 0) return;
+
+  return withTrace(TraceNames.db("batchUpsertInventory"), async (span) => {
+    span.setAttribute("db.batch_size", entries.length);
+
+    const now = new Date();
+    const values = entries.map((entry) => ({
+      productId: entry.productId,
+      locationId: entry.locationId,
+      amount: entry.amount,
+      valuation: entry.valuation,
+      createdAt: now,
+      updatedAt: now,
+      deletedAt: null,
+    }));
+
+    await dbOrTx
+      .insert(inventoryEntry as PgTable)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [inventoryEntry.productId, inventoryEntry.locationId],
+        set: {
+          amount: sql`EXCLUDED.amount`,
+          valuation: sql`EXCLUDED.valuation`,
+          updatedAt: sql`EXCLUDED.updatedAt`,
+        },
+      });
+
+    span.setAttribute("db.upserted_count", entries.length);
+  });
 }

@@ -66,6 +66,7 @@ import {
   syncItemsToLocationCSVRows,
 } from "~/server/repo/sync";
 import { SYNC_TIMESTAMPS } from "~/server/repo/sync/config";
+import { generateSnapshotHash } from "~/server/repo/sync/snapshot";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 // Schema for app settings with Google Sheets config
@@ -1354,7 +1355,15 @@ const fetchAndCompareData = async (
         "sheets.sheetInventory": sheetInventory.length,
       });
 
-      return { locationItems, inventoryItems, sheetLocations, sheetInventory };
+      return {
+        locationItems,
+        inventoryItems,
+        sheetLocations,
+        sheetInventory,
+        // Include raw data for snapshot generation
+        appLocations,
+        appInventory,
+      };
     },
   );
 };
@@ -1367,10 +1376,21 @@ const syncPreview = protectedProcedure
       TraceNames.trpc("mutation", "googleSheets.syncPreview"),
       async (span) => {
         const { client, sheetId } = await getClientAndSheetId(ctx);
-        const { locationItems, inventoryItems } = await fetchAndCompareData(
-          ctx,
-          client,
-          sheetId,
+        const {
+          locationItems,
+          inventoryItems,
+          appLocations,
+          appInventory,
+          sheetLocations,
+          sheetInventory,
+        } = await fetchAndCompareData(ctx, client, sheetId);
+
+        // Generate snapshot hash for race condition prevention
+        const snapshotHash = generateSnapshotHash(
+          appLocations,
+          sheetLocations,
+          appInventory,
+          sheetInventory,
         );
 
         // Count by state
@@ -1431,6 +1451,7 @@ const syncPreview = protectedProcedure
             hasChangesToApply &&
             !hasUnresolvedConflicts &&
             validationErrors.length === 0,
+          snapshotHash,
         };
       },
     );
@@ -1448,9 +1469,34 @@ const applySync = protectedProcedure
         const {
           locationItems,
           inventoryItems,
+          appLocations,
+          appInventory,
           sheetLocations,
           sheetInventory,
         } = await fetchAndCompareData(ctx, client, sheetId);
+
+        // ========================================================================
+        // SNAPSHOT VALIDATION: Detect race conditions
+        // ========================================================================
+
+        // Generate current snapshot hash and compare with preview
+        const currentHash = generateSnapshotHash(
+          appLocations,
+          sheetLocations,
+          appInventory,
+          sheetInventory,
+        );
+
+        if (input.snapshotHash !== currentHash) {
+          span.setAttribute("sync.snapshotMismatch", true);
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message:
+              "Data changed since preview. Please refresh and review changes before applying sync.",
+          });
+        }
+
+        span.setAttribute("sync.snapshotValid", true);
 
         // Apply user resolutions
         for (const item of locationItems) {
@@ -1479,32 +1525,64 @@ const applySync = protectedProcedure
         // Execute sync operations
         const results = createEmptySyncResults();
 
-        // Process locations first (inventory may reference them)
-        await processImportsToApp(
-          {
-            db: ctx.db,
-            actorContext: ctx.actorContext,
-          },
-          locationItems,
-          inventoryItems,
-          results,
-        );
+        // ========================================================================
+        // CRITICAL: Wrap all DB mutations in single transaction
+        // Either all changes succeed or all are rolled back
+        // ========================================================================
+        try {
+          await withTransaction(ctx.db, async (tx) => {
+            // Process locations first (inventory may reference them)
+            await processImportsToApp(
+              {
+                db: tx,
+                actorContext: ctx.actorContext,
+              },
+              locationItems,
+              inventoryItems,
+              results,
+            );
 
-        // Process deletions from app
-        await processAppDeletions(
-          { db: ctx.db, actorContext: ctx.actorContext },
-          locationItems,
-          inventoryItems,
-          results,
-        );
+            // Process deletions from app
+            await processAppDeletions(
+              { db: tx, actorContext: ctx.actorContext },
+              locationItems,
+              inventoryItems,
+              results,
+            );
 
-        // Process renames (app → sheet name)
-        await processRenames(
-          { db: ctx.db, actorContext: ctx.actorContext },
-          locationItems,
-          inventoryItems,
-          results,
-        );
+            // Process renames (app → sheet name)
+            await processRenames(
+              { db: tx, actorContext: ctx.actorContext },
+              locationItems,
+              inventoryItems,
+              results,
+            );
+
+            // Transaction commits here - either all succeed or all rollback
+          });
+
+          span.setAttribute("sync.transactionCommitted", true);
+        } catch (error) {
+          // Transaction rolled back - database unchanged
+          span.setAttributes({
+            "sync.transactionFailed": true,
+            "sync.error":
+              error instanceof Error ? error.message : "Unknown error",
+          });
+
+          return {
+            ...createEmptySyncResults(),
+            success: false,
+            errorMessages: [
+              `Database transaction failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+            ],
+          };
+        }
+
+        // ========================================================================
+        // AFTER successful DB commit: Update Google Sheets
+        // If this fails, DB changes are already committed (acceptable)
+        // ========================================================================
 
         // Push changes to sheets
         if (input.forceOverwrite) {
