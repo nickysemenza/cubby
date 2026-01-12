@@ -99,6 +99,23 @@ export const syncInventoryValuationsForProduct = async (
 };
 
 /**
+ * Compare two valuations with tolerance for floating-point precision errors.
+ * Returns true if values are different beyond tolerance (0.01 = 1 cent).
+ */
+const valuationsAreDifferent = (
+  stored: number | null,
+  expected: number | null,
+): boolean => {
+  // Both null = not different
+  if (stored === null && expected === null) return false;
+  // One null, one not = different
+  if (stored === null || expected === null) return true;
+  // Compare with epsilon tolerance for floating-point precision
+  const EPSILON = 0.01; // 1 cent tolerance
+  return Math.abs(stored - expected) >= EPSILON;
+};
+
+/**
  * Find inventory entries with stale or missing valuations.
  * Stale = stored valuation differs from computed (amount.value * product.price).
  */
@@ -140,10 +157,8 @@ export const findInventoryWithStaleValuations = async (
       entry.Product.price,
     );
 
-    // Compare with tolerance for floating point
-    const isStale =
-      entry.valuation !== expectedValuation &&
-      !(entry.valuation === null && expectedValuation === null);
+    // Compare with tolerance for floating-point precision
+    const isStale = valuationsAreDifferent(entry.valuation, expectedValuation);
 
     if (isStale) {
       staleEntries.push({
@@ -187,8 +202,8 @@ export const backfillInventoryValuations = async (
       entry.Product.price,
     );
 
-    // Only update if different
-    if (entry.valuation !== expectedValuation) {
+    // Only update if different (with tolerance)
+    if (valuationsAreDifferent(entry.valuation, expectedValuation)) {
       await getDb(db)
         .update(inventoryEntry)
         .set({ valuation: expectedValuation })
