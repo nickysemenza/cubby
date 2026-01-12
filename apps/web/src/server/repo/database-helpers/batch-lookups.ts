@@ -24,8 +24,10 @@ import {
 } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { getDb, notDeleted } from "./core";
-import { extractImagesFromJoinTable, relations } from "./transform";
+import { getDb } from "./core";
+import { notDeleted } from "./query";
+import { relations } from "./relations";
+import { extractImagesFromJoinTable } from "./transform";
 
 /**
  * Product lookup result with normalized keys for O(1) access.

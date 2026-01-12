@@ -21,6 +21,7 @@
 import { dedupe } from "~/misc/array-helpers";
 import type { ActorContext } from "~/schemas/context";
 import type { LocationId, ProductId } from "~/schemas/identifiers";
+import { unsafeLocationId } from "~/schemas/identifiers";
 import type {
   CSVImportResult,
   CSVImportResultItem,
@@ -44,6 +45,10 @@ import {
   batchUpsertInventory,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import {
+  generateUniqueLocationShortcode,
+  generateUniqueProductShortcode,
+} from "~/server/repo/shortcode-utils";
 import { processRowInMemory } from "./row-processor-inmemory";
 
 // Re-export utilities that may be used externally
@@ -146,7 +151,9 @@ export const importInventoryFromCSV = async (
   const locationsToCreate: Array<{ name: string }> = [];
   const inventoryToUpsert: Array<{
     productId: ProductId | "PENDING";
-    locationId: LocationId;
+    productName: string; // For matching after product creation
+    locationId: LocationId | "PENDING_LOCATION";
+    locationName?: string; // For matching after location auto-creation
     amount: { value: number; unit: string };
     valuation: number | null;
   }> = [];
@@ -178,7 +185,13 @@ export const importInventoryFromCSV = async (
         if (result.locationToAutoCreate) {
           locationsToCreate.push(result.locationToAutoCreate);
         }
-        if (result.inventoryToUpsert) {
+        // Only upsert inventory for actions that modify the database
+        // Skip "skipped", "product_only", and "error" actions
+        const shouldUpsertInventory =
+          result.item.action === "created" ||
+          result.item.action === "updated" ||
+          result.item.action === "moved";
+        if (result.inventoryToUpsert && shouldUpsertInventory) {
           inventoryToUpsert.push(result.inventoryToUpsert);
         }
       }
@@ -210,25 +223,56 @@ export const importInventoryFromCSV = async (
       inventoryToUpsert.length > 0)
   ) {
     await withTransaction(db, async (tx) => {
-      // 1. Batch insert new locations (if auto-created)
+      // 1. Batch insert new locations (if auto-created, with generated shortcodes)
       if (locationsToCreate.length > 0) {
-        await batchInsert(
-          tx,
-          location,
-          locationsToCreate.map((loc) => ({
-            name: loc.name,
+        // Deduplicate locations by name (multiple rows may reference same new location)
+        const uniqueLocationNames = dedupe(
+          locationsToCreate.map((loc) => loc.name),
+        );
+
+        // Generate shortcodes for each unique location
+        const locationsWithShortcodes = await Promise.all(
+          uniqueLocationNames.map(async (name) => ({
+            name,
             type: "room" as const,
             parentId: null,
+            shortcode: await generateUniqueLocationShortcode(tx),
           })),
         );
+
+        const createdLocations = await batchInsert(
+          tx,
+          location,
+          locationsWithShortcodes,
+        );
+
+        // Map created location IDs back to inventory entries
+        for (const loc of createdLocations) {
+          for (const inv of inventoryToUpsert) {
+            if (
+              inv.locationId === "PENDING_LOCATION" &&
+              inv.locationName === loc.name
+            ) {
+              inv.locationId = unsafeLocationId(loc.id);
+            }
+          }
+        }
       }
 
-      // 2. Batch insert new products
+      // 2. Batch insert new products (with generated shortcodes)
       if (productsToCreate.length > 0) {
+        // Generate shortcodes for each product
+        const productsWithShortcodes = await Promise.all(
+          productsToCreate.map(async (p) => ({
+            ...p,
+            shortcode: await generateUniqueProductShortcode(tx),
+          })),
+        );
+
         const createdProducts = await batchInsert(
           tx,
           product,
-          productsToCreate,
+          productsWithShortcodes,
         );
 
         // Map created product IDs back to result items and inventory entries
@@ -241,26 +285,26 @@ export const importInventoryFromCSV = async (
           if (item) item.productId = p.id;
 
           // Update inventory entries that were waiting for this product ID
+          // Match directly by product name stored in the inventory entry
           for (const inv of inventoryToUpsert) {
-            if (inv.productId === "PENDING") {
-              // Match by product name from the row
-              const matchingItem = items.find(
-                (i) => i.productName === p.name && i.productId === p.id,
-              );
-              if (matchingItem) {
-                inv.productId = p.id;
-              }
+            if (inv.productId === "PENDING" && inv.productName === p.name) {
+              inv.productId = p.id;
             }
           }
         }
       }
 
-      // 3. Batch upsert inventory (only entries with real product IDs)
+      // 3. Batch upsert inventory (only entries with real product IDs and location IDs)
       const validInventory = inventoryToUpsert.filter(
-        (inv) => inv.productId !== "PENDING",
+        (inv) =>
+          inv.productId !== "PENDING" && inv.locationId !== "PENDING_LOCATION",
       );
       if (validInventory.length > 0) {
-        await batchUpsertInventory(tx, validInventory);
+        // Strip productName and locationName fields before upserting (only needed for matching)
+        const inventoryForDb = validInventory.map(
+          ({ productName, locationName, ...rest }) => rest,
+        );
+        await batchUpsertInventory(tx, inventoryForDb);
       }
     });
 

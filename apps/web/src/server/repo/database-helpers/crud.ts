@@ -4,7 +4,7 @@
  */
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { getTableName, inArray, sql } from "drizzle-orm";
+import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
@@ -263,28 +263,77 @@ export async function batchUpsertInventory<
     span.setAttribute("db.batch_size", entries.length);
 
     const now = new Date();
-    const values = entries.map((entry) => ({
-      productId: entry.productId,
-      locationId: entry.locationId,
-      amount: entry.amount,
-      valuation: entry.valuation,
-      createdAt: now,
-      updatedAt: now,
-      deletedAt: null,
-    }));
 
-    await dbOrTx
-      .insert(inventoryEntry as PgTable)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [inventoryEntry.productId, inventoryEntry.locationId],
-        set: {
-          amount: sql`EXCLUDED.amount`,
-          valuation: sql`EXCLUDED.valuation`,
-          updatedAt: sql`EXCLUDED.updatedAt`,
-        },
-      });
+    // Query existing entries to determine which need insert vs update
+    // Note: Can't use ON CONFLICT with partial unique index (deletedAt IS NULL)
+    const existingEntries = await dbOrTx
+      .select({
+        id: inventoryEntry.id,
+        productId: inventoryEntry.productId,
+        locationId: inventoryEntry.locationId,
+      })
+      .from(inventoryEntry)
+      .where(
+        and(
+          inArray(
+            inventoryEntry.productId,
+            entries.map((e) => e.productId),
+          ),
+          inArray(
+            inventoryEntry.locationId,
+            entries.map((e) => e.locationId),
+          ),
+          isNull(inventoryEntry.deletedAt),
+        ),
+      );
 
-    span.setAttribute("db.upserted_count", entries.length);
+    // Create lookup for existing entries
+    const existingMap = new Map(
+      existingEntries.map((e) => [`${e.productId}|${e.locationId}`, e.id]),
+    );
+
+    // Separate into inserts and updates
+    const toInsert: Array<(typeof entries)[0]> = [];
+    const toUpdate: Array<{ id: string; entry: (typeof entries)[0] }> = [];
+
+    for (const entry of entries) {
+      const key = `${entry.productId}|${entry.locationId}`;
+      const existingId = existingMap.get(key);
+      if (existingId) {
+        toUpdate.push({ id: existingId, entry });
+      } else {
+        toInsert.push(entry);
+      }
+    }
+
+    // Batch insert new entries
+    if (toInsert.length > 0) {
+      await dbOrTx.insert(inventoryEntry as PgTable).values(
+        toInsert.map((entry) => ({
+          productId: entry.productId,
+          locationId: entry.locationId,
+          amount: entry.amount,
+          valuation: entry.valuation,
+          createdAt: now,
+          updatedAt: now,
+          deletedAt: null,
+        })),
+      );
+    }
+
+    // Batch update existing entries
+    for (const { id, entry } of toUpdate) {
+      await dbOrTx
+        .update(inventoryEntry)
+        .set({
+          amount: entry.amount,
+          valuation: entry.valuation,
+          updatedAt: now,
+        })
+        .where(eq(inventoryEntry.id, id));
+    }
+
+    span.setAttribute("db.inserted_count", toInsert.length);
+    span.setAttribute("db.updated_count", toUpdate.length);
   });
 }

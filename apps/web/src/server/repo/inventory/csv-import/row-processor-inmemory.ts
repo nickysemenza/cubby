@@ -35,7 +35,9 @@ interface RowProcessingResult {
   };
   inventoryToUpsert?: {
     productId: ProductId | "PENDING";
-    locationId: LocationId;
+    productName: string; // For matching after product creation
+    locationId: LocationId | "PENDING_LOCATION";
+    locationName?: string; // For matching after location auto-creation
     amount: { value: number; unit: string };
     valuation: number | null;
   };
@@ -168,10 +170,12 @@ export function processRowInMemory(
         }
       : undefined,
     inventoryToUpsert:
-      shouldWriteInventory && locationId
+      shouldWriteInventory && (locationId || row.location_name)
         ? {
             productId: existingProduct?.id ?? "PENDING",
-            locationId,
+            productName: row.product_name,
+            locationId: locationId ?? "PENDING_LOCATION",
+            locationName: locationId ? undefined : row.location_name,
             amount: newAmount,
             valuation: row.price ?? null,
           }
