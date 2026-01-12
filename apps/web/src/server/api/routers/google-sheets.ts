@@ -539,9 +539,13 @@ async function ensureTableSchema(
   headers: string[],
   rowCount: number,
 ): Promise<void> {
-  // Write headers if sheet is empty
+  // Write headers if sheet has no data rows
   if (rowCount === 0) {
-    await client.writeSheet(sheetId, [headers], sheetName);
+    // Read existing headers to preserve user's custom column ordering
+    // (handles case where user deleted all data rows but kept headers)
+    const existingHeaders = await client.readHeaderRow(sheetId, sheetName);
+    const columnOrder = resolveColumnOrder(headers, existingHeaders);
+    await client.writeSheet(sheetId, [columnOrder], sheetName);
     return; // Can't create table without data rows
   }
   // Create or update table with column types
