@@ -19,7 +19,6 @@ import { tryFormatAmount } from "../_components/inventory/format-amount";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { TableLink } from "../_components/table/TableLink";
-import { UnitMappingGraph } from "../_components/units/UnitMappingGraph";
 
 type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -80,7 +79,7 @@ export function InventoryItemList() {
           },
           cell: (info) => {
             const product = info.getValue();
-            const { upc, unitMappings } = product;
+            const { upc } = product;
             return (
               <div className="flex items-center gap-2">
                 <div className="min-w-0 flex-1 space-y-0.5">
@@ -97,7 +96,6 @@ export function InventoryItemList() {
                     </div>
                   )}
                 </div>
-                <UnitMappingGraph unitMapping={unitMappings} compact />
               </div>
             );
           },
