@@ -298,6 +298,28 @@ export class GoogleSheetsClient {
   }
 
   /**
+   * Read only the header row (first row) from a sheet.
+   * Returns null if sheet doesn't exist or is empty.
+   * Used for detecting user's custom column ordering before export.
+   */
+  async readHeaderRow(
+    spreadsheetId: string,
+    sheetName: string,
+  ): Promise<string[] | null> {
+    try {
+      const result = await this.readSheet(spreadsheetId, sheetName);
+      if (result.length === 0) return null;
+
+      // First row is headers
+      const headers = result[0];
+      return headers && headers.length > 0 ? headers : null;
+    } catch (_error) {
+      // Sheet doesn't exist yet
+      return null;
+    }
+  }
+
+  /**
    * Write rows to a sheet (clears existing content first)
    * @param spreadsheetId - The Google Sheet ID
    * @param rows - 2D array of values (including header row)
@@ -395,6 +417,10 @@ export class GoogleSheetsClient {
     );
 
     // Build column properties for the table
+    // Note: Columns are matched by columnName (not position), so this works
+    // correctly even when users manually reorder columns in Google Sheets.
+    // The columnIndex here is just an identifier within the schema array,
+    // not a reference to the physical column position in the sheet.
     const columnProperties = columns.map((col, index) => {
       const colType = mapToTableColumnType(col.type);
       const prop: {

@@ -158,6 +158,40 @@ const LOCATION_COLUMN_SCHEMA: ColumnSchema[] = [
 const INVENTORY_CSV_HEADERS = INVENTORY_COLUMN_SCHEMA.map((col) => col.header);
 const LOCATION_CSV_HEADERS = LOCATION_COLUMN_SCHEMA.map((col) => col.header);
 
+/**
+ * Resolve column order for export:
+ * - If sheet has existing headers, use that order (preserves user's custom ordering)
+ * - Append any new columns from schema that don't exist in sheet
+ * - Preserve any custom columns in sheet not in schema
+ * - Fallback to schema order for new sheets
+ */
+function resolveColumnOrder(
+  schemaHeaders: readonly string[],
+  sheetHeaders: string[] | null,
+): string[] {
+  // New sheet: use schema order
+  if (!sheetHeaders || sheetHeaders.length === 0) {
+    return [...schemaHeaders];
+  }
+
+  // Normalize sheet headers (match import normalization: lowercase, trim, spaces → underscores)
+  const normalizedSheetHeaders = sheetHeaders.map((h) =>
+    h.toLowerCase().trim().replace(/\s+/g, "_"),
+  );
+
+  // Start with existing sheet order
+  const finalOrder = [...normalizedSheetHeaders];
+
+  // Append new columns from schema that don't exist in sheet
+  for (const schemaHeader of schemaHeaders) {
+    if (!normalizedSheetHeaders.includes(schemaHeader)) {
+      finalOrder.push(schemaHeader);
+    }
+  }
+
+  return finalOrder;
+}
+
 // Parse currency string to number (handles $, commas, etc.)
 function parseCurrency(value: string | undefined): number | undefined {
   if (!value || value.trim() === "") return undefined;
@@ -1202,13 +1236,22 @@ async function pushLocationsToSheet(
     ...syncItemsToLocationCSVRows(locationsToAddToSheet, true),
   ];
 
-  // Write to sheet
+  // Read existing headers to preserve user's column ordering
+  const existingHeaders = await client.readHeaderRow(
+    sheetId,
+    SHEET_NAMES.LOCATIONS,
+  );
+
+  // Resolve column order (preserves user's ordering, appends new columns)
+  const columnOrder = resolveColumnOrder(LOCATION_CSV_HEADERS, existingHeaders);
+
+  // Write to sheet using resolved column order
   const dataRows = updatedRows.map((row) =>
-    LOCATION_CSV_HEADERS.map((h) => toCSVString(row[h as keyof typeof row])),
+    columnOrder.map((h) => toCSVString(row[h as keyof typeof row])),
   );
   await client.writeSheet(
     sheetId,
-    [LOCATION_CSV_HEADERS, ...dataRows],
+    [columnOrder, ...dataRows],
     SHEET_NAMES.LOCATIONS,
   );
 
@@ -1297,13 +1340,25 @@ async function pushInventoryToSheet(
     ...syncItemsToInventoryCSVRows(inventoryToAddToSheet, true),
   ];
 
-  // Write to sheet
+  // Read existing headers to preserve user's column ordering
+  const existingHeaders = await client.readHeaderRow(
+    sheetId,
+    SHEET_NAMES.INVENTORY,
+  );
+
+  // Resolve column order (preserves user's ordering, appends new columns)
+  const columnOrder = resolveColumnOrder(
+    INVENTORY_CSV_HEADERS,
+    existingHeaders,
+  );
+
+  // Write to sheet using resolved column order
   const dataRows = updatedRows.map((row) =>
-    INVENTORY_CSV_HEADERS.map((h) => toCSVString(row[h as keyof typeof row])),
+    columnOrder.map((h) => toCSVString(row[h as keyof typeof row])),
   );
   await client.writeSheet(
     sheetId,
-    [INVENTORY_CSV_HEADERS, ...dataRows],
+    [columnOrder, ...dataRows],
     SHEET_NAMES.INVENTORY,
   );
 
@@ -1596,14 +1651,26 @@ const applySync = protectedProcedure
           ]);
 
           // Write locations directly
+          // Read existing headers to preserve user's column ordering
+          const locationExistingHeaders = await client.readHeaderRow(
+            sheetId,
+            SHEET_NAMES.LOCATIONS,
+          );
+
+          // Resolve column order (preserves user's ordering, appends new columns)
+          const locationColumnOrder = resolveColumnOrder(
+            LOCATION_CSV_HEADERS,
+            locationExistingHeaders,
+          );
+
           const locationDataRows = appLocations.map((row) =>
-            LOCATION_CSV_HEADERS.map((h) =>
+            locationColumnOrder.map((h) =>
               toCSVString(row[h as keyof typeof row]),
             ),
           );
           await client.writeSheet(
             sheetId,
-            [LOCATION_CSV_HEADERS, ...locationDataRows],
+            [locationColumnOrder, ...locationDataRows],
             SHEET_NAMES.LOCATIONS,
           );
           await ensureTableSchema(
@@ -1617,14 +1684,26 @@ const applySync = protectedProcedure
           );
 
           // Write inventory directly (includes timestamps from export)
+          // Read existing headers to preserve user's column ordering
+          const inventoryExistingHeaders = await client.readHeaderRow(
+            sheetId,
+            SHEET_NAMES.INVENTORY,
+          );
+
+          // Resolve column order (preserves user's ordering, appends new columns)
+          const inventoryColumnOrder = resolveColumnOrder(
+            INVENTORY_CSV_HEADERS,
+            inventoryExistingHeaders,
+          );
+
           const inventoryDataRows = appInventory.map((row) =>
-            INVENTORY_CSV_HEADERS.map((h) =>
+            inventoryColumnOrder.map((h) =>
               toCSVString(row[h as keyof typeof row]),
             ),
           );
           await client.writeSheet(
             sheetId,
-            [INVENTORY_CSV_HEADERS, ...inventoryDataRows],
+            [inventoryColumnOrder, ...inventoryDataRows],
             SHEET_NAMES.INVENTORY,
           );
           await ensureTableSchema(
