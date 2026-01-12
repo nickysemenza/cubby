@@ -8,6 +8,7 @@ import {
   isMoneyUnit,
   serializeUnitMappings,
   syncPriceToMappings,
+  truncateToTwoDecimals,
 } from "./price-mapping-utils";
 
 // Initialize WASM before tests run
@@ -37,6 +38,36 @@ describe("isMoneyUnit", () => {
   it("returns false for volume units", () => {
     expect(isMoneyUnit("ml")).toBe(false);
     expect(isMoneyUnit("cup")).toBe(false);
+  });
+});
+
+describe("truncateToTwoDecimals", () => {
+  it("truncates to 2 decimal places", () => {
+    expect(truncateToTwoDecimals(12.999)).toBe(13.0);
+    expect(truncateToTwoDecimals(12.994)).toBe(12.99);
+    expect(truncateToTwoDecimals(12.995)).toBe(13.0);
+  });
+
+  it("handles very small values", () => {
+    expect(truncateToTwoDecimals(0.001)).toBe(0.0);
+    expect(truncateToTwoDecimals(0.005)).toBe(0.01);
+    expect(truncateToTwoDecimals(0.004)).toBe(0.0);
+  });
+
+  it("handles large values", () => {
+    expect(truncateToTwoDecimals(1000.0)).toBe(1000.0);
+    expect(truncateToTwoDecimals(9740.6784)).toBe(9740.68);
+    expect(truncateToTwoDecimals(1234567.895)).toBe(1234567.9);
+  });
+
+  it("handles exact 2-decimal values", () => {
+    expect(truncateToTwoDecimals(12.5)).toBe(12.5);
+    expect(truncateToTwoDecimals(99.99)).toBe(99.99);
+  });
+
+  it("handles negative values", () => {
+    expect(truncateToTwoDecimals(-12.999)).toBe(-13.0);
+    expect(truncateToTwoDecimals(-12.994)).toBe(-12.99);
   });
 });
 
@@ -136,7 +167,8 @@ describe("computeInventoryValuation", () => {
 
   it("handles decimal values correctly", () => {
     const valuation = computeInventoryValuation(2.5, 4.99);
-    expect(valuation).toBeCloseTo(12.475);
+    // 2.5 * 4.99 = 12.475, truncated to 2 decimals = 12.48
+    expect(valuation).toBe(12.48);
   });
 
   it("returns null when product price is null", () => {

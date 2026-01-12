@@ -13,6 +13,14 @@ export const isMoneyUnit = (unit: string): boolean => {
 };
 
 /**
+ * Truncate a monetary value to 2 decimal places (cents precision).
+ * Uses rounding to avoid floating-point errors.
+ */
+export const truncateToTwoDecimals = (value: number): number => {
+  return Math.round(value * 100) / 100;
+};
+
+/**
  * Checks if an amount represents a single unit (1 each)
  */
 const isSingleEach = (amount: Amount): boolean =>
@@ -79,24 +87,27 @@ export const extractPriceFromMappings = (
  * Compute the price value to store in the product.price column.
  * Uses WASM to detect price mappings - single source of truth.
  * Returns just the numeric value (assumes USD for storage).
+ * Truncates to 2 decimal places (cents precision).
  */
 export const computeProductPrice = (
   unitMappings: Array<{ a: Amount; b: Amount }>,
 ): number | null => {
   const priceAmount = extractPriceFromMappings(unitMappings);
-  return priceAmount?.value ?? null;
+  if (priceAmount === null) return null;
+  return truncateToTwoDecimals(priceAmount.value);
 };
 
 /**
  * Compute the valuation (total value) for an inventory entry.
  * Simple multiplication of quantity by unit price.
+ * Truncates to 2 decimal places (cents precision).
  */
 export const computeInventoryValuation = (
   amountValue: number,
   productPrice: number | null,
 ): number | null => {
   if (productPrice === null) return null;
-  return amountValue * productPrice;
+  return truncateToTwoDecimals(amountValue * productPrice);
 };
 
 /** Default currency unit when creating new price mappings */
@@ -127,14 +138,17 @@ export const syncPriceToMappings = <
     return mappings;
   }
 
-  // Use provided currency, or preserve existing, or default
-  const currency = price.unit || existing?.price.unit || DEFAULT_CURRENCY;
+  // Truncate price value to 2 decimals
+  const truncatedPrice = {
+    value: truncateToTwoDecimals(price.value),
+    unit: price.unit || existing?.price.unit || DEFAULT_CURRENCY,
+  };
 
   // Always normalize to canonical format: 1 each <-> $X
   const priceMapping = {
     ...(existing ? mappings[existing.index] : {}),
     a: { value: 1, unit: "each" },
-    b: { value: price.value, unit: currency },
+    b: truncatedPrice,
     source: existing ? (mappings[existing.index]?.source ?? source) : source,
   } as T;
 

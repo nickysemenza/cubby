@@ -9,7 +9,11 @@ import type { Amount } from "~/codec/codec";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import type { ProductId } from "~/schemas/identifiers";
-import { findPriceMapping, isMoneyUnit } from "~/schemas/price-mapping-utils";
+import {
+  findPriceMapping,
+  isMoneyUnit,
+  truncateToTwoDecimals,
+} from "~/schemas/price-mapping-utils";
 import { parseUnitMappingString } from "~/schemas/unit-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productUnitMappings } from "~/server/db/schema";
@@ -40,7 +44,8 @@ export const createOrUpdatePriceMapping = async (
 
   const existingPriceMapping = findPriceMapping(existingMappings);
 
-  // Use provided currency, or preserve existing, or default
+  // Truncate price value to 2 decimals and use provided currency, or preserve existing, or default
+  const truncatedValue = truncateToTwoDecimals(price.value);
   const currency =
     price.unit || existingPriceMapping?.price.unit || DEFAULT_CURRENCY;
 
@@ -50,7 +55,7 @@ export const createOrUpdatePriceMapping = async (
       .update(productUnitMappings)
       .set({
         a: { value: 1, unit: "each" },
-        b: { value: price.value, unit: currency },
+        b: { value: truncatedValue, unit: currency },
         source,
       })
       .where(eq(productUnitMappings.id, existingPriceMapping.match.id));
@@ -59,7 +64,7 @@ export const createOrUpdatePriceMapping = async (
     await client.insert(productUnitMappings).values({
       productId,
       a: { value: 1, unit: "each" },
-      b: { value: price.value, unit: currency },
+      b: { value: truncatedValue, unit: currency },
       source,
     });
   }

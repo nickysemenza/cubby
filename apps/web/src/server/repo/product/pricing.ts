@@ -106,7 +106,7 @@ export const findProductsWithStalePrices = async (
     } else if (
       computedPrice !== null &&
       storedPrice !== null &&
-      Math.abs(computedPrice - storedPrice) > 0.001
+      Math.abs(computedPrice - storedPrice) > 0.005
     ) {
       results.push({
         id: prod.id,
