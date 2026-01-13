@@ -194,6 +194,7 @@ vi.mock("../value-change", () => ({
   ),
 }));
 
+import { unsafeLocationId, unsafeProductId } from "~/schemas/identifiers";
 import type { SyncPreviewResult } from "~/schemas/sync";
 import { SyncDialog } from "./sync-dialog";
 
@@ -218,6 +219,8 @@ const createMockPreviewResult = (
     moved: 0,
   },
   validationErrors: [],
+  canApply: true,
+  snapshotHash: "mock-snapshot-hash",
   ...overrides,
 });
 
@@ -261,9 +264,22 @@ describe("SyncDialog", () => {
       locations: {
         items: [
           {
+            entityType: "location",
             key: "loc-1",
             state: "app_only",
-            appData: { locationId: "1", locationName: "Kitchen" },
+            defaultResolution: "add_to_sheet",
+            resolution: null,
+            appData: {
+              locationId: unsafeLocationId("1"),
+              locationName: "Kitchen",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: null,
           },
         ],
         matched: 0,
@@ -285,13 +301,31 @@ describe("SyncDialog", () => {
       inventory: {
         items: [
           {
+            entityType: "inventory",
             key: "inv-1",
             state: "sheet_only",
+            defaultResolution: "add_to_app",
+            resolution: null,
+            appData: null,
             sheetData: {
               productName: "Flour",
+              productShortcode: null,
+              manufacturer: null,
+              category: null,
               locationName: "Pantry",
+              locationShortcode: null,
               quantity: 5,
               unit: "lbs",
+              upc: null,
+              model: null,
+              ndbNumber: null,
+              expectedQty: null,
+              price: null,
+              unitMappings: null,
+              ingredientName: null,
+              aliases: null,
+              notes: null,
+              productImage: null,
             },
           },
         ],
@@ -332,10 +366,24 @@ describe("SyncDialog", () => {
       locations: {
         items: [
           {
+            entityType: "location",
             key: "loc-1",
             state: "conflict",
-            appData: { locationId: "1", locationName: "Kitchen" },
-            sheetData: { locationName: "Kitchen Updated" },
+            defaultResolution: null,
+            resolution: null,
+            appData: {
+              locationId: unsafeLocationId("1"),
+              locationName: "Kitchen",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: {
+              locationName: "Kitchen Updated",
+            },
             fieldDiffs: [
               { field: "name", from: "Kitchen", to: "Kitchen Updated" },
             ],
@@ -393,15 +441,44 @@ describe("SyncDialog state summary cards", () => {
       locations: {
         items: [
           {
+            entityType: "location",
             key: "loc-1",
             state: "matched",
-            appData: { locationId: "1", locationName: "Kitchen" },
+            defaultResolution: null,
+            resolution: null,
+            appData: {
+              locationId: unsafeLocationId("1"),
+              locationName: "Kitchen",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: {
+              locationName: "Kitchen",
+            },
           },
           {
+            entityType: "location",
             key: "loc-2",
             state: "conflict",
-            appData: { locationId: "2", locationName: "Pantry" },
-            sheetData: { locationName: "Pantry Updated" },
+            defaultResolution: null,
+            resolution: null,
+            appData: {
+              locationId: unsafeLocationId("2"),
+              locationName: "Pantry",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: {
+              locationName: "Pantry Updated",
+            },
             fieldDiffs: [
               { field: "name", from: "Pantry", to: "Pantry Updated" },
             ],
@@ -437,9 +514,24 @@ describe("SyncDialog state summary cards", () => {
       locations: {
         items: [
           {
+            entityType: "location",
             key: "loc-1",
             state: "matched",
-            appData: { locationId: "1", locationName: "Kitchen" },
+            defaultResolution: null,
+            resolution: null,
+            appData: {
+              locationId: unsafeLocationId("1"),
+              locationName: "Kitchen",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: {
+              locationName: "Kitchen",
+            },
           },
         ],
         matched: 1,
@@ -477,10 +569,24 @@ describe("SyncDialog conflict resolution", () => {
       locations: {
         items: [
           {
+            entityType: "location",
             key: "loc-1",
             state: "conflict",
-            appData: { locationId: "1", locationName: "Kitchen" },
-            sheetData: { locationName: "Kitchen Updated" },
+            defaultResolution: null,
+            resolution: null,
+            appData: {
+              locationId: unsafeLocationId("1"),
+              locationName: "Kitchen",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: {
+              locationName: "Kitchen Updated",
+            },
             fieldDiffs: [
               { field: "name", from: "Kitchen", to: "Kitchen Updated" },
             ],
@@ -514,11 +620,24 @@ describe("SyncDialog conflict resolution", () => {
       locations: {
         items: [
           {
+            entityType: "location",
             key: "loc-1",
             state: "conflict",
+            defaultResolution: null,
             resolution: "use_app", // Pre-resolved
-            appData: { locationId: "1", locationName: "Kitchen" },
-            sheetData: { locationName: "Kitchen Updated" },
+            appData: {
+              locationId: unsafeLocationId("1"),
+              locationName: "Kitchen",
+              locationShortcode: null,
+              parentName: null,
+              locationType: "room",
+              description: null,
+              locationImage: null,
+              lastInventoryDate: null,
+            },
+            sheetData: {
+              locationName: "Kitchen Updated",
+            },
             fieldDiffs: [
               { field: "name", from: "Kitchen", to: "Kitchen Updated" },
             ],
@@ -553,21 +672,55 @@ describe("SyncDialog moved items", () => {
       inventory: {
         items: [
           {
+            entityType: "inventory",
             key: "inv-1",
             state: "moved",
+            defaultResolution: "apply_move",
+            resolution: null,
             movedFrom: "Kitchen",
             movedTo: "Pantry",
             appData: {
-              productId: "p1",
+              productId: unsafeProductId("p1"),
               productName: "Flour",
-              locationId: "l1",
+              productShortcode: null,
+              manufacturer: null,
+              category: null,
+              locationId: unsafeLocationId("l1"),
               locationName: "Kitchen",
+              locationShortcode: null,
+              quantity: null,
+              unit: null,
+              upc: null,
+              model: null,
+              ndbNumber: null,
+              expectedQty: null,
+              price: null,
+              unitMappings: null,
+              ingredientName: null,
+              aliases: null,
+              notes: null,
+              productImage: null,
+              inventoryEntryId: null,
             },
             sheetData: {
               productName: "Flour",
+              productShortcode: null,
+              manufacturer: null,
+              category: null,
               locationName: "Pantry",
+              locationShortcode: null,
               quantity: 5,
               unit: "lbs",
+              upc: null,
+              model: null,
+              ndbNumber: null,
+              expectedQty: null,
+              price: null,
+              unitMappings: null,
+              ingredientName: null,
+              aliases: null,
+              notes: null,
+              productImage: null,
             },
           },
         ],

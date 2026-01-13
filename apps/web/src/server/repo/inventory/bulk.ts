@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { ActorContext } from "~/schemas/context";
 import type { LocationId } from "~/schemas/identifiers";
+import { unsafeProductId } from "~/schemas/identifiers";
 import type {
   BulkMovePayload,
   InventoryBulkOperationItem,
@@ -273,7 +274,7 @@ export const bulkMoveInventoryEntries = async (
             // Recompute valuation for updated quantity
             const valuation = await computeValuationForEntry(
               tx,
-              sourceEntry.productId,
+              unsafeProductId(sourceEntry.productId),
               newQuantity,
             );
 
@@ -357,7 +358,7 @@ export const bulkMoveInventoryEntries = async (
           // Recompute valuation for reduced quantity
           const sourceValuation = await computeValuationForEntry(
             tx,
-            sourceEntry.productId,
+            unsafeProductId(sourceEntry.productId),
             remainingQuantity,
           );
 
@@ -400,7 +401,7 @@ export const bulkMoveInventoryEntries = async (
             // Recompute valuation for updated quantity
             const targetValuation = await computeValuationForEntry(
               tx,
-              sourceEntry.productId,
+              unsafeProductId(sourceEntry.productId),
               newQuantity,
             );
 
@@ -441,7 +442,7 @@ export const bulkMoveInventoryEntries = async (
             const amountValue = item.quantity.value;
             const valuation = await computeValuationForEntry(
               tx,
-              sourceEntry.productId,
+              unsafeProductId(sourceEntry.productId),
               amountValue,
             );
 

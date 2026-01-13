@@ -26,7 +26,7 @@ export function useUpdateMutation<TVariables, TData>({
 }: {
   mutationFn: (callbacks: {
     onSuccess: () => void;
-    onError: (err: Error) => void;
+    onError: (err: { message?: string }) => void;
   }) => unknown;
   entity: Entity;
   invalidateKeys: readonly QueryKey[];
@@ -53,5 +53,9 @@ export function useUpdateMutation<TVariables, TData>({
     [mutationFn, entityLabel, invalidateKeys, queryClient],
   );
 
-  return useMutation<TData, Error, TVariables>(mutationOptions);
+  return useMutation<TData, Error, TVariables>(
+    mutationOptions as Parameters<
+      typeof useMutation<TData, Error, TVariables>
+    >[0],
+  );
 }

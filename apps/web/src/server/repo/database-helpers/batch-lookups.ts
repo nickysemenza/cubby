@@ -43,11 +43,18 @@ export type LocationLookupMap = Map<string, LocationId>;
 
 /**
  * Inventory entry DB record with full relations.
+ * Based on the actual query result from findMany with relations.inventory.full
  */
-export type InventoryEntryDB = Awaited<
-  ReturnType<typeof getDb>
->["query"]["inventoryEntry"]["findFirst"] & {
-  product: NonNullable<
+export type InventoryEntryDB = {
+  id: string;
+  productId: string;
+  locationId: string;
+  amount: { value: number; unit: string };
+  valuation: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deletedAt: Date | null;
+  Product: NonNullable<
     Awaited<ReturnType<typeof getDb>>["query"]["product"]["findFirst"]
   >;
   location: NonNullable<
@@ -133,9 +140,20 @@ export async function batchFindProductsByNameManufacturer(
       for (const p of products) {
         const key = makeProductKey(p.name, p.manufacturer);
         map.set(key, {
-          ...p,
+          id: unsafeProductId(p.id),
           shortcode: unsafeProductShortcode(p.shortcode),
+          name: p.name,
+          manufacturer: p.manufacturer,
+          model: p.model,
+          upc: p.upc,
+          ndb_number: p.ndb_number,
+          expectedQuantity: p.expectedQuantity,
+          category: p.category,
+          notes: p.notes,
+          price: p.price,
           images: extractImagesFromJoinTable(p.images),
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
         });
       }
 
@@ -256,7 +274,7 @@ export async function batchFindInventoryEntries(
     const map = new Map<string, InventoryEntryDB>();
     for (const entry of entries) {
       const key = `${entry.productId}|${entry.locationId}`;
-      map.set(key, entry as InventoryEntryDB);
+      map.set(key, entry as unknown as InventoryEntryDB);
     }
 
     return map;
@@ -341,10 +359,20 @@ export async function batchFindProductsByUPC(
     for (const p of products) {
       if (p.upc) {
         map.set(p.upc, {
-          ...p,
+          id: unsafeProductId(p.id),
           shortcode: unsafeProductShortcode(p.shortcode),
-          images: extractImagesFromJoinTable(p.images),
+          name: p.name,
+          manufacturer: p.manufacturer,
+          model: p.model,
+          upc: p.upc,
+          ndb_number: p.ndb_number,
+          expectedQuantity: p.expectedQuantity,
+          category: p.category,
+          notes: p.notes,
           price: null, // Price will be computed from unit mappings
+          images: extractImagesFromJoinTable(p.images),
+          createdAt: p.createdAt,
+          updatedAt: p.updatedAt,
         });
       }
     }
@@ -384,10 +412,20 @@ export async function batchFindProductsByIds(
     const map = new Map<ProductId, ProductTopLevelOut>();
     for (const p of products) {
       map.set(unsafeProductId(p.id), {
-        ...p,
+        id: unsafeProductId(p.id),
         shortcode: unsafeProductShortcode(p.shortcode),
-        images: extractImagesFromJoinTable(p.images),
+        name: p.name,
+        manufacturer: p.manufacturer,
+        model: p.model,
+        upc: p.upc,
+        ndb_number: p.ndb_number,
+        expectedQuantity: p.expectedQuantity,
+        category: p.category,
+        notes: p.notes,
         price: null, // Price will be computed from unit mappings
+        images: extractImagesFromJoinTable(p.images),
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt,
       });
     }
 

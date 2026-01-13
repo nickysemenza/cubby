@@ -54,7 +54,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     entityLabel: "Product",
     mutationOptions: (callbacks) =>
       api.product.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [[queryKeys.product.list]],
     redirectTo: "/products",
   });
 

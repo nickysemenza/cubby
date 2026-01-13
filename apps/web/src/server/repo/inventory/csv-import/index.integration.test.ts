@@ -78,19 +78,24 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 10 },
       );
       expect(products.data).toHaveLength(1);
       expect(products.data[0]?.name).toBe("All-Purpose Flour");
       expect(products.data[0]?.manufacturer).toBe("King Arthur");
 
       // Verify inventory in database
-      const inventory = await inventoryentryList(db, {}, {}, {});
+      const inventory = await inventoryentryList(
+        db,
+        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 10 },
+      );
       expect(inventory.data).toHaveLength(1);
       expect(inventory.data[0]?.amount.value).toBe(5);
       expect(inventory.data[0]?.amount.unit).toBe("lbs");
-      expect(inventory.data[0]?.locationId).toBe(createdLocation.id);
+      expect(inventory.data[0]?.location.id).toBe(createdLocation.id);
     });
 
     it("should import multiple rows with mixed actions", async () => {
@@ -112,7 +117,7 @@ describe("importInventoryFromCSV", () => {
           manufacturer: "C&H",
           model: null,
           upc: null,
-          ndbNumber: null,
+          ndb_number: null,
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
@@ -170,12 +175,17 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
       );
       expect(products.data).toHaveLength(4); // Sugar + Flour + Salt + Vanilla
 
-      const inventory = await inventoryentryList(db, {}, {}, {});
+      const inventory = await inventoryentryList(
+        db,
+        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
       expect(inventory.data).toHaveLength(3); // Sugar + Flour + Salt (no Vanilla)
     });
 
@@ -196,16 +206,21 @@ describe("importInventoryFromCSV", () => {
       expect(result.created).toBe(1);
 
       // Verify location was auto-created
-      const locations = await locationList(db, {}, {}, {});
+      const locations = await locationList(
+        db,
+        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
       const newLocation = locations.data.find((l) => l.name === "New Pantry");
       expect(newLocation).toBeDefined();
       expect(newLocation?.type).toBe("room");
-      // parentId can be null or undefined when not set
-      expect(newLocation?.parentId).toBeFalsy();
+      // parent can be null or undefined when not set
+      expect(newLocation?.parent).toBeFalsy();
     });
 
     it("should resolve PENDING product IDs correctly", async () => {
-      const _createdLocation = await createLocation(
+      await createLocation(
         db,
         {
           name: "Storage",
@@ -233,8 +248,13 @@ describe("importInventoryFromCSV", () => {
       expect(result.items[0]?.productId).not.toBe("PENDING");
 
       // Inventory should link to created product
-      const inventory = await inventoryentryList(db, {}, {}, {});
-      expect(inventory.data[0]?.productId).toBe(result.items[0]?.productId);
+      const inventory = await inventoryentryList(
+        db,
+        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
+      expect(inventory.data[0]?.product.id).toBe(result.items[0]?.productId);
     });
 
     it("should handle empty rows array", async () => {
@@ -280,12 +300,17 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
       );
       expect(products.data).toHaveLength(0);
 
-      const inventory = await inventoryentryList(db, {}, {}, {});
+      const inventory = await inventoryentryList(
+        db,
+        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
       expect(inventory.data).toHaveLength(0);
     });
 
@@ -314,7 +339,7 @@ describe("importInventoryFromCSV", () => {
     });
 
     it("should produce same preview as real import counters", async () => {
-      const _createdLocation = await createLocation(
+      await createLocation(
         db,
         {
           name: "Pantry",
@@ -382,8 +407,8 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
       );
       expect(products.data).toHaveLength(50);
     });
@@ -417,8 +442,8 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
       );
       expect(products.data).toHaveLength(2);
     });
@@ -443,8 +468,8 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
       );
       expect(products.data).toHaveLength(1);
     });
@@ -529,13 +554,18 @@ describe("importInventoryFromCSV", () => {
         undefined,
         undefined,
         undefined,
-        {},
-        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
       );
       expect(products.data).toHaveLength(150);
 
       // Verify all inventory entries were created
-      const inventory = await inventoryentryList(db, {}, {}, {});
+      const inventory = await inventoryentryList(
+        db,
+        {},
+        { orderBy: "createdAt", direction: "asc" },
+        { pageIndex: 0, pageSize: 100 },
+      );
       expect(inventory.data).toHaveLength(150);
     });
   });

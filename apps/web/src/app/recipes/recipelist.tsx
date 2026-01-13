@@ -198,7 +198,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         mutationOptions: (callbacks) =>
           api.recipe.delete.mutationOptions(callbacks),
         entityLabel: "Recipe",
-        invalidateKeys: [queryKeys.recipe.list],
+        invalidateKeys: [[queryKeys.recipe.list]],
       },
     });
 

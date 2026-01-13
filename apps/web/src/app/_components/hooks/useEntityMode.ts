@@ -40,7 +40,7 @@ export function useEntityCreateMode<TData, TResult extends { id: string }>(
     ...mutationOptions,
     onSuccess: (result: TResult) => {
       // Invalidate the list query for this entity type so it refetches with the new item
-      const listKey = queryKeys[entityKey]?.list;
+      const listKey = queryKeys[entityKey as keyof typeof queryKeys]?.list;
       if (listKey) {
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         void queryClient.invalidateQueries({ queryKey: [listKey] });

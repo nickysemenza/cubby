@@ -11,7 +11,7 @@ import { createAppError } from "~/server/api/trpc";
 import type { DrizzleTransaction } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { getDb } from "./core";
+import { unwrapDb } from "./core";
 
 /**
  * Helper function to format search terms for PostgreSQL pattern matching.
@@ -174,17 +174,19 @@ export async function lockAndValidateForDelete<TId extends string>(
   ids: TId[],
   entityName: string,
 ): Promise<void> {
-  const locked = await getDb(tx)
-    .select({ id: table.id })
+  const locked = await unwrapDb(tx)
+    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for select()
+    .select({ id: table.id as any })
     .from(table)
-    .where(and(inArray(table.id, ids), notDeleted(table)))
+    // biome-ignore lint/suspicious/noExplicitAny: Drizzle's AnyColumn type is too narrow for inArray()
+    .where(and(inArray(table.id as any, ids), notDeleted(table)))
     .for("update"); // 🔒 Acquires row-level lock
 
   if (locked.length !== ids.length) {
     const foundIds = locked.map((e) => e.id as TId);
     const missingIds = ids.filter((id) => !foundIds.includes(id));
     throw createAppError(
-      `${entityName.toUpperCase()}_NOT_FOUND`,
+      `${entityName.toUpperCase()}_NOT_FOUND` as "PRODUCT_NOT_FOUND",
       `${entityName}s not found or already deleted: ${missingIds.join(", ")}`,
     );
   }

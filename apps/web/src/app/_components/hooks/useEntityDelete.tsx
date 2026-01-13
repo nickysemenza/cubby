@@ -16,8 +16,8 @@ interface UseEntityDeleteOptions {
   /** tRPC delete mutation options factory */
   mutationOptions: (callbacks: {
     onSuccess: () => void;
-    onError: (err: Error) => void;
-  }) => Parameters<typeof useMutation>[0];
+    onError: (err: { message?: string }) => void;
+  }) => unknown;
   /** Query keys to invalidate on success */
   invalidateKeys: readonly unknown[][];
   /** Route to navigate to after deletion */
@@ -77,7 +77,7 @@ export function useEntityDelete({
         toast.success(`${entityLabel} deleted`);
         for (const key of invalidateKeys) {
           // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-          void queryClient.invalidateQueries({ queryKey: [key] });
+          void queryClient.invalidateQueries({ queryKey: [key as unknown[]] });
         }
         void navigate({ to: redirectTo });
       },
@@ -86,7 +86,7 @@ export function useEntityDelete({
           err.message || `Failed to delete ${entityLabel.toLowerCase()}`,
         );
       },
-    }),
+    }) as Parameters<typeof useMutation>[0],
   );
 
   const openDeleteDialog = useCallback(() => {

@@ -11,6 +11,7 @@ import { z } from "zod";
 import { toCSVString } from "~/lib/csv-utils";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
+  type IngredientId,
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
@@ -808,7 +809,7 @@ async function updateProductFromSheetData(
     model?: string | null;
     ndb_number?: number | null;
     expectedQuantity?: number | null;
-    ingredientId?: string | null;
+    ingredientId?: IngredientId | null;
   } = {};
 
   if (sheetData.productName !== undefined) {
@@ -1066,7 +1067,7 @@ async function processAppDeletions(
             i.sheetData.locationName.trim() === "")),
     )
     .map((i) => i.appData?.inventoryEntryId)
-    .filter((id): id is string => id !== undefined)
+    .filter((id): id is NonNullable<typeof id> => id !== undefined)
     .map((id) => unsafeInventoryId(id));
 
   if (inventoryIds.length > 0) {
@@ -1088,7 +1089,7 @@ async function processAppDeletions(
   const locationIds = locationItems
     .filter((i) => i.state === "app_only" && i.resolution === "delete_from_app")
     .map((i) => i.appData?.locationId)
-    .filter((id): id is string => id !== undefined)
+    .filter((id): id is NonNullable<typeof id> => id !== undefined)
     .map((id) => unsafeLocationId(id));
 
   if (locationIds.length > 0) {
@@ -1448,9 +1449,9 @@ const syncPreview = protectedProcedure
 
         // Generate snapshot hash for race condition prevention
         const snapshotHash = generateSnapshotHash(
-          appLocations,
+          appLocations as unknown as LocationCSVRow[],
           sheetLocations,
-          appInventory,
+          appInventory as unknown as InventoryCSVRow[],
           sheetInventory,
         );
 
@@ -1542,9 +1543,9 @@ const applySync = protectedProcedure
 
         // Generate current snapshot hash and compare with preview
         const currentHash = generateSnapshotHash(
-          appLocations,
+          appLocations as unknown as LocationCSVRow[],
           sheetLocations,
-          appInventory,
+          appInventory as unknown as InventoryCSVRow[],
           sheetInventory,
         );
 
@@ -1595,7 +1596,7 @@ const applySync = protectedProcedure
             // Process locations first (inventory may reference them)
             await processImportsToApp(
               {
-                db: tx,
+                db: tx as unknown as Database,
                 actorContext: ctx.actorContext,
               },
               locationItems,
@@ -1605,7 +1606,7 @@ const applySync = protectedProcedure
 
             // Process deletions from app
             await processAppDeletions(
-              { db: tx, actorContext: ctx.actorContext },
+              { db: tx as unknown as Database, actorContext: ctx.actorContext },
               locationItems,
               inventoryItems,
               results,
@@ -1613,7 +1614,7 @@ const applySync = protectedProcedure
 
             // Process renames (app → sheet name)
             await processRenames(
-              { db: tx, actorContext: ctx.actorContext },
+              { db: tx as unknown as Database, actorContext: ctx.actorContext },
               locationItems,
               inventoryItems,
               results,

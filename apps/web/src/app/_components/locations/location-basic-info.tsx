@@ -29,7 +29,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
     entityLabel: "Location",
     mutationOptions: (callbacks) =>
       api.location.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.location.list],
+    invalidateKeys: [[queryKeys.location.list]],
     redirectTo: "/locations",
   });
 

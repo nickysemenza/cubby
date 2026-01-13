@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useMemo } from "react";
 import type { z } from "zod";
 import { queryKeys } from "~/lib/query-keys";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
@@ -13,6 +12,7 @@ import {
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
+import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
@@ -28,17 +28,11 @@ export function InventoryItemList() {
   const { onRowClick, PreviewSheet } = useEntityPreview("inventory");
 
   // Memoize deletable config to prevent infinite render loop
-  const deletableConfig = useMemo(
-    () => ({
-      mutationOptions: (callbacks: {
-        onSuccess: () => void;
-        onError: (err: Error) => void;
-      }) => api.inventory.delete.mutationOptions(callbacks),
-      entityLabel: "Inventory Entry" as const,
-      invalidateKeys: [queryKeys.inventory.list] as const,
-    }),
-    [api],
-  );
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.inventory.delete.mutationOptions,
+    entityLabel: "Inventory Entry",
+    invalidateKeys: [[queryKeys.inventory.list]],
+  });
 
   const { table, data, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({

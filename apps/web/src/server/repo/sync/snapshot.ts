@@ -5,7 +5,8 @@
 
 import crypto from "node:crypto";
 
-import type { InventoryCSVRow, LocationCSVRow } from "~/schemas";
+import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { LocationCSVRow } from "~/schemas/location";
 
 /**
  * Generate stable hash from sync data snapshot.

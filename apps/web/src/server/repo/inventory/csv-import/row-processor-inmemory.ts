@@ -7,7 +7,9 @@
 
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import type { LocationId, ProductId } from "~/schemas/identifiers";
+import { unsafeLocationId } from "~/schemas/identifiers";
 import type { CSVImportResultItem, InventoryCSVRow } from "~/schemas/inventory";
+import type { ProductCategory } from "~/schemas/product";
 import type {
   InventoryLookupMap,
   LocationLookupMap,
@@ -27,11 +29,11 @@ interface RowProcessingResult {
   productToCreate?: {
     name: string;
     manufacturer: string;
-    category: string | null;
-    upc: string | null;
+    category: ProductCategory | null;
+    upc: string | undefined;
     model: string | null;
-    ndbNumber: number | null;
-    expectedQty: number | null;
+    ndb_number: number | null;
+    expectedQuantity: number | null;
   };
   inventoryToUpsert?: {
     productId: ProductId | "PENDING";
@@ -74,9 +76,9 @@ export function processRowInMemory(
         action: "product_only",
         rowIndex,
         productName: row.product_name,
-        locationName: null,
+        locationName: undefined,
         productId: existingProduct?.id,
-        upc: row.upc ?? null,
+        upc: row.upc ?? undefined,
         productWillBeCreated,
         productChanges,
       },
@@ -85,10 +87,10 @@ export function processRowInMemory(
             name: row.product_name,
             manufacturer,
             category: row.category ?? null,
-            upc: row.upc ?? null,
+            upc: row.upc ?? undefined,
             model: row.model ?? null,
-            ndbNumber: row.ndb_number ?? null,
-            expectedQty: row.expected_qty ?? null,
+            ndb_number: row.ndb_number ?? null,
+            expectedQuantity: row.expected_qty ?? null,
           }
         : undefined,
     };
@@ -127,7 +129,7 @@ export function processRowInMemory(
         action = "updated";
       }
     } else {
-      // Check if it's a move (product exists elsewhere with expectedQty=1)
+      // Check if it's a move (product exists elsewhere with expectedQuantity=1)
       const allLocations = getAllProductLocations(
         existingProduct.id,
         lookups.inventoryMap,
@@ -136,7 +138,7 @@ export function processRowInMemory(
 
       if (
         isOnlyAtOneLocation &&
-        existingProduct.expectedQty === 1 &&
+        existingProduct.expectedQuantity === 1 &&
         allLocations[0] !== locationId
       ) {
         action = "moved";
@@ -153,7 +155,7 @@ export function processRowInMemory(
       locationName: row.location_name,
       productId: existingProduct?.id,
       locationId,
-      upc: row.upc ?? null,
+      upc: row.upc ?? undefined,
       productWillBeCreated,
       productChanges,
       locationNotFound,
@@ -163,10 +165,10 @@ export function processRowInMemory(
           name: row.product_name,
           manufacturer,
           category: row.category ?? null,
-          upc: row.upc ?? null,
+          upc: row.upc ?? undefined,
           model: row.model ?? null,
-          ndbNumber: row.ndb_number ?? null,
-          expectedQty: row.expected_qty ?? null,
+          ndb_number: row.ndb_number ?? null,
+          expectedQuantity: row.expected_qty ?? null,
         }
       : undefined,
     inventoryToUpsert:
@@ -223,7 +225,7 @@ function getAllProductLocations(
 
   for (const [key, entry] of inventoryMap.entries()) {
     if (key.startsWith(`${productId}|`)) {
-      locations.push(entry.locationId);
+      locations.push(unsafeLocationId(entry.locationId));
     }
   }
 

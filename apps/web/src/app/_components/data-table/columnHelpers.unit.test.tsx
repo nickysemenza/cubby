@@ -276,7 +276,7 @@ import {
 } from "./columnHelpers";
 
 // Test types
-interface TestRow {
+interface TestRow extends Record<string, unknown> {
   id: string;
   name: string;
   manufacturer?: string | null;
@@ -286,7 +286,7 @@ interface TestRow {
   images?: { id: string; url: string; filename: string }[];
 }
 
-interface InventoryEntryRow {
+interface InventoryEntryRow extends Record<string, unknown> {
   id: string;
   name: string;
   inventoryEntry?: Array<{
@@ -297,14 +297,8 @@ interface InventoryEntryRow {
 }
 
 // Helper to render a cell
-function renderCell<T>(
-  column: ReturnType<typeof createColumnHelper<T>>["accessor"] extends (
-    ...args: infer _R
-  ) => infer S
-    ? S
-    : never,
-  row: T,
-): ReturnType<typeof render> {
+// biome-ignore lint/suspicious/noExplicitAny: test helper
+function renderCell<T>(column: any, row: T): ReturnType<typeof render> {
   // biome-ignore lint/suspicious/noExplicitAny: test helper
   const cellFn = (column as any).cell;
   if (!cellFn) {
@@ -449,7 +443,7 @@ describe("createImageColumn", () => {
 });
 
 describe("createEntityPillColumn", () => {
-  interface RowWithLocations {
+  interface RowWithLocations extends Record<string, unknown> {
     id: string;
     locations: { id: string; name: string }[];
   }
@@ -521,7 +515,14 @@ describe("createUnitMappingsColumn", () => {
 
   it("renders unit mapping display", () => {
     const mappingsMap = {
-      prod1: [{ from: "1 cup", to: "240g" }],
+      prod1: [
+        {
+          a: { value: 1, unit: "cup" },
+          b: { value: 240, unit: "g" },
+          source: null,
+          sourceMetadata: { type: "manual" as const },
+        },
+      ],
     };
     const column = createUnitMappingsColumn(columnHelper, mappingsMap);
     const row = { id: "prod1" };
@@ -693,7 +694,7 @@ describe("createCurrencyColumn", () => {
 });
 
 describe("createSingleEntityPillColumn", () => {
-  interface RowWithIngredient {
+  interface RowWithIngredient extends Record<string, unknown> {
     id: string;
     ingredient: { id: string; name: string } | null;
   }
@@ -801,7 +802,7 @@ describe("createExternalLinkColumn", () => {
 });
 
 describe("createTimestampColumn", () => {
-  interface RowWithTimestamp {
+  interface RowWithTimestamp extends Record<string, unknown> {
     id: string;
     lastUpdated: string | Date | null;
   }

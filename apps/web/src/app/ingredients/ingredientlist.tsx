@@ -17,6 +17,7 @@ import {
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
 import { EntityPillLink } from "../_components/EntityPill";
+import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -57,17 +58,11 @@ export function IngredientList() {
   });
 
   // Memoize deletable config to prevent infinite render loop
-  const deletableConfig = useMemo(
-    () => ({
-      mutationOptions: (callbacks: {
-        onSuccess: () => void;
-        onError: (err: Error) => void;
-      }) => api.ingredient.delete.mutationOptions(callbacks),
-      entityLabel: "Ingredient" as const,
-      invalidateKeys: [queryKeys.ingredient.list] as const,
-    }),
-    [api],
-  );
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.ingredient.delete.mutationOptions,
+    entityLabel: "Ingredient",
+    invalidateKeys: [[queryKeys.ingredient.list]],
+  });
 
   const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({

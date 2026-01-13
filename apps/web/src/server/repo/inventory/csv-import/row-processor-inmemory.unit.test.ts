@@ -11,6 +11,7 @@ import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
+  unsafeProductShortcode,
 } from "~/schemas/identifiers";
 import type { ProductTopLevelOut } from "~/schemas/product";
 import type {
@@ -50,19 +51,19 @@ function createFixtureProduct(
 ): ProductTopLevelOut {
   return {
     id: unsafeProductId(`prod-${Math.random().toString(36).slice(2)}`),
+    shortcode: unsafeProductShortcode("TEST"),
     name: "Test Product",
     manufacturer: "Test Brand",
     model: null,
+    category: null,
+    notes: null,
+    expectedQuantity: null,
+    price: null,
     upc: null,
-    ndbNumber: null,
-    expectedQty: null,
-    ingredientId: null,
+    ndb_number: null,
     images: [],
-    unitMappings: [],
-    ingredient: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-    deletedAt: null,
     ...overrides,
   };
 }
@@ -78,7 +79,6 @@ describe("processRowInMemory", () => {
           id: unsafeProductId("prod-1"),
           name: "Flour",
           manufacturer: "Bob's Red Mill",
-          expectedQty: null,
         }),
       );
 
@@ -120,7 +120,7 @@ describe("processRowInMemory", () => {
       const lookups = createMockLookups();
       const row = {
         product_name: "Salt",
-        manufacturer: null,
+        manufacturer: undefined,
         quantity: 1,
         unit: "each",
         location_name: "Kitchen",
@@ -334,7 +334,6 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Flour",
           manufacturer: "Brand",
-          expectedQty: null,
         }),
       );
 
@@ -381,7 +380,6 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Salt",
           manufacturer: "Brand",
-          expectedQty: null,
         }),
       );
 
@@ -430,7 +428,7 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "iPhone",
           manufacturer: "Apple",
-          expectedQty: 1, // important for move logic
+          expectedQuantity: 1,
         }),
       );
 
@@ -475,7 +473,7 @@ describe("processRowInMemory", () => {
         product_name: "VanillaExtract",
         quantity: 1,
         unit: "each",
-        location_name: null, // no location
+        location_name: undefined, // no location
       };
 
       const result = processRowInMemory(row, 0, lookups, { dryRun: false });
@@ -497,7 +495,6 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Flour",
           manufacturer: "Brand",
-          expectedQty: null, // Not 1, so no move
         }),
       );
 
@@ -564,7 +561,7 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Multi",
           manufacturer: "Brand",
-          expectedQty: 1,
+          expectedQuantity: 1,
         }),
       );
 
@@ -627,7 +624,7 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Flour",
           manufacturer: "Brand",
-          expectedQty: 10, // not 1
+          expectedQuantity: 10,
         }),
       );
 
@@ -675,7 +672,7 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Phone",
           manufacturer: "Brand",
-          expectedQty: 1,
+          expectedQuantity: 1,
         }),
       );
 
@@ -725,7 +722,7 @@ describe("processRowInMemory", () => {
           id: productId,
           name: "Tablet",
           manufacturer: "Brand",
-          expectedQty: 1,
+          expectedQuantity: 1,
         }),
       );
 
@@ -895,7 +892,7 @@ describe("processRowInMemory", () => {
         product_name: "NewItem",
         quantity: 1,
         unit: "each",
-        location_name: null,
+        location_name: undefined,
       };
 
       const result = processRowInMemory(row, 0, lookups, { dryRun: false });

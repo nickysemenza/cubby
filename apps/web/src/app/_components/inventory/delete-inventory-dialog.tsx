@@ -38,7 +38,7 @@ export function DeleteInventoryDialog({
   const handleDelete = async () => {
     try {
       await Promise.all(
-        items.map((item) => deleteMutation.mutateAsync({ id: item.id })),
+        items.map((item) => deleteMutation.mutateAsync({ ids: [item.id] })),
       );
 
       toast.success(

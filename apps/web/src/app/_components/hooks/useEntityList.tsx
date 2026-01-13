@@ -92,8 +92,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
     /** tRPC delete mutation options factory */
     mutationOptions: (callbacks: {
       onSuccess: () => void;
-      onError: (err: Error) => void;
-    }) => Parameters<typeof useMutation>[0];
+      onError: (err: { message?: string }) => void;
+    }) => unknown;
     /** Entity type label for dialog (e.g., "Product", "Ingredient") */
     entityLabel: string;
     /** Query keys to invalidate on success */
@@ -179,24 +179,44 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const deleteMutationOptions = useMemo(() => {
     if (!deletable) return null;
 
-    return deletable.mutationOptions({
+    // Get base mutation options from tRPC
+    const baseMutationOptions = deletable.mutationOptions({
+      onSuccess: () => {
+        toast.success(`${deletable.entityLabel} deleted`);
+        // Refetch to ensure data is in sync with server
+        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
+        for (const key of deletable.invalidateKeys) {
+          void queryClient.invalidateQueries({ queryKey: [key as unknown[]] });
+        }
+      },
+      onError: (err) => {
+        toast.error(
+          err.message ||
+            `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
+        );
+      },
+    }) as Record<string, unknown>;
+
+    // Extend with optimistic updates
+    return {
+      ...baseMutationOptions,
       onMutate: async (variables: { ids: string[] }) => {
         // Cancel any outgoing refetches to prevent them from overwriting optimistic update
         // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
         for (const key of deletable.invalidateKeys) {
-          await queryClient.cancelQueries({ queryKey: [key] });
+          await queryClient.cancelQueries({ queryKey: [key as unknown[]] });
         }
 
         // Snapshot the previous value for rollback
         const previousData: Array<unknown> = [];
         for (const key of deletable.invalidateKeys) {
-          const currentData = queryClient.getQueryData([key]);
+          const currentData = queryClient.getQueryData([key as unknown[]]);
           previousData.push(currentData);
         }
 
         // Optimistically remove deleted items from all relevant queries
         for (const key of deletable.invalidateKeys) {
-          queryClient.setQueryData([key], (old: unknown) => {
+          queryClient.setQueryData([key as unknown[]], (old: unknown) => {
             if (!old || typeof old !== "object") {
               return old;
             }
@@ -220,34 +240,39 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
         return { previousData };
       },
-      onSuccess: () => {
-        toast.success(`${deletable.entityLabel} deleted`);
-        // Refetch to ensure data is in sync with server
-        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        for (const key of deletable.invalidateKeys) {
-          void queryClient.invalidateQueries({ queryKey: [key] });
-        }
-      },
-      onError: (err, _variables, context) => {
+      onError: (
+        err: unknown,
+        _variables: unknown,
+        context: { previousData?: unknown[] } | undefined,
+      ) => {
         // Roll back optimistic update on error
         if (context?.previousData) {
           deletable.invalidateKeys.forEach((key, index) => {
             // Wrap key in array to match tRPC's nested structure
-            queryClient.setQueryData([key], context.previousData[index]);
+            queryClient.setQueryData(
+              [key as unknown[]],
+              context.previousData?.[index],
+            );
           });
         }
-        toast.error(
-          err.message ||
-            `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
-        );
+        // Call the base onError from tRPC (cast to avoid type mismatch)
+        if (baseMutationOptions.onError) {
+          (
+            baseMutationOptions.onError as (
+              err: unknown,
+              variables: unknown,
+              context: unknown,
+            ) => void
+          )(err, _variables, context);
+        }
       },
-    });
+    };
   }, [deletable, queryClient]);
 
   // Delete mutation (only created if deletable is provided)
   const deleteMutation = deleteMutationOptions
     ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
-      useMutation(deleteMutationOptions)
+      useMutation(deleteMutationOptions as Parameters<typeof useMutation>[0])
     : null;
   // Combine user's bulk actions with delete bulk action if deletable is provided
   const effectiveBulkActions = useMemo(():
@@ -512,7 +537,16 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
         <DeleteEntityDialog
           open={deleteTarget !== null}
           onOpenChange={(open) => !open && setDeleteTarget(null)}
-          items={deleteTarget ? [deleteTarget] : []}
+          items={
+            deleteTarget
+              ? [
+                  {
+                    id: deleteTarget.id,
+                    name: deleteTarget.name ?? deleteTarget.id,
+                  },
+                ]
+              : []
+          }
           entityType={deletable.entityLabel}
           onDelete={async () => {
             if (deleteTarget) {

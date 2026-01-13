@@ -22,7 +22,7 @@ export const IngredientBasicInfo: FC<IngredientBasicInfoProps> = ({
     entityLabel: "Ingredient",
     mutationOptions: (callbacks) =>
       api.ingredient.delete.mutationOptions(callbacks),
-    invalidateKeys: [queryKeys.ingredient.list],
+    invalidateKeys: [[queryKeys.ingredient.list]],
     redirectTo: "/ingredients",
   });
 

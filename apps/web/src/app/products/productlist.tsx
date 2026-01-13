@@ -74,7 +74,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   const deletableConfig = useDeletableConfig({
     mutationFn: deleteMutationFn,
     entityLabel: "Product",
-    invalidateKeys: [queryKeys.product.list],
+    invalidateKeys: [[queryKeys.product.list]],
   });
 
   // Memoize columns to prevent recreating on every render
@@ -192,21 +192,20 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
 
   // Memoize filters to prevent recreating on every render
   const filters = useMemo(
-    () =>
-      [
-        "name",
-        "manufacturer",
-        "upc",
-        {
-          id: "category",
-          placeholder: "Filter by category...",
-          filterType: "select",
-          options: [
-            { value: "", label: "All categories" },
-            ...productCategoryOptionsWithTheme,
-          ],
-        },
-      ] as const,
+    () => [
+      "name",
+      "manufacturer",
+      "upc",
+      {
+        id: "category",
+        placeholder: "Filter by category...",
+        filterType: "select" as const,
+        options: [
+          { value: "", label: "All categories" },
+          ...productCategoryOptionsWithTheme,
+        ],
+      },
+    ],
     [],
   );
 

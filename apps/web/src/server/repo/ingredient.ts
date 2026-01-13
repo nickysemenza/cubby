@@ -487,10 +487,12 @@ export const deleteIngredients = async (
     });
     if (linkedProducts.length > 0) {
       const failedIngredientIds = dedupe(
-        linkedProducts.map((p) => p.ingredientId),
+        linkedProducts
+          .map((p) => p.ingredientId)
+          .filter((id): id is string => id !== null),
       );
       const failedIngredients = await tx.query.ingredient.findMany({
-        where: inArray(ingredient.id, failedIngredientIds),
+        where: inArray(ingredient.id, failedIngredientIds as string[]),
         columns: { id: true, name: true },
       });
       const names = failedIngredients.map((i) => i.name).join(", ");

@@ -25,7 +25,7 @@ import type { USDAClient } from "../clients/usda";
  *   usdaClient
  * );
  */
-export async function batchEnrichWithFood<T>(
+export async function batchEnrichWithFood<T extends object>(
   items: T[],
   getLookupParam: (item: T) => FoodLookupParam | null,
   usdaClient: USDAClient,

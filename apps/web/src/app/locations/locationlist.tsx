@@ -17,6 +17,7 @@ import {
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
@@ -46,17 +47,11 @@ export function LocationList() {
   });
 
   // Memoize deletable config to prevent infinite render loop
-  const deletableConfig = useMemo(
-    () => ({
-      mutationOptions: (callbacks: {
-        onSuccess: () => void;
-        onError: (err: Error) => void;
-      }) => api.location.delete.mutationOptions(callbacks),
-      entityLabel: "Location" as const,
-      invalidateKeys: [queryKeys.location.list] as const,
-    }),
-    [api],
-  );
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.location.delete.mutationOptions,
+    entityLabel: "Location",
+    invalidateKeys: [[queryKeys.location.list]],
+  });
 
   const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({

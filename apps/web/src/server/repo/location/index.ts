@@ -14,7 +14,7 @@ export {
   updateLocation,
 } from "./crud";
 // CSV operations (existing files)
-export { compareLocationRows } from "./csv-comparison";
+export { getLocationRowDifferences } from "./csv-comparison";
 export { exportLocationsToCSV } from "./csv-export";
 export { importLocationsFromCSV } from "./csv-import";
 // Helpers

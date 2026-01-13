@@ -21,12 +21,13 @@
 import { dedupe } from "~/misc/array-helpers";
 import type { ActorContext } from "~/schemas/context";
 import type { LocationId, ProductId } from "~/schemas/identifiers";
-import { unsafeLocationId } from "~/schemas/identifiers";
+import { unsafeLocationId, unsafeProductId } from "~/schemas/identifiers";
 import type {
   CSVImportResult,
   CSVImportResultItem,
   InventoryCSVRow,
 } from "~/schemas/inventory";
+import type { ProductCategory } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import { location, product } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
@@ -122,7 +123,9 @@ export const importInventoryFromCSV = async (
   ]);
 
   // Fetch inventory entries for all product+location combinations
-  const productIds = Array.from(productMap.values()).map((p) => p.id);
+  const productIds = Array.from(productMap.values()).map((p) =>
+    unsafeProductId(p.id),
+  );
   const locationIds = Array.from(new Set(Array.from(locationMap.values())));
 
   const _inventoryMap = await batchFindInventoryEntries(
@@ -142,11 +145,11 @@ export const importInventoryFromCSV = async (
   const productsToCreate: Array<{
     name: string;
     manufacturer: string;
-    category: string | null;
-    upc: string | null;
+    category: ProductCategory | null;
+    upc: string | undefined;
     model: string | null;
-    ndbNumber: number | null;
-    expectedQty: number | null;
+    ndb_number: number | null;
+    expectedQuantity: number | null;
   }> = [];
   const locationsToCreate: Array<{ name: string }> = [];
   const inventoryToUpsert: Array<{
@@ -236,7 +239,9 @@ export const importInventoryFromCSV = async (
             name,
             type: "room" as const,
             parentId: null,
-            shortcode: await generateUniqueLocationShortcode(tx),
+            shortcode: await generateUniqueLocationShortcode(
+              tx as unknown as Database,
+            ),
           })),
         );
 
@@ -265,7 +270,9 @@ export const importInventoryFromCSV = async (
         const productsWithShortcodes = await Promise.all(
           productsToCreate.map(async (p) => ({
             ...p,
-            shortcode: await generateUniqueProductShortcode(tx),
+            shortcode: await generateUniqueProductShortcode(
+              tx as unknown as Database,
+            ),
           })),
         );
 
@@ -282,13 +289,13 @@ export const importInventoryFromCSV = async (
             (i) =>
               i.productName === p.name && i.action !== "error" && !i.productId,
           );
-          if (item) item.productId = p.id;
+          if (item) item.productId = unsafeProductId(p.id);
 
           // Update inventory entries that were waiting for this product ID
           // Match directly by product name stored in the inventory entry
           for (const inv of inventoryToUpsert) {
             if (inv.productId === "PENDING" && inv.productName === p.name) {
-              inv.productId = p.id;
+              inv.productId = unsafeProductId(p.id);
             }
           }
         }

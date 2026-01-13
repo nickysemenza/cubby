@@ -19,11 +19,19 @@ interface TableStateOptions {
 
 export interface TableStateReturn {
   sorting: SortingState;
-  setSorting: (value: SortingState) => void;
+  setSorting: (
+    value: SortingState | ((old: SortingState) => SortingState),
+  ) => void;
   columnFilters: ColumnFiltersState;
-  setColumnFilters: (value: ColumnFiltersState) => void;
+  setColumnFilters: (
+    value:
+      | ColumnFiltersState
+      | ((old: ColumnFiltersState) => ColumnFiltersState),
+  ) => void;
   pagination: PaginationState;
-  setPagination: (value: PaginationState) => void;
+  setPagination: (
+    value: PaginationState | ((old: PaginationState) => PaginationState),
+  ) => void;
   getColumnFilter: (columnId: string) => string | undefined;
   getSortParams: () => SortParams;
 }
@@ -49,16 +57,28 @@ export function useTableState(
 
   // Wrap state setters in startTransition to prevent UI freezing
   const setSorting = useCallback(
-    (value: SortingState) => startTransition(() => setSortingRaw(value)),
+    (value: SortingState | ((old: SortingState) => SortingState)) =>
+      startTransition(() =>
+        setSortingRaw(typeof value === "function" ? value : () => value),
+      ),
     [],
   );
   const setColumnFilters = useCallback(
-    (value: ColumnFiltersState) =>
-      startTransition(() => setColumnFiltersRaw(value)),
+    (
+      value:
+        | ColumnFiltersState
+        | ((old: ColumnFiltersState) => ColumnFiltersState),
+    ) =>
+      startTransition(() =>
+        setColumnFiltersRaw(typeof value === "function" ? value : () => value),
+      ),
     [],
   );
   const setPagination = useCallback(
-    (value: PaginationState) => startTransition(() => setPaginationRaw(value)),
+    (value: PaginationState | ((old: PaginationState) => PaginationState)) =>
+      startTransition(() =>
+        setPaginationRaw(typeof value === "function" ? value : () => value),
+      ),
     [],
   );
 
