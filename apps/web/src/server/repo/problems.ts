@@ -459,6 +459,278 @@ const findProductsWithIslandedMappings = async (
   return problems;
 };
 
+// Count-only functions for badge display (no full data fetching)
+const countDuplicateUniqueProducts = async (db: Database): Promise<number> => {
+  const duplicates = await getDb(db).query.product.findMany({
+    where: notDeleted(product),
+    columns: {
+      id: true,
+      expectedQuantity: true,
+    },
+    with: {
+      InventoryEntry: {
+        columns: {
+          id: true,
+        },
+      },
+    },
+  });
+
+  return duplicates.filter(
+    (prod) => prod.expectedQuantity === 1 && prod.InventoryEntry.length > 1,
+  ).length;
+};
+
+const countOrphanedProducts = async (db: Database): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const result = await dbClient
+    .select({ count: sql<number>`count(*)` })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        isNull(product.ingredientId),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(inventoryEntry)
+            .where(eq(inventoryEntry.productId, product.id)),
+        ),
+      ),
+    );
+
+  return Number(result[0]?.count ?? 0);
+};
+
+const countInvalidUPCs = async (db: Database): Promise<number> => {
+  const productsWithUPCs = await getDb(db).query.product.findMany({
+    where: sql`${product.deletedAt} IS NULL AND ${product.upc} IS NOT NULL`,
+    columns: {
+      name: true,
+      upc: true,
+    },
+  });
+
+  let count = 0;
+  const seenUPCs = new Set<string>();
+
+  for (const prod of productsWithUPCs) {
+    if (prod.upc && !isMiscProduct(prod.name)) {
+      // Check for invalid format
+      const result = upcSchema.safeParse(prod.upc);
+      if (!result.success) {
+        count++;
+      }
+      // Check for duplicates
+      else if (seenUPCs.has(prod.upc)) {
+        count++;
+      } else {
+        seenUPCs.add(prod.upc);
+      }
+    }
+  }
+
+  return count;
+};
+
+const countProductsWithoutMappings = async (db: Database): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const productsWithoutMappings = await dbClient
+    .select({
+      name: product.name,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(productUnitMappings)
+            .where(eq(productUnitMappings.productId, product.id)),
+        ),
+      ),
+    );
+
+  return productsWithoutMappings.filter((p) => !isMiscProduct(p.name)).length;
+};
+
+const countInvalidInventoryAmounts = async (db: Database): Promise<number> => {
+  const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
+    where: notDeleted(inventoryEntry),
+    columns: {
+      id: true,
+      amount: true,
+    },
+  });
+
+  let count = 0;
+  for (const entry of inventoryEntries) {
+    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
+    if (parsedAmount.value <= 0) {
+      count++;
+    }
+  }
+
+  return count;
+};
+
+const countEmptyLocations = async (db: Database): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const childLocation = dbClient
+    .$with("child_location")
+    .as(dbClient.select({ parentId: location.parentId }).from(location));
+
+  const result = await dbClient
+    .with(childLocation)
+    .select({ count: sql<number>`count(*)` })
+    .from(location)
+    .where(
+      and(
+        notDeleted(location),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(inventoryEntry)
+            .where(eq(inventoryEntry.locationId, location.id)),
+        ),
+        notExists(
+          dbClient
+            .select({ id: sql`1` })
+            .from(childLocation)
+            .where(eq(childLocation.parentId, location.id)),
+        ),
+      ),
+    );
+
+  return Number(result[0]?.count ?? 0);
+};
+
+const countProductsWithIslandedMappings = async (
+  db: Database,
+): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const productsWithMappings = await dbClient.query.product.findMany({
+    where: notDeleted(product),
+    columns: {
+      id: true,
+      name: true,
+    },
+    with: {
+      unitMappings: {
+        where: notDeleted(productUnitMappings),
+        columns: {
+          a: true,
+          b: true,
+          source: true,
+        },
+      },
+    },
+  });
+
+  let count = 0;
+  const { wasm } = await import("~/lib/wasm");
+
+  for (const prod of productsWithMappings) {
+    if (prod.unitMappings.length < 2 || isMiscProduct(prod.name)) continue;
+
+    try {
+      const islands = wasm.detect_unit_mapping_islands(
+        prod.unitMappings,
+      ) as string[][];
+
+      if (islands.length >= 2) {
+        count++;
+      }
+    } catch (error) {
+      console.error(`Failed to detect islands for product ${prod.id}:`, error);
+    }
+  }
+
+  return count;
+};
+
+interface ProblemsCount {
+  byType: {
+    duplicateUniqueProducts: number;
+    orphanedProducts: number;
+    invalidUPCs: number;
+    productsWithoutMappings: number;
+    invalidInventoryAmounts: number;
+    emptyLocations: number;
+    productsWithoutUPCImages: number;
+    productsWithWrongCategory: number;
+    productsWithStalePrices: number;
+    inventoryWithStaleValuations: number;
+    productsWithIslandedMappings: number;
+  };
+  total: number;
+}
+
+// Optimized count-only query for badge display
+export const findAllProblemsCount = async (
+  db: Database,
+): Promise<ProblemsCount> => {
+  const [
+    duplicateUniqueProducts,
+    orphanedProducts,
+    invalidUPCs,
+    productsWithoutMappings,
+    invalidInventoryAmounts,
+    emptyLocations,
+    productsWithUPCNoImages,
+    productsNeedingFoodCategory,
+    productsWithStalePrices,
+    inventoryWithStaleValuations,
+    productsWithIslandedMappings,
+  ] = await Promise.all([
+    countDuplicateUniqueProducts(db),
+    countOrphanedProducts(db),
+    countInvalidUPCs(db),
+    countProductsWithoutMappings(db),
+    countInvalidInventoryAmounts(db),
+    countEmptyLocations(db),
+    findProductsWithUPCNoImages(db).then((r) => r.length),
+    findProductsNeedingFoodCategory(db).then((r) => r.length),
+    findProductsWithStalePrices(db).then((r) => r.length),
+    findInventoryWithStaleValuations(db).then((r) => r.length),
+    countProductsWithIslandedMappings(db),
+  ]);
+
+  const byType = {
+    duplicateUniqueProducts,
+    orphanedProducts,
+    invalidUPCs,
+    productsWithoutMappings,
+    invalidInventoryAmounts,
+    emptyLocations,
+    productsWithoutUPCImages: productsWithUPCNoImages,
+    productsWithWrongCategory: productsNeedingFoodCategory,
+    productsWithStalePrices,
+    inventoryWithStaleValuations,
+    productsWithIslandedMappings,
+  };
+
+  const total =
+    duplicateUniqueProducts +
+    orphanedProducts +
+    invalidUPCs +
+    productsWithoutMappings +
+    invalidInventoryAmounts +
+    emptyLocations +
+    productsWithUPCNoImages +
+    productsNeedingFoodCategory +
+    productsWithStalePrices +
+    inventoryWithStaleValuations +
+    productsWithIslandedMappings;
+
+  return { byType, total };
+};
+
 // Main function to get all problems
 export const findAllProblems = async (db: Database): Promise<AllProblems> => {
   // Run all checks in parallel for better performance

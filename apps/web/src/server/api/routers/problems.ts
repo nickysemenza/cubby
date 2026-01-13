@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { amount } from "~/codec/codec";
-import { findAllProblems } from "~/server/repo/problems";
+import { findAllProblems, findAllProblemsCount } from "~/server/repo/problems";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Output schemas for each problem type
@@ -123,6 +123,31 @@ const getAllProblems = protectedProcedure
     return await findAllProblems(ctx.db);
   });
 
+// Count-only procedure for badge display (optimized)
+const getProblemsCount = protectedProcedure
+  .output(
+    z.object({
+      total: z.number(),
+      byType: z.object({
+        duplicateUniqueProducts: z.number(),
+        orphanedProducts: z.number(),
+        invalidUPCs: z.number(),
+        productsWithoutMappings: z.number(),
+        invalidInventoryAmounts: z.number(),
+        emptyLocations: z.number(),
+        productsWithoutUPCImages: z.number(),
+        productsWithWrongCategory: z.number(),
+        productsWithStalePrices: z.number(),
+        inventoryWithStaleValuations: z.number(),
+        productsWithIslandedMappings: z.number(),
+      }),
+    }),
+  )
+  .query(async ({ ctx }) => {
+    return await findAllProblemsCount(ctx.db);
+  });
+
 export const problemsRouter = createTRPCRouter({
   getAllProblems,
+  getProblemsCount,
 });

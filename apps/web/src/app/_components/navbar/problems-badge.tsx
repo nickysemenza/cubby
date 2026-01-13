@@ -15,7 +15,7 @@ export const ProblemsBadge = () => {
   const api = useTRPC();
 
   const { data: problems, isLoading } = useQuery({
-    ...api.problems.getAllProblems.queryOptions(),
+    ...api.problems.getProblemsCount.queryOptions(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -28,35 +28,35 @@ export const ProblemsBadge = () => {
     );
   }
 
-  const totalProblems = problems?.totalProblems ?? 0;
+  const totalProblems = problems?.total ?? 0;
   const hasProblems = totalProblems > 0;
 
   // Build tooltip content
   const tooltipParts: string[] = [];
   if (problems) {
-    if (problems.duplicateUniqueProducts.length > 0) {
+    if (problems.byType.duplicateUniqueProducts > 0) {
       tooltipParts.push(
-        `${problems.duplicateUniqueProducts.length} duplicate${problems.duplicateUniqueProducts.length > 1 ? "s" : ""}`,
+        `${problems.byType.duplicateUniqueProducts} duplicate${problems.byType.duplicateUniqueProducts > 1 ? "s" : ""}`,
       );
     }
-    if (problems.orphanedProducts.length > 0) {
-      tooltipParts.push(`${problems.orphanedProducts.length} orphaned`);
+    if (problems.byType.orphanedProducts > 0) {
+      tooltipParts.push(`${problems.byType.orphanedProducts} orphaned`);
     }
-    if (problems.invalidUPCs.length > 0) {
-      tooltipParts.push(`${problems.invalidUPCs.length} invalid UPC`);
+    if (problems.byType.invalidUPCs > 0) {
+      tooltipParts.push(`${problems.byType.invalidUPCs} invalid UPC`);
     }
-    if (problems.productsWithoutMappings.length > 0) {
+    if (problems.byType.productsWithoutMappings > 0) {
       tooltipParts.push(
-        `${problems.productsWithoutMappings.length} without pricing`,
+        `${problems.byType.productsWithoutMappings} without pricing`,
       );
     }
-    if (problems.invalidInventoryAmounts.length > 0) {
+    if (problems.byType.invalidInventoryAmounts > 0) {
       tooltipParts.push(
-        `${problems.invalidInventoryAmounts.length} invalid amount`,
+        `${problems.byType.invalidInventoryAmounts} invalid amount`,
       );
     }
-    if (problems.emptyLocations.length > 0) {
-      tooltipParts.push(`${problems.emptyLocations.length} empty location`);
+    if (problems.byType.emptyLocations > 0) {
+      tooltipParts.push(`${problems.byType.emptyLocations} empty location`);
     }
   }
 
