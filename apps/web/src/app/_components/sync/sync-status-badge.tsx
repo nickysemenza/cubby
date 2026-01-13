@@ -2,7 +2,6 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle, Check, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/spinner";
 import {
   Tooltip,
   TooltipContent,
@@ -14,9 +13,6 @@ import { useSyncPreview } from "./use-sync-preview";
 
 export const SyncStatusBadge = () => {
   const {
-    isConfigured,
-    isConnected,
-    isLoadingConnection,
     isLoadingPreview,
     status,
     previewResult,
@@ -27,29 +23,29 @@ export const SyncStatusBadge = () => {
 
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Fetch preview on mount when connected
+  // Fetch preview on mount
   useEffect(() => {
-    if (isConnected && !status && !isLoadingPreview) {
+    if (!status && !isLoadingPreview && !previewError) {
       fetchPreview();
     }
-  }, [isConnected, status, isLoadingPreview, fetchPreview]);
+  }, [status, isLoadingPreview, previewError, fetchPreview]);
 
-  // Don't render if not configured
-  if (!isConfigured && !isLoadingConnection) {
+  // Don't render if clearly not configured (PRECONDITION_FAILED error)
+  if (previewError?.data?.code === "PRECONDITION_FAILED") {
     return null;
   }
 
-  // Loading connection status
-  if (isLoadingConnection) {
+  // Loading preview
+  if (isLoadingPreview) {
     return (
       <Button variant="ghost" size="sm" disabled className="h-8 px-2">
-        <Spinner />
+        <RefreshCw className="h-4 w-4 animate-spin" />
       </Button>
     );
   }
 
-  // Not connected - show warning that links to settings
-  if (!isConnected) {
+  // Error state (not configured or other error) - link to settings
+  if (previewError) {
     return (
       <Tooltip>
         <TooltipTrigger
@@ -66,39 +62,7 @@ export const SyncStatusBadge = () => {
           <AlertTriangle className="h-4 w-4 text-muted-foreground" />
         </TooltipTrigger>
         <TooltipContent>
-          <p>Google Sheet not connected</p>
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  // Loading preview
-  if (isLoadingPreview) {
-    return (
-      <Button variant="ghost" size="sm" disabled className="h-8 px-2">
-        <RefreshCw className="h-4 w-4 animate-spin" />
-      </Button>
-    );
-  }
-
-  // Error state
-  if (previewError) {
-    return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2"
-              onClick={fetchPreview}
-            />
-          }
-        >
-          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Could not check sync status. Click to retry.</p>
+          <p>Sheet not connected. Click to configure.</p>
         </TooltipContent>
       </Tooltip>
     );

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import type { SyncPreviewResult } from "~/schemas/sync";
 import { useTRPC } from "~/trpc/react";
@@ -42,14 +42,8 @@ const extractSyncStatus = (preview: SyncPreviewResult): SyncStatus => {
 
 export const useSyncPreview = () => {
   const api = useTRPC();
-  const queryClient = useQueryClient();
   const [previewResult, setPreviewResult] = useState<SyncPreviewResult | null>(
     null,
-  );
-
-  // Connection status query - lightweight check
-  const connectionQuery = useQuery(
-    api.googleSheets.getConnectionStatus.queryOptions(),
   );
 
   // Sync preview mutation
@@ -63,10 +57,10 @@ export const useSyncPreview = () => {
 
   // Fetch preview (can be called by badge on mount or manually)
   const fetchPreview = useCallback(() => {
-    if (connectionQuery.data?.connected) {
-      previewMutation.mutate();
-    }
-  }, [connectionQuery.data?.connected, previewMutation]);
+    // Just try to fetch preview
+    // If not configured/connected, mutation will fail with clear error
+    previewMutation.mutate();
+  }, [previewMutation]);
 
   // Clear preview (after dialog closes)
   const clearPreview = useCallback(() => {
@@ -75,13 +69,9 @@ export const useSyncPreview = () => {
 
   // Invalidate and refetch (after sync applied)
   const invalidateAndRefetch = useCallback(() => {
-    // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
-    queryClient.invalidateQueries({
-      queryKey: [api.googleSheets.getConnectionStatus.queryKey()],
-    });
     setPreviewResult(null);
     // Will refetch on next fetchPreview call
-  }, [queryClient, api.googleSheets.getConnectionStatus]);
+  }, []);
 
   // Derived status for badge
   const status: SyncStatus | null = previewResult
@@ -89,12 +79,11 @@ export const useSyncPreview = () => {
     : null;
 
   return {
-    // Connection state
-    isConfigured: connectionQuery.data?.configured ?? false,
-    isConnected: connectionQuery.data?.connected ?? false,
-    sheetName: connectionQuery.data?.sheetName ?? null,
-    sheetId: connectionQuery.data?.sheetId ?? null,
-    isLoadingConnection: connectionQuery.isLoading,
+    // Infer configured state from preview mutation error
+    // If error is PRECONDITION_FAILED, it means not configured
+    isConfigured:
+      !previewMutation.error ||
+      previewMutation.error.data?.code !== "PRECONDITION_FAILED",
 
     // Preview state
     previewResult,
