@@ -9,6 +9,8 @@ export {
   createInventoryEntry,
   deleteInventoryEntries,
   findInventoryWithStaleValuations,
+  getInventoryByLocationIds,
+  getInventoryCountsByLocations,
   getInventoryEntryByID,
   inventoryentryList,
   syncInventoryValuationsForProduct,

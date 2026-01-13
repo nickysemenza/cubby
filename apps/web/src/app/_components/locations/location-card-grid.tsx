@@ -8,6 +8,7 @@ import { Badge } from "~/components/ui/badge";
 import { EntityIcon } from "~/entities/entities";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
+import type { InventoryItem } from "./calculate-inventory-valuation";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIcon } from "./location-icons";
@@ -28,7 +29,7 @@ export function LocationCardGrid({
 }: LocationCardGridProps) {
   const api = useTRPC();
 
-  // Batch query inventory counts for all locations (avoid N+1)
+  // Batch query inventory counts and items for all locations (avoid N+1)
   const locationIds = useMemo(
     () => locations.map((loc) => loc.id),
     [locations],
@@ -37,6 +38,24 @@ export function LocationCardGrid({
   const { data: inventoryCounts } = useQuery(
     api.inventory.getCountsByLocations.queryOptions({ locationIds }),
   );
+
+  // Batch fetch all inventory items for valuation calculations
+  const { data: allInventory } = useQuery(
+    api.inventory.getByLocationIds.queryOptions({ locationIds }),
+  );
+
+  // Group inventory items by locationId client-side
+  const inventoryByLocation = useMemo(() => {
+    const map = new Map<string, InventoryItem[]>();
+    if (!allInventory) return map;
+
+    for (const item of allInventory) {
+      const items = map.get(item.locationId) ?? [];
+      items.push(item);
+      map.set(item.locationId, items);
+    }
+    return map;
+  }, [allInventory]);
 
   return (
     <GridContainer cols="cards3" className={className}>
@@ -47,6 +66,7 @@ export function LocationCardGrid({
           showParentPath={showParentPath}
           onLocationSelect={onLocationSelect}
           inventoryCount={inventoryCounts?.[location.id] ?? 0}
+          inventoryItems={inventoryByLocation.get(location.id) ?? []}
         />
       ))}
     </GridContainer>
@@ -58,6 +78,7 @@ interface LocationCardProps {
   showParentPath?: boolean;
   onLocationSelect?: (location: InfLocation) => void;
   inventoryCount: number;
+  inventoryItems: InventoryItem[];
 }
 
 function LocationCard({
@@ -65,6 +86,7 @@ function LocationCard({
   showParentPath,
   onLocationSelect,
   inventoryCount,
+  inventoryItems,
 }: LocationCardProps) {
   const childrenCount = location.children?.length || 0;
   const hasInventory = inventoryCount > 0;
@@ -114,7 +136,7 @@ function LocationCard({
     details.push(
       <InventoryValuationSummary
         key="value"
-        locationId={location.id}
+        items={inventoryItems}
         variant="compact"
         className=""
       />,

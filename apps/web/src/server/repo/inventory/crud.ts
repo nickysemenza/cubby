@@ -563,6 +563,28 @@ export const createInventoryEntry = async (
 };
 
 /**
+ * Get inventory entries for multiple locations (batch query to avoid N+1).
+ * Returns all inventory entries with product and location relations for the given location IDs.
+ */
+export const getInventoryByLocationIds = async (
+  db: Database,
+  locationIds: LocationId[],
+) => {
+  if (locationIds.length === 0) return [];
+
+  const dbClient = getDb(db);
+  const results = await dbClient.query.inventoryEntry.findMany({
+    where: and(
+      notDeleted(inventoryEntry),
+      inArray(inventoryEntry.locationId, locationIds),
+    ),
+    ...relations.inventory.full,
+  });
+
+  return results.map(dbInventoryEntryToAPI);
+};
+
+/**
  * Soft delete inventory entries by IDs
  */
 export const deleteInventoryEntries = async (
