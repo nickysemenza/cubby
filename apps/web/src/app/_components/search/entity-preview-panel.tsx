@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
+import { useMemo } from "react";
 import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
@@ -26,58 +27,29 @@ export function EntityPreviewPanel({
 }: EntityPreviewPanelProps) {
   const api = useTRPC();
 
-  // All queries - only the one matching entityType will be enabled
-  const productQuery = useQuery({
-    ...api.product.getByID.queryOptions({ id }),
-    enabled: entityType === "product",
-  });
-  const recipeQuery = useQuery({
-    ...api.recipe.getByID.queryOptions({ id }),
-    enabled: entityType === "recipe",
-  });
-  const ingredientQuery = useQuery({
-    ...api.ingredient.getByID.queryOptions({ id }),
-    enabled: entityType === "ingredient",
-  });
-  const locationQuery = useQuery({
-    ...api.location.getByID.queryOptions({ id }),
-    enabled: entityType === "location",
-  });
-  const inventoryQuery = useQuery({
-    ...api.inventory.getByID.queryOptions({ id }),
-    enabled: entityType === "inventory",
-  });
-  const usdaQuery = useQuery({
-    ...api.usda.getByID.queryOptions({ id: parseInt(id, 10) }),
-    enabled: entityType === "usda-food",
-  });
-  const imageQuery = useQuery({
-    ...api.image.getImageById.queryOptions({ id }),
-    enabled: entityType === "image",
-  });
-
-  // Get active query based on entity type
-  const getActiveQuery = () => {
+  // Get query options based on entity type (stable reference with useMemo)
+  const queryOptions = useMemo(() => {
     switch (entityType) {
       case "product":
-        return productQuery;
+        return api.product.getByID.queryOptions({ id });
       case "recipe":
-        return recipeQuery;
+        return api.recipe.getByID.queryOptions({ id });
       case "ingredient":
-        return ingredientQuery;
+        return api.ingredient.getByID.queryOptions({ id });
       case "location":
-        return locationQuery;
+        return api.location.getByID.queryOptions({ id });
       case "inventory":
-        return inventoryQuery;
+        return api.inventory.getByID.queryOptions({ id });
       case "usda-food":
-        return usdaQuery;
+        return api.usda.getByID.queryOptions({ id: parseInt(id, 10) });
       case "image":
-        return imageQuery;
+        return api.image.getImageById.queryOptions({ id });
     }
-  };
+  }, [entityType, id, api]);
 
-  const activeQuery = getActiveQuery();
-  const { isLoading, error } = activeQuery;
+  // Single query hook instead of 7 disabled ones
+  const query = useQuery(queryOptions);
+  const { isLoading, error, data } = query;
 
   // Get entity definition for link
   const entityDef = entities[entityType];
@@ -115,26 +87,26 @@ export function EntityPreviewPanel({
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {entityType === "product" && productQuery.data && (
-          <ProductDetail product={productQuery.data} />
+        {entityType === "product" && data && (
+          <ProductDetail product={data as never} />
         )}
-        {entityType === "recipe" && recipeQuery.data && (
-          <RecipeDetail recipe={recipeQuery.data} />
+        {entityType === "recipe" && data && (
+          <RecipeDetail recipe={data as never} />
         )}
-        {entityType === "ingredient" && ingredientQuery.data && (
-          <IngredientDetail ingredient={ingredientQuery.data} />
+        {entityType === "ingredient" && data && (
+          <IngredientDetail ingredient={data as never} />
         )}
-        {entityType === "location" && locationQuery.data && (
-          <LocationDetail location={locationQuery.data} />
+        {entityType === "location" && data && (
+          <LocationDetail location={data as never} />
         )}
-        {entityType === "inventory" && inventoryQuery.data && (
-          <InventoryDetail inventoryitem={inventoryQuery.data} />
+        {entityType === "inventory" && data && (
+          <InventoryDetail inventoryitem={data as never} />
         )}
-        {entityType === "usda-food" && usdaQuery.data && (
-          <USDAFoodDetail id={parseInt(id, 10)} food={usdaQuery.data} />
+        {entityType === "usda-food" && data && (
+          <USDAFoodDetail id={parseInt(id, 10)} food={data as never} />
         )}
-        {entityType === "image" && imageQuery.data && (
-          <ImageDetail image={imageQuery.data} />
+        {entityType === "image" && data && (
+          <ImageDetail image={data as never} />
         )}
       </div>
     </div>

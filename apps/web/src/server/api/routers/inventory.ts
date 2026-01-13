@@ -29,6 +29,7 @@ import {
   createInventoryEntry,
   deleteInventoryEntries,
   findInventoryWithStaleValuations,
+  getInventoryCountsByLocations,
   getInventoryEntryByID,
   importInventoryFromCSV,
   inventoryentryList,
@@ -234,6 +235,14 @@ const backfillInventoryValuationsEndpoint = protectedProcedure
     return await backfillInventoryValuations(ctx.db);
   });
 
+// Get inventory counts for multiple locations (batched query to avoid N+1)
+const getCountsByLocations = protectedProcedure
+  .input(z.object({ locationIds: z.array(z.string()) }))
+  .output(z.record(z.string(), z.number()))
+  .query(async ({ ctx, input }) => {
+    return await getInventoryCountsByLocations(ctx.db, input.locationIds);
+  });
+
 export const inventoryRouter = createTRPCRouter({
   getByID,
   list,
@@ -246,4 +255,5 @@ export const inventoryRouter = createTRPCRouter({
   importCSV,
   getStaleValuationsCount,
   backfillInventoryValuations: backfillInventoryValuationsEndpoint,
+  getCountsByLocations,
 });

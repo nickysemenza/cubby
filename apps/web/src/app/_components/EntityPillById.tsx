@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
 import type { AuditEntityType } from "~/schemas/audit";
 import { useTRPC } from "~/trpc/react";
@@ -22,26 +23,25 @@ export function EntityPillById({
 }: EntityPillByIdProps) {
   const trpc = useTRPC();
 
-  // All queries must be called unconditionally (React hooks rules)
-  const productQuery = useQuery({
-    ...trpc.product.getByID.queryOptions({ id: entityId }),
-    enabled: entityType === "product",
-  });
+  // Get query options based on entity type (stable reference with useMemo)
+  const queryOptions = useMemo(() => {
+    switch (entityType) {
+      case "inventory":
+        // Inventory entries don't have a getByID that returns product info
+        return { queryKey: ["invalid"], enabled: false };
+      case "product":
+        return trpc.product.getByID.queryOptions({ id: entityId });
+      case "location":
+        return trpc.location.getByID.queryOptions({ id: entityId });
+      case "recipe":
+        return trpc.recipe.getByID.queryOptions({ id: entityId });
+      case "ingredient":
+        return trpc.ingredient.getByID.queryOptions({ id: entityId });
+    }
+  }, [entityType, entityId, trpc]);
 
-  const locationQuery = useQuery({
-    ...trpc.location.getByID.queryOptions({ id: entityId }),
-    enabled: entityType === "location",
-  });
-
-  const recipeQuery = useQuery({
-    ...trpc.recipe.getByID.queryOptions({ id: entityId }),
-    enabled: entityType === "recipe",
-  });
-
-  const ingredientQuery = useQuery({
-    ...trpc.ingredient.getByID.queryOptions({ id: entityId }),
-    enabled: entityType === "ingredient",
-  });
+  // Single query hook instead of 4 disabled ones
+  const query = useQuery(queryOptions);
 
   // Inventory entries don't have a getByID that returns product info
   if (entityType === "inventory") {
@@ -55,20 +55,11 @@ export function EntityPillById({
     );
   }
 
-  // Lookup pattern for loading and data
-  const queries = {
-    product: productQuery,
-    location: locationQuery,
-    recipe: recipeQuery,
-    ingredient: ingredientQuery,
-  } as const;
-
-  const query = queries[entityType as keyof typeof queries];
-  if (query?.isLoading) {
+  if (query.isLoading) {
     return <Spinner className="text-muted-foreground" />;
   }
 
-  if (query?.data) {
+  if (query.data) {
     return (
       <EntityPillLink
         entity={entityType as "product" | "location" | "recipe" | "ingredient"}

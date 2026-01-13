@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, not } from "drizzle-orm";
+import { and, count, eq, inArray, not, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import type { ActorContext } from "~/schemas/context";
 import {
@@ -282,6 +282,49 @@ interface InventoryFilters {
   locationNameFilter?: string;
   locationIdFilter?: string;
 }
+
+/**
+ * Get inventory counts for multiple locations in a single query.
+ * Returns a map of locationId -> count.
+ */
+export const getInventoryCountsByLocations = async (
+  db: Database,
+  locationIds: string[],
+): Promise<Record<string, number>> => {
+  if (locationIds.length === 0) return {};
+
+  const dbClient = getDb(db);
+
+  // Query to get counts grouped by location
+  const results = await dbClient
+    .select({
+      locationId: inventoryEntry.locationId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(inventoryEntry)
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        inArray(inventoryEntry.locationId, locationIds),
+      ),
+    )
+    .groupBy(inventoryEntry.locationId);
+
+  // Convert to map
+  const countMap: Record<string, number> = {};
+  for (const row of results) {
+    countMap[row.locationId] = row.count;
+  }
+
+  // Fill in zeros for locations with no inventory
+  for (const locationId of locationIds) {
+    if (!(locationId in countMap)) {
+      countMap[locationId] = 0;
+    }
+  }
+
+  return countMap;
+};
 
 export const inventoryentryList = async (
   db: Database,

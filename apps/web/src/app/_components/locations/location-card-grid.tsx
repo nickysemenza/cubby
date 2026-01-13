@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar } from "lucide-react";
+import { useMemo } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Badge } from "~/components/ui/badge";
@@ -25,6 +26,18 @@ export function LocationCardGrid({
   showParentPath = false,
   onLocationSelect,
 }: LocationCardGridProps) {
+  const api = useTRPC();
+
+  // Batch query inventory counts for all locations (avoid N+1)
+  const locationIds = useMemo(
+    () => locations.map((loc) => loc.id),
+    [locations],
+  );
+
+  const { data: inventoryCounts } = useQuery(
+    api.inventory.getCountsByLocations.queryOptions({ locationIds }),
+  );
+
   return (
     <GridContainer cols="cards3" className={className}>
       {locations.map((location) => (
@@ -33,6 +46,7 @@ export function LocationCardGrid({
           location={location}
           showParentPath={showParentPath}
           onLocationSelect={onLocationSelect}
+          inventoryCount={inventoryCounts?.[location.id] ?? 0}
         />
       ))}
     </GridContainer>
@@ -43,26 +57,16 @@ interface LocationCardProps {
   location: InfLocation;
   showParentPath?: boolean;
   onLocationSelect?: (location: InfLocation) => void;
+  inventoryCount: number;
 }
 
 function LocationCard({
   location,
   showParentPath,
   onLocationSelect,
+  inventoryCount,
 }: LocationCardProps) {
-  const api = useTRPC();
-
-  // Get inventory items for this location
-  const { data: inventoryData } = useQuery(
-    api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 5 }, // Just get first few for preview
-      filters: { locationIdFilter: location.id },
-    }),
-  );
-
   const childrenCount = location.children?.length || 0;
-  const inventoryCount = inventoryData?.meta?.totalCount || 0;
   const hasInventory = inventoryCount > 0;
   const hasChildren = childrenCount > 0;
 
