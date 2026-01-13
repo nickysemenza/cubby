@@ -5,8 +5,8 @@ import { ColoredAlert } from "~/components/common/colored-alert";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { useTRPC } from "~/trpc/react";
 import { authMiddleware } from "~/lib/protected-route";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/settings/integrations/debug")({
   component: GoogleSheetsDebugPage,

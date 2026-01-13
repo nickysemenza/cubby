@@ -23,11 +23,11 @@ import {
   buildPartialUpdateValues,
   formatSearchTerm,
   getDb,
-  insertAndReturnDb,
+  insertAndReturn,
   notDeleted,
   relations,
   unwrapDb,
-  updateAndReturnDb,
+  updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { dbInventoryEntryToAPI } from "./helpers";
@@ -436,7 +436,7 @@ export const updateInventoryEntry = async (
     valuation,
   });
 
-  const updated = await updateAndReturnDb(
+  const updated = await updateAndReturn(
     db,
     inventoryEntry,
     updateValues,
@@ -492,7 +492,7 @@ export const createInventoryEntry = async (
     amountValue,
   );
 
-  const created = await insertAndReturnDb(db, inventoryEntry, {
+  const created = await insertAndReturn(db, inventoryEntry, {
     productId: data.productId,
     locationId: data.locationId,
     amount: data.amount,

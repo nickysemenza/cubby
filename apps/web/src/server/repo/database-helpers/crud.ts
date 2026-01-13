@@ -4,7 +4,7 @@
  */
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { and, eq, getTableName, inArray, isNull, sql } from "drizzle-orm";
+import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
@@ -12,25 +12,27 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { image, inventoryEntry } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { getDb } from "./core";
+import { unwrapDb } from "./core";
 
 /**
  * Insert a single record and return it.
  * Cleaner than manually destructuring the returning() array.
+ * Accepts both Database and DrizzleTransaction.
  *
- * @param tx - Transaction instance
+ * @param db - Database or Transaction instance
  * @param table - Table schema
  * @param values - Values to insert
  * @returns The created record
  */
 export const insertAndReturn = async <T extends PgTable>(
-  tx: DrizzleTransaction,
+  db: Database | DrizzleTransaction,
   table: T,
   values: InferInsertModel<T>,
 ): Promise<InferSelectModel<T>> => {
   return withTrace(TraceNames.db("insert"), async (span) => {
     span.setAttribute("db.table", getTableName(table));
-    const result = await tx.insert(table).values(values).returning();
+    const client = unwrapDb(db);
+    const result = await client.insert(table).values(values).returning();
     const [created] = result as InferSelectModel<T>[];
     if (!created) {
       throw new Error(FAILED_TO_INSERT);
@@ -63,53 +65,30 @@ export const batchInsert = async <T extends PgTable>(
 };
 
 /**
- * Insert a single record and return it (non-transaction version).
- * For use with Database instead of Transaction.
- *
- * @param db - Database instance
- * @param table - Table schema
- * @param values - Values to insert
- * @returns The created record
- */
-export const insertAndReturnDb = async <T extends PgTable>(
-  db: Database,
-  table: T,
-  values: InferInsertModel<T>,
-): Promise<InferSelectModel<T>> => {
-  return withTrace(TraceNames.db("insert"), async (span) => {
-    span.setAttribute("db.table", getTableName(table));
-    const result = await getDb(db).insert(table).values(values).returning();
-    const [created] = result as InferSelectModel<T>[];
-    if (!created) {
-      throw new Error(FAILED_TO_INSERT);
-    }
-    return created;
-  });
-};
-
-/**
- * Update a single record and return it (transaction version).
+ * Update a single record and return it.
  * Cleaner than manually destructuring the returning() array.
+ * Accepts both Database and DrizzleTransaction.
  *
- * @param tx - Transaction instance
+ * @param db - Database or Transaction instance
  * @param table - Table schema
  * @param values - Values to update
  * @param where - Where clause (SQL condition)
  * @returns The updated record
  */
 export const updateAndReturn = async <T extends PgTable>(
-  tx: DrizzleTransaction,
+  db: Database | DrizzleTransaction,
   table: T,
   values: Partial<InferInsertModel<T>>,
   where: SQL | undefined,
 ): Promise<InferSelectModel<T>> => {
   return withTrace(TraceNames.db("update"), async (span) => {
     span.setAttribute("db.table", getTableName(table));
+    const client = unwrapDb(db);
     // If no values to update, just fetch and return the existing record
     // This handles cases like image-only updates where the main table doesn't change
     if (Object.keys(values).length === 0) {
       span.setAttribute("db.noop", true);
-      const result = await tx
+      const result = await client
         .select()
         .from(table as PgTable)
         .where(where);
@@ -120,49 +99,7 @@ export const updateAndReturn = async <T extends PgTable>(
       return existing;
     }
 
-    const result = await tx.update(table).set(values).where(where).returning();
-    const [updated] = result as InferSelectModel<T>[];
-    if (!updated) {
-      throw new Error(FAILED_TO_UPDATE);
-    }
-    return updated;
-  });
-};
-
-/**
- * Update a single record and return it (non-transaction version).
- * For use with Database instead of Transaction.
- *
- * @param db - Database instance
- * @param table - Table schema
- * @param values - Values to update
- * @param where - Where clause (SQL condition)
- * @returns The updated record
- */
-export const updateAndReturnDb = async <T extends PgTable>(
-  db: Database,
-  table: T,
-  values: Partial<InferInsertModel<T>>,
-  where: SQL | undefined,
-): Promise<InferSelectModel<T>> => {
-  return withTrace(TraceNames.db("update"), async (span) => {
-    span.setAttribute("db.table", getTableName(table));
-    // If no values to update, just fetch and return the existing record
-    // This handles cases like image-only updates where the main table doesn't change
-    if (Object.keys(values).length === 0) {
-      span.setAttribute("db.noop", true);
-      const result = await getDb(db)
-        .select()
-        .from(table as PgTable)
-        .where(where);
-      const [existing] = result as InferSelectModel<T>[];
-      if (!existing) {
-        throw new Error(FAILED_TO_UPDATE);
-      }
-      return existing;
-    }
-
-    const result = await getDb(db)
+    const result = await client
       .update(table)
       .set(values)
       .where(where)

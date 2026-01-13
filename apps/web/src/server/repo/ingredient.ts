@@ -53,7 +53,7 @@ import {
   notDeleted,
   relations,
   unwrapDb,
-  updateAndReturnDb,
+  updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { dbRecipeToAPIShallow } from "./recipe";
@@ -220,7 +220,7 @@ export const updateIngredient = async (
     where: eq(ingredient.id, id),
   });
 
-  const updated = await updateAndReturnDb(
+  const updated = await updateAndReturn(
     db,
     ingredient,
     data,

@@ -5,8 +5,8 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { useTRPC } from "~/trpc/react";
 import { authMiddleware } from "~/lib/protected-route";
+import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/ingredients/$id")({
   ssr: false,

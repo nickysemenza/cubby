@@ -13,12 +13,12 @@ import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { authMiddleware } from "~/lib/protected-route";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
-import { authMiddleware } from "~/lib/protected-route";
 
 const searchParamsSchema = z.object({
   ids: z.string().optional(),

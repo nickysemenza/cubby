@@ -82,9 +82,8 @@ Use these instead of inline patterns:
 | Inline deletable config object | `useDeletableConfig({ ... })` | `~/app/_components/hooks/useDeletableConfig` |
 | Inline update mutation with `useMemo` + `useMutation` | `useUpdateMutation({ ... })` | `~/app/_components/hooks/useUpdateMutation` |
 | `error instanceof Error ? error.message : "Unknown error"` | `getErrorMessage(error)` | `~/lib/error-utils` |
-| Manual `.insert().values().returning()` + null check | `insertAndReturn(tx, table, values)` | `~/server/repo/database-helpers` |
-| Same for `Database` type (not transaction) | `insertAndReturnDb(db, table, values)` | `~/server/repo/database-helpers` |
-| Manual `.update().set().where().returning()` + null check | `updateAndReturn(tx, table, values, where)` | `~/server/repo/database-helpers` |
+| Manual `.insert().values().returning()` + null check | `insertAndReturn(db, table, values)` | `~/server/repo/database-helpers` |
+| Manual `.update().set().where().returning()` + null check | `updateAndReturn(db, table, values, where)` | `~/server/repo/database-helpers` |
 | `getDb(db).transaction(async (tx) => {...})` | `withTransaction(db, async (tx) => {...})` | `~/server/repo/database-helpers` |
 | `ilike(column, \`%${term}%\`)` | `formatSearchTerm(column, term)` | `~/server/repo/database-helpers` |
 | `isNull(table.deletedAt)` | `notDeleted(table)` | `~/server/repo/database-helpers` |

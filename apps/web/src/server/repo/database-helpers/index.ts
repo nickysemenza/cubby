@@ -26,9 +26,7 @@ export {
   batchInsert,
   batchUpsertInventory,
   insertAndReturn,
-  insertAndReturnDb,
   updateAndReturn,
-  updateAndReturnDb,
 } from "./crud";
 // Query helpers
 export {

@@ -1,6 +1,5 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 import {
   Apple,
   Carrot,
@@ -14,6 +13,7 @@ import {
   Warehouse,
   Wheat,
 } from "lucide-react";
+import { z } from "zod";
 
 const searchSchema = z.object({
   redirect: z.string().optional(),

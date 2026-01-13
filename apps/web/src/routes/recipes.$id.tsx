@@ -10,9 +10,9 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
+import { authMiddleware } from "~/lib/protected-route";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
-import { authMiddleware } from "~/lib/protected-route";
 
 const searchSchema = z.object({
   edit: z.boolean().optional(),

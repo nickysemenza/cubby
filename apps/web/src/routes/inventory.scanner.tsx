@@ -11,11 +11,11 @@ import { Button } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
+import { authMiddleware } from "~/lib/protected-route";
 import { queryKeys } from "~/lib/query-keys";
 import type { ProductId } from "~/schemas/identifiers";
 import { unsafeLocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
-import { authMiddleware } from "~/lib/protected-route";
 
 const searchSchema = z.object({
   locationId: z.string().optional(),

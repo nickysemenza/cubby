@@ -38,7 +38,7 @@ import {
   buildPartialUpdateValues,
   executeListQueryWithCount,
   getDb,
-  insertAndReturnDb,
+  insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -73,7 +73,7 @@ export const createLocation = async (
   // Generate unique shortcode with collision retry
   const shortcode = await generateUniqueLocationShortcode(db);
 
-  const newLocation = await insertAndReturnDb(db, location, {
+  const newLocation = await insertAndReturn(db, location, {
     name: data.name,
     type: data.type,
     shortcode,

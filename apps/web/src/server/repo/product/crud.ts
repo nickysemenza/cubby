@@ -45,7 +45,6 @@ import {
   formatSearchTerm,
   getDb,
   insertAndReturn,
-  insertAndReturnDb,
   lockAndValidateForDelete,
   notDeleted,
   relations,
@@ -468,7 +467,7 @@ export const quickCreateProduct = async (
   const shortcode =
     data.shortcode ?? (await generateUniqueProductShortcode(db));
 
-  const newProduct = await insertAndReturnDb(db, product, {
+  const newProduct = await insertAndReturn(db, product, {
     name: data.name,
     manufacturer: data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
     upc: data.upc ?? null,

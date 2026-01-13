@@ -17,7 +17,7 @@ import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
 import {
   getDb,
-  insertAndReturnDb,
+  insertAndReturn,
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
@@ -100,7 +100,7 @@ export const findOrCreateLocationByName = async (
     options?.shortcode ?? (await generateUniqueLocationShortcode(db));
 
   // Create new location (with optional timestamps for sheet import)
-  const created = await insertAndReturnDb(db, location, {
+  const created = await insertAndReturn(db, location, {
     name,
     type,
     parentId,

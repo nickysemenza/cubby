@@ -17,7 +17,7 @@ import {
   buildOrderBy,
   formatSearchTerm,
   getDb,
-  insertAndReturnDb,
+  insertAndReturn,
   notDeleted,
 } from "~/server/repo/database-helpers";
 import {
@@ -44,7 +44,7 @@ export const initiateImageUploadWithoutEntity = async (
   const url = getS3ObjectUrl(key);
 
   // Create image record in pending state
-  const createdImage = await insertAndReturnDb(db, image, {
+  const createdImage = await insertAndReturn(db, image, {
     key,
     filename,
     size,
@@ -414,7 +414,7 @@ export const importImageFromUrl = async (
       // This can happen after DB wipe - the S3 file exists but DB record doesn't
       // In this case, just create a new DB record pointing to the existing S3 object
       // without re-downloading/re-uploading
-      const createdImage = await insertAndReturnDb(db, image, {
+      const createdImage = await insertAndReturn(db, image, {
         key,
         filename: params.filenamePrefix, // Use prefix as filename since we don't have the original
         size: 0, // Unknown size - could fetch metadata if needed
@@ -441,7 +441,7 @@ export const importImageFromUrl = async (
   }
 
   // Create the image record with status UPLOADED (not PENDING)
-  const createdImage = await insertAndReturnDb(db, image, {
+  const createdImage = await insertAndReturn(db, image, {
     key: stored.key,
     filename: `${params.filenamePrefix}.${contentTypeToExtension(stored.contentType)}`,
     size: stored.size,
