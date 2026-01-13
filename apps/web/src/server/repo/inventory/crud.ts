@@ -18,6 +18,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
+  batchUpdateWithCaseWhen,
   buildOrderBy,
   buildPartialUpdateValues,
   formatSearchTerm,
@@ -80,20 +81,25 @@ export const syncInventoryValuationsForProduct = async (
     columns: { id: true, amount: true },
   });
 
-  let updated = 0;
-  for (const entry of entries) {
+  if (entries.length === 0) return 0;
+
+  // Compute valuations in memory
+  const updates = entries.map((entry) => {
     const amountValue =
       typeof entry.amount === "object" && entry.amount !== null
         ? (entry.amount as { value: number }).value
         : 0;
     const valuation = computeInventoryValuation(amountValue, productPrice);
 
-    await client
-      .update(inventoryEntry)
-      .set({ valuation })
-      .where(eq(inventoryEntry.id, entry.id));
-    updated++;
-  }
+    return { id: entry.id, valuation };
+  });
+
+  // Batch update all entries (1-4 queries instead of 1000+)
+  const updated = await batchUpdateWithCaseWhen(
+    client,
+    inventoryEntry,
+    updates,
+  );
 
   return updated;
 };
@@ -189,7 +195,8 @@ export const backfillInventoryValuations = async (
     },
   });
 
-  let updated = 0;
+  // Compute expected valuations, filter to only those needing update
+  const toUpdate: Array<{ id: string; valuation: number | null }> = [];
   let skipped = 0;
 
   for (const entry of entries) {
@@ -204,15 +211,17 @@ export const backfillInventoryValuations = async (
 
     // Only update if different (with tolerance)
     if (valuationsAreDifferent(entry.valuation, expectedValuation)) {
-      await getDb(db)
-        .update(inventoryEntry)
-        .set({ valuation: expectedValuation })
-        .where(eq(inventoryEntry.id, entry.id));
-      updated++;
+      toUpdate.push({ id: entry.id, valuation: expectedValuation });
     } else {
       skipped++;
     }
   }
+
+  // Batch update all stale valuations (1-4 queries instead of 1000+)
+  const updated =
+    toUpdate.length > 0
+      ? await batchUpdateWithCaseWhen(getDb(db), inventoryEntry, toUpdate)
+      : 0;
 
   return { updated, skipped };
 };

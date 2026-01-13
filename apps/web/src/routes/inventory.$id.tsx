@@ -6,6 +6,7 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { useTRPC } from "~/trpc/react";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/inventory/$id")({
   ssr: false,
@@ -16,6 +17,9 @@ export const Route = createFileRoute("/inventory/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   component: InventoryDetailPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function InventoryDetailPage() {

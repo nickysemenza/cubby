@@ -18,6 +18,7 @@ import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { authMiddleware } from "~/lib/protected-route";
 
 const searchParamsSchema = z.object({
   ids: z.string().optional(),
@@ -27,6 +28,9 @@ export const Route = createFileRoute("/recipes/compare")({
   validateSearch: searchParamsSchema.parse,
   component: RecipeComparePage,
   head: () => ({ meta: [{ title: "Compare Recipes | RecipeHub" }] }),
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 /** Get effective servings: explicit servings, or yield value if unit is "servings" */

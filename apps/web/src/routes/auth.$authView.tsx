@@ -1,5 +1,6 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import {
   Apple,
   Carrot,
@@ -14,7 +15,12 @@ import {
   Wheat,
 } from "lucide-react";
 
+const searchSchema = z.object({
+  redirect: z.string().optional(),
+});
+
 export const Route = createFileRoute("/auth/$authView")({
+  validateSearch: searchSchema,
   component: AuthPage,
 });
 
@@ -40,6 +46,15 @@ const seededRandom = (seed: number) => {
 
 function AuthPage() {
   const { authView } = Route.useParams();
+  const { redirect } = Route.useSearch();
+  const navigate = Route.useNavigate();
+
+  // Handle redirect after successful authentication
+  // Better-Auth UI calls onSuccess callback after successful sign-in
+  const handleAuthSuccess = () => {
+    navigate({ to: redirect || "/" });
+  };
+
   return (
     <div className="auth-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
       {/* Icon pattern overlay */}
@@ -70,7 +85,7 @@ function AuthPage() {
       </div>
       {/* Auth form */}
       <div className="relative z-10 w-full max-w-md">
-        <AuthView pathname={authView} />
+        <AuthView pathname={authView} onSuccess={handleAuthSuccess} />
       </div>
     </div>
   );

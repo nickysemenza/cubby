@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { USDAFoodList } from "~/app/usda/usdafoodlist";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/usda/")({
   component: USDAPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function USDAPage() {

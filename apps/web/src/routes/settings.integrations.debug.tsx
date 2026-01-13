@@ -6,9 +6,13 @@ import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/settings/integrations/debug")({
   component: GoogleSheetsDebugPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function GoogleSheetsDebugPage() {

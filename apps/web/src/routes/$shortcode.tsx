@@ -7,6 +7,7 @@
 
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { parseShortcode } from "~/lib/shortcode";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/$shortcode")({
   ssr: false,
@@ -32,7 +33,10 @@ export const Route = createFileRoute("/$shortcode")({
         to: "/locations/$id",
         params: { id: location.id },
         replace: true,
-      });
+  server: {
+    middleware: [authMiddleware],
+  },
+});
     }
 
     if (parsed.type === "product") {

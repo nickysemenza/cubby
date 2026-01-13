@@ -12,6 +12,7 @@ import { Button } from "~/components/ui/button";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
+import { authMiddleware } from "~/lib/protected-route";
 
 const searchSchema = z.object({
   edit: z.boolean().optional(),
@@ -27,6 +28,9 @@ export const Route = createFileRoute("/recipes/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   component: RecipeDetailPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function RecipeDetailPage() {

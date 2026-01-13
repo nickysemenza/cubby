@@ -1,25 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageWrapper } from "~/components/layout/page-wrapper";
-import { useAuthGuard } from "~/hooks/useAuthGuard";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function DashboardPage() {
-  const { isLoading, isAuthenticated } = useAuthGuard();
-
-  if (isLoading || !isAuthenticated) {
-    return (
-      <PageWrapper>
-        <div className="animate-pulse space-y-4">
-          <div className="h-8 w-48 rounded bg-muted" />
-          <div className="h-4 w-96 rounded bg-muted" />
-        </div>
-      </PageWrapper>
-    );
-  }
-
   return (
     <PageWrapper>
       <div className="fade-in animate-in duration-300">

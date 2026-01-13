@@ -8,9 +8,13 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/inventory/bulk-move")({
   component: BulkInventoryMovePage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function BulkInventoryMovePage() {

@@ -4,9 +4,13 @@ import { useEffect } from "react";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Skeleton } from "~/components/ui/skeleton";
 import { useTRPC } from "~/trpc/react";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/usda/ndb/$code")({
   component: USDANDBLookupPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function USDANDBLookupPage() {

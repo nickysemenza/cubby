@@ -15,6 +15,7 @@ import { queryKeys } from "~/lib/query-keys";
 import type { ProductId } from "~/schemas/identifiers";
 import { unsafeLocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
+import { authMiddleware } from "~/lib/protected-route";
 
 const searchSchema = z.object({
   locationId: z.string().optional(),
@@ -23,6 +24,9 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/inventory/scanner")({
   validateSearch: searchSchema,
   component: ScannerPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 interface RecentItem {

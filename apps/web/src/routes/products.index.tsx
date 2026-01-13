@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ProductList } from "~/app/products/productlist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
+import { authMiddleware } from "~/lib/protected-route";
 
 const searchSchema = z.object({
   category: z.string().optional(),
@@ -13,6 +14,9 @@ export const Route = createFileRoute("/products/")({
   validateSearch: searchSchema,
   component: ProductsPage,
   head: () => ({ meta: [{ title: "Products | RecipeHub" }] }),
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function ProductsPage() {

@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AuditLogList } from "~/app/_components/audit-log/audit-log-list";
 import { EntityLayout } from "~/components/layouts/entity-layout";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/activity")({
   component: ActivityPage,
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function ActivityPage() {

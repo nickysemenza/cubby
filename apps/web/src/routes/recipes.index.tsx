@@ -3,10 +3,14 @@ import { Plus } from "lucide-react";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
+import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/recipes/")({
   component: RecipesPage,
   head: () => ({ meta: [{ title: "Recipes | RecipeHub" }] }),
+  server: {
+    middleware: [authMiddleware],
+  },
 });
 
 function RecipesPage() {

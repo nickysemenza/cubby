@@ -4,7 +4,7 @@
  */
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { and, eq, getTableName, inArray, isNull } from "drizzle-orm";
+import { and, eq, getTableName, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
@@ -322,18 +322,110 @@ export async function batchUpsertInventory<
     }
 
     // Batch update existing entries
-    for (const { id, entry } of toUpdate) {
-      await dbOrTx
-        .update(inventoryEntry)
-        .set({
-          amount: entry.amount,
-          valuation: entry.valuation,
-          updatedAt: now,
-        })
-        .where(eq(inventoryEntry.id, id));
+    if (toUpdate.length > 0) {
+      const updates = toUpdate.map(({ id, entry }) => ({
+        id,
+        amount: entry.amount,
+        valuation: entry.valuation,
+      }));
+
+      await batchUpdateWithCaseWhen(dbOrTx, inventoryEntry, updates);
     }
 
     span.setAttribute("db.inserted_count", toInsert.length);
     span.setAttribute("db.updated_count", toUpdate.length);
+  });
+}
+
+/**
+ * Batch update multiple records using SQL CASE WHEN pattern.
+ * 99% reduction in database round-trips vs individual UPDATEs.
+ *
+ * Automatically chunks large batches to avoid query size limits.
+ * Updates all specified fields plus updatedAt timestamp.
+ *
+ * @param dbOrTx - Database client or transaction
+ * @param table - The table to update
+ * @param updates - Array of update objects with id and fields to update
+ * @param chunkSize - Number of records to update per query (default 250)
+ * @returns Total number of records updated
+ *
+ * @example
+ * ```typescript
+ * await batchUpdateWithCaseWhen(tx, inventoryEntry, [
+ *   { id: "inv1", valuation: 10.50 },
+ *   { id: "inv2", valuation: 25.00 },
+ * ]);
+ * ```
+ */
+export async function batchUpdateWithCaseWhen<
+  TUpdate extends { id: string; [key: string]: unknown },
+>(
+  dbOrTx: DrizzleClient | DrizzleTransaction,
+  table: PgTable,
+  updates: TUpdate[],
+  chunkSize = 250,
+): Promise<number> {
+  if (updates.length === 0) return 0;
+
+  return withTrace(TraceNames.db("batchUpdateWithCaseWhen"), async (span) => {
+    span.setAttribute("db.table", getTableName(table));
+    span.setAttribute("db.total_updates", updates.length);
+
+    let totalUpdated = 0;
+
+    // Process in chunks to avoid query size limits
+    for (let i = 0; i < updates.length; i += chunkSize) {
+      const batch = updates.slice(i, i + chunkSize);
+
+      // Extract column names (all updates must have same columns)
+      const columnNames = Object.keys(batch[0]!).filter((k) => k !== "id");
+
+      // Build CASE WHEN for each column
+      const caseStatements: SQL[] = [];
+
+      for (const columnName of columnNames) {
+        const cases: SQL[] = [];
+
+        for (const update of batch) {
+          const value = update[columnName];
+          // Build: WHEN "id" = {id} THEN {value}
+          cases.push(
+            sql`WHEN ${sql.identifier("id")} = ${update.id} THEN ${value}`,
+          );
+        }
+
+        // Build: "columnName" = CASE WHEN ... END
+        caseStatements.push(
+          sql`${sql.identifier(columnName)} = CASE ${sql.join(cases, sql` `)} END`,
+        );
+      }
+
+      // Add updatedAt timestamp
+      caseStatements.push(sql`${sql.identifier("updatedAt")} = NOW()`);
+
+      // Build WHERE IN clause
+      const ids = batch.map((u) => u.id);
+
+      // Execute batch UPDATE
+      await dbOrTx.execute(sql`
+        UPDATE ${table}
+        SET ${sql.join(caseStatements, sql`, `)}
+        WHERE ${sql.identifier("id")} IN (${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+      `);
+
+      totalUpdated += batch.length;
+    }
+
+    span.setAttribute(
+      "db.chunks_executed",
+      Math.ceil(updates.length / chunkSize),
+    );
+    span.setAttribute("db.total_updated", totalUpdated);
+
+    return totalUpdated;
   });
 }
