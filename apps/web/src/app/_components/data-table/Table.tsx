@@ -61,8 +61,6 @@ interface TTableProps<TItem> {
   onRowClick?: (row: Row<TItem>) => void;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
   bulkActionBar?: ReactNode;
-  /** Hide pagination controls (useful for small tables) */
-  hidePagination?: boolean;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -78,7 +76,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     entity,
     renderMobileCard,
     onRowClick,
-    hidePagination = false,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -386,7 +383,9 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         )}
       </div>
 
-      {!hidePagination && <DataTablePagination table={table} timing={timing} />}
+      {table.getPageCount() > 1 && (
+        <DataTablePagination table={table} timing={timing} />
+      )}
     </SpacedContainer>
   );
 }

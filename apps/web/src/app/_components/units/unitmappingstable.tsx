@@ -116,5 +116,5 @@ export const UnitMappingsTable: React.FC<{
     getRowId: (row, i) => `${i}-${row.source}`,
   });
 
-  return <RTable table={table} className="text-xs" hidePagination />;
+  return <RTable table={table} className="text-xs" />;
 };
