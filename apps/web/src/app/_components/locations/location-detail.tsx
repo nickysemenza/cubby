@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   DollarSign,
@@ -45,14 +44,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     data: location,
     mutationOptions: api.location.update.mutationOptions(),
   });
-
-  const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
-    api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      pagination: { pageIndex: 0, pageSize: 100 },
-      filters: { locationIdFilter: location.id },
-    }),
-  );
 
   const sections: DetailSection[] = [
     {
@@ -117,10 +108,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         <div className="space-y-4">
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <QuickInventoryAdd
-                locationId={location.id}
-                onSuccess={() => refetchInventoryItems()}
-              />
+              <QuickInventoryAdd locationId={location.id} />
             </div>
             <Link
               to="/inventory/scanner"
@@ -131,11 +119,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               Scan Items
             </Link>
           </div>
-          <LocationInventoryTable
-            locationId={location.id}
-            inventoryItems={inventoryItemsData?.items ?? []}
-            onRefresh={() => refetchInventoryItems()}
-          />
+          <LocationInventoryTable locationId={location.id} />
         </div>
       ),
     },

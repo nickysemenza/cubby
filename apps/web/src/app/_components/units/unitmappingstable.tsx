@@ -1,18 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
-
+  createColumnHelper,
+  getCoreRowModel,
+  useReactTable,
+} from "@tanstack/react-table";
+import { useMemo } from "react";
 import { wasm } from "~/lib/wasm";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { useTRPC } from "~/trpc/react";
+import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
-import { NoneState } from "../NoneState";
 
 // Component for lazy loading food data and rendering FoodPillLink
 const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
@@ -61,63 +58,63 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
   return <EntityPillLink entity="product" data={displayProduct} compact />;
 };
 
-// Helper function to render source with metadata-based links
-const renderSourceWithMetadata = (mapping: UnitMapping) => {
-  const { source, sourceMetadata } = mapping;
-
-  if (!sourceMetadata) {
-    return source || "";
-  }
-
-  return (
-    <div className="flex items-center gap-1">
-      <span>{source || ""}</span>
-      {sourceMetadata.type === "food" && (
-        <LazyFoodPillLink fdcId={sourceMetadata.fdcId} />
-      )}
-      {sourceMetadata.type === "product" && (
-        <LazyProductPillLink productId={sourceMetadata.productId} />
-      )}
-    </div>
-  );
-};
-
 export const UnitMappingsTable: React.FC<{
   mappings: UnitMapping[];
 }> = ({ mappings }) => {
-  return (
-    <Table className="table-auto text-xs">
-      <TableHeader>
-        <TableRow>
-          <TableHead className="p-0.5">From</TableHead>
-          <TableHead className="p-0.5">To</TableHead>
-          <TableHead className="p-0.5">Source</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {mappings.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={3} className="p-0.5 text-center">
-              <NoneState />
-            </TableCell>
-          </TableRow>
-        )}
-        {mappings.map((unitMapping, x) => {
+  const columnHelper = createColumnHelper<UnitMapping>();
+
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor((row) => wasm.format_amount(row.a), {
+        id: "from",
+        header: "From",
+        enableSorting: false,
+        meta: { className: "p-0.5" },
+      }),
+      columnHelper.accessor((row) => wasm.format_amount(row.b), {
+        id: "to",
+        header: "To",
+        enableSorting: false,
+        meta: { className: "p-0.5" },
+      }),
+      columnHelper.accessor("source", {
+        id: "source",
+        header: "Source",
+        enableSorting: false,
+        meta: { className: "truncate p-0.5" },
+        cell: (info) => {
+          const mapping = info.row.original;
+          const { source, sourceMetadata } = mapping;
+
+          if (!sourceMetadata) {
+            return source || "";
+          }
+
           return (
-            <TableRow key={`${x}-${unitMapping.source}`}>
-              <TableCell className="p-0.5">
-                {wasm.format_amount(unitMapping.a)}
-              </TableCell>
-              <TableCell className="p-0.5">
-                {wasm.format_amount(unitMapping.b)}
-              </TableCell>
-              <TableCell className="truncate p-0.5">
-                {renderSourceWithMetadata(unitMapping)}
-              </TableCell>
-            </TableRow>
+            <div className="flex items-center gap-1">
+              <span>{source || ""}</span>
+              {sourceMetadata.type === "food" && (
+                <LazyFoodPillLink fdcId={sourceMetadata.fdcId} />
+              )}
+              {sourceMetadata.type === "product" && (
+                <LazyProductPillLink productId={sourceMetadata.productId} />
+              )}
+            </div>
           );
-        })}
-      </TableBody>
-    </Table>
+        },
+      }),
+    ],
+    [columnHelper],
   );
+
+  const table = useReactTable({
+    data: mappings,
+    columns,
+    enableSorting: false,
+    enableFilters: false,
+    getCoreRowModel: getCoreRowModel(),
+    getRowId: (row, i) => `${i}-${row.source}`,
+  });
+
+  return <RTable table={table} className="text-xs" hidePagination />;
 };

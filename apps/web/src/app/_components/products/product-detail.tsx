@@ -53,7 +53,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
             icon: Apple,
             content: (
               <MutedBox>
-                <NutritionInfoTable n={product.food.nutritionInfo} limit={10} />
+                <NutritionInfoTable n={product.food.nutritionInfo} />
               </MutedBox>
             ),
           },

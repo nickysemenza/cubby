@@ -76,15 +76,6 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
     enabled: inputValue.length > 0 && !isUpcInput(inputValue),
   });
 
-  // Existing inventory at this location
-  const { data: inventoryData, refetch: refetchInventory } = useQuery({
-    ...api.inventory.list.queryOptions({
-      sort: { orderBy: "createdAt", direction: "desc" },
-      filters: { locationIdFilter: locationId },
-      pagination: { pageIndex: 0, pageSize: 100 },
-    }),
-  });
-
   // UPC lookup mutation
   const findOrCreateByUPCMutation = useMutation(
     api.product.findOrCreateByUPC.mutationOptions({
@@ -340,14 +331,7 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
       {/* Existing inventory at location */}
       <div className="space-y-3 border-t pt-4">
         <div className="flex items-center justify-between">
-          <h4 className="font-medium text-sm">
-            At {locationName}
-            {inventoryData?.items && (
-              <span className="ml-1 text-muted-foreground">
-                ({inventoryData.items.length})
-              </span>
-            )}
-          </h4>
+          <h4 className="font-medium text-sm">At {locationName}</h4>
           <Button
             variant="outline"
             size="sm"
@@ -363,11 +347,7 @@ export function ScannerForm({ locationId, locationName }: ScannerFormProps) {
           </Button>
         </div>
 
-        <LocationInventoryTable
-          locationId={locationId}
-          inventoryItems={inventoryData?.items ?? []}
-          onRefresh={() => refetchInventory()}
-        />
+        <LocationInventoryTable locationId={locationId} />
       </div>
     </div>
   );

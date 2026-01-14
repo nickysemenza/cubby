@@ -62,7 +62,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             icon: Apple,
             content: (
               <MutedBox>
-                <NutritionInfoTable n={nutritionInfo} limit={10} />
+                <NutritionInfoTable n={nutritionInfo} />
               </MutedBox>
             ),
           },

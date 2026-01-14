@@ -182,9 +182,7 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <h4 className="font-medium text-sm">Available Unit Mappings</h4>
-              <div className="max-h-60 overflow-y-auto rounded-md border">
                 <UnitMappingsTable mappings={filteredMappings} />
-              </div>
             </div>
             <div>
               <FormWrapper

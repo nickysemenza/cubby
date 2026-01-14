@@ -29,7 +29,11 @@ import { TruncatedList } from "../TruncatedList";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { EditableCell, type FilterableComboboxItem } from "./editable-cell";
+import {
+  EditableAmountCell,
+  EditableCell,
+  type FilterableComboboxItem,
+} from "./editable-cell";
 
 /** Configuration for inline column header filters */
 export interface FilterConfig {
@@ -969,6 +973,53 @@ export function createTimestampColumn<
     cell: (info) => {
       const value = info.getValue();
       return value ? <HoverableTimestamp timestamp={value} /> : fallback;
+    },
+  });
+}
+
+// ============================================================================
+// Editable Amount Column (value + unit)
+// ============================================================================
+
+/**
+ * Creates a column for editing inventory amounts (value + unit).
+ * Displays amount using tryFormatAmount, inline editing with two inputs.
+ *
+ * @example
+ * createEditableAmountColumn(columnHelper, "amount", {
+ *   onSave: async (newAmount, row) => {
+ *     await api.inventory.update.mutate({ id: row.id, data: { amount: newAmount } });
+ *   },
+ *   getUnitMappings: (row) => row.product.unitMappings,
+ * })
+ */
+export function createEditableAmountColumn<T extends Record<string, unknown>>(
+  columnHelper: ColumnHelper<T>,
+  accessor: keyof T,
+  options: {
+    header?: string;
+    onSave: (newAmount: Amount, row: T) => Promise<void>;
+    /** Get unit mappings for price display (optional) */
+    getUnitMappings?: (
+      row: T,
+    ) => Array<{ a: Amount; b: Amount; source: string }>;
+  },
+) {
+  return columnHelper.accessor((row) => row[accessor] as Amount, {
+    id: String(accessor),
+    header: options.header ?? "Amount",
+    cell: (info) => {
+      const amount = info.getValue();
+      const row = info.row.original;
+      const unitMappings = options.getUnitMappings?.(row);
+
+      return (
+        <EditableAmountCell
+          amount={amount}
+          unitMappings={unitMappings}
+          onSave={(newAmount) => options.onSave(newAmount, row)}
+        />
+      );
     },
   });
 }

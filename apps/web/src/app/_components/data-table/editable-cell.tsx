@@ -4,6 +4,7 @@ import { Check, Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { Amount } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
 import {
   FilterableCombobox,
@@ -11,6 +12,7 @@ import {
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { formatCurrency } from "~/lib/utils";
+import { showAmountAndPrice } from "../inventory/format-amount";
 import { NoneState } from "../NoneState";
 
 // ============================================================================
@@ -502,5 +504,153 @@ export function EditableSelectCell({
       config={{ type: "select", options, placeholder }}
       renderValue={renderValue}
     />
+  );
+}
+
+// ============================================================================
+// Editable Amount Cell (value + unit for inventory)
+// ============================================================================
+
+interface EditableAmountCellProps {
+  amount: Amount;
+  unitMappings?: Array<{ a: Amount; b: Amount; source: string }>;
+  onSave: (newAmount: Amount) => Promise<void>;
+}
+
+/**
+ * Editable cell for inventory amounts (value + unit).
+ * Shows formatted amount with price in display mode.
+ * Shows two inputs (value, unit) in edit mode.
+ */
+export function EditableAmountCell({
+  amount,
+  unitMappings,
+  onSave,
+}: EditableAmountCellProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingValue, setEditingValue] = useState(amount.value);
+  const [editingUnit, setEditingUnit] = useState(amount.unit);
+  const [isPending, setIsPending] = useState(false);
+  const [optimisticAmount, setOptimisticAmount] = useState<Amount | undefined>(
+    undefined,
+  );
+
+  const displayAmount = optimisticAmount ?? amount;
+
+  const startEditing = useCallback(() => {
+    const current = optimisticAmount ?? amount;
+    setEditingValue(current.value);
+    setEditingUnit(current.unit);
+    setIsEditing(true);
+  }, [amount, optimisticAmount]);
+
+  const cancel = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const save = useCallback(async () => {
+    const newAmount = { value: editingValue, unit: editingUnit.trim() };
+
+    // Skip if unchanged
+    if (newAmount.value === amount.value && newAmount.unit === amount.unit) {
+      setIsEditing(false);
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      await onSave(newAmount);
+      setOptimisticAmount(newAmount);
+      setIsEditing(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setIsPending(false);
+    }
+  }, [editingValue, editingUnit, amount, onSave]);
+
+  // Clear optimistic value when real value catches up
+  useEffect(() => {
+    if (
+      optimisticAmount &&
+      amount.value === optimisticAmount.value &&
+      amount.unit === optimisticAmount.unit
+    ) {
+      setOptimisticAmount(undefined);
+    }
+  }, [amount, optimisticAmount]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void save();
+      } else if (e.key === "Escape") {
+        cancel();
+      }
+    },
+    [save, cancel],
+  );
+
+  if (isEditing) {
+    return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+      <div
+        className="inline-flex items-center gap-2"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Input
+          type="number"
+          value={editingValue}
+          onChange={(e) => setEditingValue(parseFloat(e.target.value) || 0)}
+          onKeyDown={handleKeyDown}
+          className="h-7 w-20"
+          step="any"
+          autoFocus
+          disabled={isPending}
+        />
+        <Input
+          type="text"
+          value={editingUnit}
+          onChange={(e) => setEditingUnit(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="h-7 w-20"
+          placeholder="unit"
+          disabled={isPending}
+        />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={() => void save()}
+          disabled={isPending}
+        >
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={cancel}
+          disabled={isPending}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
+      onClick={(e) => {
+        e.stopPropagation();
+        startEditing();
+      }}
+    >
+      {showAmountAndPrice(displayAmount, unitMappings)}
+      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
   );
 }
