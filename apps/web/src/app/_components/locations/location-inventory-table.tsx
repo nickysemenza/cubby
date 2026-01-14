@@ -41,7 +41,10 @@ import {
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
-import { createActionsColumn } from "../data-table/columnHelpers";
+import {
+  createActionsColumn,
+  createImageColumn,
+} from "../data-table/columnHelpers";
 import { MobileCardView } from "../data-table/MobileCardView";
 import { buildSelectColumn } from "../data-table/row-selection";
 import { EntityPillLink } from "../EntityPill";
@@ -49,6 +52,7 @@ import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
 import { showAmountAndPrice } from "../inventory/format-amount";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import { NoneState } from "../NoneState";
+import { ImageThumbnail } from "../table/ImageThumbnail";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -224,6 +228,10 @@ export function LocationInventoryTable({
     () => [
       buildSelectColumn<InventoryItem>(),
 
+      createImageColumn(columnHelper, {
+        getImages: (row) => row.product.images,
+      }),
+
       columnHelper.accessor("product", {
         header: "Product",
         cell: (info) => {
@@ -368,7 +376,10 @@ export function LocationInventoryTable({
                 className="group"
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell
+                    key={cell.id}
+                    className={cell.column.columnDef.meta?.className}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
@@ -430,19 +441,29 @@ export function LocationInventoryTable({
               actions={actionsDropdown}
             >
               <div className="space-y-2">
-                {/* Product name */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-medium">
-                      {item.product.name}
-                    </span>
-                  </div>
-                  {item.product.manufacturer && (
-                    <p className="ml-6 truncate text-muted-foreground text-sm">
-                      {item.product.manufacturer}
-                    </p>
+                {/* Product image and name */}
+                <div className="flex items-start gap-3">
+                  {item.product.images.length > 0 && (
+                    <div className="h-12 w-12 shrink-0">
+                      <ImageThumbnail
+                        images={item.product.images}
+                        alt={item.product.name}
+                      />
+                    </div>
                   )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate font-medium">
+                        {item.product.name}
+                      </span>
+                    </div>
+                    {item.product.manufacturer && (
+                      <p className="ml-6 truncate text-muted-foreground text-sm">
+                        {item.product.manufacturer}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Amount - editable */}
