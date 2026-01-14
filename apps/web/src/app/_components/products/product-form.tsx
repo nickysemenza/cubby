@@ -35,13 +35,12 @@ import {
   FormWrapper,
   getSubmitButtonText,
   NullableNumericField,
-  SelectField,
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
-import { productCategoryOptionsWithTheme } from "./product-category-icons";
+import { CategoryFieldWithAI } from "./category-field-with-ai";
 
 // Form schema for product form (simple Zod schema without z.custom)
 const formSchema = z
@@ -263,13 +262,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   const buttonText = getSubmitButtonText(mode, isPending);
 
-  // Watch the name field to detect misc products
+  // Watch fields for conditional rendering
   const nameValue = form.watch("name");
-  const isMisc = isMiscProduct(nameValue);
-
-  // Watch food indicator fields to determine if category should be forced to "food"
+  const manufacturerValue = form.watch("manufacturer");
   const ndbValue = form.watch("ndb_number");
   const ingredientValue = form.watch("ingredient");
+
+  // Derived state from watched values
+  const isMisc = isMiscProduct(nameValue);
   const isFoodForced = hasFoodIndicators({
     ndb_number: ndbValue,
     ingredientId: ingredientValue?.id,
@@ -314,29 +314,26 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       {/* Hide manufacturer, pricing, UPC, NDB, ingredient for misc products */}
       {!isMisc && (
         <>
-          <SideBySideFields>
-            <UnifiedTextField
-              form={form}
-              name="manufacturer"
-              label="Manufacturer"
-              placeholder="Enter manufacturer"
-              nullable={false}
-            />
-            <SelectField
-              form={form}
-              name="category"
-              label="Category"
-              options={productCategoryOptionsWithTheme}
-              placeholder="Select category"
-              nullable={true}
-              disabled={isFoodForced}
-              description={
-                isFoodForced
-                  ? "Forced to 'food' (has NDB number or ingredient)"
-                  : undefined
-              }
-            />
-          </SideBySideFields>
+          <UnifiedTextField
+            form={form}
+            name="manufacturer"
+            label="Manufacturer"
+            placeholder="Enter manufacturer"
+            nullable={false}
+          />
+
+          <CategoryFieldWithAI
+            form={form}
+            name="category"
+            productName={nameValue}
+            manufacturer={manufacturerValue}
+            disabled={isFoodForced}
+            description={
+              isFoodForced
+                ? "Forced to 'food' (has NDB number or ingredient)"
+                : undefined
+            }
+          />
 
           {/* Inventory-specific fields */}
           <SideBySideFields>

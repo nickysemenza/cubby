@@ -59,6 +59,8 @@
     "@recipehub/usda-schemas": "workspace:*",
     "@t3-oss/env-core": "^0.13.8",
     "@tailwindcss/vite": "^4.0.6",
+    "@tanstack/ai": "^0.2.2",
+    "@tanstack/ai-anthropic": "^0.2.0",
     "@tanstack/react-devtools": "^0.9.0",
     "@tanstack/react-query": "^5.90.12",
     "@tanstack/react-query-devtools": "^5.91.1",

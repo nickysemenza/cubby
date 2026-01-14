@@ -1,4 +1,5 @@
 import { createTRPCRouter } from "~/server/api/trpc";
+import { aiRouter } from "./routers/ai";
 import { auditLogRouter } from "./routers/audit-log";
 import { googleSheetsRouter } from "./routers/google-sheets";
 import { imageRouter } from "./routers/image";
@@ -18,6 +19,7 @@ import { usdaRouter } from "./routers/usda";
  * All routers added in /api/routers should be manually added here.
  */
 export const appRouter = createTRPCRouter({
+  ai: aiRouter,
   recipe: recipeRouter,
   ingredient: ingredientRouter,
   location: locationRouter,

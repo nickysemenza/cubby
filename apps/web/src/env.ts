@@ -21,6 +21,7 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
     BETTER_AUTH_SECRET: z.string().min(1).optional(),
     BETTER_AUTH_URL: z.string().url().optional(),
+    ANTHROPIC_API_KEY: z.string().min(1).optional(),
   },
 
   clientPrefix: "VITE_",
@@ -44,6 +45,7 @@ export const env = createEnv({
     UPC_LOOKUP_API_KEY: process.env.UPC_LOOKUP_API_KEY,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     VITE_APP_TITLE: import.meta.env.VITE_APP_TITLE,
   },
 
