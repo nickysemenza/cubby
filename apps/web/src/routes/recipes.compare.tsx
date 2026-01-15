@@ -12,12 +12,11 @@ import {
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 
 const searchParamsSchema = z.object({
   ids: z.string().optional(),
@@ -46,7 +45,6 @@ function RecipeComparePage() {
   const { ids } = Route.useSearch();
   const navigate = useNavigate();
   const api = useTRPC();
-  const trpcClient = useTRPCClient();
 
   // Parse recipe IDs from URL
   const recipeIds = useMemo(
@@ -59,11 +57,15 @@ function RecipeComparePage() {
   );
 
   // Fetch all recipes in parallel
-  const recipeQueries = useQueries({
-    queries: recipeIds.map((id: string) =>
-      api.recipe.getByID.queryOptions({ id }),
-    ),
-  });
+  const recipeQueryOptions = useMemo(
+    () =>
+      recipeIds.map((id: string) => api.recipe.getByID.queryOptions({ id })),
+    [api, recipeIds],
+  );
+
+  const recipeQueries = useQueries(
+    useMemo(() => ({ queries: recipeQueryOptions }), [recipeQueryOptions]),
+  );
 
   const recipes = recipeQueries
     .filter((q) => q.data)
@@ -87,31 +89,37 @@ function RecipeComparePage() {
     );
   }, [allIngredients]);
 
-  // Create stable key for dependency tracking
-  const ingredientIdsKey = uniqueIngredientIds.sort().join(",");
-
-  const ingredientData = useAsyncMemo(
-    async () => {
-      if (uniqueIngredientIds.length === 0) return {};
-
-      const ingredientsArray: IngredientWithFoodOut[] = await Promise.all(
-        uniqueIngredientIds.map((id) =>
-          trpcClient.ingredient.getByID.query({ id }),
-        ),
-      );
-
-      return ingredientsArray.reduce(
-        (acc, ingredient) => {
-          acc[ingredient.id] = ingredient;
-          return acc;
-        },
-        {} as Record<string, IngredientWithFoodOut>,
-      );
-    },
-    // Use stable string key instead of array reference
-    [ingredientIdsKey],
-    undefined,
+  const ingredientQueryOptions = useMemo(
+    () =>
+      uniqueIngredientIds.map((id) =>
+        api.ingredient.getByID.queryOptions({ id }),
+      ),
+    [api, uniqueIngredientIds],
   );
+
+  const ingredientQueries = useQueries(
+    useMemo(
+      () => ({ queries: ingredientQueryOptions }),
+      [ingredientQueryOptions],
+    ),
+  );
+
+  const ingredientData = useMemo(() => {
+    if (uniqueIngredientIds.length === 0) return {};
+    if (ingredientQueries.some((q) => q.isLoading)) return undefined;
+    const ingredientsArray = ingredientQueries
+      .map((q) => q.data)
+      .filter(Boolean) as IngredientWithFoodOut[];
+    if (ingredientsArray.length !== uniqueIngredientIds.length)
+      return undefined;
+    return ingredientsArray.reduce(
+      (acc, ingredient) => {
+        acc[ingredient.id] = ingredient;
+        return acc;
+      },
+      {} as Record<string, IngredientWithFoodOut>,
+    );
+  }, [ingredientQueries, uniqueIngredientIds]);
 
   // Calculate totals for each recipe
   const recipesWithTotals: RecipeWithTotals[] = useMemo(() => {

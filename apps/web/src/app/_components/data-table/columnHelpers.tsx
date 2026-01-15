@@ -297,7 +297,7 @@ type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
  * Requires a pre-computed mappingsMap that maps entity IDs to their unit mappings.
  *
  * @example
- * const mappingsMap = useAsyncMemo(...); // { [productId]: UnitMapping[] }
+ * const mappingsMap = useMemo(...); // { [productId]: UnitMapping[] }
  * createUnitMappingsColumn(columnHelper, mappingsMap)
  */
 export function createUnitMappingsColumn<T extends { id: string }>(

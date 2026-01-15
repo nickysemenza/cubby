@@ -1,4 +1,5 @@
 import { getNutrientValueByKey } from "@recipehub/usda-schemas";
+import { useQueries } from "@tanstack/react-query";
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
@@ -12,11 +13,11 @@ import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-tree
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { formatCurrency } from "~/lib/utils";
+import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useTRPCClient } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
 import { NYTView } from "./NYTView";
@@ -136,7 +137,7 @@ type ViewMode = "magazine" | "nyt" | "table" | "charts";
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
 }> = ({ recipe }) => {
-  const trpcClient = useTRPCClient();
+  const api = useTRPC();
   const [viewMode, setViewMode] = useState<ViewMode>("magazine");
 
   const ingredients: SectionIngredientOut[] = useMemo(
@@ -148,27 +149,41 @@ const RecipeDetail: React.FC<{
   const recipeImages = recipe.images;
 
   // Load ingredient data asynchronously (for table and charts views)
-  const data = useAsyncMemo(
-    async () => {
-      const ids = ingredients
-        .filter((i) => i.type === "ingredient")
-        .map((i) => i.ingredient.id);
+  const ingredientIds = useMemo(() => {
+    const ids = ingredients
+      .filter((i) => i.type === "ingredient")
+      .map((i) => i.ingredient.id);
+    return dedupe(ids);
+  }, [ingredients]);
 
-      const ingredientsArray: IngredientWithFoodOut[] = await Promise.all(
-        ids.map((id) => trpcClient.ingredient.getByID.query({ id })),
-      );
-
-      return ingredientsArray.reduce(
-        (acc, ingredient) => {
-          acc[ingredient.id] = ingredient;
-          return acc;
-        },
-        {} as Record<string, IngredientWithFoodOut>,
-      );
-    },
-    [ingredients, trpcClient.ingredient.getByID],
-    undefined,
+  const ingredientQueryOptions = useMemo(
+    () =>
+      ingredientIds.map((id) => api.ingredient.getByID.queryOptions({ id })),
+    [api, ingredientIds],
   );
+
+  const ingredientQueries = useQueries(
+    useMemo(
+      () => ({ queries: ingredientQueryOptions }),
+      [ingredientQueryOptions],
+    ),
+  );
+
+  const data = useMemo(() => {
+    if (ingredientIds.length === 0) return {};
+    if (ingredientQueries.some((q) => q.isLoading)) return undefined;
+    const ingredientsArray = ingredientQueries
+      .map((q) => q.data)
+      .filter(Boolean) as IngredientWithFoodOut[];
+    if (ingredientsArray.length !== ingredientIds.length) return undefined;
+    return ingredientsArray.reduce(
+      (acc, ingredient) => {
+        acc[ingredient.id] = ingredient;
+        return acc;
+      },
+      {} as Record<string, IngredientWithFoodOut>,
+    );
+  }, [ingredientIds, ingredientQueries]);
 
   // Load enriched ingredient data for charts (with price/nutrition info)
   const ingredientDataItems = useMemo(
