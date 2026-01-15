@@ -1,6 +1,5 @@
 
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { Image } from "~/components/ui/image";
 import {
   Tooltip,
@@ -59,12 +58,6 @@ export function ImageWithPreview({
   lazyPreview = false,
   className,
 }: ImageWithPreviewProps) {
-  const [isPreviewEnabled, setIsPreviewEnabled] = useState(!lazyPreview);
-  const handleOpenChange = (open: boolean) => {
-    if (open && !isPreviewEnabled) {
-      setIsPreviewEnabled(true);
-    }
-  };
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded border transition-transform hover:scale-105",
     className,
@@ -72,27 +65,19 @@ export function ImageWithPreview({
 
   // Only apply inline size when provided (undefined = rely on className for sizing)
   const sizeStyle = size != null ? { width: size, height: size } : undefined;
-  const previewEnableProps = lazyPreview
-    ? {
-        onMouseEnter: () => setIsPreviewEnabled(true),
-        onFocus: () => setIsPreviewEnabled(true),
-      }
-    : undefined;
-
   const thumbnail = to ? (
     <Link
       to={to}
       params={params}
       className={thumbnailClasses}
       style={sizeStyle}
-      {...previewEnableProps}
     />
   ) : (
-    <div className={thumbnailClasses} style={sizeStyle} {...previewEnableProps} />
+    <div className={thumbnailClasses} style={sizeStyle} />
   );
 
   return (
-    <Tooltip onOpenChange={lazyPreview ? handleOpenChange : undefined}>
+    <Tooltip lazy={lazyPreview}>
       <TooltipTrigger render={thumbnail}>
         <Image
           src={src}
@@ -100,23 +85,21 @@ export function ImageWithPreview({
           className="absolute inset-0 h-full w-full object-cover"
         />
       </TooltipTrigger>
-      {isPreviewEnabled && (
-        <TooltipContent
-          side={previewSide}
-          className="bg-background border-border overflow-hidden rounded-lg border p-0 shadow-lg"
+      <TooltipContent
+        side={previewSide}
+        className="bg-background border-border overflow-hidden rounded-lg border p-0 shadow-lg"
+      >
+        <div
+          className="relative"
+          style={{ width: previewSize, height: previewSize }}
         >
-          <div
-            className="relative"
-            style={{ width: previewSize, height: previewSize }}
-          >
-            <Image
-              src={src}
-              alt={alt}
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          </div>
-        </TooltipContent>
-      )}
+          <Image
+            src={src}
+            alt={alt}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+      </TooltipContent>
     </Tooltip>
   );
 }

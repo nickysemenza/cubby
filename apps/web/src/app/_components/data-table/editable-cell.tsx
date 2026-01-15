@@ -149,74 +149,6 @@ export function useEditableCell<T>({
 }
 
 // ============================================================================
-// Hook: useEditableSelectCell (specialized for select type)
-// ============================================================================
-
-interface UseEditableSelectCellOptions {
-  value: string | null;
-  onSave: (value: string | null) => Promise<void>;
-}
-
-function useEditableSelectCell({
-  value,
-  onSave,
-}: UseEditableSelectCellOptions) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedValue, setSelectedValue] = useState<string | null>(value);
-  const [isPending, setIsPending] = useState(false);
-  const [optimisticValue, setOptimisticValue] = useState<
-    string | null | undefined
-  >(undefined);
-
-  const displayValue = optimisticValue !== undefined ? optimisticValue : value;
-
-  const startEditing = useCallback(() => {
-    const v = optimisticValue !== undefined ? optimisticValue : value;
-    setSelectedValue(v);
-    setIsEditing(true);
-  }, [value, optimisticValue]);
-
-  const cancel = useCallback(() => {
-    setIsEditing(false);
-  }, []);
-
-  const save = useCallback(async () => {
-    if (selectedValue === value) {
-      setIsEditing(false);
-      return;
-    }
-
-    setIsPending(true);
-    try {
-      await onSave(selectedValue);
-      setOptimisticValue(selectedValue);
-      setIsEditing(false);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
-    } finally {
-      setIsPending(false);
-    }
-  }, [selectedValue, value, onSave]);
-
-  useEffect(() => {
-    if (optimisticValue !== undefined && value === optimisticValue) {
-      setOptimisticValue(undefined);
-    }
-  }, [value, optimisticValue]);
-
-  return {
-    isEditing,
-    selectedValue,
-    setSelectedValue,
-    displayValue,
-    isPending,
-    startEditing,
-    cancel,
-    save,
-  };
-}
-
-// ============================================================================
 // Component: EditableCell (unified)
 // ============================================================================
 
@@ -268,6 +200,23 @@ export function EditableCell<T>({
 // Internal: EditableInputCellInternal (text, number, currency)
 // ============================================================================
 
+function useOptimisticDisplayValue<T>(value: T | null) {
+  const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (optimisticValue !== undefined && value === optimisticValue) {
+      setOptimisticValue(undefined);
+    }
+  }, [value, optimisticValue]);
+
+  return {
+    displayValue: optimisticValue !== undefined ? optimisticValue : value,
+    setOptimisticValue,
+  };
+}
+
 function EditableInputCellInternal<T>({
   value,
   onSave,
@@ -278,6 +227,52 @@ function EditableInputCellInternal<T>({
   onSave: (value: T | null) => Promise<void>;
   config: EditableInputConfig | EditableCurrencyConfig;
   renderValue: (value: T | null) => React.ReactNode;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
+
+  if (isEditing) {
+    return (
+      <EditableInputEditor
+        value={value}
+        onSave={onSave}
+        config={config}
+        onCancel={() => setIsEditing(false)}
+        onCommit={(nextValue) => {
+          setOptimisticValue(nextValue);
+          setIsEditing(false);
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
+      onClick={(e) => {
+        e.stopPropagation();
+        setIsEditing(true);
+      }}
+    >
+      {renderValue(displayValue)}
+      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+    </button>
+  );
+}
+
+function EditableInputEditor<T>({
+  value,
+  onSave,
+  config,
+  onCancel,
+  onCommit,
+}: {
+  value: T | null;
+  onSave: (value: T | null) => Promise<void>;
+  config: EditableInputConfig | EditableCurrencyConfig;
+  onCancel: () => void;
+  onCommit: (value: T | null) => void;
 }) {
   const isCurrency = config.type === "currency";
   const inputType = isCurrency ? "number" : config.type;
@@ -308,73 +303,94 @@ function EditableInputCellInternal<T>({
     return String(v);
   }, []);
 
-  const {
-    isEditing,
-    inputValue,
-    setInputValue,
-    displayValue,
-    isPending,
-    startEditing,
-    cancel,
-    save,
-    handleKeyDown,
-  } = useEditableCell({ value, onSave, parse, format });
+  const [inputValue, setInputValue] = useState("");
+  const [isPending, setIsPending] = useState(false);
 
-  if (isEditing) {
-    return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
-      <div
-        className="inline-flex items-center gap-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {prefix && (
-          <span className="text-muted-foreground text-sm">{prefix}</span>
-        )}
-        <Input
-          type={inputType}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          className="h-7 w-24"
-          step={step}
-          placeholder={placeholder}
-          autoFocus
-          disabled={isPending}
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void save()}
-          disabled={isPending}
-        >
-          <Check className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={cancel}
-          disabled={isPending}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (format && value !== null) {
+      setInputValue(format(value));
+    } else {
+      setInputValue(value !== null ? String(value) : "");
+    }
+  }, [value, format]);
+
+  const handleSave = useCallback(async () => {
+    const trimmed = inputValue.trim();
+    const parsed =
+      trimmed === ""
+        ? null
+        : parse
+          ? parse(trimmed)
+          : (trimmed as unknown as T);
+
+    // Skip if value hasn't changed
+    if (parsed === value || (parsed === null && value === null)) {
+      onCancel();
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      await onSave(parsed);
+      onCommit(parsed);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setIsPending(false);
+    }
+  }, [inputValue, parse, value, onSave, onCancel, onCommit]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        void handleSave();
+      } else if (e.key === "Escape") {
+        onCancel();
+      }
+    },
+    [handleSave, onCancel],
+  );
 
   return (
-    <button
-      type="button"
-      className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
-      onClick={(e) => {
-        e.stopPropagation();
-        startEditing();
-      }}
+    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    <div
+      className="inline-flex items-center gap-1"
+      onClick={(e) => e.stopPropagation()}
     >
-      {renderValue(displayValue)}
-      <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-    </button>
+      {prefix && (
+        <span className="text-muted-foreground text-sm">{prefix}</span>
+      )}
+      <Input
+        type={inputType}
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        className="h-7 w-24"
+        step={step}
+        placeholder={placeholder}
+        autoFocus
+        disabled={isPending}
+      />
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        onClick={() => void handleSave()}
+        disabled={isPending}
+      >
+        <Check className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        onClick={onCancel}
+        disabled={isPending}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
 
@@ -395,51 +411,22 @@ function EditableSelectCellInternal({
   placeholder?: string;
   renderValue: (value: string | null) => React.ReactNode;
 }) {
-  const {
-    isEditing,
-    selectedValue,
-    setSelectedValue,
-    displayValue,
-    isPending,
-    startEditing,
-    cancel,
-    save,
-  } = useEditableSelectCell({ value, onSave });
+  const [isEditing, setIsEditing] = useState(false);
+  const { displayValue, setOptimisticValue } = useOptimisticDisplayValue(value);
 
   if (isEditing) {
     return (
-      // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
-      <div
-        className="inline-flex items-center gap-1"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <FilterableCombobox
-          items={options}
-          value={selectedValue}
-          onValueChange={setSelectedValue}
-          placeholder={placeholder}
-          disabled={isPending}
-          className="w-40"
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={() => void save()}
-          disabled={isPending}
-        >
-          <Check className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-7 w-7"
-          onClick={cancel}
-          disabled={isPending}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
+      <EditableSelectEditor
+        value={value}
+        onSave={onSave}
+        options={options}
+        placeholder={placeholder}
+        onCancel={() => setIsEditing(false)}
+        onCommit={(nextValue) => {
+          setOptimisticValue(nextValue);
+          setIsEditing(false);
+        }}
+      />
     );
   }
 
@@ -449,12 +436,87 @@ function EditableSelectCellInternal({
       className="group inline-flex items-center gap-1 rounded px-2 py-1 text-left hover:bg-muted"
       onClick={(e) => {
         e.stopPropagation();
-        startEditing();
+        setIsEditing(true);
       }}
     >
       {renderValue(displayValue)}
       <Pencil className="ml-1 h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
     </button>
+  );
+}
+
+function EditableSelectEditor({
+  value,
+  onSave,
+  options,
+  placeholder,
+  onCancel,
+  onCommit,
+}: {
+  value: string | null;
+  onSave: (value: string | null) => Promise<void>;
+  options: FilterableComboboxItem[];
+  placeholder: string;
+  onCancel: () => void;
+  onCommit: (value: string | null) => void;
+}) {
+  const [selectedValue, setSelectedValue] = useState<string | null>(value);
+  const [isPending, setIsPending] = useState(false);
+
+  useEffect(() => {
+    setSelectedValue(value);
+  }, [value]);
+
+  const handleSave = useCallback(async () => {
+    if (selectedValue === value) {
+      onCancel();
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      await onSave(selectedValue);
+      onCommit(selectedValue);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save");
+    } finally {
+      setIsPending(false);
+    }
+  }, [selectedValue, value, onSave, onCancel, onCommit]);
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: stop propagation for row click
+    <div
+      className="inline-flex items-center gap-1"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <FilterableCombobox
+        items={options}
+        value={selectedValue}
+        onValueChange={setSelectedValue}
+        placeholder={placeholder}
+        disabled={isPending}
+        className="w-40"
+      />
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        onClick={() => void handleSave()}
+        disabled={isPending}
+      >
+        <Check className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="h-7 w-7"
+        onClick={onCancel}
+        disabled={isPending}
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
   );
 }
 

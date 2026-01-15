@@ -106,7 +106,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     sortIcon: "h-3 w-3",
   };
 
-  // Render a single row (used by both virtualized and non-virtualized paths)
+  // Render a single row (virtualized)
   const renderRow = (row: Row<TItem>, style?: React.CSSProperties) => (
     <TableRow
       key={row.id}

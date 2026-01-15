@@ -1,7 +1,15 @@
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
+import { createContext, useContext, useMemo, useState } from "react";
 
 import { cn } from "~/lib/utils";
+
+type TooltipLazyContextValue = {
+  lazy: boolean;
+  enabled: boolean;
+};
+
+const TooltipLazyContext = createContext<TooltipLazyContextValue | null>(null);
 
 function TooltipProvider({
   delay = 0,
@@ -16,10 +24,36 @@ function TooltipProvider({
   );
 }
 
-function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
+type TooltipProps = TooltipPrimitive.Root.Props & {
+  lazy?: boolean;
+};
+
+function Tooltip({ lazy = true, onOpenChange, ...props }: TooltipProps) {
+  const [enabled, setEnabled] = useState(!lazy);
+  const contextValue = useMemo(
+    () => ({ lazy, enabled }),
+    [lazy, enabled],
+  );
+
+  const handleOpenChange: TooltipPrimitive.Root.Props["onOpenChange"] = (
+    open,
+    eventDetails,
+  ) => {
+    if (lazy && open && !enabled) {
+      setEnabled(true);
+    }
+    onOpenChange?.(open, eventDetails);
+  };
+
   return (
     <TooltipProvider>
-      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+      <TooltipLazyContext.Provider value={contextValue}>
+        <TooltipPrimitive.Root
+          data-slot="tooltip"
+          onOpenChange={handleOpenChange}
+          {...props}
+        />
+      </TooltipLazyContext.Provider>
     </TooltipProvider>
   );
 }
@@ -41,6 +75,11 @@ function TooltipContent({
     TooltipPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
   >) {
+  const lazyContext = useContext(TooltipLazyContext);
+  if (lazyContext?.lazy && !lazyContext.enabled) {
+    return null;
+  }
+
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Positioner
