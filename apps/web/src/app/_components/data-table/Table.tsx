@@ -101,8 +101,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     header:
       "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80 bg-muted/30",
     filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
-    cell: "px-2 py-1 min-h-[28px] align-middle",
-    row: "table-row-hover border-b border-border/30",
+    cell: "h-9 px-2 py-1 align-middle overflow-hidden",
+    row: "h-9 table-row-hover border-b border-border/30",
     sortIcon: "h-3 w-3",
   };
 
