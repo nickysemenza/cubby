@@ -53,6 +53,65 @@ export function LocationList() {
     invalidateKeys: [[queryKeys.location.list]],
   });
 
+  // Memoize columns to prevent recreating on every render
+  // Note: updateLocationMutation is NOT in dependencies because useMutation returns a new object every render
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateLocationMutation changes every render but is functionally stable
+  const columns = useMemo(
+    () => [
+      createImageColumn(columnHelper),
+      createNameColumn(columnHelper, "location", "name", {
+        filterConfig: { placeholder: "Filter by location name..." },
+        editable: {
+          onSave: async (newName, location) => {
+            await updateLocationMutation.mutateAsync({
+              id: location.id,
+              data: { name: newName },
+            });
+          },
+        },
+      }),
+      createEntityPillColumn(columnHelper, "children", "location"),
+      createSingleEntityPillColumn(columnHelper, "parent", "location"),
+      createFilterableSelectColumn(columnHelper, "type", {
+        placeholder: "Filter by type...",
+        selectOptions: locationTypeOptionsWithTheme,
+        renderCell: (type) => <LocationTypeBadge type={type} />,
+        editable: {
+          onSave: async (newType, location) => {
+            await updateLocationMutation.mutateAsync({
+              id: location.id,
+              data: { type: newType },
+            });
+          },
+        },
+      }),
+      columnHelper.display({
+        id: "inventory_value",
+        header: "Valuation",
+        cell: (info) => (
+          <InventoryValuationSummary
+            locationId={info.row.original.id}
+            variant="compact"
+          />
+        ),
+        meta: { className: "w-[180px]" },
+      }),
+      createCreatedAtColumn(columnHelper),
+      createTimestampColumn(columnHelper, "lastBulkInventory", {
+        header: "Last Bulk Inventory",
+        fallback: "Never",
+      }),
+      createInventoryEntriesColumn(
+        columnHelper,
+        "inventoryEntries",
+        "product",
+        (e) => e.product,
+        { layout: "inline" },
+      ),
+    ],
+    [columnHelper],
+  );
+
   const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({
       entity: "location",
@@ -61,59 +120,7 @@ export function LocationList() {
         nameFilter: ts.getColumnFilter("name"),
         itemTypeFilter: ts.getColumnFilter("type") as LocationType,
       }),
-      // Location has custom column order (createdAt in middle), so we define all columns
-      columns: [
-        createImageColumn(columnHelper),
-        createNameColumn(columnHelper, "location", "name", {
-          filterConfig: { placeholder: "Filter by location name..." },
-          editable: {
-            onSave: async (newName, location) => {
-              await updateLocationMutation.mutateAsync({
-                id: location.id,
-                data: { name: newName },
-              });
-            },
-          },
-        }),
-        createEntityPillColumn(columnHelper, "children", "location"),
-        createSingleEntityPillColumn(columnHelper, "parent", "location"),
-        createFilterableSelectColumn(columnHelper, "type", {
-          placeholder: "Filter by type...",
-          selectOptions: locationTypeOptionsWithTheme,
-          renderCell: (type) => <LocationTypeBadge type={type} />,
-          editable: {
-            onSave: async (newType, location) => {
-              await updateLocationMutation.mutateAsync({
-                id: location.id,
-                data: { type: newType },
-              });
-            },
-          },
-        }),
-        columnHelper.display({
-          id: "inventory_value",
-          header: "Valuation",
-          cell: (info) => (
-            <InventoryValuationSummary
-              locationId={info.row.original.id}
-              variant="compact"
-            />
-          ),
-          meta: { className: "w-[180px]" },
-        }),
-        createCreatedAtColumn(columnHelper),
-        createTimestampColumn(columnHelper, "lastBulkInventory", {
-          header: "Last Bulk Inventory",
-          fallback: "Never",
-        }),
-        createInventoryEntriesColumn(
-          columnHelper,
-          "inventoryEntries",
-          "product",
-          (e) => e.product,
-          { layout: "inline" },
-        ),
-      ],
+      columns,
       filters: [
         { id: "name", placeholder: "Filter by location name..." },
         {

@@ -4,13 +4,9 @@ import LocationTreemap from "~/app/_components/inventory/location-treemap";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
 import ProductCategoryDonut from "~/app/_components/visualizations/product-category-donut";
-import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/insights")({
   component: InsightsPage,
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function InsightsPage() {

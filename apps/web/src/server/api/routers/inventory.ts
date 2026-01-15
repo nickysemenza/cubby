@@ -11,6 +11,7 @@ import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   type InventoryId,
   inventoryId,
+  locationId,
   unsafeProductId,
 } from "~/schemas/identifiers";
 import {
@@ -48,7 +49,7 @@ import { createAppError, createTRPCRouter, protectedProcedure } from "../trpc";
 const inventoryFiltersSchema = z.object({
   productNameFilter: z.string().optional(),
   locationNameFilter: z.string().optional(),
-  locationIdFilter: z.string().optional(),
+  locationIdFilter: locationId.optional(),
 });
 
 // Create standardized CRUD procedures using factory
@@ -238,7 +239,7 @@ const backfillInventoryValuationsEndpoint = protectedProcedure
 
 // Get inventory counts for multiple locations (batched query to avoid N+1)
 const getCountsByLocations = protectedProcedure
-  .input(z.object({ locationIds: z.array(z.string()) }))
+  .input(z.object({ locationIds: z.array(locationId) }))
   .output(z.record(z.string(), z.number()))
   .query(async ({ ctx, input }) => {
     return await getInventoryCountsByLocations(ctx.db, input.locationIds);
@@ -246,7 +247,7 @@ const getCountsByLocations = protectedProcedure
 
 // Get inventory entries for multiple locations (batched query to avoid N+1)
 const getByLocationIds = protectedProcedure
-  .input(z.object({ locationIds: z.array(z.string()) }))
+  .input(z.object({ locationIds: z.array(locationId) }))
   .output(z.array(inventoryWithLocationAndProductOut))
   .query(async ({ ctx, input }) => {
     return await getInventoryByLocationIds(ctx.db, input.locationIds);

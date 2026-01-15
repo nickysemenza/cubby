@@ -48,7 +48,8 @@ export function EntityPreviewPanel({
   }, [entityType, id, api]);
 
   // Single query hook instead of 7 disabled ones
-  const query = useQuery(queryOptions);
+  // biome-ignore lint/suspicious/noExplicitAny: TypeScript can't narrow discriminated union in switch statement
+  const query = useQuery(queryOptions as any);
   const { isLoading, error, data } = query;
 
   // Get entity definition for link
@@ -87,27 +88,41 @@ export function EntityPreviewPanel({
       </SheetHeader>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {entityType === "product" && data && (
-          <ProductDetail product={data as never} />
-        )}
-        {entityType === "recipe" && data && (
-          <RecipeDetail recipe={data as never} />
-        )}
-        {entityType === "ingredient" && data && (
-          <IngredientDetail ingredient={data as never} />
-        )}
-        {entityType === "location" && data && (
-          <LocationDetail location={data as never} />
-        )}
-        {entityType === "inventory" && data && (
-          <InventoryDetail inventoryitem={data as never} />
-        )}
-        {entityType === "usda-food" && data && (
-          <USDAFoodDetail id={parseInt(id, 10)} food={data as never} />
-        )}
-        {entityType === "image" && data && (
-          <ImageDetail image={data as never} />
-        )}
+        {entityType === "product" ? (
+          data ? (
+            <ProductDetail product={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "recipe" ? (
+          data ? (
+            <RecipeDetail recipe={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "ingredient" ? (
+          data ? (
+            <IngredientDetail ingredient={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "location" ? (
+          data ? (
+            <LocationDetail location={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "inventory" ? (
+          data ? (
+            <InventoryDetail inventoryitem={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "usda-food" ? (
+          data ? (
+            <USDAFoodDetail id={parseInt(id, 10)} food={data as never} />
+          ) : null
+        ) : null}
+        {entityType === "image" ? (
+          data ? (
+            <ImageDetail image={data as never} />
+          ) : null
+        ) : null}
       </div>
     </div>
   );

@@ -119,7 +119,12 @@ export function USDAFoodList() {
         const nutritionInfo = info.getValue();
         return (
           <div className="w-48">
-            <NutritionInfoTable n={nutritionInfo} limit={3} />
+            <NutritionInfoTable
+              n={{
+                ...nutritionInfo,
+                nutrientSummary: nutritionInfo.nutrientSummary.slice(0, 3),
+              }}
+            />
           </div>
         );
       },

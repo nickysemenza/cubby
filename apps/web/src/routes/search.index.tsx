@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { SearchPage } from "~/app/_components/search/search-page";
-import { authMiddleware } from "~/lib/protected-route";
 import { type SearchType, searchTypeSchema } from "~/schemas/search";
 
 const searchSchema = z.object({
@@ -13,9 +12,6 @@ export const Route = createFileRoute("/search/")({
   validateSearch: searchSchema,
   component: SearchPageRoute,
   head: () => ({ meta: [{ title: "Search | RecipeHub" }] }),
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function SearchPageRoute() {

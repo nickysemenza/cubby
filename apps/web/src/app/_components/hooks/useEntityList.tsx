@@ -17,7 +17,6 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { entities, getSortableFields } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { QueryTiming } from "~/lib/query-timing";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { BulkActionBar } from "../data-table/BulkActionBar";
@@ -69,8 +68,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   columns: AnyColumnDef<TData>[];
   /** Filter definitions - string shorthand or full FilterDef config */
   filters: FilterInput[];
-  /** For unit mappings - function to extract mappings from each row (sync or async) */
-  getMappings?: (item: TData) => UnitMapping[] | Promise<UnitMapping[]>;
+  /** For unit mappings - function to extract mappings from each row (must be synchronous) */
+  getMappings?: (item: TData) => UnitMapping[];
   /** Override table state options */
   tableStateOptions?: UseTableListOptions<TFilters>["tableStateOptions"];
   /** Global filter state (for custom global filters like IngredientList) */
@@ -125,7 +124,7 @@ interface UseEntityListReturn<TData> {
  *
  * Handles:
  * - Table query via useTableList
- * - Async unit mappings loading if getMappings provided
+ * - Unit mappings loading if getMappings provided
  * - Standard columns based on entity config (image, name, createdAt)
  * - Filter expansion from simple string definitions
  *
@@ -385,24 +384,16 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       tableStateOptions: mergedTableStateOptions,
     });
 
-  // Load unit mappings asynchronously if getMappings is provided
-  const mappingsMap = useAsyncMemo(
-    async (signal) => {
-      if (!getMappings || !hasUnitMappings) return {};
-      const entries = await Promise.all(
-        data.map(async (item) => {
-          const mappings = await getMappings(item);
-          return [item.id, mappings] as const;
-        }),
-      );
-      if (signal.cancelled) return {};
-      return Object.fromEntries(entries);
-    },
-    [data, getMappings, hasUnitMappings],
-    {},
-  );
+  // Load unit mappings synchronously if getMappings is provided
+  const mappingsMap = useMemo(() => {
+    if (!getMappings || !hasUnitMappings) return {};
 
-  // Track mappings only when they're actually used to avoid re-renders from useAsyncMemo returning new {} references
+    return Object.fromEntries(
+      data.map((item) => [item.id, getMappings(item)] as const),
+    );
+  }, [data, getMappings, hasUnitMappings]);
+
+  // Track mappings only when they're actually used to avoid re-renders from useMemo returning new {} references
   const shouldUseMappings = hasUnitMappings && getMappings;
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 

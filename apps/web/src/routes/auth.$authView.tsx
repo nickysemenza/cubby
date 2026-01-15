@@ -46,14 +46,6 @@ const seededRandom = (seed: number) => {
 
 function AuthPage() {
   const { authView } = Route.useParams();
-  const { redirect } = Route.useSearch();
-  const navigate = Route.useNavigate();
-
-  // Handle redirect after successful authentication
-  // Better-Auth UI calls onSuccess callback after successful sign-in
-  const handleAuthSuccess = () => {
-    navigate({ to: redirect || "/" });
-  };
 
   return (
     <div className="auth-background relative flex min-h-screen items-center justify-center overflow-hidden p-4">
@@ -85,7 +77,7 @@ function AuthPage() {
       </div>
       {/* Auth form */}
       <div className="relative z-10 w-full max-w-md">
-        <AuthView pathname={authView} onSuccess={handleAuthSuccess} />
+        <AuthView pathname={authView} />
       </div>
     </div>
   );

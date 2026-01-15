@@ -64,6 +64,51 @@ export function IngredientList() {
     invalidateKeys: [[queryKeys.ingredient.list]],
   });
 
+  // Memoize columns to prevent recreating on every render
+  // Note: updateIngredientMutation is NOT in dependencies because useMutation returns a new object every render
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateIngredientMutation changes every render but is functionally stable
+  const columns = useMemo(
+    () => [
+      createImageColumn(columnHelper),
+      createNameColumn(columnHelper, "ingredient", "name", {
+        filterConfig: { placeholder: "Filter by ingredient name..." },
+        editable: {
+          onSave: async (newName, ingredient) => {
+            await updateIngredientMutation.mutateAsync({
+              id: ingredient.id,
+              data: { name: newName },
+            });
+          },
+        },
+      }),
+      columnHelper.accessor("aliases", {
+        header: "Aliases",
+        cell: (info) => (
+          <TruncatedList
+            items={info.getValue()}
+            maxItems={2}
+            renderItem={(alias: string) => (
+              <span key={alias} className="truncate text-xs">
+                {alias}
+              </span>
+            )}
+          />
+        ),
+      }),
+      createCreatedAtColumn(columnHelper),
+      createEntityPillColumn(columnHelper, "appearsInRecipes", "recipe", {
+        header: "Recipes",
+        className: "w-48 max-w-48",
+        dedupe: true,
+      }),
+      createEntityPillColumn(columnHelper, "product", "product", {
+        header: "Product",
+        className: "w-48 max-w-48",
+      }),
+    ],
+    [columnHelper],
+  );
+
   const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({
       entity: "ingredient",
@@ -73,45 +118,7 @@ export function IngredientList() {
         missingProductsOnly: globalFilter.missingProductsOnly,
       }),
       getMappings: getIngredientMappings,
-      // Ingredient has custom columns - unit mappings column added automatically via hasUnitMappings
-      columns: [
-        createImageColumn(columnHelper),
-        createNameColumn(columnHelper, "ingredient", "name", {
-          filterConfig: { placeholder: "Filter by ingredient name..." },
-          editable: {
-            onSave: async (newName, ingredient) => {
-              await updateIngredientMutation.mutateAsync({
-                id: ingredient.id,
-                data: { name: newName },
-              });
-            },
-          },
-        }),
-        columnHelper.accessor("aliases", {
-          header: "Aliases",
-          cell: (info) => (
-            <TruncatedList
-              items={info.getValue()}
-              maxItems={2}
-              renderItem={(alias: string) => (
-                <span key={alias} className="truncate text-xs">
-                  {alias}
-                </span>
-              )}
-            />
-          ),
-        }),
-        createCreatedAtColumn(columnHelper),
-        createEntityPillColumn(columnHelper, "appearsInRecipes", "recipe", {
-          header: "Recipes",
-          className: "w-48 max-w-48",
-          dedupe: true,
-        }),
-        createEntityPillColumn(columnHelper, "product", "product", {
-          header: "Product",
-          className: "w-48 max-w-48",
-        }),
-      ],
+      columns,
       filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
       globalFilter,
       onGlobalFilterChange: setGlobalFilter as (value: unknown) => void,

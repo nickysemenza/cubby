@@ -1,12 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageWrapper } from "~/components/layout/page-wrapper";
-import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function DashboardPage() {

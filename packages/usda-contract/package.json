@@ -5,10 +5,11 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
+    "typecheck:stable": "tsc --noEmit",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
-    "check": "biome check && tsc --noEmit",
+    "check": "biome check && pnpm typecheck",
     "format:check": "biome check",
     "format:write": "biome check --write",
     "test": "vitest run",

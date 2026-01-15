@@ -3,14 +3,10 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Skeleton } from "~/components/ui/skeleton";
-import { authMiddleware } from "~/lib/protected-route";
 import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/usda/upc/$code")({
   component: USDAUPCLookupPage,
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function USDAUPCLookupPage() {

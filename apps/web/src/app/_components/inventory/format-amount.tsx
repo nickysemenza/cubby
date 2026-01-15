@@ -15,7 +15,10 @@ import { convertAmountToPrice } from "../units/univ-conversion";
 /**
  * Helper function for displaying amount and price
  */
-export const showAmountAndPrice = (amount: Amount, mappings: UnitMapping[]) => {
+export const showAmountAndPrice = (
+  amount: Amount,
+  mappings: UnitMapping[] | undefined,
+) => {
   if (mappings === undefined) {
     return "loading";
   }

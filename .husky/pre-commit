@@ -5,4 +5,4 @@ set -e
 pnpm exec biome check --staged --write --no-errors-on-unmatched
 
 # Run TypeScript checks across all packages (tsgo is ~10x faster than tsc)
-pnpm typecheck:fast
+pnpm typecheck

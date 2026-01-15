@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
+import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 import {
   calculateInventoryValuation,
@@ -11,7 +12,7 @@ import {
 type Variant = "compact" | "full";
 
 interface InventoryValuationSummaryProps {
-  locationId?: string;
+  locationId?: LocationId;
   items?: InventoryItem[];
   variant?: Variant;
   className?: string;
@@ -31,7 +32,7 @@ export function InventoryValuationSummary({
     // Fetch generously to cover typical cases; server supports pagination
     pagination: { pageIndex: 0, pageSize: 1000 },
     filters: {
-      locationIdFilter: locationId ?? "00000000-0000-0000-0000-000000000000",
+      locationIdFilter: locationId,
     },
   });
   const { data: fetched } = useQuery({ ...baseOptions, enabled });

@@ -55,5 +55,9 @@ export const NutritionInfoTable: React.FC<{
     return null;
   }
 
-  return <RTable table={table} className="text-xs" />;
+  return (
+    <div className="text-xs">
+      <RTable table={table} />
+    </div>
+  );
 };

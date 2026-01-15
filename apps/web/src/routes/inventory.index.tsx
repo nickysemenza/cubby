@@ -3,14 +3,10 @@ import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
-import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/inventory/")({
   component: InventoryPage,
   head: () => ({ meta: [{ title: "Inventory | RecipeHub" }] }),
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function InventoryPage() {

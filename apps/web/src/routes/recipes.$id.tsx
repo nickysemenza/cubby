@@ -10,7 +10,6 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { authMiddleware } from "~/lib/protected-route";
 import { queryKeys } from "~/lib/query-keys";
 import { useTRPC } from "~/trpc/react";
 
@@ -28,9 +27,6 @@ export const Route = createFileRoute("/recipes/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   component: RecipeDetailPage,
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function RecipeDetailPage() {

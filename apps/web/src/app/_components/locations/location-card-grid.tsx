@@ -50,9 +50,10 @@ export function LocationCardGrid({
     if (!allInventory) return map;
 
     for (const item of allInventory) {
-      const items = map.get(item.locationId) ?? [];
+      const locationId = item.location.id;
+      const items = map.get(locationId) ?? [];
       items.push(item);
-      map.set(item.locationId, items);
+      map.set(locationId, items);
     }
     return map;
   }, [allInventory]);

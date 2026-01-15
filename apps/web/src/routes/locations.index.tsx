@@ -10,7 +10,6 @@ import { LocationList } from "~/app/locations/locationlist";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { authMiddleware } from "~/lib/protected-route";
 
 const viewOptions = ["gallery", "table", "visualizations"] as const;
 type ViewOption = (typeof viewOptions)[number];
@@ -23,9 +22,6 @@ export const Route = createFileRoute("/locations/")({
   validateSearch: searchSchema,
   component: LocationsPage,
   head: () => ({ meta: [{ title: "Locations | RecipeHub" }] }),
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function LocationsPage() {

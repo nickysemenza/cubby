@@ -41,7 +41,8 @@ export function EntityPillById({
   }, [entityType, entityId, trpc]);
 
   // Single query hook instead of 4 disabled ones
-  const query = useQuery(queryOptions);
+  // biome-ignore lint/suspicious/noExplicitAny: TypeScript can't narrow discriminated union in switch statement
+  const query = useQuery(queryOptions as any);
 
   // Inventory entries don't have a getByID that returns product info
   if (entityType === "inventory") {

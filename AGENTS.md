@@ -2,6 +2,8 @@
 
 - Format after changes: `pnpm run format:write`
 - Typecheck + lint: `pnpm run check`
+- Typecheck only: `pnpm run typecheck` (uses tsgo from TypeScript 7.0 preview for speed)
+- Typecheck with stable TypeScript: `pnpm run typecheck:stable` (fallback if tsgo has issues)
 - Todos: `docs/todos.md`
 
 ## Branded IDs

@@ -5,7 +5,6 @@ import { PageWrapper } from "~/components/layout/page-wrapper";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { useDocumentTitle } from "~/hooks/useDocumentTitle";
-import { authMiddleware } from "~/lib/protected-route";
 import { useTRPC } from "~/trpc/react";
 
 export const Route = createFileRoute("/inventory/$id")({
@@ -17,9 +16,6 @@ export const Route = createFileRoute("/inventory/$id")({
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,
   component: InventoryDetailPage,
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function InventoryDetailPage() {

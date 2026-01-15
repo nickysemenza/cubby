@@ -13,7 +13,6 @@ import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { useAsyncMemo } from "~/hooks/useAsyncMemo";
-import { authMiddleware } from "~/lib/protected-route";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut } from "~/schemas/recipe";
@@ -28,9 +27,6 @@ export const Route = createFileRoute("/recipes/compare")({
   validateSearch: searchParamsSchema.parse,
   component: RecipeComparePage,
   head: () => ({ meta: [{ title: "Compare Recipes | RecipeHub" }] }),
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 /** Get effective servings: explicit servings, or yield value if unit is "servings" */

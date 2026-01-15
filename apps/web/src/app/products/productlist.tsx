@@ -78,6 +78,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   });
 
   // Memoize columns to prevent recreating on every render
+  // Note: updateProductMutation is NOT in dependencies because useMutation returns a new object every render
+  // The closure captures it correctly, and we only need to recreate if columnHelper changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: updateProductMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
@@ -187,7 +190,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         {},
       ),
     ],
-    [columnHelper, updateProductMutation],
+    [columnHelper],
   );
 
   // Memoize filters to prevent recreating on every render

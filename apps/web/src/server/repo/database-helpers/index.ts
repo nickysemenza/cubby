@@ -24,6 +24,7 @@ export { getDb, unwrapDb, withTransaction } from "./core";
 export {
   associatePendingImages,
   batchInsert,
+  batchUpdateWithCaseWhen,
   batchUpsertInventory,
   insertAndReturn,
   updateAndReturn,

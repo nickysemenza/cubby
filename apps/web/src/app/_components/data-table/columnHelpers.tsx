@@ -426,7 +426,9 @@ export function createInventoryEntriesColumn<
       }
 
       // Stacked layout: amounts grouped, then pills grouped
-      const relatedEntities = entries.map(getRelatedEntity).filter(Boolean);
+      const relatedEntities = entries
+        .map((entry) => getRelatedEntity(entry) as never)
+        .filter(Boolean);
       return (
         <SpacedContainer space={0} className="space-y-0.5">
           <div className="space-y-0.5 text-xs">
@@ -1000,9 +1002,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     header?: string;
     onSave: (newAmount: Amount, row: T) => Promise<void>;
     /** Get unit mappings for price display (optional) */
-    getUnitMappings?: (
-      row: T,
-    ) => Array<{ a: Amount; b: Amount; source: string }>;
+    getUnitMappings?: (row: T) => UnitMapping[];
   },
 ) {
   return columnHelper.accessor((row) => row[accessor] as Amount, {

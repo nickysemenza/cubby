@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   DollarSign,
@@ -15,6 +16,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import type { InfLocation, LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -35,6 +37,7 @@ interface LocationDetailProps {
 
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
+  const queryClient = useQueryClient();
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -108,7 +111,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         <div className="space-y-4">
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <QuickInventoryAdd locationId={location.id} />
+              <QuickInventoryAdd
+                locationId={location.id}
+                onSuccess={() => {
+                  void queryClient.invalidateQueries({
+                    queryKey: [queryKeys.inventory.list],
+                  });
+                }}
+              />
             </div>
             <Link
               to="/inventory/scanner"

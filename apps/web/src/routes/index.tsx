@@ -2,13 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount from "~/app/_components/homepage/entitycount";
-import { authMiddleware } from "~/lib/protected-route";
 
 export const Route = createFileRoute("/")({
   component: Home,
-  server: {
-    middleware: [authMiddleware],
-  },
 });
 
 function Home() {

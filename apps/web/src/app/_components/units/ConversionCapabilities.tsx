@@ -1,6 +1,6 @@
 import type { AmountKind } from "@recipehub/recipebridge";
 import { ArrowLeftRight } from "lucide-react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Badge } from "~/components/ui/badge";
 import {
   Tooltip,
@@ -60,12 +60,16 @@ const testConversions: ConversionTest[] = [
 
 // kindIconMap and formatKindsLabel shared in kind-icons.ts
 
-export function ConversionCapabilities({
+export const ConversionCapabilities = memo(function ConversionCapabilities({
   mappings,
   hideConvertButton = false,
   compact = false,
 }: ConversionCapabilitiesProps) {
+  // Skip expensive WASM conversion tests in compact mode (table view)
+  // In compact mode, only show the Convert button without capability badges
   const capabilities = useMemo(() => {
+    if (compact) return [];
+
     return testConversions.map((test) => {
       const result = safeConvertAmount(
         { unit: test.unit, value: 1 },
@@ -77,7 +81,7 @@ export function ConversionCapabilities({
         success: result.success,
       };
     });
-  }, [mappings]);
+  }, [mappings, compact]);
 
   const successCount = capabilities.filter((c) => c.success).length;
   const totalCount = capabilities.length;
@@ -87,9 +91,11 @@ export function ConversionCapabilities({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {!hideConvertButton && <ConversionDialog mappings={mappings} />}
-          <Badge variant="outline" className="text-muted-foreground">
-            {successCount}/{totalCount}
-          </Badge>
+          {!compact && (
+            <Badge variant="outline" className="text-muted-foreground">
+              {successCount}/{totalCount}
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -131,4 +137,4 @@ export function ConversionCapabilities({
       )}
     </div>
   );
-}
+});

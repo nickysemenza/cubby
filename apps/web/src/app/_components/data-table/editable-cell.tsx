@@ -12,6 +12,7 @@ import {
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { formatCurrency } from "~/lib/utils";
+import type { UnitMapping } from "~/schemas/unitmapping";
 import { showAmountAndPrice } from "../inventory/format-amount";
 import { NoneState } from "../NoneState";
 
@@ -513,7 +514,7 @@ export function EditableSelectCell({
 
 interface EditableAmountCellProps {
   amount: Amount;
-  unitMappings?: Array<{ a: Amount; b: Amount; source: string }>;
+  unitMappings?: UnitMapping[];
   onSave: (newAmount: Amount) => Promise<void>;
 }
 

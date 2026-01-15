@@ -14,6 +14,7 @@ import {
 } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import { useEntityList } from "../hooks/useEntityList";
+import { useUpdateMutation } from "../hooks/useUpdateMutation";
 import { DeleteInventoryDialog } from "../inventory/delete-inventory-dialog";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 
@@ -28,6 +29,11 @@ export function LocationInventoryTable({
 }: LocationInventoryTableProps) {
   const api = useTRPC();
   const columnHelper = createColumnHelper<InventoryItem>();
+  const updateMutation = useUpdateMutation({
+    mutationFn: api.inventory.update.mutationOptions,
+    entity: "inventory",
+    invalidateKeys: [queryKeys.inventory.list],
+  });
 
   // Dialog states for bulk actions
   const [dialogState, setDialogState] = useState<{
@@ -35,7 +41,10 @@ export function LocationInventoryTable({
     items: InventoryItem[];
   }>({ type: null, items: [] });
 
-  const { table, data, isLoading, error } = useEntityList({
+  const { table, data, isLoading, error } = useEntityList<
+    InventoryItem,
+    Record<string, never>
+  >({
     entity: "inventory",
     queryOptions: () =>
       api.inventory.list.queryOptions({
@@ -44,6 +53,7 @@ export function LocationInventoryTable({
         filters: { locationIdFilter: locationId },
       }),
     buildFilters: () => ({}),
+    filters: [],
     columns: [
       createImageColumn(columnHelper, {
         getImages: (row) => row.product.images,
@@ -55,12 +65,21 @@ export function LocationInventoryTable({
 
       createEditableAmountColumn(columnHelper, "amount", {
         onSave: async (newAmount, row) => {
-          await api.inventory.update.mutate({
+          await updateMutation.mutateAsync({
             id: row.id,
             data: { amount: newAmount },
           });
         },
-        getUnitMappings: (row) => row.product.unitMappings,
+        getUnitMappings: (row) =>
+          row.product.unitMappings.map((m) => ({
+            a: m.a,
+            b: m.b,
+            source: m.source,
+            sourceMetadata: m.sourceMetadata ?? {
+              type: "product",
+              productId: row.product.id,
+            },
+          })),
       }),
     ],
     extraActions: (item) => (
@@ -84,17 +103,12 @@ export function LocationInventoryTable({
         </Button>
       </>
     ),
-    deletable: false, // We use custom delete dialog
-    customQueryKey: [
-      queryKeys.inventory.list,
-      { locationIdFilter: locationId },
-    ],
   });
 
   // Get selected items for bulk actions
   const selectedItems = Object.keys(table.getState().rowSelection)
     .filter((id) => table.getState().rowSelection[id])
-    .map((id) => data.items.find((item) => item.id === id))
+    .map((id) => data.find((item) => item.id === id))
     .filter((item): item is InventoryItem => item !== undefined);
 
   // Custom bulk action bar
