@@ -13,10 +13,7 @@ import {
 import { queryKeys } from "~/lib/query-keys";
 import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
 import type { LocationCreateInput, LocationOut } from "~/schemas/location";
-import type {
-  ProductInputPayload,
-  ProductTopLevelOut,
-} from "~/schemas/product";
+import type { ProductCreateInput, ProductTopLevelOut } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,
@@ -222,7 +219,7 @@ function CreateProductDialog({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onCancel: () => void;
-  onCreate: (data: ProductInputPayload) => void;
+  onCreate: (data: ProductCreateInput) => void;
   isPending: boolean;
   error?: string;
   initialName?: string;

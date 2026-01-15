@@ -790,7 +790,7 @@ async function updateProductFromSheetData(
   },
   actorContext: Parameters<typeof updateProduct>[3],
 ): Promise<void> {
-  // Map sheet data fields to ProductInputPayload fields
+  // Map sheet data fields to ProductCreateInput fields
   const updateData: {
     name?: string;
     manufacturer?: string;

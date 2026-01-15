@@ -19,7 +19,7 @@ import {
 } from "~/schemas/price-mapping-utils";
 import {
   hasFoodIndicators,
-  type ProductInputPayload,
+  type ProductCreateInput,
   type ProductTopLevelOut,
   productCategory,
 } from "~/schemas/product";
@@ -67,7 +67,7 @@ const formSchema = z
 type ProductFormValues = z.infer<typeof formSchema>;
 
 // Props for create mode
-interface CreateProductFormProps extends CreateModeProps<ProductInputPayload> {
+interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
   product?: never;
   initialName?: string;
   initialExpectedQuantity?: number | null;
@@ -88,7 +88,7 @@ interface EditProductFormProps
   extends EditModeProps<
     {
       id: string;
-      data: Partial<ProductInputPayload>;
+      data: Partial<ProductCreateInput>;
     },
     ProductWithIngredient
   > {
@@ -188,7 +188,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
     if (mode === "create") {
       // For creation, pass all fields
-      const createData: ProductInputPayload = {
+      const createData: ProductCreateInput = {
         name: values.name,
         manufacturer: values.manufacturer,
         model: values.model,
@@ -204,7 +204,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       props.onCreate(createData);
     } else if (mode === "edit" && product) {
       // In edit mode, determine which fields have changed
-      const updates: Partial<ProductInputPayload> = buildUpdateObject(
+      const updates: Partial<ProductCreateInput> = buildUpdateObject(
         {
           ...product,
         },

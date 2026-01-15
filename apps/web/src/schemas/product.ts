@@ -91,12 +91,6 @@ export type ProductTopLevelOut = z.infer<typeof productTopLevelOut>;
 export type ProductCreateInput = z.infer<typeof productCreateInput>;
 export type ProductUpdateInput = z.infer<typeof productUpdateInput>;
 
-// Backwards compatibility aliases (deprecated - use ProductCreateInput)
-/** @deprecated Use ProductCreateInput instead */
-export const productInputPayload = productCreateInput;
-/** @deprecated Use ProductCreateInput instead */
-export type ProductInputPayload = ProductCreateInput;
-
 // Quick create schema - minimal required fields for rapid entry
 // Used for quick inventory capture workflow
 export const productQuickCreatePayload = z.object({

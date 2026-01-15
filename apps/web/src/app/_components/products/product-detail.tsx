@@ -1,7 +1,7 @@
 import { Apple, Info } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
-import type { ProductInputPayload } from "~/schemas/product";
+import type { ProductCreateInput } from "~/schemas/product";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
@@ -20,7 +20,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
 
   const { commonSections, editMode } = useEntityDetail<
     ProductWithFoodOut,
-    { id: string; data: Partial<ProductInputPayload> }
+    { id: string; data: Partial<ProductCreateInput> }
   >({
     entity: "product",
     data: product,

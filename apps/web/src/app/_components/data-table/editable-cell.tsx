@@ -11,10 +11,8 @@ import {
   type FilterableComboboxItem,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
-import { formatCurrency } from "~/lib/utils";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { showAmountAndPrice } from "../inventory/format-amount";
-import { NoneState } from "../NoneState";
 
 // ============================================================================
 // Types
@@ -517,56 +515,6 @@ function EditableSelectEditor({
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>
-  );
-}
-
-// ============================================================================
-// Legacy exports (deprecated - use EditableCell with config instead)
-// ============================================================================
-
-/**
- * @deprecated Use EditableCell with config={{ type: "currency" }} instead
- */
-export function EditableCurrencyCell({
-  value,
-  onSave,
-}: {
-  value: number | null;
-  onSave: (newValue: number | null) => Promise<void>;
-}) {
-  return (
-    <EditableCell
-      value={value}
-      onSave={onSave}
-      config={{ type: "currency" }}
-      renderValue={(v) => (v !== null ? formatCurrency(v) : <NoneState />)}
-    />
-  );
-}
-
-/**
- * @deprecated Use EditableCell with config={{ type: "select", options }} instead
- */
-export function EditableSelectCell({
-  value,
-  options,
-  onSave,
-  renderValue,
-  placeholder = "Select...",
-}: {
-  value: string | null;
-  options: FilterableComboboxItem[];
-  onSave: (newValue: string | null) => Promise<void>;
-  renderValue: (value: string | null) => React.ReactNode;
-  placeholder?: string;
-}) {
-  return (
-    <EditableCell
-      value={value}
-      onSave={onSave}
-      config={{ type: "select", options, placeholder }}
-      renderValue={renderValue}
-    />
   );
 }
 
