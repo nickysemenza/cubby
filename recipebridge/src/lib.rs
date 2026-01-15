@@ -85,9 +85,7 @@ pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String
 /// Detect disconnected components (islands) in unit mapping graph
 /// Returns a list of component groups, where each group is a list of unit strings
 #[wasm_bindgen]
-pub fn detect_unit_mapping_islands(
-    mappings: Vec<WUnitMapping>,
-) -> Result<JsValue, String> {
+pub fn detect_unit_mapping_islands(mappings: Vec<WUnitMapping>) -> Result<JsValue, String> {
     use ingredient::unit::{find_connected_components, make_graph};
 
     let pairs = parse_mappings(mappings)?;

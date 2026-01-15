@@ -1,8 +1,7 @@
 import { Clock, ImageIcon, Scale } from "lucide-react";
-import { createElement } from "react";
+import { createElement, useMemo } from "react";
 import { entities } from "~/entities/entities";
 import type { Entity } from "~/entities/types";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import type { AuditEntityType } from "~/schemas/audit";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { AuditLogList } from "../audit-log/audit-log-list";
@@ -38,7 +37,7 @@ interface UseEntityDetailOptions<TData extends WithId, _TUpdateInput> {
   /** tRPC mutation options for updates */
   mutationOptions: object;
   /** For entities with unit mappings - function to extract mappings (sync or async) */
-  getMappings?: (data: TData) => UnitMapping[] | Promise<UnitMapping[]>;
+  getMappings?: (data: TData) => UnitMapping[];
   /** Custom callback on successful update */
   onSuccess?: () => void;
 }
@@ -104,16 +103,9 @@ export function useEntityDetail<
     onSuccess,
   });
 
-  // Load unit mappings asynchronously if getMappings is provided
-  const mappings = useAsyncMemo(
-    async (signal) => {
-      if (!getMappings) return [];
-      const result = await getMappings(data);
-      if (signal.cancelled) return [];
-      return result;
-    },
+  const mappings = useMemo(
+    () => (getMappings ? getMappings(data) : []),
     [data, getMappings],
-    [],
   );
 
   // Build common sections based on entity config

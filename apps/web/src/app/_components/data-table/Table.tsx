@@ -36,8 +36,6 @@ const ESTIMATED_ROW_HEIGHT = 35;
 const OVERSCAN = 5;
 // Max height for the table container (only applied for large datasets)
 const MAX_TABLE_HEIGHT = 600;
-// Threshold for applying max height constraint
-const HEIGHT_CONSTRAINT_THRESHOLD = 50;
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
@@ -84,8 +82,6 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const { rows } = table.getRowModel();
-  const shouldConstrainHeight = rows.length > HEIGHT_CONSTRAINT_THRESHOLD;
-
   // Always virtualize for consistent rendering
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -99,9 +95,10 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   const styles = {
     table:
-      "text-xs leading-tight [&_tr:nth-child(even)]:bg-[oklch(0.988_0.004_55)]",
-    header: "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80",
-    filterRow: "h-7 px-2 py-0.5 bg-muted/40 border-b border-border/50",
+      "text-xs leading-tight border-collapse border-spacing-0 [&_tr:nth-child(even)]:bg-[oklch(0.988_0.004_55)]",
+    header:
+      "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80 bg-muted/30",
+    filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
     cell: "px-2 py-1 min-h-[28px] align-middle",
     row: "table-row-hover border-b border-border/30",
     sortIcon: "h-3 w-3",
@@ -219,14 +216,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         <div
           ref={tableContainerRef}
           className="overflow-auto"
-          style={
-            shouldConstrainHeight
-              ? { maxHeight: `${MAX_TABLE_HEIGHT}px` }
-              : undefined
-          }
+          style={{ maxHeight: `${MAX_TABLE_HEIGHT}px` }}
         >
-          <Table aria-label={ariaLabel} className={cn(styles.table)}>
-            <TableHeader className="sticky top-0 z-20 bg-background">
+          <Table
+            aria-label={ariaLabel}
+            className={cn(styles.table)}
+            containerClassName="overflow-visible"
+          >
+            <TableHeader className="sticky top-0 z-20 bg-background [&_tr]:border-b-0">
               {table.getHeaderGroups().map((headerGroup) => {
                 // Check if any column has a filter config
                 const hasAnyFilters = headerGroup.headers.some(
@@ -236,7 +233,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 return (
                   <Fragment key={headerGroup.id}>
                     {/* Title Row */}
-                    <TableRow className="border-border/50 border-b">
+                    <TableRow
+                      className={cn(
+                        "border-border/50 border-b-0",
+                        !hasAnyFilters && "border-b",
+                      )}
+                    >
                       {headerGroup.headers.map((header) => {
                         const sortDirection = header.column.getIsSorted();
                         const canSort = header.column.getCanSort();
