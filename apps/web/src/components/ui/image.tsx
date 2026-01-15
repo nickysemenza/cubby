@@ -9,9 +9,6 @@ export type ImageProps = Omit<
 /**
  * Lazy-loaded image component with native browser lazy loading.
  * Drop-in replacement for next/image (without optimization).
- *
- * @example
- * <Image src="/photo.jpg" alt="Product" className="w-full" />
  */
 export function Image({ src, alt, className, style, ...props }: ImageProps) {
   const [isLoading, setIsLoading] = useState(true);

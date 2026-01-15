@@ -15,31 +15,6 @@ interface UseEntityPreviewOptions {
 
 /**
  * Hook for adding row-click preview panels to entity lists.
- *
- * @example Fixed entity (entity list pages)
- * ```tsx
- * const { onRowClick, PreviewSheet } = useEntityPreview("product");
- *
- * return (
- *   <div>
- *     <RTable table={table} onRowClick={onRowClick} ... />
- *     <PreviewSheet />
- *   </div>
- * );
- * ```
- *
- * @example Dynamic entity (search - entity varies per row)
- * ```tsx
- * const { onRowClick, PreviewSheet } = useEntityPreview();
- *
- * // Row must have entityType field
- * <RTable table={table} onRowClick={onRowClick} ... />
- * ```
- *
- * @example Custom ID field (e.g., USDA uses fdc_id)
- * ```tsx
- * const { onRowClick, PreviewSheet } = useEntityPreview("usda-food", { idField: "fdc_id" });
- * ```
  */
 export function useEntityPreview(
   fixedEntity?: Entity,

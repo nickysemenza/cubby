@@ -127,26 +127,6 @@ interface UseEntityListReturn<TData> {
  * - Unit mappings loading if getMappings provided
  * - Standard columns based on entity config (image, name, createdAt)
  * - Filter expansion from simple string definitions
- *
- * @example
- * ```tsx
- * const { table, isLoading, error } = useEntityList({
- *   entity: "product",
- *   queryOptions: api.product.list.queryOptions,
- *   buildFilters: (ts) => ({
- *     nameFilter: ts.getColumnFilter("name"),
- *     manufacturerFilter: ts.getColumnFilter("manufacturer"),
- *   }),
- *   getMappings: getAllUnitMappingsFromProduct,
- *   columns: [
- *     columnHelper.accessor("manufacturer", { ... }),
- *     columnHelper.accessor("upc", { ... }),
- *   ],
- *   filters: ["name", "manufacturer"],
- * });
- *
- * return <RTable table={table} isLoading={isLoading} error={error} />;
- * ```
  */
 export function useEntityList<TData extends BaseListRow, TFilters>({
   entity,

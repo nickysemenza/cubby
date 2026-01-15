@@ -775,12 +775,8 @@ export function countByState<T extends { state: SyncState }>(
   return counts;
 }
 
-// =============================================================================
-// Sync Data Converters
-// =============================================================================
-
 /**
- * Convert location sync item sheetData to LocationCSVRow format
+ * Convert location sync item sheetData to LocationCSVRow format.
  */
 const locationSheetDataToCSVRow = (
   sheetData: NonNullable<LocationSyncItem["sheetData"]>,

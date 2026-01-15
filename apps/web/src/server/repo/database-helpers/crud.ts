@@ -18,11 +18,6 @@ import { unwrapDb } from "./core";
  * Insert a single record and return it.
  * Cleaner than manually destructuring the returning() array.
  * Accepts both Database and DrizzleTransaction.
- *
- * @param db - Database or Transaction instance
- * @param table - Table schema
- * @param values - Values to insert
- * @returns The created record
  */
 export const insertAndReturn = async <T extends PgTable>(
   db: Database | DrizzleTransaction,
@@ -44,11 +39,6 @@ export const insertAndReturn = async <T extends PgTable>(
 /**
  * Insert multiple records in batch and return them.
  * Returns empty array if values array is empty.
- *
- * @param tx - Transaction instance
- * @param table - Table schema
- * @param values - Array of values to insert
- * @returns Array of created records
  */
 export const batchInsert = async <T extends PgTable>(
   tx: DrizzleTransaction,
@@ -68,12 +58,6 @@ export const batchInsert = async <T extends PgTable>(
  * Update a single record and return it.
  * Cleaner than manually destructuring the returning() array.
  * Accepts both Database and DrizzleTransaction.
- *
- * @param db - Database or Transaction instance
- * @param table - Table schema
- * @param values - Values to update
- * @param where - Where clause (SQL condition)
- * @returns The updated record
  */
 export const updateAndReturn = async <T extends PgTable>(
   db: Database | DrizzleTransaction,
@@ -119,23 +103,6 @@ export const updateAndReturn = async <T extends PgTable>(
  * This helper consolidates the pattern of:
  * 1. Creating records in a join table (productImage, recipeImage, locationImage)
  * 2. Updating image statuses from PENDING to UPLOADED
- *
- * @param dbOrTx - Database client or transaction
- * @param joinTable - The join table to insert records into
- * @param parentIdField - Name of the parent ID field (e.g., "productId", "recipeId")
- * @param parentId - ID of the parent entity
- * @param pendingImageIds - Array of image IDs to associate
- *
- * @example
- * ```typescript
- * await associatePendingImages(
- *   tx,
- *   productImage,
- *   "productId",
- *   newProduct.id,
- *   pendingImageIds
- * );
- * ```
  */
 export async function associatePendingImages<T extends PgTable>(
   dbOrTx: DrizzleClient | DrizzleTransaction,
@@ -169,22 +136,6 @@ export async function associatePendingImages<T extends PgTable>(
  *
  * Creates new inventory entries or updates existing ones based on the
  * unique constraint (productId, locationId).
- *
- * @param dbOrTx - Database client or transaction
- * @param entries - Array of inventory entries to upsert
- * @returns Array of upserted inventory entries
- *
- * @example
- * ```typescript
- * await batchUpsertInventory(tx, [
- *   {
- *     productId: "...",
- *     locationId: "...",
- *     amount: { value: 5, unit: "each" },
- *     valuation: 10.50
- *   }
- * ]);
- * ```
  */
 export async function batchUpsertInventory<
   T extends {
@@ -280,20 +231,6 @@ export async function batchUpsertInventory<
  *
  * Automatically chunks large batches to avoid query size limits.
  * Updates all specified fields plus updatedAt timestamp.
- *
- * @param dbOrTx - Database client or transaction
- * @param table - The table to update
- * @param updates - Array of update objects with id and fields to update
- * @param chunkSize - Number of records to update per query (default 250)
- * @returns Total number of records updated
- *
- * @example
- * ```typescript
- * await batchUpdateWithCaseWhen(tx, inventoryEntry, [
- *   { id: "inv1", valuation: 10.50 },
- *   { id: "inv2", valuation: 25.00 },
- * ]);
- * ```
  */
 export async function batchUpdateWithCaseWhen<
   TUpdate extends { id: string; [key: string]: unknown },

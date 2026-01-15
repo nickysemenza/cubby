@@ -58,27 +58,6 @@ interface UseEntityDetailReturn<TUpdateInput> {
  * - Edit mode state via useEditMode
  * - Async unit mappings loading if getMappings provided
  * - Building common sections based on entity config (images, unit-mappings, history)
- *
- * @example
- * ```tsx
- * const { commonSections, editMode, mappings } = useEntityDetail({
- *   entity: "product",
- *   data: product,
- *   mutationOptions: api.product.update.mutationOptions(),
- *   getMappings: getAllUnitMappingsFromProduct,
- * });
- *
- * const sections: DetailSection[] = [
- *   {
- *     title: "Basic Information",
- *     content: editMode.isEditing
- *       ? <ProductForm mode="edit" ... />
- *       : <ProductBasicInfo product={product} onEdit={editMode.startEditing} />,
- *   },
- *   ...customSections,
- *   ...commonSections,
- * ];
- * ```
  */
 export function useEntityDetail<
   TData extends WithId & Partial<WithImages>,

@@ -101,10 +101,6 @@ export const locationUpdateInput = z.object({
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 
-// ============================================================================
-// Location CSV Import/Export Schemas
-// ============================================================================
-
 import { amount } from "~/codec/codec";
 import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
 

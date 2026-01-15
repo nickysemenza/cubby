@@ -7,6 +7,5 @@ export const { TRPCProvider, useTRPC, useTRPCClient } =
 
 /**
  * Inference helper for outputs.
- * @example type HelloOutput = RouterOutputs['example']['hello']
  */
 export type RouterOutputs = inferRouterOutputs<TRPCRouter>;

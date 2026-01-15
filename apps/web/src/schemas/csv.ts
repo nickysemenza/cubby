@@ -7,10 +7,6 @@
 
 import { z } from "zod";
 
-// =============================================================================
-// Shared Field Change Type
-// =============================================================================
-
 /**
  * Represents a single field change for displaying diffs
  * Used by both inventory and location comparison/sync
@@ -22,10 +18,6 @@ export const fieldChange = z.object({
 });
 
 export type FieldChange = z.infer<typeof fieldChange>;
-
-// =============================================================================
-// Action Types
-// =============================================================================
 
 /**
  * Base actions all CSV-enabled entities share
@@ -58,10 +50,6 @@ export const INVENTORY_CSV_ACTIONS = [
 ] as const;
 
 export type InventoryCSVAction = (typeof INVENTORY_CSV_ACTIONS)[number];
-
-// =============================================================================
-// Base CSV Result Schemas
-// =============================================================================
 
 /**
  * Base fields for CSV result items (shared by inventory and location)

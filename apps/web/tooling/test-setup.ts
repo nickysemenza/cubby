@@ -105,10 +105,6 @@ const remapDBConfig = (
   return databaseConfig;
 };
 
-// ============================================================================
-// CSV Seed Helper
-// ============================================================================
-
 import {
   type InventoryId,
   inventoryId as inventoryIdSchema,

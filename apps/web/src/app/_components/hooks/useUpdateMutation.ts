@@ -8,16 +8,6 @@ import type { Entity } from "~/entities/types";
 /**
  * Hook for creating memoized update mutations that properly invalidate caches.
  * Prevents infinite render loops by memoizing the mutation options.
- *
- * @example
- * const updateMutation = useUpdateMutation({
- *   mutationFn: api.product.update.mutationOptions,
- *   entity: "product",
- *   invalidateKeys: [queryKeys.product.list],
- * });
- *
- * // Later in your code:
- * await updateMutation.mutateAsync({ id: "123", data: { name: "New Name" } });
  */
 export function useUpdateMutation<TVariables, TData>({
   mutationFn,

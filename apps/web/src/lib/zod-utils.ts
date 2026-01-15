@@ -40,24 +40,6 @@ function formatIssues(issues: z.core.$ZodIssue[]): string {
 
 /**
  * Parse data with a Zod schema, throwing an error with contextual information on failure.
- *
- * @example
- * // Simple usage with entity type only
- * const result = parseWithContext(productSchema, data, { entityType: "Product" });
- *
- * @example
- * // With identifier object (recommended for database entities)
- * const result = parseWithContext(productSchema, data, {
- *   entityType: "Product",
- *   identifier: { id: product.id, name: product.name }
- * });
- *
- * @example
- * // With string identifier
- * const result = parseWithContext(amountSchema, data, {
- *   entityType: "Amount",
- *   identifier: `for inventory entry ${entryId}`
- * });
  */
 export function parseWithContext<T>(
   schema: z.ZodType<T>,

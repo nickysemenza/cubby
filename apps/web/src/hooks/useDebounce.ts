@@ -6,15 +6,6 @@ type NonFunction<T> = T extends Function ? never : T;
 
 /**
  * Debounces a value by the specified delay.
- *
- * @example
- * const [search, setSearch] = useState("");
- * const debouncedSearch = useDebounce(search, 300);
- *
- * useEffect(() => {
- *   // This runs 300ms after the user stops typing
- *   fetchResults(debouncedSearch);
- * }, [debouncedSearch]);
  */
 export default function useDebounce<T>(
   value: NonFunction<T>,

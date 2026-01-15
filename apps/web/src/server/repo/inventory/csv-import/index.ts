@@ -7,15 +7,6 @@
  * - Location path resolution with type inference
  * - Smart move logic for unique items (expectedQuantity=1)
  * - Skip detection for duplicate entries
- *
- * @example
- * ```ts
- * // Preview what would happen
- * const preview = await importInventoryFromCSV(db, orgId, rows, { dryRun: true, userId: "user123" });
- *
- * // Actually import
- * const result = await importInventoryFromCSV(db, orgId, rows, { userId: "user123", source: "csv_import" });
- * ```
  */
 
 import { dedupe } from "~/misc/array-helpers";
@@ -87,10 +78,6 @@ export const importInventoryFromCSV = async (
     return buildInventoryResult(createInventoryCounters(), []);
   }
 
-  // =========================================================================
-  // PHASE 1: Extract keys and batch fetch (5-6 queries total)
-  // =========================================================================
-
   // Extract unique keys from all rows
   const productLookups = rows.map((row) => ({
     name: row.product_name,
@@ -133,10 +120,6 @@ export const importInventoryFromCSV = async (
     productIds,
     locationIds,
   );
-
-  // =========================================================================
-  // PHASE 2: Process rows in-memory (0 queries)
-  // =========================================================================
 
   const items: CSVImportResultItem[] = [];
   const counters = createInventoryCounters();
@@ -214,10 +197,6 @@ export const importInventoryFromCSV = async (
       );
     }
   }
-
-  // =========================================================================
-  // PHASE 3: Batch write (3-5 queries, within transaction)
-  // =========================================================================
 
   if (
     !dryRun &&

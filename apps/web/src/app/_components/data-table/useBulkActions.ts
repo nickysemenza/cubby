@@ -36,31 +36,6 @@ interface UseBulkActionsReturn<TData> {
  * - Action availability filtering (min/max selection)
  * - Action execution with loading state
  * - Selection clearing after successful actions
- *
- * @example
- * ```tsx
- * const bulkActions = useBulkActions({
- *   config: {
- *     actions: [
- *       {
- *         id: "delete",
- *         label: "Delete",
- *         requiresConfirmation: true,
- *         onExecute: async (rows) => {
- *           await deleteItems(rows.map(r => r.original.id));
- *           return { success: true };
- *         },
- *       },
- *     ],
- *   },
- * });
- *
- * // Pass to table config
- * const table = useTableConfig({
- *   rowSelection: bulkActions.rowSelection,
- *   onRowSelectionChange: bulkActions.onRowSelectionChange,
- * });
- * ```
  */
 export function useBulkActions<TData>({
   config,

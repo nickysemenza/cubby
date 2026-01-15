@@ -40,30 +40,6 @@ interface ComboboxFieldWithSearchProps<TFieldValues extends FieldValues> {
 /**
  * A convenience wrapper that combines a search hook with ComboboxField.
  * Eliminates the boilerplate of wrapping ComboboxField in WithXxxSearch components.
- *
- * @example
- * // Before:
- * <WithIngredientSearch>
- *   {({ items, onSearchChange, isLoading, onCreateNew }) => (
- *     <ComboboxField
- *       form={form}
- *       name="ingredient"
- *       label="Ingredient"
- *       items={items}
- *       onSearchChange={onSearchChange}
- *       isLoading={isLoading}
- *       onCreateNew={onCreateNew}
- *     />
- *   )}
- * </WithIngredientSearch>
- *
- * // After:
- * <ComboboxFieldWithSearch
- *   form={form}
- *   name="ingredient"
- *   label="Ingredient"
- *   searchType="ingredient"
- * />
  */
 export function ComboboxFieldWithSearch<TFieldValues extends FieldValues>({
   form,

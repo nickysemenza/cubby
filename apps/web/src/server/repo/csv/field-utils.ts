@@ -6,10 +6,6 @@
 
 import type { FieldChange } from "~/schemas/csv";
 
-// =============================================================================
-// Types
-// =============================================================================
-
 /** Normalizer function to transform values before comparison */
 export type NormalizeFn = (val: unknown) => unknown;
 
@@ -25,27 +21,14 @@ export type ComparisonFieldSpec<TApp, TSheet> = {
   normalize?: NormalizeFn;
 };
 
-// =============================================================================
-// Normalizers
-// =============================================================================
-
 /** Normalize null/undefined to empty string (used as default in compareFields) */
 const nullToEmpty = (v: unknown): string => (v as string) ?? "";
 
 /** Pass through null, normalize undefined to null */
 export const nullToNull = (v: unknown): unknown => v ?? null;
 
-// =============================================================================
-// Generic Comparison
-// =============================================================================
-
 /**
- * Compare fields between app and sheet rows using field specs
- *
- * @param specs - Field specifications defining how to compare each field
- * @param appRow - Row from the app (source of truth for "to" values)
- * @param sheetRow - Row from the sheet (source of truth for "from" values)
- * @returns Array of field changes where values differ
+ * Compare fields between app and sheet rows using field specs.
  */
 export const compareFields = <TApp, TSheet>(
   specs: readonly ComparisonFieldSpec<TApp, TSheet>[],
@@ -71,16 +54,8 @@ export const compareFields = <TApp, TSheet>(
   return changes;
 };
 
-// =============================================================================
-// Audit Helpers
-// =============================================================================
-
 /**
- * Build audit changes from before state and updates
- *
- * @param beforeState - State before updates
- * @param updates - The updates being applied
- * @returns Record of field changes with from/to values
+ * Build audit changes from before state and updates.
  */
 export const buildAuditChanges = <T extends Record<string, unknown>>(
   beforeState: T,
@@ -100,11 +75,7 @@ export const buildAuditChanges = <T extends Record<string, unknown>>(
 };
 
 /**
- * Merge updates into an existing object (immutably)
- *
- * @param existing - Existing object
- * @param updates - Updates to merge
- * @returns New object with updates applied
+ * Merge updates into an existing object (immutably).
  */
 export const applyUpdates = <T extends Record<string, unknown>>(
   existing: T,

@@ -14,10 +14,6 @@ import { Input } from "~/components/ui/input";
 import type { UnitMapping } from "~/schemas/unitmapping";
 import { showAmountAndPrice } from "../inventory/format-amount";
 
-// ============================================================================
-// Types
-// ============================================================================
-
 /** Re-export for convenience */
 export type { FilterableComboboxItem };
 
@@ -42,10 +38,6 @@ export type EditableConfig =
   | EditableInputConfig
   | EditableCurrencyConfig
   | EditableSelectConfig;
-
-// ============================================================================
-// Hook: useEditableCell
-// ============================================================================
 
 interface UseEditableCellOptions<T> {
   value: T | null;
@@ -146,10 +138,6 @@ export function useEditableCell<T>({
   };
 }
 
-// ============================================================================
-// Component: EditableCell (unified)
-// ============================================================================
-
 interface EditableCellProps<T> {
   value: T | null;
   onSave: (value: T | null) => Promise<void>;
@@ -193,10 +181,6 @@ export function EditableCell<T>({
     />
   );
 }
-
-// ============================================================================
-// Internal: EditableInputCellInternal (text, number, currency)
-// ============================================================================
 
 function useOptimisticDisplayValue<T>(value: T | null) {
   const [optimisticValue, setOptimisticValue] = useState<T | null | undefined>(
@@ -392,10 +376,6 @@ function EditableInputEditor<T>({
   );
 }
 
-// ============================================================================
-// Internal: EditableSelectCellInternal
-// ============================================================================
-
 function EditableSelectCellInternal({
   value,
   onSave,
@@ -517,10 +497,6 @@ function EditableSelectEditor({
     </div>
   );
 }
-
-// ============================================================================
-// Editable Amount Cell (value + unit for inventory)
-// ============================================================================
 
 interface EditableAmountCellProps {
   amount: Amount;

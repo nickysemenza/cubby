@@ -72,19 +72,6 @@ interface ImageRow extends BaseRow {
 /**
  * Creates a standard name column that links to the detail page.
  * Optionally supports inline editing when `editable` option is provided.
- *
- * @example
- * // Read-only
- * createNameColumn(columnHelper, "product")
- *
- * // With inline editing
- * createNameColumn(columnHelper, "ingredient", "name", {
- *   editable: {
- *     onSave: async (newName, row) => {
- *       await updateMutation.mutateAsync({ id: row.id, data: { name: newName } });
- *     },
- *   },
- * })
  */
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
@@ -218,10 +205,6 @@ export function createImageColumn<T extends BaseRow>(
   });
 }
 
-// ============================================================================
-// Entity Relationship Columns
-// ============================================================================
-
 // Entity-specific data types for columns
 type EntityColumnData =
   | { entity: "ingredient"; items: { name: string; id: string }[] }
@@ -237,13 +220,6 @@ type EntityColumnData =
 
 /**
  * Creates a column that displays a list of related entities as pill links.
- *
- * @example
- * // For displaying location children
- * createEntityPillColumn(columnHelper, "children", "location")
- *
- * // For displaying products linked to an ingredient
- * createEntityPillColumn(columnHelper, "product", "product", { className: "w-48" })
  */
 export function createEntityPillColumn<
   T extends Record<string, unknown>,
@@ -290,19 +266,11 @@ export function createEntityPillColumn<
   );
 }
 
-// ============================================================================
-// Unit Mappings Column
-// ============================================================================
-
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
 /**
  * Creates a column that displays unit mappings for an entity.
  * Requires a pre-computed mappingsMap that maps entity IDs to their unit mappings.
- *
- * @example
- * const mappingsMap = useMemo(...); // { [productId]: UnitMapping[] }
- * createUnitMappingsColumn(columnHelper, mappingsMap)
  */
 export function createUnitMappingsColumn<T extends { id: string }>(
   columnHelper: ColumnHelper<T>,
@@ -335,10 +303,6 @@ export function createUnitMappingsColumn<T extends { id: string }>(
   });
 }
 
-// ============================================================================
-// Inventory Entry Columns
-// ============================================================================
-
 interface InventoryEntryBase {
   id: string;
   amount: Amount;
@@ -361,13 +325,6 @@ type InventoryRelatedEntity =
 /**
  * Creates a column that displays inventory entries with amounts and related entity pills.
  * Used in ProductList (shows locations) and LocationList (shows products).
- *
- * @example
- * // In ProductList - show locations for each inventory entry
- * createInventoryEntriesColumn(columnHelper, "inventoryEntry", "location", (e) => e.location)
- *
- * // In LocationList - show products for each inventory entry
- * createInventoryEntriesColumn(columnHelper, "inventoryEntries", "product", (e) => e.product)
  */
 export function createInventoryEntriesColumn<
   T extends Record<string, unknown>,
@@ -451,10 +408,6 @@ export function createInventoryEntriesColumn<
   });
 }
 
-// ============================================================================
-// Actions Column
-// ============================================================================
-
 interface ActionsColumnOptions<T> {
   /** Additional actions to render after "View Details" */
   extraActions?: (row: T) => ReactNode;
@@ -463,24 +416,6 @@ interface ActionsColumnOptions<T> {
 /**
  * Creates a standard actions column with a dropdown menu.
  * Includes "View Details" link by default, with optional extra actions.
- *
- * @example
- * // Basic usage - just View Details
- * createActionsColumn(columnHelper, "product")
- *
- * // With extra actions (e.g., for inventory items)
- * createActionsColumn(columnHelper, "inventory", {
- *   extraActions: (item) => (
- *     <>
- *       <DropdownMenuItem onClick={() => handleMove(item)}>
- *         <ArrowRightLeft /> Move to...
- *       </DropdownMenuItem>
- *       <DropdownMenuItem onClick={() => handleDelete(item)}>
- *         <Trash /> Delete
- *       </DropdownMenuItem>
- *     </>
- *   ),
- * })
  */
 export function createActionsColumn<T extends { id: string | number }>(
   columnHelper: ColumnHelper<T>,
@@ -546,26 +481,8 @@ export function createActionsColumnBase<T>(
   });
 }
 
-// ============================================================================
-// Text Column
-// ============================================================================
-
 /**
  * Creates a simple text column with optional inline editing.
- *
- * @example
- * // Read-only
- * createTextColumn(columnHelper, "manufacturer")
- *
- * // With inline editing
- * createTextColumn(columnHelper, "manufacturer", {
- *   header: "Manufacturer",
- *   editable: {
- *     onSave: async (newValue, row) => {
- *       await updateMutation.mutateAsync({ id: row.id, data: { manufacturer: newValue } });
- *     },
- *   },
- * })
  */
 export function createTextColumn<
   T extends Record<string, unknown>,
@@ -614,28 +531,9 @@ export function createTextColumn<
   });
 }
 
-// ============================================================================
-// Currency Column
-// ============================================================================
-
 /**
  * Creates a column that displays a currency value with proper formatting.
  * Optionally supports inline editing when `editable` option is provided.
- *
- * @example
- * // Read-only
- * createCurrencyColumn(columnHelper, "price")
- * createCurrencyColumn(columnHelper, "valuation", { header: "Valuation" })
- *
- * // With inline editing
- * createCurrencyColumn(columnHelper, "price", {
- *   header: "Price",
- *   editable: {
- *     onSave: async (newPrice, row) => {
- *       await updateMutation.mutateAsync({ id: row.id, price: newPrice });
- *     },
- *   },
- * })
  */
 export function createCurrencyColumn<
   T extends Record<string, unknown>,
@@ -680,10 +578,6 @@ export function createCurrencyColumn<
   });
 }
 
-// ============================================================================
-// Single Entity Pill Column
-// ============================================================================
-
 // Entity-specific single data types (nullable)
 type SingleEntityColumnData =
   | { entity: "ingredient"; data: { name: string; id: string } | null }
@@ -704,13 +598,6 @@ type SingleEntityColumnData =
 /**
  * Creates a column that displays a single related entity as a pill link.
  * Shows NoneState when the entity is null/undefined.
- *
- * @example
- * // For displaying a product's linked ingredient
- * createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient")
- *
- * // For displaying a location's parent
- * createSingleEntityPillColumn(columnHelper, "parent", "location")
  */
 export function createSingleEntityPillColumn<
   T extends Record<string, unknown>,
@@ -760,35 +647,9 @@ export function createSingleEntityPillColumn<
   );
 }
 
-// ============================================================================
-// Filterable Select Column
-// ============================================================================
-
 /**
  * Creates a column with a select-based inline filter.
  * Optionally supports inline editing when `editable` option is provided.
- *
- * @example
- * // Read-only with filter
- * createFilterableSelectColumn(columnHelper, "category", {
- *   header: "Category",
- *   placeholder: "Filter by category...",
- *   selectOptions: productCategoryOptionsWithTheme,
- *   renderCell: (category) => <CategoryBadge category={category} />,
- * })
- *
- * // With inline editing
- * createFilterableSelectColumn(columnHelper, "category", {
- *   header: "Category",
- *   placeholder: "Filter by category...",
- *   selectOptions: productCategoryOptionsWithTheme,
- *   renderCell: (category) => <CategoryBadge category={category} />,
- *   editable: {
- *     onSave: async (newValue, row) => {
- *       await updateMutation.mutateAsync({ id: row.id, data: { category: newValue } });
- *     },
- *   },
- * })
  */
 export function createFilterableSelectColumn<
   T extends Record<string, unknown>,
@@ -844,30 +705,10 @@ export function createFilterableSelectColumn<
   });
 }
 
-// ============================================================================
-// External Link Column
-// ============================================================================
-
 /**
  * Creates a column that displays a value as a link to an external/internal page.
  * Shows NoneState when the value is null/undefined.
  * Optionally supports inline editing when `editable` option is provided.
- *
- * @example
- * // Read-only UPC link to USDA lookup
- * createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code")
- *
- * // Read-only NDB number link
- * createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", { header: "NDB" })
- *
- * // With inline editing
- * createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
- *   editable: {
- *     onSave: async (newValue, row) => {
- *       await updateMutation.mutateAsync({ id: row.id, data: { upc: newValue } });
- *     },
- *   },
- * })
  */
 export function createExternalLinkColumn<
   T extends Record<string, unknown>,
@@ -947,16 +788,9 @@ export function createExternalLinkColumn<
   );
 }
 
-// ============================================================================
-// Timestamp Column (generalized)
-// ============================================================================
-
 /**
  * Creates a timestamp column with HoverableTimestamp display.
  * Generalization of createCreatedAtColumn for any timestamp field.
- *
- * @example
- * createTimestampColumn(columnHelper, "lastBulkInventory", { header: "Last Bulk Inventory", fallback: "Never" })
  */
 export function createTimestampColumn<
   T extends Record<string, unknown>,
@@ -983,21 +817,9 @@ export function createTimestampColumn<
   });
 }
 
-// ============================================================================
-// Editable Amount Column (value + unit)
-// ============================================================================
-
 /**
  * Creates a column for editing inventory amounts (value + unit).
  * Displays amount using tryFormatAmount, inline editing with two inputs.
- *
- * @example
- * createEditableAmountColumn(columnHelper, "amount", {
- *   onSave: async (newAmount, row) => {
- *     await api.inventory.update.mutate({ id: row.id, data: { amount: newAmount } });
- *   },
- *   getUnitMappings: (row) => row.product.unitMappings,
- * })
  */
 export function createEditableAmountColumn<T extends Record<string, unknown>>(
   columnHelper: ColumnHelper<T>,

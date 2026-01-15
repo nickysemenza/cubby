@@ -13,14 +13,6 @@ type UseQueryWithTimingResult<TData, TError> = UseQueryResult<TData, TError> & {
 /**
  * Wrapper around useQuery that tracks query execution time.
  * Accepts both react-query UseQueryOptions and tRPC queryOptions return types.
- *
- * @example
- * ```tsx
- * const { data, timing } = useQueryWithTiming(
- *   trpc.product.getByID.queryOptions({ id })
- * );
- * // timing.durationMs will contain the query duration in milliseconds
- * ```
  */
 export const useQueryWithTiming = <
   TQueryFnData = unknown,

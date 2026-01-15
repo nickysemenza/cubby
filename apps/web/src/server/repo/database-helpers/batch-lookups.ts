@@ -92,17 +92,6 @@ function makeProductKey(name: string, manufacturer: string | null): string {
  * Returns map keyed by "name|manufacturer" (normalized, lowercase).
  *
  * Performance: 1 query regardless of input size (uses WHERE OR for each pair).
- *
- * @example
- * ```typescript
- * const lookups = [
- *   { name: "Apple", manufacturer: "Fuji" },
- *   { name: "Orange", manufacturer: null }
- * ];
- * const productMap = await batchFindProductsByNameManufacturer(db, lookups);
- * const apple = productMap.get("apple|fuji");
- * const orange = productMap.get("orange|(unspecified)");
- * ```
  */
 export async function batchFindProductsByNameManufacturer(
   db: Database,
@@ -169,14 +158,6 @@ export async function batchFindProductsByNameManufacturer(
  * - Shortcode with prefix (uppercase): "shortcode:KTCHN"
  *
  * This allows flexible lookups by either name or shortcode.
- *
- * @example
- * ```typescript
- * const locationMap = await batchFindLocations(db, ["Kitchen"], ["KTCHN"]);
- * const byName = locationMap.get("kitchen");
- * const byShortcode = locationMap.get("shortcode:KTCHN");
- * // byName === byShortcode (same location ID)
- * ```
  */
 export async function batchFindLocations(
   db: Database,
@@ -238,12 +219,6 @@ export async function batchFindLocations(
 /**
  * Batch fetch existing inventory entries for given products and locations.
  * Returns map keyed by "productId|locationId".
- *
- * @example
- * ```typescript
- * const inventoryMap = await batchFindInventoryEntries(db, productIds, locationIds);
- * const entry = inventoryMap.get(`${productId}|${locationId}`);
- * ```
  */
 export async function batchFindInventoryEntries(
   db: Database,
@@ -284,13 +259,6 @@ export async function batchFindInventoryEntries(
 /**
  * Batch fetch ingredients by names.
  * Returns map keyed by normalized name (lowercase).
- *
- * @example
- * ```typescript
- * const ingredientMap = await batchFindIngredients(db, ["Sugar", "Salt"]);
- * const sugarId = ingredientMap.get("sugar");
- * const saltId = ingredientMap.get("salt");
- * ```
  */
 export async function batchFindIngredients(
   db: Database,
@@ -326,12 +294,6 @@ export async function batchFindIngredients(
 /**
  * Batch fetch products by UPC codes.
  * Returns map keyed by UPC code.
- *
- * @example
- * ```typescript
- * const productMap = await batchFindProductsByUPC(db, ["012345678901", "98765432109"]);
- * const product1 = productMap.get("012345678901");
- * ```
  */
 export async function batchFindProductsByUPC(
   db: Database,
@@ -384,12 +346,6 @@ export async function batchFindProductsByUPC(
 /**
  * Batch fetch products by IDs.
  * Returns map keyed by product ID.
- *
- * @example
- * ```typescript
- * const productMap = await batchFindProductsByIds(db, [productId1, productId2]);
- * const product = productMap.get(productId1);
- * ```
  */
 export async function batchFindProductsByIds(
   db: Database,

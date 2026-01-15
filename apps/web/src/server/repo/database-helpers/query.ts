@@ -15,10 +15,6 @@ import { unwrapDb } from "./core";
 
 /**
  * Helper function to format search terms for PostgreSQL pattern matching.
- *
- * @param column - The column to search
- * @param term - The search term
- * @returns SQL condition for ILIKE search, or undefined if term is empty
  */
 export const formatSearchTerm = (
   column: AnyColumn,
@@ -33,18 +29,6 @@ export const formatSearchTerm = (
 /**
  * Helper to filter out soft-deleted records.
  * Use this in where clauses to exclude records where deletedAt is set.
- *
- * @param table - Any table with a deletedAt column
- * @returns SQL condition for deletedAt IS NULL
- *
- * @example
- * ```typescript
- * // Single condition
- * where: notDeleted(product)
- *
- * // Combined with other conditions
- * where: and(eq(product.id, id), notDeleted(product))
- * ```
  */
 export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);
@@ -52,12 +36,6 @@ export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
 /**
  * Filter out soft-deleted items from an array.
  * Use this in transformation functions when Drizzle relations can't apply WHERE filters.
- *
- * @example
- * ```ts
- * const activeImages = filterDeleted(product.images);
- * const activeMappings = filterDeleted(product.unitMappings);
- * ```
  */
 export function filterDeleted<T extends { deletedAt: Date | null }>(
   items: T[] | undefined | null,
@@ -70,11 +48,6 @@ export function filterDeleted<T extends { deletedAt: Date | null }>(
  * Build order by clause from sort parameters.
  * Validates that the requested field is in the allowed list and returns
  * the appropriate asc/desc clause.
- *
- * @param table - The table schema
- * @param sort - Sort parameters (field and direction)
- * @param allowedFields - Array of field names that can be sorted on
- * @returns Array of order by clauses (empty if field not allowed)
  */
 export const buildOrderBy = <T extends PgTable>(
   table: T,
@@ -104,26 +77,6 @@ export const buildOrderBy = <T extends PgTable>(
  *
  * Note: If you need to transform results before returning, pass the transformation
  * as part of the data query promise chain, or manually destructure and transform.
- *
- * @param dataQuery - Promise that resolves to the array of data records
- * @param countQuery - Promise that resolves to array with count result
- * @returns Object with data array and total count
- *
- * @example
- * ```typescript
- * // Simple case - no transformation needed
- * return await executeListQueryWithCount(
- *   getDb(db).query.recipe.findMany({ where, orderBy, limit, offset }),
- *   getDb(db).select({ count: count() }).from(recipe).where(where)
- * );
- *
- * // With transformation - transform in the promise chain
- * const { data, count } = await executeListQueryWithCount(
- *   getDb(db).query.product.findMany({ where, orderBy, limit, offset })
- *     .then(results => Promise.all(results.map(r => transformToAPI(r)))),
- *   getDb(db).select({ count: count() }).from(product).where(where)
- * );
- * ```
  */
 export async function executeListQueryWithCount<T>(
   dataQuery: Promise<T[]>,
@@ -147,26 +100,6 @@ export async function executeListQueryWithCount<T>(
  * 1. Records are locked (prevents concurrent modifications)
  * 2. All requested IDs exist and aren't already deleted
  * 3. Other transactions wait until our transaction completes
- *
- * @param tx - Transaction to execute in
- * @param table - Table to lock records from
- * @param ids - Array of IDs to lock
- * @param entityName - Human-readable entity name for error messages (e.g., "Product")
- * @throws {AppError} If any IDs are not found or already deleted
- *
- * @example
- * ```typescript
- * await withTransaction(db, async (tx) => {
- *   // Lock products and validate they exist
- *   await lockAndValidateForDelete(tx, product, ids, "Product");
- *
- *   // Now safely check dependencies (other transactions will wait)
- *   const withInventory = await tx.query.inventoryEntry.findMany(...);
- *   if (withInventory.length > 0) throw error;
- *
- *   // Proceed with deletion
- * });
- * ```
  */
 export async function lockAndValidateForDelete<TId extends string>(
   tx: DrizzleTransaction,

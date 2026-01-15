@@ -32,20 +32,6 @@ export interface ImageWithPreviewProps {
 /**
  * Thumbnail image that shows a larger preview on hover.
  * Use this anywhere you display small thumbnails that users might want to see larger.
- *
- * @example
- * // Basic usage
- * <ImageWithPreview src="/photo.jpg" alt="Product photo" />
- *
- * // With link and custom sizes
- * <ImageWithPreview
- *   src="/photo.jpg"
- *   alt="Product photo"
- *   to="/products/$id"
- *   params={{ id: "123" }}
- *   size={32}
- *   previewSize={240}
- * />
  */
 export function ImageWithPreview({
   src,

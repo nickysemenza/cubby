@@ -35,35 +35,6 @@ export interface UseEditModeReturn<TData> {
  * - Update mutation with success/error callbacks
  * - Router refresh on successful update
  * - Error state management
- *
- * @example
- * ```tsx
- * const editMode = useEditMode({
- *   mutationOptions: api.product.update.mutationOptions(),
- *   useRouterRefresh: true,
- * });
- *
- * const sections: DetailSection[] = [
- *   {
- *     title: "Basic Information",
- *     content: editMode.isEditing ? (
- *       <EntityForm
- *         mode="edit"
- *         entity={product}
- *         onEdit={editMode.handleEdit}
- *         isPending={editMode.isPending}
- *         error={editMode.error}
- *         onCancel={editMode.handleCancel}
- *       />
- *     ) : (
- *       <div>
- *         {/* Display content *}
- *         <Button onClick={editMode.startEditing}>Edit</Button>
- *       </div>
- *     ),
- *   },
- * ];
- * ```
  */
 export function useEditMode<TData, TResult = unknown>({
   mutationOptions,

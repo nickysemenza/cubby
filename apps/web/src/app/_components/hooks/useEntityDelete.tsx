@@ -39,25 +39,6 @@ interface UseEntityDeleteReturn {
  * Hook for managing entity deletion from detail pages.
  * Provides a delete button, confirmation dialog, and handles
  * mutation, cache invalidation, and navigation.
- *
- * @example
- * ```tsx
- * const { DeleteButton, DeleteDialog } = useEntityDelete({
- *   id: product.id,
- *   name: product.name,
- *   entityLabel: "Product",
- *   mutationOptions: (callbacks) => api.product.delete.mutationOptions(callbacks),
- *   invalidateKeys: [queryKeys.product.list],
- *   redirectTo: "/products",
- * });
- *
- * return (
- *   <>
- *     <BasicInfo actions={<DeleteButton />} />
- *     <DeleteDialog />
- *   </>
- * );
- * ```
  */
 export function useEntityDelete({
   id,

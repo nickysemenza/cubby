@@ -13,10 +13,6 @@ import {
   type LocationCSVAction,
 } from "~/schemas/csv";
 
-// =============================================================================
-// Generic Counter Types and Functions
-// =============================================================================
-
 /**
  * Generic counter type - keys are the action names
  */
@@ -49,10 +45,6 @@ export function incrementCounter<TAction extends string>(
 export function createLocationCounters(): ResultCounters<LocationCSVAction> {
   return createCounters(LOCATION_CSV_ACTIONS);
 }
-
-// =============================================================================
-// Inventory-specific Result Helpers
-// =============================================================================
 
 import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { CSVImportResult, CSVImportResultItem } from "~/schemas/inventory";

@@ -654,10 +654,6 @@ const debugSheetData = protectedProcedure
     return { headers, rawRows, parsedRows, parseErrors };
   });
 
-// =============================================================================
-// Omnidirectional Sync Endpoints
-// =============================================================================
-
 /** Result counters for sync operations */
 type SyncResults = {
   locations: {
@@ -1537,10 +1533,6 @@ const applySync = protectedProcedure
           sheetInventory,
         } = await fetchAndCompareData(ctx, client, sheetId);
 
-        // ========================================================================
-        // SNAPSHOT VALIDATION: Detect race conditions
-        // ========================================================================
-
         // Generate current snapshot hash and compare with preview
         const currentHash = generateSnapshotHash(
           appLocations as unknown as LocationCSVRow[],
@@ -1587,10 +1579,7 @@ const applySync = protectedProcedure
         // Execute sync operations
         const results = createEmptySyncResults();
 
-        // ========================================================================
-        // CRITICAL: Wrap all DB mutations in single transaction
-        // Either all changes succeed or all are rolled back
-        // ========================================================================
+        // Wrap all DB mutations in single transaction
         try {
           await withTransaction(ctx.db, async (tx) => {
             // Process locations first (inventory may reference them)
@@ -1641,11 +1630,7 @@ const applySync = protectedProcedure
           };
         }
 
-        // ========================================================================
-        // AFTER successful DB commit: Update Google Sheets
-        // If this fails, DB changes are already committed (acceptable)
-        // ========================================================================
-
+        // After DB commit, update Google Sheets (if this fails, DB is already committed)
         // Push changes to sheets
         if (input.forceOverwrite) {
           // "Refresh Timestamps" mode: export ALL app data directly (with timestamps)

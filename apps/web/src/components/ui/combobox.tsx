@@ -282,19 +282,6 @@ function useComboboxAnchor() {
 /**
  * FilterableCombobox wraps Combobox with manual filtering.
  * Pass items as a prop and it filters as you type while enforcing selection.
- *
- * @example
- * ```tsx
- * <FilterableCombobox
- *   items={[
- *     { value: "apple", label: "Apple" },
- *     { value: "banana", label: "Banana" },
- *   ]}
- *   value={value}
- *   onValueChange={setValue}
- *   placeholder="Select..."
- * />
- * ```
  */
 export interface FilterableComboboxItem {
   value: string;

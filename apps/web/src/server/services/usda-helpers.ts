@@ -12,18 +12,6 @@ import type { USDAClient } from "../clients/usda";
  * 1. Extracts lookup parameters from each item
  * 2. Batch fetches food data for valid lookups
  * 3. Maps food results back to original items
- *
- * @param items - Array of items to enrich with food data
- * @param getLookupParam - Function to extract FoodLookupParam from an item
- * @param usdaClient - USDA client instance for fetching food data
- * @returns Array of items enriched with food property (null if no lookup param or not found)
- *
- * @example
- * const productsWithFood = await batchEnrichWithFood(
- *   products,
- *   foodLookupParamFromProduct,
- *   usdaClient
- * );
  */
 export async function batchEnrichWithFood<T extends object>(
   items: T[],
@@ -118,19 +106,6 @@ export async function batchEnrichWithFood<T extends object>(
  * @param parents - Array of parent items containing nested items
  * @param getNestedItems - Function to extract nested items array from a parent
  * @param enrichFn - Async function to batch enrich all nested items
- * @param mapBack - Function to create new parent with enriched nested items
- * @returns Array of parents with their nested items enriched
- *
- * @example
- * ```typescript
- * // Enrich products within ingredients
- * const enrichedIngredients = await batchEnrichNestedItems(
- *   ingredients,
- *   (ing) => ing.product,
- *   (products) => enrichProductsWithFood(products),
- *   (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts })
- * );
- * ```
  */
 export async function batchEnrichNestedItems<
   TParent,

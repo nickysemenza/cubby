@@ -101,9 +101,6 @@ interface RenameTestCase {
 }
 
 describe("compareInventoryForSync - rename detection", () => {
-  // ============================================================================
-  // SHOULD detect renames
-  // ============================================================================
   const shouldDetectRename: RenameTestCase[] = [
     {
       name: "typo fix with same location + manufacturer",
@@ -285,9 +282,6 @@ describe("compareInventoryForSync - rename detection", () => {
     });
   });
 
-  // ============================================================================
-  // Should NOT detect renames (avoid false positives)
-  // ============================================================================
   const shouldNotDetectRename: RenameTestCase[] = [
     {
       name: "completely different products at DIFFERENT locations",
@@ -433,9 +427,6 @@ describe("compareInventoryForSync - rename detection", () => {
     });
   });
 
-  // ============================================================================
-  // Move detection
-  // ============================================================================
   const moveTests: RenameTestCase[] = [
     {
       name: "same product changes location",
@@ -507,9 +498,6 @@ describe("compareInventoryForSync - rename detection", () => {
     });
   });
 
-  // ============================================================================
-  // Manufacturer change detection
-  // ============================================================================
   describe("manufacturer change detection", () => {
     it("should detect manufacturer-only change as conflict", () => {
       const appRows = [
@@ -747,9 +735,6 @@ describe("compareInventoryForSync - rename detection", () => {
     });
   });
 
-  // ============================================================================
-  // Edge cases
-  // ============================================================================
   describe("edge cases", () => {
     it("should handle empty manufacturer matching with (unspecified)", () => {
       const appRows = [

@@ -14,24 +14,6 @@ import type { LocationCSVRow } from "~/schemas/location";
  *
  * The hash is computed from sorted arrays to ensure stability regardless
  * of the order in which data is fetched.
- *
- * @param appLocations - Raw location CSV rows from app database
- * @param sheetLocations - Raw location CSV rows from Google Sheets
- * @param appInventory - Raw inventory CSV rows from app database
- * @param sheetInventory - Raw inventory CSV rows from Google Sheets
- * @returns SHA-256 hash (hex string) of the snapshot
- *
- * @example
- * ```typescript
- * const hash = generateSnapshotHash(
- *   appLocations,
- *   sheetLocations,
- *   appInventory,
- *   sheetInventory
- * );
- * // Store hash in preview response
- * return { ...preview, snapshotHash: hash, snapshotTimestamp: Date.now() };
- * ```
  */
 export function generateSnapshotHash(
   appLocations: LocationCSVRow[],
@@ -77,20 +59,6 @@ export function generateSnapshotHash(
  *
  * Default max age is 5 minutes - balances between user decision time and
  * reducing the race condition window.
- *
- * @param snapshotTimestamp - Unix timestamp in milliseconds from preview
- * @param maxAgeMs - Maximum age in milliseconds (default: 5 minutes)
- * @returns True if snapshot is older than maxAgeMs
- *
- * @example
- * ```typescript
- * if (isSnapshotStale(input.snapshotTimestamp)) {
- *   throw new TRPCError({
- *     code: "PRECONDITION_FAILED",
- *     message: "Sync preview is stale. Please refresh and try again."
- *   });
- * }
- * ```
  */
 export function isSnapshotStale(
   snapshotTimestamp: number,

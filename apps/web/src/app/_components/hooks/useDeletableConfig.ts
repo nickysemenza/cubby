@@ -5,21 +5,6 @@ import { useMemo } from "react";
  *
  * This hook prevents infinite render loops by memoizing the deletable config object,
  * which would otherwise be recreated on every render when passed inline to useEntityList.
- *
- * @example
- * ```tsx
- * const deletableConfig = useDeletableConfig({
- *   mutationFn: api.product.delete.mutationOptions,
- *   entityLabel: "Product",
- *   invalidateKeys: [queryKeys.product.list],
- * });
- *
- * const { table, ... } = useEntityList({
- *   entity: "product",
- *   deletable: deletableConfig,
- *   // ...
- * });
- * ```
  */
 export function useDeletableConfig<T>({
   mutationFn,

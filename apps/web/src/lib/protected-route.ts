@@ -12,18 +12,6 @@ import { auth } from "~/lib/auth";
  * 3. Preserves the intended destination for post-login redirect
  *
  * Usage: Apply to routes via the `server.middleware` array.
- *
- * @example
- * ```typescript
- * import { authMiddleware } from "~/lib/protected-route";
- *
- * export const Route = createFileRoute("/products/")({
- *   component: ProductsPage,
- *   server: {
- *     middleware: [authMiddleware],
- *   },
- * });
- * ```
  */
 export const authMiddleware = createMiddleware().server(
   async ({ next, request }) => {
