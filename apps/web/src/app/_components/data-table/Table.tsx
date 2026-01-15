@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import type { Entity } from "~/entities/types";
+import { useIsMobile } from "~/hooks/use-mobile";
 import { useDebug } from "~/hooks/useDebug";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
@@ -77,6 +78,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   } = props;
 
   const { isDebugEnabled } = useDebug();
+  const isMobile = useIsMobile();
 
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -202,188 +204,192 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   return (
     <SpacedContainer space={4}>
       {/* Desktop Table View - Unified wrapper */}
-      <div className="hidden overflow-hidden rounded-lg border border-border/50 lg:block">
-        {/* Attached Toolbar */}
-        <DataTableToolbar
-          table={table}
-          additionalContent={additionalToolbarContent}
-          actions={actions}
-          bulkActionBar={bulkActionBar}
-          className="border-border/50 border-b bg-muted/30 px-3 py-2"
-        />
+      {!isMobile && (
+        <div className="overflow-hidden rounded-lg border border-border/50">
+          {/* Attached Toolbar */}
+          <DataTableToolbar
+            table={table}
+            additionalContent={additionalToolbarContent}
+            actions={actions}
+            bulkActionBar={bulkActionBar}
+            className="border-border/50 border-b bg-muted/30 px-3 py-2"
+          />
 
-        {/* Scrollable container for virtualization */}
-        <div
-          ref={tableContainerRef}
-          className="overflow-auto"
-          style={{ maxHeight: `${MAX_TABLE_HEIGHT}px` }}
-        >
-          <Table
-            aria-label={ariaLabel}
-            className={cn(styles.table)}
-            containerClassName="overflow-visible"
+          {/* Scrollable container for virtualization */}
+          <div
+            ref={tableContainerRef}
+            className="overflow-auto"
+            style={{ maxHeight: `${MAX_TABLE_HEIGHT}px` }}
           >
-            <TableHeader className="sticky top-0 z-20 bg-background [&_tr]:border-b-0">
-              {table.getHeaderGroups().map((headerGroup) => {
-                // Check if any column has a filter config
-                const hasAnyFilters = headerGroup.headers.some(
-                  (h) => h.column.columnDef.meta?.filterConfig,
-                );
+            <Table
+              aria-label={ariaLabel}
+              className={cn(styles.table)}
+              containerClassName="overflow-visible"
+            >
+              <TableHeader className="sticky top-0 z-20 bg-background [&_tr]:border-b-0">
+                {table.getHeaderGroups().map((headerGroup) => {
+                  // Check if any column has a filter config
+                  const hasAnyFilters = headerGroup.headers.some(
+                    (h) => h.column.columnDef.meta?.filterConfig,
+                  );
 
-                return (
-                  <Fragment key={headerGroup.id}>
-                    {/* Title Row */}
-                    <TableRow
-                      className={cn(
-                        "border-border/50 border-b-0",
-                        !hasAnyFilters && "border-b",
-                      )}
-                    >
-                      {headerGroup.headers.map((header) => {
-                        const sortDirection = header.column.getIsSorted();
-                        const canSort = header.column.getCanSort();
-                        const sortingArrows =
-                          sortDirection === "desc" ? (
-                            <ArrowDown
-                              className={styles.sortIcon}
-                              aria-hidden="true"
-                            />
-                          ) : sortDirection === "asc" ? (
-                            <ArrowUp
-                              className={styles.sortIcon}
-                              aria-hidden="true"
-                            />
-                          ) : canSort ? (
-                            <ArrowUpDown
-                              className={cn(
-                                styles.sortIcon,
-                                "opacity-40 group-hover:opacity-100",
-                              )}
-                              aria-hidden="true"
-                            />
-                          ) : null;
-
-                        const titleContent = (
-                          <>
-                            {header.isPlaceholder
-                              ? null
-                              : flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext(),
-                                )}
-                            {sortingArrows}
-                          </>
-                        );
-
-                        return (
-                          <TableHead
-                            key={header.id}
-                            colSpan={header.colSpan}
-                            aria-sort={
-                              sortDirection === "asc"
-                                ? "ascending"
-                                : sortDirection === "desc"
-                                  ? "descending"
-                                  : "none"
-                            }
-                            className={cn(
-                              header.column.columnDef.meta?.className,
-                              styles.header,
-                            )}
-                          >
-                            {canSort ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="group -ml-2 h-6 justify-start gap-1 px-2 font-medium text-[11px] hover:bg-muted/60"
-                                onClick={() =>
-                                  header.column.toggleSorting(
-                                    header.column.getIsSorted() === "asc",
-                                  )
-                                }
-                              >
-                                {titleContent}
-                              </Button>
-                            ) : (
-                              <span className="inline-flex items-center gap-1">
-                                {titleContent}
-                              </span>
-                            )}
-                          </TableHead>
-                        );
-                      })}
-                      {isDebugEnabled && (
-                        <TableHead className={cn(styles.header)}>
-                          Debug
-                        </TableHead>
-                      )}
-                    </TableRow>
-
-                    {/* Filter Row - only render if any column has filters */}
-                    {hasAnyFilters && (
+                  return (
+                    <Fragment key={headerGroup.id}>
+                      {/* Title Row */}
                       <TableRow
-                        key={`${headerGroup.id}-filters`}
-                        className={styles.filterRow}
+                        className={cn(
+                          "border-border/50 border-b-0",
+                          !hasAnyFilters && "border-b",
+                        )}
                       >
                         {headerGroup.headers.map((header) => {
-                          const filterConfig =
-                            header.column.columnDef.meta?.filterConfig;
+                          const sortDirection = header.column.getIsSorted();
+                          const canSort = header.column.getCanSort();
+                          const sortingArrows =
+                            sortDirection === "desc" ? (
+                              <ArrowDown
+                                className={styles.sortIcon}
+                                aria-hidden="true"
+                              />
+                            ) : sortDirection === "asc" ? (
+                              <ArrowUp
+                                className={styles.sortIcon}
+                                aria-hidden="true"
+                              />
+                            ) : canSort ? (
+                              <ArrowUpDown
+                                className={cn(
+                                  styles.sortIcon,
+                                  "opacity-40 group-hover:opacity-100",
+                                )}
+                                aria-hidden="true"
+                              />
+                            ) : null;
+
+                          const titleContent = (
+                            <>
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext(),
+                                  )}
+                              {sortingArrows}
+                            </>
+                          );
 
                           return (
                             <TableHead
-                              key={`${header.id}-filter`}
+                              key={header.id}
                               colSpan={header.colSpan}
+                              aria-sort={
+                                sortDirection === "asc"
+                                  ? "ascending"
+                                  : sortDirection === "desc"
+                                    ? "descending"
+                                    : "none"
+                              }
                               className={cn(
                                 header.column.columnDef.meta?.className,
-                                styles.filterRow,
+                                styles.header,
                               )}
                             >
-                              {filterConfig && (
-                                <HeaderFilter
-                                  column={header.column}
-                                  filterConfig={filterConfig}
-                                />
+                              {canSort ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-medium text-[11px] hover:bg-muted/60"
+                                  onClick={() =>
+                                    header.column.toggleSorting(
+                                      header.column.getIsSorted() === "asc",
+                                    )
+                                  }
+                                >
+                                  {titleContent}
+                                </Button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1">
+                                  {titleContent}
+                                </span>
                               )}
                             </TableHead>
                           );
                         })}
                         {isDebugEnabled && (
-                          <TableHead className={cn(styles.filterRow)} />
+                          <TableHead className={cn(styles.header)}>
+                            Debug
+                          </TableHead>
                         )}
                       </TableRow>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </TableHeader>
-            <TableBody>{renderTableBody()}</TableBody>
-          </Table>
+
+                      {/* Filter Row - only render if any column has filters */}
+                      {hasAnyFilters && (
+                        <TableRow
+                          key={`${headerGroup.id}-filters`}
+                          className={styles.filterRow}
+                        >
+                          {headerGroup.headers.map((header) => {
+                            const filterConfig =
+                              header.column.columnDef.meta?.filterConfig;
+
+                            return (
+                              <TableHead
+                                key={`${header.id}-filter`}
+                                colSpan={header.colSpan}
+                                className={cn(
+                                  header.column.columnDef.meta?.className,
+                                  styles.filterRow,
+                                )}
+                              >
+                                {filterConfig && (
+                                  <HeaderFilter
+                                    column={header.column}
+                                    filterConfig={filterConfig}
+                                  />
+                                )}
+                              </TableHead>
+                            );
+                          })}
+                          {isDebugEnabled && (
+                            <TableHead className={cn(styles.filterRow)} />
+                          )}
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </TableHeader>
+              <TableBody>{renderTableBody()}</TableBody>
+            </Table>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Mobile Toolbar + Card View */}
-      <div className="lg:hidden">
-        <DataTableToolbar
-          table={table}
-          additionalContent={additionalToolbarContent}
-          actions={actions}
-          bulkActionBar={bulkActionBar}
-          className="mb-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
-        />
-        {isLoading ? (
-          <SimpleLoading />
-        ) : error ? (
-          <div className="py-8">
-            <ErrorDisplay error={error} />
-          </div>
-        ) : (
-          <MobileCardView
+      {isMobile && (
+        <div>
+          <DataTableToolbar
             table={table}
-            entity={entity}
-            renderMobileCard={renderMobileCard}
+            additionalContent={additionalToolbarContent}
+            actions={actions}
+            bulkActionBar={bulkActionBar}
+            className="mb-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
           />
-        )}
-      </div>
+          {isLoading ? (
+            <SimpleLoading />
+          ) : error ? (
+            <div className="py-8">
+              <ErrorDisplay error={error} />
+            </div>
+          ) : (
+            <MobileCardView
+              table={table}
+              entity={entity}
+              renderMobileCard={renderMobileCard}
+            />
+          )}
+        </div>
+      )}
 
       {table.getPageCount() > 1 && (
         <DataTablePagination table={table} timing={timing} />

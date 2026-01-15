@@ -56,9 +56,14 @@ const amountKinds: AmountKind[] = [
 
 const isNutrientMapping = (m: UnitMapping) => m.source === "USDA nutrition";
 
-export function ConversionDialog({ mappings }: ConversionDialogProps) {
+function ConversionDialogContent({
+  mappings,
+  onClose,
+}: {
+  mappings: UnitMapping[];
+  onClose: () => void;
+}) {
   const showNutrientsId = useId();
-  const [open, setOpen] = useState(false);
   const [showNutrients, setShowNutrients] = useState(false);
   const [conversions, setConversions] = useState<
     Partial<Record<AmountKind, Result<WAmount>>>
@@ -113,15 +118,106 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
     return () => subscription.unsubscribe();
   }, [form, performConversions]);
 
-  // Trigger initial conversion when dialog opens
   React.useEffect(() => {
-    if (open) {
-      const values = form.getValues();
-      if (values.amount?.value && values.amount?.unit) {
-        performConversions(values.amount);
-      }
+    const values = form.getValues();
+    if (values.amount?.value && values.amount?.unit) {
+      performConversions(values.amount);
     }
-  }, [form, open, performConversions]);
+  }, [form, performConversions]);
+
+  return (
+    <DialogContent className="sm:max-w-[900px]">
+      <DialogHeader>
+        <DialogTitle>Unit Conversion</DialogTitle>
+        <DialogDescription>
+          Enter an amount to see live conversions to different unit types.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-4 py-4">
+        {nutrientCount > 0 && (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={showNutrientsId}
+              checked={showNutrients}
+              onCheckedChange={(checked) => setShowNutrients(checked === true)}
+            />
+            <Label htmlFor={showNutrientsId} className="text-sm">
+              Show nutrient mappings ({nutrientCount})
+            </Label>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <ConversionCapabilities
+            mappings={filteredMappings}
+            hideConvertButton={true}
+          />
+
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm">Conversion Graph</h4>
+            <UnitMappingGraph unitMapping={filteredMappings} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm">Available Unit Mappings</h4>
+            <UnitMappingsTable mappings={filteredMappings} />
+          </div>
+          <div>
+            <FormWrapper
+              form={form}
+              onSubmit={() => {
+                onClose();
+              }}
+              isPending={false}
+              submitButtonText="Apply"
+              onCancel={onClose}
+            >
+              <AmountFieldGroup
+                form={form}
+                valuePath="amount.value"
+                unitPath="amount.unit"
+                step="0.01"
+              />
+            </FormWrapper>
+
+            {Object.keys(conversions).length > 0 && (
+              <div className="mt-6 space-y-4">
+                <h4 className="font-medium text-sm">Conversion Results</h4>
+                <div className="space-y-2">
+                  {amountKinds.map((kind) => {
+                    const result = conversions[kind];
+                    const Meta = kindIconMap[kind];
+                    return (
+                      <div
+                        key={kind}
+                        className="flex items-center justify-between border-b py-1"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Meta.Icon className="h-4 w-4" aria-hidden />
+                          <span className="font-medium">{Meta.label}</span>
+                        </span>
+                        <span>
+                          {result?.success
+                            ? wasm.format_amount(result.value)
+                            : "Not convertible"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </DialogContent>
+  );
+}
+
+export function ConversionDialog({ mappings }: ConversionDialogProps) {
+  const [open, setOpen] = useState(false);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -144,95 +240,12 @@ export function ConversionDialog({ mappings }: ConversionDialogProps) {
         </DialogTrigger>
         <TooltipContent sideOffset={6}>Open unit converter</TooltipContent>
       </Tooltip>
-      <DialogContent className="sm:max-w-[900px]">
-        <DialogHeader>
-          <DialogTitle>Unit Conversion</DialogTitle>
-          <DialogDescription>
-            Enter an amount to see live conversions to different unit types.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          {nutrientCount > 0 && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id={showNutrientsId}
-                checked={showNutrients}
-                onCheckedChange={(checked) =>
-                  setShowNutrients(checked === true)
-                }
-              />
-              <Label htmlFor={showNutrientsId} className="text-sm">
-                Show nutrient mappings ({nutrientCount})
-              </Label>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <ConversionCapabilities
-              mappings={filteredMappings}
-              hideConvertButton={true}
-            />
-
-            <div className="space-y-2">
-              <h4 className="font-medium text-sm">Conversion Graph</h4>
-              <UnitMappingGraph unitMapping={filteredMappings} />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <h4 className="font-medium text-sm">Available Unit Mappings</h4>
-              <UnitMappingsTable mappings={filteredMappings} />
-            </div>
-            <div>
-              <FormWrapper
-                form={form}
-                onSubmit={() => {
-                  setOpen(false);
-                }}
-                isPending={false}
-                submitButtonText="Apply"
-                onCancel={() => setOpen(false)}
-              >
-                <AmountFieldGroup
-                  form={form}
-                  valuePath="amount.value"
-                  unitPath="amount.unit"
-                  step="0.01"
-                />
-              </FormWrapper>
-
-              {Object.keys(conversions).length > 0 && (
-                <div className="mt-6 space-y-4">
-                  <h4 className="font-medium text-sm">Conversion Results</h4>
-                  <div className="space-y-2">
-                    {amountKinds.map((kind) => {
-                      const result = conversions[kind];
-                      const Meta = kindIconMap[kind];
-                      return (
-                        <div
-                          key={kind}
-                          className="flex items-center justify-between border-b py-1"
-                        >
-                          <span className="flex items-center gap-2">
-                            <Meta.Icon className="h-4 w-4" aria-hidden />
-                            <span className="font-medium">{Meta.label}</span>
-                          </span>
-                          <span>
-                            {result?.success
-                              ? wasm.format_amount(result.value)
-                              : "Not convertible"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </DialogContent>
+      {open && (
+        <ConversionDialogContent
+          mappings={mappings}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </Dialog>
   );
 }

@@ -10,12 +10,14 @@ interface ImageData {
 interface ImageThumbnailProps {
   images: ImageData[];
   alt?: string;
+  lazyPreview?: boolean;
 }
 
 /** Image thumbnail that fills the cell height (cell must have h-px trick). */
 export const ImageThumbnail = ({
   images,
   alt = "Image",
+  lazyPreview = false,
 }: ImageThumbnailProps) => {
   if (images.length === 0) {
     return (
@@ -35,6 +37,7 @@ export const ImageThumbnail = ({
         <ImageWithPreview
           src={image.url}
           alt={alt}
+          lazyPreview={lazyPreview}
           className="absolute inset-0 h-full w-full rounded-none border-0"
         />
         {images.length > 1 && (

@@ -209,7 +209,11 @@ export function createImageColumn<T extends BaseRow>(
       className: cn("h-px overflow-hidden px-0 py-0", options?.className),
     },
     cell: (info) => (
-      <ImageThumbnail images={info.getValue() ?? []} alt="Image" />
+      <ImageThumbnail
+        images={info.getValue() ?? []}
+        alt="Image"
+        lazyPreview={true}
+      />
     ),
   });
 }

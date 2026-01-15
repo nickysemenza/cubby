@@ -1,5 +1,6 @@
 
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { Image } from "~/components/ui/image";
 import {
   Tooltip,
@@ -23,6 +24,8 @@ export interface ImageWithPreviewProps {
   previewSize?: number;
   /** Which side to show the preview (default: "right") */
   previewSide?: "top" | "right" | "bottom" | "left";
+  /** Delay mounting the preview until the first open */
+  lazyPreview?: boolean;
   /** Additional classes for the thumbnail container (can override defaults like rounded, border) */
   className?: string;
 }
@@ -53,8 +56,15 @@ export function ImageWithPreview({
   size,
   previewSize = 200,
   previewSide = "right",
+  lazyPreview = false,
   className,
 }: ImageWithPreviewProps) {
+  const [isPreviewEnabled, setIsPreviewEnabled] = useState(!lazyPreview);
+  const handleOpenChange = (open: boolean) => {
+    if (open && !isPreviewEnabled) {
+      setIsPreviewEnabled(true);
+    }
+  };
   const thumbnailClasses = cn(
     "bg-background relative flex-shrink-0 overflow-hidden rounded border transition-transform hover:scale-105",
     className,
@@ -62,6 +72,12 @@ export function ImageWithPreview({
 
   // Only apply inline size when provided (undefined = rely on className for sizing)
   const sizeStyle = size != null ? { width: size, height: size } : undefined;
+  const previewEnableProps = lazyPreview
+    ? {
+        onMouseEnter: () => setIsPreviewEnabled(true),
+        onFocus: () => setIsPreviewEnabled(true),
+      }
+    : undefined;
 
   const thumbnail = to ? (
     <Link
@@ -69,13 +85,14 @@ export function ImageWithPreview({
       params={params}
       className={thumbnailClasses}
       style={sizeStyle}
+      {...previewEnableProps}
     />
   ) : (
-    <div className={thumbnailClasses} style={sizeStyle} />
+    <div className={thumbnailClasses} style={sizeStyle} {...previewEnableProps} />
   );
 
   return (
-    <Tooltip>
+    <Tooltip onOpenChange={lazyPreview ? handleOpenChange : undefined}>
       <TooltipTrigger render={thumbnail}>
         <Image
           src={src}
@@ -83,21 +100,23 @@ export function ImageWithPreview({
           className="absolute inset-0 h-full w-full object-cover"
         />
       </TooltipTrigger>
-      <TooltipContent
-        side={previewSide}
-        className="bg-background border-border overflow-hidden rounded-lg border p-0 shadow-lg"
-      >
-        <div
-          className="relative"
-          style={{ width: previewSize, height: previewSize }}
+      {isPreviewEnabled && (
+        <TooltipContent
+          side={previewSide}
+          className="bg-background border-border overflow-hidden rounded-lg border p-0 shadow-lg"
         >
-          <Image
-            src={src}
-            alt={alt}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-        </div>
-      </TooltipContent>
+          <div
+            className="relative"
+            style={{ width: previewSize, height: previewSize }}
+          >
+            <Image
+              src={src}
+              alt={alt}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+        </TooltipContent>
+      )}
     </Tooltip>
   );
 }
