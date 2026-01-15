@@ -10,6 +10,7 @@ import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
+import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useStableColumnState } from "../_components/hooks/useStableColumnState";
@@ -165,6 +166,12 @@ export function RecipeList({ actions }: RecipeListProps) {
     [columnHelper],
   );
 
+  const deletableConfig = useDeletableConfig({
+    mutationFn: api.recipe.delete.mutationOptions,
+    entityLabel: "Recipe",
+    invalidateKeys: [[queryKeys.recipe.list]],
+  });
+
   const { table, isLoading, error, timing, data, bulkActionBar, deleteDialog } =
     useEntityList({
       entity: "recipe",
@@ -194,12 +201,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         ],
         clearSelectionOnComplete: false, // Don't clear selection after navigating
       },
-      deletable: {
-        mutationOptions: (callbacks) =>
-          api.recipe.delete.mutationOptions(callbacks),
-        entityLabel: "Recipe",
-        invalidateKeys: [[queryKeys.recipe.list]],
-      },
+      deletable: deletableConfig,
     });
 
   // Load ingredient data and calculate totals in a single effect

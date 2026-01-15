@@ -47,19 +47,18 @@ function RecipeComparePage() {
   const api = useTRPC();
 
   // Parse recipe IDs from URL
-  const recipeIds = useMemo(
-    () =>
+  const recipeIds = useMemo<string[]>(() => {
+    const list =
       ids
         ?.split(",")
         .map((id: string) => id.trim())
-        .filter(Boolean) ?? [],
-    [ids],
-  );
+        .filter((id: string) => id.length > 0) ?? [];
+    return dedupe(list);
+  }, [ids]);
 
   // Fetch all recipes in parallel
   const recipeQueryOptions = useMemo(
-    () =>
-      recipeIds.map((id: string) => api.recipe.getByID.queryOptions({ id })),
+    () => recipeIds.map((id) => api.recipe.getByID.queryOptions({ id })),
     [api, recipeIds],
   );
 
@@ -142,7 +141,7 @@ function RecipeComparePage() {
 
   // Remove a recipe from comparison
   const handleRemove = (recipeId: string) => {
-    const newIds = recipeIds.filter((id: string) => id !== recipeId).join(",");
+    const newIds = recipeIds.filter((id) => id !== recipeId).join(",");
     if (newIds) {
       navigate({ to: "/recipes/compare", search: { ids: newIds } });
     } else {
