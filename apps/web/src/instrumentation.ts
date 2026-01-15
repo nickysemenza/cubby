@@ -19,7 +19,7 @@ import {
 
 let initialized = false;
 
-export const initOpenTelemetry = async () => {
+export const initOpenTelemetry = () => {
   // Skip if already initialized or not in Node.js
   if (initialized || typeof process === "undefined") {
     return;

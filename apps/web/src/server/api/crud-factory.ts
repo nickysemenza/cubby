@@ -75,7 +75,7 @@ const createGetByIdProcedure = <T, TId extends string = string>(
   protectedProcedure
     .input(idSchema ? z.object({ id: idSchema }) : IDInput)
     .output(outputSchema)
-    .query(async ({ ctx, input }) => {
+    .query(({ ctx, input }) => {
       const id = idSchema
         ? (idSchema.parse(input.id) as TId)
         : (input.id as TId);
@@ -90,7 +90,7 @@ const createCreateProcedure = <TInput, TOutput>(
   protectedProcedure
     .input(inputSchema)
     .output(outputSchema)
-    .mutation(async ({ ctx, input }) => createFn(ctx, input as TInput));
+    .mutation(({ ctx, input }) => createFn(ctx, input as TInput));
 
 const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
   inputSchema: ZodSchema<TInput>,
@@ -109,7 +109,7 @@ const createUpdateProcedure = <TInput, TOutput, TId extends string = string>(
         : updateInputSchema(inputSchema),
     )
     .output(outputSchema)
-    .mutation(async ({ ctx, input }) => {
+    .mutation(({ ctx, input }) => {
       const id = idSchema
         ? (idSchema.parse(input.id) as TId)
         : (input.id as TId);

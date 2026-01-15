@@ -185,10 +185,10 @@ export function RecipeList({ actions }: RecipeListProps) {
             icon: <Scale className="h-4 w-4" />,
             minSelection: 2,
             maxSelection: 4,
-            onExecute: async (rows) => {
+            onExecute: (rows) => {
               const ids = rows.map((r) => r.original.id).join(",");
               navigate({ to: "/recipes/compare", search: { ids } });
-              return { success: true };
+              return Promise.resolve({ success: true });
             },
           },
         ],
@@ -247,19 +247,17 @@ export function RecipeList({ actions }: RecipeListProps) {
         setIngredientMap(ingMap);
 
         // Step 2: Calculate totals for all recipes (even if no ingredients)
-        const entries = await Promise.all(
-          data.map(async (recipe) => {
-            const recipeIngredients = recipe.sections.flatMap(
-              (s) => s.ingredients,
-            );
-            const totals = await calculateTotals(
-              recipeIngredients,
-              ingMap,
-              getIngredientName,
-            );
-            return [recipe.id, totals] as const;
-          }),
-        );
+        const entries = data.map((recipe) => {
+          const recipeIngredients = recipe.sections.flatMap(
+            (s) => s.ingredients,
+          );
+          const totals = calculateTotals(
+            recipeIngredients,
+            ingMap,
+            getIngredientName,
+          );
+          return [recipe.id, totals] as const;
+        });
 
         if (cancelled) return;
 

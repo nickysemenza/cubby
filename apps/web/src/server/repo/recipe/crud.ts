@@ -106,7 +106,7 @@ export const getRecipeByShortcode = async (
 /**
  * Insert a recipe from compact format.
  */
-export const insertCompactRecipe = async (
+export const insertCompactRecipe = (
   recipeInput: CompactRecipe,
   db: Database,
   actor: ActorContext,
@@ -296,22 +296,20 @@ export const upsertRecipe = async (
     }
 
     // Process ingredients for the update (same as in createRecipe)
-    const processedSections = await Promise.all(
-      input.sections.map(async (section) => {
-        const processedIngredients = (section.ingredients || []).map(
-          (ingredientInput) => ({
-            ingredientId: ingredientInput.ingredientId,
-            amounts: ingredientInput.amounts,
-          }),
-        );
+    const processedSections = input.sections.map((section) => {
+      const processedIngredients = (section.ingredients || []).map(
+        (ingredientInput) => ({
+          ingredientId: ingredientInput.ingredientId,
+          amounts: ingredientInput.amounts,
+        }),
+      );
 
-        return {
-          name: section.name,
-          processedIngredients,
-          instructions: section.instructions,
-        };
-      }),
-    );
+      return {
+        name: section.name,
+        processedIngredients,
+        instructions: section.instructions,
+      };
+    });
 
     // Update the recipe with new data
     const [updatedRecipe] = await dbClient

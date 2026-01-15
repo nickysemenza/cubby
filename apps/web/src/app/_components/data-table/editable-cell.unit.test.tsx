@@ -128,7 +128,7 @@ describe("useEditableCell", () => {
       result.current.setInputValue("new value");
     });
 
-    await act(async () => {
+    act(() => {
       result.current.handleKeyDown({
         key: "Enter",
         preventDefault: vi.fn(),
@@ -421,7 +421,7 @@ describe("EditableCell component", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("stops event propagation on click", async () => {
+  it("stops event propagation on click", () => {
     const parentClick = vi.fn();
     render(
       // biome-ignore lint/a11y/noStaticElementInteractions: test only

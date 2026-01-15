@@ -4,6 +4,7 @@ import {
   getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
+import { useMemo } from "react";
 import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
 import {
   type CalculateTotalsResult,
@@ -15,7 +16,6 @@ import {
   EntitySummaryCard,
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
 import { renderValueOrError } from "~/misc/result";
 import type { SectionIngredientOut } from "~/schemas/recipe";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
@@ -31,41 +31,32 @@ export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientWithFoodOut> | undefined;
 }> = ({ ingredients, ingMap }) => {
-  // Load ingredient data asynchronously
-  const data = useAsyncMemo(
-    async () => (ingMap ? createIngredientData(ingredients, ingMap) : []),
+  // Load ingredient data
+  const data = useMemo(
+    () => (ingMap ? createIngredientData(ingredients, ingMap) : []),
     [ingredients, ingMap],
-    [],
   );
 
-  // Load totals asynchronously
-  const totals = useAsyncMemo(
-    async () =>
+  // Load totals
+  const totals = useMemo(
+    () =>
       ingMap
         ? calculateTotals(ingredients, ingMap, getIngredientName)
         : undefined,
     [ingredients, ingMap],
-    undefined,
   );
 
-  // Load unit mappings asynchronously (parallelized)
-  const mappingsMap = useAsyncMemo(
-    async (signal) => {
-      if (!ingMap) return {};
-      const entries = await Promise.all(
-        Object.entries(ingMap).map(async ([id, entry]) => {
-          const productMappings = await Promise.all(
-            (entry.product ?? []).map((p) => getAllUnitMappingsFromProduct(p)),
-          );
-          return [id, productMappings.flat()] as const;
-        }),
+  // Load unit mappings
+  const mappingsMap = useMemo(() => {
+    if (!ingMap) return {};
+    const entries = Object.entries(ingMap).map(([id, entry]) => {
+      const productMappings = (entry.product ?? []).flatMap((p) =>
+        getAllUnitMappingsFromProduct(p),
       );
-      if (signal.cancelled) return {};
-      return Object.fromEntries(entries);
-    },
-    [ingMap],
-    {},
-  );
+      return [id, productMappings] as const;
+    });
+    return Object.fromEntries(entries);
+  }, [ingMap]);
 
   const columnHelper = createColumnHelper<IngredientDataItem>();
 

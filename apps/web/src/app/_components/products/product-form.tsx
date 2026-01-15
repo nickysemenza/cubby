@@ -177,7 +177,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     }
   };
 
-  const handleSubmit = async (values: ProductFormValues) => {
+  const handleSubmit = (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
     // Form uses numeric price (assumes dollar), convert to Amount
     const unitMappingsWithPrice = syncPriceToMappings(

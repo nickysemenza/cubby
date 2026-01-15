@@ -6,7 +6,6 @@ import {
   type CalculateTotalsResult,
   calculateTotals,
   createIngredientData,
-  type IngredientDataItem,
 } from "~/app/_components/units/univ-conversion";
 import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
 import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
@@ -172,18 +171,15 @@ const RecipeDetail: React.FC<{
   );
 
   // Load enriched ingredient data for charts (with price/nutrition info)
-  const ingredientDataItems = useAsyncMemo(
-    async () => (data ? createIngredientData(ingredients, data) : []),
+  const ingredientDataItems = useMemo(
+    () => (data ? createIngredientData(ingredients, data) : []),
     [ingredients, data],
-    [] as IngredientDataItem[],
   );
 
   // Calculate totals for charts
-  const totals = useAsyncMemo(
-    async () =>
-      data ? calculateTotals(ingredients, data, getIngredientName) : null,
+  const totals = useMemo(
+    () => (data ? calculateTotals(ingredients, data, getIngredientName) : null),
     [ingredients, data],
-    null,
   );
 
   return (

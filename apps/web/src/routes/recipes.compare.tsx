@@ -113,34 +113,24 @@ function RecipeComparePage() {
     undefined,
   );
 
-  // Create stable key for recipes dependency tracking
-  const recipeIdsKey = recipes.map((r) => r.id).join(",");
-
   // Calculate totals for each recipe
-  const recipesWithTotals: RecipeWithTotals[] = useAsyncMemo(
-    async () => {
-      if (!ingredientData || recipes.length === 0) return [];
+  const recipesWithTotals: RecipeWithTotals[] = useMemo(() => {
+    if (!ingredientData || recipes.length === 0) return [];
 
-      return Promise.all(
-        recipes.map(async (recipe) => {
-          const ingredients = recipe.sections.flatMap((s) => s.ingredients);
-          const totals = await calculateTotals(
-            ingredients,
-            ingredientData,
-            getIngredientName,
-          );
-          return {
-            recipe,
-            totals,
-            effectiveServings: getEffectiveServings(recipe),
-          };
-        }),
+    return recipes.map((recipe) => {
+      const ingredients = recipe.sections.flatMap((s) => s.ingredients);
+      const totals = calculateTotals(
+        ingredients,
+        ingredientData,
+        getIngredientName,
       );
-    },
-    // Use stable keys instead of object references
-    [recipeIdsKey, ingredientData ? "loaded" : "loading"],
-    [],
-  );
+      return {
+        recipe,
+        totals,
+        effectiveServings: getEffectiveServings(recipe),
+      };
+    });
+  }, [recipes, ingredientData]);
 
   // Remove a recipe from comparison
   const handleRemove = (recipeId: string) => {

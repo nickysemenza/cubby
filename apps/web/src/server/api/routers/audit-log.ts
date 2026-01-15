@@ -13,12 +13,12 @@ export const auditLogRouter = createTRPCRouter({
         cursor: z.string().optional(),
       }),
     )
-    .query(async ({ ctx, input }) => {
-      return getAuditLog(ctx.db, {
+    .query(({ ctx, input }) =>
+      getAuditLog(ctx.db, {
         entityType: input.entityType,
         entityId: input.entityId,
         limit: input.limit,
         cursor: input.cursor,
-      });
-    }),
+      }),
+    ),
 });

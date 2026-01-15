@@ -24,7 +24,7 @@ function formatTimestamp(date: Date | null): string | null {
 /**
  * Query all locations with their images and immediate parent
  */
-async function getLocationsWithParent(db: Database) {
+function getLocationsWithParent(db: Database) {
   return getDb(db).query.location.findMany({
     where: notDeleted(location),
     with: {

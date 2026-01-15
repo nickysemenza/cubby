@@ -6,7 +6,7 @@ import {
   ScrollText,
   UtensilsCrossed,
 } from "lucide-react";
-import { useAsyncMemo } from "~/hooks/useAsyncMemo";
+import { useMemo } from "react";
 import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
@@ -29,12 +29,8 @@ export const USDAFoodDetail: React.FC<{
     legacyFoodInfo,
   } = food;
 
-  // Load mappings asynchronously
-  const mappings = useAsyncMemo(
-    async () => unitMappingsFromFood(food),
-    [food],
-    [],
-  );
+  // Load mappings
+  const mappings = useMemo(() => unitMappingsFromFood(food), [food]);
 
   const foodInfoSection = (
     <div>

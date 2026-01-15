@@ -31,7 +31,7 @@ describe("createEmptyNutrients", () => {
 });
 
 describe("convertAmountToNutrients", () => {
-  test("converts amount directly to nutrients via WASM graph", async () => {
+  test("converts amount directly to nutrients via WASM graph", () => {
     const amount: Amount = { value: 2, unit: "cup" };
     // Mappings: 1 cup = 125g, 100g = 10g protein, 100g = 200 kcal
     const mappings: UnitMapping[] = [
@@ -67,7 +67,7 @@ describe("convertAmountToNutrients", () => {
     }
   });
 
-  test("returns failure when no nutrient mappings exist", async () => {
+  test("returns failure when no nutrient mappings exist", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -85,7 +85,7 @@ describe("convertAmountToNutrients", () => {
     expect(result.error).toBe("No nutrient conversions succeeded");
   });
 
-  test("handles empty mappings array", async () => {
+  test("handles empty mappings array", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [];
 
@@ -94,7 +94,7 @@ describe("convertAmountToNutrients", () => {
     expect(result.success).toBe(false);
   });
 
-  test("kcal requires 'kcal' unit (not 'kcal kcal') because WASM uses Unit::KCal internally", async () => {
+  test("kcal requires 'kcal' unit (not 'kcal kcal') because WASM uses Unit::KCal internally", () => {
     // This test documents a key implementation detail:
     // WASM treats MeasureKind::Calories → Unit::KCal (built-in)
     // but MeasureKind::Nutrient("kcal") → Unit::Other("kcal") (generic)
@@ -137,7 +137,7 @@ describe("convertAmountToNutrients", () => {
 });
 
 describe("getGramAndNutrient", () => {
-  test("successfully converts to grams and nutrients via WASM", async () => {
+  test("successfully converts to grams and nutrients via WASM", () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
@@ -181,7 +181,7 @@ describe("getGramAndNutrient", () => {
     }
   });
 
-  test("handles error when conversion to weight fails", async () => {
+  test("handles error when conversion to weight fails", () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "InvalidUnit" };
     const mappings: UnitMapping[] = [];
@@ -197,7 +197,7 @@ describe("getGramAndNutrient", () => {
     expect(result.nutrient.success).toBe(false);
   });
 
-  test("weight succeeds independently from nutrients", async () => {
+  test("weight succeeds independently from nutrients", () => {
     // Arrange - mappings with weight but no nutrients
     const amount: Amount = { value: 1, unit: "Cup" };
     const mappings: UnitMapping[] = [
@@ -225,7 +225,7 @@ describe("getGramAndNutrient", () => {
     expect(result.nutrient.error).toBe("No nutrient conversions succeeded");
   });
 
-  test("nutrients succeed independently from weight", async () => {
+  test("nutrients succeed independently from weight", () => {
     // Arrange - direct nutrient mapping without going through weight
     const amount: Amount = { value: 1, unit: "serving" };
     const mappings: UnitMapping[] = [
@@ -261,7 +261,7 @@ describe("getGramAndNutrient", () => {
 });
 
 describe("convertAmountToPrice", () => {
-  test("successfully converts amount to price", async () => {
+  test("successfully converts amount to price", () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "Pound" };
     const mappings: UnitMapping[] = [
@@ -284,7 +284,7 @@ describe("convertAmountToPrice", () => {
     }
   });
 
-  test("handles error when conversion fails", async () => {
+  test("handles error when conversion fails", () => {
     // Arrange
     const amount: Amount = { value: 1, unit: "InvalidUnit" };
     const mappings: UnitMapping[] = [];
@@ -299,7 +299,7 @@ describe("convertAmountToPrice", () => {
 });
 
 describe("WASM Error Scenarios", () => {
-  test("handles empty mappings array", async () => {
+  test("handles empty mappings array", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = []; // Empty mappings
 
@@ -309,7 +309,7 @@ describe("WASM Error Scenarios", () => {
     expect(result.error).toContain("Failed to convert");
   });
 
-  test("handles incompatible unit mappings", async () => {
+  test("handles incompatible unit mappings", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -326,7 +326,7 @@ describe("WASM Error Scenarios", () => {
     expect(result.error).toContain("Failed to convert");
   });
 
-  test("handles zero values in mappings", async () => {
+  test("handles zero values in mappings", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -349,7 +349,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles very large values", async () => {
+  test("handles very large values", () => {
     const amount: Amount = { value: 1e10, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -372,7 +372,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles very small values", async () => {
+  test("handles very small values", () => {
     const amount: Amount = { value: 1e-10, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -393,7 +393,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles case-insensitive unit names", async () => {
+  test("handles case-insensitive unit names", () => {
     const amount: Amount = { value: 1, unit: "CUP" }; // Uppercase
     const mappings: UnitMapping[] = [
       {
@@ -414,7 +414,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles chained conversions", async () => {
+  test("handles chained conversions", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -449,7 +449,7 @@ describe("WASM Error Scenarios", () => {
     }
   });
 
-  test("handles circular mapping references", async () => {
+  test("handles circular mapping references", () => {
     const amount: Amount = { value: 1, unit: "cup" };
     const mappings: UnitMapping[] = [
       {
@@ -473,7 +473,7 @@ describe("WASM Error Scenarios", () => {
     expect(result.error).toContain("Failed to convert");
   });
 
-  test("handles custom unit names", async () => {
+  test("handles custom unit names", () => {
     const amount: Amount = { value: 1, unit: "invalid_unit_xyz" };
     const mappings: UnitMapping[] = [
       {

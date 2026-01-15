@@ -156,23 +156,22 @@ const sumNutrients = (nutrients: NutrientsPer100[]): NutrientsPer100 => {
 /**
  * Gets price, weight, and nutrient information for an ingredient
  */
-const getIngredientMeasures = async (
+const getIngredientMeasures = (
   ingredient: SectionIngredientOut,
   ingMap: Record<string, IngredientWithFoodOut>,
-): Promise<{
+): {
   price: Result<WAmount>;
   gram: Result<WAmount>;
   nutrient: Result<NutrientsPer100>;
-}> => {
+} => {
   // Handle based on ingredient type (discriminated union)
   const id =
     ingredient.type === "ingredient" ? ingredient.ingredient.id : undefined;
   const entry = id ? ingMap[id] : undefined;
   const product = entry?.product;
-  const mappingArrays = await Promise.all(
-    (product ?? []).map((p) => getAllUnitMappingsFromProduct(p)),
+  const mappings = (product ?? []).flatMap((p) =>
+    getAllUnitMappingsFromProduct(p),
   );
-  const mappings = mappingArrays.flat();
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {
@@ -205,11 +204,11 @@ export type CalculateTotalsResult = {
 /**
  * Calculates price, weight, and nutrient information for a list of ingredients
  */
-export const calculateTotals = async (
+export const calculateTotals = (
   ingredients: SectionIngredientOut[],
   ingMap: Record<string, IngredientWithFoodOut>,
   getIngredientName: (ingredient: SectionIngredientOut) => string,
-): Promise<CalculateTotalsResult> => {
+): CalculateTotalsResult => {
   const prices: WAmount[] = [];
   const grams: WAmount[] = [];
   const nutrients: NutrientsPer100[] = [];
@@ -222,7 +221,7 @@ export const calculateTotals = async (
   for (const ingredient of ingredients) {
     const ingName = getIngredientName(ingredient);
     try {
-      const { price, gram, nutrient } = await getIngredientMeasures(
+      const { price, gram, nutrient } = getIngredientMeasures(
         ingredient,
         ingMap,
       );
@@ -281,14 +280,12 @@ export type IngredientDataItem = SectionIngredientOut & {
 /**
  * Creates a wrapper for tracking ingredient data with price/nutrient info
  */
-export const createIngredientData = async (
+export const createIngredientData = (
   ingredients: SectionIngredientOut[],
   ingMap: Record<string, IngredientWithFoodOut> | undefined,
-): Promise<IngredientDataItem[]> => {
-  return Promise.all(
-    ingredients.map(async (i) => ({
-      ...i,
-      priceInfo: ingMap ? await getIngredientMeasures(i, ingMap) : undefined,
-    })),
-  );
+): IngredientDataItem[] => {
+  return ingredients.map((i) => ({
+    ...i,
+    priceInfo: ingMap ? getIngredientMeasures(i, ingMap) : undefined,
+  }));
 };

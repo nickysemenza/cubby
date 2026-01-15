@@ -107,33 +107,31 @@ export const exportInventoryToCSV = async (
   });
 
   // Convert inventory entries to export rows
-  const inventoryRows = await Promise.all(
-    entries.map(async (entry) => {
-      const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
-      const productFields = buildProductExportFields({
-        ...entry.Product,
-        createdAt: entry.Product.createdAt,
-        updatedAt: entry.Product.updatedAt,
-      });
-      return {
-        ...productFields,
-        location_shortcode: entry.location.shortcode
-          ? unsafeLocationShortcode(entry.location.shortcode)
-          : null,
-        location_name: entry.location.name,
-        location_id: locationIdSchema.parse(entry.locationId),
-        inventory_entry_id: inventoryIdSchema.parse(entry.id),
-        product_id: productIdSchema.parse(entry.productId),
-        quantity: parsedAmount.value,
-        unit: parsedAmount.unit,
-        // Inventory timestamps (only if feature flag enabled)
-        ...(SYNC_TIMESTAMPS && {
-          inventory_created_at: formatTimestamp(entry.createdAt),
-          inventory_updated_at: formatTimestamp(entry.updatedAt),
-        }),
-      };
-    }),
-  );
+  const inventoryRows = entries.map((entry) => {
+    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
+    const productFields = buildProductExportFields({
+      ...entry.Product,
+      createdAt: entry.Product.createdAt,
+      updatedAt: entry.Product.updatedAt,
+    });
+    return {
+      ...productFields,
+      location_shortcode: entry.location.shortcode
+        ? unsafeLocationShortcode(entry.location.shortcode)
+        : null,
+      location_name: entry.location.name,
+      location_id: locationIdSchema.parse(entry.locationId),
+      inventory_entry_id: inventoryIdSchema.parse(entry.id),
+      product_id: productIdSchema.parse(entry.productId),
+      quantity: parsedAmount.value,
+      unit: parsedAmount.unit,
+      // Inventory timestamps (only if feature flag enabled)
+      ...(SYNC_TIMESTAMPS && {
+        inventory_created_at: formatTimestamp(entry.createdAt),
+        inventory_updated_at: formatTimestamp(entry.updatedAt),
+      }),
+    };
+  });
 
   // When filtering by location, only return inventory rows (not product-only)
   if (locationIdFilter) {
@@ -162,30 +160,28 @@ export const exportInventoryToCSV = async (
   });
 
   // Convert products without inventory to export rows (product-only rows)
-  const productOnlyRows = await Promise.all(
-    productsWithoutInventory.map(async (p) => {
-      const productFields = buildProductExportFields({
-        ...p,
-        createdAt: p.createdAt,
-        updatedAt: p.updatedAt,
-      });
-      return {
-        ...productFields,
-        location_shortcode: null, // No location for product-only rows
-        location_name: "", // Empty for product-only rows
-        location_id: null, // No location for product-only rows
-        inventory_entry_id: null, // No inventory entry for product-only rows
-        product_id: productIdSchema.parse(p.id),
-        quantity: null, // No inventory
-        unit: null, // No inventory
-        // No inventory timestamps for product-only rows
-        ...(SYNC_TIMESTAMPS && {
-          inventory_created_at: null,
-          inventory_updated_at: null,
-        }),
-      };
-    }),
-  );
+  const productOnlyRows = productsWithoutInventory.map((p) => {
+    const productFields = buildProductExportFields({
+      ...p,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    });
+    return {
+      ...productFields,
+      location_shortcode: null, // No location for product-only rows
+      location_name: "", // Empty for product-only rows
+      location_id: null, // No location for product-only rows
+      inventory_entry_id: null, // No inventory entry for product-only rows
+      product_id: productIdSchema.parse(p.id),
+      quantity: null, // No inventory
+      unit: null, // No inventory
+      // No inventory timestamps for product-only rows
+      ...(SYNC_TIMESTAMPS && {
+        inventory_created_at: null,
+        inventory_updated_at: null,
+      }),
+    };
+  });
 
   return [...inventoryRows, ...productOnlyRows];
 };

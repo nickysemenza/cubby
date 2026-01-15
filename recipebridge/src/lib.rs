@@ -3,7 +3,7 @@ use std::{collections::HashSet, str::FromStr};
 use ingredient::{
     from_str as parse_ingredient_str,
     rich_text::RichParser,
-    unit::{is_valid, make_graph, print_graph, Measure, MeasureKind},
+    unit::{find_connected_components, is_valid, make_graph, print_graph, Measure, MeasureKind},
     unit_mapping::{parse_unit_mapping as parse_unit_mapping_internal, ParsedUnitMapping},
     util::truncate_3_decimals,
 };
@@ -86,8 +86,6 @@ pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String
 /// Returns a list of component groups, where each group is a list of unit strings
 #[wasm_bindgen]
 pub fn detect_unit_mapping_islands(mappings: Vec<WUnitMapping>) -> Result<JsValue, String> {
-    use ingredient::unit::{find_connected_components, make_graph};
-
     let pairs = parse_mappings(mappings)?;
     let graph = make_graph(pairs);
 
