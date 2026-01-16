@@ -51,19 +51,3 @@ export function generateSnapshotHash(
   const json = JSON.stringify(snapshot);
   return crypto.createHash("sha256").update(json).digest("hex");
 }
-
-/**
- * Check if a snapshot is stale (too old to trust).
- * Snapshots older than the specified age should be rejected to prevent
- * applying resolutions to very old data.
- *
- * Default max age is 5 minutes - balances between user decision time and
- * reducing the race condition window.
- */
-export function isSnapshotStale(
-  snapshotTimestamp: number,
-  maxAgeMs = 5 * 60 * 1000, // 5 minutes
-): boolean {
-  const now = Date.now();
-  return now - snapshotTimestamp > maxAgeMs;
-}

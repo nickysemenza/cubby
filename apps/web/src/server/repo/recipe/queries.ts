@@ -3,6 +3,7 @@
  * Ingredient co-occurrence, tags, and other analytics.
  */
 
+import { desc } from "drizzle-orm";
 import { unsafeIngredientId, unsafeRecipeId } from "~/schemas/identifiers";
 import type {
   IngredientCooccurrence,
@@ -23,9 +24,12 @@ export const getIngredientCooccurrence = async (
 ): Promise<IngredientCooccurrence> => {
   const dbClient = getDb(db);
 
-  // Get all recipes with their ingredients (excludes soft-deleted)
+  // Get recipes with their ingredients (excludes soft-deleted)
+  // Limited to most recently updated recipes to prevent unbounded queries
   const recipes = await dbClient.query.recipe.findMany({
     where: notDeleted(recipe),
+    orderBy: desc(recipe.updatedAt),
+    limit: 500,
     with: {
       sections: {
         with: {

@@ -12,15 +12,13 @@ import {
   propagation,
   type Span,
   SpanStatusCode,
-  trace,
 } from "@opentelemetry/api";
-import { initTRPC, TRPCError } from "@trpc/server";
+import { initTRPC } from "@trpc/server";
 import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { env } from "~/env";
 import { initOpenTelemetry } from "~/instrumentation";
-import { type AppErrorReason, AppErrors } from "~/lib/app-error-codes";
 import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
 import { buildActorContext } from "~/schemas/context";
@@ -42,61 +40,9 @@ import { getTracer, TraceNames } from "~/server/tracing";
 // Initialize OpenTelemetry on first import (Node.js only, no-ops on Workers)
 initOpenTelemetry();
 
-// Expected 4xx errors that shouldn't be logged as failures
-const EXPECTED_ERROR_CODES: Set<string> = new Set([
-  "NOT_FOUND",
-  "UNAUTHORIZED",
-  "FORBIDDEN",
-  "BAD_REQUEST",
-  "CONFLICT",
-  "PRECONDITION_FAILED",
-]);
-
-/**
- * Create a TRPCError with consistent error handling:
- * - Derives tRPC error code from AppErrorReason
- * - Logs unexpected errors to console (skips expected 4xx responses)
- * - Annotates the active tracing span with error details
- * - Records the original exception if provided
- */
-export function createAppError(
-  reason: AppErrorReason,
-  message: string,
-  originalError?: unknown,
-): TRPCError {
-  const code = AppErrors[reason];
-  const isExpectedError = EXPECTED_ERROR_CODES.has(code);
-
-  // Only log unexpected errors (5xx, etc.) - expected 4xx are normal business responses
-  if (!isExpectedError) {
-    if (originalError) {
-      console.error(`[${reason}] ${message}`, originalError);
-    } else {
-      console.error(`[${reason}] ${message}`);
-    }
-  }
-
-  // Annotate tracing span (but don't mark expected errors as ERROR status)
-  const span = trace.getActiveSpan();
-  if (span) {
-    span.setAttributes({
-      "error.reason": reason,
-      "error.message": message,
-    });
-    if (!isExpectedError) {
-      span.setStatus({ code: SpanStatusCode.ERROR, message });
-      if (originalError instanceof Error || typeof originalError === "string") {
-        span.recordException(originalError);
-      }
-    }
-  }
-
-  return new TRPCError({
-    code,
-    message,
-    cause: { reason, originalError },
-  });
-}
+// Import and re-export createAppError from dedicated module to avoid circular dependencies
+import { createAppError } from "~/server/errors/app-error";
+export { createAppError };
 
 /**
  * Map database product record to ProductTopLevelOut format

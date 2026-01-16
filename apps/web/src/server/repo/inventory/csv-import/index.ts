@@ -113,7 +113,7 @@ export const importInventoryFromCSV = async (
   const productIds = Array.from(productMap.values()).map((p) =>
     unsafeProductId(p.id),
   );
-  const locationIds = Array.from(new Set(Array.from(locationMap.values())));
+  const locationIds = dedupe(Array.from(locationMap.values()));
 
   const _inventoryMap = await batchFindInventoryEntries(
     db,

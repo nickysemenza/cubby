@@ -243,30 +243,53 @@ export async function updateSectionIngredients(
   >,
   existingIngredients: Array<typeof recipeSectionIngredient.$inferSelect>,
 ): Promise<void> {
-  // Process each ingredient in the update
-  for (const ingredientUpdate of ingredientUpdates) {
-    const processedIngredient = await processIngredient(tx, ingredientUpdate);
+  // Batch process all ingredients in parallel
+  const processedIngredients = await processIngredients(tx, ingredientUpdates);
+
+  // Separate new vs existing ingredients for batch operations
+  const newIngredients: Array<{
+    recipeSectionId: string;
+    ingredientId: string;
+    amounts: (typeof processedIngredients)[number]["amounts"];
+  }> = [];
+  const updatePromises: Promise<unknown>[] = [];
+
+  for (let i = 0; i < ingredientUpdates.length; i++) {
+    const ingredientUpdate = ingredientUpdates[i];
+    const processedIngredient = processedIngredients[i];
 
     if (!ingredientUpdate.id) {
-      // Create new ingredient
-      await tx.insert(recipeSectionIngredient).values({
+      // Collect new ingredients for batch insert
+      newIngredients.push({
         recipeSectionId: sectionId,
         ingredientId: processedIngredient.ingredientId,
         amounts: processedIngredient.amounts,
       });
     } else {
-      // Update existing ingredient
-      await tx
-        .update(recipeSectionIngredient)
-        .set({
-          ingredientId: processedIngredient.ingredientId,
-          amounts: processedIngredient.amounts,
-        })
-        .where(eq(recipeSectionIngredient.id, ingredientUpdate.id));
+      // Queue update for parallel execution
+      updatePromises.push(
+        tx
+          .update(recipeSectionIngredient)
+          .set({
+            ingredientId: processedIngredient.ingredientId,
+            amounts: processedIngredient.amounts,
+          })
+          .where(eq(recipeSectionIngredient.id, ingredientUpdate.id)),
+      );
     }
   }
 
-  // Delete ingredients that weren't included in the update
+  // Batch insert new ingredients
+  if (newIngredients.length > 0) {
+    await tx.insert(recipeSectionIngredient).values(newIngredients);
+  }
+
+  // Execute updates in parallel
+  if (updatePromises.length > 0) {
+    await Promise.all(updatePromises);
+  }
+
+  // Batch delete ingredients that weren't included in the update
   const updatedIngredientIds = ingredientUpdates
     .filter((ing) => ing.id)
     .map((ing) => ing.id!);
@@ -275,10 +298,11 @@ export async function updateSectionIngredients(
     (ing) => !updatedIngredientIds.includes(ing.id),
   );
 
-  for (const ingToDelete of ingredientsToDelete) {
+  if (ingredientsToDelete.length > 0) {
+    const idsToDelete = ingredientsToDelete.map((ing) => ing.id);
     await tx
       .delete(recipeSectionIngredient)
-      .where(eq(recipeSectionIngredient.id, ingToDelete.id));
+      .where(inArray(recipeSectionIngredient.id, idsToDelete));
   }
 }
 

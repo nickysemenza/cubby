@@ -1617,15 +1617,14 @@ const applySync = protectedProcedure
           // Transaction rolled back - database unchanged
           span.setAttributes({
             "sync.transactionFailed": true,
-            "sync.error":
-              error instanceof Error ? error.message : "Unknown error",
+            "sync.error": getErrorMessage(error),
           });
 
           return {
             ...createEmptySyncResults(),
             success: false,
             errorMessages: [
-              `Database transaction failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+              `Database transaction failed: ${getErrorMessage(error)}`,
             ],
           };
         }

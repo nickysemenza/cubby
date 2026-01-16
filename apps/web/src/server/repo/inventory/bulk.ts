@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { ActorContext } from "~/schemas/context";
 import type { LocationId } from "~/schemas/identifiers";
 import { unsafeProductId } from "~/schemas/identifiers";
@@ -9,10 +9,15 @@ import type {
 import { createAppError } from "~/server/api/trpc";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   buildPartialUpdateValues,
   insertAndReturn,
+  notDeleted,
   parseInventoryAmount,
   relations,
   updateAndReturn,
@@ -36,7 +41,10 @@ export const bulkProcessInventoryEntries = async (
 
       // First, get all existing inventory entries for this location
       const existingItems = await tx.query.inventoryEntry.findMany({
-        where: eq(inventoryEntry.locationId, locationId),
+        where: and(
+          eq(inventoryEntry.locationId, locationId),
+          notDeleted(inventoryEntry),
+        ),
         ...relations.inventory.full,
       });
 
@@ -55,15 +63,23 @@ export const bulkProcessInventoryEntries = async (
         (item) => !submittedIds.includes(item.id),
       );
 
-      // Delete items that are not in the submitted array
-      for (const item of itemsToDelete) {
-        await tx.delete(inventoryEntry).where(eq(inventoryEntry.id, item.id));
-        // Log delete audit entry
-        await logAuditEntry(tx, actor, {
-          entityType: "inventory",
-          entityId: item.id,
-          action: "delete",
-        });
+      // Batch delete items that are not in the submitted array
+      if (itemsToDelete.length > 0) {
+        const idsToDelete = itemsToDelete.map((item) => item.id);
+        await tx
+          .delete(inventoryEntry)
+          .where(inArray(inventoryEntry.id, idsToDelete));
+
+        // Batch log delete audit entries
+        await logAuditEntries(
+          tx,
+          actor,
+          itemsToDelete.map((item) => ({
+            entityType: "inventory" as const,
+            entityId: item.id,
+            action: "delete" as const,
+          })),
+        );
       }
 
       // Process submitted items - create new or update existing
@@ -256,6 +272,7 @@ export const bulkMoveInventoryEntries = async (
           where: and(
             eq(inventoryEntry.productId, sourceEntry.productId),
             eq(inventoryEntry.locationId, payload.targetLocationId),
+            notDeleted(inventoryEntry),
           ),
           ...relations.inventory.full,
         });

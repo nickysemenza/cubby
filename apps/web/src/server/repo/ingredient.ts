@@ -76,7 +76,7 @@ export const mergeIngredients = async (
     }
 
     const aliasRecs = await tx.query.ingredient.findMany({
-      where: inArray(ingredient.id, aliases),
+      where: and(inArray(ingredient.id, aliases), notDeleted(ingredient)),
     });
 
     // update target ingredient to have new aliases
