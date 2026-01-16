@@ -264,8 +264,15 @@ export async function batchUpdateWithCaseWhen<
         for (const update of batch) {
           const value = update[columnName];
           // Build: WHEN "id" = {id} THEN {value}
+          // Cast numeric values to avoid Postgres type inference issues
+          const typedValue =
+            typeof value === "number"
+              ? sql`${value}::real`
+              : value === null
+                ? sql`NULL`
+                : sql`${value}`;
           cases.push(
-            sql`WHEN ${sql.identifier("id")} = ${update.id} THEN ${value}`,
+            sql`WHEN ${sql.identifier("id")} = ${update.id} THEN ${typedValue}`,
           );
         }
 

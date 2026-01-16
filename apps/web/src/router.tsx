@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { RouteErrorComponent } from "~/components/route-error";
@@ -19,6 +20,21 @@ export const getRouter = () => {
     defaultPreload: "intent",
     defaultErrorComponent: RouteErrorComponent,
   });
+
+  // Initialize Sentry on client only
+  if (!router.isServer) {
+    Sentry.init({
+      dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
+      sendDefaultPii: true,
+      tracesSampleRate: 1.0,
+      replaysSessionSampleRate: 0.1,
+      replaysOnErrorSampleRate: 1.0,
+      integrations: [
+        Sentry.tanstackRouterBrowserTracingIntegration(router),
+        Sentry.replayIntegration(),
+      ],
+    });
+  }
 
   setupRouterSsrQueryIntegration({
     router,

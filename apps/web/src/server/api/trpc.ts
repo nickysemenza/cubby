@@ -13,6 +13,7 @@ import {
   type Span,
   SpanStatusCode,
 } from "@opentelemetry/api";
+import * as Sentry from "@sentry/tanstackstart-react";
 import { initTRPC } from "@trpc/server";
 import { flatten } from "flat";
 import superjson from "superjson";
@@ -236,12 +237,36 @@ const tracingMiddleWare = t.middleware(async (opts) => {
       try {
         const result = await opts.next();
         span.setAttributes({ ok: result.ok });
-        span.setStatus({ code: SpanStatusCode.OK });
+
+        // tRPC returns errors as results with ok: false, not thrown
+        if (!result.ok) {
+          span.setStatus({
+            code: SpanStatusCode.ERROR,
+            message: getErrorMessage(result.error),
+          });
+          // Capture tRPC errors to Sentry
+          Sentry.captureException(result.error, {
+            extra: {
+              trpcPath: opts.path,
+              trpcType: opts.type,
+            },
+          });
+        } else {
+          span.setStatus({ code: SpanStatusCode.OK });
+        }
+
         return result;
       } catch (error) {
+        // Unexpected errors that bypass tRPC error handling
         span.setStatus({
           code: SpanStatusCode.ERROR,
           message: getErrorMessage(error),
+        });
+        Sentry.captureException(error, {
+          extra: {
+            trpcPath: opts.path,
+            trpcType: opts.type,
+          },
         });
         throw error;
       } finally {

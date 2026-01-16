@@ -49,6 +49,7 @@ export async function addInventory(
   const productSearch = page.getByRole("textbox", {
     name: "Search product...",
   });
+  await expect(productSearch).toBeVisible({ timeout: 5000 });
   await productSearch.fill(productName);
 
   // Wait for and click the option (button includes manufacturer suffix like "(unspecified)")
@@ -68,6 +69,7 @@ export async function addInventory(
   const locationSearch = page.getByRole("textbox", {
     name: "Search location...",
   });
+  await expect(locationSearch).toBeVisible({ timeout: 5000 });
   await locationSearch.fill(locationName);
 
   // Wait for and click the option

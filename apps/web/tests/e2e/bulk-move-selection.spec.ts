@@ -34,6 +34,7 @@ test.describe("Bulk Move Inventory - Selection", () => {
     const locationSearch = page.getByRole("textbox", {
       name: "Search from location...",
     });
+    await expect(locationSearch).toBeVisible({ timeout: 5000 });
     await locationSearch.fill(sourceName);
 
     // Wait for and click the option (includes room type suffix like "(room)")
@@ -74,6 +75,7 @@ test.describe("Bulk Move Inventory - Selection", () => {
     const sourceSearch = page.getByRole("textbox", {
       name: "Search from location...",
     });
+    await expect(sourceSearch).toBeVisible({ timeout: 5000 });
     await sourceSearch.fill(sourceName);
     await expect(page.getByRole("button", { name: sourceName })).toBeVisible({
       timeout: 10000,

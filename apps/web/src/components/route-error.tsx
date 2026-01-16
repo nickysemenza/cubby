@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/tanstackstart-react";
 import {
   type ErrorComponentProps,
   Link,
@@ -10,7 +11,7 @@ import {
   RefreshCw,
   WifiOff,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
   Collapsible,
@@ -88,6 +89,13 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
   const rawMessage = getErrorMessage(error);
   const category = categorizeError(code, reason, rawMessage);
   const friendlyMessage = FRIENDLY_MESSAGES[category];
+
+  // Capture unexpected errors to Sentry (not auth/notFound which are expected)
+  useEffect(() => {
+    if (category === "generic" || category === "network") {
+      Sentry.captureException(error);
+    }
+  }, [error, category]);
 
   // Get stack trace if available
   const stack = error instanceof Error ? error.stack : undefined;
