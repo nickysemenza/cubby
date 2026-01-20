@@ -21,16 +21,15 @@ test.describe("Bulk Move Inventory - Validation", () => {
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);
 
-    // Select source location
-    const sourceCombobox = page
-      .locator('label:has-text("From Location")')
-      .locator("..")
-      .getByRole("combobox");
+    // Select source location (aria-label is lowercase)
+    const sourceCombobox = page.getByRole("combobox", {
+      name: /from location/i,
+    });
+    await expect(sourceCombobox).toBeVisible({ timeout: 10000 });
     await sourceCombobox.click();
 
-    const sourceSearch = page.getByRole("textbox", {
-      name: "Search from location...",
-    });
+    const sourceSearch = page.getByPlaceholder("Search from location...");
+    await expect(sourceSearch).toBeVisible({ timeout: 5000 });
     await sourceSearch.fill(locationName);
     await expect(page.getByRole("button", { name: locationName })).toBeVisible({
       timeout: 10000,
@@ -42,16 +41,15 @@ test.describe("Bulk Move Inventory - Validation", () => {
     const checkbox = page.getByRole("checkbox").first();
     await checkbox.click();
 
-    // Select same location as target
-    const targetCombobox = page
-      .locator('label:has-text("To Location")')
-      .locator("..")
-      .getByRole("combobox");
+    // Select same location as target (aria-label is lowercase)
+    const targetCombobox = page.getByRole("combobox", {
+      name: /to location/i,
+    });
+    await expect(targetCombobox).toBeVisible({ timeout: 10000 });
     await targetCombobox.click();
 
-    const targetSearch = page.getByRole("textbox", {
-      name: "Search to location...",
-    });
+    const targetSearch = page.getByPlaceholder("Search to location...");
+    await expect(targetSearch).toBeVisible({ timeout: 5000 });
     await targetSearch.fill(locationName);
     await expect(page.getByRole("button", { name: locationName })).toBeVisible({
       timeout: 10000,

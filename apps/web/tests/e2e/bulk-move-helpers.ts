@@ -38,17 +38,13 @@ export async function addInventory(
   await page.goto("/inventory/new");
   await waitForFormHydration(page);
 
-  // Select product using combobox - use label to scope to the right combobox
-  const productCombobox = page
-    .locator('label:has-text("Product")')
-    .locator("..")
-    .getByRole("combobox");
+  // Select product using combobox (aria-label is lowercase)
+  const productCombobox = page.getByRole("combobox", { name: /product/i });
+  await expect(productCombobox).toBeVisible({ timeout: 10000 });
   await productCombobox.click();
 
-  // Search for the product - label is lowercased in combobox-dialog.tsx
-  const productSearch = page.getByRole("textbox", {
-    name: "Search product...",
-  });
+  // Search for the product
+  const productSearch = page.getByPlaceholder("Search product...");
   await expect(productSearch).toBeVisible({ timeout: 5000 });
   await productSearch.fill(productName);
 
@@ -58,17 +54,13 @@ export async function addInventory(
   });
   await page.getByRole("button", { name: productName }).click();
 
-  // Select location using combobox
-  const locationCombobox = page
-    .locator('label:has-text("Location")')
-    .locator("..")
-    .getByRole("combobox");
+  // Select location using combobox (aria-label is lowercase)
+  const locationCombobox = page.getByRole("combobox", { name: /location/i });
+  await expect(locationCombobox).toBeVisible({ timeout: 10000 });
   await locationCombobox.click();
 
-  // Search for the location - label is lowercased in combobox-dialog.tsx
-  const locationSearch = page.getByRole("textbox", {
-    name: "Search location...",
-  });
+  // Search for the location
+  const locationSearch = page.getByPlaceholder("Search location...");
   await expect(locationSearch).toBeVisible({ timeout: 5000 });
   await locationSearch.fill(locationName);
 

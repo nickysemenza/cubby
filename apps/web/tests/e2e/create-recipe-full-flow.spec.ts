@@ -49,15 +49,14 @@ test.describe("Create Recipe - Full Flow", () => {
     await fillInput("Enter product name", productName);
     await fillInput("Enter manufacturer", manufacturerName);
 
-    // Link ingredient
-    await page
-      .locator('label:has-text("Ingredient")')
-      .locator("..")
-      .getByRole("combobox")
-      .click();
-    const ingredientSearch = page.getByRole("textbox", {
-      name: "Search ingredient...",
+    // Link ingredient (aria-label is lowercase)
+    const ingredientCombobox = page.getByRole("combobox", {
+      name: /ingredient/i,
     });
+    await expect(ingredientCombobox).toBeVisible({ timeout: 10000 });
+    await ingredientCombobox.click();
+    const ingredientSearch = page.getByPlaceholder("Search ingredient...");
+    await expect(ingredientSearch).toBeVisible({ timeout: 5000 });
     await ingredientSearch.fill(ingredientName);
     await expect(
       page.getByRole("button", { name: ingredientName, exact: true }),
@@ -114,17 +113,16 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByLabel("Yield Value (Optional)").fill("12");
     await page.getByLabel("Yield Unit").fill("cookies");
 
-    // Add ingredient
+    // Add ingredient (aria-label is lowercase)
     await page.getByRole("button", { name: /Add Ingredient/i }).click();
-    const recipeIngredientCombobox = page
-      .locator('label:has-text("Ingredient")')
-      .locator("..")
-      .getByRole("combobox");
+    const recipeIngredientCombobox = page.getByRole("combobox", {
+      name: /ingredient/i,
+    });
+    await expect(recipeIngredientCombobox).toBeVisible({ timeout: 10000 });
     await recipeIngredientCombobox.click();
 
-    const recipeSearchBox = page.getByRole("textbox", {
-      name: "Search ingredient...",
-    });
+    const recipeSearchBox = page.getByPlaceholder("Search ingredient...");
+    await expect(recipeSearchBox).toBeVisible({ timeout: 5000 });
     await recipeSearchBox.fill(ingredientName);
     await expect(
       page.getByRole("button", { name: ingredientName, exact: true }),

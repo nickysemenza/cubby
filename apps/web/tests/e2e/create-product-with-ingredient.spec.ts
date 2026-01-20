@@ -48,16 +48,15 @@ test.describe("Create Product with Ingredient", () => {
     await fillInput("Enter product name", productName);
     await fillInput("Enter manufacturer", manufacturerName);
 
-    // Link to the ingredient we just created
-    await page
-      .locator('label:has-text("Ingredient")')
-      .locator("..")
-      .getByRole("combobox")
-      .click();
-
-    const ingredientSearch = page.getByRole("textbox", {
-      name: "Search ingredient...",
+    // Link to the ingredient we just created (aria-label is lowercase)
+    const ingredientCombobox = page.getByRole("combobox", {
+      name: /ingredient/i,
     });
+    await expect(ingredientCombobox).toBeVisible({ timeout: 10000 });
+    await ingredientCombobox.click();
+
+    const ingredientSearch = page.getByPlaceholder("Search ingredient...");
+    await expect(ingredientSearch).toBeVisible({ timeout: 5000 });
     await ingredientSearch.fill(ingredientName);
     await expect(
       page.getByRole("button", { name: ingredientName, exact: true }),
