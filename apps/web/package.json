@@ -27,7 +27,8 @@
     "load-data": "tsx scripts/load-data.ts",
     "regenerate": "pnpm run db:rebuild",
     "knip": "knip",
-    "knip:production": "knip --production"
+    "knip:production": "knip --production",
+    "gen:apple-icon": "rsvg-convert -w 180 -h 180 public/favicon.svg -o public/apple-touch-icon.png"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.952.0",
