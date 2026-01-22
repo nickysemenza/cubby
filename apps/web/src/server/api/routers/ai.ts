@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { categorySuggestionSchema } from "~/schemas/ai";
+import {
+  categorySuggestionSchema,
+  locationTypeSuggestionSchema,
+} from "~/schemas/ai";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 
@@ -20,6 +23,17 @@ const suggestCategory = protectedProcedure
   });
 
 /**
+ * Suggest a location type based on the location name
+ */
+const suggestLocationType = protectedProcedure
+  .input(z.object({ locationName: z.string().min(1) }))
+  .output(locationTypeSuggestionSchema)
+  .query(async ({ input }) => {
+    const client = getAnthropicClient();
+    return client.suggestLocationType(input.locationName);
+  });
+
+/**
  * Check if AI features are available (API key configured)
  */
 const isAvailable = publicProcedure
@@ -31,5 +45,6 @@ const isAvailable = publicProcedure
 
 export const aiRouter = createTRPCRouter({
   suggestCategory,
+  suggestLocationType,
   isAvailable,
 });

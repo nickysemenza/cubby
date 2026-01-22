@@ -118,15 +118,17 @@ function CreateEntityDialogWrapper({
   onOpenChange,
   title,
   children,
+  className = "sm:max-w-lg",
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={className}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>

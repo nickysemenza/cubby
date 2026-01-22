@@ -4,7 +4,10 @@ import { env } from "~/env";
 import {
   type CategorySuggestion,
   categorySuggestionSchema,
+  type LocationTypeSuggestion,
+  locationTypeSuggestionSchema,
 } from "~/schemas/ai";
+import { type LocationType, locationType } from "~/schemas/location";
 import { type ProductCategory, productCategoryValues } from "~/schemas/product";
 
 // Category descriptions for the LLM to understand what each category means
@@ -29,7 +32,7 @@ const CATEGORY_DESCRIPTIONS = {
     "General consumable supplies: cleaning products, tape, batteries, glue, lubricants, rags",
 } satisfies Record<ProductCategory, string>;
 
-function buildSystemPrompt(): string {
+function buildCategorySystemPrompt(): string {
   const categoryList = productCategoryValues
     .map((cat) => `- "${cat}": ${CATEGORY_DESCRIPTIONS[cat]}`)
     .join("\n");
@@ -44,6 +47,45 @@ Rules:
 2. For ambiguous items, consider the primary use case
 3. "supplies" is for general consumables that don't fit other categories
 4. Be precise: drill bits go in "tool-consumables", not "tools"`;
+}
+
+// Location type descriptions for the LLM to understand what each type means
+// Using `satisfies` to ensure all types have descriptions (build fails if one is missing)
+const LOCATION_TYPE_DESCRIPTIONS = {
+  room: "Large spaces in a building: workshop, garage, kitchen, office, bedroom, basement, attic",
+  area: "Zones or sections within rooms: workbench area, cutting station, charging station, reading nook",
+  shelf:
+    "Horizontal storage surfaces: top shelf, shelf 3, wall shelf, closet shelf",
+  cabinet:
+    "Enclosed storage with doors: tool cabinet, kitchen cabinet, medicine cabinet",
+  drawer: "Pull-out compartments: desk drawer, toolbox drawer, kitchen drawer",
+  box: "Cardboard or plastic boxes: shipping box, storage box, parts box",
+  bag: "Fabric or plastic bags: tool bag, shopping bag, parts bag",
+  crate: "Full-size stackable plastic crates",
+  "half-crate": "Half-height stackable plastic crates",
+  "quarter-crate": "Quarter-height stackable plastic crates",
+  "milk-crate": "Standard milk crate size containers",
+  "tote-bin": "Large plastic bins with lids for storage",
+  table: "Work surfaces: workbench, desk, countertop, craft table",
+  cart: "Mobile storage with wheels: tool cart, utility cart, rolling cart",
+} satisfies Record<LocationType, string>;
+
+function buildLocationTypeSystemPrompt(): string {
+  const typeList = locationType.options
+    .map((type) => `- "${type}": ${LOCATION_TYPE_DESCRIPTIONS[type]}`)
+    .join("\n");
+
+  return `You are a location classification assistant. Given a location name, determine the most appropriate location type.
+
+Available types:
+${typeList}
+
+Rules:
+1. Look for keywords in the name that indicate the type (e.g., "shelf" in name suggests shelf type)
+2. Consider the hierarchy: rooms contain areas, areas contain shelves/cabinets/drawers, etc.
+3. For ambiguous names, consider the most likely physical form
+4. Names with numbers often indicate shelves or drawers (e.g., "Shelf 3", "Drawer 2")
+5. Names mentioning "workbench" or "station" are typically areas or tables`;
 }
 
 export class AnthropicClient {
@@ -77,7 +119,7 @@ export class AnthropicClient {
 
     return chat({
       adapter,
-      systemPrompts: [buildSystemPrompt()],
+      systemPrompts: [buildCategorySystemPrompt()],
       messages: [
         {
           role: "user",
@@ -88,6 +130,26 @@ Categorize this product and explain your reasoning.`,
         },
       ],
       outputSchema: categorySuggestionSchema,
+    });
+  }
+
+  async suggestLocationType(
+    locationName: string,
+  ): Promise<LocationTypeSuggestion> {
+    const adapter = this.getAdapter();
+
+    return chat({
+      adapter,
+      systemPrompts: [buildLocationTypeSystemPrompt()],
+      messages: [
+        {
+          role: "user",
+          content: `Location: "${locationName}"
+
+Determine the appropriate type for this location and explain your reasoning.`,
+        },
+      ],
+      outputSchema: locationTypeSuggestionSchema,
     });
   }
 }

@@ -6,10 +6,11 @@ import {
   ImageIcon,
   Info,
   Package,
+  Plus,
   ScanBarcode,
 } from "lucide-react";
-import type { FC } from "react";
-import { buttonVariants } from "~/components/ui/button";
+import { type FC, useState } from "react";
+import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -24,6 +25,7 @@ import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
+import { CreateChildLocationDialog } from "./create-child-location-dialog";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
 import { LocationBreadcrumb } from "./location-breadcrumb";
@@ -38,6 +40,7 @@ interface LocationDetailProps {
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
   const queryClient = useQueryClient();
+  const [createChildOpen, setCreateChildOpen] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -85,23 +88,34 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
     {
       title: "Child Locations",
       icon: FolderTree,
-      content:
-        location.children && location.children.length > 0 ? (
-          <LocationCardGrid
-            locations={location.children}
-            showParentPath={false}
-          />
-        ) : (
-          <Empty variant="minimal" className="py-4">
-            <EmptyMedia variant="icon">
-              <FolderTree className="size-4" />
-            </EmptyMedia>
-            <EmptyTitle>No child locations</EmptyTitle>
-            <EmptyDescription>
-              This location has no sub-locations
-            </EmptyDescription>
-          </Empty>
-        ),
+      content: (
+        <div className="space-y-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCreateChildOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Child
+          </Button>
+          {location.children && location.children.length > 0 ? (
+            <LocationCardGrid
+              locations={location.children}
+              showParentPath={false}
+            />
+          ) : (
+            <Empty variant="minimal" className="py-4">
+              <EmptyMedia variant="icon">
+                <FolderTree className="size-4" />
+              </EmptyMedia>
+              <EmptyTitle>No child locations</EmptyTitle>
+              <EmptyDescription>
+                This location has no sub-locations
+              </EmptyDescription>
+            </Empty>
+          )}
+        </div>
+      ),
     },
     // Custom section: Inventory Items (with interactive refetch)
     {
@@ -145,6 +159,16 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         entity="location"
         name={location.name}
         rawData={location}
+      />
+      <CreateChildLocationDialog
+        open={createChildOpen}
+        onOpenChange={setCreateChildOpen}
+        parentLocation={location}
+        onSuccess={() => {
+          void queryClient.invalidateQueries({
+            queryKey: api.location.getByID.queryKey({ id: location.id }),
+          });
+        }}
       />
     </>
   );

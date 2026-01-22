@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { locationType } from "./location";
 import { productCategory } from "./product";
 
 // Confidence level values - single source of truth
@@ -17,3 +18,14 @@ export const categorySuggestionSchema = z.object({
 });
 
 export type CategorySuggestion = z.infer<typeof categorySuggestionSchema>;
+
+// Location type suggestion schema
+export const locationTypeSuggestionSchema = z.object({
+  type: locationType,
+  confidence: confidence,
+  reasoning: z.string(),
+});
+
+export type LocationTypeSuggestion = z.infer<
+  typeof locationTypeSuggestionSchema
+>;

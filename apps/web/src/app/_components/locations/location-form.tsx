@@ -22,12 +22,11 @@ import {
   type EditModeProps,
   FormWrapper,
   getSubmitButtonText,
-  SelectField,
   SideBySideFields,
   UnifiedTextField,
 } from "../form-utils";
 import { PendingImageUpload } from "../PendingImageUpload";
-import { locationTypeOptionsWithTheme } from "./location-icons";
+import { TypeFieldWithAI } from "./type-field-with-ai";
 
 // Form schema for location form (simple Zod schema without z.custom)
 const formSchema = z.object({
@@ -42,6 +41,7 @@ type LocationFormValues = z.infer<typeof formSchema>;
 interface CreateLocationFormProps extends CreateModeProps<LocationCreateInput> {
   location?: never;
   initialName?: string;
+  initialParent?: LocationOut;
   onCreate: (data: LocationCreateInput) => Promise<LocationOut>; // Modified to return Promise
 }
 
@@ -68,6 +68,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
   // Get the location entity in edit mode
   const location = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
+  const initialParent = mode === "create" ? props.initialParent : undefined;
 
   // Initialize form with default values or existing location data
   const form = useForm<LocationFormValues>({
@@ -77,9 +78,14 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       type: location ? location.type : "room",
       parent: location?.parent
         ? buildLocationComboboxItem(location.parent)
-        : null,
+        : initialParent
+          ? buildLocationComboboxItem(initialParent)
+          : null,
     },
   });
+
+  // Watch name field to pass to TypeFieldWithAI for AI suggestions
+  const nameValue = form.watch("name");
 
   const handleSubmit = async (values: LocationFormValues) => {
     if (mode === "create") {
@@ -152,13 +158,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
           nullable={false}
         />
 
-        <SelectField
-          form={form}
-          name="type"
-          label="Type"
-          options={locationTypeOptionsWithTheme}
-          placeholder="Select a location type"
-        />
+        <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
       </SideBySideFields>
 
       <ComboboxFieldWithSearch
