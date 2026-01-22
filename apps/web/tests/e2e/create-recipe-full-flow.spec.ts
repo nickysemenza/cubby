@@ -131,13 +131,16 @@ test.describe("Create Recipe - Full Flow", () => {
       .getByRole("button", { name: ingredientName, exact: true })
       .click();
 
-    // Add amount (2 cups)
-    await page.getByLabel("Amount Value").fill("2");
+    // Add amount (2 cups) - wait for fields to be ready after ingredient selection
+    const amountValue = page.getByLabel("Amount Value");
+    await expect(amountValue).toBeVisible({ timeout: 5000 });
+    await amountValue.fill("2");
     await page.getByRole("textbox", { name: "Amount Unit" }).fill("cups");
 
     // Add instruction
     await page.getByRole("button", { name: /Add Instruction/i }).click();
     const instructionInput = page.getByRole("textbox", { name: "Step" });
+    await expect(instructionInput).toBeVisible({ timeout: 5000 });
     const instruction =
       faker.lorem.sentence() +
       ` Make sure to use the ${ingredientName} as the main ingredient.`;

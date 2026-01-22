@@ -38,11 +38,12 @@ test.describe("Bulk Move Inventory - Transfer", () => {
     });
     await page.getByRole("button", { name: sourceName }).click();
 
-    // Wait for items to load
+    // Wait for items to load (checkbox only appears after items load)
     await expect(page.getByText(`Items at ${sourceName}`)).toBeVisible();
 
     // Select the item checkbox
     const checkbox = page.getByRole("checkbox").first();
+    await expect(checkbox).toBeVisible({ timeout: 10000 });
     await checkbox.click();
 
     // Select target location (aria-label is lowercase)

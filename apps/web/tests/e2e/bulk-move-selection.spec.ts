@@ -41,9 +41,9 @@ test.describe("Bulk Move Inventory - Selection", () => {
     });
     await page.getByRole("button", { name: sourceName }).click();
 
-    // Should show items at the source location
+    // Should show items at the source location (wait for items to load)
     await expect(page.getByText(`Items at ${sourceName}`)).toBeVisible();
-    await expect(page.getByText(productName)).toBeVisible();
+    await expect(page.getByText(productName)).toBeVisible({ timeout: 10000 });
   });
 
   test("can select and deselect all items", async ({ page }) => {
@@ -78,11 +78,13 @@ test.describe("Bulk Move Inventory - Selection", () => {
     });
     await page.getByRole("button", { name: sourceName }).click();
 
-    // Wait for items
+    // Wait for items to load (Select All button only appears when items exist)
     await expect(page.getByText(`Items at ${sourceName}`)).toBeVisible();
+    const selectAllButton = page.getByRole("button", { name: /Select All/i });
+    await expect(selectAllButton).toBeVisible({ timeout: 10000 });
 
     // Click Select All
-    await page.getByRole("button", { name: /Select All/i }).click();
+    await selectAllButton.click();
 
     // Button should now say Deselect All
     await expect(
