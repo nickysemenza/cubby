@@ -4,10 +4,6 @@
 
 Remaining optimizations to reduce verbosity in our Drizzle implementation while maintaining type safety and the opaque Database pattern.
 
-**Completed:**
-- Phase 3: Relation Loaders (`relations` object in database-helpers.ts)
-- Phase 5: Transaction Helpers (`insertAndReturn`, `batchInsert`, `updateAndReturn`)
-
 ## Phase 1: Query Builder Helpers (NOT DONE)
 
 ### Current Problem
