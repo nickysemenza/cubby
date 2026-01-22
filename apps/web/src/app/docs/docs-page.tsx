@@ -49,16 +49,14 @@ export function DocsPage() {
   return (
     <>
       <Prose>
-        <h1>RecipeHub Documentation</h1>
+        <h1>cubby Documentation</h1>
         <p>
-          RecipeHub helps you organize recipes, track ingredients, manage
-          inventory, and keep everything in its place.
+          cubby helps you organize recipes, track ingredients, manage inventory,
+          and keep everything in its place.
         </p>
 
         <h2>Core Concepts</h2>
-        <p>
-          RecipeHub is built around five key entity types that work together:
-        </p>
+        <p>cubby is built around five key entity types that work together:</p>
       </Prose>
 
       <div className="my-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -235,8 +233,8 @@ export function DocsPage() {
       <Prose>
         <h2>Component Demos</h2>
         <p>
-          Below are key view-only UI components used throughout RecipeHub,
-          rendered with static sample data.
+          Below are key view-only UI components used throughout cubby, rendered
+          with static sample data.
         </p>
       </Prose>
 

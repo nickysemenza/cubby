@@ -4,8 +4,8 @@ import {
   fdcIdParam,
   listFoodsQuery,
   listFoodsResponse,
-} from "@recipehub/usda-contract";
-import { foodLookupParam, foodSummary } from "@recipehub/usda-schemas";
+} from "@cubby/usda-contract";
+import { foodLookupParam, foodSummary } from "@cubby/usda-schemas";
 import {
   findFoodByUpc,
   findFoodByNdb,

@@ -1,4 +1,4 @@
-# First-Class Mobile Experience for RecipeHub
+# First-Class Mobile Experience
 
 **Goal:** Transform the web app into an iOS-native-feeling experience with PWA, improved scanner, better performance, and touch-friendly UX.
 
@@ -18,8 +18,8 @@
 1. **manifest.json**
    ```json
    {
-     "name": "RecipeHub",
-     "short_name": "RecipeHub",
+     "name": "cubby",
+     "short_name": "cubby",
      "start_url": "/inventory/scanner",
      "display": "standalone",
      "background_color": "#ffffff",

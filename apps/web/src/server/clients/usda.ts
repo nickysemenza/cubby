@@ -1,11 +1,11 @@
-import { context, propagation } from "@opentelemetry/api";
-import { usdaContract } from "@recipehub/usda-contract";
+import { usdaContract } from "@cubby/usda-contract";
 import type {
   BrandedFoodInfo,
   DataType,
   FoodLookupParam,
   FoodSummary,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
+import { context, propagation } from "@opentelemetry/api";
 import { initClient } from "@ts-rest/core";
 import type { PaginationParams, SortParams } from "~/schemas/pagination";
 import { getTracer, TraceNames } from "~/server/tracing";
@@ -24,7 +24,7 @@ export class USDAClient {
     this.client = initClient(usdaContract, {
       baseUrl: this.baseUrl,
       baseHeaders: {
-        "user-agent": "recipehub",
+        "user-agent": "cubby",
         // Inject OpenTelemetry trace context for distributed tracing
         traceparent: () => getTraceHeaders().traceparent ?? "",
         tracestate: () => getTraceHeaders().tracestate ?? "",

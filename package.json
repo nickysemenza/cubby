@@ -1,5 +1,5 @@
 {
-  "name": "recipehub",
+  "name": "cubby",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.28.0",
@@ -16,7 +16,7 @@
     "test": "pnpm -r test",
     "test-ui": "vitest --ui",
     "test:e2e": "pnpm -r test:e2e",
-    "wasm": "wasm-pack build --scope recipehub --out-dir ../packages/wasm recipebridge",
+    "wasm": "wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge",
     "prepare": "husky"
   },
   "devDependencies": {

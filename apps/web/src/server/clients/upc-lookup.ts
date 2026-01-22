@@ -1,8 +1,8 @@
-import { context, propagation } from "@opentelemetry/api";
 import {
   type UPCLookupResponse,
   upcLookupResponseSchema,
-} from "@recipehub/upc-lookup/schemas";
+} from "@cubby/upc-lookup/schemas";
+import { context, propagation } from "@opentelemetry/api";
 import { getTracer, TraceNames } from "~/server/tracing";
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -16,7 +16,7 @@ export class UPCLookupClient {
 
   private getHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
-      "user-agent": "recipehub",
+      "user-agent": "cubby",
     };
 
     // Inject OpenTelemetry trace context for distributed tracing

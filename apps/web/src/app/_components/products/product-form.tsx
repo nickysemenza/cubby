@@ -1,5 +1,5 @@
+import { ndb, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ndb, upc } from "@recipehub/usda-schemas";
 import { Search } from "lucide-react";
 import { type FC, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";

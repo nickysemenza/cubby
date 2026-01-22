@@ -3,7 +3,7 @@
  * Includes DB-to-API transformations and lookup utilities.
  */
 
-import { type FoodLookupParam, foodLookupParam } from "@recipehub/usda-schemas";
+import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 import type { z } from "zod";
 
 import { parseWithContext } from "~/lib/zod-utils";

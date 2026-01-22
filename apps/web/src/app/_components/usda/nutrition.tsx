@@ -1,4 +1,4 @@
-import type { NutrientSummary, NutritionInfo } from "@recipehub/usda-schemas";
+import type { NutrientSummary, NutritionInfo } from "@cubby/usda-schemas";
 import {
   createColumnHelper,
   getCoreRowModel,

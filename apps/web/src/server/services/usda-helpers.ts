@@ -2,7 +2,7 @@ import {
   type FoodLookupParam,
   type FoodSummary,
   foodLookupParam,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
 import type { USDAClient } from "../clients/usda";
 
 /**

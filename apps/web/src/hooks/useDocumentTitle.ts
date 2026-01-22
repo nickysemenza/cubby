@@ -5,7 +5,7 @@ import { useEffect } from "react";
  */
 export const useDocumentTitle = (
   title: string | undefined,
-  suffix = "RecipeHub",
+  suffix = "cubby",
 ) => {
   useEffect(() => {
     const previousTitle = document.title;

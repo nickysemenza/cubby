@@ -1,4 +1,4 @@
-import type { RichItem } from "@recipehub/recipebridge";
+import type { RichItem } from "@cubby/recipebridge";
 import { assertNever } from "~/lib/assert";
 import { tryFormatAmount } from "../inventory/format-amount";
 

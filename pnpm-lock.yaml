@@ -120,10 +120,10 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.38.0
         version: 1.38.0
-      '@recipehub/usda-contract':
+      '@cubby/usda-contract':
         specifier: workspace:*
         version: link:../../packages/usda-contract
-      '@recipehub/usda-schemas':
+      '@cubby/usda-schemas':
         specifier: workspace:*
         version: link:../../packages/usda-schemas
       '@scalar/hono-api-reference':
@@ -250,16 +250,16 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.38.0
         version: 1.38.0
-      '@recipehub/recipebridge':
+      '@cubby/recipebridge':
         specifier: workspace:*
         version: link:../../packages/wasm
-      '@recipehub/upc-lookup':
+      '@cubby/upc-lookup':
         specifier: workspace:*
         version: link:../upc-lookup
-      '@recipehub/usda-contract':
+      '@cubby/usda-contract':
         specifier: workspace:*
         version: link:../../packages/usda-contract
-      '@recipehub/usda-schemas':
+      '@cubby/usda-schemas':
         specifier: workspace:*
         version: link:../../packages/usda-schemas
       '@sentry/tanstackstart-react':
@@ -521,7 +521,7 @@ importers:
 
   packages/usda-contract:
     dependencies:
-      '@recipehub/usda-schemas':
+      '@cubby/usda-schemas':
         specifier: workspace:*
         version: link:../usda-schemas
       '@ts-rest/core':

@@ -1,4 +1,4 @@
-import { foodSummary } from "@recipehub/usda-schemas";
+import { foodSummary } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { imageOut } from "./image";
 import { ingredientOut } from "./ingredient";

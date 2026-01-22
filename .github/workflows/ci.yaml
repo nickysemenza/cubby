@@ -131,7 +131,7 @@ jobs:
 
       - name: Push database schema
         if: matrix.package.needs-db
-        run: pnpm --filter @recipehub/web db:push
+        run: pnpm --filter @cubby/web db:push
 
       - name: Create test results directory
         run: mkdir -p ${{ matrix.package.path }}/test-results
@@ -205,7 +205,7 @@ jobs:
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
       - name: Push schema to database
-        run: pnpm --filter @recipehub/web db:push
+        run: pnpm --filter @cubby/web db:push
 
       - name: Cache Playwright browsers
         uses: actions/cache@v5
@@ -271,7 +271,7 @@ jobs:
         with:
           download-wasm: 'true'
       - name: Build web app
-        run: pnpm --filter @recipehub/web build
+        run: pnpm --filter @cubby/web build
         env:
           NODE_ENV: production
 

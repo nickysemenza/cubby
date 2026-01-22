@@ -1,5 +1,5 @@
-import { upcLookupResponseSchema } from "@recipehub/upc-lookup/schemas";
-import { upc } from "@recipehub/usda-schemas";
+import { upcLookupResponseSchema } from "@cubby/upc-lookup/schemas";
+import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 

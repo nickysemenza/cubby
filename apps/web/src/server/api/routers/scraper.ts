@@ -1,4 +1,4 @@
-import type { WCompactRecipe } from "@recipehub/recipebridge";
+import type { WCompactRecipe } from "@cubby/recipebridge";
 import type { CompactRecipe } from "~/codec/codec";
 import { wasm } from "~/lib/wasm";
 

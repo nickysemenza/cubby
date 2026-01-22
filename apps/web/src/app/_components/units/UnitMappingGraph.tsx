@@ -1,4 +1,4 @@
-import type { WUnitMapping } from "@recipehub/recipebridge";
+import type { WUnitMapping } from "@cubby/recipebridge";
 import React, { lazy, Suspense, useMemo } from "react";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";

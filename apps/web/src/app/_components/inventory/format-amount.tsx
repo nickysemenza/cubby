@@ -1,4 +1,4 @@
-import type { WAmount } from "@recipehub/recipebridge";
+import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "~/codec/codec";
 import {
   Tooltip,

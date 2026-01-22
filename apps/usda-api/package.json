@@ -1,5 +1,5 @@
 {
-  "name": "@recipehub/usda-api",
+  "name": "@cubby/usda-api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -35,8 +35,8 @@
     "@opentelemetry/sdk-node": "^0.208.0",
     "@opentelemetry/sdk-trace-node": "^2.2.0",
     "@opentelemetry/semantic-conventions": "^1.38.0",
-    "@recipehub/usda-contract": "workspace:*",
-    "@recipehub/usda-schemas": "workspace:*",
+    "@cubby/usda-contract": "workspace:*",
+    "@cubby/usda-schemas": "workspace:*",
     "@scalar/hono-api-reference": "^0.9.28",
     "@ts-rest/core": "3.53.0-rc.1",
     "@ts-rest/open-api": "3.53.0-rc.1",

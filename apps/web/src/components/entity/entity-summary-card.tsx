@@ -1,7 +1,4 @@
-import {
-  getNutrientDisplayName,
-  getNutrientUnit,
-} from "@recipehub/usda-schemas";
+import { getNutrientDisplayName, getNutrientUnit } from "@cubby/usda-schemas";
 import * as React from "react";
 import { z } from "zod";
 import type { SummaryItem } from "~/app/_components/SummaryCard";

@@ -18,7 +18,7 @@
     "src/routeTree.gen.ts"
   ],
   "ignoreDependencies": [
-    "@recipehub/.+",
+    "@cubby/.+",
     "@testing-library/.+",
     "@vitest/.+",
     "@tailwindcss/postcss",

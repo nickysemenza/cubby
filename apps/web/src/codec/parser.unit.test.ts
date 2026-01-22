@@ -3,7 +3,7 @@ import {
   format_amount,
   is_valid_unit,
   parse_ingredient,
-} from "@recipehub/recipebridge";
+} from "@cubby/recipebridge";
 import { beforeAll, expect, test } from "vitest";
 import { ensureWasm } from "~/lib/wasm";
 import { parseCompactRecipe } from "./parser";

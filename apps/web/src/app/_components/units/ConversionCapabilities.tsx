@@ -1,4 +1,4 @@
-import type { AmountKind } from "@recipehub/recipebridge";
+import type { AmountKind } from "@cubby/recipebridge";
 import { ArrowLeftRight } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Badge } from "~/components/ui/badge";

@@ -1,5 +1,5 @@
+import type { AmountKind, WAmount } from "@cubby/recipebridge";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { AmountKind, WAmount } from "@recipehub/recipebridge";
 import { Scale } from "lucide-react";
 import * as React from "react";
 import { useId, useState } from "react";

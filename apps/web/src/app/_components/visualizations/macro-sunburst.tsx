@@ -1,4 +1,4 @@
-import { TIER1_NUTRIENTS } from "@recipehub/usda-schemas";
+import { TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useMemo, useRef, useState } from "react";

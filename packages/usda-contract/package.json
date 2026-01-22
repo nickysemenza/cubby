@@ -1,5 +1,5 @@
 {
-  "name": "@recipehub/usda-contract",
+  "name": "@cubby/usda-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,7 +16,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@recipehub/usda-schemas": "workspace:*",
+    "@cubby/usda-schemas": "workspace:*",
     "@ts-rest/core": "3.53.0-rc.1",
     "zod": "^4.2.0"
   },

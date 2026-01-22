@@ -213,7 +213,7 @@ Uses SQLite FTS5 for fast food search:
 
 ### Response Format
 
-All food endpoints return complete food information validated by Zod and defined in the shared contract `@recipehub/usda-contract`:
+All food endpoints return complete food information validated by Zod and defined in the shared contract `@cubby/usda-contract`:
 
 ```json
 {

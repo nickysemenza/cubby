@@ -18,7 +18,7 @@ import {
   closeAllConnections,
 } from "./db/client";
 import foodRoutes from "./routes/foods";
-import { countsSchema, errorSchema } from "@recipehub/usda-contract";
+import { countsSchema, errorSchema } from "@cubby/usda-contract";
 import { openApiDocument } from "./openapi";
 import { trace, context } from "@opentelemetry/api";
 

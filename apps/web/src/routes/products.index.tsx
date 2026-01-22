@@ -12,7 +12,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/products/")({
   validateSearch: searchSchema,
   component: ProductsPage,
-  head: () => ({ meta: [{ title: "Products | RecipeHub" }] }),
+  head: () => ({ meta: [{ title: "Products | cubby" }] }),
 });
 
 function ProductsPage() {

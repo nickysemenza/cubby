@@ -79,22 +79,22 @@ This pattern is built into `useEntityList` - no additional code needed for list 
 
 Use these instead of inline patterns:
 
-| Pattern to avoid | Use instead | Import from |
-|-----------------|-------------|-------------|
-| Inline deletable config object | `useDeletableConfig({ ... })` | `~/app/_components/hooks/useDeletableConfig` |
-| Inline update mutation with `useMemo` + `useMutation` | `useUpdateMutation({ ... })` | `~/app/_components/hooks/useUpdateMutation` |
-| `error instanceof Error ? error.message : "Unknown error"` | `getErrorMessage(error)` | `~/lib/error-utils` |
-| Manual `.insert().values().returning()` + null check | `insertAndReturn(db, table, values)` | `~/server/repo/database-helpers` |
-| Manual `.update().set().where().returning()` + null check | `updateAndReturn(db, table, values, where)` | `~/server/repo/database-helpers` |
-| `getDb(db).transaction(async (tx) => {...})` | `withTransaction(db, async (tx) => {...})` | `~/server/repo/database-helpers` |
-| `ilike(column, \`%${term}%\`)` | `formatSearchTerm(column, term)` | `~/server/repo/database-helpers` |
-| `isNull(table.deletedAt)` | `notDeleted(table)` | `~/server/repo/database-helpers` |
-| `ComboboxItem.refine()` for required product | `requiredProductField` | `~/schemas/form-fields` |
-| `ComboboxItem.refine()` for required location | `requiredLocationField` | `~/schemas/form-fields` |
-| `as ProductId`, `as LocationId`, etc. | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers` |
-| Inline `["inventoryItem"]` query keys | `queryKeys.inventoryItem.list` | `~/lib/query-keys` |
-| `Array.from(new Set(arr))` or `[...new Set(arr)]` | `dedupe(arr)` | `~/misc/array-helpers` |
-| `value === "(unspecified)"` | `isUnspecifiedManufacturer(value)` | `~/lib/manufacturer-utils` |
+| Pattern to avoid                                           | Use instead                                     | Import from                                  |
+| ---------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------- |
+| Inline deletable config object                             | `useDeletableConfig({ ... })`                   | `~/app/_components/hooks/useDeletableConfig` |
+| Inline update mutation with `useMemo` + `useMutation`      | `useUpdateMutation({ ... })`                    | `~/app/_components/hooks/useUpdateMutation`  |
+| `error instanceof Error ? error.message : "Unknown error"` | `getErrorMessage(error)`                        | `~/lib/error-utils`                          |
+| Manual `.insert().values().returning()` + null check       | `insertAndReturn(db, table, values)`            | `~/server/repo/database-helpers`             |
+| Manual `.update().set().where().returning()` + null check  | `updateAndReturn(db, table, values, where)`     | `~/server/repo/database-helpers`             |
+| `getDb(db).transaction(async (tx) => {...})`               | `withTransaction(db, async (tx) => {...})`      | `~/server/repo/database-helpers`             |
+| `ilike(column, \`%${term}%\`)`                             | `formatSearchTerm(column, term)`                | `~/server/repo/database-helpers`             |
+| `isNull(table.deletedAt)`                                  | `notDeleted(table)`                             | `~/server/repo/database-helpers`             |
+| `ComboboxItem.refine()` for required product               | `requiredProductField`                          | `~/schemas/form-fields`                      |
+| `ComboboxItem.refine()` for required location              | `requiredLocationField`                         | `~/schemas/form-fields`                      |
+| `as ProductId`, `as LocationId`, etc.                      | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers`                      |
+| Inline `["inventoryItem"]` query keys                      | `queryKeys.inventoryItem.list`                  | `~/lib/query-keys`                           |
+| `Array.from(new Set(arr))` or `[...new Set(arr)]`          | `dedupe(arr)`                                   | `~/misc/array-helpers`                       |
+| `value === "(unspecified)"`                                | `isUnspecifiedManufacturer(value)`              | `~/lib/manufacturer-utils`                   |
 
 ## Authentication (Better-Auth)
 
@@ -107,10 +107,10 @@ Use these instead of inline patterns:
 
 ## Product Types
 
-| Type | Example | Characteristics |
-|------|---------|-----------------|
-| **Specific Item** | "Kraft Macaroni & Cheese" | Has UPC, manufacturer, price, nutrition. Created via barcode scan. |
-| **Misc Collection** | "misc:random cables" | Opaque placeholder. Just a name, no details. Prefix with `misc:`. |
+| Type                | Example                   | Characteristics                                                    |
+| ------------------- | ------------------------- | ------------------------------------------------------------------ |
+| **Specific Item**   | "Kraft Macaroni & Cheese" | Has UPC, manufacturer, price, nutrition. Created via barcode scan. |
+| **Misc Collection** | "misc:random cables"      | Opaque placeholder. Just a name, no details. Prefix with `misc:`.  |
 
 ## Unit Conversion (WASM)
 
@@ -122,8 +122,8 @@ Use these instead of inline patterns:
 
 ## USDA Integration
 
-- **Contract**: `@recipehub/usda-contract` defines endpoints with Zod schemas (ts-rest)
-- **Schemas**: `@recipehub/usda-schemas` for shared entity types
+- **Contract**: `@cubby/usda-contract` defines endpoints with Zod schemas (ts-rest)
+- **Schemas**: `@cubby/usda-schemas` for shared entity types
 - **Client**: `src/server/clients/usda.ts` wraps ts-rest client
 
 Usage:

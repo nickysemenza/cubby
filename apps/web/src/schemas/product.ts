@@ -1,4 +1,4 @@
-import { ndb, upc } from "@recipehub/usda-schemas";
+import { ndb, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { dbTimestampsOut } from "./common";

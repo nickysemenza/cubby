@@ -6,7 +6,7 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { upc } from "@recipehub/usda-schemas";
+import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { getErrorMessage } from "~/lib/error-utils";

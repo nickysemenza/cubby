@@ -1,4 +1,4 @@
-import { foodLookupParam, foodSummary } from "@recipehub/usda-schemas";
+import { foodLookupParam, foodSummary } from "@cubby/usda-schemas";
 import type { z } from "zod";
 import { productWithIngredientAndInventoryAndMappingsOut } from "~/schemas/combo";
 import type { ActorContext } from "~/schemas/context";

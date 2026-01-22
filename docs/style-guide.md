@@ -1,4 +1,4 @@
-# RecipeHub Style Guide
+# Style Guide
 
 This document establishes CSS/Tailwind conventions for consistent, maintainable styling across the codebase.
 

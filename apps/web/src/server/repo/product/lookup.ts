@@ -3,7 +3,7 @@
  * Find products by various identifiers (UPC, name, manufacturer).
  */
 
-import { type FoodLookupParam, foodLookupParam } from "@recipehub/usda-schemas";
+import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 import { and, eq, ilike } from "drizzle-orm";
 
 import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";

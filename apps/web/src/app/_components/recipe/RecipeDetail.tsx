@@ -1,4 +1,4 @@
-import { getNutrientValueByKey } from "@recipehub/usda-schemas";
+import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useQueries } from "@tanstack/react-query";
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";

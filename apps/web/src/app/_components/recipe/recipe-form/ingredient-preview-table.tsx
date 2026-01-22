@@ -1,4 +1,4 @@
-import type { WAmount, WIngredient } from "@recipehub/recipebridge";
+import type { WAmount, WIngredient } from "@cubby/recipebridge";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";

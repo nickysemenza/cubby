@@ -1,4 +1,4 @@
-import { dataTypeEnum, foodLookupParam } from "@recipehub/usda-schemas";
+import { dataTypeEnum, foodLookupParam } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
 import {

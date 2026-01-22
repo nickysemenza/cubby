@@ -1,10 +1,10 @@
-import type { AmountKind, WAmount } from "@recipehub/recipebridge";
+import type { AmountKind, WAmount } from "@cubby/recipebridge";
 import {
   getNutrientUnitString,
   type NutrientKey,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
 import type { Amount } from "~/codec/codec";
 import { wasm } from "~/lib/wasm";
 import { type Result, withFailure, withSuccess } from "~/misc/result-types";

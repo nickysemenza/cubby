@@ -1,4 +1,4 @@
-import { getNutrientValueByKey } from "@recipehub/usda-schemas";
+import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useQueries } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Plus, X } from "lucide-react";
@@ -25,7 +25,7 @@ const searchParamsSchema = z.object({
 export const Route = createFileRoute("/recipes/compare")({
   validateSearch: searchParamsSchema.parse,
   component: RecipeComparePage,
-  head: () => ({ meta: [{ title: "Compare Recipes | RecipeHub" }] }),
+  head: () => ({ meta: [{ title: "Compare Recipes | cubby" }] }),
 });
 
 /** Get effective servings: explicit servings, or yield value if unit is "servings" */

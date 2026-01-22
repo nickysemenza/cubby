@@ -1,6 +1,6 @@
 # R2 Recipe Sync Design
 
-Two-way sync for recipes between RecipeHub and Cloudflare R2, similar to the existing Google Sheets inventory sync.
+Two-way sync for recipes between cubby and Cloudflare R2, similar to the existing Google Sheets inventory sync.
 
 ## Goals
 
@@ -49,7 +49,7 @@ pub struct RecipeSection {
 
 **Why metadata map instead of explicit fields:**
 - Add new fields in TypeScript without WASM rebuild
-- `shortcode` is a RecipeHub sync concern, not ingredient-parser
+- `shortcode` is a cubby sync concern, not ingredient-parser
 - Rust just parses/serializes markdown structure
 
 ### WASM Exports

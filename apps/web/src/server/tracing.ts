@@ -5,7 +5,7 @@ import { trace } from "@opentelemetry/api";
 import { getErrorMessage } from "~/lib/error-utils";
 
 // Single tracer instance for the entire application
-const tracer = trace.getTracer("recipehub");
+const tracer = trace.getTracer("cubby");
 
 /**
  * Unified trace naming conventions

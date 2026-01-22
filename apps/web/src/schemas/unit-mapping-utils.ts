@@ -1,4 +1,4 @@
-import type { WUnitMapping } from "@recipehub/recipebridge";
+import type { WUnitMapping } from "@cubby/recipebridge";
 import {
   type BrandedFoodServingSizeUnit,
   branded_food_serving_size_unit,
@@ -7,7 +7,7 @@ import {
   getNutrientUnitString,
   isTier1Nutrient,
   type NutrientKey,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
 import { wasm } from "~/lib/wasm";
 import type { UnitMapping } from "./unitmapping";
 

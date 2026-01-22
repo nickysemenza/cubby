@@ -1,4 +1,4 @@
-import type { AmountKind } from "@recipehub/recipebridge";
+import type { AmountKind } from "@cubby/recipebridge";
 import type { LucideIcon } from "lucide-react";
 import {
   DollarSign,

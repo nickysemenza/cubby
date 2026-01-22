@@ -1,4 +1,4 @@
-import { getNutrientValueByKey } from "@recipehub/usda-schemas";
+import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink, Scale } from "lucide-react";

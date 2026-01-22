@@ -1,7 +1,7 @@
 import { generateOpenApi } from "@ts-rest/open-api";
 import type { SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
-import { usdaContract } from "@recipehub/usda-contract";
+import { usdaContract } from "@cubby/usda-contract";
 
 // Zod 4 synchronous transformer implementation
 export const ZOD_4_TRANSFORMER: SchemaTransformerSync = ({ schema }) => {

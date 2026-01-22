@@ -8,10 +8,10 @@
 import { flatten } from "flat";
 import { getTracer, TraceNames } from "~/server/tracing";
 
-type WasmType = typeof import("@recipehub/recipebridge");
+type WasmType = typeof import("@cubby/recipebridge");
 
 // Load WASM at module initialization (Vite handles top-level await)
-const instance: WasmType = await import("@recipehub/recipebridge");
+const instance: WasmType = await import("@cubby/recipebridge");
 
 /** For tests - now a no-op since WASM loads at module init */
 export const ensureWasm = (): Promise<void> => Promise.resolve();

@@ -1,9 +1,9 @@
-import type { Span } from "@opentelemetry/api";
 import type {
   DataType,
   FoodLookupParam,
   FoodSummary,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
+import type { Span } from "@opentelemetry/api";
 import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
 import type { PaginationParams, SortParams } from "~/schemas/pagination";
 import type { ProductTopLevelOut } from "~/schemas/product";

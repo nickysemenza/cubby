@@ -3,7 +3,7 @@ import {
   getNutrientUnit,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
 
 // Priority order for display - show macros first, then minerals, then vitamins
 const DISPLAY_ORDER = [

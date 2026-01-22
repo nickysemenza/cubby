@@ -7,7 +7,7 @@ import {
   type nutrient_unit_name,
   type DataType,
   TIER1_CODES,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
 import { foodSearch } from "./types";
 
 // Drizzle prepared statements for better performance and type safety

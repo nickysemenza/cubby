@@ -1,5 +1,5 @@
 {
-  "name": "@recipehub/web",
+  "name": "@cubby/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -53,10 +53,10 @@
     "@opentelemetry/sdk-node": "^0.208.0",
     "@opentelemetry/sdk-trace-base": "^2.2.0",
     "@opentelemetry/semantic-conventions": "^1.38.0",
-    "@recipehub/recipebridge": "workspace:*",
-    "@recipehub/upc-lookup": "workspace:*",
-    "@recipehub/usda-contract": "workspace:*",
-    "@recipehub/usda-schemas": "workspace:*",
+    "@cubby/recipebridge": "workspace:*",
+    "@cubby/upc-lookup": "workspace:*",
+    "@cubby/usda-contract": "workspace:*",
+    "@cubby/usda-schemas": "workspace:*",
     "@sentry/tanstackstart-react": "^10.34.0",
     "@t3-oss/env-core": "^0.13.8",
     "@tailwindcss/vite": "^4.0.6",

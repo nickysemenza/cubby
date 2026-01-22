@@ -1,4 +1,4 @@
-import { type DataType, dataTypeEnum } from "@recipehub/usda-schemas";
+import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
 import { createColumnHelper } from "@tanstack/react-table";
 import { useQueryWithTiming } from "~/hooks/useQueryWithTiming";
 import type { Flatten } from "~/misc/array-helpers";

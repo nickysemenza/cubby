@@ -58,7 +58,7 @@ export const initOpenTelemetry = () => {
 
     const sdk = new NodeSDK({
       resource: resourceFromAttributes({
-        [ATTR_SERVICE_NAME]: "recipehub",
+        [ATTR_SERVICE_NAME]: "cubby",
         [ATTR_SERVICE_VERSION]: "1.0.0",
       }),
       traceExporter: new OTLPTraceExporter({
@@ -99,4 +99,4 @@ export const initOpenTelemetry = () => {
 export { getTracer, TraceNames, withTrace } from "./server/tracing";
 
 // Export a function to get the current tracer
-export const getInstrumentationTracer = () => trace.getTracer("recipehub");
+export const getInstrumentationTracer = () => trace.getTracer("cubby");

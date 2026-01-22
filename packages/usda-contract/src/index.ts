@@ -11,7 +11,7 @@ import {
   type FoodPortion,
   type BrandedFoodInfo,
   type LegacyFoodInfo,
-} from "@recipehub/usda-schemas";
+} from "@cubby/usda-schemas";
 
 // API-specific schemas (compose from shared)
 export const countsSchema = z.object({
