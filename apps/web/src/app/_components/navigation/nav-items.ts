@@ -19,17 +19,18 @@ export type NavItem = {
 
 // Define each item once
 const scan: NavItem = {
-  href: "/inventory/scanner",
+  href: "/inventory/quick-capture?scanner=true",
   label: "Scan",
   icon: ScanBarcode,
-  isActive: (p) => p === "/inventory/scanner",
+  isActive: (p) =>
+    p === "/inventory/quick-capture" && p.includes("scanner=true"),
 };
 
 const inventory: NavItem = {
   href: "/inventory",
   label: "Inventory",
   icon: entities.inventory.lucideIcon,
-  isActive: (p) => p.startsWith("/inventory") && p !== "/inventory/scanner",
+  isActive: (p) => p.startsWith("/inventory") && !p.includes("scanner=true"),
 };
 
 const locations: NavItem = {

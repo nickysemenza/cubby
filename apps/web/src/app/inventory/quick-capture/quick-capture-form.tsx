@@ -17,8 +17,15 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, Plus, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  ScanBarcode,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -36,6 +43,8 @@ import {
 } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
+import { useUpcLookup } from "~/app/_components/inventory/hooks";
+import { PersistentScanner } from "~/app/_components/inventory/persistent-scanner";
 import { RecentLocations } from "~/app/_components/inventory/recent-locations";
 import {
   LocationBreadcrumb,
@@ -46,7 +55,9 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Empty, EmptyTitle } from "~/components/ui/empty";
 import { Kbd } from "~/components/ui/kbd";
+import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
+import { Switch } from "~/components/ui/switch";
 import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
@@ -68,18 +79,30 @@ const quickCaptureFormSchema = z.object({
 
 type QuickCaptureFormValues = z.input<typeof quickCaptureFormSchema>;
 
+interface RecentScanItem {
+  id: string;
+  productName: string;
+  timestamp: Date;
+}
+
 interface QuickCaptureFormProps {
   initialLocationId?: string;
+  /** Start with persistent scanner mode enabled */
+  initialScannerMode?: boolean;
 }
 
 export default function QuickCaptureForm({
   initialLocationId,
+  initialScannerMode = false,
 }: QuickCaptureFormProps) {
   const api = useTRPC();
+  const scannerToggleId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const [showInventory, setShowInventory] = useState(true);
+  const [scannerEnabled, setScannerEnabled] = useState(initialScannerMode);
+  const [recentScans, setRecentScans] = useState<RecentScanItem[]>([]);
   const queryClient = useQueryClient();
 
   // Initialize the form
@@ -188,7 +211,7 @@ export default function QuickCaptureForm({
     }),
   );
 
-  // Handle barcode scan for a specific item index
+  // Handle barcode scan for a specific item index (row scanner button)
   const handleBarcodeScan = useCallback(
     async (barcode: string, index: number) => {
       try {
@@ -208,6 +231,61 @@ export default function QuickCaptureForm({
     },
     [findOrCreateByUPCMutation, form],
   );
+
+  // Inventory create mutation for persistent scanner mode
+  const createInventoryMutation = useMutation(
+    api.inventory.create.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: [queryKeys.inventory.list],
+        });
+      },
+    }),
+  );
+
+  // UPC lookup for persistent scanner
+  const { lookupUpc, isPending: isUpcPending } = useUpcLookup();
+
+  // Handle persistent scanner barcode scan (directly creates inventory)
+  const handlePersistentScan = useCallback(
+    async (barcode: string) => {
+      const focusedItem = items[focusedRowIndex];
+      const locationId = getOptionalLocationId(focusedItem?.location);
+
+      if (!locationId) {
+        toast.error("Select a location first");
+        return;
+      }
+
+      const product = await lookupUpc(barcode);
+      if (!product) return;
+
+      try {
+        await createInventoryMutation.mutateAsync({
+          productId: product.id as ProductId,
+          locationId,
+          amount: { value: 1, unit: "each" },
+        });
+
+        // Add to recent scans
+        setRecentScans((prev) => [
+          {
+            id: crypto.randomUUID(),
+            productName: product.name,
+            timestamp: new Date(),
+          },
+          ...prev.slice(0, 9),
+        ]);
+
+        toast.success(`Added: ${product.name}`);
+      } catch (err) {
+        toast.error(`Failed to add: ${getErrorMessage(err)}`);
+      }
+    },
+    [items, focusedRowIndex, lookupUpc, createInventoryMutation],
+  );
+
+  const isScannerPending = isUpcPending || createInventoryMutation.isPending;
 
   // Submit handler
   const onSubmit = useCallback(
@@ -327,6 +405,76 @@ export default function QuickCaptureForm({
       isPending={isSubmitting}
       submitButtonText={getSubmitButtonText("create", isSubmitting)}
     >
+      {/* Persistent Scanner Mode Toggle */}
+      <Card className="mb-4">
+        <CardContent className="pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Switch
+                id={scannerToggleId}
+                checked={scannerEnabled}
+                onCheckedChange={setScannerEnabled}
+              />
+              <Label
+                htmlFor={scannerToggleId}
+                className="flex items-center gap-2"
+              >
+                <ScanBarcode className="h-4 w-4" />
+                Persistent Scanner
+              </Label>
+            </div>
+            {scannerEnabled && !focusedLocationId && (
+              <span className="text-muted-foreground text-sm">
+                Select a location below first
+              </span>
+            )}
+          </div>
+
+          {/* Persistent Scanner */}
+          {scannerEnabled && focusedLocationId && (
+            <div className="mt-4 space-y-3">
+              <PersistentScanner
+                onScan={handlePersistentScan}
+                enabled={!isScannerPending}
+              />
+
+              {/* Loading indicator */}
+              {isScannerPending && (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                  <Spinner />
+                  Looking up product...
+                </div>
+              )}
+
+              {/* Recent scans */}
+              {recentScans.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-medium text-sm">Recently Scanned</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {recentScans.slice(0, 5).map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-green-800 text-xs dark:bg-green-900/30 dark:text-green-400"
+                      >
+                        <Check className="h-3 w-3" />
+                        <span className="max-w-[120px] truncate">
+                          {item.productName}
+                        </span>
+                      </div>
+                    ))}
+                    {recentScans.length > 5 && (
+                      <span className="px-2 py-1 text-muted-foreground text-xs">
+                        +{recentScans.length - 5} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Location Context Section */}
       {focusedLocationId ? (
         <Card className="mb-4">
@@ -398,10 +546,12 @@ export default function QuickCaptureForm({
       )}
 
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-medium text-lg">Quick Inventory Capture</h3>
+        <h3 className="font-medium text-lg">
+          {scannerEnabled ? "Manual Entry" : "Add Items"}
+        </h3>
         <Button type="button" onClick={addInventoryItem} size="sm">
           <Plus className="mr-1 h-4 w-4" />
-          Add Item (Ctrl+N)
+          Add Row <Kbd className="ml-1">Ctrl+N</Kbd>
         </Button>
       </div>
 

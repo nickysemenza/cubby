@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Zap } from "lucide-react";
+import { Plus, ScanBarcode } from "lucide-react";
 import { Button } from "~/components/ui/button";
 
 export function InventoryActions() {
@@ -7,15 +7,18 @@ export function InventoryActions() {
     <>
       <Link to="/inventory/quick-capture">
         <Button variant="default">
-          <Zap className="mr-1 h-4 w-4" />
-          Quick Capture
+          <ScanBarcode className="mr-1 h-4 w-4" />
+          Add Inventory
         </Button>
       </Link>
       <Link to="/inventory/bulk-edit">
-        <Button variant="outline">Bulk Edit</Button>
+        <Button variant="outline">Inventory Audit</Button>
       </Link>
       <Link to="/inventory/new">
-        <Button variant="outline">Create New</Button>
+        <Button variant="outline">
+          <Plus className="mr-1 h-4 w-4" />
+          Single Item
+        </Button>
       </Link>
     </>
   );

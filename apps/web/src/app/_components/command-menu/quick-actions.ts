@@ -1,12 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import {
-  Barcode,
-  ChefHat,
-  MapPin,
-  Plus,
-  ScanBarcode,
-  Settings,
-} from "lucide-react";
+import { ChefHat, MapPin, Plus, ScanBarcode, Settings } from "lucide-react";
 
 export interface QuickAction {
   id: string;
@@ -18,18 +11,18 @@ export interface QuickAction {
 
 export const quickActions: QuickAction[] = [
   {
-    id: "scanner",
-    name: "Scanner",
-    path: "/inventory/scanner",
+    id: "add-inventory",
+    name: "Add Inventory",
+    path: "/inventory/quick-capture",
     icon: ScanBarcode,
-    keywords: ["barcode", "scan", "inventory"],
+    keywords: ["barcode", "scan", "inventory", "add", "fast", "capture"],
   },
   {
-    id: "quick-capture",
-    name: "Quick Capture",
-    path: "/inventory/quick-capture",
-    icon: Barcode,
-    keywords: ["add", "inventory", "fast"],
+    id: "scanner",
+    name: "Scanner Mode",
+    path: "/inventory/quick-capture?scanner=true",
+    icon: ScanBarcode,
+    keywords: ["barcode", "scan", "camera"],
   },
   {
     id: "add-product",

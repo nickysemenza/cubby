@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Barcode, type LucideIcon, Plus, ScanBarcode } from "lucide-react";
+import { type LucideIcon, Plus, ScanBarcode } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -39,16 +39,10 @@ export const quickActions: QuickAction[] = [
   { entity: "location" },
   { entity: "recipe" },
   {
-    label: "Scanner",
-    href: "/inventory/scanner",
-    icon: ScanBarcode,
-    description: "Quick scan & add",
-  },
-  {
-    label: "Quick Capture",
+    label: "Add Inventory",
     href: "/inventory/quick-capture",
-    icon: Barcode,
-    description: "Batch entry",
+    icon: ScanBarcode,
+    description: "Scan or batch entry",
   },
 ];
 

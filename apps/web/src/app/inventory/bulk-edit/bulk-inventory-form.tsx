@@ -2,7 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Plus, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -16,6 +16,8 @@ import {
   getSubmitButtonText,
 } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
+import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
+import { useUpcLookup } from "~/app/_components/inventory/hooks";
 import { Button } from "~/components/ui/button";
 import {
   amountField,
@@ -153,6 +155,24 @@ export default function BulkInventoryForm() {
     }),
   );
 
+  // UPC lookup for barcode scanning
+  const { lookupUpc, isPending: isUpcPending } = useUpcLookup();
+
+  // Handle barcode scan for a specific item index
+  const handleBarcodeScan = useCallback(
+    async (barcode: string, index: number) => {
+      const product = await lookupUpc(barcode);
+      if (product) {
+        form.setValue(
+          `items.${index}.product`,
+          buildProductComboboxItem(product),
+        );
+        toast.success(`Found: ${product.name}`);
+      }
+    },
+    [lookupUpc, form],
+  );
+
   // Submit handler
   const onSubmit = async (values: BulkInventoryFormValues) => {
     const location = values.location;
@@ -250,6 +270,11 @@ export default function BulkInventoryForm() {
                       unitPath={`items.${index}.amount.unit`}
                     />
                   </div>
+
+                  <BarcodeScannerButton
+                    onScan={(barcode) => handleBarcodeScan(barcode, index)}
+                    disabled={isUpcPending}
+                  />
 
                   <Button
                     type="button"

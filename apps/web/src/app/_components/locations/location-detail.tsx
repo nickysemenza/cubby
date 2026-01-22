@@ -135,8 +135,8 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               />
             </div>
             <Link
-              to="/inventory/scanner"
-              search={{ locationId: location.id }}
+              to="/inventory/quick-capture"
+              search={{ locationId: location.id, scanner: true }}
               className={cn(buttonVariants({ variant: "outline" }))}
             >
               <ScanBarcode className="mr-2 h-4 w-4" />

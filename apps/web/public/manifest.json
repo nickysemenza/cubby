@@ -9,7 +9,7 @@
       "sizes": "any"
     }
   ],
-  "start_url": "/inventory/scanner",
+  "start_url": "/inventory/quick-capture?scanner=true",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
