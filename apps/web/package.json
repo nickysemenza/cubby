@@ -91,7 +91,7 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "flat": "^6.0.1",
-    "googleapis": "^170.0.0",
+    "googleapis": "^171.0.0",
     "graphviz-react": "^1.2.5",
     "html5-qrcode": "^2.3.8",
     "json-edit-react": "^1.29.0",
