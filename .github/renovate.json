@@ -2,19 +2,12 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
   "schedule": ["every weekend"],
-  "prHourlyLimit": 5,
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 1,
   "packageRules": [
     {
       "matchUpdateTypes": ["minor", "pin"],
-      "matchDatasources": ["cargo"],
-      "groupName": "cargo minor and pin",
-      "automerge": true,
-      "groupSlug": "all-deps"
-    },
-    {
-      "matchUpdateTypes": ["minor", "pin"],
-      "matchDatasources": ["npm"],
-      "groupName": "npm minor and pin",
+      "groupName": "all minor and pin updates",
       "automerge": true,
       "groupSlug": "all-deps"
     },

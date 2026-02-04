@@ -4,7 +4,17 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.vscode/**'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - '.vscode/**'
+      - 'LICENSE'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -14,6 +24,23 @@ permissions:
   checks: write
   # https://github.com/dorny/test-reporter/issues/149
 jobs:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      aux-packages: ${{ steps.filter.outputs.aux-packages }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            aux-packages:
+              - 'apps/usda-api/**'
+              - 'apps/upc-lookup/**'
+              - 'packages/usda-contract/**'
+              - 'packages/usda-schemas/**'
+
   build-wasm:
     name: Build WASM
     runs-on: ubuntu-latest
@@ -66,39 +93,16 @@ jobs:
       - run: cd apps/web && npx knip --no-exit-code
         name: 'check for unused code with knip'
 
-  test-unit:
-    name: Unit Tests - ${{ matrix.package.name }}
+  test-unit-web:
+    name: Unit Tests - web
     needs: [build-wasm]
     runs-on: ubuntu-latest
     continue-on-error: true
-    strategy:
-      matrix:
-        package:
-          - name: web
-            path: apps/web
-            needs-db: true
-            needs-wasm: true
-          - name: usda-api
-            path: apps/usda-api
-            needs-db: false
-            needs-wasm: false
-          - name: usda-contract
-            path: packages/usda-contract
-            needs-db: false
-            needs-wasm: false
-          - name: usda-schemas
-            path: packages/usda-schemas
-            needs-db: false
-            needs-wasm: false
-          - name: upc-lookup
-            path: apps/upc-lookup
-            needs-db: false
-            needs-wasm: false
     outputs:
       test-passed: ${{ steps.test.outcome == 'success' }}
     services:
       postgres:
-        image: ${{ matrix.package.needs-db && 'postgres' || '' }}
+        image: postgres
         env:
           POSTGRES_USER: postgres
           POSTGRES_DB: recipehub
@@ -111,7 +115,7 @@ jobs:
         ports:
           - 5432:5432
       integresql:
-        image: ${{ matrix.package.needs-db && 'ghcr.io/allaboutapps/integresql:latest' || '' }}
+        image: ghcr.io/allaboutapps/integresql:latest
         ports:
           - 5000:5000
         env:
@@ -123,15 +127,67 @@ jobs:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-node-with-deps
         with:
-          download-wasm: ${{ matrix.package.needs-wasm && 'true' || 'false' }}
+          download-wasm: 'true'
 
       - name: Setup web environment
-        if: matrix.package.needs-db
         uses: ./.github/actions/setup-web-env
 
       - name: Push database schema
-        if: matrix.package.needs-db
         run: pnpm --filter @cubby/web db:push
+
+      - name: Create test results directory
+        run: mkdir -p apps/web/test-results
+
+      - name: Run tests for web
+        id: test
+        continue-on-error: true
+        run: |
+          cd apps/web
+          pnpm test --run --coverage --reporter=default --reporter=github-actions --reporter=junit --outputFile=test-results/vitest-junit.xml
+
+      - name: Publish Test Results
+        if: always()
+        uses: dorny/test-reporter@v2
+        with:
+          name: Unit Tests - web
+          path: apps/web/test-results/vitest-junit.xml
+          reporter: java-junit
+          fail-on-error: false
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: nickysemenza/recipehub
+          working-directory: apps/web
+          flags: web
+          name: web-coverage
+
+  test-unit-aux:
+    name: Unit Tests - ${{ matrix.package.name }}
+    if: needs.detect-changes.outputs.aux-packages == 'true'
+    needs: [build-wasm, detect-changes]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        package:
+          - name: usda-api
+            path: apps/usda-api
+          - name: usda-contract
+            path: packages/usda-contract
+          - name: usda-schemas
+            path: packages/usda-schemas
+          - name: upc-lookup
+            path: apps/upc-lookup
+    outputs:
+      test-passed: ${{ steps.test.outcome == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          download-wasm: 'false'
 
       - name: Create test results directory
         run: mkdir -p ${{ matrix.package.path }}/test-results
@@ -163,6 +219,7 @@ jobs:
 
   test-e2e:
     name: E2E Tests
+    if: github.event.pull_request.user.login != 'renovate[bot]'
     needs: [build-wasm]
     runs-on: ubuntu-latest
     continue-on-error: true
@@ -207,12 +264,15 @@ jobs:
       - name: Push schema to database
         run: pnpm --filter @cubby/web db:push
 
+      - name: Get Playwright version
+        id: playwright-version
+        run: echo "version=$(cd apps/web && npx playwright --version)" >> $GITHUB_OUTPUT
       - name: Cache Playwright browsers
         uses: actions/cache@v5
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright Browsers (Chromium only)
         if: steps.playwright-cache.outputs.cache-hit != 'true'
@@ -237,7 +297,7 @@ jobs:
 
   check-tests:
     name: Check All Tests Passed
-    needs: [test-unit, test-e2e]
+    needs: [test-unit-web, test-unit-aux, test-e2e]
     runs-on: ubuntu-latest
     if: always()
     outputs:
@@ -246,14 +306,18 @@ jobs:
       - name: Check test results
         id: check
         run: |
-          # Check if all unit test jobs succeeded
-          unit_result="${{ needs.test-unit.result }}"
+          unit_web_result="${{ needs.test-unit-web.result }}"
+          unit_aux_result="${{ needs.test-unit-aux.result }}"
           e2e_result="${{ needs.test-e2e.result }}"
 
-          echo "Unit tests result: $unit_result"
+          echo "Unit tests (web) result: $unit_web_result"
+          echo "Unit tests (aux) result: $unit_aux_result"
           echo "E2E tests result: $e2e_result"
 
-          if [[ "$unit_result" == "success" && "$e2e_result" == "success" ]]; then
+          # Skipped jobs are OK (aux skipped when those packages unchanged, e2e skipped on Renovate PRs)
+          if [[ "$unit_web_result" == "success" && \
+                ("$unit_aux_result" == "success" || "$unit_aux_result" == "skipped") && \
+                ("$e2e_result" == "success" || "$e2e_result" == "skipped") ]]; then
             echo "all-passed=true" >> $GITHUB_OUTPUT
           else
             echo "all-passed=false" >> $GITHUB_OUTPUT
@@ -283,7 +347,8 @@ jobs:
       always() &&
       needs.lint-format.result == 'success' &&
       needs.check-tests.outputs.all-passed == 'true' &&
-      needs.build.result == 'success'
+      needs.build.result == 'success' &&
+      (github.ref == 'refs/heads/main' || github.event.pull_request.user.login != 'renovate[bot]')
     environment:
       name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
       url: ${{ steps.deploy.outputs.url }}
