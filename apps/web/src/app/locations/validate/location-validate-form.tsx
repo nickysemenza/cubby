@@ -14,6 +14,7 @@ import {
 } from "~/app/_components/inventory/persistent-scanner";
 import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { getErrorMessage } from "~/lib/error-utils";
@@ -94,7 +95,15 @@ export function LocationValidateForm({
     setParentLocationId(selectedLocation.id);
   }
 
-  const childCount = parentLocation?.children?.length ?? 0;
+  // Only include children that have QR labels (excludes spaces like room/area)
+  const children = useMemo(
+    () =>
+      (parentLocation?.children ?? []).filter((c) =>
+        typeSupportsQrCode(c.type),
+      ),
+    [parentLocation?.children],
+  );
+  const childCount = children.length;
 
   // Handle QR scan
   const handleScan = useCallback(
@@ -147,7 +156,6 @@ export function LocationValidateForm({
   );
 
   // Reconciliation data
-  const children = parentLocation?.children ?? [];
   const childShortcodes = useMemo(
     () => new Set(children.map((c) => c.shortcode as string)),
     [children],

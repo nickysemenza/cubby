@@ -1,12 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Download } from "lucide-react";
+import { Printer } from "lucide-react";
 import type { FC } from "react";
 import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { downloadLabel } from "~/lib/label-generator";
 import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
@@ -188,15 +187,13 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
             {product.shortcode && (
               <Button
                 variant="outline"
-                onClick={() =>
-                  downloadLabel({
-                    shortcode: product.shortcode!,
-                    name: product.name,
-                  })
+                render={
+                  <Link to="/labels" search={{ codes: product.shortcode }} />
                 }
+                nativeButton={false}
               >
-                <Download className="mr-2 h-4 w-4" />
-                Download Label
+                <Printer className="mr-2 h-4 w-4" />
+                Print Label
               </Button>
             )}
             <DeleteButton />

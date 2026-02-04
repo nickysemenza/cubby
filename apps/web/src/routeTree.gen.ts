@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ProblemsRouteImport } from './routes/problems'
+import { Route as LabelsRouteImport } from './routes/labels'
 import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as DashboardRouteImport } from './routes/dashboard'
@@ -54,6 +55,11 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 const ProblemsRoute = ProblemsRouteImport.update({
   id: '/problems',
   path: '/problems',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LabelsRoute = LabelsRouteImport.update({
+  id: '/labels',
+  path: '/labels',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InsightsRoute = InsightsRouteImport.update({
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
   '/insights': typeof InsightsRoute
+  '/labels': typeof LabelsRoute
   '/problems': typeof ProblemsRoute
   '/account/$accountView': typeof AccountAccountViewRoute
   '/api/panel': typeof ApiPanelRoute
@@ -308,6 +315,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
   '/insights': typeof InsightsRoute
+  '/labels': typeof LabelsRoute
   '/problems': typeof ProblemsRoute
   '/account/$accountView': typeof AccountAccountViewRoute
   '/api/panel': typeof ApiPanelRoute
@@ -352,6 +360,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
   '/insights': typeof InsightsRoute
+  '/labels': typeof LabelsRoute
   '/problems': typeof ProblemsRoute
   '/account/$accountView': typeof AccountAccountViewRoute
   '/api/panel': typeof ApiPanelRoute
@@ -397,6 +406,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/docs'
     | '/insights'
+    | '/labels'
     | '/problems'
     | '/account/$accountView'
     | '/api/panel'
@@ -440,6 +450,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/docs'
     | '/insights'
+    | '/labels'
     | '/problems'
     | '/account/$accountView'
     | '/api/panel'
@@ -483,6 +494,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/docs'
     | '/insights'
+    | '/labels'
     | '/problems'
     | '/account/$accountView'
     | '/api/panel'
@@ -527,6 +539,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   DocsRoute: typeof DocsRoute
   InsightsRoute: typeof InsightsRoute
+  LabelsRoute: typeof LabelsRoute
   ProblemsRoute: typeof ProblemsRoute
   AccountAccountViewRoute: typeof AccountAccountViewRoute
   ApiPanelRoute: typeof ApiPanelRoute
@@ -570,6 +583,13 @@ declare module '@tanstack/react-router' {
       path: '/problems'
       fullPath: '/problems'
       preLoaderRoute: typeof ProblemsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/labels': {
+      id: '/labels'
+      path: '/labels'
+      fullPath: '/labels'
+      preLoaderRoute: typeof LabelsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/insights': {
@@ -873,6 +893,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DocsRoute: DocsRoute,
   InsightsRoute: InsightsRoute,
+  LabelsRoute: LabelsRoute,
   ProblemsRoute: ProblemsRoute,
   AccountAccountViewRoute: AccountAccountViewRoute,
   ApiPanelRoute: ApiPanelRoute,

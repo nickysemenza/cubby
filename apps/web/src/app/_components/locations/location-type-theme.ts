@@ -18,6 +18,20 @@ import type { LocationType } from "~/schemas/location";
  */
 type LocationTypeGroup = "spaces" | "surfaces" | "storage" | "containers";
 
+/** Groups that get physical QR code labels */
+const QR_LABEL_GROUPS: ReadonlySet<LocationTypeGroup> = new Set([
+  "surfaces",
+  "storage",
+  "containers",
+]);
+
+/**
+ * Whether a location type supports QR code labels.
+ * Surfaces, storage, and containers get labels — spaces don't.
+ */
+export const typeSupportsQrCode = (type: LocationType): boolean =>
+  QR_LABEL_GROUPS.has(typeToGroup[type]);
+
 const typeToGroup: Record<LocationType, LocationTypeGroup> = {
   // Spaces - large areas (warm brown family)
   room: "spaces",

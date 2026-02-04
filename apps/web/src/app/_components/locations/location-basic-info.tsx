@@ -1,10 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Download } from "lucide-react";
+import { Printer } from "lucide-react";
 import type { FC } from "react";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { downloadLabel } from "~/lib/label-generator";
 import { queryKeys } from "~/lib/query-keys";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
@@ -12,6 +11,7 @@ import { EntityPillLink } from "../EntityPill";
 import { useEntityDelete } from "../hooks/useEntityDelete";
 import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIconWithLabel } from "./location-icons";
+import { typeSupportsQrCode } from "./location-type-theme";
 
 interface LocationBasicInfoProps {
   location: InfLocation;
@@ -72,18 +72,16 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
         actions={
           <div className="flex gap-2">
             <Button onClick={onEdit}>Edit</Button>
-            {location.shortcode && (
+            {location.shortcode && typeSupportsQrCode(location.type) && (
               <Button
                 variant="outline"
-                onClick={() =>
-                  downloadLabel({
-                    shortcode: location.shortcode!,
-                    name: location.name,
-                  })
+                render={
+                  <Link to="/labels" search={{ codes: location.shortcode }} />
                 }
+                nativeButton={false}
               >
-                <Download className="mr-2 h-4 w-4" />
-                Download Label
+                <Printer className="mr-2 h-4 w-4" />
+                Print Label
               </Button>
             )}
             <Button

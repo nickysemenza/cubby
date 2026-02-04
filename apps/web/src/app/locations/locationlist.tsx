@@ -1,5 +1,8 @@
+import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { Printer } from "lucide-react";
 import { useMemo } from "react";
+import { toast } from "sonner";
 import { queryKeys } from "~/lib/query-keys";
 import type {
   LocationOutWithParentChildren,
@@ -24,9 +27,11 @@ import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { LocationTypeBadge } from "../_components/locations/LocationTypeBadge";
 import { locationTypeOptionsWithTheme } from "../_components/locations/location-icons";
+import { typeSupportsQrCode } from "../_components/locations/location-type-theme";
 
 export function LocationList() {
   const api = useTRPC();
+  const navigate = useNavigate();
   const columnHelper = useMemo(
     () => createColumnHelper<LocationOutWithParentChildren>(),
     [],
@@ -112,6 +117,47 @@ export function LocationList() {
     [columnHelper],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "print-labels",
+          label: "Print Labels",
+          icon: <Printer className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (
+            rows: import("@tanstack/react-table").Row<LocationOutWithParentChildren>[],
+          ) => {
+            const eligible = rows.filter((r) =>
+              typeSupportsQrCode(r.original.type),
+            );
+            const skipped = rows.length - eligible.length;
+
+            if (eligible.length === 0) {
+              toast.error(
+                "None of the selected locations support QR code labels (rooms and areas are excluded)",
+              );
+              return { success: false };
+            }
+
+            if (skipped > 0) {
+              toast.info(
+                `Skipped ${skipped} location${skipped === 1 ? "" : "s"} without QR support (rooms/areas)`,
+              );
+            }
+
+            const codes = eligible.map((r) => r.original.shortcode).join(",");
+            navigate({ to: "/labels", search: { codes } });
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
+
   const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({
       entity: "location",
@@ -131,6 +177,7 @@ export function LocationList() {
         },
       ],
       deletable: deletableConfig,
+      bulkActions,
     });
 
   return (
