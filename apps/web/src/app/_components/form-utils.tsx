@@ -1,6 +1,5 @@
-import { DevTool } from "@hookform/devtools";
 import type { VariantProps } from "class-variance-authority";
-import type { ReactNode } from "react";
+import { lazy, type ReactNode, Suspense } from "react";
 import {
   Controller,
   type FieldValues,
@@ -17,6 +16,10 @@ import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
+
+const DevTool = lazy(() =>
+  import("@hookform/devtools").then((m) => ({ default: m.DevTool })),
+);
 
 // Base props shared by all forms
 interface BaseFormProps {
@@ -78,7 +81,9 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   return (
     <FormProvider {...form}>
       {process.env.NODE_ENV !== "production" ? (
-        <DevTool control={form.control} />
+        <Suspense>
+          <DevTool control={form.control as never} />
+        </Suspense>
       ) : null}
       <form
         onSubmit={(e) => {
