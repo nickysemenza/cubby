@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -45,8 +46,6 @@ async function waitForServer(url: string, timeoutMs: number): Promise<boolean> {
 }
 
 async function globalSetup(config: FullConfig): Promise<void> {
-  const isCI = !!process.env.CI;
-
   console.log("[E2E Setup] Getting fresh database from IntegresQL...");
 
   // 1. Get fresh database from IntegresQL
@@ -78,25 +77,49 @@ async function globalSetup(config: FullConfig): Promise<void> {
 
   console.log(`[E2E Setup] Using database: ${databaseConfig.database}`);
 
-  // 2. Start dev server with this database
-  // Always use dev mode - preview requires a build step we don't have in E2E setup
-  console.log("[E2E Setup] Starting server with: pnpm run dev --port 3001");
+  // 2. Start server with this database
+  const webRoot = path.join(__dirname, "../..");
+  const useBuild = process.env.E2E_USE_BUILD === "true";
 
-  // Important: Use E2E_DATABASE_URL which takes precedence in env.ts and won't
-  // be overwritten by Vite's .env loading mechanism.
-  const serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {
-    env: {
-      ...process.env,
-      // Use E2E_DATABASE_URL to bypass Vite's .env loading which would override DATABASE_URL
-      E2E_DATABASE_URL: databaseUrl,
-      // Also set DATABASE_URL as fallback
-      DATABASE_URL: databaseUrl,
-      // Prevent dotenvx from overriding our DATABASE_URL
-      DOTENV_PRIVATE_KEY: "",
-    },
-    stdio: "pipe",
-    cwd: path.join(__dirname, "../.."),
-  });
+  const serverEnv = {
+    ...process.env,
+    // Use E2E_DATABASE_URL to bypass Vite's .env loading which would override DATABASE_URL
+    E2E_DATABASE_URL: databaseUrl,
+    // Also set DATABASE_URL as fallback
+    DATABASE_URL: databaseUrl,
+    // Prevent dotenvx from overriding our DATABASE_URL
+    DOTENV_PRIVATE_KEY: "",
+  };
+
+  let serverProcess: ChildProcess;
+
+  if (useBuild) {
+    const serverEntry = path.join(webRoot, ".output/server/index.mjs");
+    if (!existsSync(serverEntry)) {
+      throw new Error(
+        `E2E_USE_BUILD is set but production build not found at ${serverEntry}. Run 'pnpm --filter @cubby/web build' first.`,
+      );
+    }
+
+    console.log(`[E2E Setup] Starting production server: node ${serverEntry}`);
+    serverProcess = spawn("node", [serverEntry], {
+      env: {
+        ...serverEnv,
+        PORT: "3001",
+        // Skip Sentry instrumentation for test runs
+        NITRO_NO_PREIMPORT: "true",
+      },
+      stdio: "pipe",
+      cwd: webRoot,
+    });
+  } else {
+    console.log("[E2E Setup] Starting dev server: pnpm run dev --port 3001");
+    serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {
+      env: serverEnv,
+      stdio: "pipe",
+      cwd: webRoot,
+    });
+  }
 
   // Capture server output for debugging
   serverProcess.stdout?.on("data", (data: Buffer) => {
@@ -116,7 +139,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
   // 3. Wait for server to be ready
   const baseURL = config.projects[0]?.use?.baseURL || "http://localhost:3001";
   console.log(`[E2E Setup] Waiting for server at ${baseURL}...`);
-  await waitForServer(baseURL, isCI ? 180_000 : 60_000);
+  await waitForServer(baseURL, 60_000);
   console.log("[E2E Setup] Server is ready");
 
   // 4. Authenticate test user

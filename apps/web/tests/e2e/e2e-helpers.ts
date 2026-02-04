@@ -11,7 +11,7 @@ export async function waitForFormHydration(page: Page) {
 // Helper to create a location via UI
 export async function createLocation(page: Page, name: string) {
   await page.goto("/locations/new");
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
   await page.getByPlaceholder("Enter location name").fill(name);
   await page.getByRole("button", { name: /^Create$/ }).click();
   await expect(page).toHaveURL(/\/locations\//);
@@ -20,7 +20,7 @@ export async function createLocation(page: Page, name: string) {
 // Helper to create a product via UI
 export async function createProduct(page: Page, name: string) {
   await page.goto("/products/new");
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
   await page.getByPlaceholder("Enter product name").fill(name);
   await page.getByRole("button", { name: /^Create$/ }).click();
   await expect(page).toHaveURL(/\/products\//);
