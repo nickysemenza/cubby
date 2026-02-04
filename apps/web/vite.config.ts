@@ -36,7 +36,8 @@ export default defineConfig({
     tanstackStart(),
     viteReact(),
     nitro({
-      preset: "vercel",
+      preset:
+        (process.env.NITRO_PRESET as "vercel" | "node-server") || "vercel",
       // Force bundle captcha packages from better-auth-ui (unused but cause ESM/CJS issues)
       externals: {
         inline: [

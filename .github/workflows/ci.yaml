@@ -282,6 +282,7 @@ jobs:
         run: pnpm --filter @cubby/web build
         env:
           NODE_ENV: production
+          NITRO_PRESET: node-server
       - name: Run Playwright tests
         id: e2e-test
         run: cd apps/web && npx playwright test
