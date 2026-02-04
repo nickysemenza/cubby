@@ -57,6 +57,7 @@ import type {
   LocationFilters,
   LocationWithParentChild,
 } from "./internal-types";
+import { wouldCreateParentCycle } from "./tree";
 
 // Create a new location
 export const createLocation = async (
@@ -109,30 +110,14 @@ export const updateLocation = async (
   data: LocationUpdateInput["data"],
   actor: ActorContext,
 ) => {
-  // Make sure we're not setting a location as its own parent
-  if (data.parentId === id) {
-    throw new Error("A location cannot be its own parent");
-  }
-
-  // Check if the new parent would create a circular reference
+  // Check if the new parent would create a circular reference (includes self-parent check)
   if (data.parentId) {
-    const potentialParent = await getDb(db).query.location.findFirst({
-      where: eq(location.id, data.parentId),
-      with: { parent: true },
-    });
-
-    // Walk up the parent chain to check for circular references
-    let currentParent = potentialParent?.parent;
-    while (currentParent) {
-      if (currentParent.id === id) {
-        throw new Error("Circular parent-child relationship detected");
-      }
-      currentParent = await getDb(db)
-        .query.location.findFirst({
-          where: eq(location.id, currentParent.id),
-          with: { parent: true },
-        })
-        .then((loc: typeof potentialParent) => loc?.parent ?? null);
+    const wouldCycle = await wouldCreateParentCycle(db, id, data.parentId);
+    if (wouldCycle) {
+      throw createAppError(
+        "LOCATION_CYCLE_DETECTED",
+        "Cannot set parent: would create a circular reference",
+      );
     }
   }
 

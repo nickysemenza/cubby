@@ -270,79 +270,83 @@ export const upsertRecipe = async (
 
   if (existingRecipe) {
     // Recipe exists - soft delete existing sections and recreate with new data
-    // First soft delete ingredients that reference the sections
-    const existingSections = await dbClient.query.recipeSection.findMany({
-      where: eq(recipeSection.recipeId, existingRecipe.id),
-      columns: { id: true },
-    });
-
-    if (existingSections.length > 0) {
-      const sectionIds = existingSections.map((s) => s.id);
-      const now = new Date();
-      await dbClient
-        .update(recipeSectionIngredient)
-        .set({ deletedAt: now })
-        .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
-
-      // Now soft delete the sections
-      await dbClient
-        .update(recipeSection)
-        .set({ deletedAt: now })
-        .where(eq(recipeSection.recipeId, existingRecipe.id));
-    }
-
-    // Process ingredients for the update (same as in createRecipe)
-    const processedSections = input.sections.map((section) => {
-      const processedIngredients = (section.ingredients || []).map(
-        (ingredientInput) => ({
-          ingredientId: ingredientInput.ingredientId,
-          amounts: ingredientInput.amounts,
-        }),
-      );
-
-      return {
-        name: section.name,
-        processedIngredients,
-        instructions: section.instructions,
-      };
-    });
-
-    // Update the recipe with new data
-    const updatedRecipe = await updateAndReturn(
-      db,
-      recipe,
-      {
-        SourceType: input.meta?.url ? "Website" : "Other",
-        SourceData: input.meta?.url || null,
-        updatedAt: new Date(),
-      },
-      eq(recipe.id, existingRecipe.id),
-    );
-
-    // Create new sections
-    for (const section of processedSections) {
-      const createdSection = await insertAndReturn(db, recipeSection, {
-        recipeId: updatedRecipe.id,
-        name: section.name,
-        instructions:
-          section.instructions?.map((instruction) => ({
-            text: instruction.instruction,
-          })) ?? [],
+    return await withTransaction(db, async (tx) => {
+      // First soft delete ingredients that reference the sections
+      const existingSections = await tx.query.recipeSection.findMany({
+        where: eq(recipeSection.recipeId, existingRecipe.id),
+        columns: { id: true },
       });
 
-      // Create ingredients for this section
-      if (section.processedIngredients.length > 0) {
-        await dbClient.insert(recipeSectionIngredient).values(
-          section.processedIngredients.map((ing) => ({
-            recipeSectionId: createdSection.id,
-            ingredientId: ing.ingredientId as string,
-            amounts: ing.amounts,
-          })),
-        );
-      }
-    }
+      if (existingSections.length > 0) {
+        const sectionIds = existingSections.map((s) => s.id);
+        const now = new Date();
+        await tx
+          .update(recipeSectionIngredient)
+          .set({ deletedAt: now })
+          .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
 
-    return { id: updatedRecipe.id };
+        // Now soft delete the sections
+        await tx
+          .update(recipeSection)
+          .set({ deletedAt: now })
+          .where(eq(recipeSection.recipeId, existingRecipe.id));
+      }
+
+      // Process ingredients for the update (same as in createRecipe)
+      const processedSections = input.sections.map((section) => {
+        const processedIngredients = (section.ingredients || []).map(
+          (ingredientInput) => ({
+            ingredientId: ingredientInput.ingredientId,
+            amounts: ingredientInput.amounts,
+          }),
+        );
+
+        return {
+          name: section.name,
+          processedIngredients,
+          instructions: section.instructions,
+        };
+      });
+
+      // Update the recipe with new data
+      const updatedRecipe = await updateAndReturn(
+        tx,
+        recipe,
+        {
+          SourceType: input.meta?.url ? "Website" : "Other",
+          SourceData: input.meta?.url || null,
+          updatedAt: new Date(),
+        },
+        eq(recipe.id, existingRecipe.id),
+      );
+
+      // Create new sections
+      for (const section of processedSections) {
+        const createdSection = await insertAndReturn(tx, recipeSection, {
+          recipeId: updatedRecipe.id,
+          name: section.name,
+          instructions:
+            section.instructions?.map((instruction) => ({
+              text: instruction.instruction,
+            })) ?? [],
+        });
+
+        // Create ingredients for this section
+        if (section.processedIngredients.length > 0) {
+          await batchInsert(
+            tx,
+            recipeSectionIngredient,
+            section.processedIngredients.map((ing) => ({
+              recipeSectionId: createdSection.id,
+              ingredientId: ing.ingredientId as string,
+              amounts: ing.amounts,
+            })),
+          );
+        }
+      }
+
+      return { id: updatedRecipe.id };
+    });
   } else {
     // Recipe doesn't exist - create new one
     const created = await createRecipe(db, input, actor);

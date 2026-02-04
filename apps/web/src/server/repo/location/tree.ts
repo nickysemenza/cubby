@@ -237,7 +237,7 @@ export const touchLastBulkInventory = async (
  *
  * @returns true if the change would create a cycle, false if safe
  */
-const wouldCreateParentCycle = async (
+export const wouldCreateParentCycle = async (
   db: Database,
   locationId: LocationId,
   newParentId: LocationId,

@@ -5,13 +5,16 @@
     "src/routes/**/*.tsx",
     "src/routes/**/*.ts",
     "src/styles.css",
-    "src/instrumentation.ts"
+    "src/instrumentation.ts",
+    "src/integrations/**/*.{ts,tsx}",
+    "drizzle.config.ts",
+    "instrument.server.mjs"
   ],
+  "project": ["src/**/*.{ts,tsx}"],
   "ignore": [
     "wasm/**",
     "types.ts",
     "src/components/ui/**",
-    "src/trpc/react.ts",
     "scripts/**",
     "tests/**",
     "tooling/**",
@@ -24,7 +27,15 @@
     "@tailwindcss/postcss",
     "postcss",
     "@opentelemetry/.+",
-    "@tanstack/router-plugin"
+    "@tanstack/router-plugin",
+    "vite-plugin-wasm",
+    "vite-plugin-top-level-await"
   ],
+  "vitest": {
+    "config": "vitest.config.ts"
+  },
+  "playwright": {
+    "config": "playwright.config.ts"
+  },
   "tags": ["-lintignore"]
 }

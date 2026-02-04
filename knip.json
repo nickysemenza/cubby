@@ -1,0 +1,28 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    "apps/web": {},
+    "apps/upc-lookup": {
+      "entry": "src/**/*.ts",
+      "ignoreDependencies": ["@cubby/.+"]
+    },
+    "apps/upc-scout": {
+      "entry": "src/**/*.ts",
+      "ignoreDependencies": ["@cubby/.+"]
+    },
+    "apps/usda-api": {
+      "entry": "src/**/*.ts",
+      "ignoreDependencies": ["@cubby/.+"]
+    },
+    "packages/usda-contract": {
+      "entry": "src/**/*.ts"
+    },
+    "packages/usda-schemas": {
+      "entry": "src/**/*.ts"
+    },
+    "packages/wasm": {
+      "ignore": ["**/*"]
+    }
+  },
+  "ignoreWorkspaces": ["packages/wasm"]
+}
