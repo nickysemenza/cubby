@@ -1,7 +1,10 @@
+import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
+import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo } from "react";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
 import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
@@ -223,6 +226,33 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [],
   );
 
+  const extraActions = useCallback(
+    (row: ProductWithFoodOut) => (
+      <>
+        <DropdownMenuItem
+          render={
+            <Link
+              to="/inventory/quick-capture"
+              search={{ productId: row.id }}
+            />
+          }
+        >
+          <Package className="mr-2 h-4 w-4" />
+          Add to Inventory
+        </DropdownMenuItem>
+        {row.shortcode && (
+          <DropdownMenuItem
+            render={<Link to="/labels" search={{ codes: row.shortcode }} />}
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            Print Label
+          </DropdownMenuItem>
+        )}
+      </>
+    ),
+    [],
+  );
+
   // Capture queryOptions ONCE - tRPC Proxy might return new reference on each access!
   // Store the actual function, not a getter
   const queryOptions = api.product.list.queryOptions;
@@ -237,6 +267,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       columns,
       filters,
       deletable: deletableConfig,
+      extraActions,
     });
 
   return (

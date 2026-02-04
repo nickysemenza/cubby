@@ -1,13 +1,17 @@
 import { Package } from "lucide-react";
 import type { FC } from "react";
+import { useState } from "react";
 import type { z } from "zod";
+import { queryKeys } from "~/lib/query-keys";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import type { InventoryUpdateInput } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
+import { useEntityDelete } from "../hooks/useEntityDelete";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { InventoryBasicInfo } from "./inventory-basic-info";
 import { InventoryForm } from "./inventory-form";
+import { MoveInventoryDialog } from "./move-inventory-dialog";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -19,6 +23,7 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   inventoryitem,
 }) => {
   const api = useTRPC();
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
     InventoryItem,
@@ -27,6 +32,16 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
     entity: "inventory",
     data: inventoryitem,
     mutationOptions: api.inventory.update.mutationOptions(),
+  });
+
+  const { DeleteButton, DeleteDialog } = useEntityDelete({
+    id: inventoryitem.id,
+    name: inventoryitem.product.name,
+    entityLabel: "Inventory Entry",
+    mutationOptions: (callbacks) =>
+      api.inventory.delete.mutationOptions(callbacks),
+    invalidateKeys: [[queryKeys.inventory.list]],
+    redirectTo: "/inventory",
   });
 
   const sections: DetailSection[] = [
@@ -46,6 +61,8 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
         <InventoryBasicInfo
           inventoryitem={inventoryitem}
           onEdit={editMode.startEditing}
+          onMove={() => setShowMoveDialog(true)}
+          DeleteButton={DeleteButton}
         />
       ),
     },
@@ -54,11 +71,22 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   ];
 
   return (
-    <DetailPage
-      sections={sections}
-      entity="inventory"
-      name={inventoryitem.product.name}
-      rawData={inventoryitem}
-    />
+    <>
+      <DetailPage
+        sections={sections}
+        entity="inventory"
+        name={inventoryitem.product.name}
+        rawData={inventoryitem}
+      />
+      <DeleteDialog />
+      {showMoveDialog && (
+        <MoveInventoryDialog
+          open
+          onOpenChange={setShowMoveDialog}
+          items={[inventoryitem]}
+          onSuccess={() => setShowMoveDialog(false)}
+        />
+      )}
+    </>
   );
 };

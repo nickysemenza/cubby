@@ -23,7 +23,11 @@ import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { getOptionalLocationId } from "~/schemas/form-fields";
-import { type LocationId, unsafeInventoryId } from "~/schemas/identifiers";
+import {
+  type LocationId,
+  unsafeInventoryId,
+  unsafeLocationId,
+} from "~/schemas/identifiers";
 import type { BulkMoveItem } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
@@ -33,7 +37,8 @@ interface MoveInventoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: InventoryItem[];
-  sourceLocationId: LocationId;
+  /** When omitted, derived from items[0].location.id */
+  sourceLocationId?: LocationId;
   onSuccess: () => void;
 }
 
@@ -47,9 +52,12 @@ export function MoveInventoryDialog({
   open,
   onOpenChange,
   items,
-  sourceLocationId,
+  sourceLocationId: sourceLocationIdProp,
   onSuccess,
 }: MoveInventoryDialogProps) {
+  const sourceLocationId =
+    sourceLocationIdProp ??
+    (items[0] ? unsafeLocationId(items[0].location.id) : undefined);
   const api = useTRPC();
   const [error, setError] = useState<string | null>(null);
 
@@ -84,6 +92,11 @@ export function MoveInventoryDialog({
       return;
     }
 
+    if (!sourceLocationId) {
+      setError("No source location available");
+      return;
+    }
+
     if (values.targetLocation.id === sourceLocationId) {
       setError("Target location must be different from source location");
       return;
@@ -97,7 +110,7 @@ export function MoveInventoryDialog({
     }));
 
     await bulkMoveMutation.mutateAsync({
-      sourceLocationId,
+      sourceLocationId: sourceLocationId!,
       targetLocationId: getOptionalLocationId(values.targetLocation)!,
       items: moveItems,
     });

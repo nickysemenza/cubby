@@ -13,6 +13,7 @@ import {
 const searchSchema = z.object({
   scanner: z.boolean().optional(),
   locationId: z.string().optional(),
+  productId: z.string().optional(),
 });
 
 export const Route = createFileRoute("/inventory/quick-capture")({
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/inventory/quick-capture")({
 });
 
 function QuickCapturePage() {
-  const { scanner, locationId } = Route.useSearch();
+  const { scanner, locationId, productId } = Route.useSearch();
 
   return (
     <PageWrapper>
@@ -37,6 +38,7 @@ function QuickCapturePage() {
         <CardContent>
           <QuickCaptureForm
             initialLocationId={locationId}
+            initialProductId={productId}
             initialScannerMode={scanner}
           />
         </CardContent>

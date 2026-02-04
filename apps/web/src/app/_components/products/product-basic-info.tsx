@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Printer } from "lucide-react";
+import { Package, Printer } from "lucide-react";
 import type { FC } from "react";
 import { toast } from "sonner";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
@@ -184,6 +184,19 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         actions={
           <div className="flex gap-2">
             <Button onClick={onEdit}>Edit</Button>
+            <Button
+              variant="outline"
+              render={
+                <Link
+                  to="/inventory/quick-capture"
+                  search={{ productId: product.id }}
+                />
+              }
+              nativeButton={false}
+            >
+              <Package className="mr-2 h-4 w-4" />
+              Add to Inventory
+            </Button>
             {product.shortcode && (
               <Button
                 variant="outline"

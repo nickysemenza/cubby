@@ -1,5 +1,15 @@
 import type { LucideIcon } from "lucide-react";
-import { ChefHat, MapPin, Plus, ScanBarcode, Settings } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRightLeft,
+  ChefHat,
+  ClipboardCheck,
+  MapPin,
+  Plus,
+  Printer,
+  ScanBarcode,
+  Settings,
+} from "lucide-react";
 
 export interface QuickAction {
   id: string;
@@ -44,6 +54,34 @@ export const quickActions: QuickAction[] = [
     path: "/locations/new",
     icon: MapPin,
     keywords: ["create", "new", "place", "room"],
+  },
+  {
+    id: "bulk-move",
+    name: "Bulk Move Inventory",
+    path: "/inventory/bulk-move",
+    icon: ArrowRightLeft,
+    keywords: ["move", "transfer", "relocate", "inventory"],
+  },
+  {
+    id: "problems",
+    name: "Problems",
+    path: "/problems",
+    icon: AlertTriangle,
+    keywords: ["issues", "errors", "warnings", "audit"],
+  },
+  {
+    id: "inventory-audit",
+    name: "Inventory Audit",
+    path: "/inventory/bulk-edit",
+    icon: ClipboardCheck,
+    keywords: ["audit", "bulk", "edit", "inventory", "review"],
+  },
+  {
+    id: "print-labels",
+    name: "Print Labels",
+    path: "/labels",
+    icon: Printer,
+    keywords: ["label", "print", "qr", "barcode", "sticker"],
   },
   {
     id: "api-panel",

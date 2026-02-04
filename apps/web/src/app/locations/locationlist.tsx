@@ -1,8 +1,9 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { Printer } from "lucide-react";
-import { useMemo } from "react";
+import { Printer, ScanBarcode } from "lucide-react";
+import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
 import type {
   LocationOutWithParentChildren,
@@ -158,6 +159,33 @@ export function LocationList() {
     [],
   );
 
+  const extraActions = useCallback(
+    (row: LocationOutWithParentChildren) => (
+      <>
+        <DropdownMenuItem
+          render={
+            <Link
+              to="/inventory/quick-capture"
+              search={{ locationId: row.id }}
+            />
+          }
+        >
+          <ScanBarcode className="mr-2 h-4 w-4" />
+          Quick Capture Here
+        </DropdownMenuItem>
+        {row.shortcode && typeSupportsQrCode(row.type) && (
+          <DropdownMenuItem
+            render={<Link to="/labels" search={{ codes: row.shortcode }} />}
+          >
+            <Printer className="mr-2 h-4 w-4" />
+            Print Label
+          </DropdownMenuItem>
+        )}
+      </>
+    ),
+    [],
+  );
+
   const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({
       entity: "location",
@@ -178,6 +206,7 @@ export function LocationList() {
       ],
       deletable: deletableConfig,
       bulkActions,
+      extraActions,
     });
 
   return (

@@ -1,6 +1,10 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
+import { ArrowRightLeft } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { toast } from "sonner";
 import type { z } from "zod";
+import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
 import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
@@ -16,6 +20,7 @@ import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
+import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { TableLink } from "../_components/table/TableLink";
@@ -24,8 +29,26 @@ type InventoryListItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
 export function InventoryItemList() {
   const api = useTRPC();
+  const navigate = useNavigate();
   const columnHelper = createColumnHelper<InventoryListItem>();
   const { onRowClick, PreviewSheet } = useEntityPreview("inventory");
+  const [moveTarget, setMoveTarget] = useState<InventoryListItem | null>(null);
+  const [bulkMoveItems, setBulkMoveItems] = useState<InventoryListItem[]>([]);
+
+  const extraActions = useCallback(
+    (row: InventoryListItem) => (
+      <DropdownMenuItem
+        onClick={(e) => {
+          e.stopPropagation();
+          setMoveTarget(row);
+        }}
+      >
+        <ArrowRightLeft className="mr-2 h-4 w-4" />
+        Move to...
+      </DropdownMenuItem>
+    ),
+    [],
+  );
 
   // Memoize deletable config to prevent infinite render loop
   const deletableConfig = useDeletableConfig({
@@ -33,6 +56,41 @@ export function InventoryItemList() {
     entityLabel: "Inventory Entry",
     invalidateKeys: [[queryKeys.inventory.list]],
   });
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: navigate is stable
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "move",
+          label: "Move",
+          icon: <ArrowRightLeft className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (
+            rows: import("@tanstack/react-table").Row<InventoryListItem>[],
+          ) => {
+            const items = rows.map((r) => r.original);
+            const locationIds = new Set(items.map((i) => i.location.id));
+
+            if (locationIds.size === 1) {
+              // All from same location — use dialog
+              setBulkMoveItems(items);
+            } else {
+              // Multiple source locations — redirect to bulk move page
+              toast.info(
+                "Items from multiple locations selected — opening bulk move page",
+              );
+              navigate({ to: "/inventory/bulk-move" });
+            }
+
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
 
   const { table, data, isLoading, error, timing, bulkActionBar, deleteDialog } =
     useEntityList({
@@ -103,6 +161,8 @@ export function InventoryItemList() {
       ],
       filters: ["product", "location"],
       deletable: deletableConfig,
+      extraActions,
+      bulkActions,
     });
 
   return (
@@ -125,6 +185,26 @@ export function InventoryItemList() {
       />
       <PreviewSheet />
       {deleteDialog}
+      {moveTarget && (
+        <MoveInventoryDialog
+          open={!!moveTarget}
+          onOpenChange={(open) => {
+            if (!open) setMoveTarget(null);
+          }}
+          items={[moveTarget]}
+          onSuccess={() => setMoveTarget(null)}
+        />
+      )}
+      {bulkMoveItems.length > 0 && (
+        <MoveInventoryDialog
+          open={bulkMoveItems.length > 0}
+          onOpenChange={(open) => {
+            if (!open) setBulkMoveItems([]);
+          }}
+          items={bulkMoveItems}
+          onSuccess={() => setBulkMoveItems([])}
+        />
+      )}
     </div>
   );
 }

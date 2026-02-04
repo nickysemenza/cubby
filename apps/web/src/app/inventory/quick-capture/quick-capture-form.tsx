@@ -71,7 +71,7 @@ import {
   inventoryItemWithLocationFields,
 } from "~/schemas/form-fields";
 import type { ProductId } from "~/schemas/identifiers";
-import { unsafeLocationId } from "~/schemas/identifiers";
+import { unsafeLocationId, unsafeProductId } from "~/schemas/identifiers";
 import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
@@ -90,12 +90,14 @@ interface RecentScanItem {
 
 interface QuickCaptureFormProps {
   initialLocationId?: string;
+  initialProductId?: string;
   /** Start with persistent scanner mode enabled */
   initialScannerMode?: boolean;
 }
 
 export default function QuickCaptureForm({
   initialLocationId,
+  initialProductId,
   initialScannerMode = false,
 }: QuickCaptureFormProps) {
   const api = useTRPC();
@@ -150,6 +152,24 @@ export default function QuickCaptureForm({
       );
     }
   }, [initialLocation, form, items]);
+
+  // Fetch initial product if provided
+  const { data: initialProduct } = useQuery({
+    ...api.product.getByID.queryOptions({
+      id: unsafeProductId(initialProductId!),
+    }),
+    enabled: !!initialProductId,
+  });
+
+  // Set initial product when loaded
+  useEffect(() => {
+    if (initialProduct && items[0]?.product === null) {
+      form.setValue(
+        "items.0.product",
+        buildProductComboboxItem(initialProduct),
+      );
+    }
+  }, [initialProduct, form, items]);
 
   // Fetch focused location with hierarchy for breadcrumbs
   const { data: focusedLocation, isLoading: isLoadingFocusedLocation } =
