@@ -1,5 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
+import { waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Create Recipe - Full Flow", () => {
   test("can create ingredient, product, and recipe with cost calculations", async ({
@@ -14,15 +15,6 @@ test.describe("Create Recipe - Full Flow", () => {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
 
-    // Helper to wait for form hydration
-    async function waitForFormHydration() {
-      await page.waitForLoadState("networkidle");
-      await expect(
-        page.getByRole("button", { name: "React Hook Form Logo" }),
-      ).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(500);
-    }
-
     // Helper to fill input
     async function fillInput(placeholder: string, value: string) {
       const input = page.getByPlaceholder(placeholder);
@@ -36,7 +28,7 @@ test.describe("Create Recipe - Full Flow", () => {
 
     // Step 1: Create ingredient
     await page.goto("/ingredients/new");
-    await waitForFormHydration();
+    await waitForFormHydration(page);
     await fillInput("Enter ingredient name", ingredientName);
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
@@ -45,7 +37,7 @@ test.describe("Create Recipe - Full Flow", () => {
 
     // Step 2: Create product with unit mappings
     await page.goto("/products/new");
-    await waitForFormHydration();
+    await waitForFormHydration(page);
     await fillInput("Enter product name", productName);
     await fillInput("Enter manufacturer", manufacturerName);
 
@@ -105,7 +97,7 @@ test.describe("Create Recipe - Full Flow", () => {
 
     // Step 3: Create recipe
     await page.goto("/recipes/new");
-    await waitForFormHydration();
+    await waitForFormHydration(page);
     await fillInput("Enter recipe name", recipeName);
     await fillInput("Enter recipe URL", faker.internet.url());
 

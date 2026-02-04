@@ -1,5 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
+import { waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Create Product with Ingredient", () => {
   test("can create a product with ingredient link and unit mappings", async ({
@@ -8,15 +9,6 @@ test.describe("Create Product with Ingredient", () => {
     const ingredientName = faker.food.ingredient();
     const productName = `${ingredientName} Brand Product`;
     const manufacturerName = faker.company.name();
-
-    // Helper to wait for form hydration
-    async function waitForFormHydration() {
-      await page.waitForLoadState("networkidle");
-      await expect(
-        page.getByRole("button", { name: "React Hook Form Logo" }),
-      ).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(500);
-    }
 
     // Helper to fill input with proper React event handling
     async function fillInput(placeholder: string, value: string) {
@@ -32,7 +24,7 @@ test.describe("Create Product with Ingredient", () => {
     // Step 1: Create an ingredient first
     await page.goto("/ingredients/new");
     await expect(page).toHaveURL(/\/ingredients\/new/);
-    await waitForFormHydration();
+    await waitForFormHydration(page);
     await fillInput("Enter ingredient name", ingredientName);
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
@@ -42,7 +34,7 @@ test.describe("Create Product with Ingredient", () => {
     // Step 2: Create a product and link it to the ingredient
     await page.goto("/products/new");
     await expect(page).toHaveURL(/\/products\/new/);
-    await waitForFormHydration();
+    await waitForFormHydration(page);
 
     // Fill in the product form
     await fillInput("Enter product name", productName);

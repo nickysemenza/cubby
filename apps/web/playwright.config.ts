@@ -18,6 +18,8 @@ const isCI = !!process.env.CI;
 
 export default defineConfig({
   testDir: "./tests/e2e",
+  /* CI dev server is slower — give tests more room */
+  timeout: isCI ? 60_000 : 30_000,
 
   /* Global setup/teardown - starts dev server with fresh IntegresQL database */
   globalSetup: "./tests/e2e/e2e-global-setup.ts",

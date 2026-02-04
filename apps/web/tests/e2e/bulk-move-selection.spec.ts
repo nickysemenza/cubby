@@ -4,7 +4,7 @@ import {
   createLocation,
   createProduct,
   waitForFormHydration,
-} from "./bulk-move-helpers";
+} from "./e2e-helpers";
 
 test.describe("Bulk Move Inventory - Selection", () => {
   test("can select source location and see inventory items", async ({

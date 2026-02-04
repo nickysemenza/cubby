@@ -4,7 +4,7 @@ import {
   createLocation,
   createProduct,
   waitForFormHydration,
-} from "./bulk-move-helpers";
+} from "./e2e-helpers";
 
 test.describe("Bulk Move Inventory - Validation", () => {
   test("shows error when source and target are the same", async ({ page }) => {

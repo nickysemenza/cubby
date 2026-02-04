@@ -1,18 +1,10 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
+import { waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Create Ingredient", () => {
   test("can create an ingredient", async ({ page }) => {
     const ingredientName = faker.food.ingredient();
-
-    // Helper to wait for form hydration
-    async function waitForFormHydration() {
-      await page.waitForLoadState("networkidle");
-      await expect(
-        page.getByRole("button", { name: "React Hook Form Logo" }),
-      ).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(500);
-    }
 
     // Helper to fill input with proper React event handling
     async function fillInput(placeholder: string, value: string) {
@@ -30,7 +22,7 @@ test.describe("Create Ingredient", () => {
     await expect(page).toHaveURL(/\/ingredients\/new/);
 
     // Wait for form hydration
-    await waitForFormHydration();
+    await waitForFormHydration(page);
 
     // Fill in the ingredient form
     await fillInput("Enter ingredient name", ingredientName);
