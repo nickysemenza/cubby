@@ -7,6 +7,7 @@ import type {
 } from "@cubby/usda-schemas";
 import { context, propagation } from "@opentelemetry/api";
 import { initClient } from "@ts-rest/core";
+import { getErrorMessage } from "~/lib/error-utils";
 import type { PaginationParams, SortParams } from "~/schemas/pagination";
 import { getTracer, TraceNames } from "~/server/tracing";
 
@@ -43,8 +44,7 @@ export class USDAClient {
           span.setStatus({ code: 1 });
           return res;
         } catch (e) {
-          const err = e instanceof Error ? e : new Error(String(e));
-          span.setStatus({ code: 2, message: err.message });
+          span.setStatus({ code: 2, message: getErrorMessage(e) });
           throw e;
         } finally {
           span.end();

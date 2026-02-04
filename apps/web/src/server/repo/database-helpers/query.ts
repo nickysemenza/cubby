@@ -14,6 +14,29 @@ import { TraceNames, withTrace } from "~/server/tracing";
 import { unwrapDb } from "./core";
 
 /**
+ * Build a combined WHERE clause from notDeleted + search terms + extra conditions.
+ * Reduces the repetitive filter-building pattern across repos.
+ */
+export function buildSearchConditions(
+  table: { deletedAt: AnyColumn },
+  searchFilters: Array<{ column: AnyColumn; term: string | undefined }>,
+  extraConditions?: Array<SQL | undefined>,
+): SQL | undefined {
+  const conditions: (SQL | undefined)[] = [notDeleted(table)];
+
+  for (const { column, term } of searchFilters) {
+    conditions.push(formatSearchTerm(column, term));
+  }
+
+  if (extraConditions) {
+    conditions.push(...extraConditions);
+  }
+
+  const defined = conditions.filter((c): c is SQL => c !== undefined);
+  return defined.length > 0 ? and(...defined) : undefined;
+}
+
+/**
  * Helper function to format search terms for PostgreSQL pattern matching.
  */
 export const formatSearchTerm = (

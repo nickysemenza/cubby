@@ -1,19 +1,4 @@
 {
-  "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "allowSyntheticDefaultImports": true
-  },
-  "include": ["src/**/*", "vitest.config.ts"],
-  "exclude": ["node_modules", "dist"]
+  "extends": "../tsconfig.package.json",
+  "include": ["src/**/*", "vitest.config.ts"]
 }

@@ -3,6 +3,7 @@ import {
   upcLookupResponseSchema,
 } from "@cubby/upc-lookup/schemas";
 import { context, propagation } from "@opentelemetry/api";
+import { getErrorMessage } from "~/lib/error-utils";
 import { getTracer, TraceNames } from "~/server/tracing";
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -39,8 +40,7 @@ export class UPCLookupClient {
           span.setStatus({ code: 1 });
           return res;
         } catch (e) {
-          const err = e instanceof Error ? e : new Error(String(e));
-          span.setStatus({ code: 2, message: err.message });
+          span.setStatus({ code: 2, message: getErrorMessage(e) });
           throw e;
         } finally {
           span.end();

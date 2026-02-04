@@ -4,7 +4,53 @@
 - Typecheck + lint: `pnpm run check`
 - Typecheck only: `pnpm run typecheck` (uses tsgo from TypeScript 7.0 preview for speed)
 - Typecheck with stable TypeScript: `pnpm run typecheck:stable` (fallback if tsgo has issues)
+- Dev server: `pnpm run dev`
+- Build: `pnpm run build`
+- Test (unit): `pnpm run test`
+- Test (e2e): `pnpm run test:e2e` (Playwright)
+- DB migrations: `pnpm run db:migrate` (in `apps/web`)
 - Todos: `docs/todos.md`
+
+## Monorepo Structure
+
+```
+apps/web           — Main app (TanStack Start, tRPC, Drizzle)
+apps/upc-lookup    — Cloudflare Worker for UPC lookups
+apps/upc-scout     — UPC product scouting service
+apps/usda-api      — USDA food data API
+packages/usda-contract — ts-rest contract definitions
+packages/usda-schemas  — Shared Zod schemas
+packages/wasm      — WASM bindings for ingredient parser
+```
+
+## Architecture Layers
+
+Request flow: **Router** (tRPC) → **Service** (optional) → **Repo** (data access) → **Database**
+
+- **Routers** use the CRUD factory (`createEntityCrudProcedures` from `crud-factory.ts`) for standard CRUD operations
+- **Services** exist only when entities need enrichment (e.g., USDA food data). Otherwise routers call repos directly
+- **Repos** handle all database access through the opaque `Database` type
+
+## Test Conventions
+
+| Suffix | Purpose | Runner |
+|---|---|---|
+| `*.unit.test.ts` | Unit tests | Vitest |
+| `*.integration.test.ts` | Integration tests (DB) | Vitest |
+| `*.spec.ts` | E2E tests | Playwright |
+
+## File Naming Conventions
+
+| Pattern | Example | Used For |
+|---|---|---|
+| `*.service.ts` | `product.service.ts` | Service layer (enrichment) |
+| `*-helpers.ts` | `database-helpers.ts` | Utility helpers |
+| `*-utils.ts` | `location-utils.ts` | Utility functions |
+| `types.ts` / `internal-types.ts` | `repo/product/types.ts` | Local type definitions |
+
+## Environment Setup
+
+See `apps/web/.env.example` for required environment variables. See `docs/style-guide.md` for CSS/Tailwind patterns.
 
 ## Branded IDs
 
@@ -89,6 +135,7 @@ Use these instead of inline patterns:
 | `getDb(db).transaction(async (tx) => {...})`               | `withTransaction(db, async (tx) => {...})`      | `~/server/repo/database-helpers`             |
 | `ilike(column, \`%${term}%\`)`                             | `formatSearchTerm(column, term)`                | `~/server/repo/database-helpers`             |
 | `isNull(table.deletedAt)`                                  | `notDeleted(table)`                             | `~/server/repo/database-helpers`             |
+| Manual conditions array + notDeleted + formatSearchTerm    | `buildSearchConditions(table, filters, extras)` | `~/server/repo/database-helpers`             |
 | `ComboboxItem.refine()` for required product               | `requiredProductField`                          | `~/schemas/form-fields`                      |
 | `ComboboxItem.refine()` for required location              | `requiredLocationField`                         | `~/schemas/form-fields`                      |
 | `as ProductId`, `as LocationId`, etc.                      | `unsafeProductId()`, `unsafeLocationId()`, etc. | `~/schemas/identifiers`                      |

@@ -20,6 +20,7 @@ import type {
   RecipeOut,
   RecipeUpdateInput,
 } from "~/schemas/recipe";
+import { createAppError } from "~/server/api/trpc";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   recipe,
@@ -37,14 +38,15 @@ import {
   associatePendingImages,
   batchInsert,
   buildOrderBy,
+  buildSearchConditions,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
   notDeleted,
   relations,
   unwrapDb,
+  updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
@@ -127,15 +129,9 @@ export const recipeList = async (
   const dbClient = getDb(db);
 
   // Build where conditions - always filter out deleted items
-  const whereConditions = [
-    notDeleted(recipe),
-    filters.nameFilter
-      ? formatSearchTerm(recipe.name, filters.nameFilter)
-      : undefined,
-  ].filter((c): c is NonNullable<typeof c> => c !== undefined);
-
-  const whereClause =
-    whereConditions.length > 0 ? and(...whereConditions) : undefined;
+  const whereClause = buildSearchConditions(recipe, [
+    { column: recipe.name, term: filters.nameFilter },
+  ]);
 
   // Build orderBy using central sortableFields config
   const orderByClause = buildOrderBy(recipe, sort, [
@@ -312,37 +308,27 @@ export const upsertRecipe = async (
     });
 
     // Update the recipe with new data
-    const [updatedRecipe] = await dbClient
-      .update(recipe)
-      .set({
+    const updatedRecipe = await updateAndReturn(
+      db,
+      recipe,
+      {
         SourceType: input.meta?.url ? "Website" : "Other",
         SourceData: input.meta?.url || null,
         updatedAt: new Date(),
-      })
-      .where(eq(recipe.id, existingRecipe.id))
-      .returning();
-
-    if (!updatedRecipe) {
-      throw new Error("Failed to update recipe");
-    }
+      },
+      eq(recipe.id, existingRecipe.id),
+    );
 
     // Create new sections
     for (const section of processedSections) {
-      const [createdSection] = await dbClient
-        .insert(recipeSection)
-        .values({
-          recipeId: updatedRecipe.id,
-          name: section.name,
-          instructions:
-            section.instructions?.map((instruction) => ({
-              text: instruction.instruction,
-            })) ?? [],
-        })
-        .returning();
-
-      if (!createdSection) {
-        throw new Error("Failed to create recipe section");
-      }
+      const createdSection = await insertAndReturn(db, recipeSection, {
+        recipeId: updatedRecipe.id,
+        name: section.name,
+        instructions:
+          section.instructions?.map((instruction) => ({
+            text: instruction.instruction,
+          })) ?? [],
+      });
 
       // Create ingredients for this section
       if (section.processedIngredients.length > 0) {
@@ -386,7 +372,7 @@ export const updateRecipe = async (
   });
 
   if (!existingRecipe) {
-    throw new Error(`Recipe with ID ${id} not found`);
+    throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
   }
 
   // Store before state for audit logging

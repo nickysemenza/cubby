@@ -21,7 +21,7 @@ import {
   batchUpdateWithCaseWhen,
   buildOrderBy,
   buildPartialUpdateValues,
-  formatSearchTerm,
+  buildSearchConditions,
   getDb,
   insertAndReturn,
   notDeleted,
@@ -343,25 +343,18 @@ export const inventoryentryList = async (
 
   if (needsJoins) {
     // Build conditions for join-based query
-    const conditions: ReturnType<typeof eq>[] = [notDeleted(inventoryEntry)];
-    const productNameCondition = formatSearchTerm(
-      product.name,
-      filters.productNameFilter,
+    const whereCondition = buildSearchConditions(
+      inventoryEntry,
+      [
+        { column: product.name, term: filters.productNameFilter },
+        { column: location.name, term: filters.locationNameFilter },
+      ],
+      [
+        filters.locationIdFilter
+          ? eq(inventoryEntry.locationId, filters.locationIdFilter)
+          : undefined,
+      ],
     );
-    if (productNameCondition) {
-      conditions.push(productNameCondition);
-    }
-    const locationNameCondition = formatSearchTerm(
-      location.name,
-      filters.locationNameFilter,
-    );
-    if (locationNameCondition) {
-      conditions.push(locationNameCondition);
-    }
-    if (filters.locationIdFilter) {
-      conditions.push(eq(inventoryEntry.locationId, filters.locationIdFilter));
-    }
-    const whereCondition = and(...conditions);
 
     // Query with joins for name filtering
     const [results, [countResult]] = await Promise.all([
@@ -556,7 +549,10 @@ export const createInventoryEntry = async (
   });
 
   if (!result) {
-    throw new Error("Failed to fetch created inventory entry");
+    throw createAppError(
+      "INVENTORY_NOT_FOUND",
+      `Inventory entry not found after creation`,
+    );
   }
 
   return dbInventoryEntryToAPI(result);

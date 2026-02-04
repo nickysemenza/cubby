@@ -48,6 +48,7 @@ import {
   extractImagesFromJoinTable,
   formatSearchTerm,
   getDb,
+  insertAndReturn,
   lockAndValidateForDelete,
   mapRelation,
   notDeleted,
@@ -178,17 +179,10 @@ export const createIngredient = async (
   data: z.infer<typeof ingredientBase>,
   actor: ActorContext,
 ): Promise<IngredientWithRecipesAndProductOut> => {
-  const [newIngredient] = await unwrapDb(db)
-    .insert(ingredient)
-    .values({
-      name: data.name,
-      aliases: data.aliases || [],
-    })
-    .returning();
-
-  if (!newIngredient) {
-    throw new Error("Failed to create ingredient");
-  }
+  const newIngredient = await insertAndReturn(db, ingredient, {
+    name: data.name,
+    aliases: data.aliases || [],
+  });
 
   // Log audit entry
   await logAuditEntry(db, actor, {
@@ -265,19 +259,10 @@ export const findOrCreateIngredient = async (
       return existing;
     }
 
-    const [newIngredient] = await unwrapDb(db)
-      .insert(ingredient)
-      .values({
-        name: name,
-        aliases: aliases || [],
-      })
-      .returning();
-
-    if (!newIngredient) {
-      throw new Error("Failed to create ingredient");
-    }
-
-    return newIngredient;
+    return await insertAndReturn(db, ingredient, {
+      name: name,
+      aliases: aliases || [],
+    });
   };
 
   const entry = await findOrCreate();
@@ -291,20 +276,15 @@ export const findOrCreateIngredient = async (
     return entry;
   }
 
-  const [updated] = await unwrapDb(db)
-    .update(ingredient)
-    .set({
+  return await updateAndReturn(
+    db,
+    ingredient,
+    {
       name: name,
       aliases: [...entry.aliases, ...aliasesToAdd],
-    })
-    .where(eq(ingredient.id, entry.id))
-    .returning();
-
-  if (!updated) {
-    throw new Error("Failed to update ingredient aliases");
-  }
-
-  return updated;
+    },
+    eq(ingredient.id, entry.id),
+  );
 };
 
 // exact:

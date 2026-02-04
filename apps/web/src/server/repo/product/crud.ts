@@ -40,9 +40,9 @@ import {
 import {
   associatePendingImages,
   buildOrderBy,
+  buildSearchConditions,
   executeListQueryWithCount,
   extractImagesFromJoinTable,
-  formatSearchTerm,
   getDb,
   insertAndReturn,
   lockAndValidateForDelete,
@@ -112,38 +112,15 @@ export const productList = async (
   pagination: PaginationParams,
 ) => {
   // Build where conditions - always filter out deleted items
-  const conditions: ReturnType<typeof eq>[] = [notDeleted(product)];
-
-  if (name !== undefined) {
-    const nameCondition = formatSearchTerm(product.name, name);
-    if (nameCondition) {
-      conditions.push(nameCondition);
-    }
-  }
-
-  if (manufacturer !== undefined) {
-    const manufacturerCondition = formatSearchTerm(
-      product.manufacturer,
-      manufacturer,
-    );
-    if (manufacturerCondition) {
-      conditions.push(manufacturerCondition);
-    }
-  }
-
-  if (upc !== undefined) {
-    const upcCondition = formatSearchTerm(product.upc, upc);
-    if (upcCondition) {
-      conditions.push(upcCondition);
-    }
-  }
-
-  if (category !== undefined) {
-    // Exact match for category (enum value)
-    conditions.push(eq(product.category, category));
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  const whereClause = buildSearchConditions(
+    product,
+    [
+      { column: product.name, term: name },
+      { column: product.manufacturer, term: manufacturer },
+      { column: product.upc, term: upc },
+    ],
+    [category !== undefined ? eq(product.category, category) : undefined],
+  );
 
   // Build order by using central sortableFields config
   const orderByArray = buildOrderBy(product, sort, [

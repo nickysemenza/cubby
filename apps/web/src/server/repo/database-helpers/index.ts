@@ -32,6 +32,7 @@ export {
 // Query helpers
 export {
   buildOrderBy,
+  buildSearchConditions,
   executeListQueryWithCount,
   formatSearchTerm,
   lockAndValidateForDelete,

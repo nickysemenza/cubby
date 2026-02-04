@@ -36,6 +36,7 @@ import {
   associatePendingImages,
   buildOrderBy,
   buildPartialUpdateValues,
+  buildSearchConditions,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -303,22 +304,16 @@ export const locationList = async (
   sort: SortParams,
   pagination: PaginationParams,
 ) => {
-  // Always filter out deleted items
-  const conditions: ReturnType<typeof eq>[] = [notDeleted(location)];
-
-  if (filters.nameFilter) {
-    const { formatSearchTerm } = await import("~/server/repo/database-helpers");
-    const nameCondition = formatSearchTerm(location.name, filters.nameFilter);
-    if (nameCondition) {
-      conditions.push(nameCondition);
-    }
-  }
-
-  if (filters.itemTypeFilter) {
-    conditions.push(eq(location.type, filters.itemTypeFilter));
-  }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  // Build where conditions - always filter out deleted items
+  const whereClause = buildSearchConditions(
+    location,
+    [{ column: location.name, term: filters.nameFilter }],
+    [
+      filters.itemTypeFilter
+        ? eq(location.type, filters.itemTypeFilter)
+        : undefined,
+    ],
+  );
 
   // Build order by using central sortableFields config
   const orderByClause = buildOrderBy(location, sort, [
