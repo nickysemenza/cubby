@@ -31,6 +31,7 @@ import { Route as RecipesCompareRouteImport } from './routes/recipes.compare'
 import { Route as RecipesIdRouteImport } from './routes/recipes.$id'
 import { Route as ProductsNewRouteImport } from './routes/products.new'
 import { Route as ProductsIdRouteImport } from './routes/products.$id'
+import { Route as LocationsValidateRouteImport } from './routes/locations.validate'
 import { Route as LocationsNewRouteImport } from './routes/locations.new'
 import { Route as LocationsIdRouteImport } from './routes/locations.$id'
 import { Route as InventoryQuickCaptureRouteImport } from './routes/inventory.quick-capture'
@@ -160,6 +161,11 @@ const ProductsIdRoute = ProductsIdRouteImport.update({
   path: '/products/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LocationsValidateRoute = LocationsValidateRouteImport.update({
+  id: '/locations/validate',
+  path: '/locations/validate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LocationsNewRoute = LocationsNewRouteImport.update({
   id: '/locations/new',
   path: '/locations/new',
@@ -273,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/new': typeof LocationsNewRoute
+  '/locations/validate': typeof LocationsValidateRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
@@ -315,6 +322,7 @@ export interface FileRoutesByTo {
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/new': typeof LocationsNewRoute
+  '/locations/validate': typeof LocationsValidateRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
@@ -358,6 +366,7 @@ export interface FileRoutesById {
   '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
   '/locations/$id': typeof LocationsIdRoute
   '/locations/new': typeof LocationsNewRoute
+  '/locations/validate': typeof LocationsValidateRoute
   '/products/$id': typeof ProductsIdRoute
   '/products/new': typeof ProductsNewRoute
   '/recipes/$id': typeof RecipesIdRoute
@@ -402,6 +411,7 @@ export interface FileRouteTypes {
     | '/inventory/quick-capture'
     | '/locations/$id'
     | '/locations/new'
+    | '/locations/validate'
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
@@ -444,6 +454,7 @@ export interface FileRouteTypes {
     | '/inventory/quick-capture'
     | '/locations/$id'
     | '/locations/new'
+    | '/locations/validate'
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
@@ -486,6 +497,7 @@ export interface FileRouteTypes {
     | '/inventory/quick-capture'
     | '/locations/$id'
     | '/locations/new'
+    | '/locations/validate'
     | '/products/$id'
     | '/products/new'
     | '/recipes/$id'
@@ -529,6 +541,7 @@ export interface RootRouteChildren {
   InventoryQuickCaptureRoute: typeof InventoryQuickCaptureRoute
   LocationsIdRoute: typeof LocationsIdRoute
   LocationsNewRoute: typeof LocationsNewRoute
+  LocationsValidateRoute: typeof LocationsValidateRoute
   ProductsIdRoute: typeof ProductsIdRoute
   ProductsNewRoute: typeof ProductsNewRoute
   RecipesIdRoute: typeof RecipesIdRoute
@@ -706,6 +719,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/locations/validate': {
+      id: '/locations/validate'
+      path: '/locations/validate'
+      fullPath: '/locations/validate'
+      preLoaderRoute: typeof LocationsValidateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/locations/new': {
       id: '/locations/new'
       path: '/locations/new'
@@ -867,6 +887,7 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryQuickCaptureRoute: InventoryQuickCaptureRoute,
   LocationsIdRoute: LocationsIdRoute,
   LocationsNewRoute: LocationsNewRoute,
+  LocationsValidateRoute: LocationsValidateRoute,
   ProductsIdRoute: ProductsIdRoute,
   ProductsNewRoute: ProductsNewRoute,
   RecipesIdRoute: RecipesIdRoute,

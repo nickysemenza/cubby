@@ -1,0 +1,490 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, CircleAlert, CircleHelp, MapPin } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
+import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import {
+  PersistentScanner,
+  QR_CODE_FORMATS,
+} from "~/app/_components/inventory/persistent-scanner";
+import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { getErrorMessage } from "~/lib/error-utils";
+import { queryKeys } from "~/lib/query-keys";
+import { extractShortcodeFromScan, parseShortcode } from "~/lib/shortcode";
+import type { LocationId } from "~/schemas/identifiers";
+import { unsafeLocationId } from "~/schemas/identifiers";
+import type { InfLocation } from "~/schemas/location";
+import { useTRPC } from "~/trpc/react";
+
+type Phase = "SELECT_LOCATION" | "SCANNING" | "RECONCILIATION";
+
+interface ScannedLocation {
+  shortcode: string;
+  location: InfLocation;
+}
+
+// Form schema for location picker
+const locationPickerSchema = z.object({
+  parentLocation: ComboboxItemSchema.nullable(),
+});
+type LocationPickerValues = z.infer<typeof locationPickerSchema>;
+
+// Inline reassignment form schema
+const reassignSchema = z.object({
+  newParent: ComboboxItemSchema.nullable(),
+});
+type ReassignValues = z.infer<typeof reassignSchema>;
+
+interface LocationValidateFormProps {
+  initialParentId?: string;
+}
+
+export function LocationValidateForm({
+  initialParentId,
+}: LocationValidateFormProps) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const [phase, setPhase] = useState<Phase>(
+    initialParentId ? "SELECT_LOCATION" : "SELECT_LOCATION",
+  );
+  const [parentLocationId, setParentLocationId] = useState<string | null>(
+    initialParentId ?? null,
+  );
+  const [scannedLocations, setScannedLocations] = useState<
+    Map<string, ScannedLocation>
+  >(new Map());
+
+  // Fetch parent location with children
+  const { data: parentLocation } = useQuery({
+    ...api.location.getByID.queryOptions({
+      id: unsafeLocationId(parentLocationId!),
+    }),
+    enabled: !!parentLocationId,
+  });
+
+  // Set up form for location picker
+  const form = useForm<LocationPickerValues>({
+    resolver: zodResolver(locationPickerSchema),
+    defaultValues: { parentLocation: null },
+  });
+
+  // Pre-fill combobox when parent location loads from URL param
+  const watchedLocation = form.watch("parentLocation");
+  if (
+    parentLocation &&
+    initialParentId &&
+    !watchedLocation &&
+    parentLocationId === initialParentId
+  ) {
+    form.setValue("parentLocation", buildLocationComboboxItem(parentLocation));
+  }
+
+  // Watch for combobox changes
+  const selectedLocation = form.watch("parentLocation");
+  if (selectedLocation && selectedLocation.id !== parentLocationId) {
+    setParentLocationId(selectedLocation.id);
+  }
+
+  const childCount = parentLocation?.children?.length ?? 0;
+
+  // Handle QR scan
+  const handleScan = useCallback(
+    async (rawValue: string) => {
+      const shortcode = extractShortcodeFromScan(rawValue);
+      if (!shortcode) {
+        toast.error("Not a valid QR code");
+        return;
+      }
+
+      const parsed = parseShortcode(shortcode);
+      if (!parsed || parsed.type !== "location") {
+        toast.error("Not a location QR code");
+        return;
+      }
+
+      // Skip if this is the parent location itself
+      if (parentLocation?.shortcode === shortcode) {
+        toast.info("That's the parent location itself");
+        return;
+      }
+
+      // Skip if already scanned
+      if (scannedLocations.has(shortcode)) {
+        toast.info("Already scanned");
+        return;
+      }
+
+      // Resolve the shortcode to a location
+      try {
+        const location = await queryClient.fetchQuery(
+          api.location.getByShortcode.queryOptions({ shortcode }),
+        );
+        if (!location) {
+          toast.error(`No location found for ${shortcode}`);
+          return;
+        }
+
+        setScannedLocations((prev) => {
+          const next = new Map(prev);
+          next.set(shortcode, { shortcode, location });
+          return next;
+        });
+        toast.success(`Scanned: ${location.name}`);
+      } catch (err) {
+        toast.error(`Failed to look up ${shortcode}: ${getErrorMessage(err)}`);
+      }
+    },
+    [parentLocation, scannedLocations, queryClient, api],
+  );
+
+  // Reconciliation data
+  const children = parentLocation?.children ?? [];
+  const childShortcodes = useMemo(
+    () => new Set(children.map((c) => c.shortcode as string)),
+    [children],
+  );
+
+  const confirmed = useMemo(
+    () => children.filter((c) => scannedLocations.has(c.shortcode as string)),
+    [children, scannedLocations],
+  );
+
+  const missing = useMemo(
+    () => children.filter((c) => !scannedLocations.has(c.shortcode as string)),
+    [children, scannedLocations],
+  );
+
+  const unexpected = useMemo(
+    () =>
+      Array.from(scannedLocations.values()).filter(
+        (s) => !childShortcodes.has(s.shortcode),
+      ),
+    [scannedLocations, childShortcodes],
+  );
+
+  const scannedCount = Array.from(scannedLocations.values()).filter((s) =>
+    childShortcodes.has(s.shortcode),
+  ).length;
+
+  // Update mutation for reassignment
+  const updateMutation = useMutation(
+    api.location.update.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({
+          queryKey: [queryKeys.location.list],
+        });
+        if (parentLocationId) {
+          queryClient.invalidateQueries({
+            queryKey: api.location.getByID.queryKey({
+              id: unsafeLocationId(parentLocationId),
+            }),
+          });
+        }
+      },
+    }),
+  );
+
+  const handleConfirmHere = useCallback(
+    async (locationId: LocationId) => {
+      if (!parentLocationId) return;
+      try {
+        await updateMutation.mutateAsync({
+          id: locationId,
+          data: { parentId: parentLocationId },
+        });
+        toast.success("Location reassigned");
+      } catch (err) {
+        toast.error(`Failed to reassign: ${getErrorMessage(err)}`);
+      }
+    },
+    [parentLocationId, updateMutation],
+  );
+
+  const handleReassign = useCallback(
+    async (locationId: LocationId, newParentId: string) => {
+      try {
+        await updateMutation.mutateAsync({
+          id: locationId,
+          data: { parentId: newParentId },
+        });
+        toast.success("Location reassigned");
+      } catch (err) {
+        toast.error(`Failed to reassign: ${getErrorMessage(err)}`);
+      }
+    },
+    [updateMutation],
+  );
+
+  const handleStartOver = useCallback(() => {
+    setPhase("SELECT_LOCATION");
+    setParentLocationId(null);
+    setScannedLocations(new Map());
+    form.reset();
+  }, [form]);
+
+  // Phase 1: SELECT_LOCATION
+  if (phase === "SELECT_LOCATION") {
+    return (
+      <div className="space-y-4">
+        <ComboboxFieldWithSearch
+          form={form}
+          name="parentLocation"
+          label="Parent Location"
+          searchType="location"
+        />
+
+        {parentLocation && (
+          <div className="space-y-2">
+            <LocationBreadcrumb location={parentLocation} linkable />
+            <p className="text-muted-foreground text-sm">
+              {childCount} child location{childCount !== 1 ? "s" : ""} to
+              validate
+            </p>
+          </div>
+        )}
+
+        <Button
+          onClick={() => setPhase("SCANNING")}
+          disabled={!parentLocationId || childCount === 0}
+        >
+          Start Scanning
+        </Button>
+      </div>
+    );
+  }
+
+  // Phase 2: SCANNING
+  if (phase === "SCANNING") {
+    return (
+      <div className="space-y-4">
+        {parentLocation && (
+          <LocationBreadcrumb location={parentLocation} linkable />
+        )}
+
+        <p className="text-muted-foreground text-sm">
+          Scanned {scannedCount} of {childCount} expected
+        </p>
+
+        <PersistentScanner
+          onScan={handleScan}
+          formatsToSupport={QR_CODE_FORMATS}
+          scanHintText="Point at location QR code"
+        />
+
+        {scannedLocations.size > 0 && (
+          <div className="space-y-2">
+            <h4 className="font-medium text-sm">Scanned Locations</h4>
+            <div className="flex flex-wrap gap-2">
+              {Array.from(scannedLocations.values()).map((item) => (
+                <div
+                  key={item.shortcode}
+                  className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-green-800 text-xs dark:bg-green-900/30 dark:text-green-400"
+                >
+                  <Check className="h-3 w-3" />
+                  <span className="max-w-[120px] truncate">
+                    {item.location.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Button onClick={() => setPhase("RECONCILIATION")}>
+          Done Scanning
+        </Button>
+      </div>
+    );
+  }
+
+  // Phase 3: RECONCILIATION
+  return (
+    <div className="space-y-4">
+      {parentLocation && (
+        <LocationBreadcrumb location={parentLocation} linkable />
+      )}
+
+      <p className="text-muted-foreground text-sm">
+        {confirmed.length} confirmed, {missing.length} missing,{" "}
+        {unexpected.length} unexpected
+      </p>
+
+      {/* Confirmed */}
+      {confirmed.length > 0 && (
+        <Card className="border-green-300 dark:border-green-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 font-medium text-sm">
+              <Check className="h-4 w-4 text-green-600" />
+              Confirmed ({confirmed.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {confirmed.map((child) => (
+                <div key={child.id} className="flex items-center gap-2 text-sm">
+                  <LocationIcon type={child.type} size={14} />
+                  <span>{child.name}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {child.shortcode}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Missing */}
+      {missing.length > 0 && (
+        <Card className="border-amber-300 dark:border-amber-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 font-medium text-sm">
+              <CircleAlert className="h-4 w-4 text-amber-600" />
+              Missing ({missing.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {missing.map((child) => (
+                <MissingLocationRow
+                  key={child.id}
+                  location={child}
+                  onReassign={handleReassign}
+                  isPending={updateMutation.isPending}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Unexpected */}
+      {unexpected.length > 0 && (
+        <Card className="border-blue-300 dark:border-blue-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 font-medium text-sm">
+              <CircleHelp className="h-4 w-4 text-blue-600" />
+              Unexpected ({unexpected.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {unexpected.map((item) => (
+                <div
+                  key={item.shortcode}
+                  className="flex items-center justify-between gap-2 text-sm"
+                >
+                  <div className="flex items-center gap-2">
+                    <LocationIcon type={item.location.type} size={14} />
+                    <span>{item.location.name}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {item.shortcode}
+                    </span>
+                    {item.location.parent && (
+                      <span className="text-muted-foreground text-xs">
+                        (currently in {item.location.parent.name})
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleConfirmHere(item.location.id)}
+                    disabled={updateMutation.isPending}
+                  >
+                    <MapPin className="mr-1 h-3 w-3" />
+                    Confirm Here
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Footer actions */}
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => setPhase("SCANNING")}>
+          Scan More
+        </Button>
+        <Button variant="ghost" onClick={handleStartOver}>
+          Start Over
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Sub-component for missing location rows with inline reassignment
+function MissingLocationRow({
+  location,
+  onReassign,
+  isPending,
+}: {
+  location: InfLocation;
+  onReassign: (locationId: LocationId, newParentId: string) => Promise<void>;
+  isPending: boolean;
+}) {
+  const [showReassign, setShowReassign] = useState(false);
+
+  const form = useForm<ReassignValues>({
+    resolver: zodResolver(reassignSchema),
+    defaultValues: { newParent: null },
+  });
+
+  const handleReassign = useCallback(async () => {
+    const selected = form.getValues("newParent");
+    if (!selected) return;
+    await onReassign(location.id, selected.id);
+    setShowReassign(false);
+  }, [form, location.id, onReassign]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <div className="flex items-center gap-2">
+          <LocationIcon type={location.type} size={14} />
+          <span>{location.name}</span>
+          <span className="text-muted-foreground text-xs">
+            {location.shortcode}
+          </span>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowReassign(!showReassign)}
+        >
+          Reassign to...
+        </Button>
+      </div>
+      {showReassign && (
+        <div className="flex items-end gap-2 pl-6">
+          <div className="flex-1">
+            <ComboboxFieldWithSearch
+              form={form}
+              name="newParent"
+              label="New parent"
+              searchType="location"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={handleReassign}
+            disabled={!form.watch("newParent") || isPending}
+          >
+            Move
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}

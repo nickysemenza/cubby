@@ -44,7 +44,10 @@ import {
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
-import { PersistentScanner } from "~/app/_components/inventory/persistent-scanner";
+import {
+  BARCODE_FORMATS,
+  PersistentScanner,
+} from "~/app/_components/inventory/persistent-scanner";
 import { RecentLocations } from "~/app/_components/inventory/recent-locations";
 import {
   LocationBreadcrumb,
@@ -436,6 +439,8 @@ export default function QuickCaptureForm({
               <PersistentScanner
                 onScan={handlePersistentScan}
                 enabled={!isScannerPending}
+                formatsToSupport={BARCODE_FORMATS}
+                scanHintText="Point at barcode to scan"
               />
 
               {/* Loading indicator */}

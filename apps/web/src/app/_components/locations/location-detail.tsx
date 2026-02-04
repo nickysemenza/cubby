@@ -1,6 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
+  ClipboardCheck,
   DollarSign,
   FolderTree,
   ImageIcon,
@@ -90,14 +91,28 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       icon: FolderTree,
       content: (
         <div className="space-y-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCreateChildOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Child
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateChildOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Child
+            </Button>
+            {location.children && location.children.length > 0 && (
+              <Link
+                to="/locations/validate"
+                search={{ parentId: location.id }}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                )}
+              >
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+                Validate
+              </Link>
+            )}
+          </div>
           {location.children && location.children.length > 0 ? (
             <LocationCardGrid
               locations={location.children}

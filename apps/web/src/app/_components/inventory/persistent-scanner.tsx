@@ -19,13 +19,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 
-const SUPPORTED_FORMATS = [
+export const BARCODE_FORMATS = [
   Html5QrcodeSupportedFormats.UPC_A,
   Html5QrcodeSupportedFormats.UPC_E,
   Html5QrcodeSupportedFormats.EAN_13,
   Html5QrcodeSupportedFormats.EAN_8,
   Html5QrcodeSupportedFormats.CODE_128, // Added for non-UPC products
 ];
+
+export const QR_CODE_FORMATS = [Html5QrcodeSupportedFormats.QR_CODE];
 
 // Global counter to ensure unique IDs across strict mode remounts
 let scannerIdCounter = 0;
@@ -34,12 +36,16 @@ interface PersistentScannerProps {
   onScan: (barcode: string) => void;
   onError?: (error: string) => void;
   enabled?: boolean;
+  formatsToSupport: Html5QrcodeSupportedFormats[];
+  scanHintText: string;
 }
 
 export function PersistentScanner({
   onScan,
   onError,
   enabled = true,
+  formatsToSupport,
+  scanHintText,
 }: PersistentScannerProps) {
   const [containerId] = useState(
     () => `persistent-scanner-${++scannerIdCounter}`,
@@ -99,7 +105,7 @@ export function PersistentScanner({
       if (!container || cancelled) return;
 
       const scanner = new Html5Qrcode(containerId, {
-        formatsToSupport: SUPPORTED_FORMATS,
+        formatsToSupport,
         verbose: false,
       });
 
@@ -185,7 +191,7 @@ export function PersistentScanner({
         scannerRef.current = null;
       }
     };
-  }, [containerId, enabled, handleScan, onError]);
+  }, [containerId, enabled, handleScan, onError, formatsToSupport]);
 
   if (!enabled) {
     return null;
@@ -247,7 +253,7 @@ export function PersistentScanner({
       {!isLoading && !error && (
         <div className="absolute inset-x-0 bottom-3 text-center">
           <span className="rounded-full bg-black/60 px-3 py-1 text-sm text-white">
-            Point at barcode to scan
+            {scanHintText}
           </span>
         </div>
       )}

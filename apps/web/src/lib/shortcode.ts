@@ -80,6 +80,33 @@ export function isValidShortcode(code: string): boolean {
 }
 
 /**
+ * Extract a shortcode from a raw QR code scan value.
+ * Handles both raw shortcodes ("L-A3F2") and full URLs ("https://cubby.example.com/L-A3F2").
+ * Returns the normalized uppercase shortcode or null if invalid.
+ */
+export function extractShortcodeFromScan(rawValue: string): string | null {
+  const trimmed = rawValue.trim();
+
+  // Try parsing as a raw shortcode first
+  const direct = parseShortcode(trimmed);
+  if (direct) return trimmed.toUpperCase();
+
+  // Try parsing as a URL and extracting the last path segment
+  try {
+    const url = new URL(trimmed);
+    const lastSegment = url.pathname.split("/").filter(Boolean).pop();
+    if (lastSegment) {
+      const fromUrl = parseShortcode(lastSegment);
+      if (fromUrl) return lastSegment.toUpperCase();
+    }
+  } catch {
+    // Not a valid URL
+  }
+
+  return null;
+}
+
+/**
  * Build the full URL for a shortcode (used in QR codes).
  * Uses the shortcode directly in the path: /L-XXXX or /P-XXXX
  */
