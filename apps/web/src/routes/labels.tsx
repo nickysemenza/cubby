@@ -18,6 +18,9 @@ import type { LocationType } from "~/schemas/location";
 import type { ProductCategory } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 
+// test layouts wiht
+// ╰─❮ pdftk PLS763-2.625x1.pdf stamp 3x.pdf output overlay.pdf && open overlay.pdf
+// ╰─❮ pdftk PLS134-4x1.5.pdf stamp 2x.pdf output overlay.pdf && open overlay.pdf
 const SHEET_LAYOUTS = {
   pls134: {
     // https://www.premiumlabelsupply.com/templates/pls134/
@@ -65,6 +68,7 @@ function isSheetFormat(format: string): format is SheetFormat {
 const searchParamsSchema = z.object({
   codes: z.string().optional(),
   format: z.enum(["pls134", "pls763", "ptouch"]).default("pls134"),
+  skip: z.coerce.number().int().min(0).default(0),
 });
 
 export const Route = createFileRoute("/labels")({
@@ -154,9 +158,10 @@ function useShortcodeLookups(shortcodes: string[]) {
 }
 
 function LabelsPage() {
-  const { codes, format } = Route.useSearch();
+  const { codes, format, skip } = Route.useSearch();
   const router = useRouter();
   const navigate = Route.useNavigate();
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const shortcodes = useMemo<string[]>(() => {
     const list =
@@ -197,6 +202,30 @@ function LabelsPage() {
     [items, qrUrls],
   );
 
+  const visibleLabelItems = useMemo(
+    () => labelItems.filter((item) => !hidden.has(item.shortcode)),
+    [labelItems, hidden],
+  );
+
+  const hiddenItems = useMemo(
+    () => labelItems.filter((item) => hidden.has(item.shortcode)),
+    [labelItems, hidden],
+  );
+
+  const effectiveSkip = isSheetFormat(format) ? skip : 0;
+
+  function toggleHidden(shortcode: string) {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(shortcode)) {
+        next.delete(shortcode);
+      } else {
+        next.add(shortcode);
+      }
+      return next;
+    });
+  }
+
   function handleDownloadCsv() {
     const csv = generateLabelCsv(items);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -228,15 +257,36 @@ function LabelsPage() {
       <EntityLayout
         title="Print Labels"
         actions={
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => router.history.back()}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
             <FormatToggle
               format={format}
-              onChange={(f) => navigate({ search: { codes, format: f } })}
+              onChange={(f) => navigate({ search: { codes, format: f, skip } })}
             />
+            {isSheetFormat(format) && (
+              <label className="flex items-center gap-1.5 text-sm">
+                <span className="text-muted-foreground">Skip</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={SHEET_LAYOUTS[format].labelsPerSheet - 1}
+                  value={effectiveSkip}
+                  onChange={(e) =>
+                    navigate({
+                      search: {
+                        codes,
+                        format,
+                        skip: Math.max(0, Number(e.target.value) || 0),
+                      },
+                    })
+                  }
+                  className="h-8 w-14 rounded-md border border-input bg-background px-2 text-center text-sm"
+                />
+              </label>
+            )}
             {format !== "ptouch" ? (
               <Button onClick={() => window.print()} disabled={!allQrReady}>
                 <Printer className="mr-2 h-4 w-4" />
@@ -258,7 +308,29 @@ function LabelsPage() {
             </CardContent>
           </Card>
         ) : isSheetFormat(format) ? (
-          <LabelSheet items={labelItems} layout={SHEET_LAYOUTS[format]} />
+          <>
+            <LabelSheet
+              items={visibleLabelItems}
+              layout={SHEET_LAYOUTS[format]}
+              skip={effectiveSkip}
+              onToggle={toggleHidden}
+            />
+            {hiddenItems.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <span className="text-muted-foreground text-xs">Hidden:</span>
+                {hiddenItems.map((item) => (
+                  <button
+                    key={item.shortcode}
+                    type="button"
+                    className="rounded bg-muted px-2 py-0.5 font-mono text-muted-foreground text-xs transition-colors hover:bg-muted/80"
+                    onClick={() => toggleHidden(item.shortcode)}
+                  >
+                    {item.shortcode}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
           <PtouchPreview items={items} />
         )}
@@ -270,8 +342,9 @@ function LabelsPage() {
           <>
             <PrintStyles layout={SHEET_LAYOUTS[format]} />
             <LabelSheet
-              items={labelItems}
+              items={visibleLabelItems}
               layout={SHEET_LAYOUTS[format]}
+              skip={effectiveSkip}
               printOnly
             />
           </>,
@@ -367,15 +440,155 @@ function PrintStyles({
   );
 }
 
+function LabelCell({
+  item,
+  layout,
+  interactive,
+  preview,
+  onToggle,
+}: {
+  item: LabelItem & { qrUrl?: string };
+  layout: (typeof SHEET_LAYOUTS)[SheetFormat];
+  interactive: boolean;
+  preview: boolean;
+  onToggle?: (shortcode: string) => void;
+}) {
+  const color = getLabelColor(item);
+  return (
+    <div
+      className={[
+        "flex break-inside-avoid items-center overflow-hidden",
+        interactive && "cursor-pointer transition-opacity hover:opacity-60",
+        preview && "rounded-md border border-border/60",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      style={{
+        height: layout.labelHeight,
+        width: layout.labelWidth,
+        gap: layout.contentGap,
+        paddingTop: layout.verticalPadding,
+        paddingBottom: layout.verticalPadding,
+        paddingRight: layout.borderWidth,
+        borderLeftWidth: layout.borderWidth,
+        borderLeftColor: color,
+        borderLeftStyle: "solid",
+      }}
+      {...(interactive && onToggle
+        ? {
+            onClick: () => onToggle(item.shortcode),
+            role: "button",
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onToggle(item.shortcode);
+              }
+            },
+          }
+        : {})}
+    >
+      {item.qrUrl ? (
+        <img
+          src={item.qrUrl}
+          alt={`QR ${item.shortcode}`}
+          style={{ height: layout.qrSize, width: layout.qrSize }}
+          className="shrink-0"
+        />
+      ) : (
+        <div
+          style={{ height: layout.qrSize, width: layout.qrSize }}
+          className="shrink-0"
+        />
+      )}
+      <div className="flex min-w-0 flex-col gap-[0.03in]">
+        <div
+          className="font-bold font-mono tracking-[0.5px]"
+          style={{ fontSize: layout.shortcodeSize }}
+        >
+          {item.shortcode}
+        </div>
+        <div
+          className="line-clamp-1 text-[#333]"
+          style={{ fontSize: layout.nameSize }}
+        >
+          {item.name}
+        </div>
+        <div
+          className="flex items-center gap-1 whitespace-nowrap capitalize"
+          style={{ color, fontSize: layout.badgeSize }}
+        >
+          <LabelIcon item={item} />
+          <span>{formatSubtype(item)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LabelSheet({
   items,
   layout,
+  skip = 0,
   printOnly,
+  onToggle,
 }: {
   items: (LabelItem & { qrUrl?: string })[];
   layout: (typeof SHEET_LAYOUTS)[SheetFormat];
+  skip?: number;
   printOnly?: boolean;
+  onToggle?: (shortcode: string) => void;
 }) {
+  const preview = !printOnly;
+  const interactive = preview && !!onToggle;
+  const n = layout.labelsPerSheet;
+
+  // Build flat list of cell elements: spacers then labels
+  const cells: React.ReactNode[] = [];
+  for (let i = 0; i < skip; i++) {
+    cells.push(
+      <div
+        key={`spacer-${i}`}
+        className={
+          preview
+            ? "rounded-md border border-border/40 border-dashed"
+            : undefined
+        }
+        style={{ height: layout.labelHeight, width: layout.labelWidth }}
+      />,
+    );
+  }
+  for (const item of items) {
+    cells.push(
+      <LabelCell
+        key={item.shortcode}
+        item={item}
+        layout={layout}
+        interactive={interactive}
+        preview={preview}
+        onToggle={onToggle}
+      />,
+    );
+  }
+
+  // For on-screen, insert page separators between pages
+  const gridChildren: React.ReactNode[] = [];
+  if (!printOnly && cells.length > n) {
+    for (let i = 0; i < cells.length; i++) {
+      if (i > 0 && i % n === 0) {
+        gridChildren.push(
+          <div
+            key={`page-sep-${i}`}
+            className="col-span-full my-2 border-muted-foreground/30 border-t border-dashed"
+          />,
+        );
+      }
+      gridChildren.push(cells[i]);
+    }
+  } else {
+    gridChildren.push(...cells);
+  }
+
   return (
     <div
       className={
@@ -390,61 +603,7 @@ function LabelSheet({
         gridTemplateColumns: `repeat(${layout.cols}, 1fr)`,
       }}
     >
-      {items.map((item) => {
-        const color = getLabelColor(item);
-        return (
-          <div
-            key={item.shortcode}
-            className="flex break-inside-avoid items-center overflow-hidden"
-            style={{
-              height: layout.labelHeight,
-              width: layout.labelWidth,
-              gap: layout.contentGap,
-              paddingTop: layout.verticalPadding,
-              paddingBottom: layout.verticalPadding,
-              paddingRight: layout.borderWidth,
-              borderLeftWidth: layout.borderWidth,
-              borderLeftColor: color,
-              borderLeftStyle: "solid",
-            }}
-          >
-            {item.qrUrl ? (
-              <img
-                src={item.qrUrl}
-                alt={`QR ${item.shortcode}`}
-                style={{ height: layout.qrSize, width: layout.qrSize }}
-                className="shrink-0"
-              />
-            ) : (
-              <div
-                style={{ height: layout.qrSize, width: layout.qrSize }}
-                className="shrink-0"
-              />
-            )}
-            <div className="flex min-w-0 flex-col gap-[0.03in]">
-              <div
-                className="font-bold font-mono tracking-[0.5px]"
-                style={{ fontSize: layout.shortcodeSize }}
-              >
-                {item.shortcode}
-              </div>
-              <div
-                className="line-clamp-1 text-[#333]"
-                style={{ fontSize: layout.nameSize }}
-              >
-                {item.name}
-              </div>
-              <div
-                className="flex items-center gap-1 whitespace-nowrap capitalize"
-                style={{ color, fontSize: layout.badgeSize }}
-              >
-                <LabelIcon item={item} />
-                <span>{formatSubtype(item)}</span>
-              </div>
-            </div>
-          </div>
-        );
-      })}
+      {gridChildren}
     </div>
   );
 }
