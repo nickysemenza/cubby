@@ -5,17 +5,19 @@ import {
 import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import ws from "ws";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
 
-// Required for @neondatabase/serverless in Node.js environments
-neonConfig.webSocketConstructor = ws;
+// Use the native WebSocket global (Node 22+) to avoid ws native addon
+// bundling issues on Vercel (bufferUtil.mask is not a function)
+neonConfig.webSocketConstructor = WebSocket;
 // Pipeline startup+auth messages to save 1-2 round trips per new connection
 neonConfig.pipelineConnect = "password";
 // Batch multiple protocol messages into single WebSocket frames
 neonConfig.coalesceWrites = true;
+// Skip redundant Postgres-level TLS inside the already-encrypted wss:// tunnel
+neonConfig.forceDisablePgSSL = true;
 
 // Re-export Database type for use throughout the application
 export type { Database };
