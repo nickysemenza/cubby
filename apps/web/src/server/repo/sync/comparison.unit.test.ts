@@ -444,8 +444,8 @@ describe("compareInventoryForSync - rename detection", () => {
         location_name: "workshop bench",
       },
       expectedCounts: { moved: 1 },
-      movedFrom: "garage corner",
-      movedTo: "workshop bench",
+      movedFrom: "workshop bench",
+      movedTo: "garage corner",
     },
     {
       name: "case insensitive product name",
@@ -498,6 +498,61 @@ describe("compareInventoryForSync - rename detection", () => {
         if (movedFrom) expect(moved?.movedFrom).toBe(movedFrom);
         if (movedTo) expect(moved?.movedTo).toBe(movedTo);
       }
+    });
+
+    it("should detect move when product exists at multiple locations", () => {
+      // Bug scenario: product at Location A and Location B in both app and sheet,
+      // but Location B changed to Location C in the app.
+      // Before fix: 2 matched + 1 app_only + 1 sheet_only (move missed)
+      // After fix: 2 matched + 1 moved
+      const appRows = [
+        makeAppRow({
+          product_name: "M18 Router",
+          manufacturer: "Milwaukee",
+          location_name: "Location A",
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+        makeAppRow({
+          product_name: "M18 Router",
+          manufacturer: "Milwaukee",
+          location_name: "Location C",
+          location_id: unsafeLocationId("loc-3"),
+          inventory_entry_id: unsafeInventoryId("inv-3"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "M18 Router",
+          manufacturer: "Milwaukee",
+          location_name: "Location A",
+        }),
+        makeSheetRow({
+          product_name: "M18 Router",
+          manufacturer: "Milwaukee",
+          location_name: "Location B",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 1,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 1,
+      });
+
+      const matched = result.find((i) => i.state === "matched");
+      expect(matched?.appData?.locationName).toBe("Location A");
+
+      const moved = result.find((i) => i.state === "moved");
+      expect(moved).toBeDefined();
+      expect(moved?.movedFrom).toBe("Location B");
+      expect(moved?.movedTo).toBe("Location C");
     });
   });
 

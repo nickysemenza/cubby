@@ -490,8 +490,30 @@ export function compareInventoryForSync(
     if (processedKeys.has(key)) continue;
 
     const productKey = normalizeForComparison(appRow.product_name);
-    const appEntriesForProduct = appByProduct.get(productKey) ?? [];
-    const sheetEntriesForProduct = sheetByProduct.get(productKey) ?? [];
+    const appEntriesForProduct = (appByProduct.get(productKey) ?? []).filter(
+      (row) =>
+        !processedKeys.has(
+          makeInventoryKey(
+            row.product_name,
+            row.manufacturer,
+            row.location_shortcode,
+            row.location_name,
+          ),
+        ),
+    );
+    const sheetEntriesForProduct = (
+      sheetByProduct.get(productKey) ?? []
+    ).filter(
+      (row) =>
+        !processedKeys.has(
+          makeInventoryKey(
+            row.product_name,
+            row.manufacturer,
+            row.location_shortcode,
+            row.location_name,
+          ),
+        ),
+    );
 
     // Check for move or manufacturer change: 1 entry in app, 1 entry in sheet
     if (
@@ -523,8 +545,8 @@ export function compareInventoryForSync(
           resolution: defaultResolution,
           appData: buildInventoryAppData(appRow),
           sheetData: buildInventorySheetData(sheetRow),
-          movedFrom: appRow.location_name ?? undefined,
-          movedTo: sheetRow.location_name ?? undefined,
+          movedFrom: sheetRow.location_name ?? undefined,
+          movedTo: appRow.location_name ?? undefined,
         });
 
         processedKeys.add(key);
@@ -590,8 +612,8 @@ export function compareInventoryForSync(
           resolution: defaultResolution,
           appData: buildInventoryAppData(appRow),
           sheetData: buildInventorySheetData(sheetRow),
-          movedFrom: appRow.location_name ?? undefined,
-          movedTo: sheetRow.location_name ?? undefined,
+          movedFrom: sheetRow.location_name ?? undefined,
+          movedTo: appRow.location_name ?? undefined,
         });
       } else if (fieldDiffs.length > 0) {
         // Same location but other field differences = conflict
