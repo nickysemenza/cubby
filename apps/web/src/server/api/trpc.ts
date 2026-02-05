@@ -32,14 +32,13 @@ import { UPCLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { db } from "~/server/db";
+// Import and re-export createAppError from dedicated module to avoid circular dependencies
+import { createAppError } from "~/server/errors/app-error";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { ProductService } from "~/server/services/product.service";
 import { USDAService } from "~/server/services/usda.service";
 import { getTracer, TraceNames } from "~/server/tracing";
-
-// Import and re-export createAppError from dedicated module to avoid circular dependencies
-import { createAppError } from "~/server/errors/app-error";
 export { createAppError };
 
 /**

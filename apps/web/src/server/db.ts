@@ -12,6 +12,10 @@ import * as schema from "./db/schema";
 
 // Required for @neondatabase/serverless in Node.js environments
 neonConfig.webSocketConstructor = ws;
+// Pipeline startup+auth messages to save 1-2 round trips per new connection
+neonConfig.pipelineConnect = "password";
+// Batch multiple protocol messages into single WebSocket frames
+neonConfig.coalesceWrites = true;
 
 // Re-export Database type for use throughout the application
 export type { Database };
