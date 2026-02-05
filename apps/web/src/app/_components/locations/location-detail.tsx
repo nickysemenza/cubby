@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ClipboardCheck,
   DollarSign,
@@ -8,9 +8,11 @@ import {
   Info,
   Package,
   Plus,
+  Printer,
   ScanBarcode,
 } from "lucide-react";
 import { type FC, useState } from "react";
+import { toast } from "sonner";
 import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Empty,
@@ -33,6 +35,7 @@ import { LocationBreadcrumb } from "./location-breadcrumb";
 import { LocationCardGrid } from "./location-card-grid";
 import { LocationForm } from "./location-form";
 import { LocationInventoryTable } from "./location-inventory-table";
+import { typeSupportsQrCode } from "./location-type-theme";
 
 interface LocationDetailProps {
   location: InfLocation;
@@ -41,6 +44,7 @@ interface LocationDetailProps {
 export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const api = useTRPC();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [createChildOpen, setCreateChildOpen] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
@@ -101,16 +105,48 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
               Add Child
             </Button>
             {location.children && location.children.length > 0 && (
-              <Link
-                to="/locations/validate"
-                search={{ parentId: location.id }}
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" }),
-                )}
-              >
-                <ClipboardCheck className="mr-2 h-4 w-4" />
-                Validate
-              </Link>
+              <>
+                <Link
+                  to="/locations/validate"
+                  search={{ parentId: location.id }}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                  )}
+                >
+                  <ClipboardCheck className="mr-2 h-4 w-4" />
+                  Validate
+                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const children = location.children!;
+                    const eligible = children.filter(
+                      (c) => c.shortcode && typeSupportsQrCode(c.type),
+                    );
+                    const skipped = children.length - eligible.length;
+
+                    if (eligible.length === 0) {
+                      toast.error(
+                        "None of the child locations support QR code labels (rooms and areas are excluded)",
+                      );
+                      return;
+                    }
+
+                    if (skipped > 0) {
+                      toast.info(
+                        `Skipped ${skipped} location${skipped === 1 ? "" : "s"} without QR support (rooms/areas)`,
+                      );
+                    }
+
+                    const codes = eligible.map((c) => c.shortcode).join(",");
+                    void navigate({ to: "/labels", search: { codes } });
+                  }}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print Labels
+                </Button>
+              </>
             )}
           </div>
           {location.children && location.children.length > 0 ? (
