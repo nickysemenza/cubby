@@ -110,8 +110,6 @@ export function extractShortcodeFromScan(rawValue: string): string | null {
  * Build the full URL for a shortcode (used in QR codes).
  * Uses the shortcode directly in the path: /L-XXXX or /P-XXXX
  */
-export function getShortcodeUrl(shortcode: string, baseUrl?: string): string {
-  const base =
-    baseUrl ?? (typeof window !== "undefined" ? window.location.origin : "");
-  return `${base}/${shortcode}`;
+export function getShortcodeUrl(shortcode: string): string {
+  return `https://cubby.nickysemenza.com/${shortcode}`;
 }

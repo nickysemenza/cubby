@@ -120,7 +120,10 @@ const getResolutionOptions = (
         { value: "delete_from_sheet", label: "Delete from Sheet" },
       ];
     case "renamed":
-      return [];
+      return [
+        { value: "use_app", label: "Use App Name" },
+        { value: "apply_rename", label: "Use Sheet Name" },
+      ];
     case "moved":
       return [
         { value: "apply_move", label: "Apply Move" },
@@ -788,10 +791,19 @@ function LocationSyncTable({
               <td className="p-2">
                 {item.state === "renamed" && item.renamedFrom ? (
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-muted-foreground text-sm line-through">
-                      {item.renamedFrom}
-                    </span>
-                    <span>{item.renamedTo ?? item.appData?.locationName}</span>
+                    {(() => {
+                      const isUseApp = resolutions[item.key] !== "apply_rename";
+                      return (
+                        <>
+                          <span className="text-muted-foreground text-sm line-through">
+                            {isUseApp ? item.renamedTo : item.renamedFrom}
+                          </span>
+                          <span>
+                            {isUseApp ? item.renamedFrom : item.renamedTo}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : item.appData?.locationId ? (
                   <Link
@@ -868,10 +880,19 @@ function InventorySyncTable({
               <td className="p-2">
                 {item.state === "renamed" && item.renamedFrom ? (
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-muted-foreground text-sm line-through">
-                      {item.renamedFrom}
-                    </span>
-                    <span>{item.renamedTo ?? item.appData?.productName}</span>
+                    {(() => {
+                      const isUseApp = resolutions[item.key] !== "apply_rename";
+                      return (
+                        <>
+                          <span className="text-muted-foreground text-sm line-through">
+                            {isUseApp ? item.renamedTo : item.renamedFrom}
+                          </span>
+                          <span>
+                            {isUseApp ? item.renamedFrom : item.renamedTo}
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : item.appData?.productId ? (
                   <Link

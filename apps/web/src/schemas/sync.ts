@@ -283,7 +283,7 @@ export function getDefaultResolution(
     case "sheet_only":
       return "add_to_app";
     case "renamed":
-      return "apply_rename";
+      return "use_app";
     case "moved":
       return "apply_move";
   }

@@ -89,17 +89,25 @@ export function getRowDifferences(
 ): FieldChange[] {
   const changes: FieldChange[] = [];
 
-  // Special case: location_name needs normalized comparison (lowercase, trimmed)
-  const normalizedAppName = normalizeForComparison(appRow.location_name);
-  const normalizedSheetName = normalizeForComparison(
-    sheetRow.location_name ?? "",
-  );
-  if (normalizedAppName !== normalizedSheetName) {
-    changes.push({
-      field: "location",
-      from: sheetRow.location_name ?? null,
-      to: appRow.location_name,
-    });
+  // Special case: location - use shortcode (stable ID) when both sides have it,
+  // so a location rename doesn't produce a false "location" diff
+  const appSc = appRow.location_shortcode?.trim();
+  const sheetSc = sheetRow.location_shortcode?.trim();
+  const sameLocationByShortcode =
+    appSc && sheetSc && appSc.toLowerCase() === sheetSc.toLowerCase();
+
+  if (!sameLocationByShortcode) {
+    const normalizedAppName = normalizeForComparison(appRow.location_name);
+    const normalizedSheetName = normalizeForComparison(
+      sheetRow.location_name ?? "",
+    );
+    if (normalizedAppName !== normalizedSheetName) {
+      changes.push({
+        field: "location",
+        from: sheetRow.location_name ?? null,
+        to: appRow.location_name,
+      });
+    }
   }
 
   // Special case: quantity/unit have defaults (1/each) for product-only rows

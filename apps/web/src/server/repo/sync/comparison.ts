@@ -324,8 +324,73 @@ export function compareLocationsForSync(
     processedKeys.add(key);
   }
 
+  // Post-process: suppress parent_name diffs caused by location renames.
+  // When a parent location is renamed, its children show a parent_name conflict
+  // even though nothing actually changed from the user's perspective.
+  const renameMap = new Map<string, string>();
+  for (const item of items) {
+    if (item.state === "renamed" && item.renamedFrom && item.renamedTo) {
+      renameMap.set(
+        item.renamedFrom.toLowerCase().trim(),
+        item.renamedTo.toLowerCase().trim(),
+      );
+    }
+  }
+
+  if (renameMap.size > 0) {
+    for (const item of items) {
+      if (item.state !== "conflict" || !item.fieldDiffs) continue;
+
+      const parentDiffIdx = item.fieldDiffs.findIndex(
+        (d) => d.field === "parent_name",
+      );
+      if (parentDiffIdx === -1) continue;
+
+      const parentDiff = item.fieldDiffs[parentDiffIdx]!;
+      const fromNorm = String(parentDiff.from ?? "")
+        .toLowerCase()
+        .trim();
+      const toNorm = String(parentDiff.to ?? "")
+        .toLowerCase()
+        .trim();
+
+      // Check if this parent_name change is explained by a rename
+      // (app has the old name, sheet has the new name, or vice versa)
+      const isExplainedByRename =
+        renameMap.get(fromNorm) === toNorm ||
+        renameMap.get(toNorm) === fromNorm;
+
+      if (isExplainedByRename) {
+        item.fieldDiffs.splice(parentDiffIdx, 1);
+        if (item.fieldDiffs.length === 0) {
+          item.state = "matched";
+          item.fieldDiffs = undefined;
+          item.defaultResolution = null;
+          item.resolution = null;
+        }
+      }
+    }
+  }
+
   return items;
 }
+
+/**
+ * Compare two rows' locations using shortcode (stable ID) when available,
+ * falling back to normalized name comparison.
+ */
+const isSameLocation = (
+  a: { location_shortcode?: string | null; location_name?: string | null },
+  b: { location_shortcode?: string | null; location_name?: string | null },
+): boolean => {
+  const aSc = a.location_shortcode?.trim();
+  const bSc = b.location_shortcode?.trim();
+  if (aSc && bSc) return aSc.toLowerCase() === bSc.toLowerCase();
+  return (
+    normalizeForComparison(a.location_name ?? "") ===
+    normalizeForComparison(b.location_name ?? "")
+  );
+};
 
 /**
  * Create inventory key from product, manufacturer, location
@@ -333,12 +398,15 @@ export function compareLocationsForSync(
 const makeInventoryKey = (
   productName: string,
   manufacturer: string | null | undefined,
+  locationShortcode: string | null | undefined,
   locationName: string | null | undefined,
 ): string => {
   const normProduct = normalizeForComparison(productName);
   // normalizeManufacturer returns "(unspecified)" for empty, lowercase for key matching
   const normManufacturer = normalizeManufacturer(manufacturer).toLowerCase();
-  const normLocation = normalizeForComparison(locationName ?? "");
+  const normLocation = locationShortcode?.trim()
+    ? locationShortcode.trim().toLowerCase()
+    : normalizeForComparison(locationName ?? "");
   return `${normProduct}|${normManufacturer}|${normLocation}`;
 };
 
@@ -363,6 +431,7 @@ export function compareInventoryForSync(
     const key = makeInventoryKey(
       row.product_name,
       row.manufacturer,
+      row.location_shortcode,
       row.location_name,
     );
     appByKey.set(key, row);
@@ -377,6 +446,7 @@ export function compareInventoryForSync(
     const key = makeInventoryKey(
       row.product_name,
       row.manufacturer,
+      row.location_shortcode,
       row.location_name,
     );
     sheetByKey.set(key, row);
@@ -432,12 +502,11 @@ export function compareInventoryForSync(
       const sheetKey = makeInventoryKey(
         sheetRow.product_name,
         sheetRow.manufacturer,
+        sheetRow.location_shortcode,
         sheetRow.location_name,
       );
 
-      const sameLocation =
-        normalizeForComparison(appRow.location_name ?? "") ===
-        normalizeForComparison(sheetRow.location_name ?? "");
+      const sameLocation = isSameLocation(appRow, sheetRow);
       const sameManufacturer =
         normalizeManufacturer(appRow.manufacturer).toLowerCase() ===
         normalizeManufacturer(sheetRow.manufacturer).toLowerCase();
@@ -507,9 +576,7 @@ export function compareInventoryForSync(
       // Detect field differences (likely manufacturer change)
       const fieldDiffs = getInventoryRowDifferences(appRow, sheetRow);
 
-      const sameLocation =
-        normalizeForComparison(appRow.location_name ?? "") ===
-        normalizeForComparison(sheetRow.location_name ?? "");
+      const sameLocation = isSameLocation(appRow, sheetRow);
 
       if (!sameLocation) {
         // Location changed = move

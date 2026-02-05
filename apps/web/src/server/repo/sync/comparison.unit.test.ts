@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   unsafeInventoryId,
   unsafeLocationId,
+  unsafeLocationShortcode,
   unsafeProductId,
 } from "~/schemas/identifiers";
 import type { InventoryCSVRow } from "~/schemas/inventory";
+import type { LocationCSVRow } from "~/schemas/location";
 import type { SyncState } from "~/schemas/sync";
 import type { InventoryCSVExportRow } from "~/server/repo/inventory/types";
-import { compareInventoryForSync } from "./comparison";
+import type { LocationCSVExportRow } from "~/server/repo/location/types";
+import { compareInventoryForSync, compareLocationsForSync } from "./comparison";
 
 // Helper to create a minimal app row (from database)
 const makeAppRow = (
@@ -843,5 +846,233 @@ describe("compareInventoryForSync - rename detection", () => {
       const sheetOnly = result.find((i) => i.state === "sheet_only");
       expect(sheetOnly?.sheetData?.productName).toBe("6-Piece Screwdriver Set");
     });
+  });
+
+  describe("shortcode-based location matching", () => {
+    it("should match by shortcode when location name differs (no false move)", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Drill Press",
+          manufacturer: "DeWalt",
+          location_name: "rolling chrome shelf",
+          location_shortcode: unsafeLocationShortcode("L-0042"),
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Drill Press",
+          manufacturer: "DeWalt",
+          location_name: "white metal shelf",
+          location_shortcode: "L-0042",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      // Should match on shortcode, not produce a false "moved"
+      expect(counts).toEqual({
+        matched: 1,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 0,
+      });
+    });
+
+    it("should still detect moves when shortcodes differ", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Drill Press",
+          manufacturer: "DeWalt",
+          location_name: "garage",
+          location_shortcode: unsafeLocationShortcode("L-0042"),
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Drill Press",
+          manufacturer: "DeWalt",
+          location_name: "workshop",
+          location_shortcode: "L-0099",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 1,
+      });
+    });
+
+    it("should fall back to name comparison when shortcodes are absent", () => {
+      const appRows = [
+        makeAppRow({
+          product_name: "Drill Press",
+          manufacturer: "DeWalt",
+          location_name: "garage",
+          location_shortcode: null,
+          location_id: unsafeLocationId("loc-1"),
+          inventory_entry_id: unsafeInventoryId("inv-1"),
+        }),
+      ];
+      const sheetRows = [
+        makeSheetRow({
+          product_name: "Drill Press",
+          manufacturer: "DeWalt",
+          location_name: "workshop",
+        }),
+      ];
+
+      const result = compareInventoryForSync(appRows, sheetRows);
+      const counts = countByState(result);
+
+      expect(counts).toEqual({
+        matched: 0,
+        conflict: 0,
+        app_only: 0,
+        sheet_only: 0,
+        renamed: 0,
+        moved: 1,
+      });
+    });
+  });
+});
+
+// ── Location sync tests ──────────────────────────────────────────────
+
+// Helper to create a minimal location app row
+const makeLocationAppRow = (
+  overrides: Partial<LocationCSVExportRow> & { location_name: string },
+): LocationCSVExportRow => {
+  const { location_name, ...rest } = overrides;
+  return {
+    location_shortcode: null,
+    location_name,
+    parent_name: null,
+    location_type: "shelf",
+    description: null,
+    location_image: null,
+    last_inventory_date: null,
+    location_id: unsafeLocationId("loc-1"),
+    ...rest,
+  };
+};
+
+// Helper to create a minimal location sheet row
+const makeLocationSheetRow = (
+  overrides: Partial<LocationCSVRow> & { location_name: string },
+): LocationCSVRow => {
+  const { location_name, ...rest } = overrides;
+  return {
+    location_name,
+    ...rest,
+  };
+};
+
+// Count location items by state
+const countLocationsByState = (
+  result: ReturnType<typeof compareLocationsForSync>,
+): Record<SyncState, number> => {
+  const counts: Record<SyncState, number> = {
+    matched: 0,
+    conflict: 0,
+    app_only: 0,
+    sheet_only: 0,
+    renamed: 0,
+    moved: 0,
+  };
+  for (const item of result) {
+    counts[item.state]++;
+  }
+  return counts;
+};
+
+describe("compareLocationsForSync - parent rename handling", () => {
+  it("should not report parent_name conflict when parent was renamed", () => {
+    // Parent "rolling chrome shelf" renamed to "white metal shelf"
+    // Children reference parent by name, so both sides have different parent names
+    const appRows = [
+      // The renamed parent itself
+      makeLocationAppRow({
+        location_name: "rolling chrome shelf",
+        location_shortcode: unsafeLocationShortcode("L-0001"),
+        location_id: unsafeLocationId("loc-parent"),
+        location_type: "shelf",
+        description: "metal shelf unit",
+      }),
+      // A child whose parent_name differs because of the rename
+      makeLocationAppRow({
+        location_name: "shelf A",
+        location_shortcode: unsafeLocationShortcode("L-0002"),
+        parent_name: "rolling chrome shelf",
+        location_id: unsafeLocationId("loc-child"),
+      }),
+    ];
+
+    const sheetRows = [
+      // Renamed parent in sheet
+      makeLocationSheetRow({
+        location_name: "white metal shelf",
+        location_shortcode: "L-0001",
+        location_type: "shelf",
+        description: "metal shelf unit",
+      }),
+      // Child still references renamed parent
+      makeLocationSheetRow({
+        location_name: "shelf A",
+        location_shortcode: "L-0002",
+        parent_name: "white metal shelf",
+      }),
+    ];
+
+    const result = compareLocationsForSync(appRows, sheetRows);
+    const counts = countLocationsByState(result);
+
+    // Parent should be "renamed", child should be "matched" (not "conflict")
+    expect(counts.renamed).toBe(1);
+    expect(counts.matched).toBe(1);
+    expect(counts.conflict).toBe(0);
+
+    const child = result.find((i) => i.appData?.locationName === "shelf A");
+    expect(child?.state).toBe("matched");
+  });
+
+  it("should keep real parent_name conflicts when not explained by a rename", () => {
+    const appRows = [
+      makeLocationAppRow({
+        location_name: "drawer A",
+        location_shortcode: unsafeLocationShortcode("L-0010"),
+        parent_name: "kitchen",
+        location_id: unsafeLocationId("loc-1"),
+      }),
+    ];
+
+    const sheetRows = [
+      makeLocationSheetRow({
+        location_name: "drawer A",
+        location_shortcode: "L-0010",
+        parent_name: "living room",
+      }),
+    ];
+
+    const result = compareLocationsForSync(appRows, sheetRows);
+    const counts = countLocationsByState(result);
+
+    expect(counts.conflict).toBe(1);
+    const item = result.find((i) => i.appData?.locationName === "drawer A");
+    expect(item?.state).toBe("conflict");
+    expect(item?.fieldDiffs?.some((d) => d.field === "parent_name")).toBe(true);
   });
 });

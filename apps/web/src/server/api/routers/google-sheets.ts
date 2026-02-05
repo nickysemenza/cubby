@@ -1224,16 +1224,41 @@ async function pushLocationsToSheet(
   ).length;
   results.locations.updated += conflictUpdates + renamedLocationsUseApp.length;
 
+  // Build parent_name rename map: old sheet name → new app name
+  // When a parent is renamed with "use_app", child rows still reference the old parent_name
+  const parentRenameMap = new Map<string, string>();
+  for (const item of renamedLocationsUseApp) {
+    if (item.renamedTo && item.renamedFrom) {
+      parentRenameMap.set(
+        item.renamedTo.toLowerCase().trim(),
+        item.renamedFrom,
+      );
+    }
+  }
+
   // Rebuild sheet rows
   const updatedRows = [
-    ...sheetLocations.filter((row) => {
-      const key = row.location_name.toLowerCase().trim();
-      return (
-        !deleteKeys.has(key) &&
-        !updateKeys.has(key) &&
-        !renamedSheetKeys.has(key)
-      );
-    }),
+    ...sheetLocations
+      .filter((row) => {
+        const key = row.location_name.toLowerCase().trim();
+        return (
+          !deleteKeys.has(key) &&
+          !updateKeys.has(key) &&
+          !renamedSheetKeys.has(key)
+        );
+      })
+      .map((row) => {
+        // Cascade parent_name updates for renamed locations
+        if (row.parent_name && parentRenameMap.size > 0) {
+          const newParent = parentRenameMap.get(
+            row.parent_name.toLowerCase().trim(),
+          );
+          if (newParent) {
+            return { ...row, parent_name: newParent };
+          }
+        }
+        return row;
+      }),
     ...syncItemsToLocationCSVRows(locationsToAddToSheet, true),
   ];
 
