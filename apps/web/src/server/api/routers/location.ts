@@ -24,6 +24,7 @@ import {
   getChildCountsByLocationIds,
   getLocationById,
   getLocationByShortcode,
+  getLocationsByShortcodes,
   getRecentlyActiveLocations,
   locationList,
   touchLastBulkInventory as touchLastBulkInventoryRepo,
@@ -96,6 +97,14 @@ const touchLastBulkInventory = protectedProcedure
     return { success: true };
   });
 
+// Batch lookup: multiple locations by shortcode (e.g. for label printing)
+const getByShortcodes = protectedProcedure
+  .input(z.object({ shortcodes: z.array(z.string()) }))
+  .output(z.array(locationOut))
+  .query(async ({ ctx, input }) => {
+    return await getLocationsByShortcodes(ctx.db, input.shortcodes);
+  });
+
 // Get location by shortcode (e.g., L-A3F2)
 const getByShortcode = protectedProcedure
   .input(z.object({ shortcode: z.string() }))
@@ -129,6 +138,7 @@ export const locationRouter = createTRPCRouter({
   list,
   getByID,
   getByShortcode,
+  getByShortcodes,
   getRecentlyActive,
   getLocationTypesCount,
   getChildCountsByLocations,

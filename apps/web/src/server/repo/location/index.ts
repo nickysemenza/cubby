@@ -36,6 +36,7 @@ export {
   findLocationByShortcode,
   findOrCreateLocationByName,
   getLocationByShortcode,
+  getLocationsByShortcodes,
   getRecentlyActiveLocations,
 } from "./lookup";
 // Tree and hierarchy operations

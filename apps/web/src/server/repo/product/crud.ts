@@ -102,6 +102,23 @@ export const getProductByShortcode = async (
   return getProductByID(db, productId);
 };
 
+/**
+ * Fetch multiple products by shortcodes in a single query.
+ * Returns basic product data (suitable for labels).
+ */
+export const getProductsByShortcodes = async (
+  db: Database,
+  shortcodes: string[],
+) => {
+  if (shortcodes.length === 0) return [];
+  const uppercased = shortcodes.map((s) => s.toUpperCase());
+  const results = await getDb(db).query.product.findMany({
+    where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
+    ...relations.product.full,
+  });
+  return results.map(dbProductToAPI);
+};
+
 export const productList = async (
   db: Database,
   name: string | undefined,

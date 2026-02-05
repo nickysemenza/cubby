@@ -1,4 +1,4 @@
-import { useQueries } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Download, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -100,41 +100,14 @@ function useShortcodeLookups(shortcodes: string[]) {
     return { locationCodes: locs, productCodes: prods };
   }, [shortcodes]);
 
-  // Fetch locations and products in parallel
-  const locationQueryOptions = useMemo(
-    () =>
-      locationCodes.map((shortcode) =>
-        api.location.getByShortcode.queryOptions({ shortcode }),
-      ),
-    [api, locationCodes],
-  );
-  const productQueryOptions = useMemo(
-    () =>
-      productCodes.map((shortcode) =>
-        api.product.getByShortcode.queryOptions({ shortcode }),
-      ),
-    [api, productCodes],
+  // Batch fetch: one query per entity type instead of N individual queries
+  const { data: locationData = [], isLoading: locationsLoading } = useQuery(
+    api.location.getByShortcodes.queryOptions({ shortcodes: locationCodes }),
   );
 
-  const { data: locationData, isLoading: locationsLoading } = useQueries({
-    queries: locationQueryOptions,
-    combine: (results) => ({
-      data: results
-        .map((r) => r.data)
-        .filter((d): d is NonNullable<typeof d> => d != null),
-      isLoading: results.some((r) => r.isLoading),
-    }),
-  });
-
-  const { data: productData, isLoading: productsLoading } = useQueries({
-    queries: productQueryOptions,
-    combine: (results) => ({
-      data: results
-        .map((r) => r.data)
-        .filter((d): d is NonNullable<typeof d> => d != null),
-      isLoading: results.some((r) => r.isLoading),
-    }),
-  });
+  const { data: productData = [], isLoading: productsLoading } = useQuery(
+    api.product.getByShortcodes.queryOptions({ shortcodes: productCodes }),
+  );
 
   const items: LabelItem[] = useMemo(() => {
     const locs = locationData.map((d) => ({

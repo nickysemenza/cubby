@@ -31,6 +31,7 @@ import {
   findProductsWithUPCNoImages,
   getCategoryDistribution,
   getProductByShortcode,
+  getProductsByShortcodes,
   quickCreateProduct,
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
@@ -405,6 +406,14 @@ const categoryDistribution = protectedProcedure
     return await getCategoryDistribution(ctx.db);
   });
 
+// Batch lookup: multiple products by shortcode (e.g. for label printing)
+const getByShortcodes = protectedProcedure
+  .input(z.object({ shortcodes: z.array(z.string()) }))
+  .output(z.array(productTopLevelOut))
+  .query(async ({ ctx, input }) => {
+    return await getProductsByShortcodes(ctx.db, input.shortcodes);
+  });
+
 // Get product by shortcode (e.g., P-X7K9)
 const getByShortcode = protectedProcedure
   .input(z.object({ shortcode: z.string() }))
@@ -421,6 +430,7 @@ const deleteItem = createDeleteProcedure<ProductId>(async (services, ids) => {
 export const productRouter = createTRPCRouter({
   getByID,
   getByShortcode,
+  getByShortcodes,
   list,
   create,
   update,

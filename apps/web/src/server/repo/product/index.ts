@@ -20,6 +20,7 @@ export {
   findProductByShortcode,
   getProductByID,
   getProductByShortcode,
+  getProductsByShortcodes,
   productList,
   quickCreateProduct,
   updateProduct,
