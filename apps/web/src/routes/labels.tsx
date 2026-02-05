@@ -33,9 +33,9 @@ const SHEET_LAYOUTS = {
     labelWidth: "4in",
     labelHeight: "1.5in",
     borderWidth: "0.15in",
-    qrSize: "0.8in",
-    shortcodeSize: "14pt",
-    nameSize: "10pt",
+    qrSize: "1.25in",
+    shortcodeSize: "9pt",
+    nameSize: "16pt",
     badgeSize: "8pt",
     verticalPadding: "0.08in",
     contentGap: "0.12in",
@@ -51,9 +51,9 @@ const SHEET_LAYOUTS = {
     labelWidth: "2.625in",
     labelHeight: "1in",
     borderWidth: "0.08in",
-    qrSize: "0.55in",
-    shortcodeSize: "10pt",
-    nameSize: "7pt",
+    qrSize: "0.86in",
+    shortcodeSize: "7pt",
+    nameSize: "11pt",
     badgeSize: "6pt",
     verticalPadding: "0.04in",
     contentGap: "0.06in",
@@ -503,23 +503,23 @@ function LabelCell({
       )}
       <div className="flex min-w-0 flex-col gap-[0.03in]">
         <div
-          className="font-bold font-mono tracking-[0.5px]"
-          style={{ fontSize: layout.shortcodeSize }}
-        >
-          {item.shortcode}
-        </div>
-        <div
-          className="line-clamp-1 text-[#333]"
+          className="line-clamp-2 font-bold text-[#333]"
           style={{ fontSize: layout.nameSize }}
         >
           {item.name}
         </div>
         <div
-          className="flex items-center gap-1 whitespace-nowrap capitalize"
-          style={{ color, fontSize: layout.badgeSize }}
+          className="flex items-center gap-1.5 whitespace-nowrap"
+          style={{ fontSize: layout.badgeSize }}
         >
-          <LabelIcon item={item} />
-          <span>{formatSubtype(item)}</span>
+          <span className="font-mono tracking-[0.5px]">{item.shortcode}</span>
+          <span
+            style={{ color }}
+            className="flex items-center gap-1 capitalize"
+          >
+            <LabelIcon item={item} />
+            {formatSubtype(item)}
+          </span>
         </div>
       </div>
     </div>
