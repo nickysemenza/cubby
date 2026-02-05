@@ -4,8 +4,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
  * Wait for React to hydrate a form after SSR.
  *
  * Uses `networkidle` (not `domcontentloaded`) so that all JS bundles have been
- * downloaded AND executed before we start interacting with the page.  A short
- * extra delay gives React time to attach event handlers after rendering.
+ * downloaded AND executed before we start interacting with the page.
  */
 export async function waitForFormHydration(page: Page) {
   await page.waitForLoadState("networkidle");
@@ -13,15 +12,14 @@ export async function waitForFormHydration(page: Page) {
   await expect(
     page.getByRole("button", { name: /Create|Save|Move/ }),
   ).toBeVisible({ timeout: 15000 });
-  // Extra settle time for React event-handler attachment
-  await page.waitForTimeout(500);
 }
 
 /**
  * Click a DialogCompatibleCombobox and select an item from the dropdown.
  *
- * Handles the SSR-hydration race by retrying the click once if the dropdown
- * doesn't appear after the first attempt.
+ * Uses Playwright's `toPass` retry to handle the SSR-hydration race:
+ * keeps clicking the combobox until `aria-expanded` becomes "true",
+ * which means React's onClick handler has fired and set the open state.
  */
 export async function selectComboboxItem(
   page: Page,
@@ -30,18 +28,15 @@ export async function selectComboboxItem(
   itemName: string,
 ) {
   await expect(combobox).toBeVisible({ timeout: 10000 });
-  await combobox.click();
+
+  // Retry click until React's state update sets aria-expanded="true"
+  await expect(async () => {
+    await combobox.click();
+    await expect(combobox).toHaveAttribute("aria-expanded", "true");
+  }).toPass({ timeout: 5000 });
 
   const searchInput = page.getByPlaceholder(searchPlaceholder);
-
-  // If the dropdown didn't open (hydration race), retry once
-  const visible = await searchInput.isVisible().catch(() => false);
-  if (!visible) {
-    await page.waitForTimeout(500);
-    await combobox.click();
-  }
   await expect(searchInput).toBeVisible({ timeout: 5000 });
-
   await searchInput.fill(itemName);
 
   // Wait for and click the matching option
