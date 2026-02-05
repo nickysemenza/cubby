@@ -111,6 +111,29 @@ const { table } = useEntityList({
 2. Wrap in `useMemo` with proper dependencies
 3. Extract to a stable reference outside the component
 
+### `useQueries` must use `combine`
+
+`useQueries` returns a **new array reference on every render**. Deriving values from the raw result array (even inside `useMemo`) creates an unstable dependency chain that causes infinite re-renders when downstream `useEffect`s set state.
+
+**Always** use the `combine` option, which applies structural sharing to keep the result referentially stable:
+
+```typescript
+// Bad — raw useQueries returns new array every render:
+const queries = useQueries({ queries: queryOptions });
+const data = useMemo(() => queries.map((q) => q.data).filter(Boolean), [queries]); // ← new ref every render
+
+// Good — combine provides structural sharing:
+const { data, isLoading } = useQueries({
+  queries: queryOptions,
+  combine: (results) => ({
+    data: results
+      .map((r) => r.data)
+      .filter((d): d is NonNullable<typeof d> => d != null),
+    isLoading: results.some((r) => r.isLoading),
+  }),
+});
+```
+
 ### Optimistic Updates
 
 All entity deletions use **optimistic updates** for instant UI feedback:

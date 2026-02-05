@@ -67,38 +67,43 @@ function useShortcodeLookups(shortcodes: string[]) {
     [api, productCodes],
   );
 
-  const locationQueries = useQueries(
-    useMemo(() => ({ queries: locationQueryOptions }), [locationQueryOptions]),
-  );
-  const productQueries = useQueries(
-    useMemo(() => ({ queries: productQueryOptions }), [productQueryOptions]),
-  );
+  const { data: locationData, isLoading: locationsLoading } = useQueries({
+    queries: locationQueryOptions,
+    combine: (results) => ({
+      data: results
+        .map((r) => r.data)
+        .filter((d): d is NonNullable<typeof d> => d != null),
+      isLoading: results.some((r) => r.isLoading),
+    }),
+  });
+
+  const { data: productData, isLoading: productsLoading } = useQueries({
+    queries: productQueryOptions,
+    combine: (results) => ({
+      data: results
+        .map((r) => r.data)
+        .filter((d): d is NonNullable<typeof d> => d != null),
+      isLoading: results.some((r) => r.isLoading),
+    }),
+  });
 
   const items: LabelItem[] = useMemo(() => {
-    const locs = locationQueries
-      .map((q) => q.data)
-      .filter((d): d is NonNullable<typeof d> => d != null)
-      .map((d) => ({
-        shortcode: d.shortcode,
-        name: d.name,
-        entityType: "location" as const,
-        locationType: d.type,
-      }));
-    const prods = productQueries
-      .map((q) => q.data)
-      .filter((d): d is NonNullable<typeof d> => d != null)
-      .map((d) => ({
-        shortcode: d.shortcode,
-        name: d.name,
-        entityType: "product" as const,
-        productCategory: d.category,
-      }));
+    const locs = locationData.map((d) => ({
+      shortcode: d.shortcode,
+      name: d.name,
+      entityType: "location" as const,
+      locationType: d.type,
+    }));
+    const prods = productData.map((d) => ({
+      shortcode: d.shortcode,
+      name: d.name,
+      entityType: "product" as const,
+      productCategory: d.category,
+    }));
     return [...locs, ...prods];
-  }, [locationQueries, productQueries]);
+  }, [locationData, productData]);
 
-  const isLoading =
-    locationQueries.some((q) => q.isLoading) ||
-    productQueries.some((q) => q.isLoading);
+  const isLoading = locationsLoading || productsLoading;
 
   return { items, isLoading };
 }
