@@ -1,6 +1,6 @@
-# Recipehub
+# cubby
 
-Recipehub is both a recipe database and a home inventory database tied together.
+cubby is both a recipe database and a home inventory database tied together.
 Main technologies: TanStack Start, React w/ TailwindCSS, tRPC w/ React Query, and Drizzle ORM (PostgreSQL)
 
 ## Authentication
