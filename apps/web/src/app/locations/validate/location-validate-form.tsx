@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CircleAlert, CircleHelp, MapPin } from "lucide-react";
+import { Check, Circle, CircleAlert, CircleHelp, MapPin } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -12,6 +12,7 @@ import {
   PersistentScanner,
   QR_CODE_FORMATS,
 } from "~/app/_components/inventory/persistent-scanner";
+import { LocationTypeBadge } from "~/app/_components/locations/LocationTypeBadge";
 import { LocationBreadcrumb } from "~/app/_components/locations/location-breadcrumb";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { typeSupportsQrCode } from "~/app/_components/locations/location-type-theme";
@@ -251,12 +252,29 @@ export function LocationValidateForm({
         />
 
         {parentLocation && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <LocationBreadcrumb location={parentLocation} linkable />
             <p className="text-muted-foreground text-sm">
               {childCount} child location{childCount !== 1 ? "s" : ""} to
               validate
             </p>
+            {children.length > 0 && (
+              <div className="space-y-1">
+                {children.map((child) => (
+                  <div
+                    key={child.id}
+                    className="flex items-center gap-2 text-muted-foreground text-sm"
+                  >
+                    <LocationIcon type={child.type} size={14} />
+                    <span>{child.name}</span>
+                    <span className="text-xs opacity-60">
+                      {child.shortcode}
+                    </span>
+                    <LocationTypeBadge type={child.type} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -288,19 +306,58 @@ export function LocationValidateForm({
           scanHintText="Point at location QR code"
         />
 
-        {scannedLocations.size > 0 && (
+        {/* Expected children checklist */}
+        <div className="space-y-2">
+          <h4 className="font-medium text-sm">
+            Expected ({scannedCount} of {childCount} confirmed)
+          </h4>
+          <div className="space-y-1">
+            {children.map((child) => {
+              const isScanned = scannedLocations.has(child.shortcode as string);
+              return (
+                <div
+                  key={child.id}
+                  className={`flex items-center gap-2 text-sm ${
+                    isScanned
+                      ? "text-green-700 dark:text-green-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {isScanned ? (
+                    <Check className="h-4 w-4 shrink-0 text-green-600" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 opacity-40" />
+                  )}
+                  <LocationIcon type={child.type} size={14} />
+                  <span>{child.name}</span>
+                  <span className="text-xs opacity-60">{child.shortcode}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Unexpected scans */}
+        {unexpected.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium text-sm">Scanned Locations</h4>
-            <div className="flex flex-wrap gap-2">
-              {Array.from(scannedLocations.values()).map((item) => (
+            <h4 className="font-medium text-blue-700 text-sm dark:text-blue-400">
+              Unexpected ({unexpected.length})
+            </h4>
+            <div className="space-y-1">
+              {unexpected.map((item) => (
                 <div
                   key={item.shortcode}
-                  className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-green-800 text-xs dark:bg-green-900/30 dark:text-green-400"
+                  className="flex items-center gap-2 text-blue-700 text-sm dark:text-blue-400"
                 >
-                  <Check className="h-3 w-3" />
-                  <span className="max-w-[120px] truncate">
-                    {item.location.name}
-                  </span>
+                  <CircleHelp className="h-4 w-4 shrink-0" />
+                  <LocationIcon type={item.location.type} size={14} />
+                  <span>{item.location.name}</span>
+                  <span className="text-xs opacity-60">{item.shortcode}</span>
+                  {item.location.parent && (
+                    <span className="text-muted-foreground text-xs">
+                      (in {item.location.parent.name})
+                    </span>
+                  )}
                 </div>
               ))}
             </div>
