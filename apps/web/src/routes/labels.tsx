@@ -67,8 +67,8 @@ function isSheetFormat(format: string): format is SheetFormat {
 
 const searchParamsSchema = z.object({
   codes: z.string().optional(),
-  format: z.enum(["pls134", "pls763", "ptouch"]).default("pls134"),
-  skip: z.coerce.number().int().min(0).default(0),
+  format: z.enum(["pls134", "pls763", "ptouch"]).optional(),
+  skip: z.coerce.number().int().min(0).optional(),
 });
 
 export const Route = createFileRoute("/labels")({
@@ -158,7 +158,7 @@ function useShortcodeLookups(shortcodes: string[]) {
 }
 
 function LabelsPage() {
-  const { codes, format, skip } = Route.useSearch();
+  const { codes, format = "pls134", skip = 0 } = Route.useSearch();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [hidden, setHidden] = useState<Set<string>>(new Set());

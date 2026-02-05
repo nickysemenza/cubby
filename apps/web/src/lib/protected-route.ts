@@ -22,7 +22,8 @@ export const authMiddleware = createMiddleware().server(
       // Extract pathname from request URL for redirect
       const url = new URL(request.url);
       throw redirect({
-        to: "/auth/sign-in",
+        to: "/auth/$authView",
+        params: { authView: "sign-in" },
         search: {
           redirect: url.pathname + url.search,
         },

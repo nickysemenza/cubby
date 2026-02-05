@@ -39,17 +39,15 @@ export default defineConfig({
       preset:
         (process.env.NITRO_PRESET as "vercel" | "node-server") || "vercel",
       // Force bundle captcha packages from better-auth-ui (unused but cause ESM/CJS issues)
-      externals: {
-        inline: [
-          "@hcaptcha/react-hcaptcha",
-          "@hcaptcha/loader",
-          "@captchafox/react",
-          "@marsidev/react-turnstile",
-          "@wojtekmaj/react-recaptcha-v3",
-          "react-google-recaptcha",
-          "@daveyplate/better-auth-ui",
-        ],
-      },
+      noExternals: [
+        "@hcaptcha/react-hcaptcha",
+        "@hcaptcha/loader",
+        "@captchafox/react",
+        "@marsidev/react-turnstile",
+        "@wojtekmaj/react-recaptcha-v3",
+        "react-google-recaptcha",
+        "@daveyplate/better-auth-ui",
+      ],
     }),
   ],
 });
