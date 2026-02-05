@@ -26,6 +26,8 @@ interface MobileCardProps {
   titleIcon?: LucideIcon;
   /** Optional subtitle below title */
   subtitle?: string;
+  /** Optional image/thumbnail to render left of the title */
+  imageSlot?: ReactNode;
   /** Optional entity type for colored accent border */
   entity?: Entity;
   /** Optional click handler for the entire card */
@@ -54,6 +56,7 @@ export function MobileCard({
   title,
   titleIcon: TitleIcon,
   subtitle,
+  imageSlot,
   entity,
   onClick,
 }: MobileCardProps) {
@@ -88,9 +91,10 @@ export function MobileCard({
 
       {/* Content */}
       <div className="min-w-0 flex-1 space-y-2">
-        {/* Header row: title + actions together */}
+        {/* Header row: image + title + actions together */}
         {(title || detailsHref || actions) && (
           <div className="flex items-start gap-2">
+            {imageSlot}
             {/* Title section */}
             {title && (
               <div className="min-w-0 flex-1">

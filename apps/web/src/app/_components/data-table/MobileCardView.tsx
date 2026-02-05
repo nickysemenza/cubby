@@ -237,21 +237,16 @@ export function MobileCardView<TItem>({
           const detailsHref =
             basePath && entityId ? `/${basePath}/${entityId}` : undefined;
 
-          // Build default card content
+          // Image slot for MobileCard header
+          const imageSlot = imageContent ? (
+            <div className="h-10 w-10 shrink-0 overflow-hidden rounded">
+              {imageContent}
+            </div>
+          ) : undefined;
+
+          // Build default card content (details, badges, footer — title/image handled by MobileCard)
           const defaultContent = (
             <div className="space-y-2">
-              {/* Title with image */}
-              <div className="flex items-start gap-3">
-                {imageContent && (
-                  <div className="h-10 w-10 shrink-0 overflow-hidden rounded">
-                    {imageContent}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{titleString}</p>
-                </div>
-              </div>
-
               {/* Details */}
               {details.length > 0 && <div className="space-y-1">{details}</div>}
 
@@ -274,6 +269,8 @@ export function MobileCardView<TItem>({
           return (
             <MobileCard
               key={row.id}
+              title={titleString}
+              imageSlot={imageSlot}
               selectable={
                 isSelectable
                   ? {

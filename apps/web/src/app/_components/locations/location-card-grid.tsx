@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, LayoutGrid, List } from "lucide-react";
 import { useMemo, useState } from "react";
+import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
@@ -196,6 +197,16 @@ function LocationCard({
       title={location.name}
       titleIcon={getLocationIcon(location.type)}
       subtitle={subtitle}
+      imageSlot={
+        location.images.length > 0 ? (
+          <CardThumbnail
+            images={location.images}
+            alt={location.name}
+            to="/locations/$id"
+            params={{ id: location.id }}
+          />
+        ) : null
+      }
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
       className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
       detailsHref={`/locations/${location.id}`}
@@ -237,7 +248,7 @@ function LocationCard({
       {/* Timestamp - subtle, at bottom */}
       {location.lastBulkInventory && (
         <div className="flex items-center gap-1 text-muted-foreground/70 text-xs">
-          <Calendar size={10} />
+          <Calendar size={12} />
           <span>
             {formatDistanceToNow(location.lastBulkInventory, {
               addSuffix: true,

@@ -95,7 +95,15 @@ export const relations = {
     full: {
       with: {
         parent: true,
-        children: true,
+        children: {
+          with: {
+            images: {
+              with: {
+                image: true,
+              },
+            },
+          },
+        },
         InventoryEntries: {
           with: {
             Product: true,

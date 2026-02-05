@@ -17,7 +17,11 @@ import type {
  */
 export type LocationDeepDB = typeof location.$inferSelect & {
   parent: typeof location.$inferSelect | null;
-  children: Array<typeof location.$inferSelect>;
+  children: Array<
+    typeof location.$inferSelect & {
+      images: Array<{ image: typeof image.$inferSelect }>;
+    }
+  >;
   InventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
       Product: typeof product.$inferSelect;
