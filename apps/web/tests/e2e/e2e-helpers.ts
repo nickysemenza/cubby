@@ -1,11 +1,12 @@
 import { expect, type Page } from "@playwright/test";
 
-// Helper to wait for form hydration (React Hook Form needs time to initialize)
+// Helper to wait for form hydration (React needs time to hydrate after SSR)
 export async function waitForFormHydration(page: Page) {
   await page.waitForLoadState("domcontentloaded");
-  await expect(
-    page.getByRole("button", { name: "React Hook Form Logo" }),
-  ).toBeVisible({ timeout: 15000 });
+  // Wait for the form's submit button to appear (indicates React has hydrated the form)
+  await expect(page.getByRole("button", { name: /Create|Save/ })).toBeVisible({
+    timeout: 15000,
+  });
 }
 
 // Helper to create a location via UI

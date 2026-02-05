@@ -132,6 +132,9 @@ jobs:
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
 
+      - name: Enable pg_trgm extension
+        run: psql -h localhost -U postgres -d cubby -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+
       - name: Push database schema
         run: pnpm --filter @cubby/web db:push
 
@@ -262,6 +265,8 @@ jobs:
           download-wasm: 'true'
       - name: Setup web environment
         uses: ./.github/actions/setup-web-env
+      - name: Enable pg_trgm extension
+        run: psql -h localhost -U postgres -d cubby -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
       - name: Push schema to database
         run: pnpm --filter @cubby/web db:push
 

@@ -11,10 +11,10 @@ test.describe("Create Product", () => {
     // Wait for hydration: the React app takes over the server-rendered HTML
     await page.waitForLoadState("networkidle");
 
-    // Wait for React Hook Form DevTool to appear (indicates React has hydrated)
-    await expect(
-      page.getByRole("button", { name: "React Hook Form Logo" }),
-    ).toBeVisible({ timeout: 10000 });
+    // Wait for the form's submit button to appear (indicates React has hydrated)
+    await expect(page.getByRole("button", { name: /^Create$/ })).toBeVisible({
+      timeout: 10000,
+    });
 
     // Additional delay to ensure form is fully interactive
     await page.waitForTimeout(500);
