@@ -395,7 +395,7 @@ const isSameLocation = (
 /**
  * Create inventory key from product, manufacturer, location
  */
-const makeInventoryKey = (
+export const makeInventoryKey = (
   productName: string,
   manufacturer: string | null | undefined,
   locationShortcode: string | null | undefined,

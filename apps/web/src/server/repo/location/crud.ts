@@ -3,7 +3,7 @@
  * Core create, read, update, delete, list operations for locations.
  */
 
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import { getSortableFields } from "~/entities/entities";
 import { dedupe } from "~/misc/array-helpers";
@@ -385,4 +385,35 @@ export const getLocationById = async (
   };
 
   return buildLocationWithChildren(locationWithParent, id);
+};
+
+/**
+ * Get child location counts for multiple parent locations in a single query.
+ * Returns a map of locationId -> count of direct children.
+ */
+export const getChildCountsByLocationIds = async (
+  db: Database,
+  locationIds: string[],
+): Promise<Record<string, number>> => {
+  if (locationIds.length === 0) return {};
+
+  const dbClient = getDb(db);
+
+  const results = await dbClient
+    .select({
+      parentId: location.parentId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(location)
+    .where(and(notDeleted(location), inArray(location.parentId, locationIds)))
+    .groupBy(location.parentId);
+
+  const countMap: Record<string, number> = {};
+  for (const row of results) {
+    if (row.parentId) {
+      countMap[row.parentId] = row.count;
+    }
+  }
+
+  return countMap;
 };

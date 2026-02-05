@@ -63,6 +63,7 @@ import {
   compareInventoryForSync,
   compareLocationsForSync,
   countByState,
+  makeInventoryKey,
   syncItemsToInventoryCSVRows,
   syncItemsToLocationCSVRows,
 } from "~/server/repo/sync";
@@ -1300,6 +1301,7 @@ async function pushInventoryToSheet(
   inventoryItems: InventorySyncItem[],
   sheetInventory: InventoryCSVRow[],
   results: SyncResults,
+  locationItems: LocationSyncItem[],
 ): Promise<void> {
   // Items to add/update in sheet
   const inventoryToAddToSheet = inventoryItems.filter(
@@ -1340,13 +1342,23 @@ async function pushInventoryToSheet(
       .filter((i) => i.sheetData)
       .map((i) => {
         const sd = i.sheetData!;
-        return `${(sd.productName ?? "").toLowerCase().trim()}|${((sd.manufacturer as string | null) ?? "(unspecified)").toLowerCase().trim()}|${(sd.locationName ?? "").toLowerCase().trim()}`;
+        return makeInventoryKey(
+          sd.productName ?? "",
+          sd.manufacturer,
+          sd.locationShortcode,
+          sd.locationName,
+        );
       }),
   );
 
   // Keep sheet rows not being deleted/updated
   const keptRows = sheetInventory.filter((row) => {
-    const key = `${row.product_name.toLowerCase().trim()}|${(row.manufacturer ?? "(unspecified)").toLowerCase().trim()}|${(row.location_name ?? "").toLowerCase().trim()}`;
+    const key = makeInventoryKey(
+      row.product_name,
+      row.manufacturer,
+      row.location_shortcode,
+      row.location_name,
+    );
     return (
       !deleteKeys.has(key) &&
       !updateKeys.has(key) &&
@@ -1360,9 +1372,36 @@ async function pushInventoryToSheet(
   ).length;
   results.inventory.updated += conflictUpdates + movedOrRenamedUseApp.length;
 
-  // Rebuild sheet rows
+  // Build location_name rename map from location renames pushed to sheet
+  // When a location is renamed with "use_app", inventory rows still reference the old name
+  const locationRenameMap = new Map<string, string>();
+  for (const item of locationItems) {
+    if (
+      item.state === "renamed" &&
+      item.resolution === "use_app" &&
+      item.renamedTo &&
+      item.renamedFrom
+    ) {
+      locationRenameMap.set(
+        item.renamedTo.toLowerCase().trim(),
+        item.renamedFrom,
+      );
+    }
+  }
+
+  // Rebuild sheet rows, cascading location_name updates for renamed locations
   const updatedRows = [
-    ...keptRows,
+    ...keptRows.map((row) => {
+      if (row.location_name && locationRenameMap.size > 0) {
+        const newName = locationRenameMap.get(
+          row.location_name.toLowerCase().trim(),
+        );
+        if (newName) {
+          return { ...row, location_name: newName };
+        }
+      }
+      return row;
+    }),
     ...syncItemsToInventoryCSVRows(inventoryToAddToSheet, true),
   ];
 
@@ -1744,6 +1783,7 @@ const applySync = protectedProcedure
             inventoryItems,
             sheetInventory,
             results,
+            locationItems,
           );
         }
 

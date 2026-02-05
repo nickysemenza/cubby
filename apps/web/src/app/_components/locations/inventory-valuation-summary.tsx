@@ -15,6 +15,8 @@ interface InventoryValuationSummaryProps {
   locationId?: LocationId;
   items?: InventoryItem[];
   variant?: Variant;
+  /** Hide the pricing status note (e.g., "no pricing for 2") - useful for compact cards */
+  hidePricingStatus?: boolean;
   className?: string;
 }
 
@@ -22,6 +24,7 @@ export function InventoryValuationSummary({
   locationId,
   items,
   variant = "compact",
+  hidePricingStatus = false,
   className,
 }: InventoryValuationSummaryProps) {
   const api = useTRPC();
@@ -55,7 +58,9 @@ export function InventoryValuationSummary({
       <div className={className}>
         <div className="text-muted-foreground text-xs">
           Valuation: {formatCurrency(result.totalValuation)}
-          {pricingSummary && <span className="ml-1">({pricingSummary})</span>}
+          {!hidePricingStatus && pricingSummary && (
+            <span className="ml-1">({pricingSummary})</span>
+          )}
         </div>
       </div>
     );

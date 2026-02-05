@@ -21,6 +21,7 @@ import {
   buildLocationTypeCount,
   createLocation,
   deleteLocations,
+  getChildCountsByLocationIds,
   getLocationById,
   getLocationByShortcode,
   getRecentlyActiveLocations,
@@ -116,12 +117,21 @@ const deleteItem = createDeleteProcedure<LocationId>(async (services, ids) => {
   await deleteLocations(services.db, ids, services.actorContext);
 }, locationId);
 
+// Get child location counts for multiple parent locations (batched to avoid N+1)
+const getChildCountsByLocations = protectedProcedure
+  .input(z.object({ locationIds: z.array(locationId) }))
+  .output(z.record(z.string(), z.number()))
+  .query(async ({ ctx, input }) => {
+    return await getChildCountsByLocationIds(ctx.db, input.locationIds);
+  });
+
 export const locationRouter = createTRPCRouter({
   list,
   getByID,
   getByShortcode,
   getRecentlyActive,
   getLocationTypesCount,
+  getChildCountsByLocations,
   makeTree,
   create,
   update,

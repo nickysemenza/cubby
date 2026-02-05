@@ -94,11 +94,11 @@ export function MobileCard({
             {/* Title section */}
             {title && (
               <div className="min-w-0 flex-1">
-                <h5 className="flex min-w-0 items-center gap-2 font-medium">
+                <h5 className="flex min-w-0 items-start gap-2 font-medium">
                   {TitleIcon && (
-                    <TitleIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <TitleIcon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
-                  <span className="truncate" title={title}>
+                  <span className="line-clamp-2" title={title}>
                     {title}
                   </span>
                 </h5>

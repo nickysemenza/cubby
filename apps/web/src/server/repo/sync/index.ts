@@ -6,6 +6,7 @@ export {
   compareInventoryForSync,
   compareLocationsForSync,
   countByState,
+  makeInventoryKey,
   syncItemsToInventoryCSVRows,
   // Converters
   syncItemsToLocationCSVRows,

@@ -9,6 +9,7 @@
 export {
   createLocation,
   deleteLocations,
+  getChildCountsByLocationIds,
   getLocationById,
   locationList,
   updateLocation,
