@@ -45,6 +45,26 @@ export async function selectComboboxItem(
   await option.click();
 }
 
+/**
+ * Fill an input field with proper React event handling.
+ *
+ * Uses `pressSequentially` so that controlled inputs see each keystroke,
+ * then blurs to trigger any `onBlur` validation.
+ */
+export async function fillInput(
+  page: Page,
+  placeholder: string,
+  value: string,
+) {
+  const input = page.getByPlaceholder(placeholder);
+  await expect(input).toBeVisible();
+  await expect(input).toBeEnabled();
+  await input.click();
+  await input.clear();
+  await input.pressSequentially(value, { delay: 10 });
+  await input.blur();
+}
+
 // Helper to create a location via UI
 export async function createLocation(page: Page, name: string) {
   await page.goto("/locations/new");

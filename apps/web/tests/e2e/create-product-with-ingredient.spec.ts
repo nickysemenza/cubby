@@ -1,6 +1,10 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
-import { waitForFormHydration } from "./e2e-helpers";
+import {
+  fillInput,
+  selectComboboxItem,
+  waitForFormHydration,
+} from "./e2e-helpers";
 
 test.describe("Create Product with Ingredient", () => {
   test("can create a product with ingredient link and unit mappings", async ({
@@ -10,22 +14,11 @@ test.describe("Create Product with Ingredient", () => {
     const productName = `${ingredientName} Brand Product`;
     const manufacturerName = faker.company.name();
 
-    // Helper to fill input with proper React event handling
-    async function fillInput(placeholder: string, value: string) {
-      const input = page.getByPlaceholder(placeholder);
-      await expect(input).toBeVisible();
-      await expect(input).toBeEnabled();
-      await input.click();
-      await input.clear();
-      await input.pressSequentially(value, { delay: 10 });
-      await input.blur();
-    }
-
     // Step 1: Create an ingredient first
     await page.goto("/ingredients/new");
     await expect(page).toHaveURL(/\/ingredients\/new/);
     await waitForFormHydration(page);
-    await fillInput("Enter ingredient name", ingredientName);
+    await fillInput(page, "Enter ingredient name", ingredientName);
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
       timeout: 15000,
@@ -37,30 +30,23 @@ test.describe("Create Product with Ingredient", () => {
     await waitForFormHydration(page);
 
     // Fill in the product form
-    await fillInput("Enter product name", productName);
-    await fillInput("Enter manufacturer", manufacturerName);
+    await fillInput(page, "Enter product name", productName);
+    await fillInput(page, "Enter manufacturer", manufacturerName);
 
-    // Link to the ingredient we just created (aria-label is lowercase)
-    const ingredientCombobox = page.getByRole("combobox", {
-      name: /ingredient/i,
-    });
-    await expect(ingredientCombobox).toBeVisible({ timeout: 10000 });
-    await ingredientCombobox.click();
-
-    const ingredientSearch = page.getByPlaceholder("Search ingredient...");
-    await expect(ingredientSearch).toBeVisible({ timeout: 5000 });
-    await ingredientSearch.fill(ingredientName);
-    await expect(
-      page.getByRole("button", { name: ingredientName, exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: ingredientName, exact: true })
-      .click();
+    // Link to the ingredient we just created
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /ingredient/i }),
+      "Search ingredient...",
+      ingredientName,
+    );
 
     // Add first unit mapping (1 cup = $2.50)
     await page.getByRole("button", { name: "Add Mapping" }).click();
-    await page.waitForSelector('text="Unit Mapping 1"', { timeout: 10000 });
-    await page.waitForSelector('input[placeholder="Enter unit"]', {
+    await expect(page.getByText("Unit Mapping 1")).toBeVisible({
+      timeout: 10000,
+    });
+    await expect(page.getByPlaceholder("Enter unit").first()).toBeVisible({
       timeout: 10000,
     });
 
@@ -80,7 +66,9 @@ test.describe("Create Product with Ingredient", () => {
 
     // Add second unit mapping (100 grams = $1.50)
     await page.getByRole("button", { name: "Add Mapping" }).click();
-    await page.waitForSelector('h4:text("Unit Mapping 2")');
+    await expect(
+      page.getByRole("heading", { name: "Unit Mapping 2" }),
+    ).toBeVisible();
 
     const fromValueField2 = page
       .getByRole("spinbutton", { name: "Amount Value" })

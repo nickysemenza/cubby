@@ -1,6 +1,10 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
-import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
+import {
+  fillInput,
+  selectComboboxItem,
+  waitForFormHydration,
+} from "./e2e-helpers";
 
 test.describe("Create Recipe - Full Flow", () => {
   test("can create ingredient, product, and recipe with cost calculations", async ({
@@ -15,21 +19,10 @@ test.describe("Create Recipe - Full Flow", () => {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
 
-    // Helper to fill input
-    async function fillInput(placeholder: string, value: string) {
-      const input = page.getByPlaceholder(placeholder);
-      await expect(input).toBeVisible();
-      await expect(input).toBeEnabled();
-      await input.click();
-      await input.clear();
-      await input.pressSequentially(value, { delay: 10 });
-      await input.blur();
-    }
-
     // Step 1: Create ingredient
     await page.goto("/ingredients/new");
     await waitForFormHydration(page);
-    await fillInput("Enter ingredient name", ingredientName);
+    await fillInput(page, "Enter ingredient name", ingredientName);
     await page.getByRole("button", { name: /^Create$/ }).click();
     await expect(page).toHaveURL(/\/ingredients\/[a-f0-9-]+/, {
       timeout: 15000,
@@ -38,8 +31,8 @@ test.describe("Create Recipe - Full Flow", () => {
     // Step 2: Create product with unit mappings
     await page.goto("/products/new");
     await waitForFormHydration(page);
-    await fillInput("Enter product name", productName);
-    await fillInput("Enter manufacturer", manufacturerName);
+    await fillInput(page, "Enter product name", productName);
+    await fillInput(page, "Enter manufacturer", manufacturerName);
 
     // Link ingredient
     await selectComboboxItem(
@@ -51,7 +44,7 @@ test.describe("Create Recipe - Full Flow", () => {
 
     // Add unit mappings (1 cup = $2.50, 100 grams = $1.50)
     await page.getByRole("button", { name: "Add Mapping" }).click();
-    await page.waitForSelector('text="Unit Mapping 1"');
+    await expect(page.getByText("Unit Mapping 1")).toBeVisible();
     await page
       .getByRole("textbox", { name: "Amount Unit" })
       .first()
@@ -66,7 +59,9 @@ test.describe("Create Recipe - Full Flow", () => {
       .fill("dollar");
 
     await page.getByRole("button", { name: "Add Mapping" }).click();
-    await page.waitForSelector('h4:text("Unit Mapping 2")');
+    await expect(
+      page.getByRole("heading", { name: "Unit Mapping 2" }),
+    ).toBeVisible();
     await page
       .getByRole("spinbutton", { name: "Amount Value" })
       .nth(2)
@@ -90,8 +85,8 @@ test.describe("Create Recipe - Full Flow", () => {
     // Step 3: Create recipe
     await page.goto("/recipes/new");
     await waitForFormHydration(page);
-    await fillInput("Enter recipe name", recipeName);
-    await fillInput("Enter recipe URL", faker.internet.url());
+    await fillInput(page, "Enter recipe name", recipeName);
+    await fillInput(page, "Enter recipe URL", faker.internet.url());
 
     // Fill yield
     await page.getByLabel("Yield Value (Optional)").fill("12");
