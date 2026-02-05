@@ -3,6 +3,7 @@ import {
   addInventory,
   createLocation,
   createProduct,
+  selectComboboxItem,
   waitForFormHydration,
 } from "./e2e-helpers";
 
@@ -23,23 +24,13 @@ test.describe("Bulk Move Inventory - Selection", () => {
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);
 
-    // Select source location using combobox (aria-label is lowercase)
-    const sourceCombobox = page.getByRole("combobox", {
-      name: /from location/i,
-    });
-    await expect(sourceCombobox).toBeVisible({ timeout: 10000 });
-    await sourceCombobox.click();
-
-    // Search for location
-    const locationSearch = page.getByPlaceholder("Search from location...");
-    await expect(locationSearch).toBeVisible({ timeout: 5000 });
-    await locationSearch.fill(sourceName);
-
-    // Wait for and click the option (includes room type suffix like "(room)")
-    await expect(page.getByRole("button", { name: sourceName })).toBeVisible({
-      timeout: 10000,
-    });
-    await page.getByRole("button", { name: sourceName }).click();
+    // Select source location using combobox
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /from location/i }),
+      "Search from location...",
+      sourceName,
+    );
 
     // Should show items at the source location (wait for items to load)
     await expect(page.getByText(`Items at ${sourceName}`)).toBeVisible();
@@ -63,20 +54,13 @@ test.describe("Bulk Move Inventory - Selection", () => {
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);
 
-    // Select source location (aria-label is lowercase)
-    const sourceCombobox = page.getByRole("combobox", {
-      name: /from location/i,
-    });
-    await expect(sourceCombobox).toBeVisible({ timeout: 10000 });
-    await sourceCombobox.click();
-
-    const sourceSearch = page.getByPlaceholder("Search from location...");
-    await expect(sourceSearch).toBeVisible({ timeout: 5000 });
-    await sourceSearch.fill(sourceName);
-    await expect(page.getByRole("button", { name: sourceName })).toBeVisible({
-      timeout: 10000,
-    });
-    await page.getByRole("button", { name: sourceName }).click();
+    // Select source location
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /from location/i }),
+      "Search from location...",
+      sourceName,
+    );
 
     // Wait for items to load (Select All button only appears when items exist)
     await expect(page.getByText(`Items at ${sourceName}`)).toBeVisible();

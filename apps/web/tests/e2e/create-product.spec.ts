@@ -1,29 +1,16 @@
 import { expect, test } from "@playwright/test";
+import { waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Create Product", () => {
   test("can create a new product and view detail", async ({ page }) => {
     const name = `E2E Product ${Date.now()}`;
 
-    // Navigate directly to New Product page
     await page.goto("/products/new");
-    await expect(page).toHaveURL(/\/products\/new/);
+    await waitForFormHydration(page);
 
-    // Wait for hydration: the React app takes over the server-rendered HTML
-    await page.waitForLoadState("networkidle");
-
-    // Wait for the form's submit button to appear (indicates React has hydrated)
-    await expect(page.getByRole("button", { name: /^Create$/ })).toBeVisible({
-      timeout: 10000,
-    });
-
-    // Additional delay to ensure form is fully interactive
-    await page.waitForTimeout(500);
-
-    // Fill in the form - use click and pressSequentially for proper React event handling
+    // Fill in the form
     const nameInput = page.getByPlaceholder("Enter product name");
     await expect(nameInput).toBeVisible();
-    await expect(nameInput).toBeEnabled();
-
     await nameInput.click();
     await nameInput.clear();
     await nameInput.pressSequentially(name, { delay: 10 });
@@ -37,7 +24,6 @@ test.describe("Create Product", () => {
     });
     await manufacturerInput.blur();
 
-    // Verify the values were entered
     await expect(nameInput).toHaveValue(name);
 
     // Submit

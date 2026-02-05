@@ -71,7 +71,8 @@ export default defineConfig({
     },
     {
       name: "Authenticated tests",
-      testMatch: /(?!unauth\.).*\.spec\.ts/,
+      testMatch: /\.spec\.ts$/,
+      testIgnore: /unauth\./,
       use: {
         ...devices["Desktop Chrome"],
         // Use prepared better-auth state (saved by globalSetup)

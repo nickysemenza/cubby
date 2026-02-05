@@ -60,8 +60,7 @@ test.describe("Main navigation", () => {
     // Click the link and wait for navigation
     await inventoryLink.click();
     await page.waitForURL(/\/inventory/, { timeout: 10000 });
-    await expect(
-      page.getByRole("heading", { name: /^Inventory$/i }),
-    ).toBeVisible();
+    // Unauthenticated users see the sign-in prompt instead of the page heading
+    await expect(page.getByText(/Sign in to access Inventory/i)).toBeVisible();
   });
 });

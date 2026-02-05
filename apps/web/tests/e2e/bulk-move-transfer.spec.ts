@@ -3,6 +3,7 @@ import {
   addInventory,
   createLocation,
   createProduct,
+  selectComboboxItem,
   waitForFormHydration,
 } from "./e2e-helpers";
 
@@ -23,20 +24,13 @@ test.describe("Bulk Move Inventory - Transfer", () => {
     await page.goto("/inventory/bulk-move");
     await waitForFormHydration(page);
 
-    // Select source location (aria-label is lowercase)
-    const sourceCombobox = page.getByRole("combobox", {
-      name: /from location/i,
-    });
-    await expect(sourceCombobox).toBeVisible({ timeout: 10000 });
-    await sourceCombobox.click();
-
-    const sourceSearch = page.getByPlaceholder("Search from location...");
-    await expect(sourceSearch).toBeVisible({ timeout: 5000 });
-    await sourceSearch.fill(sourceName);
-    await expect(page.getByRole("button", { name: sourceName })).toBeVisible({
-      timeout: 10000,
-    });
-    await page.getByRole("button", { name: sourceName }).click();
+    // Select source location
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /from location/i }),
+      "Search from location...",
+      sourceName,
+    );
 
     // Wait for items to load (checkbox only appears after items load)
     await expect(page.getByText(`Items at ${sourceName}`)).toBeVisible();
@@ -46,20 +40,13 @@ test.describe("Bulk Move Inventory - Transfer", () => {
     await expect(checkbox).toBeVisible({ timeout: 10000 });
     await checkbox.click();
 
-    // Select target location (aria-label is lowercase)
-    const targetCombobox = page.getByRole("combobox", {
-      name: /to location/i,
-    });
-    await expect(targetCombobox).toBeVisible({ timeout: 10000 });
-    await targetCombobox.click();
-
-    const targetSearch = page.getByPlaceholder("Search to location...");
-    await expect(targetSearch).toBeVisible({ timeout: 5000 });
-    await targetSearch.fill(targetName);
-    await expect(page.getByRole("button", { name: targetName })).toBeVisible({
-      timeout: 10000,
-    });
-    await page.getByRole("button", { name: targetName }).click();
+    // Select target location
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /to location/i }),
+      "Search to location...",
+      targetName,
+    );
 
     // Submit the move
     await page.getByRole("button", { name: /Move 1 Item/i }).click();

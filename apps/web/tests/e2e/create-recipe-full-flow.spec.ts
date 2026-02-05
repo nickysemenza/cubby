@@ -1,6 +1,6 @@
 import { faker } from "@faker-js/faker";
 import { expect, test } from "@playwright/test";
-import { waitForFormHydration } from "./e2e-helpers";
+import { selectComboboxItem, waitForFormHydration } from "./e2e-helpers";
 
 test.describe("Create Recipe - Full Flow", () => {
   test("can create ingredient, product, and recipe with cost calculations", async ({
@@ -41,21 +41,13 @@ test.describe("Create Recipe - Full Flow", () => {
     await fillInput("Enter product name", productName);
     await fillInput("Enter manufacturer", manufacturerName);
 
-    // Link ingredient (aria-label is lowercase)
-    const ingredientCombobox = page.getByRole("combobox", {
-      name: /ingredient/i,
-    });
-    await expect(ingredientCombobox).toBeVisible({ timeout: 10000 });
-    await ingredientCombobox.click();
-    const ingredientSearch = page.getByPlaceholder("Search ingredient...");
-    await expect(ingredientSearch).toBeVisible({ timeout: 5000 });
-    await ingredientSearch.fill(ingredientName);
-    await expect(
-      page.getByRole("button", { name: ingredientName, exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: ingredientName, exact: true })
-      .click();
+    // Link ingredient
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /ingredient/i }),
+      "Search ingredient...",
+      ingredientName,
+    );
 
     // Add unit mappings (1 cup = $2.50, 100 grams = $1.50)
     await page.getByRole("button", { name: "Add Mapping" }).click();
@@ -105,23 +97,14 @@ test.describe("Create Recipe - Full Flow", () => {
     await page.getByLabel("Yield Value (Optional)").fill("12");
     await page.getByLabel("Yield Unit").fill("cookies");
 
-    // Add ingredient (aria-label is lowercase)
+    // Add ingredient
     await page.getByRole("button", { name: /Add Ingredient/i }).click();
-    const recipeIngredientCombobox = page.getByRole("combobox", {
-      name: /ingredient/i,
-    });
-    await expect(recipeIngredientCombobox).toBeVisible({ timeout: 10000 });
-    await recipeIngredientCombobox.click();
-
-    const recipeSearchBox = page.getByPlaceholder("Search ingredient...");
-    await expect(recipeSearchBox).toBeVisible({ timeout: 5000 });
-    await recipeSearchBox.fill(ingredientName);
-    await expect(
-      page.getByRole("button", { name: ingredientName, exact: true }),
-    ).toBeVisible();
-    await page
-      .getByRole("button", { name: ingredientName, exact: true })
-      .click();
+    await selectComboboxItem(
+      page,
+      page.getByRole("combobox", { name: /ingredient/i }),
+      "Search ingredient...",
+      ingredientName,
+    );
 
     // Add amount (2 cups) - wait for fields to be ready after ingredient selection
     const amountValue = page.getByLabel("Amount Value");
