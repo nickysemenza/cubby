@@ -294,14 +294,14 @@ export interface FileRoutesByFullPath {
   '/recipes/new': typeof RecipesNewRoute
   '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
-  '/images': typeof ImagesIndexRoute
-  '/ingredients': typeof IngredientsIndexRoute
-  '/inventory': typeof InventoryIndexRoute
-  '/locations': typeof LocationsIndexRoute
-  '/products': typeof ProductsIndexRoute
-  '/recipes': typeof RecipesIndexRoute
-  '/search': typeof SearchIndexRoute
-  '/usda': typeof UsdaIndexRoute
+  '/images/': typeof ImagesIndexRoute
+  '/ingredients/': typeof IngredientsIndexRoute
+  '/inventory/': typeof InventoryIndexRoute
+  '/locations/': typeof LocationsIndexRoute
+  '/products/': typeof ProductsIndexRoute
+  '/recipes/': typeof RecipesIndexRoute
+  '/search/': typeof SearchIndexRoute
+  '/usda/': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/settings/integrations/debug': typeof SettingsIntegrationsDebugRoute
@@ -429,14 +429,14 @@ export interface FileRouteTypes {
     | '/recipes/new'
     | '/settings/integrations'
     | '/usda/$id'
-    | '/images'
-    | '/ingredients'
-    | '/inventory'
-    | '/locations'
-    | '/products'
-    | '/recipes'
-    | '/search'
-    | '/usda'
+    | '/images/'
+    | '/ingredients/'
+    | '/inventory/'
+    | '/locations/'
+    | '/products/'
+    | '/recipes/'
+    | '/search/'
+    | '/usda/'
     | '/api/auth/$'
     | '/api/trpc/$'
     | '/settings/integrations/debug'
@@ -637,56 +637,56 @@ declare module '@tanstack/react-router' {
     '/usda/': {
       id: '/usda/'
       path: '/usda'
-      fullPath: '/usda'
+      fullPath: '/usda/'
       preLoaderRoute: typeof UsdaIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/search/': {
       id: '/search/'
       path: '/search'
-      fullPath: '/search'
+      fullPath: '/search/'
       preLoaderRoute: typeof SearchIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recipes/': {
       id: '/recipes/'
       path: '/recipes'
-      fullPath: '/recipes'
+      fullPath: '/recipes/'
       preLoaderRoute: typeof RecipesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/products/': {
       id: '/products/'
       path: '/products'
-      fullPath: '/products'
+      fullPath: '/products/'
       preLoaderRoute: typeof ProductsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/locations/': {
       id: '/locations/'
       path: '/locations'
-      fullPath: '/locations'
+      fullPath: '/locations/'
       preLoaderRoute: typeof LocationsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory/': {
       id: '/inventory/'
       path: '/inventory'
-      fullPath: '/inventory'
+      fullPath: '/inventory/'
       preLoaderRoute: typeof InventoryIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ingredients/': {
       id: '/ingredients/'
       path: '/ingredients'
-      fullPath: '/ingredients'
+      fullPath: '/ingredients/'
       preLoaderRoute: typeof IngredientsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/images/': {
       id: '/images/'
       path: '/images'
-      fullPath: '/images'
+      fullPath: '/images/'
       preLoaderRoute: typeof ImagesIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
