@@ -58,6 +58,8 @@ export type InventoryItemForTree = z.infer<typeof inventoryItemForTree>;
 export type InfLocation = LocationOut & {
   children?: InfLocation[];
   parent?: InfLocation;
+  /** Number of direct child locations */
+  childCount?: number;
   /** Number of inventory items directly at this location */
   directItemCount?: number;
   /** Number of inventory items at this location and all descendants */
@@ -69,6 +71,7 @@ export type InfLocation = LocationOut & {
 export const infLocation: z.ZodType<InfLocation> = locationOut.extend({
   children: z.lazy(() => infLocation.array()).optional(),
   parent: z.lazy(() => infLocation.optional()),
+  childCount: z.number().optional(),
   directItemCount: z.number().optional(),
   totalItemCount: z.number().optional(),
   inventoryItems: z.array(inventoryItemForTree).optional(),

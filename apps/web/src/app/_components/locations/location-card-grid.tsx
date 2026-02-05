@@ -2,15 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, LayoutGrid, List } from "lucide-react";
 import { useMemo, useState } from "react";
+import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Button } from "~/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
-import { EntityIcon } from "~/entities/entities";
 import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import type { InventoryItem } from "./calculate-inventory-valuation";
@@ -37,18 +32,9 @@ export function LocationCardGrid({
   const api = useTRPC();
   const [isGrouped, setIsGrouped] = useState(true);
 
-  // Batch query inventory counts and items for all locations (avoid N+1)
   const locationIds = useMemo(
     () => locations.map((loc) => loc.id),
     [locations],
-  );
-
-  const { data: inventoryCounts } = useQuery(
-    api.inventory.getCountsByLocations.queryOptions({ locationIds }),
-  );
-
-  const { data: childCounts } = useQuery(
-    api.location.getChildCountsByLocations.queryOptions({ locationIds }),
   );
 
   // Batch fetch all inventory items for valuation calculations
@@ -128,8 +114,6 @@ export function LocationCardGrid({
       location={location}
       showParentPath={showParentPath}
       onLocationSelect={onLocationSelect}
-      childCount={childCounts?.[location.id] ?? 0}
-      inventoryCount={inventoryCounts?.[location.id] ?? 0}
       inventoryItems={inventoryByLocation.get(location.id) ?? []}
       showTypeBadge={showBadge}
     />
@@ -186,8 +170,6 @@ interface LocationCardProps {
   location: InfLocation;
   showParentPath?: boolean;
   onLocationSelect?: (location: InfLocation) => void;
-  childCount: number;
-  inventoryCount: number;
   inventoryItems: InventoryItem[];
   showTypeBadge?: boolean;
 }
@@ -196,11 +178,11 @@ function LocationCard({
   location,
   showParentPath,
   onLocationSelect,
-  childCount,
-  inventoryCount,
   inventoryItems,
   showTypeBadge = false,
 }: LocationCardProps) {
+  const childCount = location.childCount ?? 0;
+  const inventoryCount = location.directItemCount ?? 0;
   const hasInventory = inventoryCount > 0;
 
   // Create subtitle with parent path
@@ -218,46 +200,38 @@ function LocationCard({
       className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
       detailsHref={`/locations/${location.id}`}
     >
-      {/* Stats row: valuation + counts */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-        {showTypeBadge && <LocationTypeBadge type={location.type} />}
-        {hasInventory && (
+      {/* Valuation row */}
+      {hasInventory && (
+        <div className="text-muted-foreground text-xs">
           <InventoryValuationSummary
             items={inventoryItems}
             variant="compact"
             hidePricingStatus
           />
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <div className="flex items-center gap-1">
-                <EntityIcon entity="location" size={12} />
-                <span>{childCount}</span>
-              </div>
-            }
-          />
-          <TooltipContent>
-            {childCount === 1
+        </div>
+      )}
+
+      {/* Stats row: counts */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+        {showTypeBadge && <LocationTypeBadge type={location.type} />}
+        <EntityStat
+          entity="location"
+          count={childCount}
+          tooltip={
+            childCount === 1
               ? "1 child location"
-              : `${childCount} child locations`}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <div className="flex items-center gap-1">
-                <EntityIcon entity="inventory" size={12} />
-                <span>{inventoryCount}</span>
-              </div>
-            }
-          />
-          <TooltipContent>
-            {inventoryCount === 1
+              : `${childCount} child locations`
+          }
+        />
+        <EntityStat
+          entity="inventory"
+          count={inventoryCount}
+          tooltip={
+            inventoryCount === 1
               ? "1 inventory item"
-              : `${inventoryCount} inventory items`}
-          </TooltipContent>
-        </Tooltip>
+              : `${inventoryCount} inventory items`
+          }
+        />
       </div>
 
       {/* Timestamp - subtle, at bottom */}

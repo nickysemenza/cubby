@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
 import { useId } from "react";
+import { EntityStat } from "~/components/entity/entity-stat";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { FilterableCombobox } from "~/components/ui/combobox";
@@ -53,14 +54,16 @@ export function GalleryHeader({
         {/* Stats - hidden on mobile */}
         {stats && (
           <div className="hidden items-center gap-3 border-r pr-3 text-muted-foreground text-xs md:flex">
-            <span className="flex items-center gap-1">
-              <EntityIcon entity="location" className="h-3 w-3" />
-              {stats.locationCount} locations
-            </span>
-            <span className="flex items-center gap-1">
-              <EntityIcon entity="inventory" className="h-3 w-3" />
-              {stats.itemCount} items
-            </span>
+            <EntityStat
+              entity="location"
+              count={stats.locationCount}
+              label="locations"
+            />
+            <EntityStat
+              entity="inventory"
+              count={stats.itemCount}
+              label="items"
+            />
           </div>
         )}
 

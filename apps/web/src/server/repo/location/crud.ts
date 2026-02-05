@@ -377,10 +377,64 @@ export const getLocationById = async (
     }
   }
 
+  // Enrich children with counts so the frontend doesn't need extra queries
+  const activeChildren = (res.children ?? []).filter(
+    (c) => c.id !== id && c.deletedAt === null,
+  );
+  const childIds = activeChildren.map((c) => c.id);
+
+  const childCountMap: Record<string, number> = {};
+  const inventoryCountMap: Record<string, number> = {};
+
+  if (childIds.length > 0) {
+    const dbClient = unwrapDb(db);
+
+    // Run both count queries in parallel
+    const [childCountResults, inventoryCountResults] = await Promise.all([
+      dbClient
+        .select({
+          parentId: location.parentId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(location)
+        .where(and(notDeleted(location), inArray(location.parentId, childIds)))
+        .groupBy(location.parentId),
+      dbClient
+        .select({
+          locationId: inventoryEntry.locationId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(inventoryEntry)
+        .where(
+          and(
+            notDeleted(inventoryEntry),
+            inArray(inventoryEntry.locationId, childIds),
+          ),
+        )
+        .groupBy(inventoryEntry.locationId),
+    ]);
+
+    for (const row of childCountResults) {
+      if (row.parentId) childCountMap[row.parentId] = row.count;
+    }
+    for (const row of inventoryCountResults) {
+      inventoryCountMap[row.locationId] = row.count;
+    }
+  }
+
+  // Attach counts to children
+  const enrichedChildren: LocationWithParentChild[] = (res.children ?? []).map(
+    (child) => ({
+      ...child,
+      childCount: childCountMap[child.id] ?? 0,
+      directItemCount: inventoryCountMap[child.id] ?? 0,
+    }),
+  );
+
   const locationWithParent: LocationWithParentChild = {
     ...res,
     parent: parentChain,
-    children: res.children,
+    children: enrichedChildren,
     images: res.images,
   };
 

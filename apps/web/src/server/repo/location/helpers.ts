@@ -131,6 +131,7 @@ export const buildLocationWithChildren = (
       includeParent && x.parent
         ? buildLocationWithChildren(x.parent, excludeId, includeParent)
         : undefined,
+    childCount: x.childCount,
     directItemCount,
     totalItemCount: directItemCount + childrenTotalCount,
     inventoryItems: x.inventoryItems ?? [],

@@ -38,6 +38,7 @@ export type LocationWithParentChild = typeof location.$inferSelect & {
   images?: Array<{
     image: typeof image.$inferSelect;
   }>;
+  childCount?: number;
   directItemCount?: number;
   inventoryItems?: InventoryItemForTree[];
 };
