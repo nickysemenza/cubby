@@ -1,20 +1,28 @@
-import { instrumentDrizzle } from "@kubiks/otel-drizzle";
-import { neon } from "@neondatabase/serverless";
-import { drizzle as drizzleHttp } from "drizzle-orm/neon-http";
+import {
+  instrumentDrizzle,
+  instrumentDrizzleClient,
+} from "@kubiks/otel-drizzle";
+import { Pool as NeonPool, neonConfig } from "@neondatabase/serverless";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import ws from "ws";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
+
+// Required for @neondatabase/serverless in Node.js environments
+neonConfig.webSocketConstructor = ws;
 
 // Re-export Database type for use throughout the application
 export type { Database };
 
 const createDBClient = (connectionString: string) => {
   if (connectionString.includes("neon.tech")) {
-    // Use Neon HTTP for serverless environments
-    const sql = neon(connectionString);
-    return drizzleHttp(sql, { schema });
+    // Use Neon WebSocket pool for serverless environments (supports transactions)
+    const pool = new NeonPool({ connectionString });
+    const db = drizzleNodePostgres({ client: pool, schema });
+    instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+    return db;
   } else {
     // Use standard node-postgres for traditional PostgreSQL connections
     const pool = new Pool({ connectionString });

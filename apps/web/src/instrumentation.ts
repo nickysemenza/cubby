@@ -22,16 +22,25 @@ let initialized = false;
 export const initOpenTelemetry = () => {
   // Skip if already initialized or not in Node.js
   if (initialized || typeof process === "undefined") {
+    console.log(
+      "[OTel] Skipping OpenTelemetry initialization (already initialized or not in Node.js)",
+    );
     return;
   }
 
   // Skip in Cloudflare Workers (no process.versions.node)
   if (!process.versions?.node) {
+    console.log(
+      "[OTel] Skipping OpenTelemetry initialization (not running in Node.js)",
+    );
     return;
   }
 
   // Skip on Vercel - OTel packages aren't bundled for serverless
   if (process.env.VERCEL) {
+    console.log(
+      "[OTel] Skipping OpenTelemetry initialization (running on Vercel)",
+    );
     return;
   }
 

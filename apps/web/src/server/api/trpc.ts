@@ -19,7 +19,7 @@ import { flatten } from "flat";
 import superjson from "superjson";
 import { ZodError } from "zod";
 import { env } from "~/env";
-import { initOpenTelemetry } from "~/instrumentation";
+
 import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
 import { buildActorContext } from "~/schemas/context";
@@ -37,9 +37,6 @@ import { IngredientService } from "~/server/services/ingredient.service";
 import { ProductService } from "~/server/services/product.service";
 import { USDAService } from "~/server/services/usda.service";
 import { getTracer, TraceNames } from "~/server/tracing";
-
-// Initialize OpenTelemetry on first import (Node.js only, no-ops on Workers)
-initOpenTelemetry();
 
 // Import and re-export createAppError from dedicated module to avoid circular dependencies
 import { createAppError } from "~/server/errors/app-error";
