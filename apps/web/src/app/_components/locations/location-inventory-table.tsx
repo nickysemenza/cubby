@@ -1,6 +1,7 @@
+import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, Trash } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
@@ -41,7 +42,42 @@ export function LocationInventoryTable({
     items: InventoryItem[];
   }>({ type: null, items: [] });
 
-  const { table, data, isLoading, error } = useEntityList<
+  const bulkActions = useMemo(
+    () => ({
+      actions: [
+        {
+          id: "move",
+          label: "Move",
+          icon: <ArrowRightLeft className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<InventoryItem>[]) => {
+            setDialogState({
+              type: "move",
+              items: rows.map((r) => r.original),
+            });
+            return { success: true };
+          },
+        },
+        {
+          id: "delete",
+          label: "Delete",
+          icon: <Trash className="h-4 w-4" />,
+          minSelection: 1,
+          onExecute: async (rows: Row<InventoryItem>[]) => {
+            setDialogState({
+              type: "delete",
+              items: rows.map((r) => r.original),
+            });
+            return { success: true };
+          },
+        },
+      ],
+      clearSelectionOnComplete: false,
+    }),
+    [],
+  );
+
+  const { table, isLoading, error, bulkActionBar } = useEntityList<
     InventoryItem,
     Record<string, never>
   >({
@@ -103,39 +139,8 @@ export function LocationInventoryTable({
         </Button>
       </>
     ),
+    bulkActions,
   });
-
-  // Get selected items for bulk actions
-  const selectedItems = Object.keys(table.getState().rowSelection)
-    .filter((id) => table.getState().rowSelection[id])
-    .map((id) => data.find((item) => item.id === id))
-    .filter((item): item is InventoryItem => item !== undefined);
-
-  // Custom bulk action bar
-  const customBulkActionBar = selectedItems.length > 0 && (
-    <div className="flex items-center gap-2">
-      <span className="text-sm">
-        {selectedItems.length} item{selectedItems.length !== 1 ? "s" : ""}{" "}
-        selected
-      </span>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setDialogState({ type: "move", items: selectedItems })}
-      >
-        <ArrowRightLeft className="mr-2 h-4 w-4" />
-        Move
-      </Button>
-      <Button
-        variant="destructive"
-        size="sm"
-        onClick={() => setDialogState({ type: "delete", items: selectedItems })}
-      >
-        <Trash className="mr-2 h-4 w-4" />
-        Delete
-      </Button>
-    </div>
-  );
 
   return (
     <>
@@ -144,7 +149,7 @@ export function LocationInventoryTable({
         isLoading={isLoading}
         error={error}
         entity="inventory"
-        bulkActionBar={customBulkActionBar}
+        bulkActionBar={bulkActionBar}
       />
 
       {/* Move dialog */}
