@@ -1,6 +1,6 @@
 import { useQueries } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Download, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
@@ -11,15 +11,60 @@ import { CategoryIcon } from "~/app/_components/products/product-category-icons"
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { generateQrDataUrl } from "~/lib/label-generator";
-import { parseShortcode } from "~/lib/shortcode";
+import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
+import { getShortcodeUrl, parseShortcode } from "~/lib/shortcode";
 import { dedupe } from "~/misc/array-helpers";
 import type { LocationType } from "~/schemas/location";
 import type { ProductCategory } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 
+const SHEET_LAYOUTS = {
+  pls134: {
+    // https://www.premiumlabelsupply.com/templates/pls134/
+    // https://www.amazon.com/gp/product/B0DV5N4QF5/
+    cols: 2,
+    labelsPerSheet: 12,
+    pageMargin: "1in 0.172in",
+    sheetWidth: "8.156in",
+    columnGap: "0.156in",
+    labelWidth: "4in",
+    labelHeight: "1.5in",
+    borderWidth: "0.15in",
+    qrSize: "0.8in",
+    shortcodeSize: "14pt",
+    nameSize: "10pt",
+    badgeSize: "8pt",
+    verticalPadding: "0.08in",
+    contentGap: "0.12in",
+  },
+  pls763: {
+    // https://www.premiumlabelsupply.com/templates/pls763/
+    // https://www.amazon.com/gp/product/B0C27B2DW7
+    cols: 3,
+    labelsPerSheet: 30,
+    pageMargin: "0.5in 0.1875in",
+    sheetWidth: "8.125in",
+    columnGap: "0.125in",
+    labelWidth: "2.625in",
+    labelHeight: "1in",
+    borderWidth: "0.08in",
+    qrSize: "0.55in",
+    shortcodeSize: "10pt",
+    nameSize: "7pt",
+    badgeSize: "6pt",
+    verticalPadding: "0.04in",
+    contentGap: "0.06in",
+  },
+} as const;
+type SheetFormat = keyof typeof SHEET_LAYOUTS;
+
+function isSheetFormat(format: string): format is SheetFormat {
+  return format in SHEET_LAYOUTS;
+}
+
 const searchParamsSchema = z.object({
   codes: z.string().optional(),
+  format: z.enum(["pls134", "pls763", "ptouch"]).default("pls134"),
 });
 
 export const Route = createFileRoute("/labels")({
@@ -109,8 +154,9 @@ function useShortcodeLookups(shortcodes: string[]) {
 }
 
 function LabelsPage() {
-  const { codes } = Route.useSearch();
+  const { codes, format } = Route.useSearch();
   const router = useRouter();
+  const navigate = Route.useNavigate();
 
   const shortcodes = useMemo<string[]>(() => {
     const list =
@@ -123,10 +169,10 @@ function LabelsPage() {
 
   const { items, isLoading } = useShortcodeLookups(shortcodes);
 
-  // Generate QR codes client-side
+  // Generate QR codes client-side (needed for sheet formats, not P-Touch)
   const [qrUrls, setQrUrls] = useState<Record<string, string>>({});
   useEffect(() => {
-    if (items.length === 0) return;
+    if (items.length === 0 || format === "ptouch") return;
     let cancelled = false;
     Promise.all(
       items.map(async (item) => {
@@ -141,7 +187,7 @@ function LabelsPage() {
     return () => {
       cancelled = true;
     };
-  }, [items]);
+  }, [items, format]);
 
   const allQrReady =
     items.length > 0 && items.every((item) => qrUrls[item.shortcode]);
@@ -150,6 +196,17 @@ function LabelsPage() {
     () => items.map((item) => ({ ...item, qrUrl: qrUrls[item.shortcode] })),
     [items, qrUrls],
   );
+
+  function handleDownloadCsv() {
+    const csv = generateLabelCsv(items);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "labels.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   if (shortcodes.length === 0) {
     return (
@@ -176,10 +233,21 @@ function LabelsPage() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
-            <Button onClick={() => window.print()} disabled={!allQrReady}>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
+            <FormatToggle
+              format={format}
+              onChange={(f) => navigate({ search: { codes, format: f } })}
+            />
+            {format !== "ptouch" ? (
+              <Button onClick={() => window.print()} disabled={!allQrReady}>
+                <Printer className="mr-2 h-4 w-4" />
+                Print
+              </Button>
+            ) : (
+              <Button onClick={handleDownloadCsv} disabled={items.length === 0}>
+                <Download className="mr-2 h-4 w-4" />
+                Download CSV
+              </Button>
+            )}
           </div>
         }
       >
@@ -189,20 +257,59 @@ function LabelsPage() {
               <p className="text-muted-foreground">Loading...</p>
             </CardContent>
           </Card>
+        ) : isSheetFormat(format) ? (
+          <LabelSheet items={labelItems} layout={SHEET_LAYOUTS[format]} />
         ) : (
-          <LabelSheet items={labelItems} />
+          <PtouchPreview items={items} />
         )}
       </EntityLayout>
       {/* Portal to body so print CSS can hide everything else */}
-      {!isLoading &&
+      {isSheetFormat(format) &&
+        !isLoading &&
         createPortal(
           <>
-            <PrintStyles />
-            <LabelSheet items={labelItems} printOnly />
+            <PrintStyles layout={SHEET_LAYOUTS[format]} />
+            <LabelSheet
+              items={labelItems}
+              layout={SHEET_LAYOUTS[format]}
+              printOnly
+            />
           </>,
           document.body,
         )}
     </>
+  );
+}
+
+function FormatToggle({
+  format,
+  onChange,
+}: {
+  format: "pls134" | "pls763" | "ptouch";
+  onChange: (format: "pls134" | "pls763" | "ptouch") => void;
+}) {
+  const options = [
+    { value: "pls134" as const, label: '4 \u00d7 1.5"' },
+    { value: "pls763" as const, label: '2\u215d \u00d7 1"' },
+    { value: "ptouch" as const, label: "P-Touch" },
+  ];
+  return (
+    <div className="flex rounded-md border">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          className={`px-3 py-1.5 text-sm transition-colors ${
+            format === opt.value
+              ? "bg-primary text-primary-foreground"
+              : "hover:bg-muted"
+          }`}
+          onClick={() => onChange(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -236,18 +343,23 @@ function formatSubtype(item: LabelItem): string {
   return item.entityType;
 }
 
-function PrintStyles() {
+function PrintStyles({
+  layout,
+}: {
+  layout: (typeof SHEET_LAYOUTS)[SheetFormat];
+}) {
+  const n = layout.labelsPerSheet;
   return (
     <style
       // biome-ignore lint/security/noDangerouslySetInnerHtml: static print CSS
       dangerouslySetInnerHTML={{
         __html: `
           @media print {
-            @page { size: letter; margin: 0.5in; }
+            @page { size: letter; margin: ${layout.pageMargin}; }
             body > *:not(.label-sheet) { display: none; }
             .label-sheet { display: grid !important; }
-            .label-sheet > div:nth-child(10n+1) { break-before: page; }
-            .label-sheet > div:nth-child(-n+10) { break-before: auto; }
+            .label-sheet > div:nth-child(${n}n+1) { break-before: page; }
+            .label-sheet > div:nth-child(-n+${n}) { break-before: auto; }
           }
         `,
       }}
@@ -257,27 +369,41 @@ function PrintStyles() {
 
 function LabelSheet({
   items,
+  layout,
   printOnly,
 }: {
   items: (LabelItem & { qrUrl?: string })[];
+  layout: (typeof SHEET_LAYOUTS)[SheetFormat];
   printOnly?: boolean;
 }) {
   return (
     <div
       className={
         printOnly
-          ? "label-sheet hidden w-[7.5in] grid-cols-2 gap-0"
-          : "mx-auto grid w-[7.5in] grid-cols-2 gap-0 print:hidden"
+          ? `label-sheet hidden gap-0`
+          : "mx-auto grid gap-0 print:hidden"
       }
+      style={{
+        width: layout.sheetWidth,
+        columnGap: layout.columnGap,
+        rowGap: 0,
+        gridTemplateColumns: `repeat(${layout.cols}, 1fr)`,
+      }}
     >
       {items.map((item) => {
         const color = getLabelColor(item);
         return (
           <div
             key={item.shortcode}
-            className="flex h-[2in] w-[3.75in] break-inside-avoid items-center gap-[0.15in] overflow-hidden border border-gray-300 border-dashed py-[0.15in] pr-[0.2in]"
+            className="flex break-inside-avoid items-center overflow-hidden"
             style={{
-              borderLeftWidth: "0.25in",
+              height: layout.labelHeight,
+              width: layout.labelWidth,
+              gap: layout.contentGap,
+              paddingTop: layout.verticalPadding,
+              paddingBottom: layout.verticalPadding,
+              paddingRight: layout.borderWidth,
+              borderLeftWidth: layout.borderWidth,
               borderLeftColor: color,
               borderLeftStyle: "solid",
             }}
@@ -286,21 +412,31 @@ function LabelSheet({
               <img
                 src={item.qrUrl}
                 alt={`QR ${item.shortcode}`}
-                className="h-[0.8in] w-[0.8in] shrink-0"
+                style={{ height: layout.qrSize, width: layout.qrSize }}
+                className="shrink-0"
               />
             ) : (
-              <div className="h-[0.8in] w-[0.8in] shrink-0" />
+              <div
+                style={{ height: layout.qrSize, width: layout.qrSize }}
+                className="shrink-0"
+              />
             )}
-            <div className="flex min-w-0 flex-col gap-[0.05in]">
-              <div className="font-bold font-mono text-[18pt] tracking-[0.5px]">
+            <div className="flex min-w-0 flex-col gap-[0.03in]">
+              <div
+                className="font-bold font-mono tracking-[0.5px]"
+                style={{ fontSize: layout.shortcodeSize }}
+              >
                 {item.shortcode}
               </div>
-              <div className="line-clamp-2 text-[#333] text-[11pt]">
+              <div
+                className="line-clamp-1 text-[#333]"
+                style={{ fontSize: layout.nameSize }}
+              >
                 {item.name}
               </div>
               <div
-                className="flex items-center gap-1 whitespace-nowrap text-[9pt] capitalize"
-                style={{ color }}
+                className="flex items-center gap-1 whitespace-nowrap capitalize"
+                style={{ color, fontSize: layout.badgeSize }}
               >
                 <LabelIcon item={item} />
                 <span>{formatSubtype(item)}</span>
@@ -310,5 +446,34 @@ function LabelSheet({
         );
       })}
     </div>
+  );
+}
+
+function PtouchPreview({ items }: { items: LabelItem[] }) {
+  return (
+    <Card>
+      <CardContent className="p-0">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b">
+              <th className="px-4 py-2 text-left font-medium">Shortcode</th>
+              <th className="px-4 py-2 text-left font-medium">Name</th>
+              <th className="px-4 py-2 text-left font-medium">URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.shortcode} className="border-b last:border-b-0">
+                <td className="px-4 py-2 font-mono">{item.shortcode}</td>
+                <td className="px-4 py-2">{item.name}</td>
+                <td className="px-4 py-2 text-muted-foreground">
+                  {getShortcodeUrl(item.shortcode)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }

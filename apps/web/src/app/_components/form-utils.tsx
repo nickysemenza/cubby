@@ -17,9 +17,13 @@ import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
 import type { ComboboxItem } from "./combobox/combobox-types";
 
-const DevTool = lazy(() =>
-  import("@hookform/devtools").then((m) => ({ default: m.DevTool })),
-);
+// Guard with import.meta.env.DEV so the bundler eliminates the
+// @hookform/devtools import (and its lodash dependency) from production builds.
+const DevTool = import.meta.env.DEV
+  ? lazy(() =>
+      import("@hookform/devtools").then((m) => ({ default: m.DevTool })),
+    )
+  : () => null;
 
 // Base props shared by all forms
 interface BaseFormProps {
