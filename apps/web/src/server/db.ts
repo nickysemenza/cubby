@@ -8,6 +8,7 @@ import {
   drizzle as drizzleNodePostgres,
   type NodePgDatabase,
 } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
@@ -43,7 +44,7 @@ const createPoolClient = async (connectionString: string) => {
     return db;
   }
   // Standard node-postgres for traditional PostgreSQL connections
-  const { Pool } = await import("pg");
+  const { Pool } = pg;
   const pool = new Pool({ connectionString });
   const instrumentedPool = instrumentDrizzle(pool);
   return drizzleNodePostgres({ client: instrumentedPool, schema });
@@ -65,7 +66,7 @@ export const withRequestDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const { Client } = await import("pg");
+  const { Client } = pg;
   const client = new Client({ connectionString });
   await client.connect();
   const db = drizzleNodePostgres({ client, schema });

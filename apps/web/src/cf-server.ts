@@ -11,6 +11,18 @@
 
 import { withRequestDb } from "./server/db";
 
+// Cache the handler module promise so the dynamic import only runs once (on
+// first request). We keep it lazy (not a top-level static import) so that
+// module-level errors are caught in the fetch() try/catch rather than becoming
+// silent 500s.
+let handlerPromise: Promise<
+  typeof import("@tanstack/react-start/server-entry")
+>;
+const getHandler = () => {
+  handlerPromise ??= import("@tanstack/react-start/server-entry");
+  return handlerPromise;
+};
+
 let lastInterceptedError: {
   name: string;
   message: string;
@@ -48,9 +60,7 @@ export default {
 
     try {
       return await withRequestDb(env.HYPERDRIVE.connectionString, async () => {
-        const { default: handler } = await import(
-          "@tanstack/react-start/server-entry"
-        );
+        const { default: handler } = await getHandler();
         const response = await handler.fetch(request);
 
         // If Nitro returned a 500 and we intercepted a real error, log the details
