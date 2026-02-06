@@ -3,8 +3,13 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 export default createServerEntry(
   wrapFetchWithSentry({
-    fetch(request: Request) {
-      return handler.fetch(request);
+    async fetch(request: Request) {
+      try {
+        return await handler.fetch(request);
+      } catch (error) {
+        console.error("[server]", error);
+        throw error;
+      }
     },
   }),
 );
