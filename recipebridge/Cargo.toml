@@ -10,7 +10,7 @@ wasm-bindgen = "0.2.9"
 js-sys = "0.3"
 
 # https://doc.rust-lang.org/cargo/reference/config.html
-# override: 
+# override:
 # [patch."https://github.com/nickysemenza/ingredient-parser"]
 # recipe-scraper = { path = "dev/ingredient-parser/recipe-scraper" }
 # ingredient = { path = "dev/ingredient-parser/ingredient-parser" }

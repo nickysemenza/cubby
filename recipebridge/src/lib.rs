@@ -63,7 +63,7 @@ fn parse_mappings(mappings: Vec<WUnitMapping>) -> Result<UnitMappingPairs, Strin
 // Public API
 #[wasm_bindgen]
 pub fn format_amount_value(input: &WAmount) -> Result<f64, String> {
-    let v = from_js::<Measure>(input, "amount")?.values().0;
+    let v = from_js::<Measure>(input, "amount")?.value();
     Ok(truncate_3_decimals(v))
 }
 
@@ -79,7 +79,7 @@ pub fn format_amount(amount: &WAmount) -> Result<String, String> {
 
 #[wasm_bindgen]
 pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String> {
-    parse_mappings(mappings).map(|p| print_graph(make_graph(p)))
+    parse_mappings(mappings).map(|p| print_graph(make_graph(&p)))
 }
 
 /// Detect disconnected components (islands) in unit mapping graph
@@ -87,7 +87,7 @@ pub fn graph_unit_mappings(mappings: Vec<WUnitMapping>) -> Result<String, String
 #[wasm_bindgen]
 pub fn detect_unit_mapping_islands(mappings: Vec<WUnitMapping>) -> Result<JsValue, String> {
     let pairs = parse_mappings(mappings)?;
-    let graph = make_graph(pairs);
+    let graph = make_graph(&pairs);
 
     // Find connected components
     let components = find_connected_components(&graph);
@@ -109,7 +109,7 @@ pub fn conv_amount_to_kind(
         MeasureKind::from_str(&kind_str).map_err(|_| format!("Invalid amount kind: {kind_str}"))?;
 
     measure
-        .convert_measure_via_mappings(kind.clone(), pairs)
+        .convert_measure_via_mappings(kind.clone(), &pairs)
         .ok_or_else(|| format!("Failed to convert '{measure}' to '{kind}'"))
         .and_then(|m| to_js(&m, "amount").map(Into::into))
 }
@@ -129,9 +129,7 @@ pub fn conv_amount_to_nutrients(
     let result = js_sys::Object::new();
     for target in nutrient_targets {
         let kind = MeasureKind::Nutrient(target.clone());
-        let converted = measure
-            .clone()
-            .convert_measure_via_mappings(kind, pairs.clone());
+        let converted = measure.convert_measure_via_mappings(kind, &pairs);
 
         let js_value = match converted {
             Some(m) => to_js(&m, "amount")?,
@@ -157,7 +155,7 @@ pub fn conv_amount_to_unit(
     let kind = MeasureKind::Nutrient(target_unit.clone());
 
     measure
-        .convert_measure_via_mappings(kind, pairs)
+        .convert_measure_via_mappings(kind, &pairs)
         .ok_or_else(|| format!("Failed to convert to '{target_unit}'"))
         .and_then(|m| to_js(&m, "amount").map(Into::into))
 }
