@@ -350,6 +350,26 @@ jobs:
         env:
           NODE_ENV: production
 
+  build-cf:
+    name: Build for Cloudflare Workers
+    needs: [build-wasm, lint-format]
+    runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: "--max-old-space-size=4096"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          download-wasm: "true"
+      - name: Build for Cloudflare Workers
+        run: pnpm --filter @cubby/web run build:cf
+      - name: Upload CF build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: cf-build
+          path: apps/web/dist
+          retention-days: 1
+
   deploy:
     name: Deploy to Vercel
     needs: [build-wasm, lint-format, check-tests, build]
@@ -379,3 +399,33 @@ jobs:
         env:
           VERCEL_ORG_ID: team_rAffu7VKl4KcVrPBRqaMYB7f
           VERCEL_PROJECT_ID: prj_JPllV9ESJ1mzTBJZEmAtNrooLS00
+
+  deploy-cf:
+    name: Deploy to Cloudflare Workers
+    needs: [lint-format, check-tests, build-cf]
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      needs.lint-format.result == 'success' &&
+      needs.check-tests.outputs.all-passed == 'true' &&
+      needs.build-cf.result == 'success' &&
+      github.ref == 'refs/heads/main'
+    environment:
+      name: cloudflare
+      url: https://cubby.nickysemenza.com
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download CF build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: cf-build
+          path: apps/web/dist
+      - name: Install wrangler
+        run: npm install -g wrangler
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: 9f10f078d35d86c78dedece2300a6b88
+          command: deploy --config dist/server/wrangler.json
+          workingDirectory: apps/web
