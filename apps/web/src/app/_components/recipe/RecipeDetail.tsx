@@ -11,8 +11,8 @@ import {
 import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
 import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
-import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";
@@ -204,40 +204,33 @@ const RecipeDetail: React.FC<{
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
-        <div className="ml-auto flex gap-2">
-          <Button
-            variant={viewMode === "magazine" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("magazine")}
-          >
+        <ToggleGroup
+          className="ml-auto"
+          variant="outline"
+          size="sm"
+          value={[viewMode]}
+          onValueChange={(values) => {
+            const v = values[0] as ViewMode | undefined;
+            if (v) setViewMode(v);
+          }}
+        >
+          <ToggleGroupItem value="magazine" aria-label="Magazine view">
             <BookOpen className="mr-2 h-4 w-4" />
             Magazine
-          </Button>
-          <Button
-            variant={viewMode === "nyt" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("nyt")}
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="nyt" aria-label="NYT view">
             <Newspaper className="mr-2 h-4 w-4" />
             NYT
-          </Button>
-          <Button
-            variant={viewMode === "table" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("table")}
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="table" aria-label="Table view">
             <Table2 className="mr-2 h-4 w-4" />
             Table
-          </Button>
-          <Button
-            variant={viewMode === "charts" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("charts")}
-          >
+          </ToggleGroupItem>
+          <ToggleGroupItem value="charts" aria-label="Charts view">
             <BarChart3 className="mr-2 h-4 w-4" />
             Charts
-          </Button>
-        </div>
+          </ToggleGroupItem>
+        </ToggleGroup>
       </div>
 
       {/* View Components */}

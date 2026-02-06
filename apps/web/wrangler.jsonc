@@ -4,7 +4,7 @@
   "compatibility_date": "2026-02-05",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": false,
+    "enabled": true,
     "head_sampling_rate": 1,
     "logs": {
       "enabled": true,
