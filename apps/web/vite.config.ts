@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,6 +11,9 @@ import viteTsConfigPaths from "vite-tsconfig-paths";
 
 const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const gitCommit = execSync("git rev-parse --short HEAD", {
+  encoding: "utf-8",
+}).trim();
 
 /**
  * Stub pg-native for CF Workers. Vite emits a bare `throw` for unresolvable
@@ -96,7 +100,10 @@ export default defineConfig(async () => {
   return {
     envDir: ".", // Explicitly load .env from this directory
     // CF Workers build-time flag for dead code elimination in db.ts
-    define: isCloudflare ? { __CF_WORKERS__: "true" } : {},
+    define: {
+      __GIT_COMMIT__: JSON.stringify(gitCommit),
+      ...(isCloudflare ? { __CF_WORKERS__: "true" } : {}),
+    },
     server: {
       host: "0.0.0.0",
       allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
