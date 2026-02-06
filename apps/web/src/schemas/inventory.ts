@@ -93,7 +93,7 @@ export const inventoryCSVRow = z.object({
   aliases: z.string().nullable().optional(), // semicolon-separated: "sugar;granulated sugar"
   notes: z.string().nullable().optional(), // product notes, URLs, or other details
   product_image: z.string().url().nullable().optional(), // URL of product's primary image
-  // Timestamps (optional - old exports won't have them, controlled by SYNC_TIMESTAMPS)
+  // Timestamps (optional - old exports may not have them)
   product_created_at: z.string().nullable().optional(),
   product_updated_at: z.string().nullable().optional(),
   inventory_created_at: z.string().nullable().optional(),

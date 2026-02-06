@@ -3,7 +3,6 @@
  *
  * Used for showing field changes in:
  * - Audit log entries
- * - Google Sheets sync preview
  * - CSV import preview
  */
 

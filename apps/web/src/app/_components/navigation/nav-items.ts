@@ -4,7 +4,6 @@ import {
   ExternalLink,
   Home,
   LayoutDashboard,
-  Plug,
   ScanBarcode,
   TrendingUp,
 } from "lucide-react";
@@ -110,13 +109,6 @@ const images: NavItem = {
   isActive: (p) => p.startsWith("/images"),
 };
 
-const integrations: NavItem = {
-  href: "/settings/integrations",
-  label: "Integrations",
-  icon: Plug,
-  isActive: (p) => p.startsWith("/settings/integrations"),
-};
-
 const apiPanel: NavItem = {
   href: "/api/panel",
   label: "API Panel",
@@ -142,7 +134,6 @@ export const moreNavItems: NavItem[] = [
   insights,
   problems,
   images,
-  integrations,
 ];
 
 export const kitchenItems: NavItem[] = [ingredients, recipes, usda];
@@ -154,4 +145,4 @@ export const reportsItems: NavItem[] = [
   problems,
 ];
 
-export const desktopMoreItems: NavItem[] = [images, integrations, apiPanel];
+export const desktopMoreItems: NavItem[] = [images, apiPanel];

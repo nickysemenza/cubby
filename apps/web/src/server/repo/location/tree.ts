@@ -21,18 +21,10 @@ import {
   locationImage,
   product,
 } from "~/server/db/schema";
-import {
-  buildPartialUpdateValues,
-  getDb,
-  notDeleted,
-  relations,
-} from "~/server/repo/database-helpers";
+import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 
 import { buildLocationWithChildren } from "./helpers";
-import type {
-  LocationImportData,
-  LocationWithParentChild,
-} from "./internal-types";
+import type { LocationWithParentChild } from "./internal-types";
 
 export const buildLocationTypeCount = async (db: Database) => {
   const types = await getDb(db)
@@ -263,55 +255,4 @@ export const wouldCreateParentCycle = async (
   }
 
   return false;
-};
-
-/**
- * Update location fields from CSV/sync import data
- * Used by importLocationsFromCSV when updating existing locations.
- * Returns true if any fields were updated.
- *
- * Handles all location sync fields:
- * - locationType: updates if provided and different
- * - parentId: updates if provided and different (with cycle detection)
- * - description: updates if provided
- * - lastInventoryDate: updates if provided
- */
-export const updateLocationFromImport = async (
-  db: Database,
-  locationId: LocationId,
-  data: LocationImportData,
-): Promise<{ updated: boolean; cycleSkipped?: boolean }> => {
-  // Check for parent cycle if parentId is being changed
-  let cycleSkipped = false;
-  let safeParentId = data.parentId;
-
-  if (data.parentId !== undefined && data.parentId !== null) {
-    const wouldCycle = await wouldCreateParentCycle(
-      db,
-      locationId,
-      data.parentId,
-    );
-    if (wouldCycle) {
-      // Skip parent update to prevent cycle, but continue with other updates
-      safeParentId = undefined;
-      cycleSkipped = true;
-    }
-  }
-
-  const updateValues = buildPartialUpdateValues({
-    lastBulkInventory: data.lastInventoryDate,
-    description: data.description,
-    type: data.locationType,
-    parentId: safeParentId,
-  });
-
-  // Only update if there are values to update
-  if (Object.keys(updateValues).length > 0) {
-    await getDb(db)
-      .update(location)
-      .set(updateValues)
-      .where(eq(location.id, locationId));
-    return { updated: true, cycleSkipped };
-  }
-  return { updated: false, cycleSkipped };
 };

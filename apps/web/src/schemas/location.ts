@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { amount } from "~/codec/codec";
 import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { dbTimestampsOut } from "./common";
 import {
@@ -103,52 +104,3 @@ export const locationUpdateInput = z.object({
 
 export type LocationCreateInput = z.infer<typeof locationCreateInput>;
 export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
-
-import { amount } from "~/codec/codec";
-import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
-
-/**
- * CSV row schema for location import/export
- * Uses location_name (unique) and parent_name instead of hierarchical paths
- */
-export const locationCSVRow = z.object({
-  location_name: z.string().min(1), // Required: unique location name
-  location_shortcode: z.string().nullable().optional(), // L-XXXX format (for matching)
-  parent_name: z.string().nullable().optional(), // Parent location name (null for root)
-  location_type: locationType.optional(), // Optional: defaults to "room" for root, "shelf" for children
-  description: z.string().nullable().optional(),
-  location_image: z.string().optional(), // Semicolon-separated image URLs
-  last_inventory_date: z.string().nullable().optional(), // ISO timestamp of when location was last inventoried
-  // Timestamps (optional, only present when SYNC_TIMESTAMPS enabled)
-  location_created_at: z.string().nullable().optional(),
-  location_updated_at: z.string().nullable().optional(),
-});
-
-export type LocationCSVRow = z.infer<typeof locationCSVRow>;
-
-/**
- * Individual result item for location CSV import
- */
-const locationCSVImportResultItem = baseCsvResultItem.extend({
-  action: z.enum(["created", "updated", "skipped", "error", "removed"]),
-  locationName: z.string(),
-  locationId: locationId.optional(),
-  // Preview fields
-  locationWillBeCreated: z.boolean().optional(),
-  imageWillBeImported: z.string().optional(),
-  imageImportSkipped: z.boolean().optional(),
-  imageImportError: z.string().optional(),
-});
-
-export type LocationCSVImportResultItem = z.infer<
-  typeof locationCSVImportResultItem
->;
-
-/**
- * Result of location CSV import operation
- */
-export const locationCSVImportResult = baseCsvImportCounts.extend({
-  items: z.array(locationCSVImportResultItem),
-});
-
-export type LocationCSVImportResult = z.infer<typeof locationCSVImportResult>;

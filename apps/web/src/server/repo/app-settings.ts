@@ -2,7 +2,6 @@
  * App Settings Repository
  *
  * Provides functions to get and update app-wide settings stored in a singleton table.
- * Stores app-wide configuration like Google Sheets connection.
  */
 
 import type { Database } from "~/server/db";

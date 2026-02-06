@@ -22,7 +22,6 @@ import {
   kitchenItems,
   reportsItems,
 } from "./navigation/nav-items";
-import { SyncStatusBadge } from "./sync/sync-status-badge";
 
 // Icons for desktop nav
 const HomeIcon = Home;
@@ -146,10 +145,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         {session.data?.user && <QuickActionsMenu />}
 
         {/* Status Badges */}
-        <div className="flex flex-row gap-2">
-          {session.data?.user && <ProblemsBadge />}
-          <SyncStatusBadge />
-        </div>
+        {session.data?.user && <ProblemsBadge />}
 
         {/* Debug Toggle */}
         <Button

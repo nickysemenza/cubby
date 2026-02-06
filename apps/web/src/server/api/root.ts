@@ -1,7 +1,6 @@
 import { createTRPCRouter } from "~/server/api/trpc";
 import { aiRouter } from "./routers/ai";
 import { auditLogRouter } from "./routers/audit-log";
-import { googleSheetsRouter } from "./routers/google-sheets";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
 import { inventoryRouter } from "./routers/inventory";
@@ -30,7 +29,6 @@ export const appRouter = createTRPCRouter({
   image: imageRouter,
   problems: problemsRouter,
   auditLog: auditLogRouter,
-  googleSheets: googleSheetsRouter,
   search: searchRouter,
 });
 

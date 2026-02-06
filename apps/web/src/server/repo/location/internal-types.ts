@@ -54,14 +54,3 @@ export interface LocationFilters {
   nameFilter?: string;
   itemTypeFilter?: string;
 }
-
-/**
- * Input data for location import updates.
- * Matches location sync fields for consistency.
- */
-export interface LocationImportData {
-  lastInventoryDate?: Date | null;
-  description?: string | null;
-  locationType?: import("~/schemas/location").LocationType;
-  parentId?: import("~/schemas/identifiers").LocationId | null;
-}

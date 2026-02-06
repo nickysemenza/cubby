@@ -18,7 +18,6 @@ export {
 } from "./crud";
 
 // CSV operations
-export { exportInventoryToCSV } from "./csv-export";
 export {
   createOrUpdatePriceMapping,
   importInventoryFromCSV,

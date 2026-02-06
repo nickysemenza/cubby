@@ -14,10 +14,6 @@ export {
   locationList,
   updateLocation,
 } from "./crud";
-// CSV operations (existing files)
-export { getLocationRowDifferences } from "./csv-comparison";
-export { exportLocationsToCSV } from "./csv-export";
-export { importLocationsFromCSV } from "./csv-import";
 // Helpers
 export {
   buildLocationWithChildren,
@@ -27,7 +23,6 @@ export {
 export type {
   LocationDeepDB,
   LocationFilters,
-  LocationImportData,
   LocationWithParentChild,
 } from "./internal-types";
 // Lookup operations
@@ -44,7 +39,4 @@ export {
   buildLocationTree,
   buildLocationTypeCount,
   touchLastBulkInventory,
-  updateLocationFromImport,
 } from "./tree";
-// Types (CSV export types are in types.ts, internal types in internal-types.ts)
-export type { LocationCSVExportRow } from "./types";

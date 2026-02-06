@@ -13,6 +13,10 @@ Now that all unit conversions go through WASM with compound unit support:
 
 - [ ] Add drag-drop between locations in tree view
 
+## Simplify Data Loading
+
+- [ ] Replace inventory CSV import with direct tRPC calls in `load-data.ts` — the CSV import pipeline (`csv-import/`, `inventoryCSVRow` schema, `parseInventoryCSV`, papaparse dep) only exists to serve `load-data.ts` and its integration tests. A simpler approach: call `inventory.create` / `product.create` mutations directly, skip the CSV parsing/diffing layer entirely.
+
 ## Architecture Improvements (from assumption review)
 
 ### Quick wins

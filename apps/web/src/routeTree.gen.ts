@@ -26,7 +26,6 @@ import { Route as InventoryIndexRouteImport } from './routes/inventory.index'
 import { Route as IngredientsIndexRouteImport } from './routes/ingredients.index'
 import { Route as ImagesIndexRouteImport } from './routes/images.index'
 import { Route as UsdaIdRouteImport } from './routes/usda.$id'
-import { Route as SettingsIntegrationsRouteImport } from './routes/settings.integrations'
 import { Route as RecipesNewRouteImport } from './routes/recipes.new'
 import { Route as RecipesCompareRouteImport } from './routes/recipes.compare'
 import { Route as RecipesIdRouteImport } from './routes/recipes.$id'
@@ -48,7 +47,6 @@ import { Route as ApiPanelRouteImport } from './routes/api/panel'
 import { Route as AccountAccountViewRouteImport } from './routes/account.$accountView'
 import { Route as UsdaUpcCodeRouteImport } from './routes/usda.upc.$code'
 import { Route as UsdaNdbCodeRouteImport } from './routes/usda.ndb.$code'
-import { Route as SettingsIntegrationsDebugRouteImport } from './routes/settings.integrations.debug'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -135,11 +133,6 @@ const ImagesIndexRoute = ImagesIndexRouteImport.update({
 const UsdaIdRoute = UsdaIdRouteImport.update({
   id: '/usda/$id',
   path: '/usda/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
-  id: '/settings/integrations',
-  path: '/settings/integrations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RecipesNewRoute = RecipesNewRouteImport.update({
@@ -247,12 +240,6 @@ const UsdaNdbCodeRoute = UsdaNdbCodeRouteImport.update({
   path: '/usda/ndb/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SettingsIntegrationsDebugRoute =
-  SettingsIntegrationsDebugRouteImport.update({
-    id: '/debug',
-    path: '/debug',
-    getParentRoute: () => SettingsIntegrationsRoute,
-  } as any)
 const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   id: '/api/trpc/$',
   path: '/api/trpc/$',
@@ -292,7 +279,6 @@ export interface FileRoutesByFullPath {
   '/recipes/$id': typeof RecipesIdRoute
   '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
-  '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
   '/images/': typeof ImagesIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
@@ -304,7 +290,6 @@ export interface FileRoutesByFullPath {
   '/usda/': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/settings/integrations/debug': typeof SettingsIntegrationsDebugRoute
   '/usda/ndb/$code': typeof UsdaNdbCodeRoute
   '/usda/upc/$code': typeof UsdaUpcCodeRoute
 }
@@ -336,7 +321,6 @@ export interface FileRoutesByTo {
   '/recipes/$id': typeof RecipesIdRoute
   '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
-  '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
   '/images': typeof ImagesIndexRoute
   '/ingredients': typeof IngredientsIndexRoute
@@ -348,7 +332,6 @@ export interface FileRoutesByTo {
   '/usda': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/settings/integrations/debug': typeof SettingsIntegrationsDebugRoute
   '/usda/ndb/$code': typeof UsdaNdbCodeRoute
   '/usda/upc/$code': typeof UsdaUpcCodeRoute
 }
@@ -381,7 +364,6 @@ export interface FileRoutesById {
   '/recipes/$id': typeof RecipesIdRoute
   '/recipes/compare': typeof RecipesCompareRoute
   '/recipes/new': typeof RecipesNewRoute
-  '/settings/integrations': typeof SettingsIntegrationsRouteWithChildren
   '/usda/$id': typeof UsdaIdRoute
   '/images/': typeof ImagesIndexRoute
   '/ingredients/': typeof IngredientsIndexRoute
@@ -393,7 +375,6 @@ export interface FileRoutesById {
   '/usda/': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/settings/integrations/debug': typeof SettingsIntegrationsDebugRoute
   '/usda/ndb/$code': typeof UsdaNdbCodeRoute
   '/usda/upc/$code': typeof UsdaUpcCodeRoute
 }
@@ -427,7 +408,6 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
-    | '/settings/integrations'
     | '/usda/$id'
     | '/images/'
     | '/ingredients/'
@@ -439,7 +419,6 @@ export interface FileRouteTypes {
     | '/usda/'
     | '/api/auth/$'
     | '/api/trpc/$'
-    | '/settings/integrations/debug'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   fileRoutesByTo: FileRoutesByTo
@@ -471,7 +450,6 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
-    | '/settings/integrations'
     | '/usda/$id'
     | '/images'
     | '/ingredients'
@@ -483,7 +461,6 @@ export interface FileRouteTypes {
     | '/usda'
     | '/api/auth/$'
     | '/api/trpc/$'
-    | '/settings/integrations/debug'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   id:
@@ -515,7 +492,6 @@ export interface FileRouteTypes {
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
-    | '/settings/integrations'
     | '/usda/$id'
     | '/images/'
     | '/ingredients/'
@@ -527,7 +503,6 @@ export interface FileRouteTypes {
     | '/usda/'
     | '/api/auth/$'
     | '/api/trpc/$'
-    | '/settings/integrations/debug'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   fileRoutesById: FileRoutesById
@@ -560,7 +535,6 @@ export interface RootRouteChildren {
   RecipesIdRoute: typeof RecipesIdRoute
   RecipesCompareRoute: typeof RecipesCompareRoute
   RecipesNewRoute: typeof RecipesNewRoute
-  SettingsIntegrationsRoute: typeof SettingsIntegrationsRouteWithChildren
   UsdaIdRoute: typeof UsdaIdRoute
   ImagesIndexRoute: typeof ImagesIndexRoute
   IngredientsIndexRoute: typeof IngredientsIndexRoute
@@ -695,13 +669,6 @@ declare module '@tanstack/react-router' {
       path: '/usda/$id'
       fullPath: '/usda/$id'
       preLoaderRoute: typeof UsdaIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings/integrations': {
-      id: '/settings/integrations'
-      path: '/settings/integrations'
-      fullPath: '/settings/integrations'
-      preLoaderRoute: typeof SettingsIntegrationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/recipes/new': {
@@ -851,13 +818,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UsdaNdbCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/settings/integrations/debug': {
-      id: '/settings/integrations/debug'
-      path: '/debug'
-      fullPath: '/settings/integrations/debug'
-      preLoaderRoute: typeof SettingsIntegrationsDebugRouteImport
-      parentRoute: typeof SettingsIntegrationsRoute
-    }
     '/api/trpc/$': {
       id: '/api/trpc/$'
       path: '/api/trpc/$'
@@ -874,17 +834,6 @@ declare module '@tanstack/react-router' {
     }
   }
 }
-
-interface SettingsIntegrationsRouteChildren {
-  SettingsIntegrationsDebugRoute: typeof SettingsIntegrationsDebugRoute
-}
-
-const SettingsIntegrationsRouteChildren: SettingsIntegrationsRouteChildren = {
-  SettingsIntegrationsDebugRoute: SettingsIntegrationsDebugRoute,
-}
-
-const SettingsIntegrationsRouteWithChildren =
-  SettingsIntegrationsRoute._addFileChildren(SettingsIntegrationsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -914,7 +863,6 @@ const rootRouteChildren: RootRouteChildren = {
   RecipesIdRoute: RecipesIdRoute,
   RecipesCompareRoute: RecipesCompareRoute,
   RecipesNewRoute: RecipesNewRoute,
-  SettingsIntegrationsRoute: SettingsIntegrationsRouteWithChildren,
   UsdaIdRoute: UsdaIdRoute,
   ImagesIndexRoute: ImagesIndexRoute,
   IngredientsIndexRoute: IngredientsIndexRoute,

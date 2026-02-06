@@ -19,8 +19,6 @@ declare namespace Cloudflare {
     E2E_TEST_USER_PASSWORD: string;
     UPC_LOOKUP_API_URL: string;
     UPC_LOOKUP_API_KEY: string;
-    GOOGLE_SERVICE_ACCOUNT_EMAIL: string;
-    GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: string;
     ANTHROPIC_API_KEY: string;
   }
 }
@@ -48,8 +46,6 @@ declare namespace NodeJS {
         | "E2E_TEST_USER_PASSWORD"
         | "UPC_LOOKUP_API_URL"
         | "UPC_LOOKUP_API_KEY"
-        | "GOOGLE_SERVICE_ACCOUNT_EMAIL"
-        | "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"
         | "ANTHROPIC_API_KEY"
       >
     > {}
