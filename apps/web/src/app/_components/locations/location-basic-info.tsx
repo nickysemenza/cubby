@@ -70,7 +70,7 @@ export const LocationBasicInfo: FC<LocationBasicInfoProps> = ({
           </div>
         }
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={onEdit}>Edit</Button>
             {location.shortcode && typeSupportsQrCode(location.type) && (
               <Button

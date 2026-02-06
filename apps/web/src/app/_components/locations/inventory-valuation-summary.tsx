@@ -69,7 +69,6 @@ export function InventoryValuationSummary({
   // full variant
   return (
     <div className={className}>
-      <div className="mb-2 font-medium text-sm">Inventory Valuation</div>
       <div className="font-semibold text-lg">
         {formatCurrency(result.totalValuation)}
       </div>

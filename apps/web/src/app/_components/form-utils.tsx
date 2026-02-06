@@ -338,7 +338,12 @@ export function SideBySideFields({
   className?: string;
 }): ReactNode {
   return (
-    <div className={cn("flex space-x-4", className)}>
+    <div
+      className={cn(
+        "flex flex-col space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0",
+        className,
+      )}
+    >
       <div className="flex-1">
         {Array.isArray(children) ? children[0] : children}
       </div>

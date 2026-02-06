@@ -29,8 +29,8 @@ export const DetailPage: FC<DetailPageProps> = ({
   const { isDebugEnabled } = useDebug();
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <h1 className="flex items-center gap-2 font-heading font-semibold text-xl tracking-tight sm:text-2xl">
+    <div className="space-y-3 sm:space-y-6">
+      <h1 className="hidden items-center gap-2 font-heading font-semibold text-xl tracking-tight sm:flex sm:text-2xl">
         <EntityIcon entity={entity} colored className="h-6 w-6" />
         <span>
           {entityDetails.label}: <span className="text-foreground">{name}</span>
@@ -38,13 +38,13 @@ export const DetailPage: FC<DetailPageProps> = ({
       </h1>
 
       {/* Grid sections */}
-      <div className="grid gap-4 sm:gap-6 md:grid-cols-2">
+      <div className="grid gap-3 sm:gap-6 md:grid-cols-2">
         {sections.map((section, index) => (
           <Card
             key={section.title}
             className={cn(
               "transition-all duration-200",
-              "hover:-translate-y-0.5 hover:shadow-md",
+              "md:hover:-translate-y-0.5 md:hover:shadow-md",
               "fade-in slide-in-from-bottom-2 animate-in",
             )}
             style={{

@@ -14,7 +14,7 @@ function InventoryPage() {
     <EntityLayout
       title="Inventory"
       actions={
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <InventoryActions />
           <Link to="/inventory/new">
             <Button>Add Inventory</Button>

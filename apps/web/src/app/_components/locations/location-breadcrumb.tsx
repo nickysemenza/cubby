@@ -88,8 +88,8 @@ export function LocationBreadcrumb({
   if (segments.length === 0 && !showHome) return null;
 
   return (
-    <Breadcrumb className={className}>
-      <BreadcrumbList>
+    <Breadcrumb className={cn("overflow-x-auto", className)}>
+      <BreadcrumbList className="flex-nowrap">
         {showHome && (
           <>
             <BreadcrumbItem>
