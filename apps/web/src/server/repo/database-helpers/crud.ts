@@ -259,6 +259,16 @@ export async function batchUpdateWithCaseWhen<
       const caseStatements: SQL[] = [];
 
       for (const columnName of columnNames) {
+        // When all values are NULL, use simple SET column = NULL.
+        // CASE WHEN with only NULL branches produces an untyped expression
+        // that can fail type resolution for typed columns like real/float4.
+        const allNull = batch.every((update) => update[columnName] === null);
+
+        if (allNull) {
+          caseStatements.push(sql`${sql.identifier(columnName)} = NULL`);
+          continue;
+        }
+
         const cases: SQL[] = [];
 
         for (const update of batch) {

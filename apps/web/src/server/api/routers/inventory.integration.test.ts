@@ -829,23 +829,25 @@ describe("inventory router", () => {
         }),
       );
 
-      // Create some inventory with price - valuations auto-synced
+      // Create inventory WITHOUT a price - valuation is null from both
+      // the import and the backfill (product.price is null), so nothing is stale.
+      // Note: seedFromCSV with price creates a stale valuation because it stores
+      // row.price as valuation but doesn't sync product.price via unit mappings.
       await seedFromCSV(
         db,
         [
           {
-            product_name: "Synced Product",
+            product_name: "Unpriced Product",
             manufacturer: "Brand",
             location_name: "Pantry",
             quantity: 4,
             unit: "each",
-            price: 5.0,
           },
         ],
         TEST_ACTOR,
       );
 
-      // Backfill should find nothing since values are synced
+      // Backfill should find nothing since valuations are consistently null
       const result = await caller.backfillInventoryValuations();
       expect(result.updated).toBe(0);
       expect(result.skipped).toBeGreaterThanOrEqual(0);
