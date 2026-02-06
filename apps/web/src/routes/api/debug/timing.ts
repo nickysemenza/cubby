@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { sql } from "drizzle-orm";
+import { count, sql } from "drizzle-orm";
 import { env } from "~/env";
 import { db } from "~/server/db";
+import { product } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
 
 type TimingResult = {
@@ -34,17 +35,26 @@ export const Route = createFileRoute("/api/debug/timing")({
         const overallStart = performance.now();
         const drizzle = getDb(db);
 
-        const results: TimingResult[] = await Promise.all([
-          // 1. DB: simple query
+        // Run DB queries in parallel to verify they use separate connections
+        const dbParallelStart = performance.now();
+        const [selectOne, countProducts] = await Promise.all([
           measure("db: SELECT 1", () =>
             drizzle.execute(sql`SELECT 1`).then(() => {}),
           ),
-
-          // 2. DB: count query (tests actual table scan)
           measure("db: count products", () =>
-            drizzle.execute(sql`SELECT count(*) FROM product`).then(() => {}),
+            drizzle
+              .select({ n: count() })
+              .from(product)
+              .then(() => {}),
           ),
+        ]);
+        const dbParallelMs = Math.round(performance.now() - dbParallelStart);
+        const dbParallelResult: TimingResult = {
+          label: "db: parallel wall time (should ≈ max, not sum)",
+          durationMs: dbParallelMs,
+        };
 
+        const [usdaCounts, usdaBatch, upcPing] = await Promise.all([
           // 3. USDA API: health/counts endpoint
           measure(`usda: GET ${env.USDA_API_URL}counts`, async () => {
             const res = await fetch(`${env.USDA_API_URL}counts`);
@@ -76,6 +86,15 @@ export const Route = createFileRoute("/api/debug/timing")({
             await res.text();
           }),
         ]);
+
+        const results: TimingResult[] = [
+          selectOne,
+          countProducts,
+          dbParallelResult,
+          usdaCounts,
+          usdaBatch,
+          upcPing,
+        ];
 
         const totalMs = Math.round(performance.now() - overallStart);
 

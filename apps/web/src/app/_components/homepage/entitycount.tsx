@@ -16,13 +16,20 @@ interface StatCardProps {
   entity: Entity;
   count: number | undefined;
   isLoading: boolean;
+  isError: boolean;
 }
 
 interface StatCardPropsWithIndex extends StatCardProps {
   index: number;
 }
 
-function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
+function StatCard({
+  entity,
+  count,
+  isLoading,
+  isError,
+  index,
+}: StatCardPropsWithIndex) {
   const def = entities[entity];
   const Icon = def.lucideIcon;
 
@@ -55,6 +62,10 @@ function StatCard({ entity, count, isLoading, index }: StatCardPropsWithIndex) {
           <div className="min-w-0 flex-1">
             {isLoading ? (
               <div className="h-7 w-12 animate-pulse rounded bg-muted" />
+            ) : isError ? (
+              <p className="font-heading font-semibold text-2xl text-muted-foreground leading-none tracking-tight">
+                —
+              </p>
             ) : (
               <p className="font-heading font-semibold text-2xl leading-none tracking-tight">
                 {formatCount(count ?? 0)}
@@ -96,6 +107,7 @@ export default function EntityCount() {
       queryResults.map((q) => ({
         count: q.data?.meta.totalCount,
         isLoading: q.isLoading,
+        isError: q.isError,
       })),
   });
 
@@ -118,6 +130,7 @@ export default function EntityCount() {
           entity={entity}
           count={results[i]?.count}
           isLoading={results[i]?.isLoading ?? true}
+          isError={results[i]?.isError ?? false}
           index={i}
         />
       ))}

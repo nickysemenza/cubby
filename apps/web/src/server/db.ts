@@ -52,25 +52,29 @@ const createPoolClient = async (connectionString: string) => {
 
 // ---------------------------------------------------------------------------
 // CF Workers: per-request Client via AsyncLocalStorage
-// Hyperdrive pools TCP connections at CF's edge. Each Worker invocation still
-// needs its own pg.Client handle, stored in AsyncLocalStorage.
+// Hyperdrive pools TCP connections at CF's edge — use pg.Client (not pg.Pool)
+// since Hyperdrive itself is the pool. Queries serialize through one connection
+// but Hyperdrive caching makes them fast (~5ms for cached reads).
 // ---------------------------------------------------------------------------
 
 const requestDbStore = new AsyncLocalStorage<DBClient>();
 
 /**
  * Run a function with a per-request database connection (CF Workers only).
- * Uses standard pg.Client through Hyperdrive's pooled TCP connections.
+ * Uses pg.Client through Hyperdrive's pooled TCP connections.
  */
 export const withRequestDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const { Client } = pg;
-  const client = new Client({ connectionString });
+  const client = new pg.Client({ connectionString });
   await client.connect();
   const db = drizzleNodePostgres({ client, schema });
   instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+  // No explicit client.end() — Hyperdrive manages connection lifecycle.
+  // Calling client.end() can terminate the connection while queries are
+  // still queued on the pg.Client (tRPC batches stream responses before
+  // all procedures complete).
   return requestDbStore.run(db, fn);
 };
 

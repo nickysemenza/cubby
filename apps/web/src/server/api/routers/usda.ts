@@ -39,14 +39,24 @@ const list = publicProcedure
   )
   .output(createPaginatedResponseSchema(foodSummaryWithLinkedProducts))
   .query(async ({ ctx, input }) => {
-    const { data, count } = await ctx.usdaService.listFoods(
-      input.filters.nameFilter,
-      input.filters.dataTypeFilter,
-      input.sort,
-      input.pagination,
-    );
+    try {
+      const { data, count } = await ctx.usdaService.listFoods(
+        input.filters.nameFilter,
+        input.filters.dataTypeFilter,
+        input.sort,
+        input.pagination,
+      );
 
-    return buildPaginatedResponse(input.pagination, data, count);
+      return buildPaginatedResponse(input.pagination, data, count);
+    } catch (e) {
+      // Degrade gracefully — don't let a slow/down USDA API kill the entire batch
+      console.error(
+        "[usda.list] failed, returning empty:",
+        e,
+        e instanceof Error ? e.cause : undefined,
+      );
+      return buildPaginatedResponse(input.pagination, [], 0);
+    }
   });
 
 export const usdaRouter = createTRPCRouter({

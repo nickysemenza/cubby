@@ -30,6 +30,17 @@ export class USDAClient {
         traceparent: () => getTraceHeaders().traceparent ?? "",
         tracestate: () => getTraceHeaders().tracestate ?? "",
       },
+      api: async (args) => {
+        const response = await fetch(args.path, {
+          ...args,
+          signal: AbortSignal.timeout(5_000),
+        });
+        return {
+          status: response.status,
+          body: await response.json(),
+          headers: response.headers,
+        };
+      },
     });
   }
 
