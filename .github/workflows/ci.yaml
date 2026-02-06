@@ -334,21 +334,21 @@ jobs:
             echo "all-passed=false" >> $GITHUB_OUTPUT
           fi
 
-  build:
-    name: Build Application
-    needs: [build-wasm, lint-format]
-    runs-on: ubuntu-latest
-    env:
-      NODE_OPTIONS: "--max-old-space-size=4096"
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          download-wasm: "true"
-      - name: Build web app
-        run: pnpm --filter @cubby/web build
-        env:
-          NODE_ENV: production
+  # build:
+  #   name: Build Application
+  #   needs: [build-wasm, lint-format]
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     NODE_OPTIONS: "--max-old-space-size=4096"
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: ./.github/actions/setup-node-with-deps
+  #       with:
+  #         download-wasm: "true"
+  #     - name: Build web app
+  #       run: pnpm --filter @cubby/web build
+  #       env:
+  #         NODE_ENV: production
 
   build-cf:
     name: Build for Cloudflare Workers
@@ -370,35 +370,35 @@ jobs:
           path: apps/web/dist
           retention-days: 1
 
-  deploy:
-    name: Deploy to Vercel
-    needs: [build-wasm, lint-format, check-tests, build]
-    runs-on: ubuntu-latest
-    if: |
-      always() &&
-      needs.lint-format.result == 'success' &&
-      needs.check-tests.outputs.all-passed == 'true' &&
-      needs.build.result == 'success' &&
-      (github.ref == 'refs/heads/main' || github.event.pull_request.user.login != 'renovate[bot]')
-    environment:
-      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - uses: actions/checkout@v6
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          download-wasm: "true"
-      - name: Deploy to Vercel
-        id: deploy
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-            npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
-          else
-            npx vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
-          fi
-        env:
-          VERCEL_ORG_ID: team_rAffu7VKl4KcVrPBRqaMYB7f
-          VERCEL_PROJECT_ID: prj_JPllV9ESJ1mzTBJZEmAtNrooLS00
+  # deploy:
+  #   name: Deploy to Vercel
+  #   needs: [build-wasm, lint-format, check-tests, build]
+  #   runs-on: ubuntu-latest
+  #   if: |
+  #     always() &&
+  #     needs.lint-format.result == 'success' &&
+  #     needs.check-tests.outputs.all-passed == 'true' &&
+  #     needs.build.result == 'success' &&
+  #     (github.ref == 'refs/heads/main' || github.event.pull_request.user.login != 'renovate[bot]')
+  #   environment:
+  #     name: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+  #     url: ${{ steps.deploy.outputs.url }}
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: ./.github/actions/setup-node-with-deps
+  #       with:
+  #         download-wasm: "true"
+  #     - name: Deploy to Vercel
+  #       id: deploy
+  #       run: |
+  #         if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+  #           npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}
+  #         else
+  #           npx vercel deploy --token=${{ secrets.VERCEL_TOKEN }}
+  #         fi
+  #       env:
+  #         VERCEL_ORG_ID: team_rAffu7VKl4KcVrPBRqaMYB7f
+  #         VERCEL_PROJECT_ID: prj_JPllV9ESJ1mzTBJZEmAtNrooLS00
 
   deploy-cf:
     name: Deploy to Cloudflare Workers
