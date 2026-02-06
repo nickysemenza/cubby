@@ -19,7 +19,7 @@ export const env = createEnv({
       .url()
       .default("https://upc-lookup.nicky.workers.dev"),
     UPC_LOOKUP_API_KEY: z.string().min(1).optional(),
-    BETTER_AUTH_SECRET: z.string().min(1).optional(),
+    BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
   },

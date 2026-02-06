@@ -20,6 +20,7 @@ declare namespace Cloudflare {
     UPC_LOOKUP_API_URL: string;
     UPC_LOOKUP_API_KEY: string;
     ANTHROPIC_API_KEY: string;
+    BETTER_AUTH_SECRET: string;
   }
 }
 interface Env extends Cloudflare.Env {}
@@ -47,6 +48,7 @@ declare namespace NodeJS {
         | "UPC_LOOKUP_API_URL"
         | "UPC_LOOKUP_API_KEY"
         | "ANTHROPIC_API_KEY"
+        | "BETTER_AUTH_SECRET"
       >
     > {}
 }

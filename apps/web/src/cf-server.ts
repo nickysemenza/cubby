@@ -56,6 +56,10 @@ console.error = (...args: unknown[]) => {
 
 export default {
   async fetch(request: Request, env: Env) {
+    // Bridge CF secrets → process.env for libraries that read from it
+    // (better-auth reads BETTER_AUTH_SECRET from process.env at init time)
+    process.env.BETTER_AUTH_SECRET ??= env.BETTER_AUTH_SECRET;
+
     lastInterceptedError = null;
 
     try {
