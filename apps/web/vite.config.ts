@@ -12,6 +12,27 @@ const isCloudflare = process.env.DEPLOY_TARGET === "cloudflare";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
+ * Stub pg-native for CF Workers. Vite emits a bare `throw` for unresolvable
+ * optional peer deps, which CF's deploy validator rejects. This resolves
+ * pg-native to an empty module so pg falls through to its JS implementation.
+ */
+function cfPgNativeStub(): Plugin {
+  return {
+    name: "cf-pg-native-stub",
+    enforce: "pre",
+    applyToEnvironment(env) {
+      return env.name === "ssr";
+    },
+    resolveId(id) {
+      if (id === "pg-native") return "\0pg-native-stub";
+    },
+    load(id) {
+      if (id === "\0pg-native-stub") return "export default null;";
+    },
+  };
+}
+
+/**
  * Vite plugin that redirects @cubby/recipebridge to a CF Workers-compatible
  * wrapper in the SSR environment. The wrapper uses the ?init pattern supported
  * by @cloudflare/vite-plugin to properly instantiate the WASM module.
@@ -97,7 +118,7 @@ export default defineConfig(async () => {
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
       // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
-      ...(isCloudflare ? [cfWasmPlugin()] : []),
+      ...(isCloudflare ? [cfPgNativeStub(), cfWasmPlugin()] : []),
       wasm(),
       devtools({
         injectSource: { enabled: false },

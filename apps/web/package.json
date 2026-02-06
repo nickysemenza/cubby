@@ -29,7 +29,7 @@
     "knip": "knip",
     "knip:production": "knip --production",
     "cf:types": "wrangler types --strict-vars=false --include-runtime=false",
-    "build:cf": "DEPLOY_TARGET=cloudflare vite build",
+    "build:cf": "rm -rf dist && DEPLOY_TARGET=cloudflare vite build",
     "deploy:cf": "pnpm run build:cf && wrangler deploy --config dist/server/wrangler.json",
     "preview:cf": "pnpm run build:cf && wrangler dev --config dist/server/wrangler.json",
     "gen:apple-icon": "rsvg-convert -w 180 -h 180 public/favicon.svg -o public/apple-touch-icon.png"
