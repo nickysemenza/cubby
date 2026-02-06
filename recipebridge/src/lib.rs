@@ -93,7 +93,7 @@ pub fn detect_unit_mapping_islands(mappings: Vec<WUnitMapping>) -> Result<JsValu
     let components = find_connected_components(&graph);
 
     // Convert to JsValue (Vec<Vec<String>>)
-    to_js(&components, "connected components").map(Into::into)
+    to_js(&components, "connected components")
 }
 
 #[wasm_bindgen]
