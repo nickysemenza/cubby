@@ -4,10 +4,8 @@ import { ArrowLeft, Download, Printer } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { z } from "zod";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { getLocationTypeColor } from "~/app/_components/locations/location-type-theme";
 import { getCategoryColor } from "~/app/_components/products/category-theme";
-import { CategoryIcon } from "~/app/_components/products/product-category-icons";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -33,10 +31,9 @@ const SHEET_LAYOUTS = {
     labelWidth: "4in",
     labelHeight: "1.5in",
     borderWidth: "0.15in",
-    qrSize: "1.25in",
-    shortcodeSize: "9pt",
-    nameSize: "16pt",
-    badgeSize: "8pt",
+    qrSize: "1.0in",
+    shortcodeSize: "10pt",
+    nameSize: "18pt",
     verticalPadding: "0.08in",
     contentGap: "0.12in",
   },
@@ -51,10 +48,9 @@ const SHEET_LAYOUTS = {
     labelWidth: "2.625in",
     labelHeight: "1in",
     borderWidth: "0.08in",
-    qrSize: "0.86in",
+    qrSize: "0.62in",
     shortcodeSize: "7pt",
-    nameSize: "11pt",
-    badgeSize: "6pt",
+    nameSize: "14pt",
     verticalPadding: "0.04in",
     contentGap: "0.06in",
   },
@@ -69,6 +65,7 @@ const searchParamsSchema = z.object({
   codes: z.string().optional(),
   format: z.enum(["pls134", "pls763", "ptouch"]).optional(),
   skip: z.coerce.number().int().min(0).optional(),
+  copies: z.coerce.number().int().min(1).optional(),
 });
 
 export const Route = createFileRoute("/labels")({
@@ -131,7 +128,7 @@ function useShortcodeLookups(shortcodes: string[]) {
 }
 
 function LabelsPage() {
-  const { codes, format = "pls134", skip = 0 } = Route.useSearch();
+  const { codes, format = "pls134", skip = 0, copies = 1 } = Route.useSearch();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -175,10 +172,16 @@ function LabelsPage() {
     [items, qrUrls],
   );
 
-  const visibleLabelItems = useMemo(
-    () => labelItems.filter((item) => !hidden.has(item.shortcode)),
-    [labelItems, hidden],
-  );
+  const visibleLabelItems = useMemo(() => {
+    const filtered = labelItems.filter((item) => !hidden.has(item.shortcode));
+    if (copies <= 1) return filtered;
+    return filtered.flatMap((item) =>
+      Array.from({ length: copies }, (_, i) => ({
+        ...item,
+        copyKey: i === 0 ? item.shortcode : `${item.shortcode}#${i + 1}`,
+      })),
+    );
+  }, [labelItems, hidden, copies]);
 
   const hiddenItems = useMemo(
     () => labelItems.filter((item) => hidden.has(item.shortcode)),
@@ -237,7 +240,9 @@ function LabelsPage() {
             </Button>
             <FormatToggle
               format={format}
-              onChange={(f) => navigate({ search: { codes, format: f, skip } })}
+              onChange={(f) =>
+                navigate({ search: { codes, format: f, skip, copies } })
+              }
             />
             {isSheetFormat(format) && (
               <label className="flex items-center gap-1.5 text-sm">
@@ -252,6 +257,7 @@ function LabelsPage() {
                       search: {
                         codes,
                         format,
+                        copies,
                         skip: Math.max(0, Number(e.target.value) || 0),
                       },
                     })
@@ -260,6 +266,26 @@ function LabelsPage() {
                 />
               </label>
             )}
+            <label className="flex items-center gap-1.5 text-sm">
+              <span className="text-muted-foreground">Copies</span>
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={copies}
+                onChange={(e) =>
+                  navigate({
+                    search: {
+                      codes,
+                      format,
+                      skip,
+                      copies: Math.max(1, Number(e.target.value) || 1),
+                    },
+                  })
+                }
+                className="h-8 w-14 rounded-md border border-input bg-background px-2 text-center text-sm"
+              />
+            </label>
             {format !== "ptouch" ? (
               <Button onClick={() => window.print()} disabled={!allQrReady}>
                 <Printer className="mr-2 h-4 w-4" />
@@ -282,6 +308,11 @@ function LabelsPage() {
           </Card>
         ) : isSheetFormat(format) ? (
           <>
+            <LabelSummary
+              labelCount={visibleLabelItems.length}
+              skip={effectiveSkip}
+              labelsPerSheet={SHEET_LAYOUTS[format].labelsPerSheet}
+            />
             <LabelSheet
               items={visibleLabelItems}
               layout={SHEET_LAYOUTS[format]}
@@ -369,24 +400,24 @@ function getLabelColor(item: LabelItem): string {
   return "hsl(0, 0%, 65%)";
 }
 
-function LabelIcon({ item }: { item: LabelItem }) {
-  if (item.entityType === "location" && item.locationType) {
-    return <LocationIcon type={item.locationType} size={14} />;
-  }
-  if (item.entityType === "product" && item.productCategory) {
-    return <CategoryIcon category={item.productCategory} size={14} />;
-  }
-  return null;
-}
-
-function formatSubtype(item: LabelItem): string {
-  if (item.entityType === "location" && item.locationType) {
-    return item.locationType.replace("-", " ");
-  }
-  if (item.entityType === "product" && item.productCategory) {
-    return item.productCategory.replace("-", " ");
-  }
-  return item.entityType;
+function LabelSummary({
+  labelCount,
+  skip,
+  labelsPerSheet,
+}: {
+  labelCount: number;
+  skip: number;
+  labelsPerSheet: number;
+}) {
+  const totalSlots = labelCount + skip;
+  const pages = totalSlots / labelsPerSheet;
+  const pagesDisplay = pages % 1 === 0 ? pages.toString() : pages.toFixed(1);
+  return (
+    <p className="text-muted-foreground text-sm">
+      {labelCount} label{labelCount !== 1 && "s"}, {pagesDisplay} page
+      {pages !== 1 && "s"}
+    </p>
+  );
 }
 
 function PrintStyles({
@@ -461,38 +492,29 @@ function LabelCell({
           }
         : {})}
     >
-      {item.qrUrl ? (
-        <img
-          src={item.qrUrl}
-          alt={`QR ${item.shortcode}`}
-          style={{ height: layout.qrSize, width: layout.qrSize }}
-          className="shrink-0"
-        />
-      ) : (
+      <div className="flex shrink-0 flex-col items-center">
+        {item.qrUrl ? (
+          <img
+            src={item.qrUrl}
+            alt={`QR ${item.shortcode}`}
+            style={{ height: layout.qrSize, width: layout.qrSize }}
+          />
+        ) : (
+          <div style={{ height: layout.qrSize, width: layout.qrSize }} />
+        )}
         <div
-          style={{ height: layout.qrSize, width: layout.qrSize }}
-          className="shrink-0"
-        />
-      )}
-      <div className="flex min-w-0 flex-col gap-[0.03in]">
+          className="font-mono tracking-[0.5px]"
+          style={{ fontSize: layout.shortcodeSize }}
+        >
+          {item.shortcode}
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col justify-center">
         <div
-          className="line-clamp-2 font-bold text-[#333]"
+          className="line-clamp-3 font-bold text-[#333] leading-tight"
           style={{ fontSize: layout.nameSize }}
         >
           {item.name}
-        </div>
-        <div
-          className="flex items-center gap-1.5 whitespace-nowrap"
-          style={{ fontSize: layout.badgeSize }}
-        >
-          <span className="font-mono tracking-[0.5px]">{item.shortcode}</span>
-          <span
-            style={{ color }}
-            className="flex items-center gap-1 capitalize"
-          >
-            <LabelIcon item={item} />
-            {formatSubtype(item)}
-          </span>
         </div>
       </div>
     </div>
@@ -506,7 +528,7 @@ function LabelSheet({
   printOnly,
   onToggle,
 }: {
-  items: (LabelItem & { qrUrl?: string })[];
+  items: (LabelItem & { qrUrl?: string; copyKey?: string })[];
   layout: (typeof SHEET_LAYOUTS)[SheetFormat];
   skip?: number;
   printOnly?: boolean;
@@ -534,7 +556,7 @@ function LabelSheet({
   for (const item of items) {
     cells.push(
       <LabelCell
-        key={item.shortcode}
+        key={item.copyKey ?? item.shortcode}
         item={item}
         layout={layout}
         interactive={interactive}
