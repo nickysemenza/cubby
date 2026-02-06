@@ -48,6 +48,7 @@ import { Route as AccountAccountViewRouteImport } from './routes/account.$accoun
 import { Route as UsdaUpcCodeRouteImport } from './routes/usda.upc.$code'
 import { Route as UsdaNdbCodeRouteImport } from './routes/usda.ndb.$code'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
+import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const ProblemsRoute = ProblemsRouteImport.update({
@@ -245,6 +246,11 @@ const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   path: '/api/trpc/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
+  id: '/api/debug/timing',
+  path: '/api/debug/timing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -289,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/search/': typeof SearchIndexRoute
   '/usda/': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/usda/ndb/$code': typeof UsdaNdbCodeRoute
   '/usda/upc/$code': typeof UsdaUpcCodeRoute
@@ -331,6 +338,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchIndexRoute
   '/usda': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/usda/ndb/$code': typeof UsdaNdbCodeRoute
   '/usda/upc/$code': typeof UsdaUpcCodeRoute
@@ -374,6 +382,7 @@ export interface FileRoutesById {
   '/search/': typeof SearchIndexRoute
   '/usda/': typeof UsdaIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
   '/usda/ndb/$code': typeof UsdaNdbCodeRoute
   '/usda/upc/$code': typeof UsdaUpcCodeRoute
@@ -418,6 +427,7 @@ export interface FileRouteTypes {
     | '/search/'
     | '/usda/'
     | '/api/auth/$'
+    | '/api/debug/timing'
     | '/api/trpc/$'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -460,6 +470,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/usda'
     | '/api/auth/$'
+    | '/api/debug/timing'
     | '/api/trpc/$'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -502,6 +513,7 @@ export interface FileRouteTypes {
     | '/search/'
     | '/usda/'
     | '/api/auth/$'
+    | '/api/debug/timing'
     | '/api/trpc/$'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
@@ -545,6 +557,7 @@ export interface RootRouteChildren {
   SearchIndexRoute: typeof SearchIndexRoute
   UsdaIndexRoute: typeof UsdaIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
+  ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
   UsdaNdbCodeRoute: typeof UsdaNdbCodeRoute
   UsdaUpcCodeRoute: typeof UsdaUpcCodeRoute
@@ -825,6 +838,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTrpcSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/debug/timing': {
+      id: '/api/debug/timing'
+      path: '/api/debug/timing'
+      fullPath: '/api/debug/timing'
+      preLoaderRoute: typeof ApiDebugTimingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -873,6 +893,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchIndexRoute: SearchIndexRoute,
   UsdaIndexRoute: UsdaIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
+  ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
   UsdaNdbCodeRoute: UsdaNdbCodeRoute,
   UsdaUpcCodeRoute: UsdaUpcCodeRoute,
