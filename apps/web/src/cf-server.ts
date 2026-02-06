@@ -1,10 +1,9 @@
 // CF Workers entry point.
 //
-// Two key differences from the Vercel/node-server entry:
+// Key differences from the Vercel/node-server entry:
 // 1. Dynamic import catches module-level errors (which would otherwise be silent 500s)
-// 2. Per-request database connections via withRequestDb (CF Workers bind WebSocket
-//    connections to request contexts — a Pool shared across requests fails with
-//    "Cannot perform I/O on behalf of a different request")
+// 2. Per-request database connections via withRequestDb — Hyperdrive provides pooled
+//    TCP connections, but each Worker invocation still needs its own pg.Client handle.
 //
 // Also intercepts console.error to capture real error details that Nitro's
 // HTTPError.toJSON() strips from unhandled errors (always returns
@@ -44,11 +43,11 @@ console.error = (...args: unknown[]) => {
 };
 
 export default {
-  async fetch(request: Request) {
+  async fetch(request: Request, env: Env) {
     lastInterceptedError = null;
 
     try {
-      return await withRequestDb(process.env.DATABASE_URL!, async () => {
+      return await withRequestDb(env.HYPERDRIVE.connectionString, async () => {
         const { default: handler } = await import(
           "@tanstack/react-start/server-entry"
         );

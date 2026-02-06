@@ -191,25 +191,23 @@ Use these instead of inline patterns:
 - Build: `pnpm --filter @cubby/web run build:cf`
 - Deploy: `pnpm --filter @cubby/web run deploy:cf`
 - Preview: `pnpm --filter @cubby/web run preview:cf`
-- Secrets: `wrangler secret put DATABASE_URL` (etc.) — see `wrangler.jsonc` for full list
+- Secrets: `wrangler secret put BETTER_AUTH_SECRET` (etc.) — see `wrangler.jsonc` for full list
+- Hyperdrive: `wrangler hyperdrive create cubby-db --connection-string="postgres://..."` — update ID in `wrangler.jsonc`
 
 ### Architecture
 
 | File | Purpose |
 |---|---|
 | `src/cf-server.ts` | Worker entry point — wraps each request with `withRequestDb()` |
-| `src/server/db.ts` | Dual-environment DB: AsyncLocalStorage (CF) or module-level Pool (Vercel) |
-| `src/lib/pg-cf-shim.ts` | Aliases `pg` → `@neondatabase/serverless` (Pool, types, default export) |
+| `src/server/db.ts` | Dual-environment DB: per-request `pg.Client` via AsyncLocalStorage (CF) or module-level Pool (Vercel) |
 | `src/lib/recipebridge-cf.ts` | WASM wrapper using `?init` pattern for CF Workers |
-| `wrangler.jsonc` | Worker config (name, vars, secrets, compatibility flags) |
-| `vite.config.ts` | `cfWasmPlugin()` + conditional deploy plugin, pg alias, `__CF_WORKERS__` define |
+| `wrangler.jsonc` | Worker config (name, vars, Hyperdrive binding, compatibility flags) |
+| `vite.config.ts` | `cfWasmPlugin()` + conditional deploy plugin, `__CF_WORKERS__` define |
 
 ### Key Constraints
 
-- **Per-request database connections**: CF Workers bind WebSocket connections to the request that created them. A shared `Pool` fails with "Cannot perform I/O on behalf of a different request". Use `withRequestDb()` which creates a fresh `NeonClient` per request via `AsyncLocalStorage`.
-- **Never call `client.end()`**: CF runtime auto-cleans request-scoped WebSockets. Early close causes "Can't call WebSocket send() after close()" errors during streaming SSR.
-- **pg shim must export real types**: Drizzle destructures `{ Pool, types }` from `pg` and accesses `types.builtins.TIMESTAMPTZ`. An empty `types: {}` causes runtime errors. The shim re-exports from `@neondatabase/serverless`.
-- **pg shim needs default export**: `drizzle-orm/node-postgres/session.js` does `import pg from "pg"`.
+- **Hyperdrive for database**: Hyperdrive pools TCP connections at CF's edge, eliminating per-request WebSocket/TLS/auth overhead. Connection string comes from `env.HYPERDRIVE.connectionString`, not a secret. Uses standard `pg.Client` (not `@neondatabase/serverless`).
+- **Per-request pg.Client**: Each Worker invocation gets its own `pg.Client` handle via `withRequestDb()` + `AsyncLocalStorage`, even though Hyperdrive reuses underlying connections.
 - **WASM uses `?init` pattern**: `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts` which uses `import initWasm from "file.wasm?init"` (supported by `@cloudflare/vite-plugin`).
 - **`__CF_WORKERS__` dead code elimination**: `define: { __CF_WORKERS__: "true" }` in Vite config eliminates the module-level Pool creation from CF builds.
 - **Error visibility**: Nitro strips error details from 500s. `cf-server.ts` monkey-patches `console.error` to capture real errors for `wrangler tail`.

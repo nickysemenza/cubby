@@ -1,10 +1,19 @@
 {
   "name": "cubby",
   "main": "src/cf-server.ts",
+  "compatibility_date": "2026-02-05",
   "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
+  // Hyperdrive connection pooling — creates via:
+  //   wrangler hyperdrive create cubby-db --connection-string="postgres://..."
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "adc9757dfffd45bc94d5c2a66b2ad410"
+    }
+  ],
   "vars": {
     "NODE_ENV": "production",
     "R2_ENDPOINT": "https://9f10f078d35d86c78dedece2300a6b88.r2.cloudflarestorage.com",
@@ -15,9 +24,9 @@
     "UPC_LOOKUP_API_URL": "https://upc-lookup.nicky.workers.dev"
   }
   // Required secrets (set via `wrangler secret put <NAME>`):
-  //   DATABASE_URL
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
   //   ANTHROPIC_API_KEY (optional)
+  // Note: DATABASE_URL is provided by the Hyperdrive binding, not a secret.
 }

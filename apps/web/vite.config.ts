@@ -76,13 +76,6 @@ export default defineConfig(async () => {
     envDir: ".", // Explicitly load .env from this directory
     // CF Workers build-time flag for dead code elimination in db.ts
     define: isCloudflare ? { __CF_WORKERS__: "true" } : {},
-    // CF Workers: alias `pg` to a shim that re-exports from @neondatabase/serverless.
-    // The pg package imports pg-native (optional native addon) which can't resolve
-    // in Workers. The shim provides real pg-types (builtins, getTypeParser, etc.)
-    // needed by drizzle-orm's neon-serverless session.
-    resolve: isCloudflare
-      ? { alias: { pg: path.resolve(__dirname, "src/lib/pg-cf-shim.ts") } }
-      : undefined,
     server: {
       host: "0.0.0.0",
       allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],

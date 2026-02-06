@@ -3,7 +3,7 @@ import {
   instrumentDrizzle,
   instrumentDrizzleClient,
 } from "@kubiks/otel-drizzle";
-import { Client as NeonClient, neonConfig } from "@neondatabase/serverless";
+import { neonConfig } from "@neondatabase/serverless";
 import {
   drizzle as drizzleNodePostgres,
   type NodePgDatabase,
@@ -29,13 +29,6 @@ export type { Database };
 // DB Client creation
 // ---------------------------------------------------------------------------
 
-const createNeonClient = (connectionString: string) => {
-  const client = new NeonClient({ connectionString });
-  const db = drizzleNodePostgres({ client, schema });
-  instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
-  return { client, db };
-};
-
 // The query interface is identical whether backed by Client or Pool.
 // Use NodePgDatabase<schema> to avoid $client type mismatch.
 type DBClient = NodePgDatabase<typeof schema>;
@@ -58,26 +51,26 @@ const createPoolClient = async (connectionString: string) => {
 
 // ---------------------------------------------------------------------------
 // CF Workers: per-request Client via AsyncLocalStorage
-// In Workers, WebSocket connections are bound to the request that created them.
-// We create a fresh NeonClient per request and store it in AsyncLocalStorage.
+// Hyperdrive pools TCP connections at CF's edge. Each Worker invocation still
+// needs its own pg.Client handle, stored in AsyncLocalStorage.
 // ---------------------------------------------------------------------------
 
 const requestDbStore = new AsyncLocalStorage<DBClient>();
 
 /**
  * Run a function with a per-request database connection (CF Workers only).
- * Creates a fresh NeonClient, connects it, runs the handler, then disconnects.
+ * Uses standard pg.Client through Hyperdrive's pooled TCP connections.
  */
 export const withRequestDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const { client, db: dbClient } = createNeonClient(connectionString);
+  const { Client } = await import("pg");
+  const client = new Client({ connectionString });
   await client.connect();
-  // Don't call client.end() — CF Workers cleans up request-scoped WebSockets
-  // automatically. Closing early causes "Can't call WebSocket send() after close()"
-  // errors when queries are still in-flight (e.g., streaming SSR responses).
-  return requestDbStore.run(dbClient, fn);
+  const db = drizzleNodePostgres({ client, schema });
+  instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
+  return requestDbStore.run(db, fn);
 };
 
 // ---------------------------------------------------------------------------
