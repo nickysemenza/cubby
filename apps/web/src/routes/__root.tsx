@@ -102,7 +102,7 @@ function RootComponent() {
         <main className="container mx-auto p-4 pb-20 md:pb-4">
           <Outlet />
         </main>
-        <footer className="hidden border-t pb-2 pt-2 text-center text-muted-foreground text-xs md:block">
+        <footer className="hidden border-t pt-2 pb-2 text-center text-muted-foreground text-xs md:block">
           v {__GIT_COMMIT__}
         </footer>
         {/* Bottom navigation for mobile */}

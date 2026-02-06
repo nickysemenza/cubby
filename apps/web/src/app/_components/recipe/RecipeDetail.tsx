@@ -162,28 +162,24 @@ const RecipeDetail: React.FC<{
     [api, ingredientIds],
   );
 
-  const ingredientQueries = useQueries(
-    useMemo(
-      () => ({ queries: ingredientQueryOptions }),
-      [ingredientQueryOptions],
-    ),
-  );
-
-  const data = useMemo(() => {
-    if (ingredientIds.length === 0) return {};
-    if (ingredientQueries.some((q) => q.isLoading)) return undefined;
-    const ingredientsArray = ingredientQueries
-      .map((q) => q.data)
-      .filter(Boolean) as IngredientWithFoodOut[];
-    if (ingredientsArray.length !== ingredientIds.length) return undefined;
-    return ingredientsArray.reduce(
-      (acc, ingredient) => {
-        acc[ingredient.id] = ingredient;
-        return acc;
-      },
-      {} as Record<string, IngredientWithFoodOut>,
-    );
-  }, [ingredientIds, ingredientQueries]);
+  const data = useQueries({
+    queries: ingredientQueryOptions,
+    combine: (results) => {
+      if (ingredientIds.length === 0) return {};
+      if (results.some((q) => q.isLoading)) return undefined;
+      const ingredientsArray = results
+        .map((q) => q.data)
+        .filter((d): d is IngredientWithFoodOut => d != null);
+      if (ingredientsArray.length !== ingredientIds.length) return undefined;
+      return ingredientsArray.reduce(
+        (acc, ingredient) => {
+          acc[ingredient.id] = ingredient;
+          return acc;
+        },
+        {} as Record<string, IngredientWithFoodOut>,
+      );
+    },
+  });
 
   // Load enriched ingredient data for charts (with price/nutrition info)
   const ingredientDataItems = useMemo(

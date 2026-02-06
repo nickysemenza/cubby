@@ -15,6 +15,8 @@ import {
 } from "~/server/repo/database-helpers";
 import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
+  countProductsNeedingFoodCategory,
+  countProductsWithUPCNoImages,
   findProductsNeedingFoodCategory,
   findProductsWithStalePrices,
   findProductsWithUPCNoImages,
@@ -461,24 +463,27 @@ const findProductsWithIslandedMappings = async (
 
 // Count-only functions for badge display (no full data fetching)
 const countDuplicateUniqueProducts = async (db: Database): Promise<number> => {
-  const duplicates = await getDb(db).query.product.findMany({
-    where: notDeleted(product),
-    columns: {
-      id: true,
-      expectedQuantity: true,
-    },
-    with: {
-      InventoryEntry: {
-        columns: {
-          id: true,
-        },
-      },
-    },
-  });
+  const dbClient = getDb(db);
 
-  return duplicates.filter(
-    (prod) => prod.expectedQuantity === 1 && prod.InventoryEntry.length > 1,
-  ).length;
+  // SQL-level count: products with expectedQuantity=1 that have >1 inventory entries
+  const result = await dbClient.select({ count: sql<number>`count(*)` }).from(
+    dbClient
+      .select({ id: product.id })
+      .from(product)
+      .innerJoin(
+        inventoryEntry,
+        and(
+          eq(inventoryEntry.productId, product.id),
+          notDeleted(inventoryEntry),
+        ),
+      )
+      .where(and(notDeleted(product), eq(product.expectedQuantity, 1)))
+      .groupBy(product.id)
+      .having(sql`count(${inventoryEntry.id}) > 1`)
+      .as("duplicates"),
+  );
+
+  return Number(result[0]?.count ?? 0);
 };
 
 const countOrphanedProducts = async (db: Database): Promise<number> => {
@@ -537,14 +542,13 @@ const countInvalidUPCs = async (db: Database): Promise<number> => {
 const countProductsWithoutMappings = async (db: Database): Promise<number> => {
   const dbClient = getDb(db);
 
-  const productsWithoutMappings = await dbClient
-    .select({
-      name: product.name,
-    })
+  const result = await dbClient
+    .select({ count: sql<number>`count(*)` })
     .from(product)
     .where(
       and(
         notDeleted(product),
+        sql`${product.name} NOT ILIKE 'misc:%'`,
         notExists(
           dbClient
             .select({ id: sql`1` })
@@ -554,27 +558,23 @@ const countProductsWithoutMappings = async (db: Database): Promise<number> => {
       ),
     );
 
-  return productsWithoutMappings.filter((p) => !isMiscProduct(p.name)).length;
+  return Number(result[0]?.count ?? 0);
 };
 
 const countInvalidInventoryAmounts = async (db: Database): Promise<number> => {
-  const inventoryEntries = await getDb(db).query.inventoryEntry.findMany({
-    where: notDeleted(inventoryEntry),
-    columns: {
-      id: true,
-      amount: true,
-    },
-  });
+  const dbClient = getDb(db);
 
-  let count = 0;
-  for (const entry of inventoryEntries) {
-    const parsedAmount = parseInventoryAmount(entry.amount, entry.id);
-    if (parsedAmount.value <= 0) {
-      count++;
-    }
-  }
+  const result = await dbClient
+    .select({ count: sql<number>`count(*)` })
+    .from(inventoryEntry)
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        sql`(${inventoryEntry.amount}->>'value')::numeric <= 0`,
+      ),
+    );
 
-  return count;
+  return Number(result[0]?.count ?? 0);
 };
 
 const countEmptyLocations = async (db: Database): Promise<number> => {
@@ -614,11 +614,11 @@ const countProductsWithIslandedMappings = async (
 ): Promise<number> => {
   const dbClient = getDb(db);
 
+  // Pre-filter: skip misc products at SQL level
   const productsWithMappings = await dbClient.query.product.findMany({
-    where: notDeleted(product),
+    where: and(notDeleted(product), sql`${product.name} NOT ILIKE 'misc:%'`),
     columns: {
       id: true,
-      name: true,
     },
     with: {
       unitMappings: {
@@ -636,7 +636,7 @@ const countProductsWithIslandedMappings = async (
   const { wasm } = await import("~/lib/wasm");
 
   for (const prod of productsWithMappings) {
-    if (prod.unitMappings.length < 2 || isMiscProduct(prod.name)) continue;
+    if (prod.unitMappings.length < 2) continue;
 
     try {
       const islands = wasm.detect_unit_mapping_islands(
@@ -694,8 +694,8 @@ export const findAllProblemsCount = async (
     countProductsWithoutMappings(db),
     countInvalidInventoryAmounts(db),
     countEmptyLocations(db),
-    findProductsWithUPCNoImages(db).then((r) => r.length),
-    findProductsNeedingFoodCategory(db).then((r) => r.length),
+    countProductsWithUPCNoImages(db),
+    countProductsNeedingFoodCategory(db),
     findProductsWithStalePrices(db).then((r) => r.length),
     findInventoryWithStaleValuations(db).then((r) => r.length),
     countProductsWithIslandedMappings(db),

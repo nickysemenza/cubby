@@ -92,6 +92,11 @@ export default function EntityCount() {
       { ...api.image.list.queryOptions(opts), enabled: isAuthenticated },
       { ...api.usda.list.queryOptions(opts), enabled: isAuthenticated },
     ],
+    combine: (queryResults) =>
+      queryResults.map((q) => ({
+        count: q.data?.meta.totalCount,
+        isLoading: q.isLoading,
+      })),
   });
 
   // Entity order matches query order above
@@ -111,7 +116,7 @@ export default function EntityCount() {
         <StatCard
           key={entity}
           entity={entity}
-          count={results[i]?.data?.meta.totalCount}
+          count={results[i]?.count}
           isLoading={results[i]?.isLoading ?? true}
           index={i}
         />

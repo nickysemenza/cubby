@@ -18,6 +18,12 @@
       "head_sampling_rate": 1
     }
   },
+  "routes": [
+    {
+      "pattern": "cubby.nickysemenza.com",
+      "custom_domain": true
+    }
+  ],
   // Place Worker near the database rather than the user (SSR-heavy app)
   "placement": {
     "mode": "smart"

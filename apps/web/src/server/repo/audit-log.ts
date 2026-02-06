@@ -9,7 +9,7 @@ import { unwrapDb } from "~/server/repo/database-helpers";
 type AuditAction = "create" | "update" | "delete";
 
 // Input for the audit entry (without actor context)
-interface AuditEntryInput {
+export interface AuditEntryInput {
   entityType: AuditEntityType;
   entityId: string;
   action: AuditAction;

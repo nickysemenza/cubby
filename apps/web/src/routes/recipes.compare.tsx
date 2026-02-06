@@ -62,15 +62,15 @@ function RecipeComparePage() {
     [api, recipeIds],
   );
 
-  const recipeQueries = useQueries(
-    useMemo(() => ({ queries: recipeQueryOptions }), [recipeQueryOptions]),
-  );
-
-  const recipes = recipeQueries
-    .filter((q) => q.data)
-    .map((q) => q.data as RecipeOut);
-
-  const isLoading = recipeQueries.some((q) => q.isLoading);
+  const { recipes, isLoading } = useQueries({
+    queries: recipeQueryOptions,
+    combine: (results) => ({
+      recipes: results
+        .map((q) => q.data)
+        .filter((d): d is RecipeOut => d != null),
+      isLoading: results.some((q) => q.isLoading),
+    }),
+  });
 
   // Load ingredient data for all recipes
   const allIngredients = useMemo(() => {
@@ -96,29 +96,25 @@ function RecipeComparePage() {
     [api, uniqueIngredientIds],
   );
 
-  const ingredientQueries = useQueries(
-    useMemo(
-      () => ({ queries: ingredientQueryOptions }),
-      [ingredientQueryOptions],
-    ),
-  );
-
-  const ingredientData = useMemo(() => {
-    if (uniqueIngredientIds.length === 0) return {};
-    if (ingredientQueries.some((q) => q.isLoading)) return undefined;
-    const ingredientsArray = ingredientQueries
-      .map((q) => q.data)
-      .filter(Boolean) as IngredientWithFoodOut[];
-    if (ingredientsArray.length !== uniqueIngredientIds.length)
-      return undefined;
-    return ingredientsArray.reduce(
-      (acc, ingredient) => {
-        acc[ingredient.id] = ingredient;
-        return acc;
-      },
-      {} as Record<string, IngredientWithFoodOut>,
-    );
-  }, [ingredientQueries, uniqueIngredientIds]);
+  const ingredientData = useQueries({
+    queries: ingredientQueryOptions,
+    combine: (results) => {
+      if (uniqueIngredientIds.length === 0) return {};
+      if (results.some((q) => q.isLoading)) return undefined;
+      const ingredientsArray = results
+        .map((q) => q.data)
+        .filter((d): d is IngredientWithFoodOut => d != null);
+      if (ingredientsArray.length !== uniqueIngredientIds.length)
+        return undefined;
+      return ingredientsArray.reduce(
+        (acc, ingredient) => {
+          acc[ingredient.id] = ingredient;
+          return acc;
+        },
+        {} as Record<string, IngredientWithFoodOut>,
+      );
+    },
+  });
 
   // Calculate totals for each recipe
   const recipesWithTotals: RecipeWithTotals[] = useMemo(() => {

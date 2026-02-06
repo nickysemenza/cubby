@@ -3,7 +3,7 @@
  * Category distribution, duplicate detection, and backfill operations.
  */
 
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { ActorContext } from "~/schemas/context";
 import { hasFoodIndicators, type ProductCategory } from "~/schemas/product";
@@ -100,6 +100,51 @@ export const findProductsWithUPCNoImages = async (
   }
 
   return results;
+};
+
+/**
+ * Count products that have a UPC but no UPC-fetched image.
+ * Optimized SQL-level count for badge display.
+ */
+export const countProductsWithUPCNoImages = async (
+  db: Database,
+): Promise<number> => {
+  const dbClient = getDb(db);
+
+  // Count products with UPCs that have no UPC image
+  // A UPC image has a URL containing "/upc-"
+  const result = await dbClient
+    .select({ count: sql<number>`count(distinct ${product.id})` })
+    .from(product)
+    .leftJoin(productImage, eq(productImage.productId, product.id))
+    .leftJoin(image, eq(productImage.imageId, image.id))
+    .where(and(isNotNull(product.upc), notDeleted(product)))
+    .having(sql`count(case when ${image.url} like '%/upc-%' then 1 end) = 0`);
+
+  return Number(result[0]?.count ?? 0);
+};
+
+/**
+ * Count products that have food indicators but category is not "food".
+ * Optimized SQL-level count for badge display.
+ */
+export const countProductsNeedingFoodCategory = async (
+  db: Database,
+): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const result = await dbClient
+    .select({ count: sql<number>`count(*)` })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        sql`${product.category} IS DISTINCT FROM 'food'`,
+        sql`((${product.ndb_number} IS NOT NULL AND ${product.ndb_number} > 0) OR ${product.ingredientId} IS NOT NULL)`,
+      ),
+    );
+
+  return Number(result[0]?.count ?? 0);
 };
 
 /**
