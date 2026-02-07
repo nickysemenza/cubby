@@ -1,3 +1,4 @@
+import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { BookOpen, MapPin, Package, Search, Settings } from "lucide-react";
@@ -14,7 +15,6 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
-import { parseShortcode } from "~/lib/shortcode";
 import type { SearchableEntity } from "~/schemas/search";
 import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";

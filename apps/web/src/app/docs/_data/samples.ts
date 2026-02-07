@@ -1,6 +1,6 @@
+import { generateLocationShortcode } from "@cubby/shared";
 import { z } from "zod";
 import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
-import { generateLocationShortcode } from "~/lib/shortcode";
 import {
   unsafeLocationId,
   unsafeLocationShortcode,

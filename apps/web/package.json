@@ -40,6 +40,7 @@
     "@base-ui/react": "^1.1.0",
     "@better-auth/expo": "^1.4.18",
     "@cubby/recipebridge": "workspace:*",
+    "@cubby/shared": "workspace:*",
     "@cubby/upc-lookup": "workspace:*",
     "@cubby/usda-contract": "workspace:*",
     "@cubby/usda-schemas": "workspace:*",

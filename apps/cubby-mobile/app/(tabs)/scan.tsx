@@ -4,7 +4,11 @@ import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { trpcClient } from "@/lib/api";
-import { extractShortcodeFromScan } from "@/lib/shortcode";
+import {
+  colors,
+  extractShortcodeFromScan,
+  getErrorMessage,
+} from "@cubby/shared";
 
 const COOLDOWN_MS = 2000;
 
@@ -52,7 +56,7 @@ export default function ScanScreen() {
 
         Alert.alert("Unknown", `Scanned: ${data}`);
       } catch (e) {
-        Alert.alert("Error", e instanceof Error ? e.message : "Lookup failed");
+        Alert.alert("Error", getErrorMessage(e));
       } finally {
         setTimeout(() => setScanned(false), COOLDOWN_MS);
       }
@@ -107,21 +111,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.cream,
     paddingHorizontal: 32,
   },
   permissionText: {
     fontSize: 16,
     textAlign: "center",
     marginBottom: 16,
+    color: colors.foreground,
   },
   button: {
-    backgroundColor: "#2563eb",
+    backgroundColor: colors.terracotta,
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  buttonText: { color: "#fff", fontWeight: "600" },
+  buttonText: { color: colors.cream, fontWeight: "600" },
   overlay: {
     position: "absolute",
     bottom: 32,
@@ -130,10 +135,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   scanAgainButton: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.cream,
     borderRadius: 8,
     paddingHorizontal: 24,
     paddingVertical: 12,
   },
-  scanAgainText: { fontWeight: "600" },
+  scanAgainText: { fontWeight: "600", color: colors.foreground },
 });

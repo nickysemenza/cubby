@@ -1,3 +1,4 @@
+import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Circle, CircleAlert, CircleHelp, MapPin } from "lucide-react";
@@ -20,7 +21,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { extractShortcodeFromScan, parseShortcode } from "~/lib/shortcode";
 import type { LocationId } from "~/schemas/identifiers";
 import { unsafeLocationId } from "~/schemas/identifiers";
 import type { InfLocation } from "~/schemas/location";
@@ -109,17 +109,18 @@ export function LocationValidateForm({
   // Handle QR scan
   const handleScan = useCallback(
     async (rawValue: string) => {
-      const shortcode = extractShortcodeFromScan(rawValue);
-      if (!shortcode) {
+      const parsed = extractShortcodeFromScan(rawValue);
+      if (!parsed) {
         toast.error("Not a valid QR code");
         return;
       }
 
-      const parsed = parseShortcode(shortcode);
-      if (!parsed || parsed.type !== "location") {
+      if (parsed.type !== "location") {
         toast.error("Not a location QR code");
         return;
       }
+
+      const shortcode = parsed.shortcode;
 
       // Skip if this is the parent location itself
       if (parentLocation?.shortcode === shortcode) {

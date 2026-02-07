@@ -1,3 +1,4 @@
+import { getShortcodeUrl, parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, Download, Printer } from "lucide-react";
@@ -10,7 +11,6 @@ import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
-import { getShortcodeUrl, parseShortcode } from "~/lib/shortcode";
 import { dedupe } from "~/misc/array-helpers";
 import type { LocationType } from "~/schemas/location";
 import type { ProductCategory } from "~/schemas/product";

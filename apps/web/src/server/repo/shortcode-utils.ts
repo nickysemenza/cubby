@@ -6,13 +6,12 @@
  * in the database before returning.
  */
 
-import { and, eq } from "drizzle-orm";
-
 import {
   generateLocationShortcode,
   generateProductShortcode,
   generateRecipeShortcode,
-} from "~/lib/shortcode";
+} from "@cubby/shared";
+import { and, eq } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { location, product, recipe } from "~/server/db/schema";
 

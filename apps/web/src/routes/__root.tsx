@@ -3,6 +3,7 @@ import "@fontsource-variable/fraunces";
 import "@fontsource-variable/nunito";
 import "@fontsource-variable/source-sans-3";
 
+import { brandCssVars } from "@cubby/shared";
 import { TanStackDevtools } from "@tanstack/react-devtools";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -25,6 +26,8 @@ import type { TRPCRouter } from "~/integrations/trpc/router";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import { Provider } from "../integrations/tanstack-query/root-provider";
 import appCss from "../styles.css?url";
+
+const brandStyleTag = `:root { ${brandCssVars} }`;
 
 interface MyRouterContext {
   queryClient: QueryClient;
@@ -181,6 +184,9 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        {/* Brand colors from @cubby/shared — single source of truth */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static brand CSS vars */}
+        <style dangerouslySetInnerHTML={{ __html: brandStyleTag }} />
       </head>
       <body>
         {children}

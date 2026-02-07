@@ -113,12 +113,7 @@
   Cubby Theme - Warm, organic palette from brand colors
 */
 :root {
-  /* Brand tokens (hex) */
-  --brand-foreground: #3a3530;
-  --brand-terracotta: #c2603d;
-  --brand-terra-light: #d98a68;
-  --brand-cream: #fdfbf7;
-  --brand-shelf: #5c5550;
+  /* Brand tokens injected from @cubby/shared via __root.tsx inline <style> */
 
   /* Warm shadows - earthy tones for depth */
   --shadow-warm-sm:

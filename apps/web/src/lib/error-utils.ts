@@ -1,6 +1,9 @@
+import type { AppErrorReason } from "@cubby/shared";
 import type { TRPCClientErrorLike } from "@trpc/client";
 import type { AppRouter } from "~/server/api/root";
-import type { AppErrorReason } from "./app-error-codes";
+
+// Re-export from shared for convenience (22+ consumers)
+export { getErrorMessage } from "@cubby/shared";
 
 function isTRPCClientError(
   err: unknown,
@@ -63,18 +66,4 @@ export function shouldRetryQuery(
   const details = getAppErrorDetails(error);
   if (isNonRetriableError(details)) return false;
   return failureCount < 3;
-}
-
-/**
- * Safely extract error message from unknown error type.
- * Handles Error objects, strings, and other types safely.
- */
-export function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  return "An unknown error occurred";
 }

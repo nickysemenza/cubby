@@ -1,5 +1,5 @@
+import { getShortcodeUrl } from "@cubby/shared";
 import QRCode from "qrcode";
-import { getShortcodeUrl } from "./shortcode";
 
 /**
  * Generate a QR code data URL for a shortcode.

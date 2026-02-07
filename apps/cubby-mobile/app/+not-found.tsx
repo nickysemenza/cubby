@@ -1,3 +1,4 @@
+import { colors } from "@cubby/shared";
 import { Link, Stack } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -18,9 +19,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.cream,
   },
-  title: { fontSize: 20, fontWeight: "bold" },
+  title: { fontSize: 20, fontWeight: "bold", color: colors.foreground },
   link: { marginTop: 16, paddingTop: 16 },
-  linkText: { fontSize: 16, color: "#2563eb" },
+  linkText: { fontSize: 16, color: colors.terracotta },
 });

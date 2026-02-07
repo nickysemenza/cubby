@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { colors } from "@cubby/shared";
 import { Stack, useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
@@ -24,7 +25,7 @@ export default function ProductDetail() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={colors.terracotta} />
       </View>
     );
   }
@@ -86,23 +87,23 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: colors.cream },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.cream,
   },
   imageScroller: { flexGrow: 0 },
   heroImage: {
     width: screenWidth,
     height: 250,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.muted,
   },
   content: { padding: 16 },
-  title: { fontSize: 24, fontWeight: "bold" },
-  notFound: { color: "#9ca3af" },
+  title: { fontSize: 24, fontWeight: "bold", color: colors.foreground },
+  notFound: { color: colors.mutedForeground },
   detail: { marginTop: 12 },
-  detailLabel: { fontSize: 14, color: "#6b7280" },
-  detailValue: { fontSize: 16 },
+  detailLabel: { fontSize: 14, color: colors.shelf },
+  detailValue: { fontSize: 16, color: colors.foreground },
 });

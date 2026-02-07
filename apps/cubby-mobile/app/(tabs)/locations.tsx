@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { colors, getErrorMessage } from "@cubby/shared";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
@@ -24,7 +25,7 @@ export default function LocationsScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color={colors.terracotta} />
       </View>
     );
   }
@@ -32,9 +33,7 @@ export default function LocationsScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>
-          {error instanceof Error ? error.message : "Failed to load locations"}
-        </Text>
+        <Text style={styles.errorText}>{getErrorMessage(error)}</Text>
       </View>
     );
   }
@@ -72,12 +71,12 @@ export default function LocationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: colors.cream },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.cream,
   },
   row: {
     flexDirection: "row",
@@ -85,20 +84,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    borderBottomColor: colors.border,
   },
   thumbnail: {
     width: 48,
     height: 48,
     borderRadius: 6,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.muted,
     marginRight: 12,
   },
   text: { flex: 1 },
   textWithImage: { flex: 1 },
-  name: { fontSize: 16, fontWeight: "500" },
-  subtitle: { fontSize: 14, color: "#6b7280", marginTop: 2 },
-  errorText: { color: "#ef4444" },
+  name: { fontSize: 16, fontWeight: "500", color: colors.foreground },
+  subtitle: { fontSize: 14, color: colors.shelf, marginTop: 2 },
+  errorText: { color: colors.destructive },
   empty: { alignItems: "center", paddingVertical: 32 },
-  emptyText: { color: "#9ca3af" },
+  emptyText: { color: colors.mutedForeground },
 });

@@ -1,3 +1,8 @@
+import type {
+  LocationShortcode,
+  ProductShortcode,
+  RecipeShortcode,
+} from "@cubby/shared";
 import { z } from "zod";
 
 // Generic entity ID (use sparingly - prefer specific branded types)
@@ -12,25 +17,13 @@ export const productId = z.uuid().brand("ProductId");
 export const locationId = z.uuid().brand("LocationId");
 export const inventoryId = z.uuid().brand("InventoryId");
 
-// Shortcode branded types with format validation (L-XXXX, P-XXXX format)
-// Character set excludes ambiguous characters: 0/O, 1/I/L
-const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-const shortcodePattern = `[${SHORTCODE_CHARS}]{4}`;
-
-export const locationShortcode = z
-  .string()
-  .regex(new RegExp(`^L-${shortcodePattern}$`), "Invalid location shortcode")
-  .brand("LocationShortcode");
-
-export const productShortcode = z
-  .string()
-  .regex(new RegExp(`^P-${shortcodePattern}$`), "Invalid product shortcode")
-  .brand("ProductShortcode");
-
-export const recipeShortcode = z
-  .string()
-  .regex(new RegExp(`^R-${shortcodePattern}$`), "Invalid recipe shortcode")
-  .brand("RecipeShortcode");
+// Shortcode schemas re-exported from shared package (single source of truth)
+export {
+  locationShortcode,
+  productShortcode,
+  recipeShortcode,
+} from "@cubby/shared";
+export type { LocationShortcode, ProductShortcode, RecipeShortcode };
 
 // Type exports
 export type UserId = z.infer<typeof _userId>;
@@ -39,9 +32,6 @@ export type IngredientId = z.infer<typeof ingredientId>;
 export type ProductId = z.infer<typeof productId>;
 export type LocationId = z.infer<typeof locationId>;
 export type InventoryId = z.infer<typeof inventoryId>;
-export type LocationShortcode = z.infer<typeof locationShortcode>;
-export type ProductShortcode = z.infer<typeof productShortcode>;
-export type RecipeShortcode = z.infer<typeof recipeShortcode>;
 
 // Helper functions for unsafe casts (use only when you're certain the value is valid)
 // These are useful in tests and when working with external data that you know is valid

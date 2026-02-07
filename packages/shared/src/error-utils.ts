@@ -1,8 +1,22 @@
-import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
+/**
+ * Portable error utilities (no tRPC dependency).
+ */
+
+/** Safely extract error message from unknown error type. */
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return "An unknown error occurred";
+}
 
 /**
- * App error definitions: key = reason, value = tRPC code.
- * Adding a new error requires only one entry here.
+ * App error definitions: key = reason, value = HTTP-style error code string.
+ * The web app's `createAppError` casts these to tRPC codes, but the map
+ * itself is framework-agnostic so it can be used in any environment.
  */
 export const AppErrors = {
   // Auth
@@ -32,6 +46,6 @@ export const AppErrors = {
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_GET_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_CULL_FAILED: "INTERNAL_SERVER_ERROR",
-} as const satisfies Record<string, TRPC_ERROR_CODE_KEY>;
+} as const;
 
 export type AppErrorReason = keyof typeof AppErrors;

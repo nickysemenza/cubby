@@ -5,8 +5,8 @@
  * Used for QR code labels that encode the shortcode URL.
  */
 
+import { parseShortcode } from "@cubby/shared";
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
-import { parseShortcode } from "~/lib/shortcode";
 
 export const Route = createFileRoute("/$shortcode")({
   ssr: false,

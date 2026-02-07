@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { authClient } from "@/lib/auth";
+import { colors, getErrorMessage } from "@cubby/shared";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -36,10 +37,7 @@ export default function SignIn() {
         Alert.alert("Sign in failed", error.message ?? "Unknown error");
       }
     } catch (e) {
-      Alert.alert(
-        "Error",
-        e instanceof Error ? e.message : "Something went wrong",
-      );
+      Alert.alert("Error", getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -57,7 +55,7 @@ export default function SignIn() {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={colors.mutedForeground}
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -68,7 +66,7 @@ export default function SignIn() {
           <TextInput
             style={[styles.input, { marginBottom: 24 }]}
             placeholder="Password"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={colors.mutedForeground}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -81,7 +79,7 @@ export default function SignIn() {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.cream} />
             ) : (
               <Text style={styles.buttonText}>Sign In</Text>
             )}
@@ -93,7 +91,7 @@ export default function SignIn() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: colors.cream },
   flex: { flex: 1 },
   form: { flex: 1, justifyContent: "center", paddingHorizontal: 32 },
   title: {
@@ -101,24 +99,26 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginBottom: 32,
+    color: colors.foreground,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
     marginBottom: 16,
+    color: colors.foreground,
   },
   button: {
-    backgroundColor: "#2563eb",
+    backgroundColor: colors.terracotta,
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: "center",
   },
   buttonText: {
-    color: "#fff",
+    color: colors.cream,
     fontSize: 18,
     fontWeight: "600",
     textAlign: "center",

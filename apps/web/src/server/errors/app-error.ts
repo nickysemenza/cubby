@@ -5,9 +5,10 @@
  * Extracted from trpc.ts to avoid circular dependencies with repo files.
  */
 
+import { type AppErrorReason, AppErrors } from "@cubby/shared";
 import { SpanStatusCode, trace } from "@opentelemetry/api";
 import { TRPCError } from "@trpc/server";
-import { type AppErrorReason, AppErrors } from "~/lib/app-error-codes";
+import type { TRPC_ERROR_CODE_KEY } from "@trpc/server/rpc";
 
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([
@@ -31,7 +32,7 @@ export function createAppError(
   message: string,
   originalError?: unknown,
 ): TRPCError {
-  const code = AppErrors[reason];
+  const code = AppErrors[reason] as TRPC_ERROR_CODE_KEY;
   const isExpectedError = EXPECTED_ERROR_CODES.has(code);
 
   // Only log unexpected errors (5xx, etc.) - expected 4xx are normal business responses
