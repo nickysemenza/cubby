@@ -27,8 +27,8 @@ import {
   deleteProducts,
   findProductByUPC,
   findProductsNeedingFoodCategory,
+  findProductsWithNoImages,
   findProductsWithStalePrices,
-  findProductsWithUPCNoImages,
   getCategoryDistribution,
   getProductByShortcode,
   getProductsByShortcodes,
@@ -250,8 +250,11 @@ const backfillUPCImages = protectedProcedure
     }),
   )
   .mutation(async ({ ctx }) => {
-    // Find all products with UPC but without images
-    const productsWithUPCNoImages = await findProductsWithUPCNoImages(ctx.db);
+    // Find products without images, then filter to those with UPC for backfill
+    const allNoImages = await findProductsWithNoImages(ctx.db);
+    const productsWithUPC = allNoImages.filter(
+      (p): p is typeof p & { upc: string } => p.upc != null,
+    );
 
     const details: Array<{
       productId: string;
@@ -267,8 +270,8 @@ const backfillUPCImages = protectedProcedure
 
     // Process in parallel batches of 10
     const BATCH_SIZE = 10;
-    for (let i = 0; i < productsWithUPCNoImages.length; i += BATCH_SIZE) {
-      const batch = productsWithUPCNoImages.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < productsWithUPC.length; i += BATCH_SIZE) {
+      const batch = productsWithUPC.slice(i, i + BATCH_SIZE);
 
       const batchResults = await Promise.all(
         batch.map(async (p) => {
@@ -317,7 +320,7 @@ const backfillUPCImages = protectedProcedure
     }
 
     return {
-      found: productsWithUPCNoImages.length,
+      found: productsWithUPC.length,
       imported,
       failed,
       skipped,
@@ -329,8 +332,8 @@ const backfillUPCImages = protectedProcedure
 const getUPCImageBackfillCount = protectedProcedure
   .output(z.object({ count: z.number() }))
   .query(async ({ ctx }) => {
-    const products = await findProductsWithUPCNoImages(ctx.db);
-    return { count: products.length };
+    const products = await findProductsWithNoImages(ctx.db);
+    return { count: products.filter((p) => p.upc != null).length };
   });
 
 // Get count of products with food indicators but wrong category

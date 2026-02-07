@@ -55,11 +55,11 @@ const emptyLocationSchema = z.object({
   lastBulkInventory: z.date().nullable(),
 });
 
-const productWithoutUPCImageSchema = z.object({
+const productWithNoImagesSchema = z.object({
   id: z.string(),
   name: z.string(),
   manufacturer: z.string(),
-  upc: z.string(),
+  upc: z.string().nullable(),
 });
 
 const productWithWrongCategorySchema = z.object({
@@ -110,7 +110,7 @@ const allProblemsSchema = z.object({
   inventoryWithStaleValuations: z.array(inventoryWithStaleValuationSchema),
   invalidInventoryAmounts: z.array(invalidInventoryAmountSchema),
   emptyLocations: z.array(emptyLocationSchema),
-  productsWithoutUPCImages: z.array(productWithoutUPCImageSchema),
+  productsWithNoImages: z.array(productWithNoImagesSchema),
   productsWithWrongCategory: z.array(productWithWrongCategorySchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   totalProblems: z.number(),
@@ -135,7 +135,7 @@ const getProblemsCount = protectedProcedure
         productsWithoutMappings: z.number(),
         invalidInventoryAmounts: z.number(),
         emptyLocations: z.number(),
-        productsWithoutUPCImages: z.number(),
+        productsWithNoImages: z.number(),
         productsWithWrongCategory: z.number(),
         productsWithStalePrices: z.number(),
         inventoryWithStaleValuations: z.number(),

@@ -8,9 +8,9 @@ import {
   hasFoodIndicators,
   type ProductCategory,
 } from "@cubby/schemas/product";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
-import { image, product, productImage } from "~/server/db/schema";
+import { product, productImage } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
@@ -31,97 +31,69 @@ export const findDuplicateUniqueProducts = async (db: Database) => {
 };
 
 /**
- * Find all products that have a UPC but no UPC-fetched image.
- * Products may have other images (user-uploaded), but are missing the UPC image.
- * Used for UPC image backfill functionality.
+ * Find all products that have no images at all.
+ * @param excludeIngredients - If true, excludes products linked to ingredients (for problems dashboard)
  */
-export const findProductsWithUPCNoImages = async (
+export const findProductsWithNoImages = async (
   db: Database,
+  { excludeIngredients = false } = {},
 ): Promise<
-  Array<{ id: string; name: string; manufacturer: string; upc: string }>
+  Array<{
+    id: string;
+    name: string;
+    manufacturer: string;
+    upc: string | null;
+  }>
 > => {
   const dbClient = getDb(db);
 
-  // Get all products with UPCs and their images in a single query
-  const productsWithImages = await dbClient
+  const conditions = [notDeleted(product)];
+  if (excludeIngredients) {
+    conditions.push(isNull(product.ingredientId));
+  }
+
+  const results = await dbClient
     .select({
       id: product.id,
       name: product.name,
       manufacturer: product.manufacturer,
       upc: product.upc,
-      imageUrl: image.url,
     })
     .from(product)
     .leftJoin(productImage, eq(productImage.productId, product.id))
-    .leftJoin(image, eq(productImage.imageId, image.id))
-    .where(and(isNotNull(product.upc), notDeleted(product)));
-
-  // Group by product and check for UPC images
-  const productMap = new Map<
-    string,
-    { name: string; manufacturer: string; upc: string; hasUPCImage: boolean }
-  >();
-
-  for (const row of productsWithImages) {
-    if (!row.upc) continue;
-
-    const existing = productMap.get(row.id);
-    const isUPCImage = row.imageUrl?.includes("/upc-") ?? false;
-
-    if (existing) {
-      // Update if this row has a UPC image
-      if (isUPCImage) {
-        existing.hasUPCImage = true;
-      }
-    } else {
-      productMap.set(row.id, {
-        name: row.name,
-        manufacturer: row.manufacturer,
-        upc: row.upc,
-        hasUPCImage: isUPCImage,
-      });
-    }
-  }
-
-  // Return products without UPC images
-  const results: Array<{
-    id: string;
-    name: string;
-    manufacturer: string;
-    upc: string;
-  }> = [];
-  for (const [id, data] of productMap) {
-    if (!data.hasUPCImage) {
-      results.push({
-        id,
-        name: data.name,
-        manufacturer: data.manufacturer,
-        upc: data.upc,
-      });
-    }
-  }
+    .where(and(...conditions))
+    .groupBy(product.id)
+    .having(sql`count(${productImage.imageId}) = 0`);
 
   return results;
 };
 
 /**
- * Count products that have a UPC but no UPC-fetched image.
+ * Count products that have no images at all.
  * Optimized SQL-level count for badge display.
+ * @param excludeIngredients - If true, excludes products linked to ingredients (for problems dashboard)
  */
-export const countProductsWithUPCNoImages = async (
+export const countProductsWithNoImages = async (
   db: Database,
+  { excludeIngredients = false } = {},
 ): Promise<number> => {
   const dbClient = getDb(db);
 
-  // Count products with UPCs that have no UPC image
-  // A UPC image has a URL containing "/upc-"
-  const result = await dbClient
-    .select({ count: sql<number>`count(distinct ${product.id})` })
-    .from(product)
-    .leftJoin(productImage, eq(productImage.productId, product.id))
-    .leftJoin(image, eq(productImage.imageId, image.id))
-    .where(and(isNotNull(product.upc), notDeleted(product)))
-    .having(sql`count(case when ${image.url} like '%/upc-%' then 1 end) = 0`);
+  const conditions = [notDeleted(product)];
+  if (excludeIngredients) {
+    conditions.push(isNull(product.ingredientId));
+  }
+
+  const result = await dbClient.select({ count: sql<number>`count(*)` }).from(
+    dbClient
+      .select({ id: product.id })
+      .from(product)
+      .leftJoin(productImage, eq(productImage.productId, product.id))
+      .where(and(...conditions))
+      .groupBy(product.id)
+      .having(sql`count(${productImage.imageId}) = 0`)
+      .as("no_images"),
+  );
 
   return Number(result[0]?.count ?? 0);
 };

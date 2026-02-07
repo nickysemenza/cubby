@@ -16,10 +16,10 @@ import {
 import { findInventoryWithStaleValuations } from "~/server/repo/inventory/crud";
 import {
   countProductsNeedingFoodCategory,
-  countProductsWithUPCNoImages,
+  countProductsWithNoImages,
   findProductsNeedingFoodCategory,
+  findProductsWithNoImages,
   findProductsWithStalePrices,
-  findProductsWithUPCNoImages,
 } from "~/server/repo/product";
 
 // Interface for the complete problems result
@@ -30,7 +30,7 @@ interface AllProblems {
   productsWithoutMappings: ProductWithoutMappings[];
   invalidInventoryAmounts: InvalidInventoryAmount[];
   emptyLocations: EmptyLocation[];
-  productsWithoutUPCImages: ProductWithoutUPCImage[];
+  productsWithNoImages: ProductWithNoImages[];
   productsWithWrongCategory: ProductWithWrongCategory[];
   productsWithStalePrices: ProductWithStalePrice[];
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
@@ -91,11 +91,11 @@ export interface EmptyLocation {
   lastBulkInventory: Date | null;
 }
 
-export interface ProductWithoutUPCImage {
+export interface ProductWithNoImages {
   id: string;
   name: string;
   manufacturer: string;
-  upc: string;
+  upc: string | null;
 }
 
 export interface ProductWithWrongCategory {
@@ -662,7 +662,7 @@ interface ProblemsCount {
     productsWithoutMappings: number;
     invalidInventoryAmounts: number;
     emptyLocations: number;
-    productsWithoutUPCImages: number;
+    productsWithNoImages: number;
     productsWithWrongCategory: number;
     productsWithStalePrices: number;
     inventoryWithStaleValuations: number;
@@ -682,7 +682,7 @@ export const findAllProblemsCount = async (
     productsWithoutMappings,
     invalidInventoryAmounts,
     emptyLocations,
-    productsWithUPCNoImages,
+    productsWithNoImages,
     productsNeedingFoodCategory,
     productsWithStalePrices,
     inventoryWithStaleValuations,
@@ -694,7 +694,7 @@ export const findAllProblemsCount = async (
     countProductsWithoutMappings(db),
     countInvalidInventoryAmounts(db),
     countEmptyLocations(db),
-    countProductsWithUPCNoImages(db),
+    countProductsWithNoImages(db, { excludeIngredients: true }),
     countProductsNeedingFoodCategory(db),
     findProductsWithStalePrices(db).then((r) => r.length),
     findInventoryWithStaleValuations(db).then((r) => r.length),
@@ -708,7 +708,7 @@ export const findAllProblemsCount = async (
     productsWithoutMappings,
     invalidInventoryAmounts,
     emptyLocations,
-    productsWithoutUPCImages: productsWithUPCNoImages,
+    productsWithNoImages,
     productsWithWrongCategory: productsNeedingFoodCategory,
     productsWithStalePrices,
     inventoryWithStaleValuations,
@@ -722,7 +722,7 @@ export const findAllProblemsCount = async (
     productsWithoutMappings +
     invalidInventoryAmounts +
     emptyLocations +
-    productsWithUPCNoImages +
+    productsWithNoImages +
     productsNeedingFoodCategory +
     productsWithStalePrices +
     inventoryWithStaleValuations +
@@ -741,7 +741,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithoutMappings,
     invalidInventoryAmounts,
     emptyLocations,
-    productsWithUPCNoImages,
+    productsWithNoImages,
     productsNeedingFoodCategory,
     productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
@@ -753,7 +753,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findProductsWithoutMappings(db),
     findInvalidInventoryAmounts(db),
     findEmptyLocations(db),
-    findProductsWithUPCNoImages(db),
+    findProductsWithNoImages(db, { excludeIngredients: true }),
     findProductsNeedingFoodCategory(db),
     findProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db),
@@ -761,9 +761,6 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
   ]);
 
   // Transform to problem types
-  const productsWithoutUPCImages: ProductWithoutUPCImage[] =
-    productsWithUPCNoImages;
-
   const productsWithWrongCategory: ProductWithWrongCategory[] =
     productsNeedingFoodCategory.map((p) => ({
       id: p.id,
@@ -786,7 +783,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithoutMappings.length +
     invalidInventoryAmounts.length +
     emptyLocations.length +
-    productsWithoutUPCImages.length +
+    productsWithNoImages.length +
     productsWithWrongCategory.length +
     productsWithStalePrices.length +
     inventoryWithStaleValuations.length +
@@ -799,7 +796,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithoutMappings,
     invalidInventoryAmounts,
     emptyLocations,
-    productsWithoutUPCImages,
+    productsWithNoImages,
     productsWithWrongCategory,
     productsWithStalePrices,
     inventoryWithStaleValuations,

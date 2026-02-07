@@ -33,8 +33,8 @@ import type {
   InventoryWithStaleValuation,
   OrphanedProduct,
   ProductWithIslandedMappings,
+  ProductWithNoImages,
   ProductWithoutMappings,
-  ProductWithoutUPCImage,
   ProductWithStalePrice,
   ProductWithWrongCategory,
 } from "~/server/repo/problems";
@@ -286,13 +286,15 @@ function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
   );
 }
 
-function ProductsWithoutUPCImagesList({
+function ProductsWithNoImagesList({
   products,
 }: {
-  products: ProductWithoutUPCImage[];
+  products: ProductWithNoImages[];
 }) {
   const api = useTRPC();
   const queryClient = useQueryClient();
+
+  const productsWithUPC = products.filter((p) => p.upc != null);
 
   const backfillMutation = useMutation(
     api.product.backfillUPCImages.mutationOptions({
@@ -306,7 +308,6 @@ function ProductsWithoutUPCImagesList({
         } else {
           toast.info(`No images found for ${result.skipped} product(s)`);
         }
-        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
           queryKey: [api.problems.getAllProblems.queryKey()],
         });
@@ -322,35 +323,39 @@ function ProductsWithoutUPCImagesList({
 
   return (
     <ProblemSection
-      title="Missing UPC Images"
-      description="Products with UPC codes that don't have images fetched from the product database."
+      title="Missing Images"
+      description="Products that don't have any images."
       icon={ImageOff}
       items={products}
-      emptyMessage="All products with UPC codes have images."
+      emptyMessage="All products have images."
       headerAction={
-        <Button
-          size="sm"
-          onClick={() => backfillMutation.mutate()}
-          disabled={backfillMutation.isPending}
-        >
-          {backfillMutation.isPending ? (
-            <>
-              <Spinner className="mr-2" />
-              Fetching...
-            </>
-          ) : (
-            "Fetch All Images"
-          )}
-        </Button>
+        productsWithUPC.length > 0 ? (
+          <Button
+            size="sm"
+            onClick={() => backfillMutation.mutate()}
+            disabled={backfillMutation.isPending}
+          >
+            {backfillMutation.isPending ? (
+              <>
+                <Spinner className="mr-2" />
+                Fetching...
+              </>
+            ) : (
+              `Fetch UPC Images (${productsWithUPC.length})`
+            )}
+          </Button>
+        ) : undefined
       }
       renderItem={(product) => ({
         title: product.name,
         subtitle: `by ${product.manufacturer}`,
-        badges: [
-          <code key="upc" className="rounded bg-muted px-2 py-1 text-sm">
-            {product.upc}
-          </code>,
-        ],
+        badges: product.upc
+          ? [
+              <code key="upc" className="rounded bg-muted px-2 py-1 text-sm">
+                {product.upc}
+              </code>,
+            ]
+          : [],
         route: { to: "/products/$id" as const, params: { id: product.id } },
       })}
     />
@@ -724,7 +729,7 @@ export function ProblemsOverview() {
     {
       id: "images",
       label: "Images",
-      count: problems.productsWithoutUPCImages.length,
+      count: problems.productsWithNoImages.length,
     },
     {
       id: "categories",
@@ -852,9 +857,7 @@ export function ProblemsOverview() {
           sectionRefs.current.images = el;
         }}
       >
-        <ProductsWithoutUPCImagesList
-          products={problems.productsWithoutUPCImages}
-        />
+        <ProductsWithNoImagesList products={problems.productsWithNoImages} />
       </div>
       <div
         ref={(el) => {

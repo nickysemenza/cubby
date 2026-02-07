@@ -9,10 +9,10 @@
 export {
   backfillFoodCategories,
   countProductsNeedingFoodCategory,
-  countProductsWithUPCNoImages,
+  countProductsWithNoImages,
   findDuplicateUniqueProducts,
   findProductsNeedingFoodCategory,
-  findProductsWithUPCNoImages,
+  findProductsWithNoImages,
   getCategoryDistribution,
 } from "./analytics";
 // CRUD operations
