@@ -1,18 +1,26 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { useNavigate } from "@tanstack/react-router";
 import {
   flexRender,
   type Table as ITable,
   type Row,
 } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import {
+  isValidElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
-import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
+import { extractEntityTitle } from "~/lib/entity-utils";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { NoneState } from "../NoneState";
 import { DebugDialog } from "./DebugDialog";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 
@@ -30,17 +38,25 @@ interface MobileCardViewProps<TItem> {
   infiniteScroll?: InfiniteScrollControls;
 }
 
-type FieldCategory = "hero" | "compact" | "medium" | "wide";
-
-interface CategorizedField {
-  id: string;
-  displayHeader: string;
-  content: ReactNode;
-  category: FieldCategory;
-}
+/** Column IDs automatically hidden on mobile — verbose or complex fields */
+const MOBILE_HIDDEN_COLUMNS = new Set([
+  "createdAt",
+  "notes",
+  "ndb_number",
+  "model",
+  "fdc_id",
+  "unitMapping",
+  "unitMappings",
+  "inventoryEntry",
+  "inventoryEntries",
+  "food",
+  "nutrition",
+  "meta",
+]);
 
 /**
- * Check if a field has meaningful content worth displaying
+ * Check if a rendered cell has meaningful content worth displaying.
+ * Filters out null, empty strings, "—", and NoneState elements.
  */
 function hasContent(content: ReactNode): boolean {
   if (content === null || content === undefined) return false;
@@ -48,48 +64,8 @@ function hasContent(content: ReactNode): boolean {
     const trimmed = content.trim();
     return trimmed !== "" && trimmed !== "—";
   }
+  if (isValidElement(content) && content.type === NoneState) return false;
   return true;
-}
-
-function categorizeField(
-  columnId: string,
-  metaCategory?: FieldCategory,
-): FieldCategory {
-  // Check for meta override first
-  if (metaCategory) {
-    return metaCategory;
-  }
-
-  // Hero fields: image and name (primary identification)
-  if (columnId === "image" || columnId === "name") {
-    return "hero";
-  }
-
-  // Compact fields: short IDs, codes, dates, simple text
-  if (
-    columnId.includes("id") ||
-    columnId.includes("upc") ||
-    columnId.includes("ndb") ||
-    columnId.includes("createdAt") ||
-    columnId.includes("model") ||
-    columnId === "fdc_id"
-  ) {
-    return "compact";
-  }
-
-  // Wide fields: complex tables, long descriptions, complex components
-  if (
-    columnId.includes("food") ||
-    columnId.includes("nutrition") ||
-    columnId.includes("unitMapping") ||
-    columnId.includes("inventoryEntry") ||
-    columnId.includes("meta")
-  ) {
-    return "wide";
-  }
-
-  // Medium fields: everything else (manufacturer, etc.)
-  return "medium";
 }
 
 export function MobileCardView<TItem>({
@@ -99,6 +75,7 @@ export function MobileCardView<TItem>({
   infiniteScroll,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
+  const navigate = useNavigate();
 
   // Infinite scroll sentinel — IntersectionObserver triggers fetchNextPage
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -138,7 +115,7 @@ export function MobileCardView<TItem>({
   const basePath = entity ? entities[entity].basePath : undefined;
 
   return (
-    <div className="block space-y-4 lg:hidden">
+    <div className="block space-y-0 lg:hidden">
       {table.getRowModel().rows?.length ? (
         table.getRowModel().rows.map((row) => {
           // Extract actions cell content (for MobileCard.actions slot)
@@ -152,111 +129,98 @@ export function MobileCardView<TItem>({
               )
             : undefined;
 
-          // Categorize all fields for this row, filtering out "select" and "actions" columns
-          const categorizedFields: CategorizedField[] = row
-            .getVisibleCells()
-            .filter(
-              (cell) =>
-                cell.column.id !== "select" && cell.column.id !== "actions",
-            )
-            .map((cell) => {
-              const header = cell.column.columnDef.header;
-              let headerText = cell.column.id;
-
-              if (typeof header === "string") {
-                headerText = header;
-              }
-
-              const displayHeader = headerText
-                .replace(/([A-Z])/g, " $1")
-                .replace(/^./, (str) => str.toUpperCase())
-                .trim();
-
-              const content = flexRender(
-                cell.column.columnDef.cell,
-                cell.getContext(),
-              );
-              const metaCategory = cell.column.columnDef.meta?.mobileCategory;
-              const category = categorizeField(cell.column.id, metaCategory);
-
-              return {
-                id: cell.id,
-                displayHeader,
-                content,
-                category,
-              };
-            });
-
-          // Group fields by category
-          const heroFields = categorizedFields.filter(
-            (f) => f.category === "hero",
-          );
-          const compactFields = categorizedFields.filter(
-            (f) => f.category === "compact",
-          );
-          const mediumFields = categorizedFields.filter(
-            (f) => f.category === "medium",
-          );
-          const wideFields = categorizedFields.filter(
-            (f) => f.category === "wide",
-          );
-
-          // Get title using generic utility function (no cast needed)
+          // Get title using generic utility function
           const titleString = extractEntityTitle(row.original);
 
-          // Extract raw data for image extraction
+          // Extract raw data
           const rowData = row.original as Record<string, unknown>;
 
-          // Get image using utility function, with fallback to rendered field
-          const entityImage = getEntityImage(rowData);
-          const imageField = heroFields.find(
-            (f) => f.displayHeader.toLowerCase() === "image",
-          );
-          const imageContent = entityImage || imageField?.content;
+          // Render the image column content if present
+          const imageCell = row
+            .getVisibleCells()
+            .find((cell) => cell.column.id === "image");
+          const imageContent = imageCell
+            ? flexRender(
+                imageCell.column.columnDef.cell,
+                imageCell.getContext(),
+              )
+            : undefined;
 
-          // Create details from medium and compact fields (filter empty)
-          const details = [...mediumFields, ...compactFields]
-            .filter((field) => hasContent(field.content))
-            .map((field) => (
-              <div
-                key={field.id}
-                className="flex min-w-0 items-center justify-between gap-2"
-              >
-                <span className="shrink-0 font-medium text-muted-foreground text-xs">
-                  {field.displayHeader}:
-                </span>
-                <span className="truncate text-right text-sm">
-                  {field.content}
-                </span>
-              </div>
-            ));
+          // Collect visible non-hero, non-hidden field values for right side
+          const rightValues: ReactNode[] = [];
+          let subtitleText: string | undefined;
 
-          // Create badges from wide fields with their content (filter empty)
-          const badges = wideFields
-            .filter((field) => hasContent(field.content))
-            .map((field) => (
-              <div
-                key={field.id}
-                className="flex min-w-0 items-center gap-1 text-xs"
-              >
-                <span className="shrink-0 text-muted-foreground">
-                  {field.displayHeader}:
-                </span>
-                <span className="min-w-0 truncate">{field.content}</span>
-              </div>
-            ));
+          for (const cell of row.getVisibleCells()) {
+            const colId = cell.column.id;
 
-          const footer = isDebugEnabled ? (
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-muted-foreground text-sm">
-                Debug
-              </span>
+            // Skip utility columns and hero fields
+            if (
+              colId === "select" ||
+              colId === "actions" ||
+              colId === "image" ||
+              colId === "name"
+            )
+              continue;
+
+            // Skip hidden columns (auto-hide list + per-column opt-out)
+            if (
+              MOBILE_HIDDEN_COLUMNS.has(colId) ||
+              cell.column.columnDef.meta?.mobileHidden
+            )
+              continue;
+
+            // Quick-reject: skip cells with empty raw accessor values
+            // (catches nulls wrapped in EditableCell that hasContent can't see through)
+            const rawValue = cell.getValue();
+            if (
+              rawValue === null ||
+              rawValue === undefined ||
+              rawValue === "" ||
+              (Array.isArray(rawValue) && rawValue.length === 0)
+            )
+              continue;
+
+            const content = flexRender(
+              cell.column.columnDef.cell,
+              cell.getContext(),
+            );
+
+            if (!hasContent(content)) continue;
+
+            // Use first badge/category-like field as subtitle
+            const category = cell.column.columnDef.meta?.mobileCategory;
+            if (
+              !subtitleText &&
+              (category === "medium" || category === "compact") &&
+              typeof content === "string"
+            ) {
+              subtitleText = content;
+              continue;
+            }
+
+            // Collect up to 2 right-aligned values
+            if (rightValues.length < 2) {
+              rightValues.push(content);
+            }
+          }
+
+          // Pass raw image content — MobileCard row variant handles sizing
+          const imageSlot = imageContent || undefined;
+
+          // Build details href for navigation
+          const entityId = rowData.id as string | undefined;
+          const detailsHref =
+            basePath && entityId ? `/${basePath}/${entityId}` : undefined;
+
+          // Debug footer (only in row children if debug mode)
+          const debugContent = isDebugEnabled ? (
+            <div className="flex items-center gap-1">
               <DebugDialog
                 data={row.original}
                 title={`Debug Data - Row ${row.id}`}
                 trigger={
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                    <Bug className="h-4 w-4" />
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                    <Bug className="h-3 w-3" />
                     <span className="sr-only">Debug row data</span>
                   </Button>
                 }
@@ -264,31 +228,8 @@ export function MobileCardView<TItem>({
             </div>
           ) : undefined;
 
-          // Build details href for navigation
-          const entityId = rowData.id as string | undefined;
-          const detailsHref =
-            basePath && entityId ? `/${basePath}/${entityId}` : undefined;
-
-          // Image slot for MobileCard header
-          const imageSlot = imageContent ? (
-            <div className="h-10 w-10 shrink-0 overflow-hidden rounded">
-              {imageContent}
-            </div>
-          ) : undefined;
-
-          // Build default card content (details, badges, footer — title/image handled by MobileCard)
-          const defaultContent = (
-            <div className="space-y-2">
-              {/* Details */}
-              {details.length > 0 && <div className="space-y-1">{details}</div>}
-
-              {/* Badges */}
-              {badges.length > 0 && <div className="space-y-1">{badges}</div>}
-
-              {/* Debug footer */}
-              {footer}
-            </div>
-          );
+          // Default content (just debug if enabled, otherwise nothing)
+          const defaultContent = debugContent ?? null;
 
           // Allow custom rendering for special cases (e.g., inline editing)
           if (renderMobileCard) {
@@ -297,12 +238,15 @@ export function MobileCardView<TItem>({
             );
           }
 
-          // Default MobileCard with optional selection and actions
+          // Default compact row with right-aligned values
           return (
             <MobileCard
               key={row.id}
+              variant="row"
               title={titleString}
+              subtitle={subtitleText}
               imageSlot={imageSlot}
+              rightValues={rightValues}
               selectable={
                 isSelectable
                   ? {
@@ -313,10 +257,16 @@ export function MobileCardView<TItem>({
                   : undefined
               }
               actions={actionsContent}
-              detailsHref={detailsHref}
               entity={entity}
+              onClick={
+                detailsHref
+                  ? () => {
+                      navigate({ to: detailsHref });
+                    }
+                  : undefined
+              }
             >
-              {defaultContent}
+              {debugContent}
             </MobileCard>
           );
         })

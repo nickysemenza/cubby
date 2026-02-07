@@ -32,6 +32,14 @@ interface MobileCardProps {
   entity?: Entity;
   /** Optional click handler for the entire card */
   onClick?: () => void;
+  /**
+   * Display variant:
+   * - "card" (default): bordered card with shadow, used by LocationCardGrid, ProblemSection
+   * - "row": compact row with bottom divider, used by MobileCardView for dense lists
+   */
+  variant?: "card" | "row";
+  /** Right-aligned values for compact row variant (max 2 lines) */
+  rightValues?: ReactNode[];
 }
 
 /**
@@ -59,12 +67,115 @@ export function MobileCard({
   imageSlot,
   entity,
   onClick,
+  variant = "card",
+  rightValues,
 }: MobileCardProps) {
   // Get entity-specific border color, fallback to primary
   const borderColor = entity
     ? entities[entity].color.text.replace("text-", "border-l-")
     : "border-l-primary/30";
 
+  const isRow = variant === "row";
+  const hasSecondLine =
+    isRow && (subtitle || (rightValues && rightValues.length > 0));
+
+  if (isRow) {
+    // Compact row layout using CSS grid:
+    //   Col: [checkbox?] [image?] [content: 1fr] [actions?]
+    //   Row 1: title
+    //   Row 2: subtitle ... rightValues
+    return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
+      <div
+        className={cn(
+          "grid items-center gap-x-2.5 border-border/30 border-b px-3 py-2.5",
+          // Dynamic grid columns based on which slots are present
+          selectable && imageSlot
+            ? "grid-cols-[auto_auto_1fr_auto]"
+            : selectable || imageSlot
+              ? "grid-cols-[auto_1fr_auto]"
+              : "grid-cols-[1fr_auto]",
+          onClick && "cursor-pointer",
+          className,
+        )}
+        onClick={onClick}
+        onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
+        role={onClick ? "button" : undefined}
+        tabIndex={onClick ? 0 : undefined}
+      >
+        {/* Checkbox */}
+        {selectable && (
+          // biome-ignore lint/a11y/useKeyWithClickEvents: checkbox handles its own keyboard events
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={cn("self-center", hasSecondLine && "row-span-2")}
+          >
+            <Checkbox
+              checked={selectable.isSelected}
+              onCheckedChange={(checked) =>
+                selectable.onSelectionChange(!!checked)
+              }
+              className="shrink-0"
+              aria-label="Select item"
+            />
+          </div>
+        )}
+
+        {/* Image */}
+        {imageSlot && (
+          <div
+            className={cn(
+              "h-11 w-11 self-center overflow-hidden rounded",
+              hasSecondLine && "row-span-2",
+            )}
+          >
+            {imageSlot}
+          </div>
+        )}
+
+        {/* Title (content column, row 1) */}
+        <div className="flex min-w-0 items-baseline gap-2">
+          {TitleIcon && (
+            <TitleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate font-medium text-sm" title={title}>
+            {title}
+          </span>
+        </div>
+
+        {/* Actions */}
+        <div className={cn("self-center", hasSecondLine && "row-span-2")}>
+          {actions}
+        </div>
+
+        {/* Second line (content column, row 2) */}
+        {hasSecondLine && (
+          <div className="flex items-center gap-2">
+            {subtitle && (
+              <span className="min-w-0 truncate text-muted-foreground text-xs">
+                {subtitle}
+              </span>
+            )}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {rightValues?.slice(0, 2).map((value, i) => (
+                <span
+                  key={i}
+                  className="max-w-40 truncate text-muted-foreground text-xs"
+                >
+                  {value}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Extra children (debug, etc.) */}
+        {children}
+      </div>
+    );
+  }
+
+  // Card layout: original bordered card style
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
     <div
@@ -79,7 +190,6 @@ export function MobileCard({
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
     >
-      {/* Checkbox - only rendered if selectable */}
       {selectable && (
         <Checkbox
           checked={selectable.isSelected}
@@ -88,14 +198,10 @@ export function MobileCard({
           aria-label="Select item"
         />
       )}
-
-      {/* Content */}
       <div className="min-w-0 flex-1 space-y-2">
-        {/* Header row: image + title + actions together */}
         {(title || detailsHref || actions) && (
           <div className="flex items-start gap-2">
             {imageSlot}
-            {/* Title section */}
             {title && (
               <div className="min-w-0 flex-1">
                 <h5 className="flex min-w-0 items-start gap-2 font-medium">
@@ -113,7 +219,6 @@ export function MobileCard({
                 )}
               </div>
             )}
-            {/* Actions - compact, next to title */}
             {(detailsHref || actions) && (
               <div className="flex shrink-0 items-center gap-1">
                 {detailsHref && (

@@ -47,6 +47,8 @@ export interface FilterConfig {
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData, TValue> {
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
+    /** Hide this column in mobile card view */
+    mobileHidden?: boolean;
     className?: string;
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
