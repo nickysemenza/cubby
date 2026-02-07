@@ -257,18 +257,26 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   // Store the actual function, not a getter
   const queryOptions = api.product.list.queryOptions;
 
-  const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
-    useEntityList({
-      entity: "product",
-      queryOptions,
-      buildFilters,
-      getMappings: getAllUnitMappingsFromProduct,
-      tableStateOptions,
-      columns,
-      filters,
-      deletable: deletableConfig,
-      extraActions,
-    });
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+  } = useEntityList({
+    entity: "product",
+    queryOptions,
+    buildFilters,
+    getMappings: getAllUnitMappingsFromProduct,
+    tableStateOptions,
+    columns,
+    filters,
+    deletable: deletableConfig,
+    extraActions,
+    infinite: true,
+  });
 
   return (
     <div>
@@ -282,6 +290,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         onRowClick={onRowClick}
         actions={actions}
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
       />
       <PreviewSheet />
       {deleteDialog}

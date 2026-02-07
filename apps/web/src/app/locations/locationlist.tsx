@@ -186,28 +186,36 @@ export function LocationList() {
     [],
   );
 
-  const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
-    useEntityList({
-      entity: "location",
-      queryOptions: api.location.list.queryOptions,
-      buildFilters: (ts) => ({
-        nameFilter: ts.getColumnFilter("name"),
-        itemTypeFilter: ts.getColumnFilter("type") as LocationType,
-      }),
-      columns,
-      filters: [
-        { id: "name", placeholder: "Filter by location name..." },
-        {
-          id: "type",
-          placeholder: "Filter by type...",
-          filterType: "select",
-          options: locationTypeOptionsWithTheme,
-        },
-      ],
-      deletable: deletableConfig,
-      bulkActions,
-      extraActions,
-    });
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+  } = useEntityList({
+    entity: "location",
+    queryOptions: api.location.list.queryOptions,
+    buildFilters: (ts) => ({
+      nameFilter: ts.getColumnFilter("name"),
+      itemTypeFilter: ts.getColumnFilter("type") as LocationType,
+    }),
+    columns,
+    filters: [
+      { id: "name", placeholder: "Filter by location name..." },
+      {
+        id: "type",
+        placeholder: "Filter by type...",
+        filterType: "select",
+        options: locationTypeOptionsWithTheme,
+      },
+    ],
+    deletable: deletableConfig,
+    bulkActions,
+    extraActions,
+    infinite: true,
+  });
 
   return (
     <>
@@ -220,6 +228,7 @@ export function LocationList() {
         entity="location"
         onRowClick={onRowClick}
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
       />
       <PreviewSheet />
       {deleteDialog}

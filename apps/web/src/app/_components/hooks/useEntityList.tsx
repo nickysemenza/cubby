@@ -33,6 +33,10 @@ import { buildSelectColumn } from "../data-table/row-selection";
 import { useBulkActions } from "../data-table/useBulkActions";
 import { useTableConfig } from "../data-table/useTableConfig";
 
+import {
+  type InfiniteScrollControls,
+  useInfiniteTableList,
+} from "./useInfiniteTableList";
 import { type UseTableListOptions, useTableList } from "./useTableList";
 
 /** Base interface for entities in list views */
@@ -86,6 +90,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   bulkActions?: BulkActionsConfig<TData>;
   /** Extra actions to render in the row action menu (after "View Details") */
   extraActions?: (row: TData) => ReactNode;
+  /** Enable infinite scroll on mobile (default: false) */
+  infinite?: boolean;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
   deletable?: {
     /** tRPC delete mutation options factory */
@@ -117,6 +123,8 @@ interface UseEntityListReturn<TData> {
   bulkActionBar: ReactNode | null;
   /** Delete dialog element - render in component if deletable is enabled */
   deleteDialog: ReactNode | null;
+  /** Infinite scroll controls (only present when infinite: true) */
+  infiniteScroll?: InfiniteScrollControls;
 }
 
 /**
@@ -144,6 +152,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   bulkActions,
   extraActions,
   deletable,
+  infinite = false,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
@@ -356,13 +365,27 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [defaultSort, tableStateOptions],
   );
 
-  // Use the base table list hook
+  // Use infinite or paginated table list hook
+  const infiniteResult = infinite
+    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - `infinite` is stable per usage
+      useInfiniteTableList<TFilters, TData>({
+        queryOptions,
+        buildFilters,
+        tableStateOptions: mergedTableStateOptions,
+      })
+    : null;
+
+  const paginatedResult = !infinite
+    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - `infinite` is stable per usage
+      useTableList<TFilters, TData>({
+        queryOptions,
+        buildFilters,
+        tableStateOptions: mergedTableStateOptions,
+      })
+    : null;
+
   const { data, totalCount, isLoading, error, tableState, timing } =
-    useTableList<TFilters, TData>({
-      queryOptions,
-      buildFilters,
-      tableStateOptions: mergedTableStateOptions,
-    });
+    infiniteResult ?? paginatedResult!;
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
@@ -469,11 +492,14 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   );
 
   // Configure the table
+  // In infinite mode, feed all accumulated rows as a single "page" so TanStack Table
+  // doesn't try to paginate server-side.
   const table = useTableConfig({
     data,
     columns: allColumns,
     tableState,
-    totalCount,
+    totalCount: infinite ? data.length : totalCount,
+    manualPagination: !infinite,
     globalFilter,
     onGlobalFilterChange,
     getRowId,
@@ -540,5 +566,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     timing,
     bulkActionBar,
     deleteDialog,
+    infiniteScroll: infiniteResult?.infiniteScroll,
   };
 }

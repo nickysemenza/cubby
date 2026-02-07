@@ -18,6 +18,7 @@ export const getRouter = () => {
     },
 
     defaultPreload: "intent",
+    defaultViewTransition: true,
     defaultErrorComponent: RouteErrorComponent,
   });
 

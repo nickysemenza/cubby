@@ -172,37 +172,46 @@ export function RecipeList({ actions }: RecipeListProps) {
     invalidateKeys: [[queryKeys.recipe.list]],
   });
 
-  const { table, isLoading, error, timing, data, bulkActionBar, deleteDialog } =
-    useEntityList({
-      entity: "recipe",
-      queryOptions: api.recipe.list.queryOptions,
-      buildFilters: (ts) => ({
-        nameFilter: ts.getColumnFilter("name"),
-      }),
-      columns,
-      filters: [
-        { id: "name", placeholder: "Filter by recipe name..." },
-        { id: "meta", placeholder: "Filter by source..." },
-      ],
-      bulkActions: {
-        actions: [
-          {
-            id: "compare",
-            label: "Compare",
-            icon: <Scale className="h-4 w-4" />,
-            minSelection: 2,
-            maxSelection: 4,
-            onExecute: (rows) => {
-              const ids = rows.map((r) => r.original.id).join(",");
-              navigate({ to: "/recipes/compare", search: { ids } });
-              return Promise.resolve({ success: true });
-            },
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    data,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+  } = useEntityList({
+    entity: "recipe",
+    queryOptions: api.recipe.list.queryOptions,
+    buildFilters: (ts) => ({
+      nameFilter: ts.getColumnFilter("name"),
+    }),
+    columns,
+    filters: [
+      { id: "name", placeholder: "Filter by recipe name..." },
+      { id: "meta", placeholder: "Filter by source..." },
+    ],
+    bulkActions: {
+      actions: [
+        {
+          id: "compare",
+          label: "Compare",
+          icon: <Scale className="h-4 w-4" />,
+          minSelection: 2,
+          maxSelection: 4,
+          onExecute: (rows) => {
+            const ids = rows.map((r) => r.original.id).join(",");
+            navigate({ to: "/recipes/compare", search: { ids } });
+            return Promise.resolve({ success: true });
           },
-        ],
-        clearSelectionOnComplete: false, // Don't clear selection after navigating
-      },
-      deletable: deletableConfig,
-    });
+        },
+      ],
+      clearSelectionOnComplete: false, // Don't clear selection after navigating
+    },
+    deletable: deletableConfig,
+    infinite: true,
+  });
 
   // Load ingredient data and calculate totals in a single effect
   useEffect(() => {
@@ -296,6 +305,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         onRowClick={onRowClick}
         actions={actions}
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
       />
       <PreviewSheet />
       {deleteDialog}

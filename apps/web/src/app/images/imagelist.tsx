@@ -16,7 +16,7 @@ export default function ImageList() {
   const columnHelper = createColumnHelper<ImageWithEntity>();
   const { onRowClick, PreviewSheet } = useEntityPreview("image");
 
-  const { table, isLoading, error, timing } = useEntityList({
+  const { table, isLoading, error, timing, infiniteScroll } = useEntityList({
     entity: "image",
     queryOptions: api.image.list.queryOptions,
     buildFilters: (ts) => ({
@@ -107,6 +107,7 @@ export default function ImageList() {
         placeholder: "Filter by filename...",
       },
     ],
+    infinite: true,
   });
 
   return (
@@ -119,6 +120,7 @@ export default function ImageList() {
         timing={timing}
         entity="image"
         onRowClick={onRowClick}
+        infiniteScroll={infiniteScroll}
       />
       <PreviewSheet />
     </div>

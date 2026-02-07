@@ -109,77 +109,85 @@ export function IngredientList() {
     [columnHelper],
   );
 
-  const { table, isLoading, error, timing, bulkActionBar, deleteDialog } =
-    useEntityList({
-      entity: "ingredient",
-      queryOptions: api.ingredient.list.queryOptions,
-      buildFilters: (ts) => ({
-        nameFilter: ts.getColumnFilter("name"),
-        missingProductsOnly: globalFilter.missingProductsOnly,
-      }),
-      getMappings: getIngredientMappings,
-      columns,
-      filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
-      globalFilter,
-      onGlobalFilterChange: setGlobalFilter as (value: unknown) => void,
-      bulkActions: {
-        actions: [
-          {
-            id: "merge",
-            label: "Merge",
-            icon: <Merge className="h-4 w-4" />,
-            minSelection: 2,
-            requiresConfirmation: true,
-            renderConfirmation: (rows) => {
-              const target = rows[0]?.original;
-              const aliases = rows.slice(1).map((r) => r.original);
-              return (
-                <div className="space-y-3">
-                  <div>
-                    <div className="mb-1 font-medium text-muted-foreground text-sm">
-                      Keep (target):
-                    </div>
-                    {target && (
-                      <EntityPillLink
-                        entity="ingredient"
-                        data={{ name: target.name, id: target.id }}
-                      />
-                    )}
+  const {
+    table,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+  } = useEntityList({
+    entity: "ingredient",
+    queryOptions: api.ingredient.list.queryOptions,
+    buildFilters: (ts) => ({
+      nameFilter: ts.getColumnFilter("name"),
+      missingProductsOnly: globalFilter.missingProductsOnly,
+    }),
+    getMappings: getIngredientMappings,
+    columns,
+    filters: [{ id: "name", placeholder: "Filter by ingredient name..." }],
+    globalFilter,
+    onGlobalFilterChange: setGlobalFilter as (value: unknown) => void,
+    bulkActions: {
+      actions: [
+        {
+          id: "merge",
+          label: "Merge",
+          icon: <Merge className="h-4 w-4" />,
+          minSelection: 2,
+          requiresConfirmation: true,
+          renderConfirmation: (rows) => {
+            const target = rows[0]?.original;
+            const aliases = rows.slice(1).map((r) => r.original);
+            return (
+              <div className="space-y-3">
+                <div>
+                  <div className="mb-1 font-medium text-muted-foreground text-sm">
+                    Keep (target):
                   </div>
-                  <div>
-                    <div className="mb-1 font-medium text-muted-foreground text-sm">
-                      Merge into aliases:
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {aliases.map((a) => (
-                        <EntityPillLink
-                          key={a.id}
-                          entity="ingredient"
-                          data={{ name: a.name, id: a.id }}
-                        />
-                      ))}
-                    </div>
+                  {target && (
+                    <EntityPillLink
+                      entity="ingredient"
+                      data={{ name: target.name, id: target.id }}
+                    />
+                  )}
+                </div>
+                <div>
+                  <div className="mb-1 font-medium text-muted-foreground text-sm">
+                    Merge into aliases:
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {aliases.map((a) => (
+                      <EntityPillLink
+                        key={a.id}
+                        entity="ingredient"
+                        data={{ name: a.name, id: a.id }}
+                      />
+                    ))}
                   </div>
                 </div>
-              );
-            },
-            onExecute: async (rows) => {
-              const [target, ...aliasRows] = rows.map((r) => r.original);
-              if (!target) return { success: false };
-              await trpcClient.ingredient.merge.mutate({
-                target: target.id,
-                aliases: aliasRows.map((a) => a.id),
-              });
-              toast.success(
-                `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
-              );
-              return { success: true };
-            },
+              </div>
+            );
           },
-        ],
-      },
-      deletable: deletableConfig,
-    });
+          onExecute: async (rows) => {
+            const [target, ...aliasRows] = rows.map((r) => r.original);
+            if (!target) return { success: false };
+            await trpcClient.ingredient.merge.mutate({
+              target: target.id,
+              aliases: aliasRows.map((a) => a.id),
+            });
+            toast.success(
+              `Merged into ${target.name} (${aliasRows.length} ingredient${aliasRows.length === 1 ? "" : "s"})`,
+            );
+            return { success: true };
+          },
+        },
+      ],
+    },
+    deletable: deletableConfig,
+    infinite: true,
+  });
 
   return (
     <div>
@@ -192,6 +200,7 @@ export function IngredientList() {
         entity="ingredient"
         onRowClick={onRowClick}
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
         actions={
           <Button
             variant="default"

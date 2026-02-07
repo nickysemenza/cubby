@@ -25,6 +25,7 @@ import { useIsMobile } from "~/hooks/use-mobile";
 import { useDebug } from "~/hooks/useDebug";
 import type { QueryTiming } from "~/lib/query-timing";
 import { cn } from "~/lib/utils";
+import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
@@ -61,6 +62,8 @@ interface TTableProps<TItem> {
   onRowClick?: (row: Row<TItem>) => void;
   /** Bulk action bar (rendered in toolbar when rows are selected) */
   bulkActionBar?: ReactNode;
+  /** Infinite scroll controls — when provided, mobile hides pagination and auto-loads more */
+  infiniteScroll?: InfiniteScrollControls;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -76,6 +79,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     entity,
     renderMobileCard,
     onRowClick,
+    infiniteScroll,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -387,12 +391,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
               table={table}
               entity={entity}
               renderMobileCard={renderMobileCard}
+              infiniteScroll={infiniteScroll}
             />
           )}
         </div>
       )}
 
-      {table.getPageCount() > 1 && (
+      {/* Hide pagination on mobile when infinite scroll is active */}
+      {table.getPageCount() > 1 && !(isMobile && infiniteScroll) && (
         <DataTablePagination table={table} timing={timing} />
       )}
     </SpacedContainer>

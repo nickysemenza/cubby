@@ -5,12 +5,14 @@ import {
   type Row,
 } from "@tanstack/react-table";
 import { Bug } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
+import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 
@@ -24,6 +26,8 @@ interface MobileCardViewProps<TItem> {
    * Useful for tables with inline editing or special mobile UX.
    */
   renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
+  /** Infinite scroll controls — when provided, auto-loads more at bottom */
+  infiniteScroll?: InfiniteScrollControls;
 }
 
 type FieldCategory = "hero" | "compact" | "medium" | "wide";
@@ -92,8 +96,36 @@ export function MobileCardView<TItem>({
   table,
   entity,
   renderMobileCard,
+  infiniteScroll,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
+
+  // Infinite scroll sentinel — IntersectionObserver triggers fetchNextPage
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const fetchNextPage = infiniteScroll?.fetchNextPage;
+  const hasNextPage = infiniteScroll?.hasNextPage ?? false;
+  const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
+
+  const handleIntersect = useCallback(
+    (entries: IntersectionObserverEntry[]) => {
+      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage?.();
+      }
+    },
+    [fetchNextPage, hasNextPage, isFetchingNextPage],
+  );
+
+  useEffect(() => {
+    if (!infiniteScroll) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(handleIntersect, {
+      rootMargin: "200px",
+    });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [infiniteScroll, handleIntersect]);
 
   // Check if table has row selection enabled
   const hasRowSelection = table.options.enableRowSelection !== false;
@@ -295,6 +327,18 @@ export function MobileCardView<TItem>({
         />
       ) : (
         <EntityEmptyState entity="product" isFiltered={true} />
+      )}
+
+      {/* Infinite scroll sentinel and loading indicator */}
+      {infiniteScroll && (
+        <>
+          <div ref={sentinelRef} className="h-1" />
+          {isFetchingNextPage && (
+            <div className="flex items-center justify-center py-4">
+              <Spinner size="sm" className="text-muted-foreground" />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

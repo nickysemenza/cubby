@@ -92,78 +92,87 @@ export function InventoryItemList() {
     [],
   );
 
-  const { table, data, isLoading, error, timing, bulkActionBar, deleteDialog } =
-    useEntityList({
-      entity: "inventory",
-      queryOptions: api.inventory.list.queryOptions,
-      buildFilters: (ts) => ({
-        productNameFilter: ts.getColumnFilter("product"),
-        locationNameFilter: ts.getColumnFilter("location"),
+  const {
+    table,
+    data,
+    isLoading,
+    error,
+    timing,
+    bulkActionBar,
+    deleteDialog,
+    infiniteScroll,
+  } = useEntityList({
+    entity: "inventory",
+    queryOptions: api.inventory.list.queryOptions,
+    buildFilters: (ts) => ({
+      productNameFilter: ts.getColumnFilter("product"),
+      locationNameFilter: ts.getColumnFilter("location"),
+    }),
+    // Inventory has custom columns (product image, amount instead of name)
+    columns: [
+      createImageColumn(columnHelper, {
+        getImages: (row) => row.product.images,
       }),
-      // Inventory has custom columns (product image, amount instead of name)
-      columns: [
-        createImageColumn(columnHelper, {
-          getImages: (row) => row.product.images,
-        }),
-        columnHelper.accessor("amount", {
-          header: "Qty",
-          cell: (info) => {
-            return (
-              <Link
-                className="block max-w-64"
-                to="/inventory/$id"
-                params={{ id: info.row.original.id }}
-              >
-                {tryFormatAmount(info.getValue())}
-              </Link>
-            );
-          },
-        }),
-        createCurrencyColumn(columnHelper, "valuation", {
-          header: "Valuation",
-        }),
-        columnHelper.accessor("product", {
-          enableSorting: false,
-          meta: {
-            className: "min-w-0 w-56 max-w-72",
-            mobileCategory: "wide",
-            filterConfig: { placeholder: "Filter product..." },
-          },
-          cell: (info) => {
-            const product = info.getValue();
-            const { upc } = product;
-            return (
-              <div className="flex items-center gap-2">
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <EntityPillLink entity="product" data={product} compact />
-                  {upc && (
-                    <div className="text-muted-foreground text-xs">
-                      <TableLink
-                        to="/usda/upc/$code"
-                        params={{ code: upc }}
-                        variant="mono"
-                      >
-                        {upc}
-                      </TableLink>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          },
-        }),
-        createSingleEntityPillColumn(columnHelper, "location", "location", {
-          className: "min-w-0 w-40 max-w-56",
+      columnHelper.accessor("amount", {
+        header: "Qty",
+        cell: (info) => {
+          return (
+            <Link
+              className="block max-w-64"
+              to="/inventory/$id"
+              params={{ id: info.row.original.id }}
+            >
+              {tryFormatAmount(info.getValue())}
+            </Link>
+          );
+        },
+      }),
+      createCurrencyColumn(columnHelper, "valuation", {
+        header: "Valuation",
+      }),
+      columnHelper.accessor("product", {
+        enableSorting: false,
+        meta: {
+          className: "min-w-0 w-56 max-w-72",
           mobileCategory: "wide",
-          filterConfig: { placeholder: "Filter location..." },
-        }),
-        createCreatedAtColumn(columnHelper),
-      ],
-      filters: ["product", "location"],
-      deletable: deletableConfig,
-      extraActions,
-      bulkActions,
-    });
+          filterConfig: { placeholder: "Filter product..." },
+        },
+        cell: (info) => {
+          const product = info.getValue();
+          const { upc } = product;
+          return (
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <EntityPillLink entity="product" data={product} compact />
+                {upc && (
+                  <div className="text-muted-foreground text-xs">
+                    <TableLink
+                      to="/usda/upc/$code"
+                      params={{ code: upc }}
+                      variant="mono"
+                    >
+                      {upc}
+                    </TableLink>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        },
+      }),
+      createSingleEntityPillColumn(columnHelper, "location", "location", {
+        className: "min-w-0 w-40 max-w-56",
+        mobileCategory: "wide",
+        filterConfig: { placeholder: "Filter location..." },
+      }),
+      createCreatedAtColumn(columnHelper),
+    ],
+    filters: ["product", "location"],
+    deletable: deletableConfig,
+    extraActions,
+    bulkActions,
+    infinite: true,
+  });
 
   return (
     <div>
@@ -182,6 +191,7 @@ export function InventoryItemList() {
         entity="inventory"
         onRowClick={onRowClick}
         bulkActionBar={bulkActionBar}
+        infiniteScroll={infiniteScroll}
       />
       <PreviewSheet />
       {deleteDialog}
