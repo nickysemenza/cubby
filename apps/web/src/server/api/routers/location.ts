@@ -100,7 +100,7 @@ const touchLastBulkInventory = protectedProcedure
 // Batch lookup: multiple locations by shortcode (e.g. for label printing)
 const getByShortcodes = protectedProcedure
   .input(z.object({ shortcodes: z.array(z.string()) }))
-  .output(z.array(locationOut))
+  .output(z.array(locationOut.extend({ parentName: z.string().nullable() })))
   .query(async ({ ctx, input }) => {
     return await getLocationsByShortcodes(ctx.db, input.shortcodes);
   });

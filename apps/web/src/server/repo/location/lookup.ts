@@ -73,19 +73,25 @@ export const getLocationByShortcode = async (
 
 /**
  * Fetch multiple locations by shortcodes in a single query.
- * Returns basic location data (no parent chains or children).
+ * Includes parent name for label display.
  */
 export const getLocationsByShortcodes = async (
   db: Database,
   shortcodes: string[],
-): Promise<LocationOut[]> => {
+): Promise<(LocationOut & { parentName: string | null })[]> => {
   if (shortcodes.length === 0) return [];
   const uppercased = shortcodes.map((s) => s.toUpperCase());
   const results = await getDb(db).query.location.findMany({
     where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
-    ...relations.location.withImages,
+    with: {
+      ...relations.location.withImages.with,
+      parent: true,
+    },
   });
-  return results.map(dbLocationToAPI);
+  return results.map((r) => ({
+    ...dbLocationToAPI(r),
+    parentName: r.parent?.name ?? null,
+  }));
 };
 
 /**

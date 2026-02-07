@@ -1,17 +1,36 @@
 import { getShortcodeUrl, parseShortcode } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { ArrowLeft, Download, Printer } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  Download,
+  Plus,
+  Printer,
+  Search,
+  Users,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import { z } from "zod";
-import { getLocationTypeColor } from "~/app/_components/locations/location-type-theme";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
+import {
+  getLocationTypeColor,
+  typeSupportsQrCode,
+} from "~/app/_components/locations/location-type-theme";
 import { getCategoryColor } from "~/app/_components/products/category-theme";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import useDebounce from "~/hooks/useDebounce";
 import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
 import { dedupe } from "~/misc/array-helpers";
+import { unsafeLocationId } from "~/schemas/identifiers";
 import type { LocationType } from "~/schemas/location";
 import type { ProductCategory } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
@@ -80,6 +99,7 @@ interface LabelItem {
   entityType: "location" | "product";
   locationType?: LocationType;
   productCategory?: ProductCategory | null;
+  parentName?: string | null;
 }
 
 function useShortcodeLookups(shortcodes: string[]) {
@@ -112,6 +132,7 @@ function useShortcodeLookups(shortcodes: string[]) {
       name: d.name,
       entityType: "location" as const,
       locationType: d.type,
+      parentName: d.parentName,
     }));
     const prods = productData.map((d) => ({
       shortcode: d.shortcode,
@@ -127,11 +148,174 @@ function useShortcodeLookups(shortcodes: string[]) {
   return { items, isLoading };
 }
 
+function AddLabelsPopover({
+  codes,
+  onCodesChange,
+}: {
+  codes: string | undefined;
+  onCodesChange: (newCodes: string) => void;
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Focus search input when popover opens
+  useEffect(() => {
+    if (open) {
+      // Small delay to let the popover render
+      const timer = setTimeout(() => inputRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
+
+  const { data: searchResults, isLoading } = useQuery({
+    ...api.location.list.queryOptions({
+      filters: { nameFilter: debouncedSearch || undefined },
+      pagination: { pageIndex: 0, pageSize: 10 },
+      sort: { orderBy: "name", direction: "asc" },
+    }),
+    enabled: open,
+  });
+
+  const locations = searchResults?.items ?? [];
+
+  function mergeCodes(newShortcodes: string[]) {
+    const existing =
+      codes
+        ?.split(",")
+        .map((c) => c.trim())
+        .filter((c) => c.length > 0) ?? [];
+    const merged = dedupe([...existing, ...newShortcodes]);
+    onCodesChange(merged.join(","));
+  }
+
+  function handleAddSingle(location: {
+    name: string;
+    type: LocationType;
+    shortcode: string;
+  }) {
+    if (!typeSupportsQrCode(location.type)) {
+      toast.warning(
+        `${location.name} is a ${location.type} and doesn't support QR labels`,
+      );
+      return;
+    }
+    if (!location.shortcode) {
+      toast.warning(`${location.name} has no shortcode`);
+      return;
+    }
+    mergeCodes([location.shortcode]);
+    toast.success(`Added ${location.name}`);
+  }
+
+  async function handleAddChildren(location: { id: string; name: string }) {
+    const full = await queryClient.fetchQuery(
+      api.location.getByID.queryOptions({
+        id: unsafeLocationId(location.id),
+      }),
+    );
+    const children = full.children ?? [];
+    const eligible = children.filter(
+      (c) => c.shortcode && typeSupportsQrCode(c.type),
+    );
+
+    if (eligible.length === 0) {
+      toast.warning(
+        `No QR-eligible children found in ${location.name} (rooms/areas are excluded)`,
+      );
+      return;
+    }
+
+    const skipped = children.length - eligible.length;
+    mergeCodes(eligible.map((c) => c.shortcode));
+    toast.success(
+      `Added ${eligible.length} label${eligible.length !== 1 ? "s" : ""} from ${location.name}` +
+        (skipped > 0 ? ` (skipped ${skipped} without QR support)` : ""),
+    );
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <Plus className="mr-2 h-4 w-4" />
+            Add
+          </Button>
+        }
+      />
+      <PopoverContent align="start" className="w-80 p-0">
+        <div className="flex items-center gap-2 border-b px-3 py-2">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Search locations..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+        <div className="max-h-64 overflow-y-auto p-1">
+          {isLoading ? (
+            <p className="px-3 py-4 text-center text-muted-foreground text-sm">
+              Searching...
+            </p>
+          ) : locations.length === 0 ? (
+            <p className="px-3 py-4 text-center text-muted-foreground text-sm">
+              No locations found
+            </p>
+          ) : (
+            locations.map((loc) => (
+              <div
+                key={loc.id}
+                className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+              >
+                <LocationIcon
+                  type={loc.type}
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                />
+                <span className="min-w-0 flex-1 truncate">{loc.name}</span>
+                <div className="flex shrink-0 gap-1">
+                  {typeSupportsQrCode(loc.type) && loc.shortcode && (
+                    <button
+                      type="button"
+                      className="rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted"
+                      onClick={() => handleAddSingle(loc)}
+                    >
+                      Add
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-primary text-xs hover:bg-muted"
+                    onClick={() => void handleAddChildren(loc)}
+                  >
+                    <Users className="h-3 w-3" />
+                    Children
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function LabelsPage() {
   const { codes, format = "pls134", skip = 0, copies = 1 } = Route.useSearch();
   const router = useRouter();
   const navigate = Route.useNavigate();
   const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+  function handleCodesChange(newCodes: string) {
+    void navigate({ search: { codes: newCodes, format, skip, copies } });
+  }
 
   const shortcodes = useMemo<string[]>(() => {
     const list =
@@ -217,11 +401,12 @@ function LabelsPage() {
     return (
       <EntityLayout title="Print Labels">
         <Card>
-          <CardContent className="py-12 text-center">
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
             <p className="text-muted-foreground">
               No items selected. Select items from the locations or products
-              table to print labels.
+              table, or add them here.
             </p>
+            <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
           </CardContent>
         </Card>
       </EntityLayout>
@@ -238,6 +423,7 @@ function LabelsPage() {
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
+            <AddLabelsPopover codes={codes} onCodesChange={handleCodesChange} />
             <FormatToggle
               format={format}
               onChange={(f) =>
@@ -516,6 +702,14 @@ function LabelCell({
         >
           {item.name}
         </div>
+        {preview && item.parentName && (
+          <div
+            className="truncate text-muted-foreground"
+            style={{ fontSize: layout.shortcodeSize }}
+          >
+            {item.parentName}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -619,7 +813,14 @@ function PtouchPreview({ items }: { items: LabelItem[] }) {
             {items.map((item) => (
               <tr key={item.shortcode} className="border-b last:border-b-0">
                 <td className="px-4 py-2 font-mono">{item.shortcode}</td>
-                <td className="px-4 py-2">{item.name}</td>
+                <td className="px-4 py-2">
+                  {item.name}
+                  {item.parentName && (
+                    <span className="ml-2 text-muted-foreground text-xs">
+                      {item.parentName}
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-muted-foreground">
                   {getShortcodeUrl(item.shortcode)}
                 </td>
