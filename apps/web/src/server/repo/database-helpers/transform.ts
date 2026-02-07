@@ -3,11 +3,10 @@
  * Extract, map, and transform database records.
  */
 
+import { amount } from "@cubby/schemas/codec";
+import { unsafeProductId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
-
-import { amount } from "~/codec/codec";
 import { parseWithContext } from "~/lib/zod-utils";
-import { unsafeProductId } from "~/schemas/identifiers";
 import type { productUnitMappings } from "~/server/db/schema";
 
 /**

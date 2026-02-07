@@ -1,11 +1,11 @@
-import { dataTypeEnum, foodLookupParam } from "@cubby/usda-schemas";
-import { z } from "zod";
-import { foodSummaryWithLinkedProducts } from "~/schemas/combo";
+import { foodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import {
   buildPaginatedResponse,
   createPaginatedResponseSchema,
   sortPaginationCombo,
-} from "~/schemas/pagination";
+} from "@cubby/schemas/pagination";
+import { dataTypeEnum, foodLookupParam } from "@cubby/usda-schemas";
+import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../trpc";
 
 const getByAlternateID = publicProcedure

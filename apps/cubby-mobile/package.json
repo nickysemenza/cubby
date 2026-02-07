@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@better-auth/expo": "^1.4.18",
+    "@cubby/schemas": "workspace:*",
     "@cubby/shared": "workspace:*",
     "@expo/vector-icons": "^15.0.2",
     "@react-navigation/native": "^7.1.6",
@@ -24,6 +25,7 @@
     "expo": "^54.0.33",
     "expo-camera": "^17.0.10",
     "expo-constants": "~18.0.9",
+    "expo-dev-client": "~6.0.20",
     "expo-linking": "~8.0.8",
     "expo-network": "^8.0.8",
     "expo-router": "~6.0.10",

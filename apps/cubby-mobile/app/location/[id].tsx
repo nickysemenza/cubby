@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { LocationTypeBadge } from "@/components/LocationTypeBadge";
 import { api } from "@/lib/api";
 
 const screenWidth = Dimensions.get("window").width;
@@ -62,6 +63,11 @@ export default function LocationDetail() {
       )}
       <View style={styles.content}>
         <Text style={styles.title}>{location.name}</Text>
+        {location.type && (
+          <View style={styles.badgeRow}>
+            <LocationTypeBadge type={location.type} />
+          </View>
+        )}
         {location.shortcode && (
           <Detail label="Shortcode" value={location.shortcode} />
         )}
@@ -98,6 +104,7 @@ const styles = StyleSheet.create({
   },
   content: { padding: 16 },
   title: { fontSize: 24, fontWeight: "bold", color: colors.foreground },
+  badgeRow: { marginTop: 8 },
   notFound: { color: colors.mutedForeground },
   detail: { marginTop: 12 },
   detailLabel: { fontSize: 14, color: colors.shelf },

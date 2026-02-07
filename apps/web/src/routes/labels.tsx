@@ -1,3 +1,6 @@
+import { unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { LocationType } from "@cubby/schemas/location";
+import type { ProductCategory } from "@cubby/schemas/product";
 import { getShortcodeUrl, parseShortcode } from "@cubby/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
@@ -30,9 +33,6 @@ import {
 import useDebounce from "~/hooks/useDebounce";
 import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
 import { dedupe } from "~/misc/array-helpers";
-import { unsafeLocationId } from "~/schemas/identifiers";
-import type { LocationType } from "~/schemas/location";
-import type { ProductCategory } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 
 // test layouts wiht

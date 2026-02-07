@@ -1,3 +1,5 @@
+import type { Entity } from "@cubby/schemas/entity";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ColumnDef,
@@ -16,9 +18,7 @@ import {
   DropdownMenuSeparator,
 } from "~/components/ui/dropdown-menu";
 import { entities, getSortableFields } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import type { QueryTiming } from "~/lib/query-timing";
-import type { UnitMapping } from "~/schemas/unitmapping";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
 import {

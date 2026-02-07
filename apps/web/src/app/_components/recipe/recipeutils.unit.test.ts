@@ -1,5 +1,5 @@
+import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, test } from "vitest";
-import type { RecipeOut, SectionIngredient } from "~/schemas/recipe";
 import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
 
 test("recipe utils", () => {

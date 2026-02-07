@@ -1,5 +1,5 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import type { RecipeOut } from "~/schemas/recipe";
 import { RecipeHero } from "./RecipeHero";
 import { RecipeIngredientsSidebar } from "./RecipeIngredientsSidebar";
 import { RecipeInstructions } from "./RecipeInstructions";

@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { CategoryBadge } from "@/components/CategoryBadge";
 import { api } from "@/lib/api";
 
 export default function ProductsScreen() {
@@ -58,6 +59,11 @@ export default function ProductsScreen() {
                 {item.manufacturer && (
                   <Text style={styles.subtitle}>{item.manufacturer}</Text>
                 )}
+                {item.category && (
+                  <View style={styles.badgeRow}>
+                    <CategoryBadge category={item.category} />
+                  </View>
+                )}
               </View>
             </TouchableOpacity>
           );
@@ -98,6 +104,7 @@ const styles = StyleSheet.create({
   text: { flex: 1 },
   name: { fontSize: 16, fontWeight: "500", color: colors.foreground },
   subtitle: { fontSize: 14, color: colors.shelf, marginTop: 4 },
+  badgeRow: { marginTop: 4 },
   errorText: { color: colors.destructive },
   empty: { alignItems: "center", paddingVertical: 32 },
   emptyText: { color: colors.mutedForeground },

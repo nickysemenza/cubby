@@ -1,5 +1,5 @@
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { SortingState } from "@tanstack/react-table";
-import type { PaginationParams, SortParams } from "~/schemas/pagination";
 
 export const buildSortParams = (
   sorting: SortingState,

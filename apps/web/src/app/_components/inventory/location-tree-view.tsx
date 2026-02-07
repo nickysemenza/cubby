@@ -1,3 +1,4 @@
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
@@ -7,7 +8,6 @@ import { Badge } from "~/components/ui/badge";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { LocationIcon } from "../locations/location-icons";
 

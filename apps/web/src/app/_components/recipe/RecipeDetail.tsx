@@ -1,3 +1,4 @@
+import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useQueries } from "@tanstack/react-query";
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
@@ -15,7 +16,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
-import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogList } from "../audit-log/audit-log-list";

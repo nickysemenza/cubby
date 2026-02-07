@@ -1,7 +1,7 @@
+import type { LocationId } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 import {
   calculateInventoryValuation,

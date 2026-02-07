@@ -1,13 +1,13 @@
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import type {
   DataType,
   FoodLookupParam,
   FoodSummary,
 } from "@cubby/usda-schemas";
 import type { Span } from "@opentelemetry/api";
-import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
-import type { PaginationParams, SortParams } from "~/schemas/pagination";
-import type { ProductTopLevelOut } from "~/schemas/product";
-import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
+import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { getTracer, TraceNames } from "~/server/tracing";
 import type { USDAClient } from "../clients/usda";
 

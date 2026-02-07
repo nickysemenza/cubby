@@ -1,3 +1,4 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft } from "lucide-react";
@@ -6,7 +7,6 @@ import { toast } from "sonner";
 import type { z } from "zod";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,

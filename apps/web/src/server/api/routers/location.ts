@@ -6,16 +6,16 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { z } from "zod";
-import { locationOutWithParentChildrenAndInventoryOut } from "~/schemas/combo";
-import { type LocationId, locationId } from "~/schemas/identifiers";
+import { locationOutWithParentChildrenAndInventoryOut } from "@cubby/schemas/combo";
+import { type LocationId, locationId } from "@cubby/schemas/identifiers";
 import {
   infLocation,
   locationCreateInput,
   locationOut,
   locationType,
   locationUpdateInput,
-} from "~/schemas/location";
+} from "@cubby/schemas/location";
+import { z } from "zod";
 import {
   buildLocationTree,
   buildLocationTypeCount,

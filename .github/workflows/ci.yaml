@@ -38,6 +38,7 @@ jobs:
             aux-packages:
               - 'apps/usda-api/**'
               - 'apps/upc-lookup/**'
+              - 'packages/schemas/**'
               - 'packages/usda-contract/**'
               - 'packages/usda-schemas/**'
 
@@ -175,6 +176,8 @@ jobs:
     strategy:
       matrix:
         package:
+          - name: schemas
+            path: packages/schemas
           - name: usda-api
             path: apps/usda-api
           - name: usda-contract

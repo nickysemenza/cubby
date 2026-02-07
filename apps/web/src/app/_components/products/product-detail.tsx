@@ -1,8 +1,8 @@
+import type { ProductCreateInput } from "@cubby/schemas/product";
 import { Apple, Info } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
-import type { ProductCreateInput } from "~/schemas/product";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";

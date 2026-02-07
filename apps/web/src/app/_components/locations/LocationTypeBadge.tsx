@@ -1,5 +1,5 @@
+import type { LocationType } from "@cubby/schemas/location";
 import { Pill } from "~/app/_components/Pill";
-import type { LocationType } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
 import { getLocationTypeColor } from "./location-type-theme";
 

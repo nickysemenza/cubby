@@ -1,11 +1,11 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { forwardRef, useMemo } from "react";
 import type { z } from "zod";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { InfLocation } from "~/schemas/location";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationTypeBadge } from "./LocationTypeBadge";
 import { LocationIcon } from "./location-icons";

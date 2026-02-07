@@ -4,8 +4,8 @@
  * This service combines UPC lookup + image import + association in a single operation.
  */
 
+import type { ProductId } from "@cubby/schemas/identifiers";
 import { env } from "~/env";
-import type { ProductId } from "~/schemas/identifiers";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {

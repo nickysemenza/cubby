@@ -1,3 +1,4 @@
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
 import { useId } from "react";
@@ -10,7 +11,6 @@ import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
 import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { LocationBreadcrumb } from "./location-breadcrumb";
 import { locationTypeOptionsWithTheme } from "./location-icons";
 

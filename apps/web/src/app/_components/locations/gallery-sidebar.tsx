@@ -1,3 +1,4 @@
+import type { InfLocation } from "@cubby/schemas/location";
 import {
   ChevronRight,
   ImageIcon,
@@ -9,7 +10,6 @@ import { Button } from "~/components/ui/button";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-import type { InfLocation } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
 
 /** Build a map of location id -> parent id by traversing the tree */

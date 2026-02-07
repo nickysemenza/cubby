@@ -4,7 +4,7 @@
  * Reduces repetitive if-statement patterns by using declarative field specs.
  */
 
-import type { FieldChange } from "~/schemas/csv";
+import type { FieldChange } from "@cubby/schemas/csv";
 
 /** Normalizer function to transform values before comparison */
 export type NormalizeFn = (val: unknown) => unknown;

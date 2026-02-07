@@ -1,14 +1,14 @@
-import type { z } from "zod";
-import { parseWithContext } from "~/lib/zod-utils";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductId,
   unsafeProductShortcode,
-} from "~/schemas/identifiers";
-import { locationType } from "~/schemas/location";
+} from "@cubby/schemas/identifiers";
+import { locationType } from "@cubby/schemas/location";
+import type { z } from "zod";
+import { parseWithContext } from "~/lib/zod-utils";
 import {
   addProductSourceMetadata,
   extractImagesFromJoinTable,

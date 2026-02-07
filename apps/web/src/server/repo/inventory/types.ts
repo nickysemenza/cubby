@@ -1,5 +1,5 @@
-import type { z } from "zod";
-import type { LocationId, ProductId } from "~/schemas/identifiers";
+import type { Amount } from "@cubby/schemas/codec";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type {
   image,
   inventoryEntry,
@@ -23,13 +23,13 @@ export type InventoryEntryDeepDB = typeof inventoryEntry.$inferSelect & {
 };
 
 export interface UpdateInventoryEntryData {
-  amount?: z.infer<typeof import("~/codec/codec").amount>;
+  amount?: Amount;
   productId?: ProductId;
   locationId?: LocationId;
 }
 
 export interface CreateInventoryEntryData {
-  amount: z.infer<typeof import("~/codec/codec").amount>;
+  amount: Amount;
   productId: ProductId;
   locationId: LocationId;
 }

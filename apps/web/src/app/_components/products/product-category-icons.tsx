@@ -1,5 +1,5 @@
+import { type ProductCategory, productCategory } from "@cubby/schemas/product";
 import { cn } from "~/lib/utils";
-import { type ProductCategory, productCategory } from "~/schemas/product";
 import { getCategoryColor, getCategoryIcon } from "./category-theme";
 
 interface CategoryIconProps {

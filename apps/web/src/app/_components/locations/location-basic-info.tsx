@@ -1,3 +1,4 @@
+import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Printer } from "lucide-react";
 import type { FC } from "react";
@@ -5,7 +6,6 @@ import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
-import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "../EntityPill";
 import { useEntityDelete } from "../hooks/useEntityDelete";

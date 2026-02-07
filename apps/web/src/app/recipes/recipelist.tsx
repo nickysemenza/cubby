@@ -1,3 +1,4 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -6,7 +7,6 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
-import type { RecipeOut } from "~/schemas/recipe";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";

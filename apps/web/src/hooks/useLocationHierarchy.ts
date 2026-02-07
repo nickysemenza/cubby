@@ -1,3 +1,5 @@
+import type { LocationId } from "@cubby/schemas/identifiers";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
@@ -7,8 +9,6 @@ import {
   mergePricingStatus,
   type PricingStatus,
 } from "~/app/_components/locations/calculate-inventory-valuation";
-import type { LocationId } from "~/schemas/identifiers";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
 /**

@@ -12,6 +12,13 @@
  * @see /inventory/bulk-move - Full page bulk move workflow
  */
 
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import {
+  type LocationId,
+  unsafeInventoryId,
+  unsafeLocationId,
+} from "@cubby/schemas/identifiers";
+import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
@@ -19,16 +26,9 @@ import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
+import { getOptionalLocationId } from "~/app/_components/form-fields";
 import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { getOptionalLocationId } from "~/schemas/form-fields";
-import {
-  type LocationId,
-  unsafeInventoryId,
-  unsafeLocationId,
-} from "~/schemas/identifiers";
-import type { BulkMoveItem } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;

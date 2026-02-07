@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { amount } from "~/codec/codec";
+import { amount } from "./codec";
 import { dbTimestampsOut } from "./common";
 import { productId } from "./identifiers";
 

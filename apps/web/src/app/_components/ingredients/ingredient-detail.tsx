@@ -1,8 +1,8 @@
+import type { IngredientUpdateInput } from "@cubby/schemas/ingredient";
 import { Apple, ChefHat, Info, Scale, ShoppingCart } from "lucide-react";
 import type { FC } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
-import type { IngredientUpdateInput } from "~/schemas/ingredient";
-import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
+import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";

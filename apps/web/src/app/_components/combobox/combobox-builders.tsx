@@ -1,15 +1,15 @@
-import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { LocationIcon } from "~/app/_components/locations/location-icons";
-import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
 import type {
   IngredientId,
   LocationId,
   ProductId,
   RecipeId,
-} from "~/schemas/identifiers";
-import type { LocationOut } from "~/schemas/location";
-import type { ProductTopLevelOut } from "~/schemas/product";
-import type { RecipeOut } from "~/schemas/recipe";
+} from "@cubby/schemas/identifiers";
+import type { LocationOut } from "@cubby/schemas/location";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import type { RecipeOut } from "@cubby/schemas/recipe";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import { LocationIcon } from "~/app/_components/locations/location-icons";
 
 export const buildProductComboboxItem = (
   product: ProductTopLevelOut,

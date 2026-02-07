@@ -1,9 +1,9 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 
 /**
  * Hook for creating memoized update mutations that properly invalidate caches.

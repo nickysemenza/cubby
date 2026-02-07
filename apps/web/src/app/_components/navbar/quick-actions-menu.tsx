@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { type LucideIcon, Plus, ScanBarcode } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -15,7 +16,6 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 
 type EntityAction = {
   entity: Entity;

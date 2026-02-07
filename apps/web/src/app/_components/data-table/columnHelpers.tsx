@@ -1,8 +1,10 @@
+import type { Amount } from "@cubby/schemas/codec";
+import type { Entity } from "@cubby/schemas/entity";
+import type { LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { CellContext, ColumnHelper } from "@tanstack/react-table";
 import { Eye, ImageIcon, MoreHorizontal } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Amount } from "~/codec/codec";
 import { SpacedContainer } from "~/components/layout/spaced-container";
 import { Button } from "~/components/ui/button";
 import {
@@ -17,9 +19,8 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { entities } from "~/entities/entities";
-import type { Entity, EntityDetailRoute } from "~/entities/types";
+import type { EntityDetailRoute } from "~/entities/types";
 import { cn, formatCurrency } from "~/lib/utils";
-import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "../EntityPill";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { HoverableTimestamp } from "../HoverableTimestamp";
@@ -44,7 +45,6 @@ export interface FilterConfig {
 
 // Extend TanStack Table's meta type to include our custom properties
 declare module "@tanstack/react-table" {
-  // biome-ignore lint/correctness/noUnusedVariables: required for module augmentation
   interface ColumnMeta<TData, TValue> {
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
     className?: string;

@@ -1,3 +1,4 @@
+import type { AuditEntityType } from "@cubby/schemas/audit";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -9,7 +10,6 @@ import {
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
 import { authClient } from "~/lib/auth-client";
-import type { AuditEntityType } from "~/schemas/audit";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 

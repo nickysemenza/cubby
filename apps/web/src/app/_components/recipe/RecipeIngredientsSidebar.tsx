@@ -1,6 +1,6 @@
+import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { useState } from "react";
 import { Checkbox } from "~/components/ui/checkbox";
-import type { RecipeOut, SectionIngredientOut } from "~/schemas/recipe";
 import { tryFormatAmount } from "../inventory/format-amount";
 
 interface RecipeIngredientsSidebarProps {

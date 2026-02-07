@@ -1,7 +1,7 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 import JsonRenderer from "../json-renderer";

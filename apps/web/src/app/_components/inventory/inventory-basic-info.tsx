@@ -1,10 +1,10 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import { ArrowRightLeft } from "lucide-react";
 import type { FC } from "react";
 import type { z } from "zod";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
 import { Button } from "~/components/ui/button";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { EntityPillLink } from "../EntityPill";
 import { UnitMappingGraph } from "../units/UnitMappingGraph";
 import { showAmountAndPrice } from "./format-amount";

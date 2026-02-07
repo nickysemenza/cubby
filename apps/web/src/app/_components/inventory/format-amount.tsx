@@ -1,5 +1,6 @@
 import type { WAmount } from "@cubby/recipebridge";
-import type { Amount } from "~/codec/codec";
+import type { Amount } from "@cubby/schemas/codec";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   Tooltip,
   TooltipContent,
@@ -8,7 +9,6 @@ import {
 } from "~/components/ui/tooltip";
 import { wasm } from "~/lib/wasm";
 import { renderValueOrError } from "~/misc/result";
-import type { UnitMapping } from "~/schemas/unitmapping";
 import ValidInvalidIcon from "../icons/valid-invalid";
 import { convertAmountToPrice } from "../units/univ-conversion";
 

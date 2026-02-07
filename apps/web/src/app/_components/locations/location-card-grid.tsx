@@ -1,3 +1,4 @@
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { Calendar, LayoutGrid, List } from "lucide-react";
@@ -7,7 +8,6 @@ import { EntityStat } from "~/components/entity/entity-stat";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { GridContainer } from "~/components/layout/grid-container";
 import { Button } from "~/components/ui/button";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import type { InventoryItem } from "./calculate-inventory-valuation";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";

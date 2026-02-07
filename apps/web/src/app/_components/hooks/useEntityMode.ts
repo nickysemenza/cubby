@@ -1,8 +1,8 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 

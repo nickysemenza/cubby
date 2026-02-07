@@ -1,9 +1,9 @@
 import type { WAmount, WIngredient } from "@cubby/recipebridge";
+import type { Amount } from "@cubby/schemas/codec";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Amount } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {

@@ -1,3 +1,4 @@
+import type { ImageStatus } from "@cubby/schemas/image";
 import { ImageIcon } from "lucide-react";
 import { EntityPillLink } from "~/app/_components/EntityPill";
 import { HoverableTimestamp } from "~/app/_components/HoverableTimestamp";
@@ -6,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
 import { assertNever } from "~/lib/assert";
 import { formatBytes } from "~/lib/format";
-import type { ImageStatus } from "~/schemas/image";
 
 interface ImageData {
   id: string;

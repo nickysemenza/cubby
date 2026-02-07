@@ -4,8 +4,8 @@
  * Handles inventory creation, updates, moves, and checking.
  */
 
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
-import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { inventoryEntry } from "~/server/db/schema";
 import { getDb, parseInventoryAmount } from "~/server/repo/database-helpers";

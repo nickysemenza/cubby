@@ -31,3 +31,26 @@ export {
   AppErrors,
 } from "./error-utils";
 export type { AppErrorReason } from "./error-utils";
+
+export {
+  productCategoryValues,
+  categoryColors,
+  getCategoryColor,
+  formatCategoryLabel,
+} from "./category-theme";
+export type { ProductCategory } from "./category-theme";
+
+export {
+  locationTypeValues,
+  locationTypeColors,
+  getLocationTypeColor,
+} from "./location-type-theme";
+export type { LocationType } from "./location-type-theme";
+
+export { withOpacity } from "./color-helpers";
+
+export {
+  UNSPECIFIED_MANUFACTURER,
+  isMiscProduct,
+  getMiscDisplayName,
+} from "./constants";

@@ -1,6 +1,6 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Clock, ExternalLink, Users } from "lucide-react";
 import { Image } from "~/components/ui/image";
-import type { RecipeOut } from "~/schemas/recipe";
 
 interface RecipeHeroProps {
   recipe: RecipeOut;

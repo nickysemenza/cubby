@@ -1,8 +1,8 @@
+import type { Entity } from "@cubby/schemas/entity";
 import type { ReactNode } from "react";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 
 interface CreateModeProps<TResult> {
   isPending: boolean;

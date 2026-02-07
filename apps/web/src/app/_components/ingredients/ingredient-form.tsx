@@ -1,14 +1,14 @@
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
+import type {
+  IngredientUpdateInput,
+  ingredientBase,
+} from "@cubby/schemas/ingredient";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Input } from "~/components/ui/input";
-import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import type {
-  IngredientUpdateInput,
-  ingredientBase,
-} from "~/schemas/ingredient";
 import {
   buildUpdateObject,
   type CreateModeProps,

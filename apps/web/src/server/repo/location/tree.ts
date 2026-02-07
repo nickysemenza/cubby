@@ -3,15 +3,17 @@
  * Build location trees, type counts, and import updates.
  */
 
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-
 import {
   type LocationId,
   unsafeInventoryId,
   unsafeProductId,
-} from "~/schemas/identifiers";
-import type { InfLocation, InventoryItemForTree } from "~/schemas/location";
-import { locationType } from "~/schemas/location";
+} from "@cubby/schemas/identifiers";
+import {
+  type InfLocation,
+  type InventoryItemForTree,
+  locationType,
+} from "@cubby/schemas/location";
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
 import { createAppError } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import {

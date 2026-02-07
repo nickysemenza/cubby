@@ -4,14 +4,17 @@
  * Handles product creation, updates, and preview logic.
  */
 
-import { eq } from "drizzle-orm";
-import type { ActorContext } from "~/schemas/context";
-import { type IngredientId, unsafeIngredientId } from "~/schemas/identifiers";
+import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type IngredientId,
+  unsafeIngredientId,
+} from "@cubby/schemas/identifiers";
 import {
   hasFoodIndicators,
   type ProductCategory,
   type ProductTopLevelOut,
-} from "~/schemas/product";
+} from "@cubby/schemas/product";
+import { eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";

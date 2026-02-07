@@ -1,10 +1,10 @@
+import type { SortParams } from "@cubby/schemas/pagination";
 import type {
   ColumnFiltersState,
   PaginationState,
   SortingState,
 } from "@tanstack/react-table";
 import { useCallback, useMemo, useState, useTransition } from "react";
-import type { SortParams } from "~/schemas/pagination";
 import {
   buildSortParams,
   defaultPagination,

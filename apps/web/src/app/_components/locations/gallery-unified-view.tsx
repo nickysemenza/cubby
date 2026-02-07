@@ -1,8 +1,8 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { InfLocation } from "@cubby/schemas/location";
 import type { RefCallback } from "react";
 import type { z } from "zod";
 import { cn } from "~/lib/utils";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { InfLocation } from "~/schemas/location";
 import { LocationGalleryCard } from "./location-gallery-card";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;

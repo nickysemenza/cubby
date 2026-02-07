@@ -1,4 +1,5 @@
 import type { WUnitMapping } from "@cubby/recipebridge";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   type BrandedFoodServingSizeUnit,
   branded_food_serving_size_unit,
@@ -9,7 +10,6 @@ import {
   type NutrientKey,
 } from "@cubby/usda-schemas";
 import { wasm } from "~/lib/wasm";
-import type { UnitMapping } from "./unitmapping";
 
 // Parsed unit mapping result (source normalized from undefined to null)
 interface ParsedUnitMappingResult extends Omit<WUnitMapping, "source"> {

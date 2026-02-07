@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { LocationTypeBadge } from "@/components/LocationTypeBadge";
 import { api } from "@/lib/api";
 
 export default function LocationsScreen() {
@@ -55,7 +56,11 @@ export default function LocationsScreen() {
               )}
               <View style={imageUrl ? styles.textWithImage : styles.text}>
                 <Text style={styles.name}>{item.name}</Text>
-                {item.type && <Text style={styles.subtitle}>{item.type}</Text>}
+                {item.type && (
+                  <View style={styles.badgeRow}>
+                    <LocationTypeBadge type={item.type} />
+                  </View>
+                )}
               </View>
             </TouchableOpacity>
           );
@@ -96,7 +101,7 @@ const styles = StyleSheet.create({
   text: { flex: 1 },
   textWithImage: { flex: 1 },
   name: { fontSize: 16, fontWeight: "500", color: colors.foreground },
-  subtitle: { fontSize: 14, color: colors.shelf, marginTop: 2 },
+  badgeRow: { marginTop: 4 },
   errorText: { color: colors.destructive },
   empty: { alignItems: "center", paddingVertical: 32 },
   emptyText: { color: colors.mutedForeground },

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { amount } from "~/codec/codec";
-import type { Entity } from "~/entities/types";
+import { amount } from "./codec";
+import type { Entity } from "./entity";
 
 /** Searchable entities - subset of Entity excluding "usda-food" and "image" */
 export const searchableEntities = [

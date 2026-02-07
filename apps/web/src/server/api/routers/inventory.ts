@@ -6,14 +6,13 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { z } from "zod";
-import { inventoryWithLocationAndProductOut } from "~/schemas/combo";
+import { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import {
   type InventoryId,
   inventoryId,
   locationId,
   unsafeProductId,
-} from "~/schemas/identifiers";
+} from "@cubby/schemas/identifiers";
 import {
   bulkMovePayload,
   csvImportResult,
@@ -21,7 +20,8 @@ import {
   inventoryCreatePayloadData,
   inventoryCSVRow,
   inventoryUpdateInput,
-} from "~/schemas/inventory";
+} from "@cubby/schemas/inventory";
+import { z } from "zod";
 import {
   backfillInventoryValuations,
   bulkMoveInventoryEntries,

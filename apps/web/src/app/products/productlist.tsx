@@ -5,9 +5,9 @@ import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo } from "react";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { syncPriceToMappings } from "~/lib/price-mapping-utils";
 import { queryKeys } from "~/lib/query-keys";
-import { syncPriceToMappings } from "~/schemas/price-mapping-utils";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { ProductWithFoodOut } from "~/server/services/product.service";
 import { useTRPC } from "~/trpc/react";
 import {

@@ -3,10 +3,12 @@
  * Category distribution, duplicate detection, and backfill operations.
  */
 
+import type { ActorContext } from "@cubby/schemas/context";
+import {
+  hasFoodIndicators,
+  type ProductCategory,
+} from "@cubby/schemas/product";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
-
-import type { ActorContext } from "~/schemas/context";
-import { hasFoodIndicators, type ProductCategory } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import { image, product, productImage } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";

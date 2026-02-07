@@ -1,8 +1,8 @@
+import type { LocationOut } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { MapPin } from "lucide-react";
 import { LocationIcon } from "~/app/_components/locations/location-icons";
 import { Spinner } from "~/components/ui/spinner";
-import type { LocationOut } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
 interface RecentLocationsProps {

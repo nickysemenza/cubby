@@ -5,9 +5,12 @@
  * during CSV/sync import. Used by both preview (dry-run) and execution modes.
  */
 
-import type { IngredientId } from "~/schemas/identifiers";
-import type { ProductChangesPreview } from "~/schemas/inventory";
-import type { ProductCategory, ProductTopLevelOut } from "~/schemas/product";
+import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { ProductChangesPreview } from "@cubby/schemas/inventory";
+import type {
+  ProductCategory,
+  ProductTopLevelOut,
+} from "@cubby/schemas/product";
 
 /**
  * Input data from CSV row for computing product updates

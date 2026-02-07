@@ -1,9 +1,9 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { queryKeys } from "~/lib/query-keys";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;

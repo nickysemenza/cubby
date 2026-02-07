@@ -1,7 +1,8 @@
 import { ndb, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { amount } from "~/codec/codec";
+import { amount } from "./codec";
 import { dbTimestampsOut } from "./common";
+import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
 import { inventoryId, locationId, productId } from "./identifiers";
 import { productCategory } from "./product";
 
@@ -149,8 +150,6 @@ const productChangesPreview = z.object({
 });
 
 export type ProductChangesPreview = z.infer<typeof productChangesPreview>;
-
-import { baseCsvImportCounts, baseCsvResultItem } from "./csv";
 
 // Result types for CSV import (and push preview)
 const csvImportResultItem = baseCsvResultItem.extend({

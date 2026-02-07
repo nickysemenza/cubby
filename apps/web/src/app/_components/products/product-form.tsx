@@ -1,29 +1,32 @@
+import type { IngredientId } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
+import {
+  hasFoodIndicators,
+  type ProductCreateInput,
+  type ProductTopLevelOut,
+  productCategory,
+} from "@cubby/schemas/product";
+import {
+  type UnitMappingInput,
+  unitMappingInput,
+} from "@cubby/schemas/unitmapping";
+import { isMiscProduct, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { ndb, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Search } from "lucide-react";
 import { type FC, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
-import { isMiscProduct, UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-import { getOptionalIngredientId } from "~/schemas/form-fields";
-import type { IngredientId } from "~/schemas/identifiers";
-import type { ImageOut } from "~/schemas/image";
 import {
   extractPriceFromMappings,
   syncPriceToMappings,
-} from "~/schemas/price-mapping-utils";
-import {
-  hasFoodIndicators,
-  type ProductCreateInput,
-  type ProductTopLevelOut,
-  productCategory,
-} from "~/schemas/product";
-import { type UnitMappingInput, unitMappingInput } from "~/schemas/unitmapping";
+} from "~/lib/price-mapping-utils";
 import { useTRPCClient } from "~/trpc/react";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {

@@ -1,7 +1,7 @@
+import { unsafeUserId } from "@cubby/schemas/identifiers";
+import type { InventoryCSVRow } from "@cubby/schemas/inventory";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import { unsafeUserId } from "~/schemas/identifiers";
-import type { InventoryCSVRow } from "~/schemas/inventory";
 import type { Database } from "~/server/db";
 import { appRouter } from "../root";
 import { createCallerFactory, createTestTRPCContext } from "../trpc";

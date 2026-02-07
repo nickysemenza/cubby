@@ -1,0 +1,47 @@
+{
+  "name": "@cubby/schemas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./codec": "./src/codec.ts",
+    "./entity": "./src/entity.ts",
+    "./identifiers": "./src/identifiers.ts",
+    "./common": "./src/common.ts",
+    "./pagination": "./src/pagination.ts",
+    "./csv": "./src/csv.ts",
+    "./context": "./src/context.ts",
+    "./ingredient": "./src/ingredient.ts",
+    "./ingredient-cooccurrence": "./src/ingredient-cooccurrence.ts",
+    "./image": "./src/image.ts",
+    "./unitmapping": "./src/unitmapping.ts",
+    "./product": "./src/product.ts",
+    "./location": "./src/location.ts",
+    "./inventory": "./src/inventory.ts",
+    "./recipe": "./src/recipe.ts",
+    "./search": "./src/search.ts",
+    "./audit": "./src/audit.ts",
+    "./ai": "./src/ai.ts",
+    "./combo": "./src/combo.ts"
+  },
+  "scripts": {
+    "typecheck": "tsgo --noEmit",
+    "typecheck:stable": "tsc --noEmit",
+    "lint": "biome lint",
+    "lint:fix": "biome lint --write",
+    "check": "biome check && pnpm typecheck",
+    "format:check": "biome check",
+    "format:write": "biome check --write",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@cubby/shared": "workspace:*",
+    "@cubby/usda-schemas": "workspace:*",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

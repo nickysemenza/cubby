@@ -1,4 +1,4 @@
-import { type LocationType, locationType } from "~/schemas/location";
+import { type LocationType, locationType } from "@cubby/schemas/location";
 import { getLocationIcon, getLocationTypeColor } from "./location-type-theme";
 
 interface LocationIconProps {

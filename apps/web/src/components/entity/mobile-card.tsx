@@ -1,9 +1,9 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { cn } from "~/lib/utils";
 
 interface MobileCardProps {

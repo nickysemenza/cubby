@@ -1,3 +1,8 @@
+import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { Amount } from "@cubby/schemas/codec";
+import { imageStatusValues } from "@cubby/schemas/image";
+import { productCategoryValues } from "@cubby/schemas/product";
+import { type RecipeYield, recipeSourceValues } from "@cubby/schemas/recipe";
 import { relations, sql } from "drizzle-orm";
 import {
   index,
@@ -11,11 +16,6 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { Amount } from "~/codec/codec";
-import type { AuditEntityType } from "~/schemas/audit";
-import { imageStatusValues } from "~/schemas/image";
-import { productCategoryValues } from "~/schemas/product";
-import { type RecipeYield, recipeSourceValues } from "~/schemas/recipe";
 import { account, apikey, session, user, verification } from "./auth.schema";
 
 // JSON types for JSONB columns

@@ -1,3 +1,9 @@
+import type { IngredientWithRecipesAndProductOut } from "@cubby/schemas/combo";
+import type { LocationCreateInput, LocationOut } from "@cubby/schemas/location";
+import type {
+  ProductCreateInput,
+  ProductTopLevelOut,
+} from "@cubby/schemas/product";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -11,9 +17,6 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { queryKeys } from "~/lib/query-keys";
-import type { IngredientWithRecipesAndProductOut } from "~/schemas/combo";
-import type { LocationCreateInput, LocationOut } from "~/schemas/location";
-import type { ProductCreateInput, ProductTopLevelOut } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import {
   buildIngredientComboboxItem,

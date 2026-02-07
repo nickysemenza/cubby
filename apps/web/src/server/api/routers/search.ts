@@ -1,8 +1,8 @@
-import { z } from "zod";
 import {
   type SearchResultItem,
   searchResultItemSchema,
-} from "~/schemas/search";
+} from "@cubby/schemas/search";
+import { z } from "zod";
 import { globalSearch } from "~/server/repo/search";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 

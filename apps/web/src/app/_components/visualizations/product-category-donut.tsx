@@ -1,3 +1,4 @@
+import type { ProductCategory } from "@cubby/schemas/product";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -6,7 +7,6 @@ import {
   getCategoryColor,
 } from "~/app/_components/products/category-theme";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import type { ProductCategory } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 

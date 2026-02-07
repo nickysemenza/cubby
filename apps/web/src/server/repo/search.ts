@@ -1,4 +1,3 @@
-import { and, eq, ilike, or, sql } from "drizzle-orm";
 import type {
   IngredientSearchResult,
   InventorySearchResult,
@@ -6,7 +5,8 @@ import type {
   ProductSearchResult,
   RecipeSearchResult,
   SearchResultItem,
-} from "~/schemas/search";
+} from "@cubby/schemas/search";
+import { and, eq, ilike, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,

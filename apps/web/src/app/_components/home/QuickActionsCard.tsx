@@ -1,9 +1,9 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { AlertCircle, Zap } from "lucide-react";
 import { DashboardCard } from "~/components/layout/dashboard-card";
 import { Button } from "~/components/ui/button";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { quickActions } from "../navbar/quick-actions-menu";
 
 type CustomAction = { label: string; href: string; icon: React.ElementType };

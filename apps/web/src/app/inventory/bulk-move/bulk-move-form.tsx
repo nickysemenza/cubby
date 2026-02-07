@@ -12,6 +12,10 @@
  *
  * @see MoveInventoryDialog - Lightweight modal for quick moves
  */
+
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { InventoryId } from "@cubby/schemas/identifiers";
+import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -22,6 +26,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
 import { ComboboxItem as ComboboxItemSchema } from "~/app/_components/combobox/combobox-types";
+import { getLocationId } from "~/app/_components/form-fields";
 import {
   ComboboxFieldWithSearch,
   FormWrapper,
@@ -30,10 +35,6 @@ import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { EntityIcon } from "~/entities/entities";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import { getLocationId } from "~/schemas/form-fields";
-import type { InventoryId } from "~/schemas/identifiers";
-import type { BulkMoveItem } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
 type InventoryWithLocationAndProductOut = z.infer<

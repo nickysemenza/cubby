@@ -5,15 +5,15 @@
  * write operations without making database queries.
  */
 
-import { describe, expect, it } from "vitest";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeProductId,
   unsafeProductShortcode,
-} from "~/schemas/identifiers";
-import type { ProductTopLevelOut } from "~/schemas/product";
+} from "@cubby/schemas/identifiers";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { describe, expect, it } from "vitest";
 import type {
   InventoryLookupMap,
   LocationLookupMap,

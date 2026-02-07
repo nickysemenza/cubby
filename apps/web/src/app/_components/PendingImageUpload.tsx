@@ -1,3 +1,4 @@
+import type { EntityImage } from "@cubby/schemas/entity";
 import { useMutation } from "@tanstack/react-query";
 import { Camera, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -7,7 +8,6 @@ import { Button } from "~/components/ui/button";
 import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import type { EntityImage } from "~/entities/types";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";

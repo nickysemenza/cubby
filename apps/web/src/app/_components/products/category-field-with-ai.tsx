@@ -1,3 +1,4 @@
+import type { CategorySuggestion } from "@cubby/schemas/ai";
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -11,7 +12,6 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { CategorySuggestion } from "~/schemas/ai";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import { SelectField } from "../form-utils";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";

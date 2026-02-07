@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { entityImage } from "~/entities/types";
 import { dbTimestampsOut } from "./common";
+import { entityImage } from "./entity";
 import { id } from "./identifiers";
 import {
   createPaginatedResponseSchema,

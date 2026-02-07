@@ -1,3 +1,5 @@
+import { unsafeInventoryId } from "@cubby/schemas/identifiers";
+import type { InventoryBulkOperationItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -11,6 +13,13 @@ import {
   buildProductComboboxItem,
 } from "~/app/_components/combobox/combobox-builders";
 import {
+  amountField,
+  getLocationId,
+  getProductId,
+  requiredLocationField,
+  requiredProductField,
+} from "~/app/_components/form-fields";
+import {
   ComboboxFieldWithSearch,
   FormWrapper,
   getSubmitButtonText,
@@ -19,15 +28,6 @@ import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group
 import { BarcodeScannerButton } from "~/app/_components/inventory/barcode-scanner-button";
 import { useUpcLookup } from "~/app/_components/inventory/hooks";
 import { Button } from "~/components/ui/button";
-import {
-  amountField,
-  getLocationId,
-  getProductId,
-  requiredLocationField,
-  requiredProductField,
-} from "~/schemas/form-fields";
-import { unsafeInventoryId } from "~/schemas/identifiers";
-import type { InventoryBulkOperationItem } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for a single inventory item using shared field schemas

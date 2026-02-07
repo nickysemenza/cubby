@@ -1,10 +1,10 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { InventoryUpdateInput } from "@cubby/schemas/inventory";
 import { Package } from "lucide-react";
 import type { FC } from "react";
 import { useState } from "react";
 import type { z } from "zod";
 import { queryKeys } from "~/lib/query-keys";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { InventoryUpdateInput } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { useEntityDelete } from "../hooks/useEntityDelete";

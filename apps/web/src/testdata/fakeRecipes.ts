@@ -1,4 +1,4 @@
-import type { CompactRecipe } from "~/codec/codec";
+import type { CompactRecipe } from "@cubby/schemas/codec";
 
 export const exampleRecipesCompact: CompactRecipe[] = [
   {

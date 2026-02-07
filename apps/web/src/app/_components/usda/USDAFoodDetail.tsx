@@ -1,3 +1,4 @@
+import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/combo";
 import {
   Apple,
   Info,
@@ -7,8 +8,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { useMemo } from "react";
-import type { FoodSummaryWithLinkedProducts } from "~/schemas/combo";
-import { unitMappingsFromFood } from "~/schemas/unit-mapping-utils";
+import { unitMappingsFromFood } from "~/lib/unit-mapping-utils";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import { EntityPillLinkList } from "../EntityPillLinkList";
 import { NutrientsSummary } from "../units/NutrientsSummary";

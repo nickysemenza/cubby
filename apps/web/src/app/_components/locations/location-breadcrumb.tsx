@@ -1,3 +1,4 @@
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import { Home } from "lucide-react";
 import * as React from "react";
@@ -12,7 +13,6 @@ import {
 } from "~/components/ui/breadcrumb";
 import { getDefaultLocationType } from "~/lib/location-path";
 import { cn } from "~/lib/utils";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { LocationIcon } from "./location-icons";
 
 interface LocationSegment {

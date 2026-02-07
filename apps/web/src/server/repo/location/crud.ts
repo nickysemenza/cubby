@@ -3,22 +3,21 @@
  * Core create, read, update, delete, list operations for locations.
  */
 
-import { and, count, eq, inArray, sql } from "drizzle-orm";
-
-import { getSortableFields } from "~/entities/entities";
-import { dedupe } from "~/misc/array-helpers";
-import type { ActorContext } from "~/schemas/context";
-import { type LocationId, unsafeLocationId } from "~/schemas/identifiers";
+import type { ActorContext } from "@cubby/schemas/context";
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationCreateInput,
   LocationUpdateInput,
-} from "~/schemas/location";
+} from "@cubby/schemas/location";
 import {
   buildTakeSkip,
   type PaginationParams,
   type SortParams,
-} from "~/schemas/pagination";
+} from "@cubby/schemas/pagination";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { getSortableFields } from "~/entities/entities";
+import { dedupe } from "~/misc/array-helpers";
 import { createAppError } from "~/server/api/trpc";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {

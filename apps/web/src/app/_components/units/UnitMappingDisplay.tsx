@@ -1,4 +1,4 @@
-import type { UnitMapping } from "~/schemas/unitmapping";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 
 interface UnitMappingDisplayProps {

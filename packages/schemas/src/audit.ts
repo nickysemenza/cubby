@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { entitySchema } from "~/entities/types";
+import { entitySchema } from "./entity";
 
 /**
  * Audit log schemas and types.

@@ -1,4 +1,4 @@
-import type { Amount } from "~/codec/codec";
+import type { Amount } from "@cubby/schemas/codec";
 import { wasm } from "~/lib/wasm";
 
 /**

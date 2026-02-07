@@ -3,11 +3,10 @@
  * Price sync, stale price detection, and price backfill.
  */
 
+import type { ActorContext } from "@cubby/schemas/context";
+import type { ProductId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
-
-import type { ActorContext } from "~/schemas/context";
-import type { ProductId } from "~/schemas/identifiers";
-import { computeProductPrice } from "~/schemas/price-mapping-utils";
+import { computeProductPrice } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, productUnitMappings } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/repo/audit-log";

@@ -1,8 +1,8 @@
-import { z } from "zod";
 import {
   categorySuggestionSchema,
   locationTypeSuggestionSchema,
-} from "~/schemas/ai";
+} from "@cubby/schemas/ai";
+import { z } from "zod";
 import { getAnthropicClient } from "~/server/clients/anthropic";
 import { createTRPCRouter, protectedProcedure, publicProcedure } from "../trpc";
 

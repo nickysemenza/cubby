@@ -3,16 +3,14 @@
  * Find locations by various identifiers (name, shortcode).
  */
 
-import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
-
-import { dedupe } from "~/misc/array-helpers";
-import type { LocationId } from "~/schemas/identifiers";
-import { unsafeLocationId } from "~/schemas/identifiers";
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationOut,
   LocationType,
-} from "~/schemas/location";
+} from "@cubby/schemas/location";
+import { and, desc, eq, ilike, inArray, sql } from "drizzle-orm";
+import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location } from "~/server/db/schema";
 import {

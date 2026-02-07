@@ -1,4 +1,5 @@
 import type { AmountKind } from "@cubby/recipebridge";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { ArrowLeftRight } from "lucide-react";
 import { memo, useMemo } from "react";
 import { Badge } from "~/components/ui/badge";
@@ -7,7 +8,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import type { UnitMapping } from "~/schemas/unitmapping";
 import { ConversionDialog } from "./ConversionDialog";
 import { formatKindsLabel, kindIconMap } from "./kind-icons";
 import { safeConvertAmount } from "./univ-conversion";

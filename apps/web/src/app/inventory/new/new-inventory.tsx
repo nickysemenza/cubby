@@ -1,8 +1,8 @@
+import type { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import type { FC } from "react";
 import type { z } from "zod";
 import { useEntityCreateMode } from "~/app/_components/hooks/useEntityMode";
 import { InventoryForm } from "~/app/_components/inventory/inventory-form";
-import type { inventoryCreatePayloadData } from "~/schemas/inventory";
 import { useTRPC } from "~/trpc/react";
 
 const CreateInventoryItem: FC = () => {

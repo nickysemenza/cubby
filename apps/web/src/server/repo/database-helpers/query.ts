@@ -3,10 +3,10 @@
  * Search formatting, ordering, and list queries with counts.
  */
 
+import type { SortParams } from "@cubby/schemas/pagination";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import type { SortParams } from "~/schemas/pagination";
 import { createAppError } from "~/server/api/trpc";
 import type { DrizzleTransaction } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";

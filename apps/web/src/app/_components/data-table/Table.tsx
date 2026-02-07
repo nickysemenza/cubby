@@ -1,4 +1,6 @@
 // cf https://ui.shadcn.com/docs/components/data-table
+
+import type { Entity } from "@cubby/schemas/entity";
 import {
   flexRender,
   type Table as ITable,
@@ -19,7 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import type { Entity } from "~/entities/types";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { useDebug } from "~/hooks/useDebug";
 import type { QueryTiming } from "~/lib/query-timing";

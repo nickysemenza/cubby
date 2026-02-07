@@ -1,3 +1,4 @@
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { usdaContract } from "@cubby/usda-contract";
 import type {
   BrandedFoodInfo,
@@ -8,7 +9,6 @@ import type {
 import { context, propagation } from "@opentelemetry/api";
 import { initClient } from "@ts-rest/core";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { PaginationParams, SortParams } from "~/schemas/pagination";
 import { getTracer, TraceNames } from "~/server/tracing";
 
 export class USDAClient {

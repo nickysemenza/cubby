@@ -3,13 +3,13 @@
  * Ingredient co-occurrence, tags, and other analytics.
  */
 
-import { desc } from "drizzle-orm";
-import { unsafeIngredientId, unsafeRecipeId } from "~/schemas/identifiers";
+import { unsafeIngredientId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type {
   IngredientCooccurrence,
   IngredientEdge,
   IngredientNode,
-} from "~/schemas/ingredient-cooccurrence";
+} from "@cubby/schemas/ingredient-cooccurrence";
+import { desc } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { recipe } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";

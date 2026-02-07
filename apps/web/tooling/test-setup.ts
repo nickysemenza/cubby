@@ -1,3 +1,13 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type InventoryId,
+  inventoryId as inventoryIdSchema,
+  type LocationId,
+  locationId as locationIdSchema,
+  type ProductId,
+  productId as productIdSchema,
+  unsafeUserId,
+} from "@cubby/schemas/identifiers";
 import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
@@ -5,8 +15,6 @@ import {
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
-import type { ActorContext } from "../src/schemas/context";
-import { unsafeUserId } from "../src/schemas/identifiers";
 import type { Database } from "../src/server/db/database";
 import * as schema from "../src/server/db/schema";
 
@@ -105,20 +113,12 @@ const remapDBConfig = (
   return databaseConfig;
 };
 
-import {
-  type InventoryId,
-  inventoryId as inventoryIdSchema,
-  type LocationId,
-  locationId as locationIdSchema,
-  type ProductId,
-  productId as productIdSchema,
-} from "../src/schemas/identifiers";
-// NOTE: We use dynamic imports for repo modules to avoid loading env.js
-// during vitest globalSetup phase (before test.env variables are applied)
 import type {
   CSVImportResult,
   InventoryCSVRow,
-} from "../src/schemas/inventory";
+} from "@cubby/schemas/inventory";
+// NOTE: We use dynamic imports for repo modules to avoid loading env.js
+// during vitest globalSetup phase (before test.env variables are applied)
 
 export interface SeedResult {
   /** Import result with counts and per-row details */
@@ -249,4 +249,4 @@ export async function seedFromCSV(
   return { result, productIds, locationIds, inventoryIds };
 }
 // Re-export types for convenience
-export type { InventoryCSVRow } from "../src/schemas/inventory";
+export type { InventoryCSVRow } from "@cubby/schemas/inventory";

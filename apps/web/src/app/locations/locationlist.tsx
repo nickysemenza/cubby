@@ -1,3 +1,7 @@
+import type {
+  LocationOutWithParentChildren,
+  LocationType,
+} from "@cubby/schemas/location";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Printer, ScanBarcode } from "lucide-react";
@@ -5,10 +9,6 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
 import { queryKeys } from "~/lib/query-keys";
-import type {
-  LocationOutWithParentChildren,
-  LocationType,
-} from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import {
   createCreatedAtColumn,

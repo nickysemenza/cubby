@@ -15,6 +15,12 @@
  * @see QuickInventoryAdd - Compact inline form for single items
  */
 
+import {
+  type ProductId,
+  unsafeLocationId,
+  unsafeProductId,
+} from "@cubby/schemas/identifiers";
+import type { InfLocation } from "@cubby/schemas/location";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -35,6 +41,11 @@ import {
 } from "~/app/_components/combobox/combobox-builders";
 import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityPillLink } from "~/app/_components/EntityPill";
+import {
+  getOptionalLocationId,
+  getProductId,
+  inventoryItemWithLocationFields,
+} from "~/app/_components/form-fields";
 import {
   ComboboxField,
   ComboboxFieldWithSearch,
@@ -65,14 +76,6 @@ import { EntityIcon } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { dedupe } from "~/misc/array-helpers";
-import {
-  getOptionalLocationId,
-  getProductId,
-  inventoryItemWithLocationFields,
-} from "~/schemas/form-fields";
-import type { ProductId } from "~/schemas/identifiers";
-import { unsafeLocationId, unsafeProductId } from "~/schemas/identifiers";
-import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
 // Schema for the entire form using shared field schema

@@ -1,3 +1,4 @@
+import type { AuditEntityType } from "@cubby/schemas/audit";
 import { Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { MutedBox } from "~/components/layout/muted-box";
@@ -10,7 +11,6 @@ import {
 } from "~/components/ui/collapsible";
 import { EntityIcon, entities } from "~/entities/entities";
 import { cn } from "~/lib/utils";
-import type { AuditEntityType } from "~/schemas/audit";
 import type { RouterOutputs } from "~/trpc/react";
 import { EntityPillById } from "../EntityPillById";
 import { HoverableTimestamp } from "../HoverableTimestamp";

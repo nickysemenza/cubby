@@ -1,11 +1,11 @@
+import type { Entity } from "@cubby/schemas/entity";
+import type { SortParams } from "@cubby/schemas/pagination";
 import { useQueries } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
-import type { SortParams } from "~/schemas/pagination";
 import { useTRPC } from "~/trpc/react";
 
 /** Format large numbers with compact notation (e.g., 2.1M, 15K) */

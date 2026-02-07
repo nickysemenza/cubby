@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import {
   flexRender,
   type Table as ITable,
@@ -8,7 +9,6 @@ import type { ReactNode } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { useDebug } from "~/hooks/useDebug";
 import { extractEntityTitle, getEntityImage } from "~/lib/entity-utils";
 import { DebugDialog } from "./DebugDialog";

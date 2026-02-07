@@ -6,21 +6,21 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { upc } from "@cubby/usda-schemas";
-import { z } from "zod";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   type ProductId,
   productId,
   unsafeProductId,
-} from "~/schemas/identifiers";
+} from "@cubby/schemas/identifiers";
 import {
   productCategory,
   productCreateInput,
   productQuickCreatePayload,
   productTopLevelOut,
-} from "~/schemas/product";
+} from "@cubby/schemas/product";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { upc } from "@cubby/usda-schemas";
+import { z } from "zod";
+import { getErrorMessage } from "~/lib/error-utils";
 import {
   backfillFoodCategories,
   backfillProductPrices,

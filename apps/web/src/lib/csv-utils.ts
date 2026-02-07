@@ -2,8 +2,11 @@
  * CSV utility functions for parsing CSV files.
  */
 
+import {
+  type InventoryCSVRow,
+  inventoryCSVRow,
+} from "@cubby/schemas/inventory";
 import Papa from "papaparse";
-import { type InventoryCSVRow, inventoryCSVRow } from "~/schemas/inventory";
 
 /**
  * Convert any value to a CSV-safe string.

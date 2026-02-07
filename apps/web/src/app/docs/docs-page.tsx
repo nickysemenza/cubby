@@ -1,3 +1,6 @@
+import { infLocation } from "@cubby/schemas/location";
+import { recipeOut } from "@cubby/schemas/recipe";
+import { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
 import { AlertTriangle, Apple, Scale } from "lucide-react";
 import { lazy, Suspense } from "react";
 import { z } from "zod";
@@ -17,9 +20,6 @@ import {
 } from "~/components/ui/card";
 import { entities } from "~/entities/entities";
 import { wasm } from "~/lib/wasm";
-import { infLocation } from "~/schemas/location";
-import { recipeOut } from "~/schemas/recipe";
-import { unitMappingWithMetadata } from "~/schemas/unitmapping";
 import { EditableComponentDemo } from "./_components/EditableComponentDemo";
 import { Prose } from "./_components/Prose";
 import {

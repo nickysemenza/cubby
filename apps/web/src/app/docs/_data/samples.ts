@@ -1,13 +1,13 @@
-import { generateLocationShortcode } from "@cubby/shared";
-import { z } from "zod";
-import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 import {
   unsafeLocationId,
   unsafeLocationShortcode,
-} from "~/schemas/identifiers";
-import type { infLocation, LocationType } from "~/schemas/location";
-import type { recipeOut } from "~/schemas/recipe";
-import type { unitMappingWithMetadata } from "~/schemas/unitmapping";
+} from "@cubby/schemas/identifiers";
+import type { infLocation, LocationType } from "@cubby/schemas/location";
+import type { recipeOut } from "@cubby/schemas/recipe";
+import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
+import { generateLocationShortcode } from "@cubby/shared";
+import { z } from "zod";
+import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
 
 const uuid = () => crypto.randomUUID();
 const now = new Date();

@@ -2,8 +2,8 @@
  * Internal types for CSV import processing
  */
 
-import type { ProductChangesPreview } from "~/schemas/inventory";
-import type { ProductTopLevelOut } from "~/schemas/product";
+import type { ProductChangesPreview } from "@cubby/schemas/inventory";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
 
 /**
  * Result of previewing product changes for a CSV row

@@ -1,6 +1,6 @@
+import type { AuditEntityType } from "@cubby/schemas/audit";
+import type { ActorContext } from "@cubby/schemas/context";
 import { and, desc, eq, lt } from "drizzle-orm";
-import type { AuditEntityType } from "~/schemas/audit";
-import type { ActorContext } from "~/schemas/context";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { auditLog } from "~/server/db/schema";
 import { unwrapDb } from "~/server/repo/database-helpers";

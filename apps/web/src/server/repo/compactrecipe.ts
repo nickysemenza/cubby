@@ -1,7 +1,7 @@
-import type { ParsedCompactRecipe } from "~/codec/codec";
-import type { ActorContext } from "~/schemas/context";
-import { unsafeIngredientId } from "~/schemas/identifiers";
-import type { RecipeCreateInput } from "~/schemas/recipe";
+import type { ParsedCompactRecipe } from "@cubby/schemas/codec";
+import type { ActorContext } from "@cubby/schemas/context";
+import { unsafeIngredientId } from "@cubby/schemas/identifiers";
+import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { Database } from "../db";
 import { withTransaction } from "./database-helpers";
 import { findOrCreateIngredient } from "./ingredient";

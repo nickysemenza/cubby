@@ -1,5 +1,5 @@
+import { auditEntitySchema } from "@cubby/schemas/audit";
 import { z } from "zod";
-import { auditEntitySchema } from "~/schemas/audit";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 

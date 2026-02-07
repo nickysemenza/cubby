@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { Button } from "~/components/ui/button";
 import {
@@ -8,7 +9,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 
 interface EntityEmptyConfig {
   title: string;

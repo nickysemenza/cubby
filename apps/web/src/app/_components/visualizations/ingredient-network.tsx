@@ -1,12 +1,12 @@
+import type {
+  IngredientEdge,
+  IngredientNode,
+} from "@cubby/schemas/ingredient-cooccurrence";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
-import type {
-  IngredientEdge,
-  IngredientNode,
-} from "~/schemas/ingredient-cooccurrence";
 import { useTRPC } from "~/trpc/react";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 

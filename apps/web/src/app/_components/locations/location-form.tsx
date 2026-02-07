@@ -1,18 +1,18 @@
-import { zodResolver } from "@hookform/resolvers/zod";
-import type { FC } from "react";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { useImageState } from "~/hooks/useImageState";
-import { getOptionalLocationId } from "~/schemas/form-fields";
-import type { LocationId } from "~/schemas/identifiers";
-import type { ImageOut } from "~/schemas/image";
+import type { LocationId } from "@cubby/schemas/identifiers";
+import type { ImageOut } from "@cubby/schemas/image";
 import {
   type LocationCreateInput,
   type LocationOut,
   type LocationUpdateInput,
   locationType,
-} from "~/schemas/location";
+} from "@cubby/schemas/location";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { FC } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
+import { getOptionalLocationId } from "~/app/_components/form-fields";
+import { useImageState } from "~/hooks/useImageState";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
   buildUpdateObject,

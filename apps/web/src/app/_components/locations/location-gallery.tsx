@@ -1,3 +1,5 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import {
   type RefCallback,
@@ -12,8 +14,6 @@ import {
   type EmptyFilter,
   useGalleryViewState,
 } from "~/hooks/useGalleryViewState";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";

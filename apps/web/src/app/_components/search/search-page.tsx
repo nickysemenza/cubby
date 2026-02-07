@@ -1,3 +1,4 @@
+import type { SearchType } from "@cubby/schemas/search";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -8,7 +9,6 @@ import {
 } from "@tanstack/react-table";
 import { Search } from "lucide-react";
 import { Input } from "~/components/ui/input";
-import type { SearchType } from "~/schemas/search";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";
 import { useEntityPreview } from "../hooks/useEntityPreview";

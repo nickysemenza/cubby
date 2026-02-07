@@ -6,14 +6,18 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
-import { z } from "zod";
-import { compactRecipeSchema } from "~/codec/codec";
-import { type RecipeId, recipeId } from "~/schemas/identifiers";
+import { compactRecipeSchema } from "@cubby/schemas/codec";
+import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
+import {
+  type IngredientCooccurrence,
+  ingredientCooccurrenceSchema,
+} from "@cubby/schemas/ingredient-cooccurrence";
 import {
   recipeCreateInput,
   recipeOut,
   recipeUpdateInput,
-} from "~/schemas/recipe";
+} from "@cubby/schemas/recipe";
+import { z } from "zod";
 import {
   createRecipe,
   deleteRecipes,
@@ -88,10 +92,6 @@ const insertCompact = protectedProcedure
   });
 
 // Import co-occurrence schema and types
-import {
-  type IngredientCooccurrence,
-  ingredientCooccurrenceSchema,
-} from "~/schemas/ingredient-cooccurrence";
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
   .input(z.object({ minEdgeWeight: z.number().min(1).default(2) }).optional())

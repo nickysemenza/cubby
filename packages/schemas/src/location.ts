@@ -1,5 +1,6 @@
+import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
-import { amount } from "~/codec/codec";
+import { amount } from "./codec";
 import type { locationOutWithParentChildrenAndInventoryOut } from "./combo";
 import { dbTimestampsOut } from "./common";
 import {
@@ -11,25 +12,12 @@ import {
 import { createInputImages, imageOut, updateInputImages } from "./image";
 
 export const locationType = z
-  //todo: remove this in the future to make it more flexible?
-  .enum([
-    "room",
-    "area",
-    "bag",
-    "box",
-    "shelf",
-    "crate",
-    "half-crate",
-    "quarter-crate",
-    "milk-crate",
-    "tote-bin",
-    "table",
-    "drawer",
-    "cart",
-    "cabinet",
-  ])
+  .enum(locationTypeValues)
   .describe("type of location (room, container, etc)");
 export type LocationType = z.infer<typeof locationType>;
+
+// Re-export for consumers that need the values array
+export { locationTypeValues } from "@cubby/shared";
 
 const locationBase = z.object({
   name: z.string().describe("name of location"),

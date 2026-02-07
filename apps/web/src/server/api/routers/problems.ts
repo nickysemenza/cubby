@@ -1,5 +1,5 @@
+import { amount } from "@cubby/schemas/codec";
 import { z } from "zod";
-import { amount } from "~/codec/codec";
 import { findAllProblems, findAllProblemsCount } from "~/server/repo/problems";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 

@@ -3,18 +3,19 @@
  * Reduces O(n) queries to O(1) by fetching all data upfront.
  */
 
-import { and, ilike, inArray, or } from "drizzle-orm";
-
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
-import { dedupe } from "~/misc/array-helpers";
-import type { LocationId, ProductId } from "~/schemas/identifiers";
 import {
+  type LocationId,
+  type ProductId,
   unsafeLocationId,
   unsafeProductId,
   unsafeProductShortcode,
-} from "~/schemas/identifiers";
-import type { ProductTopLevelOut } from "~/schemas/product";
+} from "@cubby/schemas/identifiers";
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
+
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { and, ilike, inArray, or } from "drizzle-orm";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import {
   ingredient,

@@ -1,9 +1,9 @@
+import type { Entity } from "@cubby/schemas/entity";
+import type { LocationType } from "@cubby/schemas/location";
+import type { ProductCategory } from "@cubby/schemas/product";
+import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { EntityIcon } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { formatCurrency } from "~/lib/utils";
-import type { LocationType } from "~/schemas/location";
-import type { ProductCategory } from "~/schemas/product";
-import type { SearchableEntity, SearchResultItem } from "~/schemas/search";
 import { tryFormatAmount } from "../inventory/format-amount";
 import {
   getLocationIcon,

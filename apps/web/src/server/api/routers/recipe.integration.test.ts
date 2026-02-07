@@ -1,6 +1,6 @@
+import { unsafeUserId } from "@cubby/schemas/identifiers";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
-import { unsafeUserId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/repo/database-helpers";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";

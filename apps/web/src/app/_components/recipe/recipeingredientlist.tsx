@@ -1,3 +1,4 @@
+import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -16,9 +17,8 @@ import {
   EntitySummaryCard,
   type RecipeSummaryData,
 } from "~/components/entity/entity-summary-card";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { renderValueOrError } from "~/misc/result";
-import type { SectionIngredientOut } from "~/schemas/recipe";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";

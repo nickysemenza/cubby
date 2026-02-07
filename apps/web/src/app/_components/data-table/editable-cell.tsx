@@ -1,17 +1,17 @@
 "use client";
 
+import type { Amount } from "@cubby/schemas/codec";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { Check, Pencil, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { Amount } from "~/codec/codec";
 import { Button } from "~/components/ui/button";
 import {
   FilterableCombobox,
   type FilterableComboboxItem,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
-import type { UnitMapping } from "~/schemas/unitmapping";
 import { showAmountAndPrice } from "../inventory/format-amount";
 
 /** Re-export for convenience */

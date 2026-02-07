@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 
+import { CategoryBadge } from "@/components/CategoryBadge";
 import { api } from "@/lib/api";
 
 const screenWidth = Dimensions.get("window").width;
@@ -62,6 +63,11 @@ export default function ProductDetail() {
       )}
       <View style={styles.content}>
         <Text style={styles.title}>{product.name}</Text>
+        {product.category && (
+          <View style={styles.badgeRow}>
+            <CategoryBadge category={product.category} />
+          </View>
+        )}
         {product.manufacturer && (
           <Detail label="Manufacturer" value={product.manufacturer} />
         )}
@@ -102,6 +108,7 @@ const styles = StyleSheet.create({
   },
   content: { padding: 16 },
   title: { fontSize: 24, fontWeight: "bold", color: colors.foreground },
+  badgeRow: { marginTop: 8 },
   notFound: { color: colors.mutedForeground },
   detail: { marginTop: 12 },
   detailLabel: { fontSize: 14, color: colors.shelf },

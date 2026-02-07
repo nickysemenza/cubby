@@ -1,5 +1,5 @@
 import type { WCompactRecipe } from "@cubby/recipebridge";
-import type { CompactRecipe } from "~/codec/codec";
+import type { CompactRecipe } from "@cubby/schemas/codec";
 import { wasm } from "~/lib/wasm";
 
 const scrapeRecipe = async (url: string) => {

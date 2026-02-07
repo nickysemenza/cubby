@@ -1,16 +1,16 @@
 import type { AmountKind, WAmount } from "@cubby/recipebridge";
+import type { Amount } from "@cubby/schemas/codec";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   getNutrientUnitString,
   type NutrientKey,
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
-import type { Amount } from "~/codec/codec";
+import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import { type Result, withFailure, withSuccess } from "~/misc/result-types";
-import type { SectionIngredientOut } from "~/schemas/recipe";
-import { getAllUnitMappingsFromProduct } from "~/schemas/unit-mapping-utils";
-import type { UnitMapping } from "~/schemas/unitmapping";
 import type {
   IngredientWithFoodOut,
   ProductWithMappingsAndFoodOut,

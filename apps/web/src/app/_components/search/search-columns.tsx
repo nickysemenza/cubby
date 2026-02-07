@@ -1,6 +1,6 @@
+import type { SearchableEntity, SearchResultItem } from "@cubby/schemas/search";
 import { createColumnHelper } from "@tanstack/react-table";
 import { EntityIcon, entities } from "~/entities/entities";
-import type { SearchableEntity, SearchResultItem } from "~/schemas/search";
 import {
   createActionsColumnBase,
   createCreatedAtColumn,

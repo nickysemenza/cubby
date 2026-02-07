@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { queryKeys } from "~/lib/query-keys";
-import { getIngredientMappings } from "~/schemas/unit-mapping-utils";
+import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
 import {

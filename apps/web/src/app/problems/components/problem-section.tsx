@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -13,7 +14,7 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { EntityIcon } from "~/entities/entities";
-import type { Entity, EntityDetailRoute } from "~/entities/types";
+import type { EntityDetailRoute } from "~/entities/types";
 
 // Type-safe route patterns for entity detail pages
 type RoutePattern = { to: EntityDetailRoute; params: { id: string } };

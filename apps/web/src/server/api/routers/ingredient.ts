@@ -6,9 +6,9 @@
  * See CLAUDE.md "Service Layer Architecture" for details.
  */
 
+import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
+import { ingredientBase } from "@cubby/schemas/ingredient";
 import { z } from "zod";
-import { type IngredientId, ingredientId } from "~/schemas/identifiers";
-import { ingredientBase } from "~/schemas/ingredient";
 import { deleteIngredients, mergeIngredients } from "~/server/repo/ingredient";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import {

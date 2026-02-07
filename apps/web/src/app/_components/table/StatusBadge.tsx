@@ -1,6 +1,6 @@
+import type { ImageStatus } from "@cubby/schemas/image";
 import { cva } from "class-variance-authority";
 import { Badge } from "~/components/ui/badge";
-import type { ImageStatus } from "~/schemas/image";
 
 const statusBadgeVariants = cva("", {
   variants: {

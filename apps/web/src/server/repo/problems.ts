@@ -1,6 +1,6 @@
+import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
 import { and, eq, isNull, notExists, sql } from "drizzle-orm";
-import { isMiscProduct } from "~/lib/constants";
 import type { Database } from "~/server/db";
 import {
   inventoryEntry,

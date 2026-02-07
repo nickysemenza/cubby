@@ -1,3 +1,5 @@
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
+import type { InfLocation } from "@cubby/schemas/location";
 import { extractShortcodeFromScan } from "@cubby/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,9 +23,6 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import type { LocationId } from "~/schemas/identifiers";
-import { unsafeLocationId } from "~/schemas/identifiers";
-import type { InfLocation } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
 type Phase = "SELECT_LOCATION" | "SCANNING" | "RECONCILIATION";

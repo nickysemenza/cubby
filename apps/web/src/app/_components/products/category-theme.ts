@@ -1,4 +1,10 @@
 import {
+  categoryColors,
+  formatCategoryLabel,
+  getCategoryColor,
+  type ProductCategory,
+} from "@cubby/shared";
+import {
   Archive,
   Bolt,
   Cpu,
@@ -11,7 +17,9 @@ import {
   Wrench,
 } from "lucide-react";
 import { assertNever } from "~/lib/assert";
-import type { ProductCategory } from "~/schemas/product";
+
+// Re-export colors/helpers from @cubby/shared for existing consumers
+export { categoryColors, formatCategoryLabel, getCategoryColor };
 
 /**
  * Product category color groups - color families with within-group variation
@@ -38,54 +46,10 @@ const categoryToGroup: Record<ProductCategory, CategoryGroup> = {
 };
 
 /**
- * Color palette for product categories - color families with variations
- * Each group has a base hue, items vary by lightness/saturation
- */
-export const categoryColors: Record<ProductCategory | "uncategorized", string> =
-  {
-    // Food group (green)
-    food: "hsl(142, 55%, 45%)",
-
-    // Tools group (blue family)
-    tools: "hsl(220, 55%, 45%)", // base (darker)
-    "tool-consumables": "hsl(220, 55%, 55%)", // lighter
-    "tool-accessories": "hsl(220, 45%, 40%)", // muted/darker
-
-    // Organization group (orange)
-    storage: "hsl(35, 55%, 50%)",
-
-    // Building group (red)
-    hardware: "hsl(0, 55%, 50%)",
-
-    // Tech group (purple)
-    electronics: "hsl(280, 55%, 50%)",
-
-    // Home group (teal family)
-    household: "hsl(180, 45%, 45%)", // base
-    supplies: "hsl(180, 55%, 55%)", // lighter/brighter
-
-    // Fallback
-    uncategorized: "hsl(0, 0%, 65%)",
-  };
-
-/**
- * Get the color for a product category
- */
-export const getCategoryColor = (category: ProductCategory | null): string =>
-  category ? categoryColors[category] : categoryColors.uncategorized;
-
-/**
  * Get the group for a product category (useful for logic based on grouping)
  */
 export const getCategoryGroup = (category: ProductCategory): CategoryGroup =>
   categoryToGroup[category];
-
-/**
- * Format a category value for display
- */
-export const formatCategoryLabel = (
-  category: ProductCategory | null,
-): string => (category ? category.replace("-", " ") : "uncategorized");
 
 /**
  * Get the icon component for a product category

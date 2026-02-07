@@ -7,12 +7,12 @@
  * Used by: Quick-Capture, Bulk-Edit, and Scanner functionality
  */
 
+import type { ProductTopLevelOut } from "@cubby/schemas/product";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 import { getErrorMessage } from "~/lib/error-utils";
 import { queryKeys } from "~/lib/query-keys";
-import type { ProductTopLevelOut } from "~/schemas/product";
 import { useTRPC } from "~/trpc/react";
 import { applyMiscPrefix, isUpcInput, useUpcLookup } from "./useUpcLookup";
 

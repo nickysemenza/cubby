@@ -1,5 +1,5 @@
+import type { CompactRecipe, ParsedCompactRecipe } from "@cubby/schemas/codec";
 import { wasm } from "~/lib/wasm";
-import type { CompactRecipe, ParsedCompactRecipe } from "./codec";
 
 export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
   return {

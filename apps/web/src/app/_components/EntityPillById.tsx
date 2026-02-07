@@ -1,7 +1,7 @@
+import type { AuditEntityType } from "@cubby/schemas/audit";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
-import type { AuditEntityType } from "~/schemas/audit";
 import { useTRPC } from "~/trpc/react";
 import { EntityPillLink } from "./EntityPill";
 

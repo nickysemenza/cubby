@@ -11,7 +11,12 @@ import {
   type InventoryCSVAction,
   LOCATION_CSV_ACTIONS,
   type LocationCSVAction,
-} from "~/schemas/csv";
+} from "@cubby/schemas/csv";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  CSVImportResult,
+  CSVImportResultItem,
+} from "@cubby/schemas/inventory";
 
 /**
  * Generic counter type - keys are the action names
@@ -45,9 +50,6 @@ export function incrementCounter<TAction extends string>(
 export function createLocationCounters(): ResultCounters<LocationCSVAction> {
   return createCounters(LOCATION_CSV_ACTIONS);
 }
-
-import type { LocationId, ProductId } from "~/schemas/identifiers";
-import type { CSVImportResult, CSVImportResultItem } from "~/schemas/inventory";
 
 /** Type alias for inventory counters */
 export type InventoryCounters = ResultCounters<InventoryCSVAction>;

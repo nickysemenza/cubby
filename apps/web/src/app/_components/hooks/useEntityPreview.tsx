@@ -1,6 +1,6 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { useCallback, useState } from "react";
 import { Sheet, SheetContent } from "~/components/ui/sheet";
-import type { Entity } from "~/entities/types";
 import { EntityPreviewPanel } from "../search/entity-preview-panel";
 
 interface PreviewState {

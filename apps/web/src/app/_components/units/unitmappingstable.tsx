@@ -1,3 +1,4 @@
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useQuery } from "@tanstack/react-query";
 import {
   createColumnHelper,
@@ -6,7 +7,6 @@ import {
 } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { wasm } from "~/lib/wasm";
-import type { UnitMapping } from "~/schemas/unitmapping";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";

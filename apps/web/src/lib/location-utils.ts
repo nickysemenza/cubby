@@ -1,4 +1,4 @@
-import type { InfLocation } from "~/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location";
 
 /**
  * Flatten a hierarchical tree of locations into a flat array.

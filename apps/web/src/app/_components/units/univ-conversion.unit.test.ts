@@ -1,13 +1,13 @@
-import { beforeAll, describe, expect, test } from "vitest";
-import type { Amount } from "~/codec/codec";
-import { ensureWasm } from "~/lib/wasm";
+import type { Amount } from "@cubby/schemas/codec";
 import {
   unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
-} from "~/schemas/identifiers";
-import type { SectionIngredientOut } from "~/schemas/recipe";
-import type { UnitMapping } from "~/schemas/unitmapping";
+} from "@cubby/schemas/identifiers";
+import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import { beforeAll, describe, expect, test } from "vitest";
+import { ensureWasm } from "~/lib/wasm";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import {
   calculateTotals,

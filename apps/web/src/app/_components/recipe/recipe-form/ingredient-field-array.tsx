@@ -1,9 +1,9 @@
+import type { SectionIngredientType } from "@cubby/schemas/recipe";
 import { Plus } from "lucide-react";
 import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import type { SectionIngredientType } from "~/schemas/recipe";
 import {
   WithIngredientSearch,
   WithRecipeSearch,

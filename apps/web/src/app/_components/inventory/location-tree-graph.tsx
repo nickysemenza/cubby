@@ -1,9 +1,9 @@
+import type { LocationId } from "@cubby/schemas/identifiers";
+import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityPillLink } from "~/app/_components/EntityPill";
-import type { LocationId } from "~/schemas/identifiers";
-import type { InfLocation, LocationType } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 
 interface TreeNode {

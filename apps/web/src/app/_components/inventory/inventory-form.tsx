@@ -1,3 +1,10 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
+import type {
+  InventoryUpdateInput,
+  inventoryCreatePayloadData,
+  inventoryUpdatePayloadData,
+} from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
 import { useForm } from "react-hook-form";
@@ -6,20 +13,13 @@ import {
   buildLocationComboboxItem,
   buildProductComboboxItem,
 } from "~/app/_components/combobox/combobox-builders";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 import {
   amountField,
   getLocationId,
   getProductId,
   requiredLocationField,
   requiredProductField,
-} from "~/schemas/form-fields";
-import type { LocationId, ProductId } from "~/schemas/identifiers";
-import type {
-  InventoryUpdateInput,
-  inventoryCreatePayloadData,
-  inventoryUpdatePayloadData,
-} from "~/schemas/inventory";
+} from "~/app/_components/form-fields";
 import {
   ComboboxFieldWithSearch,
   type CreateModeProps,

@@ -1,28 +1,18 @@
+import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { ndb, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { dbTimestampsOut } from "./common";
 import { ingredientId, productId, productShortcode } from "./identifiers";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
 
-// Product category values - single source of truth for both Zod and Drizzle
-export const productCategoryValues = [
-  "food", // flour, olive oil, canned tomatoes
-  "tools", // angle grinder, drill, screwdriver, hand tools
-  "tool-consumables", // grinding discs, drill bits, sandpaper
-  "tool-accessories", // jigs, fixtures, router table accessories
-  "storage", // packout, systainers, toolboxes, bags
-  "hardware", // screws, nails, bolts
-  "electronics", // raspberry pi, cables, monitors
-  "household", // furniture, cookware, appliances
-  "supplies", // cleaning products, tape, batteries, cables
-] as const;
-
 // Product category enum for filtering/organization
 export const productCategory = z.enum(productCategoryValues);
 
 export type ProductCategory = z.infer<typeof productCategory>;
+
+// Re-export for consumers that need the values array
+export { productCategoryValues } from "@cubby/shared";
 
 /**
  * Check if a product has USDA food data indicators that should force category to "food"

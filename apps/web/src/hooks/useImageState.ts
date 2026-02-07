@@ -1,6 +1,6 @@
+import type { UpdateInputImages } from "@cubby/schemas/image";
 import { useState } from "react";
 import type { PendingImage } from "~/app/_components/PendingImageUpload";
-import type { UpdateInputImages } from "~/schemas/image";
 
 /**
  * Custom hook for managing image state in forms (both pending uploads and removed images).

@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
 import {
   unsafeInventoryId,
   unsafeLocationId,
   unsafeLocationShortcode,
   unsafeProductId,
   unsafeProductShortcode,
-} from "~/schemas/identifiers";
+} from "@cubby/schemas/identifiers";
+import { describe, expect, it } from "vitest";
 import {
   calculateInventoryValuation,
   emptyPricingStatus,

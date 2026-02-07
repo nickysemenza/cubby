@@ -1,3 +1,5 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import type { Row } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ArrowRightLeft, Trash } from "lucide-react";
@@ -5,8 +7,6 @@ import { useMemo, useState } from "react";
 import type { z } from "zod";
 import { Button } from "~/components/ui/button";
 import { queryKeys } from "~/lib/query-keys";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
-import type { LocationId } from "~/schemas/identifiers";
 import { useTRPC } from "~/trpc/react";
 import {
   createEditableAmountColumn,

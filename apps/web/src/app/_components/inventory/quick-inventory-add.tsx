@@ -12,20 +12,20 @@
  * @see /inventory/quick-capture - Full-featured rapid entry form
  */
 
+import { amount } from "@cubby/schemas/codec";
+import type { LocationId } from "@cubby/schemas/identifiers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { FormProvider, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
-import { amount } from "~/codec/codec";
-import { Button } from "~/components/ui/button";
 import {
   getOptionalProductId,
   requiredProductField,
-} from "~/schemas/form-fields";
-import type { LocationId } from "~/schemas/identifiers";
+} from "~/app/_components/form-fields";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
+import { Button } from "~/components/ui/button";
 import { useTRPC } from "~/trpc/react";
 import { AmountFieldGroup } from "./amount-field-group";
 

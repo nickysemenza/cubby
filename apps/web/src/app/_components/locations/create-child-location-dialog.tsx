@@ -1,3 +1,4 @@
+import type { LocationCreateInput, LocationOut } from "@cubby/schemas/location";
 import { useMutation } from "@tanstack/react-query";
 import type { FC } from "react";
 import { toast } from "sonner";
@@ -9,7 +10,6 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { LocationCreateInput, LocationOut } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { LocationForm } from "./location-form";
 

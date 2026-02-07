@@ -1,6 +1,6 @@
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
+import { isMiscProduct } from "@cubby/shared";
 import type { z } from "zod";
-import { isMiscProduct } from "~/lib/constants";
-import type { inventoryWithLocationAndProductOut } from "~/schemas/combo";
 
 export type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 

@@ -4,15 +4,16 @@
  * These schemas are used across multiple forms to ensure consistent validation
  * and reduce duplication. They handle combobox selection validation and amount fields.
  */
-import { z } from "zod";
-import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
-import { amount } from "~/codec/codec";
+
+import { amount } from "@cubby/schemas/codec";
 import type {
   IngredientId,
   LocationId,
   ProductId,
   RecipeId,
-} from "./identifiers";
+} from "@cubby/schemas/identifiers";
+import { z } from "zod";
+import { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 
 /**
  * Required combobox field for product selection.

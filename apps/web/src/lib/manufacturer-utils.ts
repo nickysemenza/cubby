@@ -5,7 +5,7 @@
  * including the "(unspecified)" wildcard matching logic used in CSV import/export.
  */
 
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 
 /**
  * Normalize a manufacturer value:

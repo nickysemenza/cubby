@@ -3,14 +3,16 @@
  * Find products by various identifiers (UPC, name, manufacturer).
  */
 
+import { unsafeProductShortcode } from "@cubby/schemas/identifiers";
+import {
+  type ProductTopLevelOut,
+  productTopLevelOut,
+} from "@cubby/schemas/product";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
 import { and, eq, ilike } from "drizzle-orm";
-
-import { UNSPECIFIED_MANUFACTURER } from "~/lib/constants";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { parseWithContext } from "~/lib/zod-utils";
-import { unsafeProductShortcode } from "~/schemas/identifiers";
-import { type ProductTopLevelOut, productTopLevelOut } from "~/schemas/product";
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
 import {

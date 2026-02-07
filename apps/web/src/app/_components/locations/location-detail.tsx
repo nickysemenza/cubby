@@ -1,3 +1,4 @@
+import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -22,7 +23,6 @@ import {
 } from "~/components/ui/empty";
 import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
-import type { InfLocation, LocationUpdateInput } from "~/schemas/location";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";

@@ -3,13 +3,12 @@
  * Convert database records to API types.
  */
 
-import type { z } from "zod";
-
 import type {
   RecipeOut,
   recipeTopLevel,
   SectionIngredient,
-} from "~/schemas/recipe";
+} from "@cubby/schemas/recipe";
+import type { z } from "zod";
 import type { recipe } from "~/server/db/schema";
 import {
   extractImagesFromJoinTable,

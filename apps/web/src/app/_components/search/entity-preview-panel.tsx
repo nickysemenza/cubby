@@ -1,3 +1,4 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink } from "lucide-react";
@@ -6,7 +7,6 @@ import { Button } from "~/components/ui/button";
 import { SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import { Spinner } from "~/components/ui/spinner";
 import { entities } from "~/entities/entities";
-import type { Entity } from "~/entities/types";
 import { useTRPC } from "~/trpc/react";
 import { ImageDetail } from "../images/image-detail";
 import { IngredientDetail } from "../ingredients/ingredient-detail";

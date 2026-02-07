@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { amount } from "~/codec/codec";
+import { amount } from "./codec";
 import { baseEntitySchema, dbTimestampsOut } from "./common";
 import { id, ingredientId, recipeId } from "./identifiers";
 import { createInputImages, imageOut, updateInputImages } from "./image";

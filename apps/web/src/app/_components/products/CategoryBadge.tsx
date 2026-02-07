@@ -1,6 +1,6 @@
+import type { ProductCategory } from "@cubby/schemas/product";
 import { NoneState } from "~/app/_components/NoneState";
 import { Pill } from "~/app/_components/Pill";
-import type { ProductCategory } from "~/schemas/product";
 import { getCategoryColor } from "./category-theme";
 import { CategoryIcon } from "./product-category-icons";
 

@@ -1,6 +1,6 @@
+import type { LocationType } from "@cubby/schemas/location";
 import type React from "react";
 import { Empty, EmptyDescription, EmptyTitle } from "~/components/ui/empty";
-import type { LocationType } from "~/schemas/location";
 import { EntityPillLink } from "./EntityPill";
 import { NoneState } from "./NoneState";
 import { TruncatedList } from "./TruncatedList";

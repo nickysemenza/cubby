@@ -1,6 +1,6 @@
+import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useMemo } from "react";
 import { wasm } from "~/lib/wasm";
-import type { RecipeOut } from "~/schemas/recipe";
 import { formatRichText } from "./richtext";
 
 interface RecipeInstructionsProps {

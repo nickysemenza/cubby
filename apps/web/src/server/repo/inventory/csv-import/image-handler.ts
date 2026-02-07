@@ -5,9 +5,9 @@
  * Supports multiple images as semicolon-separated URLs.
  */
 
+import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
 import { getErrorMessage } from "~/lib/error-utils";
-import type { LocationId, ProductId } from "~/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { locationImage, productImage } from "~/server/db/schema";
 import { associatePendingImages, getDb } from "~/server/repo/database-helpers";

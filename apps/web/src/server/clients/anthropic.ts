@@ -1,14 +1,17 @@
-import { chat } from "@tanstack/ai";
-import { anthropicText } from "@tanstack/ai-anthropic";
-import { env } from "~/env";
 import {
   type CategorySuggestion,
   categorySuggestionSchema,
   type LocationTypeSuggestion,
   locationTypeSuggestionSchema,
-} from "~/schemas/ai";
-import { type LocationType, locationType } from "~/schemas/location";
-import { type ProductCategory, productCategoryValues } from "~/schemas/product";
+} from "@cubby/schemas/ai";
+import { type LocationType, locationType } from "@cubby/schemas/location";
+import {
+  type ProductCategory,
+  productCategoryValues,
+} from "@cubby/schemas/product";
+import { chat } from "@tanstack/ai";
+import { anthropicText } from "@tanstack/ai-anthropic";
+import { env } from "~/env";
 
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)

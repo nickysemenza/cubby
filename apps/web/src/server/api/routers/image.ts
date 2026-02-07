@@ -7,8 +7,8 @@ import {
   imageWithEntitySchema,
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
-} from "~/schemas/image";
-import { buildPaginatedResponse } from "~/schemas/pagination";
+} from "@cubby/schemas/image";
+import { buildPaginatedResponse } from "@cubby/schemas/pagination";
 import {
   createAppError,
   createTRPCRouter,

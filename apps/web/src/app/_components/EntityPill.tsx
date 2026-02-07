@@ -1,3 +1,5 @@
+import type { LocationType } from "@cubby/schemas/location";
+import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import {
   Tooltip,
@@ -6,9 +8,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { assertNever } from "~/lib/assert";
-import { getMiscDisplayName, isMiscProduct } from "~/lib/constants";
 import { cn } from "~/lib/utils";
-import type { LocationType } from "~/schemas/location";
 import { LocationIcon } from "./locations/location-icons";
 import { Pill, pillClassName } from "./Pill";
 
