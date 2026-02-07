@@ -37,12 +37,28 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="search"
+        options={{
+          title: "Search",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="search" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="more"
+        options={{
+          title: "More",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="more-horiz" size={size} color={color} />
+          ),
+        }}
+      />
+      {/* Hide the old inventory tab - it's now under More */}
+      <Tabs.Screen
         name="inventory"
         options={{
-          title: "Inventory",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="list-alt" size={size} color={color} />
-          ),
+          href: null,
         }}
       />
     </Tabs>

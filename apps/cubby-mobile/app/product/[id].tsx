@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
-import { colors } from "@cubby/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { colors, getErrorMessage } from "@cubby/shared";
 import { Stack, useLocalSearchParams } from "expo-router";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   Image,
   ScrollView,
@@ -12,16 +13,32 @@ import {
 } from "react-native";
 
 import { CategoryBadge } from "@/components/CategoryBadge";
-import { api } from "@/lib/api";
+import { ImageCapture } from "@/components/ImageCapture";
+import { api, trpcClient } from "@/lib/api";
 
 const screenWidth = Dimensions.get("window").width;
 
 export default function ProductDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const { data: product, isLoading } = useQuery(
     api.product.getByID.queryOptions({ id: id! }),
   );
+
+  const updateMutation = useMutation({
+    mutationFn: (pendingImageIds: string[]) =>
+      trpcClient.product.update.mutate({
+        id: id!,
+        data: { pendingImageIds },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product"] });
+    },
+    onError: (e) => {
+      Alert.alert("Error", getErrorMessage(e));
+    },
+  });
 
   if (isLoading) {
     return (
@@ -78,6 +95,11 @@ export default function ProductDetail() {
         {product.description && (
           <Detail label="Description" value={product.description} />
         )}
+
+        <ImageCapture
+          entityType="PRODUCT"
+          onImageUploaded={(imageId) => updateMutation.mutate([imageId])}
+        />
       </View>
     </ScrollView>
   );

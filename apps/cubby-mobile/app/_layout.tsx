@@ -45,9 +45,16 @@ export default function RootLayout() {
               name="product/[id]"
               options={{ headerShown: true, title: "Product" }}
             />
+            <Stack.Screen name="location" options={{ headerShown: false }} />
+            <Stack.Screen name="recipe" options={{ headerShown: false }} />
+            <Stack.Screen name="ingredient" options={{ headerShown: false }} />
             <Stack.Screen
-              name="location/[id]"
-              options={{ headerShown: true, title: "Location" }}
+              name="inventory-list"
+              options={{ headerShown: true, title: "Inventory" }}
+            />
+            <Stack.Screen
+              name="activity"
+              options={{ headerShown: true, title: "Activity" }}
             />
           </Stack>
         </AuthGate>

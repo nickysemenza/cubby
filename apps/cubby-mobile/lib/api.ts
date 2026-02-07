@@ -23,7 +23,7 @@ export const trpcClient = createTRPCClient<AppRouter>({
         const headers: Record<string, string> = {};
         const cookies = authClient.getCookie();
         if (cookies) {
-          headers["Cookie"] = cookies;
+          headers.Cookie = cookies;
         }
         return headers;
       },

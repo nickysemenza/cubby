@@ -1,4 +1,5 @@
 import { colors, getErrorMessage } from "@cubby/shared";
+import { Stack } from "expo-router";
 import {
   ActivityIndicator,
   FlatList,
@@ -21,7 +22,7 @@ type InventoryItem = {
 
 const EMPTY_FILTERS = {};
 
-export default function InventoryScreen() {
+export default function InventoryListScreen() {
   const {
     data,
     isLoading,
@@ -40,6 +41,7 @@ export default function InventoryScreen() {
   if (isLoading) {
     return (
       <View style={styles.center}>
+        <Stack.Screen options={{ title: "Inventory" }} />
         <ActivityIndicator size="large" color={colors.terracotta} />
       </View>
     );
@@ -48,6 +50,7 @@ export default function InventoryScreen() {
   if (error) {
     return (
       <View style={styles.center}>
+        <Stack.Screen options={{ title: "Inventory" }} />
         <Text style={styles.errorText}>{getErrorMessage(error)}</Text>
       </View>
     );
@@ -55,6 +58,7 @@ export default function InventoryScreen() {
 
   return (
     <View style={styles.container}>
+      <Stack.Screen options={{ title: "Inventory" }} />
       <FlatList
         data={data}
         keyExtractor={(item) => item.id}

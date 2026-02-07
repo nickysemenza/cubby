@@ -83,6 +83,9 @@ importers:
       expo-dev-client:
         specifier: ~6.0.20
         version: 6.0.20(expo@54.0.33)
+      expo-image-picker:
+        specifier: ^17.0.10
+        version: 17.0.10(expo@54.0.33)
       expo-linking:
         specifier: ~8.0.8
         version: 8.0.11(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -316,7 +319,7 @@ importers:
         version: 1.1.0(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@better-auth/expo':
         specifier: ^1.4.18
-        version: 1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(expo-constants@18.0.13)(expo-linking@8.0.11)(expo-network@8.0.8(expo@54.0.33)(react@19.2.4))(expo-web-browser@15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)))
+        version: 1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(expo-constants@18.0.13)(expo-linking@8.0.11)(expo-network@8.0.8(expo@54.0.33)(react@19.2.4))(expo-web-browser@15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)))
       '@cubby/recipebridge':
         specifier: workspace:*
         version: link:../../packages/wasm
@@ -340,7 +343,7 @@ importers:
         version: 1.3.6(@tanstack/query-core@5.90.20)(@tanstack/react-query@5.90.20(react@19.2.4))(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@daveyplate/better-auth-ui':
         specifier: ^3.3.15
-        version: 3.3.15(82a58a8fbccb32583bf82437474d0360)
+        version: 3.3.15(bc960db68746a4366c24d10276050518)
       '@devoxa/integresql-client':
         specifier: ^2.1.2
         version: 2.1.2
@@ -8554,6 +8557,16 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-image-loader@6.0.0:
+    resolution: {integrity: sha512-nKs/xnOGw6ACb4g26xceBD57FKLFkSwEUTDXEDF3Gtcu3MqF3ZIYd3YM+sSb1/z9AKV1dYT7rMSGVNgsveXLIQ==}
+    peerDependencies:
+      expo: '*'
+
+  expo-image-picker@17.0.10:
+    resolution: {integrity: sha512-a2xrowp2trmvXyUWgX3O6Q2rZaa2C59AqivKI7+bm+wLvMfTEbZgldLX4rEJJhM8xtmEDTNU+lzjtObwzBRGaw==}
+    peerDependencies:
+      expo: '*'
+
   expo-json-utils@0.15.0:
     resolution: {integrity: sha512-duRT6oGl80IDzH2LD2yEFWNwGIC2WkozsB6HF3cDYNoNNdUvFk6uN3YiwsTsqVM/D0z6LEAQ01/SlYvN+Fw0JQ==}
 
@@ -14402,7 +14415,7 @@ snapshots:
       expo-network: 8.0.8(expo@54.0.33)(react@19.1.0)
       expo-web-browser: 15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))
 
-  '@better-auth/expo@1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(expo-constants@18.0.13)(expo-linking@8.0.11)(expo-network@8.0.8(expo@54.0.33)(react@19.2.4))(expo-web-browser@15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)))':
+  '@better-auth/expo@1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(expo-constants@18.0.13)(expo-linking@8.0.11)(expo-network@8.0.8(expo@54.0.33)(react@19.2.4))(expo-web-browser@15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)))':
     dependencies:
       '@better-auth/core': 1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0)
       '@better-fetch/fetch': 1.1.21
@@ -14415,7 +14428,7 @@ snapshots:
       expo-network: 8.0.8(expo@54.0.33)(react@19.2.4)
       expo-web-browser: 15.0.10(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))
 
-  '@better-auth/passkey@1.4.7(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(better-call@1.1.8(zod@4.3.6))(nanostores@1.1.0)':
+  '@better-auth/passkey@1.4.7(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(nanostores@1.1.0)':
     dependencies:
       '@better-auth/core': 1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0)
       '@better-auth/utils': 0.3.0
@@ -14423,11 +14436,10 @@ snapshots:
       '@simplewebauthn/browser': 13.2.2
       '@simplewebauthn/server': 13.2.2
       better-auth: 1.4.18(ea053a0bf9110bef113479405ffdcbac)
-      better-call: 1.1.8(zod@4.3.6)
       nanostores: 1.1.0
       zod: 4.3.6
 
-  '@better-auth/telemetry@1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))':
+  '@better-auth/telemetry@1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))':
     dependencies:
       '@better-auth/core': 1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0)
       '@better-auth/utils': 0.3.0
@@ -14552,9 +14564,9 @@ snapshots:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
 
-  '@daveyplate/better-auth-ui@3.3.15(82a58a8fbccb32583bf82437474d0360)':
+  '@daveyplate/better-auth-ui@3.3.15(bc960db68746a4366c24d10276050518)':
     dependencies:
-      '@better-auth/passkey': 1.4.7(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(better-call@1.1.8(zod@4.3.6))(nanostores@1.1.0)
+      '@better-auth/passkey': 1.4.7(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(nanostores@1.1.0)
       '@better-fetch/fetch': 1.1.21
       '@captchafox/react': 1.10.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@daveyplate/better-auth-tanstack': 1.3.6(@tanstack/query-core@5.90.20)(@tanstack/react-query@5.90.20(react@19.2.4))(better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -15248,6 +15260,7 @@ snapshots:
       - graphql
       - supports-color
       - utf-8-validate
+    optional: true
 
   '@expo/code-signing-certificates@0.0.6':
     dependencies:
@@ -15312,6 +15325,7 @@ snapshots:
     optionalDependencies:
       react: 19.2.4
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
+    optional: true
 
   '@expo/env@2.0.8':
     dependencies:
@@ -15381,7 +15395,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -15462,7 +15476,7 @@ snapshots:
       '@expo/json-file': 10.0.8
       '@react-native/normalize-colors': 0.81.5
       debug: 4.4.3
-      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
       resolve-from: 5.0.0
       semver: 7.7.3
       xml2js: 0.6.0
@@ -15490,6 +15504,7 @@ snapshots:
       expo-font: 14.0.11(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
       react: 19.2.4
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
+    optional: true
 
   '@expo/ws-tunnel@1.0.6': {}
 
@@ -18161,6 +18176,7 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
     optionalDependencies:
       '@types/react': 19.2.13
+    optional: true
 
   '@react-navigation/bottom-tabs@7.12.0(@react-navigation/native@7.1.28(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.2(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native-screens@4.16.0(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)':
     dependencies:
@@ -20526,7 +20542,6 @@ snapshots:
     optionalDependencies:
       msw: 2.12.4(@types/node@25.2.1)(typescript@5.9.3)
       vite: 7.3.1(@types/node@25.2.1)(jiti@1.21.7)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-    optional: true
 
   '@vitest/mocker@4.0.18(msw@2.12.4(@types/node@25.2.1)(typescript@5.9.3))(vite@7.3.1(@types/node@25.2.1)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
@@ -20563,7 +20578,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vitest: 4.0.18(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.0)(@types/node@25.2.1)(@vitest/ui@4.0.18)(jiti@2.6.1)(jsdom@28.0.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.2.1)(typescript@5.9.3))(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+      vitest: 4.0.18(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.0)(@types/node@25.2.1)(@vitest/ui@4.0.18)(jiti@1.21.7)(jsdom@28.0.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.2.1)(typescript@5.9.3))(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/utils@4.0.18':
     dependencies:
@@ -21051,7 +21066,7 @@ snapshots:
       resolve-from: 5.0.0
     optionalDependencies:
       '@babel/runtime': 7.28.6
-      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -21076,7 +21091,7 @@ snapshots:
   better-auth@1.4.18(2b329c80d0b0042a6e2c9d135dff40cc):
     dependencies:
       '@better-auth/core': 1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0)
-      '@better-auth/telemetry': 1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))
+      '@better-auth/telemetry': 1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.21
       '@noble/ciphers': 2.1.1
@@ -21104,7 +21119,7 @@ snapshots:
   better-auth@1.4.18(ea053a0bf9110bef113479405ffdcbac):
     dependencies:
       '@better-auth/core': 1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0)
-      '@better-auth/telemetry': 1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(better-call@1.1.8(zod@4.3.6))(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))
+      '@better-auth/telemetry': 1.4.18(@better-auth/core@1.4.18(@better-auth/utils@0.3.0)(@better-fetch/fetch@1.1.21)(jose@6.1.3)(kysely@0.28.9)(nanostores@1.1.0))
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.21
       '@noble/ciphers': 2.1.1
@@ -22548,6 +22563,7 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   expo-camera@17.0.10(expo@54.0.33)(react-native-web@0.21.2(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
@@ -22575,6 +22591,7 @@ snapshots:
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   expo-dev-client@6.0.20(expo@54.0.33):
     dependencies:
@@ -22614,6 +22631,7 @@ snapshots:
     dependencies:
       expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
+    optional: true
 
   expo-font@14.0.11(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
@@ -22628,6 +22646,16 @@ snapshots:
       fontfaceobserver: 2.3.0
       react: 19.2.4
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
+    optional: true
+
+  expo-image-loader@6.0.0(expo@54.0.33):
+    dependencies:
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+
+  expo-image-picker@17.0.10(expo@54.0.33):
+    dependencies:
+      expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo-image-loader: 6.0.0(expo@54.0.33)
 
   expo-json-utils@0.15.0: {}
 
@@ -22640,6 +22668,7 @@ snapshots:
     dependencies:
       expo: 54.0.33(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.23)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4))(react@19.2.4)
       react: 19.2.4
+    optional: true
 
   expo-linking@8.0.11(expo@54.0.33)(react-native@0.81.5(@babel/core@7.29.0)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0):
     dependencies:
@@ -22689,6 +22718,7 @@ snapshots:
       invariant: 2.2.4
       react: 19.2.4
       react-native: 0.81.5(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.2.4)
+    optional: true
 
   expo-network@8.0.8(expo@54.0.33)(react@19.1.0):
     dependencies:
@@ -22895,6 +22925,7 @@ snapshots:
       - graphql
       - supports-color
       - utf-8-validate
+    optional: true
 
   exponential-backoff@3.1.3: {}
 
@@ -26022,6 +26053,7 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
+    optional: true
 
   react-qr-code@2.0.18(react@19.2.4):
     dependencies:
@@ -27663,7 +27695,6 @@ snapshots:
       terser: 5.44.1
       tsx: 4.21.0
       yaml: 2.8.2
-    optional: true
 
   vite@7.3.1(@types/node@25.2.1)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
@@ -27731,7 +27762,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-    optional: true
 
   vitest@4.0.18(@edge-runtime/vm@3.2.0)(@opentelemetry/api@1.9.0)(@types/node@25.2.1)(@vitest/ui@4.0.18)(jiti@2.6.1)(jsdom@28.0.0(@noble/hashes@2.0.1))(lightningcss@1.30.2)(msw@2.12.4(@types/node@25.2.1)(typescript@5.9.3))(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
