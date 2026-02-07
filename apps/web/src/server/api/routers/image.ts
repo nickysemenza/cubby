@@ -5,6 +5,8 @@ import {
   imageListFiltersSchema,
   imageListResponseSchema,
   imageWithEntitySchema,
+  importImageFromUrlResponseSchema,
+  importImageFromUrlSchema,
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
@@ -18,6 +20,7 @@ import {
   cullPendingImages,
   getImageById,
   imageList,
+  importImageFromUrl,
   initiateImageUploadWithoutEntity,
 } from "~/server/repo/image";
 
@@ -69,6 +72,43 @@ export const imageRouter = createTRPCRouter({
         throw createAppError(
           "IMAGE_UPLOAD_FAILED",
           "Failed to initiate upload",
+          error,
+        );
+      }
+    }),
+
+  /**
+   * Import an image from an external URL
+   */
+  importFromUrl: protectedProcedure
+    .input(importImageFromUrlSchema)
+    .output(importImageFromUrlResponseSchema)
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const filenamePrefix = `${input.entityType}-url-import`;
+        const result = await importImageFromUrl(ctx.db, {
+          sourceUrl: input.url,
+          filenamePrefix,
+        });
+
+        if (!result) {
+          throw new Error("Failed to fetch image from URL");
+        }
+
+        // Extract filename from URL path, falling back to the prefix
+        const urlPath = new URL(input.url).pathname;
+        const filename = urlPath.split("/").pop() || `${filenamePrefix}.jpg`;
+
+        return {
+          imageId: result.imageId,
+          key: result.key,
+          url: result.url,
+          filename,
+        };
+      } catch (error) {
+        throw createAppError(
+          "IMAGE_IMPORT_FAILED",
+          "Failed to import image from URL",
           error,
         );
       }

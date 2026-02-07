@@ -46,6 +46,7 @@ export const AppErrors = {
   IMAGE_UPLOAD_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_GET_FAILED: "INTERNAL_SERVER_ERROR",
   IMAGE_CULL_FAILED: "INTERNAL_SERVER_ERROR",
+  IMAGE_IMPORT_FAILED: "INTERNAL_SERVER_ERROR",
 } as const;
 
 export type AppErrorReason = keyof typeof AppErrors;

@@ -1,6 +1,6 @@
 import type { EntityImage } from "@cubby/schemas/entity";
 import { useMutation } from "@tanstack/react-query";
-import { Camera, X } from "lucide-react";
+import { Camera, Link, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { GridContainer } from "~/components/layout/grid-container";
@@ -44,6 +44,9 @@ export function PendingImageUpload({
     string[]
   >([]);
 
+  const [imageUrl, setImageUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const api = useTRPC();
@@ -61,6 +64,59 @@ export function PendingImageUpload({
       },
     }),
   );
+
+  // tRPC mutation for importing from URL
+  const importFromUrlMutation = useMutation(
+    api.image.importFromUrl.mutationOptions({
+      onError: (error) => {
+        toast.error(`Import failed: ${error.message}`);
+      },
+    }),
+  );
+
+  // Handle importing an image from URL
+  const handleImportFromUrl = useCallback(async () => {
+    const trimmed = imageUrl.trim();
+    if (!trimmed) return;
+
+    try {
+      new URL(trimmed);
+    } catch {
+      toast.error("Please enter a valid URL");
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const result = await importFromUrlMutation.mutateAsync({
+        url: trimmed,
+        entityType,
+      });
+
+      const newImage: PendingImage = {
+        id: result.imageId,
+        url: result.url,
+        filename: result.filename,
+        key: result.key,
+      };
+
+      const updatedImages = [...pendingImages, newImage];
+      setPendingImages(updatedImages);
+      onImagesChange?.(updatedImages);
+      setImageUrl("");
+      toast.success("Image imported successfully!");
+    } catch (error) {
+      toast.error(`Import failed: ${getErrorMessage(error)}`);
+    } finally {
+      setImporting(false);
+    }
+  }, [
+    imageUrl,
+    entityType,
+    importFromUrlMutation,
+    pendingImages,
+    onImagesChange,
+  ]);
 
   // Upload a file (used by both file input and camera)
   const uploadFile = useCallback(
@@ -220,11 +276,37 @@ export function PendingImageUpload({
             Camera
           </Button>
         </div>
+        <div className="flex gap-2">
+          <Input
+            type="url"
+            placeholder="Paste image URL..."
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleImportFromUrl();
+              }
+            }}
+            disabled={importing || uploading}
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            onClick={handleImportFromUrl}
+            disabled={importing || uploading || !imageUrl.trim()}
+          >
+            <Link className="mr-2 h-4 w-4" />
+            Import
+          </Button>
+        </div>
       </div>
 
-      {uploading && (
+      {(uploading || importing) && (
         <div className="py-2 text-center">
-          <div className="mb-2">Uploading...</div>
+          <div className="mb-2">
+            {importing ? "Importing..." : "Uploading..."}
+          </div>
           <div className="mx-auto h-1 w-full max-w-md rounded-full bg-muted">
             <div
               className="h-1 animate-pulse rounded-full bg-primary"

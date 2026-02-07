@@ -95,6 +95,20 @@ export const imageListResponseSchema = createPaginatedResponseSchema(
   imageWithEntitySchema,
 );
 
+// Schema for importing an image from a URL
+export const importImageFromUrlSchema = z.object({
+  url: z.url(),
+  entityType: entityImage,
+});
+
+// Response schema for importing an image from a URL
+export const importImageFromUrlResponseSchema = z.object({
+  imageId: id,
+  key: z.string(),
+  url: z.url(),
+  filename: z.string(),
+});
+
 // Schema for culling pending images
 export const cullPendingImagesSchema = z.object({
   olderThanHours: z.int().positive().default(24),
