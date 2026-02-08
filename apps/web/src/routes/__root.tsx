@@ -91,22 +91,22 @@ function RootComponent() {
   return (
     <Provider queryClient={queryClient}>
       <DebugContextProvider>
-        <div className="flex flex-col">
-          <div className="border-b">
-            <div className="flex h-16 items-center px-4">
-              <MainNav
-                className="mx-0"
-                onSearchClick={() => setCommandMenuOpen(true)}
-              />
-            </div>
+        <div className="border-b">
+          <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 md:px-6">
+            <MainNav
+              className="mx-0"
+              onSearchClick={() => setCommandMenuOpen(true)}
+            />
           </div>
         </div>
         {/* Add bottom padding on mobile for bottom nav */}
-        <main className="container mx-auto p-4 pb-20 md:pb-4">
+        <main className="mx-auto w-full max-w-7xl px-4 pt-4 pb-20 md:px-6 md:pb-4">
           <Outlet />
         </main>
-        <footer className="hidden border-t pt-2 pb-2 text-center text-muted-foreground text-xs md:block">
-          v {__GIT_COMMIT__}
+        <footer className="border-t">
+          <div className="mx-auto hidden w-full max-w-7xl px-4 py-2 text-center text-muted-foreground text-xs md:block md:px-6">
+            v {__GIT_COMMIT__}
+          </div>
         </footer>
         {/* Bottom navigation for mobile */}
         <BottomNav />

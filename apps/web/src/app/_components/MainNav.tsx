@@ -47,7 +47,7 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
       <Link to="/">
         <FlexContainer align="center" gap={2}>
           <img src="/favicon.svg" alt="" className="h-6 w-6 sm:h-7 sm:w-7" />
-          <span className="self-center whitespace-nowrap font-bold text-[#3a3530] text-lg tracking-tight sm:text-xl">
+          <span className="self-center whitespace-nowrap font-bold text-foreground text-lg tracking-tight sm:text-xl">
             cubby
           </span>
         </FlexContainer>

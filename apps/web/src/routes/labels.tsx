@@ -697,7 +697,7 @@ function LabelCell({
       </div>
       <div className="flex min-w-0 flex-col justify-center">
         <div
-          className="line-clamp-3 font-bold text-[#333] leading-tight"
+          className="line-clamp-3 font-bold text-foreground leading-tight"
           style={{ fontSize: layout.nameSize }}
         >
           {item.name}
