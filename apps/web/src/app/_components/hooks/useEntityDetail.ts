@@ -77,6 +77,7 @@ export function useEntityDetail<
 
   // Set up edit mode
   const editMode = useEditMode<TUpdateInput>({
+    entityId: data.id,
     mutationOptions,
     useRouterRefresh: true,
     onSuccess,

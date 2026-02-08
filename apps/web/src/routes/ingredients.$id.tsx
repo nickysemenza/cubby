@@ -37,7 +37,7 @@ function IngredientDetailPage() {
 
   return (
     <PageWrapper>
-      <IngredientDetail ingredient={ingredient} />
+      <IngredientDetail key={id} ingredient={ingredient} />
     </PageWrapper>
   );
 }

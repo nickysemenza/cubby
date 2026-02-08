@@ -37,7 +37,7 @@ function LocationDetailPage() {
 
   return (
     <PageWrapper>
-      <LocationDetail location={location} />
+      <LocationDetail key={id} location={location} />
     </PageWrapper>
   );
 }

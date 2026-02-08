@@ -37,7 +37,7 @@ function InventoryDetailPage() {
 
   return (
     <PageWrapper>
-      <InventoryDetail inventoryitem={inventory} />
+      <InventoryDetail key={id} inventoryitem={inventory} />
     </PageWrapper>
   );
 }

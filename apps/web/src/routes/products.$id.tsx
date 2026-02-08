@@ -35,7 +35,7 @@ function ProductDetailPage() {
 
   return (
     <PageWrapper>
-      <ProductDetail product={product} />
+      <ProductDetail key={id} product={product} />
     </PageWrapper>
   );
 }

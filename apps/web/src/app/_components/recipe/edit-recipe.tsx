@@ -17,6 +17,7 @@ export default function EditRecipeForm({
   const api = useTRPC();
 
   const { error, isPending, handleEdit } = useEditMode<RecipeUpdateInput>({
+    entityId: recipe.id,
     mutationOptions: api.recipe.update.mutationOptions(),
     onSuccess: () => {
       toast.success("Recipe updated successfully!");

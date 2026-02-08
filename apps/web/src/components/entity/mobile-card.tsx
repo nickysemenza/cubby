@@ -105,16 +105,13 @@ export function MobileCard({
       >
         {/* Checkbox */}
         {selectable && (
-          // biome-ignore lint/a11y/useKeyWithClickEvents: checkbox handles its own keyboard events
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className={cn("self-center", hasSecondLine && "row-span-2")}
-          >
+          <div className={cn("self-center", hasSecondLine && "row-span-2")}>
             <Checkbox
               checked={selectable.isSelected}
               onCheckedChange={(checked) =>
                 selectable.onSelectionChange(!!checked)
               }
+              onClickCapture={(e) => e.stopPropagation()}
               className="shrink-0"
               aria-label="Select item"
             />
@@ -157,14 +154,16 @@ export function MobileCard({
               </span>
             )}
             <div className="ml-auto flex shrink-0 items-center gap-2">
-              {rightValues?.slice(0, 2).map((value, i) => (
-                <span
-                  key={i}
-                  className="max-w-40 truncate text-muted-foreground text-xs"
-                >
-                  {value}
+              {rightValues?.[0] !== undefined && (
+                <span className="max-w-40 truncate text-muted-foreground text-xs">
+                  {rightValues[0]}
                 </span>
-              ))}
+              )}
+              {rightValues?.[1] !== undefined && (
+                <span className="max-w-40 truncate text-muted-foreground text-xs">
+                  {rightValues[1]}
+                </span>
+              )}
             </div>
           </div>
         )}

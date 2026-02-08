@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getErrorMessage } from "~/lib/error-utils";
 
 /**
@@ -11,6 +11,8 @@ import { getErrorMessage } from "~/lib/error-utils";
 type TRPCMutationOptions = object;
 
 interface UseEditModeOptions<TResult = unknown> {
+  /** Entity ID — edit mode resets when this changes (e.g., navigating between detail pages). */
+  entityId: string;
   mutationOptions: TRPCMutationOptions;
   onSuccess?: (result?: TResult) => void;
   useRouterRefresh?: boolean;
@@ -37,6 +39,7 @@ export interface UseEditModeReturn<TData> {
  * - Error state management
  */
 export function useEditMode<TData, TResult = unknown>({
+  entityId,
   mutationOptions,
   onSuccess,
   useRouterRefresh = true,
@@ -45,6 +48,14 @@ export function useEditMode<TData, TResult = unknown>({
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | undefined>();
+
+  // Reset edit state when navigating between entities of the same type.
+  // entityId is intentionally the sole dependency — the effect exists to react to ID changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on entity change
+  useEffect(() => {
+    setIsEditing(false);
+    setError(undefined);
+  }, [entityId]);
 
   const mutation = useMutation<TResult, unknown, TData>({
     ...mutationOptions,
