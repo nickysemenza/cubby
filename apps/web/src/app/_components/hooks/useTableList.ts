@@ -43,6 +43,10 @@ interface UseTableListReturn<TData = unknown> {
   error: Error | null;
   tableState: ReturnType<typeof useTableState>;
   timing: QueryTiming;
+  refreshControls: {
+    onRefresh: () => Promise<void>;
+    isRefreshing: boolean;
+  };
 }
 
 /**
@@ -93,11 +97,15 @@ export function useTableList<TFilters, TData = unknown>({
     isLoading,
     error,
     isFetching,
+    isRefetching,
+    refetch,
   } = useQuery(memoizedQueryOptions) as {
     data: ListQueryResponse<TData> | undefined;
     isLoading: boolean;
     error: Error | null;
     isFetching: boolean;
+    isRefetching: boolean;
+    refetch: () => Promise<unknown>;
   };
 
   // Track query timing
@@ -133,5 +141,11 @@ export function useTableList<TFilters, TData = unknown>({
     error: error instanceof Error ? error : null,
     tableState,
     timing: timingRef.current, // Use ref instead of state to avoid triggering rerenders
+    refreshControls: {
+      onRefresh: async () => {
+        await refetch();
+      },
+      isRefreshing: isRefetching,
+    },
   };
 }

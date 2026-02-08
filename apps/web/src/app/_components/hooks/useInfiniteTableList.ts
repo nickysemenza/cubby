@@ -47,6 +47,10 @@ interface UseInfiniteTableListReturn<TData = unknown> {
   tableState: ReturnType<typeof useTableState>;
   timing: QueryTiming;
   infiniteScroll: InfiniteScrollControls;
+  refreshControls: {
+    onRefresh: () => Promise<void>;
+    isRefreshing: boolean;
+  };
 }
 
 /**
@@ -89,6 +93,8 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isRefetching,
+    refetch,
   } = useInfiniteQuery({
     queryKey: [...baseOptions.queryKey, "__infinite__"],
     queryFn: async ({ pageParam }: { pageParam: number }) => {
@@ -120,6 +126,8 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     fetchNextPage: () => void;
     hasNextPage: boolean;
     isFetchingNextPage: boolean;
+    isRefetching: boolean;
+    refetch: () => Promise<unknown>;
   };
 
   // Flatten all pages into a single array
@@ -142,6 +150,12 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
       fetchNextPage,
       hasNextPage: hasNextPage ?? false,
       isFetchingNextPage,
+    },
+    refreshControls: {
+      onRefresh: async () => {
+        await refetch();
+      },
+      isRefreshing: isRefetching && !isFetchingNextPage,
     },
   };
 }

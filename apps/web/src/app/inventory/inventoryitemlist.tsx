@@ -101,6 +101,7 @@ export function InventoryItemList() {
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
+    refreshControls,
   } = useEntityList({
     entity: "inventory",
     queryOptions: api.inventory.list.queryOptions,
@@ -115,6 +116,9 @@ export function InventoryItemList() {
       }),
       columnHelper.accessor("amount", {
         header: "Qty",
+        meta: {
+          mobile: { slot: "trailing", priority: 10 },
+        },
         cell: (info) => {
           return (
             <Link
@@ -129,12 +133,13 @@ export function InventoryItemList() {
       }),
       createCurrencyColumn(columnHelper, "valuation", {
         header: "Valuation",
+        mobile: { slot: "trailing", priority: 30 },
       }),
       columnHelper.accessor("product", {
         enableSorting: false,
         meta: {
           className: "min-w-0 w-56 max-w-72",
-          mobileCategory: "wide",
+          mobile: { slot: "meta", priority: 50 },
           filterConfig: { placeholder: "Filter product..." },
         },
         cell: (info) => {
@@ -162,7 +167,7 @@ export function InventoryItemList() {
       }),
       createSingleEntityPillColumn(columnHelper, "location", "location", {
         className: "min-w-0 w-40 max-w-56",
-        mobileCategory: "wide",
+        mobile: { slot: "subtitle", priority: 20 },
         filterConfig: { placeholder: "Filter location..." },
       }),
       createCreatedAtColumn(columnHelper),
@@ -192,6 +197,7 @@ export function InventoryItemList() {
         onRowClick={onRowClick}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       <PreviewSheet />
       {deleteDialog}

@@ -31,7 +31,7 @@ import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
-import { MobileCardView } from "./MobileCardView";
+import { MobileListScreen } from "./MobileListScreen";
 
 // Estimated row height in pixels
 const ESTIMATED_ROW_HEIGHT = 35;
@@ -64,6 +64,11 @@ interface TTableProps<TItem> {
   bulkActionBar?: ReactNode;
   /** Infinite scroll controls — when provided, mobile hides pagination and auto-loads more */
   infiniteScroll?: InfiniteScrollControls;
+  /** Pull-to-refresh controls for mobile list rendering */
+  refreshControls?: {
+    onRefresh: () => Promise<void>;
+    isRefreshing: boolean;
+  };
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -80,6 +85,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     renderMobileCard,
     onRowClick,
     infiniteScroll,
+    refreshControls,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -370,31 +376,20 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
         </div>
       )}
 
-      {/* Mobile Toolbar + Card View */}
+      {/* Mobile List View */}
       {isMobile && (
-        <div>
-          <DataTableToolbar
-            table={table}
-            additionalContent={additionalToolbarContent}
-            actions={actions}
-            bulkActionBar={bulkActionBar}
-            className="mb-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2"
-          />
-          {isLoading ? (
-            <SimpleLoading />
-          ) : error ? (
-            <div className="py-8">
-              <ErrorDisplay error={error} />
-            </div>
-          ) : (
-            <MobileCardView
-              table={table}
-              entity={entity}
-              renderMobileCard={renderMobileCard}
-              infiniteScroll={infiniteScroll}
-            />
-          )}
-        </div>
+        <MobileListScreen
+          table={table}
+          entity={entity}
+          additionalToolbarContent={additionalToolbarContent}
+          actions={actions}
+          bulkActionBar={bulkActionBar}
+          isLoading={isLoading}
+          error={error}
+          renderMobileCard={renderMobileCard}
+          infiniteScroll={infiniteScroll}
+          refreshControls={refreshControls}
+        />
       )}
 
       {/* Hide pagination on mobile when infinite scroll is active */}

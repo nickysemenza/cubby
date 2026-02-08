@@ -25,8 +25,3 @@ export function useIsMobile(): boolean {
 
   return isMobile;
 }
-
-export function useMobilePageSize(desktopSize = 50, mobileSize = 25): number {
-  const isMobile = useIsMobile();
-  return isMobile ? mobileSize : desktopSize;
-}

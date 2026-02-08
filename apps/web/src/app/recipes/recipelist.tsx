@@ -60,6 +60,9 @@ export function RecipeList({ actions }: RecipeListProps) {
       columnHelper.accessor("tags", {
         header: "Tags",
         enableSorting: false,
+        meta: {
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         cell: (info) => {
           const tags = info.getValue();
           if (!tags?.length) return <NoneState />;
@@ -77,6 +80,9 @@ export function RecipeList({ actions }: RecipeListProps) {
         id: "yield",
         header: "Yield",
         enableSorting: false,
+        meta: {
+          mobile: { slot: "meta", priority: 20 },
+        },
         cell: (info) => {
           const recipe = info.row.original;
           if (recipe.yield) return `${recipe.yield.value} ${recipe.yield.unit}`;
@@ -89,6 +95,9 @@ export function RecipeList({ actions }: RecipeListProps) {
         id: "totalCost",
         header: "Cost",
         enableSorting: false,
+        meta: {
+          mobile: { slot: "trailing", priority: 5 },
+        },
         cell: (info) => {
           const recipe = info.row.original;
           // Read from ref to get latest state (avoids stale closure)
@@ -116,6 +125,9 @@ export function RecipeList({ actions }: RecipeListProps) {
         id: "totalCalories",
         header: "Calories",
         enableSorting: false,
+        meta: {
+          mobile: { slot: "trailing", priority: 10 },
+        },
         cell: (info) => {
           const recipe = info.row.original;
           // Read from ref to get latest state (avoids stale closure)
@@ -145,6 +157,9 @@ export function RecipeList({ actions }: RecipeListProps) {
       columnHelper.accessor("meta", {
         header: "Source",
         enableSorting: false,
+        meta: {
+          mobile: { slot: "meta", priority: 30 },
+        },
         cell: (info) => {
           const url = info.getValue()?.url;
           if (!url) return <NoneState />;
@@ -181,6 +196,7 @@ export function RecipeList({ actions }: RecipeListProps) {
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
+    refreshControls,
   } = useEntityList({
     entity: "recipe",
     queryOptions: api.recipe.list.queryOptions,
@@ -306,6 +322,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         actions={actions}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       <PreviewSheet />
       {deleteDialog}

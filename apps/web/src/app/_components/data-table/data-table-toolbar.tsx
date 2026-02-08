@@ -13,6 +13,8 @@ interface DataTableToolbarProps<TData> {
   actions?: ReactNode;
   /** Bulk action bar (rendered when rows selected, replaces view options) */
   bulkActionBar?: ReactNode;
+  /** Show desktop view options dropdown (column toggles) */
+  showViewOptions?: boolean;
   /** Additional className for styling */
   className?: string;
 }
@@ -22,6 +24,7 @@ export function DataTableToolbar<TData>({
   additionalContent,
   actions,
   bulkActionBar,
+  showViewOptions = true,
   className,
 }: DataTableToolbarProps<TData>) {
   const isFiltered =
@@ -30,7 +33,8 @@ export function DataTableToolbar<TData>({
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
       {/* Show bulk action bar when present, otherwise show view options */}
-      {bulkActionBar ?? <DataTableViewOptions table={table} />}
+      {bulkActionBar ??
+        (showViewOptions ? <DataTableViewOptions table={table} /> : <div />)}
 
       <div className="flex flex-1 items-center justify-end gap-2">
         {additionalContent}

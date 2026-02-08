@@ -1,10 +1,6 @@
 /**
  * useUpcLookup - Shared UPC barcode lookup and product creation logic.
  *
- * Provides:
- * - isUpcInput(): Check if a string looks like a UPC barcode (8-14 digits)
- * - useUpcLookup(): Hook for looking up or creating products by UPC
- *
  * Used by: Quick-Capture, Bulk-Edit, and Scanner functionality
  */
 
@@ -19,24 +15,9 @@ import { useTRPC } from "~/trpc/react";
  * Check if input looks like a UPC barcode (8-14 digits only).
  * Supports UPC-A (12), UPC-E (8), EAN-13 (13), and EAN-8 (8) formats.
  */
-export function isUpcInput(input: string): boolean {
+function isUpcInput(input: string): boolean {
   const trimmed = input.trim();
   return /^\d{8,14}$/.test(trimmed);
-}
-
-/**
- * Check if a product name uses the "misc:" prefix convention.
- * Misc items are opaque placeholders without detailed product info.
- */
-export function isMiscProduct(name: string): boolean {
-  return name.startsWith("misc:");
-}
-
-/**
- * Apply the "misc:" prefix to a name if not already present.
- */
-export function applyMiscPrefix(name: string): string {
-  return isMiscProduct(name) ? name : `misc:${name}`;
 }
 
 interface UseUpcLookupOptions {

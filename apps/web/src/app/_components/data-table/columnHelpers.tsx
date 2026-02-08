@@ -43,11 +43,29 @@ export interface FilterConfig {
   options?: FilterableComboboxItem[];
 }
 
+export type MobileSlot =
+  | "title"
+  | "subtitle"
+  | "meta"
+  | "trailing"
+  | "image"
+  | "actions"
+  | "hidden";
+
+export interface MobileColumnMeta {
+  slot?: MobileSlot;
+  /** Lower values are rendered first within a slot */
+  priority?: number;
+}
+
 // Extend TanStack Table's meta type to include our custom properties
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData, TValue> {
+    /** New mobile projection metadata (preferred) */
+    mobile?: MobileColumnMeta;
+    /** @deprecated Use `mobile.slot` instead */
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
-    /** Hide this column in mobile card view */
+    /** @deprecated Use `mobile: { slot: "hidden" }` instead */
     mobileHidden?: boolean;
     className?: string;
     /** Filter configuration for inline header filter */
@@ -86,6 +104,8 @@ export function createNameColumn<T extends BaseRow>(
     editable?: {
       onSave: (newValue: string, row: T) => Promise<void>;
     };
+    /** Mobile projection metadata override */
+    mobile?: MobileColumnMeta;
   },
 ) {
   const config = {
@@ -94,6 +114,7 @@ export function createNameColumn<T extends BaseRow>(
     meta: {
       className: "min-w-0 w-40 max-w-56",
       filterConfig: options?.filterConfig,
+      mobile: options?.mobile ?? { slot: "title", priority: 0 },
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       const value = String(info.getValue());
@@ -163,6 +184,9 @@ export function createCreatedAtColumn<T extends BaseRow>(
 ) {
   return columnHelper.accessor((row) => row.createdAt, {
     id: "createdAt",
+    meta: {
+      mobile: { slot: "hidden" },
+    },
     cell: (info) => {
       const value = info.getValue();
       return value ? <HoverableTimestamp timestamp={value} /> : <NoneState />;
@@ -182,6 +206,8 @@ export function createImageColumn<T extends BaseRow>(
     ) => Array<{ id: string; url: string; filename?: string }>;
     /** Custom className for the column (default: "px-0 py-0 h-px") */
     className?: string;
+    /** Mobile projection metadata override */
+    mobile?: MobileColumnMeta;
   },
 ) {
   const getImages =
@@ -196,6 +222,7 @@ export function createImageColumn<T extends BaseRow>(
     // overflow-hidden prevents image from expanding the row
     meta: {
       className: cn("h-px overflow-hidden px-0 py-0", options?.className),
+      mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
     cell: (info) => (
       <ImageThumbnail
@@ -236,6 +263,8 @@ export function createEntityPillColumn<
     className?: string;
     /** Optional filter to deduplicate items */
     dedupe?: boolean;
+    /** Mobile projection metadata override */
+    mobile?: MobileColumnMeta;
   },
 ) {
   return columnHelper.accessor(
@@ -244,9 +273,12 @@ export function createEntityPillColumn<
       id: String(accessor),
       header: options?.header,
       enableSorting: false,
-      meta: options?.className
-        ? { className: `${options.className} overflow-hidden` }
-        : undefined,
+      meta: {
+        className: options?.className
+          ? `${options.className} overflow-hidden`
+          : undefined,
+        mobile: options?.mobile,
+      },
       cell: (info) => {
         let items = info.getValue() ?? [];
         if (options?.dedupe) {
@@ -345,6 +377,8 @@ export function createInventoryEntriesColumn<
     className?: string;
     /** Layout variant: 'stacked' shows amounts then pills, 'inline' shows amount+pill per row */
     layout?: "stacked" | "inline";
+    /** Mobile projection metadata override */
+    mobile?: MobileColumnMeta;
   },
 ) {
   const layout = options?.layout ?? "inline";
@@ -354,7 +388,10 @@ export function createInventoryEntriesColumn<
     header:
       options?.header ?? (entity === "location" ? "Locations" : "Products"),
     enableSorting: false,
-    meta: { className: options?.className ?? "min-w-0 w-40 max-w-56" },
+    meta: {
+      className: options?.className ?? "min-w-0 w-40 max-w-56",
+      mobile: options?.mobile,
+    },
     cell: (info) => {
       const entries = info.getValue() ?? [];
       if (entries.length === 0) {
@@ -452,6 +489,7 @@ export function createActionsColumnBase<T>(
     enableSorting: false,
     meta: {
       className: "w-10",
+      mobile: { slot: "actions", priority: 100 },
     },
     cell: (info) => {
       const row = info.row.original;
@@ -497,6 +535,7 @@ export function createTextColumn<
     placeholder?: string;
     className?: string;
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
+    mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     /** Enable inline editing */
     editable?: {
@@ -510,6 +549,7 @@ export function createTextColumn<
     meta: {
       className: options?.className,
       mobileCategory: options?.mobileCategory,
+      mobile: options?.mobile,
       filterConfig: options?.filterConfig,
     },
     cell: (info) => {
@@ -546,6 +586,7 @@ export function createCurrencyColumn<
   options?: {
     header?: string;
     className?: string;
+    mobile?: MobileColumnMeta;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: number | null, row: T) => Promise<void>;
@@ -555,7 +596,10 @@ export function createCurrencyColumn<
   return columnHelper.accessor((row) => row[accessor] as number | null, {
     id: String(accessor),
     header: options?.header,
-    meta: options?.className ? { className: options.className } : undefined,
+    meta: {
+      className: options?.className,
+      mobile: options?.mobile,
+    },
     cell: (info) => {
       const val = info.getValue();
 
@@ -614,6 +658,7 @@ export function createSingleEntityPillColumn<
     className?: string;
     compact?: boolean;
     mobileCategory?: "hero" | "compact" | "medium" | "wide";
+    mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
   },
 ) {
@@ -632,6 +677,7 @@ export function createSingleEntityPillColumn<
       meta: {
         className: options?.className,
         mobileCategory: options?.mobileCategory,
+        mobile: options?.mobile,
         filterConfig: options?.filterConfig,
       },
       cell: (info) => {
@@ -665,6 +711,7 @@ export function createFilterableSelectColumn<
     selectOptions: FilterableComboboxItem[];
     renderCell: (value: T[K]) => ReactNode;
     className?: string;
+    mobile?: MobileColumnMeta;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: T[K], row: T) => Promise<void>;
@@ -676,6 +723,7 @@ export function createFilterableSelectColumn<
     header: options.header,
     meta: {
       className: options.className,
+      mobile: options.mobile,
       filterConfig: {
         placeholder: options.placeholder,
         filterType: "select",
@@ -725,6 +773,7 @@ export function createExternalLinkColumn<
     paramName?: string;
     variant?: "mono" | "default";
     className?: string;
+    mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     /** Enable inline editing */
     editable?: {
@@ -742,6 +791,7 @@ export function createExternalLinkColumn<
       header: options?.header,
       meta: {
         className: options?.className,
+        mobile: options?.mobile,
         filterConfig: options?.filterConfig,
       },
       cell: (info) => {
@@ -804,6 +854,7 @@ export function createTimestampColumn<
     header?: string;
     fallback?: ReactNode;
     className?: string;
+    mobile?: MobileColumnMeta;
   },
 ) {
   const fallback = options?.fallback ?? <NoneState />;
@@ -811,7 +862,10 @@ export function createTimestampColumn<
   return columnHelper.accessor((row) => row[accessor] as string | Date | null, {
     id: String(accessor),
     header: options?.header,
-    meta: options?.className ? { className: options.className } : undefined,
+    meta: {
+      className: options?.className,
+      mobile: options?.mobile,
+    },
     cell: (info) => {
       const value = info.getValue();
       return value ? <HoverableTimestamp timestamp={value} /> : fallback;

@@ -25,7 +25,7 @@ interface MobileCardProps {
   /** Optional icon for title */
   titleIcon?: LucideIcon;
   /** Optional subtitle below title */
-  subtitle?: string;
+  subtitle?: ReactNode;
   /** Optional image/thumbnail to render left of the title */
   imageSlot?: ReactNode;
   /** Optional entity type for colored accent border */
@@ -88,7 +88,7 @@ export function MobileCard({
       // biome-ignore lint/a11y/noStaticElementInteractions: role, tabIndex, and onKeyDown are conditionally set based on onClick
       <div
         className={cn(
-          "grid items-center gap-x-2.5 border-border/30 border-b px-3 py-2.5",
+          "grid w-full max-w-full items-center gap-x-2.5 overflow-hidden border-border/30 border-b px-3 py-2.5",
           // Dynamic grid columns based on which slots are present
           selectable && imageSlot
             ? "grid-cols-[auto_auto_1fr_auto]"
@@ -135,7 +135,10 @@ export function MobileCard({
           {TitleIcon && (
             <TitleIcon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate font-medium text-sm" title={title}>
+          <span
+            className="block min-w-0 flex-1 truncate font-medium text-sm"
+            title={title}
+          >
             {title}
           </span>
         </div>
@@ -147,20 +150,20 @@ export function MobileCard({
 
         {/* Second line (content column, row 2) */}
         {hasSecondLine && (
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             {subtitle && (
-              <span className="min-w-0 truncate text-muted-foreground text-xs">
+              <span className="block min-w-0 flex-1 truncate text-muted-foreground text-xs">
                 {subtitle}
               </span>
             )}
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex min-w-0 max-w-[45%] items-center justify-end gap-2">
               {rightValues?.[0] !== undefined && (
-                <span className="max-w-40 truncate text-muted-foreground text-xs">
+                <span className="inline-block min-w-0 max-w-24 truncate text-muted-foreground text-xs">
                   {rightValues[0]}
                 </span>
               )}
               {rightValues?.[1] !== undefined && (
-                <span className="max-w-40 truncate text-muted-foreground text-xs">
+                <span className="inline-block min-w-0 max-w-24 truncate text-muted-foreground text-xs">
                   {rightValues[1]}
                 </span>
               )}

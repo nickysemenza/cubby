@@ -66,6 +66,7 @@ export function LocationList() {
     () => [
       createImageColumn(columnHelper),
       createNameColumn(columnHelper, "location", "name", {
+        mobile: { slot: "title", priority: 0 },
         filterConfig: { placeholder: "Filter by location name..." },
         editable: {
           onSave: async (newName, location) => {
@@ -76,12 +77,17 @@ export function LocationList() {
           },
         },
       }),
-      createEntityPillColumn(columnHelper, "children", "location"),
-      createSingleEntityPillColumn(columnHelper, "parent", "location"),
+      createEntityPillColumn(columnHelper, "children", "location", {
+        mobile: { slot: "meta", priority: 55 },
+      }),
+      createSingleEntityPillColumn(columnHelper, "parent", "location", {
+        mobile: { slot: "subtitle", priority: 20 },
+      }),
       createFilterableSelectColumn(columnHelper, "type", {
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
         renderCell: (type) => <LocationTypeBadge type={type} />,
+        mobile: { slot: "subtitle", priority: 15 },
         editable: {
           onSave: async (newType, location) => {
             await updateLocationMutation.mutateAsync({
@@ -100,19 +106,26 @@ export function LocationList() {
             variant="compact"
           />
         ),
-        meta: { className: "w-[180px]" },
+        meta: {
+          className: "w-[180px]",
+          mobile: { slot: "trailing", priority: 10 },
+        },
       }),
       createCreatedAtColumn(columnHelper),
       createTimestampColumn(columnHelper, "lastBulkInventory", {
         header: "Last Bulk Inventory",
         fallback: "Never",
+        mobile: { slot: "meta", priority: 90 },
       }),
       createInventoryEntriesColumn(
         columnHelper,
         "inventoryEntries",
         "product",
         (e) => e.product,
-        { layout: "inline" },
+        {
+          layout: "inline",
+          mobile: { slot: "meta", priority: 80 },
+        },
       ),
     ],
     [columnHelper],
@@ -194,6 +207,7 @@ export function LocationList() {
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
+    refreshControls,
   } = useEntityList({
     entity: "location",
     queryOptions: api.location.list.queryOptions,
@@ -229,6 +243,7 @@ export function LocationList() {
         onRowClick={onRowClick}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       <PreviewSheet />
       {deleteDialog}

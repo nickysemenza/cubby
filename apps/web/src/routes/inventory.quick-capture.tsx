@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { useIsMobile } from "~/hooks/use-mobile";
 
 const searchSchema = z.object({
   scanner: z.boolean().optional(),
@@ -23,6 +24,20 @@ export const Route = createFileRoute("/inventory/quick-capture")({
 
 function QuickCapturePage() {
   const { scanner, locationId, productId } = Route.useSearch();
+  const isMobile = useIsMobile();
+  const isImmersiveScan = isMobile && !!scanner;
+
+  if (isImmersiveScan) {
+    return (
+      <div className="safe-top safe-bottom min-h-[100dvh] px-3 py-3">
+        <QuickCaptureForm
+          initialLocationId={locationId}
+          initialProductId={productId}
+          initialScannerMode={scanner}
+        />
+      </div>
+    );
+  }
 
   return (
     <PageWrapper>

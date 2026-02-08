@@ -83,6 +83,9 @@ export function IngredientList() {
       }),
       columnHelper.accessor("aliases", {
         header: "Aliases",
+        meta: {
+          mobile: { slot: "subtitle", priority: 20 },
+        },
         cell: (info) => (
           <TruncatedList
             items={info.getValue()}
@@ -100,10 +103,12 @@ export function IngredientList() {
         header: "Recipes",
         className: "w-48 max-w-48",
         dedupe: true,
+        mobile: { slot: "meta", priority: 30 },
       }),
       createEntityPillColumn(columnHelper, "product", "product", {
         header: "Product",
         className: "w-48 max-w-48",
+        mobile: { slot: "subtitle", priority: 10 },
       }),
     ],
     [columnHelper],
@@ -117,6 +122,7 @@ export function IngredientList() {
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
+    refreshControls,
   } = useEntityList({
     entity: "ingredient",
     queryOptions: api.ingredient.list.queryOptions,
@@ -201,6 +207,7 @@ export function IngredientList() {
         onRowClick={onRowClick}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
         actions={
           <Button
             variant="default"

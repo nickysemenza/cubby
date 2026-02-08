@@ -12,6 +12,7 @@ import {
   Link,
   Outlet,
   Scripts,
+  useLocation,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
@@ -21,6 +22,7 @@ import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
 import { RouteErrorComponent } from "~/components/route-error";
 import { Toaster } from "~/components/ui/sonner";
+import { useIsMobile } from "~/hooks/use-mobile";
 import { DebugContextProvider, useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
@@ -87,29 +89,42 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [commandMenuOpen, setCommandMenuOpen] = React.useState(false);
+  const pathname = useLocation().pathname;
+  const isMobile = useIsMobile();
+  const isImmersiveScan = isMobile && pathname === "/inventory/quick-capture";
 
   return (
     <Provider queryClient={queryClient}>
       <DebugContextProvider>
-        <div className="border-b">
-          <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 md:px-6">
-            <MainNav
-              className="mx-0"
-              onSearchClick={() => setCommandMenuOpen(true)}
-            />
+        {!isImmersiveScan && (
+          <div className="border-b">
+            <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 md:px-6">
+              <MainNav
+                className="mx-0"
+                onSearchClick={() => setCommandMenuOpen(true)}
+              />
+            </div>
           </div>
-        </div>
+        )}
         {/* Add bottom padding on mobile for bottom nav */}
-        <main className="mx-auto w-full max-w-7xl px-4 pt-4 pb-20 md:px-6 md:pb-4">
+        <main
+          className={
+            isImmersiveScan
+              ? "min-h-[100dvh] w-full"
+              : "mx-auto w-full max-w-7xl px-4 pt-4 pb-20 md:px-6 md:pb-4"
+          }
+        >
           <Outlet />
         </main>
-        <footer className="border-t">
-          <div className="mx-auto hidden w-full max-w-7xl px-4 py-2 text-center text-muted-foreground text-xs md:block md:px-6">
-            v {__GIT_COMMIT__}
-          </div>
-        </footer>
+        {!isImmersiveScan && (
+          <footer className="border-t">
+            <div className="mx-auto hidden w-full max-w-7xl px-4 py-2 text-center text-muted-foreground text-xs md:block md:px-6">
+              v {__GIT_COMMIT__}
+            </div>
+          </footer>
+        )}
         {/* Bottom navigation for mobile */}
-        <BottomNav />
+        {!isImmersiveScan && <BottomNav />}
         <GlobalCommandMenu
           open={commandMenuOpen}
           onOpenChange={setCommandMenuOpen}

@@ -16,99 +16,113 @@ export default function ImageList() {
   const columnHelper = createColumnHelper<ImageWithEntity>();
   const { onRowClick, PreviewSheet } = useEntityPreview("image");
 
-  const { table, isLoading, error, timing, infiniteScroll } = useEntityList({
-    entity: "image",
-    queryOptions: api.image.list.queryOptions,
-    buildFilters: (ts) => ({
-      // Map filename column filter to the API's searchFilter
-      searchFilter: ts.getColumnFilter("filename") ?? undefined,
-    }),
-    columns: [
-      // Filename column (links to detail page)
-      columnHelper.accessor("filename", {
-        header: "Filename",
-        cell: ({ row, getValue }) => {
-          const filename = getValue();
-          return (
-            <Link
-              to="/images/$id"
-              params={{ id: row.original.id }}
-              className="font-medium text-primary hover:underline"
-            >
-              {filename || <NoneState />}
-            </Link>
-          );
-        },
-        meta: {
-          filterConfig: {
-            placeholder: "Filter by filename...",
-          },
-        },
+  const { table, isLoading, error, timing, infiniteScroll, refreshControls } =
+    useEntityList({
+      entity: "image",
+      queryOptions: api.image.list.queryOptions,
+      buildFilters: (ts) => ({
+        // Map filename column filter to the API's searchFilter
+        searchFilter: ts.getColumnFilter("filename") ?? undefined,
       }),
-      // Preview column
-      createImageColumn(columnHelper, {
-        getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
-      }),
-      // Content type
-      columnHelper.accessor("contentType", {
-        header: "Type",
-        cell: ({ getValue }) => <span>{getValue()}</span>,
-      }),
-      // File size
-      columnHelper.accessor("size", {
-        header: "Size",
-        cell: ({ getValue }) => <span>{formatBytes(getValue())}</span>,
-      }),
-      // Status
-      columnHelper.accessor("status", {
-        header: "Status",
-        cell: ({ getValue }) => {
-          const status = getValue();
-          return <ImageStatusBadge status={status} />;
-        },
-      }),
-      // Associated entity
-      columnHelper.accessor(
-        (row) => ({
-          entityType: row.entityType,
-          entityId: row.entityId,
-          entityName: row.entityName,
-        }),
-        {
-          id: "entity",
-          header: "Associated Entity",
-          cell: ({ getValue }) => {
-            const { entityType, entityId, entityName } = getValue();
-
-            if (!entityType || !entityId || !entityName) {
-              return <NoneState />;
-            }
-
-            const entityMap = {
-              PRODUCT: "product",
-              LOCATION: "location",
-              RECIPE: "recipe",
-            } as const;
-
+      columns: [
+        // Filename column (links to detail page)
+        columnHelper.accessor("filename", {
+          header: "Filename",
+          cell: ({ row, getValue }) => {
+            const filename = getValue();
             return (
-              <EntityPillLink
-                entity={entityMap[entityType as keyof typeof entityMap]}
-                data={{ id: entityId, name: entityName }}
-                compact
-              />
+              <Link
+                to="/images/$id"
+                params={{ id: row.original.id }}
+                className="font-medium text-primary hover:underline"
+              >
+                {filename || <NoneState />}
+              </Link>
             );
           },
+          meta: {
+            mobile: { slot: "title", priority: 0 },
+            filterConfig: {
+              placeholder: "Filter by filename...",
+            },
+          },
+        }),
+        // Preview column
+        createImageColumn(columnHelper, {
+          getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
+        }),
+        // Content type
+        columnHelper.accessor("contentType", {
+          header: "Type",
+          meta: {
+            mobile: { slot: "subtitle", priority: 10 },
+          },
+          cell: ({ getValue }) => <span>{getValue()}</span>,
+        }),
+        // File size
+        columnHelper.accessor("size", {
+          header: "Size",
+          meta: {
+            mobile: { slot: "trailing", priority: 5 },
+          },
+          cell: ({ getValue }) => <span>{formatBytes(getValue())}</span>,
+        }),
+        // Status
+        columnHelper.accessor("status", {
+          header: "Status",
+          meta: {
+            mobile: { slot: "meta", priority: 20 },
+          },
+          cell: ({ getValue }) => {
+            const status = getValue();
+            return <ImageStatusBadge status={status} />;
+          },
+        }),
+        // Associated entity
+        columnHelper.accessor(
+          (row) => ({
+            entityType: row.entityType,
+            entityId: row.entityId,
+            entityName: row.entityName,
+          }),
+          {
+            id: "entity",
+            header: "Associated Entity",
+            meta: {
+              mobile: { slot: "meta", priority: 30 },
+            },
+            cell: ({ getValue }) => {
+              const { entityType, entityId, entityName } = getValue();
+
+              if (!entityType || !entityId || !entityName) {
+                return <NoneState />;
+              }
+
+              const entityMap = {
+                PRODUCT: "product",
+                LOCATION: "location",
+                RECIPE: "recipe",
+              } as const;
+
+              return (
+                <EntityPillLink
+                  entity={entityMap[entityType as keyof typeof entityMap]}
+                  data={{ id: entityId, name: entityName }}
+                  compact
+                />
+              );
+            },
+          },
+        ),
+      ],
+      filters: [
+        {
+          id: "filename",
+          placeholder: "Filter by filename...",
         },
-      ),
-    ],
-    filters: [
-      {
-        id: "filename",
-        placeholder: "Filter by filename...",
-      },
-    ],
-    infinite: true,
-  });
+      ],
+      infinite: true,
+    });
 
   return (
     <div>
@@ -121,6 +135,7 @@ export default function ImageList() {
         entity="image"
         onRowClick={onRowClick}
         infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       <PreviewSheet />
     </div>

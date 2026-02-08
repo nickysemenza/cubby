@@ -125,6 +125,11 @@ interface UseEntityListReturn<TData> {
   deleteDialog: ReactNode | null;
   /** Infinite scroll controls (only present when infinite: true) */
   infiniteScroll?: InfiniteScrollControls;
+  /** Pull-to-refresh controls for mobile views */
+  refreshControls: {
+    onRefresh: () => Promise<void>;
+    isRefreshing: boolean;
+  };
 }
 
 /**
@@ -384,8 +389,15 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
       })
     : null;
 
-  const { data, totalCount, isLoading, error, tableState, timing } =
-    infiniteResult ?? paginatedResult!;
+  const {
+    data,
+    totalCount,
+    isLoading,
+    error,
+    tableState,
+    timing,
+    refreshControls,
+  } = infiniteResult ?? paginatedResult!;
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
@@ -567,5 +579,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     bulkActionBar,
     deleteDialog,
     infiniteScroll: infiniteResult?.infiniteScroll,
+    refreshControls,
   };
 }

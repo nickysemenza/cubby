@@ -95,6 +95,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
           ...productCategoryOptionsWithTheme,
         ],
         renderCell: (cat) => <CategoryBadge category={cat} />,
+        mobile: { slot: "subtitle", priority: 20 },
         editable: {
           onSave: async (newCategory, product) => {
             await updateProductMutation.mutateAsync({
@@ -106,9 +107,10 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
         header: "Ingredient",
+        mobile: { slot: "meta", priority: 45 },
       }),
       createTextColumn(columnHelper, "manufacturer", {
-        mobileCategory: "compact",
+        mobile: { slot: "subtitle", priority: 30 },
         filterConfig: { placeholder: "Filter manufacturer..." },
         editable: {
           onSave: async (newValue, product) => {
@@ -166,6 +168,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createCurrencyColumn(columnHelper, "price", {
         header: "Price",
+        mobile: { slot: "trailing", priority: 10 },
         editable: {
           onSave: async (newPrice, product) => {
             // Sync price to unitMappings (canonical way to set price)
@@ -183,7 +186,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
         header: "USDA Food",
-        mobileCategory: "compact",
+        mobile: { slot: "meta", priority: 70 },
       }),
       createInventoryEntriesColumn(
         columnHelper,
@@ -265,6 +268,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     bulkActionBar,
     deleteDialog,
     infiniteScroll,
+    refreshControls,
   } = useEntityList({
     entity: "product",
     queryOptions,
@@ -291,6 +295,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         actions={actions}
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
+        refreshControls={refreshControls}
       />
       <PreviewSheet />
       {deleteDialog}
