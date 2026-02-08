@@ -5,6 +5,7 @@ import {
   Home,
   LayoutDashboard,
   ScanBarcode,
+  Search,
   TrendingUp,
 } from "lucide-react";
 import { entities } from "~/entities/entities";
@@ -44,6 +45,13 @@ const recipes: NavItem = {
   label: "Recipes",
   icon: entities.recipe.lucideIcon,
   isActive: (p) => p.startsWith("/recipes"),
+};
+
+const search: NavItem = {
+  href: "/search",
+  label: "Search",
+  icon: Search,
+  isActive: (p) => p.startsWith("/search"),
 };
 
 const products: NavItem = {
@@ -121,12 +129,13 @@ export const bottomNavItems: NavItem[] = [
   scan,
   inventory,
   locations,
-  recipes,
+  search,
   products,
 ];
 
 export const moreNavItems: NavItem[] = [
   home,
+  recipes,
   ingredients,
   usda,
   dashboard,

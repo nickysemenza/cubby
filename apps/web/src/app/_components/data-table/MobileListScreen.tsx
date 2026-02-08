@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { Table as ITable, Row } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
-import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { PullToRefresh } from "~/components/ui/pull-to-refresh";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DataTableToolbar } from "./data-table-toolbar";
@@ -50,7 +50,7 @@ export function MobileListScreen<TItem>({
       />
 
       {isLoading ? (
-        <SimpleLoading />
+        <MobileCardSkeletonList />
       ) : error ? (
         <div className="py-8">
           <ErrorDisplay error={error} />
@@ -69,6 +69,7 @@ export function MobileListScreen<TItem>({
             <PullToRefresh
               onRefresh={refreshControls.onRefresh}
               disabled={refreshControls.isRefreshing}
+              getScrollTop={() => window.scrollY}
             >
               {cardView}
             </PullToRefresh>

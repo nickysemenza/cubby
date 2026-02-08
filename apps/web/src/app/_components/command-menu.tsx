@@ -14,11 +14,10 @@ import {
   CommandSeparator,
 } from "~/components/ui/command";
 import { Spinner } from "~/components/ui/spinner";
-import { EntityIcon, entities } from "~/entities/entities";
+import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";
-import { Pill } from "./Pill";
 import {
   entityTypeMap,
   getEnrichmentText,
@@ -126,6 +125,33 @@ export function GlobalCommandMenu({
   const hasSearch = search.length > 0;
   const hasResults = results && results.length > 0;
 
+  // Group search results by entity type for section headers
+  const groupedResults = React.useMemo(() => {
+    if (!results) return [];
+    const groups: Array<{
+      entityType: SearchableEntity;
+      label: string;
+      items: typeof results;
+    }> = [];
+    const byType = new Map<SearchableEntity, typeof results>();
+
+    for (const item of results) {
+      const existing = byType.get(item.entityType);
+      if (existing) {
+        existing.push(item);
+      } else {
+        const arr = [item];
+        byType.set(item.entityType, arr);
+        groups.push({
+          entityType: item.entityType,
+          label: entities[entityTypeMap[item.entityType]].pluralLabel,
+          items: arr,
+        });
+      }
+    }
+    return groups;
+  }, [results]);
+
   return (
     <CommandDialog
       open={open}
@@ -173,49 +199,62 @@ export function GlobalCommandMenu({
           </CommandGroup>
         )}
 
-        {/* Search Results - flat list with type pills */}
+        {/* Search Results - grouped by entity type with icon placeholders */}
         {hasResults && !isLoading && (
-          <CommandGroup heading="Results">
-            {results.map((item) => {
-              const entity = entityTypeMap[item.entityType];
-              const entityDef = entities[entity];
-              const enrichment = getEnrichmentText(item);
+          <>
+            {groupedResults.map((group) => (
+              <CommandGroup key={group.entityType} heading={group.label}>
+                {group.items.map((item) => {
+                  const enrichment = getEnrichmentText(item);
 
-              return (
-                <CommandItem
-                  key={`${item.entityType}-${item.id}`}
-                  onSelect={() => goToEntity(item.entityType, item.id)}
-                  className="flex items-center gap-2"
-                >
-                  <SearchResultItemIcon item={item} />
-                  <span className="w-56 min-w-0 shrink-0 truncate">
-                    {item.name}
-                  </span>
-                  <span className="w-32 shrink-0 text-muted-foreground text-xs">
-                    {enrichment}
-                  </span>
-                  <span className="flex-1" />
-                  <Pill
-                    icon={<EntityIcon entity={entity} size={10} colored />}
-                    className="shrink-0"
-                    metadata={item.subtitle || undefined}
-                  >
-                    {entityDef.label}
-                  </Pill>
-                </CommandItem>
-              );
-            })}
-            <CommandItem
-              onSelect={() => {
-                navigate({ to: "/search", search: { q: search } });
-                setOpen(false);
-              }}
-              className="justify-center text-muted-foreground"
-            >
-              <Search className="mr-2 h-4 w-4" />
-              See all results for "{search}"
-            </CommandItem>
-          </CommandGroup>
+                  return (
+                    <CommandItem
+                      key={`${item.entityType}-${item.id}`}
+                      onSelect={() => goToEntity(item.entityType, item.id)}
+                      className="flex items-center gap-3"
+                    >
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt=""
+                          className="h-8 w-8 shrink-0 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                          <SearchResultItemIcon
+                            item={item}
+                            className="h-4 w-4 shrink-0"
+                          />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm">{item.name}</div>
+                        {(item.subtitle || enrichment) && (
+                          <div className="truncate text-muted-foreground text-xs">
+                            {[item.subtitle, enrichment]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        )}
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+            <CommandGroup>
+              <CommandItem
+                onSelect={() => {
+                  navigate({ to: "/search", search: { q: search } });
+                  setOpen(false);
+                }}
+                className="justify-center text-muted-foreground"
+              >
+                <Search className="mr-2 h-4 w-4" />
+                See all results for "{search}"
+              </CommandItem>
+            </CommandGroup>
+          </>
         )}
 
         {/* Quick Actions - show when searching and matching */}

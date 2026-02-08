@@ -1,5 +1,7 @@
+import type { Entity } from "@cubby/schemas/entity";
 import { ImageIcon } from "lucide-react";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
+import { EntityIcon } from "~/entities/entities";
 
 interface ImageData {
   id: string;
@@ -11,6 +13,8 @@ interface ImageThumbnailProps {
   images: ImageData[];
   alt?: string;
   lazyPreview?: boolean;
+  /** When provided, shows a colored entity icon instead of a generic image icon */
+  entity?: Entity;
 }
 
 /** Image thumbnail that fills the cell height (cell must have h-px trick). */
@@ -18,12 +22,17 @@ export const ImageThumbnail = ({
   images,
   alt = "Image",
   lazyPreview = false,
+  entity,
 }: ImageThumbnailProps) => {
   if (images.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="flex aspect-square h-full items-center justify-center bg-muted/30">
-          <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
+          {entity ? (
+            <EntityIcon entity={entity} colored className="h-4 w-4" />
+          ) : (
+            <ImageIcon className="h-4 w-4 text-muted-foreground/30" />
+          )}
         </div>
       </div>
     );

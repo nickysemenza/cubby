@@ -69,7 +69,7 @@ export function IngredientList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateIngredientMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createImageColumn(columnHelper),
+      createImageColumn(columnHelper, { entity: "ingredient" }),
       createNameColumn(columnHelper, "ingredient", "name", {
         filterConfig: { placeholder: "Filter by ingredient name..." },
         editable: {

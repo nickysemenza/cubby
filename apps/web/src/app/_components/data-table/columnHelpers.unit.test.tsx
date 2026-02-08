@@ -395,13 +395,13 @@ describe("createImageColumn", () => {
   const columnHelper = createColumnHelper<TestRow>();
 
   it("creates a column with id 'image'", () => {
-    const column = createImageColumn(columnHelper);
+    const column = createImageColumn(columnHelper, { entity: "product" });
     // biome-ignore lint/suspicious/noExplicitAny: test helper
     expect((column as any).id).toBe("image");
   });
 
   it("renders image thumbnail when images exist", () => {
-    const column = createImageColumn(columnHelper);
+    const column = createImageColumn(columnHelper, { entity: "product" });
     const row: TestRow = {
       id: "1",
       name: "Test",
@@ -424,6 +424,7 @@ describe("createImageColumn", () => {
     }
     const customHelper = createColumnHelper<CustomRow>();
     const column = createImageColumn(customHelper, {
+      entity: "product",
       getImages: (row) => row.photos,
     });
 

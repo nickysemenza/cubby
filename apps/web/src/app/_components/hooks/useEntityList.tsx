@@ -439,7 +439,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
 
     // Prepend standard columns
     if (standardColumns.includes("image")) {
-      cols.push(createImageColumn(columnHelper));
+      cols.push(createImageColumn(columnHelper, { entity }));
     }
     if (standardColumns.includes("name")) {
       const nameFilterConfig = getFilterConfig("name");

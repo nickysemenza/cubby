@@ -93,6 +93,7 @@ export function LocationInventoryTable({
     columns: [
       createImageColumn(columnHelper, {
         getImages: (row) => row.product.images,
+        entity: "inventory",
       }),
 
       createSingleEntityPillColumn(columnHelper, "product", "product", {

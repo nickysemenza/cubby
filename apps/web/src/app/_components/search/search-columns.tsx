@@ -32,6 +32,7 @@ const entityTypeOptions: Array<{
 export const searchColumns = [
   // Image - compact thumbnail
   createImageColumn(columnHelper, {
+    entity: "product",
     getImages: (row) =>
       row.imageUrl ? [{ id: row.id, url: row.imageUrl }] : [],
     className: "w-12",

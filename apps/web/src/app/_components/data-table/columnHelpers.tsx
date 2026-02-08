@@ -199,7 +199,9 @@ export function createCreatedAtColumn<T extends BaseRow>(
  */
 export function createImageColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
-  options?: {
+  options: {
+    /** Entity type for colored placeholder icon when no image */
+    entity: Entity;
     /** Custom accessor when row doesn't have standard `images` array */
     getImages?: (
       row: T,
@@ -211,8 +213,9 @@ export function createImageColumn<T extends BaseRow>(
   },
 ) {
   const getImages =
-    options?.getImages ??
+    options.getImages ??
     ((row: T) => (row as unknown as ImageRow).images ?? []);
+  const { entity } = options;
 
   return columnHelper.accessor((row) => getImages(row), {
     id: "image",
@@ -229,6 +232,7 @@ export function createImageColumn<T extends BaseRow>(
         images={info.getValue() ?? []}
         alt="Image"
         lazyPreview={true}
+        entity={entity}
       />
     ),
   });

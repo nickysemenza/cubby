@@ -50,6 +50,7 @@ export default function ImageList() {
         // Preview column
         createImageColumn(columnHelper, {
           getImages: (row) => (row.status === "UPLOADED" ? [row] : []),
+          entity: "image",
         }),
         // Content type
         columnHelper.accessor("contentType", {

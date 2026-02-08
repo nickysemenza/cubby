@@ -1,3 +1,7 @@
+## Mobile PWA
+
+**Target: iOS only** — no Android-specific APIs (e.g., `navigator.vibrate` is not available on iOS Safari). See `docs/plans/2026-01-05-mobile-first-experience-design.md` for design details.
+
 ## Quick Reference
 
 - Format after changes: `pnpm run format:write`

@@ -64,7 +64,7 @@ export function LocationList() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: updateLocationMutation changes every render but is functionally stable
   const columns = useMemo(
     () => [
-      createImageColumn(columnHelper),
+      createImageColumn(columnHelper, { entity: "location" }),
       createNameColumn(columnHelper, "location", "name", {
         mobile: { slot: "title", priority: 0 },
         filterConfig: { placeholder: "Filter by location name..." },

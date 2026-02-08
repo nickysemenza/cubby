@@ -32,6 +32,8 @@ interface MobileCardProps {
   entity?: Entity;
   /** Optional click handler for the entire card */
   onClick?: () => void;
+  /** Optional touchstart handler (e.g., for route preloading) */
+  onTouchStart?: () => void;
   /**
    * Display variant:
    * - "card" (default): bordered card with shadow, used by LocationCardGrid, ProblemSection
@@ -67,6 +69,7 @@ export function MobileCard({
   imageSlot,
   entity,
   onClick,
+  onTouchStart,
   variant = "card",
   rightValues,
 }: MobileCardProps) {
@@ -99,6 +102,7 @@ export function MobileCard({
           className,
         )}
         onClick={onClick}
+        onTouchStart={onTouchStart}
         onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
         role={onClick ? "button" : undefined}
         tabIndex={onClick ? 0 : undefined}
@@ -188,6 +192,7 @@ export function MobileCard({
         className,
       )}
       onClick={onClick}
+      onTouchStart={onTouchStart}
       onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}

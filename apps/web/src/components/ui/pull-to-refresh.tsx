@@ -7,6 +7,8 @@ interface PullToRefreshProps {
   children: React.ReactNode;
   className?: string;
   disabled?: boolean;
+  /** Custom scroll position getter — defaults to container.scrollTop. Use () => window.scrollY for window-scrolled content. */
+  getScrollTop?: () => number;
 }
 
 const PULL_THRESHOLD = 80; // pixels to trigger refresh
@@ -21,6 +23,7 @@ export function PullToRefresh({
   children,
   className,
   disabled = false,
+  getScrollTop,
 }: PullToRefreshProps) {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -36,7 +39,8 @@ export function PullToRefresh({
       if (!container) return;
 
       // Only start pull if scrolled to top
-      if (container.scrollTop === 0) {
+      const scrollTop = getScrollTop ? getScrollTop() : container.scrollTop;
+      if (scrollTop === 0) {
         startYRef.current = e.touches[0].clientY;
         isPullingRef.current = true;
       }

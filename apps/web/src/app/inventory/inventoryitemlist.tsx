@@ -113,6 +113,7 @@ export function InventoryItemList() {
     columns: [
       createImageColumn(columnHelper, {
         getImages: (row) => row.product.images,
+        entity: "inventory",
       }),
       columnHelper.accessor("amount", {
         header: "Qty",
