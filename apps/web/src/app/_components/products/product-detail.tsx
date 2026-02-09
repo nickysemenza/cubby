@@ -69,6 +69,7 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
       entity="product"
       name={product.name}
       rawData={product}
+      heroImages={product.images}
     />
   );
 };

@@ -2,6 +2,7 @@ import type {
   LocationOutWithParentChildren,
   LocationType,
 } from "@cubby/schemas/location";
+import { getLocationTypeColor } from "@cubby/shared";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { Printer, ScanBarcode } from "lucide-react";
@@ -21,6 +22,7 @@ import {
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -199,6 +201,23 @@ export function LocationList() {
     [],
   );
 
+  // Group by location type for mobile section headers
+  const groupKeyFn = useCallback(
+    (item: LocationOutWithParentChildren) => item.type,
+    [],
+  );
+  const groupColorFn = useCallback(
+    (key: string) => getLocationTypeColor(key as LocationType),
+    [],
+  );
+  const groupConfig = useMemo(
+    (): GroupConfig<LocationOutWithParentChildren> => ({
+      keyFn: groupKeyFn,
+      colorFn: groupColorFn,
+    }),
+    [groupKeyFn, groupColorFn],
+  );
+
   const {
     table,
     isLoading,
@@ -244,6 +263,7 @@ export function LocationList() {
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
+        groupConfig={groupConfig}
       />
       <PreviewSheet />
       {deleteDialog}

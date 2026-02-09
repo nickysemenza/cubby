@@ -210,6 +210,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
         entity="location"
         name={location.name}
         rawData={location}
+        heroImages={location.images}
       />
       <CreateChildLocationDialog
         open={createChildOpen}

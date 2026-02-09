@@ -3,7 +3,7 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import type { Table as ITable, Row } from "@tanstack/react-table";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Bug } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { MobileCard } from "~/components/entity/mobile-card";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
@@ -12,6 +12,9 @@ import { useDebug } from "~/hooks/useDebug";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { DebugDialog } from "./DebugDialog";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
+import { SectionHeader } from "./SectionHeader";
+import type { GroupConfig } from "./useGroupedList";
+import { useGroupedList } from "./useGroupedList";
 import { useMobileListModel } from "./useMobileListModel";
 
 interface MobileCardViewProps<TItem> {
@@ -26,6 +29,10 @@ interface MobileCardViewProps<TItem> {
   renderMobileCard?: (row: Row<TItem>, defaultContent: ReactNode) => ReactNode;
   /** Infinite scroll controls — when provided, auto-loads more at bottom */
   infiniteScroll?: InfiniteScrollControls;
+  /** Group configuration for section headers */
+  groupConfig?: GroupConfig<TItem>;
+  /** Whether grouping is currently active */
+  grouped?: boolean;
 }
 
 export function MobileCardView<TItem>({
@@ -33,19 +40,50 @@ export function MobileCardView<TItem>({
   entity,
   renderMobileCard,
   infiniteScroll,
+  groupConfig,
+  grouped = false,
 }: MobileCardViewProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const navigate = useNavigate();
   const router = useRouter();
   const mobileRows = useMobileListModel({ table, entity });
 
+  // Build a lookup from table row index to mobileRow model
+  const rowIndexToModel = useMemo(() => {
+    const map = new Map<number, (typeof mobileRows)[number]>();
+    for (const model of mobileRows) {
+      // row.index is the index within the table row model
+      map.set(model.row.index, model);
+    }
+    return map;
+  }, [mobileRows]);
+
+  // Build grouped items when grouping is active
+  const allData = useMemo(
+    () => table.getRowModel().rows.map((r) => r.original),
+    [table],
+  );
+  const groupedItems = useGroupedList(allData, groupConfig, grouped);
+
+  // Determine virtualizer item count and estimate sizes
+  const itemCount = groupedItems ? groupedItems.length : mobileRows.length;
+  const estimateSize = useCallback(
+    (index: number) => {
+      if (groupedItems) {
+        return groupedItems[index]?.kind === "header" ? 36 : 56;
+      }
+      return 56;
+    },
+    [groupedItems],
+  );
+
   // Ref for scrollMargin offset calculation
   const listRef = useRef<HTMLDivElement>(null);
 
   // Window virtualizer — scrolls against the window, not a container
   const virtualizer = useWindowVirtualizer({
-    count: mobileRows.length,
-    estimateSize: () => 56,
+    count: itemCount,
+    estimateSize,
     overscan: 8,
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
@@ -86,9 +124,153 @@ export function MobileCardView<TItem>({
 
   const virtualItems = virtualizer.getVirtualItems();
 
+  const renderVirtualItem = (vi: (typeof virtualItems)[number]) => {
+    // --- Grouped mode ---
+    if (groupedItems) {
+      const gItem = groupedItems[vi.index];
+      if (!gItem) return null;
+
+      if (gItem.kind === "header") {
+        return (
+          <div
+            key={`header-${gItem.title}`}
+            ref={virtualizer.measureElement}
+            data-index={vi.index}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+            }}
+          >
+            <SectionHeader
+              title={gItem.title}
+              count={gItem.count}
+              color={gItem.color}
+            />
+          </div>
+        );
+      }
+
+      // gItem.kind === "row" — find matching mobile row model
+      const model = rowIndexToModel.get(gItem.index);
+      if (!model) return null;
+      return renderRowItem(vi, model);
+    }
+
+    // --- Flat mode ---
+    const model = mobileRows[vi.index];
+    if (!model) return null;
+    return renderRowItem(vi, model);
+  };
+
+  const renderRowItem = (
+    vi: (typeof virtualItems)[number],
+    model: (typeof mobileRows)[number],
+  ) => {
+    const row = model.row;
+
+    // Debug footer (only in row children if debug mode)
+    const debugContent = isDebugEnabled ? (
+      <div className="flex items-center gap-1">
+        <DebugDialog
+          data={row.original}
+          title={`Debug Data - Row ${row.id}`}
+          trigger={
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+              <Bug className="h-3 w-3" />
+              <span className="sr-only">Debug row data</span>
+            </Button>
+          }
+        />
+      </div>
+    ) : undefined;
+
+    // Default content (just debug if enabled, otherwise nothing)
+    const defaultContent = debugContent ?? null;
+
+    // Allow custom rendering for special cases (e.g., inline editing)
+    if (renderMobileCard) {
+      return (
+        <div
+          key={row.id}
+          ref={virtualizer.measureElement}
+          data-index={vi.index}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+          }}
+        >
+          {renderMobileCard(row, defaultContent)}
+        </div>
+      );
+    }
+
+    // Default compact row with right-aligned values
+    return (
+      <div
+        key={row.id}
+        ref={virtualizer.measureElement}
+        data-index={vi.index}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+        }}
+      >
+        <MobileCard
+          variant="row"
+          title={model.title}
+          subtitle={model.subtitle}
+          imageSlot={
+            model.imageSlot ??
+            (entity && (
+              <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
+                <EntityIcon entity={entity} colored className="h-5 w-5" />
+              </div>
+            ))
+          }
+          rightValues={model.rightValues}
+          selectable={
+            isSelectable
+              ? {
+                  isSelected: row.getIsSelected(),
+                  onSelectionChange: (checked) => row.toggleSelected(checked),
+                }
+              : undefined
+          }
+          actions={model.actionsContent}
+          entity={entity}
+          onClick={
+            model.detailsHref
+              ? () => {
+                  navigate({ to: model.detailsHref });
+                }
+              : undefined
+          }
+          onTouchStart={
+            model.detailsHref
+              ? () => {
+                  router.preloadRoute({ to: model.detailsHref });
+                }
+              : undefined
+          }
+        >
+          {debugContent}
+        </MobileCard>
+      </div>
+    );
+  };
+
   return (
     <div className="block overflow-x-hidden lg:hidden">
-      {mobileRows.length ? (
+      {itemCount > 0 ? (
         <div ref={listRef}>
           <div
             style={{
@@ -97,111 +279,7 @@ export function MobileCardView<TItem>({
               position: "relative",
             }}
           >
-            {virtualItems.map((vi) => {
-              const model = mobileRows[vi.index];
-              const row = model.row;
-
-              // Debug footer (only in row children if debug mode)
-              const debugContent = isDebugEnabled ? (
-                <div className="flex items-center gap-1">
-                  <DebugDialog
-                    data={row.original}
-                    title={`Debug Data - Row ${row.id}`}
-                    trigger={
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                        <Bug className="h-3 w-3" />
-                        <span className="sr-only">Debug row data</span>
-                      </Button>
-                    }
-                  />
-                </div>
-              ) : undefined;
-
-              // Default content (just debug if enabled, otherwise nothing)
-              const defaultContent = debugContent ?? null;
-
-              // Allow custom rendering for special cases (e.g., inline editing)
-              if (renderMobileCard) {
-                return (
-                  <div
-                    key={row.id}
-                    ref={virtualizer.measureElement}
-                    data-index={vi.index}
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      width: "100%",
-                      transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
-                    }}
-                  >
-                    {renderMobileCard(row, defaultContent)}
-                  </div>
-                );
-              }
-
-              // Default compact row with right-aligned values
-              return (
-                <div
-                  key={row.id}
-                  ref={virtualizer.measureElement}
-                  data-index={vi.index}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
-                  }}
-                >
-                  <MobileCard
-                    variant="row"
-                    title={model.title}
-                    subtitle={model.subtitle}
-                    imageSlot={
-                      model.imageSlot ??
-                      (entity && (
-                        <div className="flex h-11 w-11 items-center justify-center rounded bg-muted/50">
-                          <EntityIcon
-                            entity={entity}
-                            colored
-                            className="h-5 w-5"
-                          />
-                        </div>
-                      ))
-                    }
-                    rightValues={model.rightValues}
-                    selectable={
-                      isSelectable
-                        ? {
-                            isSelected: row.getIsSelected(),
-                            onSelectionChange: (checked) =>
-                              row.toggleSelected(checked),
-                          }
-                        : undefined
-                    }
-                    actions={model.actionsContent}
-                    entity={entity}
-                    onClick={
-                      model.detailsHref
-                        ? () => {
-                            navigate({ to: model.detailsHref });
-                          }
-                        : undefined
-                    }
-                    onTouchStart={
-                      model.detailsHref
-                        ? () => {
-                            router.preloadRoute({ to: model.detailsHref });
-                          }
-                        : undefined
-                    }
-                  >
-                    {debugContent}
-                  </MobileCard>
-                </div>
-              );
-            })}
+            {virtualItems.map(renderVirtualItem)}
           </div>
 
           {/* Infinite scroll sentinel — placed after virtualizer content */}

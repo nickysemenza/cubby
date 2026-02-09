@@ -414,6 +414,36 @@
     }
   }
 
+  /* Mobile: slide transitions for a more native feel */
+  @media (max-width: 767px) {
+    ::view-transition-old(root) {
+      animation: vt-slide-out-left 200ms ease-in;
+    }
+    ::view-transition-new(root) {
+      animation: vt-slide-in-right 200ms ease-out;
+    }
+  }
+  @keyframes vt-slide-out-left {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-25%);
+    }
+  }
+  @keyframes vt-slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(25%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
   /* Auth page background with warm gradient */
   .auth-background {
     @apply bg-background;

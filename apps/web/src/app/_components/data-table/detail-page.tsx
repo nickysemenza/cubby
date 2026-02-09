@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FC } from "react";
+import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntityIcon, entities } from "~/entities/entities";
+import { useIsMobile } from "~/hooks/use-mobile";
 import { useDebug } from "~/hooks/useDebug";
 import { cn } from "~/lib/utils";
 import JsonRenderer from "../json-renderer";
@@ -17,6 +19,8 @@ interface DetailPageProps {
   entity: Entity;
   name: string;
   rawData: unknown; // The full entity data for debug display
+  /** Images shown as a swipeable hero gallery on mobile */
+  heroImages?: Array<{ id: string; url: string; filename: string }>;
 }
 
 export const DetailPage: FC<DetailPageProps> = ({
@@ -24,12 +28,21 @@ export const DetailPage: FC<DetailPageProps> = ({
   entity,
   name,
   rawData,
+  heroImages,
 }) => {
   const entityDetails = entities[entity];
   const { isDebugEnabled } = useDebug();
+  const isMobile = useIsMobile();
 
   return (
     <div className="space-y-3 sm:space-y-6">
+      {/* Hero image gallery — mobile only */}
+      {isMobile && heroImages && heroImages.length > 0 && (
+        <div className="-mx-4 -mt-4">
+          <ImageGallery images={heroImages} />
+        </div>
+      )}
+
       <h1 className="hidden items-center gap-2 font-heading font-semibold text-xl tracking-tight sm:flex sm:text-2xl">
         <EntityIcon entity={entity} colored className="h-6 w-6" />
         <span>

@@ -1,6 +1,8 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import { ChevronLeft } from "lucide-react";
 import {
   type RefCallback,
   useCallback,
@@ -10,6 +12,8 @@ import {
 } from "react";
 import type { z } from "zod";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
+import { Button } from "~/components/ui/button";
+import { useIsMobile } from "~/hooks/use-mobile";
 import {
   type EmptyFilter,
   useGalleryViewState,
@@ -18,6 +22,8 @@ import { useTRPC } from "~/trpc/react";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";
 import { GalleryUnifiedView } from "./gallery-unified-view";
+import { LocationGalleryCard } from "./location-gallery-card";
+import { LocationIcon } from "./location-icons";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -225,6 +231,7 @@ function calculateStats(
  */
 export function LocationGallery() {
   const api = useTRPC();
+  const isMobile = useIsMobile();
 
   // Gallery state
   const {
@@ -489,6 +496,15 @@ export function LocationGallery() {
     );
   }
 
+  if (isMobile) {
+    return (
+      <MobileGalleryDrillDown
+        locations={displayLocations}
+        inventoryByLocation={inventoryByLocation}
+      />
+    );
+  }
+
   return (
     <div className="flex h-[calc(100vh-12rem)] overflow-hidden rounded-lg border bg-background">
       {/* Sidebar */}
@@ -532,6 +548,116 @@ export function LocationGallery() {
           />
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile drill-down gallery. Shows a 2-column grid of location cards.
+ * Tapping a location with children drills into it; leaf locations navigate to detail.
+ */
+function MobileGalleryDrillDown({
+  locations,
+  inventoryByLocation,
+}: {
+  locations: InfLocation[];
+  inventoryByLocation: Map<
+    string,
+    z.infer<typeof inventoryWithLocationAndProductOut>[]
+  >;
+}) {
+  const navigate = useNavigate();
+  const [path, setPath] = useState<InfLocation[]>([]);
+
+  // Current level: root or drilled-in children
+  const currentLocations =
+    path.length === 0 ? locations : (path[path.length - 1].children ?? []);
+
+  const handleTap = useCallback(
+    (location: InfLocation) => {
+      if (location.children && location.children.length > 0) {
+        setPath((prev) => [...prev, location]);
+      } else {
+        navigate({ to: "/locations/$id", params: { id: location.id } });
+      }
+    },
+    [navigate],
+  );
+
+  const handleBack = useCallback(() => {
+    setPath((prev) => prev.slice(0, -1));
+  }, []);
+
+  return (
+    <div className="space-y-3">
+      {/* Breadcrumb navigation */}
+      {path.length > 0 && (
+        <div className="flex items-center gap-1 text-sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 px-2"
+            onClick={handleBack}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <div className="flex items-center gap-1 text-muted-foreground">
+            <button
+              type="button"
+              className="hover:text-foreground"
+              onClick={() => setPath([])}
+            >
+              All
+            </button>
+            {path.map((loc, i) => (
+              <span key={loc.id} className="flex items-center gap-1">
+                <span>/</span>
+                <button
+                  type="button"
+                  className="hover:text-foreground"
+                  onClick={() => setPath((prev) => prev.slice(0, i + 1))}
+                >
+                  {loc.name}
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 2-column card grid */}
+      {currentLocations.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2">
+          {currentLocations.map((location) => {
+            const hasChildren = (location.children?.length ?? 0) > 0;
+            return (
+              <button
+                type="button"
+                key={location.id}
+                className="text-left"
+                onClick={() => handleTap(location)}
+              >
+                <LocationGalleryCard
+                  location={location}
+                  inventoryItems={inventoryByLocation.get(location.id) ?? []}
+                />
+                {hasChildren && (
+                  <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
+                    {location.children!.length} sub-location
+                    {location.children!.length !== 1 ? "s" : ""}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+          <LocationIcon type="room" className="mb-2 h-8 w-8 opacity-40" />
+          <span>No locations here</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { formatCategoryLabel, getCategoryColor } from "@cubby/shared";
 import { Link } from "@tanstack/react-router";
 import type { ColumnFiltersState } from "@tanstack/react-table";
 import { createColumnHelper } from "@tanstack/react-table";
@@ -19,6 +20,7 @@ import {
   createTextColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
+import type { GroupConfig } from "../_components/data-table/useGroupedList";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
@@ -256,6 +258,28 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [],
   );
 
+  // Group by product category for mobile section headers
+  const groupKeyFn = useCallback(
+    (item: ProductWithFoodOut) => formatCategoryLabel(item.category),
+    [],
+  );
+  const groupColorFn = useCallback(
+    (key: string) =>
+      getCategoryColor(
+        key === "uncategorized"
+          ? null
+          : (key.replace(" ", "-") as Parameters<typeof getCategoryColor>[0]),
+      ),
+    [],
+  );
+  const groupConfig = useMemo(
+    (): GroupConfig<ProductWithFoodOut> => ({
+      keyFn: groupKeyFn,
+      colorFn: groupColorFn,
+    }),
+    [groupKeyFn, groupColorFn],
+  );
+
   // Capture queryOptions ONCE - tRPC Proxy might return new reference on each access!
   // Store the actual function, not a getter
   const queryOptions = api.product.list.queryOptions;
@@ -296,6 +320,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         bulkActionBar={bulkActionBar}
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
+        groupConfig={groupConfig}
       />
       <PreviewSheet />
       {deleteDialog}

@@ -32,6 +32,7 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
 import { MobileListScreen } from "./MobileListScreen";
+import type { GroupConfig } from "./useGroupedList";
 
 // Estimated row height in pixels
 const ESTIMATED_ROW_HEIGHT = 35;
@@ -69,6 +70,8 @@ interface TTableProps<TItem> {
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
   };
+  /** Group configuration for mobile section headers */
+  groupConfig?: GroupConfig<TItem>;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -86,6 +89,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     onRowClick,
     infiniteScroll,
     refreshControls,
+    groupConfig,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -389,6 +393,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           renderMobileCard={renderMobileCard}
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
+          groupConfig={groupConfig}
         />
       )}
 
