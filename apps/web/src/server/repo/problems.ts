@@ -157,6 +157,7 @@ const findDuplicateUniqueProducts = async (
     },
     with: {
       InventoryEntry: {
+        where: notDeleted(inventoryEntry),
         columns: {
           id: true,
           locationId: true,

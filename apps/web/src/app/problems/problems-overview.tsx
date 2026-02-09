@@ -60,14 +60,19 @@ function DuplicateUniqueProductsList({
         title: product.name,
         subtitle: `by ${product.manufacturer}`,
         badges: product.locations.map((location) => (
-          <Badge
+          <Link
             key={location.id}
-            variant="outline"
-            className="flex items-center gap-1"
+            to="/locations/$id"
+            params={{ id: location.id }}
           >
-            <EntityIcon entity="location" colored className="h-3 w-3" />
-            {location.name}
-          </Badge>
+            <Badge
+              variant="outline"
+              className="flex items-center gap-1 hover:bg-accent"
+            >
+              <EntityIcon entity="location" colored className="h-3 w-3" />
+              {location.name}
+            </Badge>
+          </Link>
         )),
         route: { to: "/products/$id" as const, params: { id: product.id } },
       })}
