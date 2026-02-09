@@ -40,6 +40,7 @@ function makeInventoryItem(params: {
       createdAt: now,
       updatedAt: now,
       lastBulkInventory: null,
+      aiDescription: null,
     },
     product: {
       id: unsafeProductId(params.product.id),

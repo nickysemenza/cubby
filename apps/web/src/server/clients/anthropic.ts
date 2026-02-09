@@ -1,7 +1,11 @@
 import {
   type CategorySuggestion,
   categorySuggestionSchema,
+  type DetectedInventory,
+  detectedInventorySchema,
+  type LocationDescription,
   type LocationTypeSuggestion,
+  locationDescriptionSchema,
   locationTypeSuggestionSchema,
 } from "@cubby/schemas/ai";
 import { type LocationType, locationType } from "@cubby/schemas/location";
@@ -9,8 +13,11 @@ import {
   type ProductCategory,
   productCategoryValues,
 } from "@cubby/schemas/product";
-import { chat } from "@tanstack/ai";
-import { anthropicText } from "@tanstack/ai-anthropic";
+import { chat, type ImagePart } from "@tanstack/ai";
+import {
+  type AnthropicImageMetadata,
+  anthropicText,
+} from "@tanstack/ai-anthropic";
 import { env } from "~/env";
 
 // Category descriptions for the LLM to understand what each category means
@@ -153,6 +160,86 @@ Determine the appropriate type for this location and explain your reasoning.`,
         },
       ],
       outputSchema: locationTypeSuggestionSchema,
+    });
+  }
+
+  async describeLocation(
+    imageUrls: string[],
+    locationName: string,
+  ): Promise<LocationDescription> {
+    const adapter = this.getAdapter();
+
+    const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
+      (url) => ({
+        type: "image",
+        source: { type: "url", value: url },
+      }),
+    );
+
+    return chat({
+      adapter,
+      systemPrompts: [
+        "You are a visual inventory assistant. Describe what you see stored in this location. Be concise (2-4 sentences). Identify specific items, brands, and quantities where visible. Don't speculate about items you can't clearly see.",
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...imageParts,
+            {
+              type: "text",
+              content: `Describe the contents of this location: "${locationName}"`,
+            },
+          ],
+        },
+      ],
+      outputSchema: locationDescriptionSchema,
+    });
+  }
+
+  async detectInventoryItems(
+    imageUrls: string[],
+    locationName: string,
+    existingItems: string[],
+  ): Promise<DetectedInventory> {
+    const adapter = this.getAdapter();
+
+    const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
+      (url) => ({
+        type: "image",
+        source: { type: "url", value: url },
+      }),
+    );
+
+    const existingItemsList =
+      existingItems.length > 0
+        ? `\n\nItems already tracked at this location (avoid duplicates):\n${existingItems.map((i) => `- ${i}`).join("\n")}`
+        : "";
+
+    return chat({
+      adapter,
+      systemPrompts: [
+        `You are a visual inventory assistant. Identify distinct products and items visible in the photos. For each item:
+- "name": the product name WITHOUT the brand (e.g., "packing tape roll", "digital scale", "tape dispenser")
+- "manufacturer": the brand/manufacturer if visible, or "(unspecified)" if not identifiable
+- Estimate quantity visible
+- Suggest an appropriate unit (e.g., "each", "box", "bag", "can", "bottle")
+- For items you can't clearly identify, use the "misc:" prefix in name (e.g., "misc:unidentified cables")
+- Only list items you can reasonably identify from the photos`,
+      ],
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...imageParts,
+            {
+              type: "text",
+              content: `Identify inventory items in this location: "${locationName}"${existingItemsList}`,
+            },
+          ],
+        },
+      ],
+      outputSchema: detectedInventorySchema,
     });
   }
 }

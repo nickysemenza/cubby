@@ -1,0 +1,210 @@
+import type { DetectedItem } from "@cubby/schemas/ai";
+import type { LocationId } from "@cubby/schemas/identifiers";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Package, Sparkles, Trash2 } from "lucide-react";
+import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { ScrollArea } from "~/components/ui/scroll-area";
+import { Spinner } from "~/components/ui/spinner";
+import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { queryKeys } from "~/lib/query-keys";
+import { useTRPC } from "~/trpc/react";
+
+interface DetectItemsDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  locationId: LocationId;
+  locationName: string;
+}
+
+const confidenceVariant = {
+  high: "default",
+  medium: "secondary",
+  low: "outline",
+} as const;
+
+export const DetectItemsDialog: FC<DetectItemsDialogProps> = ({
+  open,
+  onOpenChange,
+  locationId,
+  locationName,
+}) => {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const [items, setItems] = useState<DetectedItem[]>([]);
+  const [summary, setSummary] = useState<string>("");
+
+  const detectMutation = useMutation(
+    api.ai.detectInventoryItems.mutationOptions({
+      onSuccess: (data) => {
+        setItems(data.items);
+        setSummary(data.summary);
+      },
+      onError: (error) => {
+        toast.error(getErrorMessage(error));
+      },
+    }),
+  );
+
+  const createMutation = useMutation(
+    api.inventory.create.mutationOptions({
+      onError: (error) => {
+        toast.error(getErrorMessage(error));
+      },
+    }),
+  );
+
+  // Use ref to avoid re-triggering effect when mutation reference changes
+  const detectRef = useRef(detectMutation.mutate);
+  detectRef.current = detectMutation.mutate;
+
+  // Trigger detection when dialog opens
+  useEffect(() => {
+    if (open) {
+      setItems([]);
+      setSummary("");
+      detectRef.current({ locationId });
+    }
+  }, [open, locationId]);
+
+  const dismissItem = useCallback((index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleAddItems = useCallback(async () => {
+    if (items.length === 0) return;
+
+    let added = 0;
+    for (const item of items) {
+      try {
+        // Create as misc product with detected quantity
+        await createMutation.mutateAsync({
+          productId: undefined as never, // Will be handled by quick-add flow
+          locationId,
+          amount: { value: item.estimatedQuantity, unit: item.unit },
+        });
+        added++;
+      } catch {
+        // Individual failures are already toasted by onError
+      }
+    }
+
+    if (added > 0) {
+      toast.success(
+        `Added ${added} item${added === 1 ? "" : "s"} to inventory`,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: [queryKeys.inventory.list],
+      });
+      onOpenChange(false);
+    }
+  }, [items, locationId, createMutation, queryClient, onOpenChange]);
+
+  const isLoading = detectMutation.isPending;
+  const hasResults = items.length > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Detect Items
+          </DialogTitle>
+          <DialogDescription>
+            Analyzing photos of "{locationName}" to identify inventory items
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading && (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <Spinner className="h-6 w-6" />
+            <p className="text-muted-foreground text-sm">Analyzing photos...</p>
+          </div>
+        )}
+
+        {!isLoading && !hasResults && detectMutation.isSuccess && (
+          <div className="py-8 text-center">
+            <Package className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
+            <p className="text-muted-foreground text-sm">
+              No items detected in the photos
+            </p>
+          </div>
+        )}
+
+        {!isLoading && hasResults && (
+          <>
+            {summary && (
+              <p className="text-muted-foreground text-sm">{summary}</p>
+            )}
+            <ScrollArea className="max-h-[400px]">
+              <div className="space-y-2">
+                {items.map((item, index) => (
+                  <div
+                    key={`${item.name}-${index}`}
+                    className="flex items-center gap-3 rounded-md border p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-medium text-sm">
+                          {item.name}
+                        </span>
+                        <Badge variant={confidenceVariant[item.confidence]}>
+                          {item.confidence}
+                        </Badge>
+                      </div>
+                      <p className="text-muted-foreground text-sm">
+                        {!isUnspecifiedManufacturer(item.manufacturer) && (
+                          <span>{item.manufacturer} &middot; </span>
+                        )}
+                        {item.estimatedQuantity} {item.unit}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => dismissItem(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </>
+        )}
+
+        {!isLoading && hasResults && (
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddItems}
+              disabled={createMutation.isPending}
+            >
+              {createMutation.isPending ? (
+                <Spinner className="mr-2" />
+              ) : (
+                <Package className="mr-2 h-4 w-4" />
+              )}
+              Add {items.length} Item{items.length === 1 ? "" : "s"}
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};

@@ -28,6 +28,7 @@ export const locationOut = z
     id: locationId,
     shortcode: locationShortcode,
     lastBulkInventory: z.date().nullable(),
+    aiDescription: z.string().nullable(),
     images: z.array(imageOut),
   })
   .extend(locationBase.shape)

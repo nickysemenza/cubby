@@ -9,10 +9,12 @@
 export {
   createLocation,
   deleteLocations,
+  findLocationsNeedingAiDescription,
   getChildCountsByLocationIds,
   getLocationById,
   locationList,
   updateLocation,
+  updateLocationAiDescription,
 } from "./crud";
 // Helpers
 export {

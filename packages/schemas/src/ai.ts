@@ -29,3 +29,26 @@ export const locationTypeSuggestionSchema = z.object({
 export type LocationTypeSuggestion = z.infer<
   typeof locationTypeSuggestionSchema
 >;
+
+// Location description from photo analysis
+export const locationDescriptionSchema = z.object({
+  description: z.string(),
+  confidence: confidence,
+});
+export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
+
+// Detected inventory item from photo analysis
+export const detectedItemSchema = z.object({
+  name: z.string(),
+  manufacturer: z.string(),
+  estimatedQuantity: z.number().positive(),
+  unit: z.string(),
+  confidence: confidence,
+});
+export type DetectedItem = z.infer<typeof detectedItemSchema>;
+
+export const detectedInventorySchema = z.object({
+  items: z.array(detectedItemSchema),
+  summary: z.string(),
+});
+export type DetectedInventory = z.infer<typeof detectedInventorySchema>;

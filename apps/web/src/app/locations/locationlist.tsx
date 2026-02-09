@@ -19,6 +19,7 @@ import {
   createInventoryEntriesColumn,
   createNameColumn,
   createSingleEntityPillColumn,
+  createTextColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
 import RTable from "../_components/data-table/Table";
@@ -112,6 +113,11 @@ export function LocationList() {
           className: "w-[180px]",
           mobile: { slot: "trailing", priority: 10 },
         },
+      }),
+      createTextColumn(columnHelper, "aiDescription", {
+        header: "AI Description",
+        className: "max-w-[300px]",
+        mobile: { slot: "meta", priority: 70 },
       }),
       createCreatedAtColumn(columnHelper),
       createTimestampColumn(columnHelper, "lastBulkInventory", {

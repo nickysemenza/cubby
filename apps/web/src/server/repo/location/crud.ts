@@ -15,7 +15,7 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { dedupe } from "~/misc/array-helpers";
 import { createAppError } from "~/server/api/trpc";
@@ -320,6 +320,50 @@ export const locationList = async (
 
   const items = results.map(dbLocationToAPIWithChildren);
   return { data: items, count: totalCount };
+};
+
+// Update the AI description for a location
+export const updateLocationAiDescription = async (
+  db: Database,
+  id: LocationId,
+  aiDescription: string,
+) => {
+  await updateAndReturn(db, location, { aiDescription }, eq(location.id, id));
+};
+
+/**
+ * Find locations that have images but no AI description.
+ * Returns minimal data needed for backfill: id, name, and image URLs.
+ */
+export const findLocationsNeedingAiDescription = async (
+  db: Database,
+): Promise<Array<{ id: LocationId; name: string; imageUrls: string[] }>> => {
+  const dbClient = getDb(db);
+
+  // Find locations with images but no AI description
+  const locations = await dbClient.query.location.findMany({
+    where: and(notDeleted(location), isNull(location.aiDescription)),
+    columns: { id: true, name: true },
+    with: {
+      images: {
+        columns: {},
+        with: {
+          image: {
+            columns: { url: true },
+          },
+        },
+      },
+    },
+  });
+
+  // Filter to only those that actually have images
+  return locations
+    .filter((loc) => loc.images.length > 0)
+    .map((loc) => ({
+      id: unsafeLocationId(loc.id),
+      name: loc.name,
+      imageUrls: loc.images.map((li) => li.image.url),
+    }));
 };
 
 export const getLocationById = async (

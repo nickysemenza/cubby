@@ -39,6 +39,7 @@ const makeLocation = (
   name,
   type,
   lastBulkInventory: null,
+  aiDescription: null,
   images: [],
   ...ts,
   ...(children ? { children } : {}),

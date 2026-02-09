@@ -4,6 +4,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ClipboardCheck,
   DollarSign,
+  Eye,
   FolderTree,
   ImageIcon,
   Info,
@@ -11,6 +12,7 @@ import {
   Plus,
   Printer,
   ScanBarcode,
+  Sparkles,
 } from "lucide-react";
 import { type FC, useState } from "react";
 import { toast } from "sonner";
@@ -28,7 +30,9 @@ import { DetailPage, type DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
+import { AiDescriptionSection } from "./ai-description-section";
 import { CreateChildLocationDialog } from "./create-child-location-dialog";
+import { DetectItemsDialog } from "./detect-items-dialog";
 import { InventoryValuationSummary } from "./inventory-valuation-summary";
 import { LocationBasicInfo } from "./location-basic-info";
 import { LocationBreadcrumb } from "./location-breadcrumb";
@@ -46,6 +50,7 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [createChildOpen, setCreateChildOpen] = useState(false);
+  const [detectItemsOpen, setDetectItemsOpen] = useState(false);
 
   const { commonSections, editMode } = useEntityDetail<
     InfLocation,
@@ -88,6 +93,18 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       title: "Images",
       icon: ImageIcon,
       content: <EntityImageList images={location.images ?? []} />,
+    },
+    // Custom section: AI Description
+    {
+      title: "AI Description",
+      icon: Eye,
+      content: (
+        <AiDescriptionSection
+          locationId={location.id}
+          currentDescription={location.aiDescription ?? null}
+          hasImages={(location.images ?? []).length > 0}
+        />
+      ),
     },
     // Custom section: Child Locations
     {
@@ -185,6 +202,14 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
                 }}
               />
             </div>
+            <Button
+              variant="outline"
+              onClick={() => setDetectItemsOpen(true)}
+              disabled={(location.images ?? []).length === 0}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Detect Items
+            </Button>
             <Link
               to="/inventory/quick-capture"
               search={{ locationId: location.id, scanner: true }}
@@ -221,6 +246,12 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
             queryKey: api.location.getByID.queryKey({ id: location.id }),
           });
         }}
+      />
+      <DetectItemsDialog
+        open={detectItemsOpen}
+        onOpenChange={setDetectItemsOpen}
+        locationId={location.id}
+        locationName={location.name}
       />
     </>
   );

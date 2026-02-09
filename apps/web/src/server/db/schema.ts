@@ -276,6 +276,7 @@ export const location = pgTable(
     lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
     parentId: uuid("parentId"),
     type: text("type").notNull(),
+    aiDescription: text("aiDescription"),
   },
   (table) => ({
     shortcodeUnique: uniqueIndex("Location_shortcode_unique")

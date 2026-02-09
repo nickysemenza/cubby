@@ -5,6 +5,7 @@ import type { Database } from "~/server/db";
 import {
   inventoryEntry,
   location,
+  locationImage,
   product,
   productUnitMappings,
 } from "~/server/db/schema";
@@ -35,6 +36,7 @@ interface AllProblems {
   productsWithStalePrices: ProductWithStalePrice[];
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
   productsWithIslandedMappings: ProductWithIslandedMappings[];
+  locationsWithoutAiDescription: LocationWithoutAiDescription[];
   totalProblems: number;
 }
 
@@ -132,6 +134,13 @@ export interface ProductWithIslandedMappings {
     units: string[]; // Up to 3 representative units from this island
     exampleUnit: string; // Most important unit for badge display
   }>;
+}
+
+export interface LocationWithoutAiDescription {
+  id: string;
+  name: string;
+  type: string;
+  imageCount: number;
 }
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -461,6 +470,46 @@ const findProductsWithIslandedMappings = async (
   return problems;
 };
 
+// Find locations that have images but no AI description
+const findLocationsWithoutAiDescription = async (
+  db: Database,
+): Promise<LocationWithoutAiDescription[]> => {
+  const dbClient = getDb(db);
+
+  const results = await dbClient
+    .select({
+      id: location.id,
+      name: location.name,
+      type: location.type,
+      imageCount: sql<number>`count(${locationImage.id})`,
+    })
+    .from(location)
+    .innerJoin(locationImage, eq(locationImage.locationId, location.id))
+    .where(and(notDeleted(location), isNull(location.aiDescription)))
+    .groupBy(location.id, location.name, location.type);
+
+  return results.map((r) => ({
+    id: r.id,
+    name: r.name,
+    type: r.type,
+    imageCount: Number(r.imageCount),
+  }));
+};
+
+const countLocationsWithoutAiDescription = async (
+  db: Database,
+): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const result = await dbClient
+    .select({ count: sql<number>`count(distinct ${location.id})` })
+    .from(location)
+    .innerJoin(locationImage, eq(locationImage.locationId, location.id))
+    .where(and(notDeleted(location), isNull(location.aiDescription)));
+
+  return Number(result[0]?.count ?? 0);
+};
+
 // Count-only functions for badge display (no full data fetching)
 const countDuplicateUniqueProducts = async (db: Database): Promise<number> => {
   const dbClient = getDb(db);
@@ -667,6 +716,7 @@ interface ProblemsCount {
     productsWithStalePrices: number;
     inventoryWithStaleValuations: number;
     productsWithIslandedMappings: number;
+    locationsWithoutAiDescription: number;
   };
   total: number;
 }
@@ -687,6 +737,7 @@ export const findAllProblemsCount = async (
     productsWithStalePrices,
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
+    locationsWithoutAiDescription,
   ] = await Promise.all([
     countDuplicateUniqueProducts(db),
     countOrphanedProducts(db),
@@ -699,6 +750,7 @@ export const findAllProblemsCount = async (
     findProductsWithStalePrices(db).then((r) => r.length),
     findInventoryWithStaleValuations(db).then((r) => r.length),
     countProductsWithIslandedMappings(db),
+    countLocationsWithoutAiDescription(db),
   ]);
 
   const byType = {
@@ -713,6 +765,7 @@ export const findAllProblemsCount = async (
     productsWithStalePrices,
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
+    locationsWithoutAiDescription,
   };
 
   const total =
@@ -726,7 +779,8 @@ export const findAllProblemsCount = async (
     productsNeedingFoodCategory +
     productsWithStalePrices +
     inventoryWithStaleValuations +
-    productsWithIslandedMappings;
+    productsWithIslandedMappings +
+    locationsWithoutAiDescription;
 
   return { byType, total };
 };
@@ -746,6 +800,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithStalePricesRaw,
     inventoryWithStaleValuationsRaw,
     productsWithIslandedMappings,
+    locationsWithoutAiDescription,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
@@ -758,6 +813,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db),
     findProductsWithIslandedMappings(db),
+    findLocationsWithoutAiDescription(db),
   ]);
 
   // Transform to problem types
@@ -787,7 +843,8 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithWrongCategory.length +
     productsWithStalePrices.length +
     inventoryWithStaleValuations.length +
-    productsWithIslandedMappings.length;
+    productsWithIslandedMappings.length +
+    locationsWithoutAiDescription.length;
 
   return {
     duplicateUniqueProducts,
@@ -801,6 +858,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithStalePrices,
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
+    locationsWithoutAiDescription,
     totalProblems,
   };
 };

@@ -7,6 +7,7 @@ import {
   DollarSign,
   ImageOff,
   Network,
+  Sparkles,
   Utensils,
   Zap,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import type {
   InvalidInventoryAmount,
   InvalidUPC,
   InventoryWithStaleValuation,
+  LocationWithoutAiDescription,
   OrphanedProduct,
   ProductWithIslandedMappings,
   ProductWithNoImages,
@@ -651,6 +653,77 @@ function ProductsWithIslandedMappingsList({
   );
 }
 
+function LocationsWithoutAiDescriptionList({
+  locations,
+}: {
+  locations: LocationWithoutAiDescription[];
+}) {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+
+  const backfillMutation = useMutation(
+    api.ai.backfillLocationDescriptions.mutationOptions({
+      onSuccess: (result) => {
+        if (result.analyzed > 0) {
+          toast.success(
+            `Analyzed ${result.analyzed} location${result.analyzed !== 1 ? "s" : ""}`,
+          );
+        } else {
+          toast.info("No locations need AI description");
+        }
+        queryClient.invalidateQueries({
+          queryKey: [api.problems.getAllProblems.queryKey()],
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
+    }),
+  );
+
+  return (
+    <ProblemSection
+      title="Missing AI Descriptions"
+      description="Locations with photos that haven't been analyzed by AI yet. Run backfill to generate descriptions for all."
+      icon={Sparkles}
+      items={locations}
+      emptyMessage="All locations with photos have AI descriptions."
+      headerAction={
+        <Button
+          size="sm"
+          onClick={() => backfillMutation.mutate()}
+          disabled={backfillMutation.isPending}
+        >
+          {backfillMutation.isPending ? (
+            <>
+              <Spinner className="mr-2" />
+              Analyzing...
+            </>
+          ) : (
+            `Analyze All (${locations.length})`
+          )}
+        </Button>
+      }
+      renderItem={(location) => ({
+        title: location.name,
+        badges: [
+          <Badge key="type" variant="outline" className="capitalize">
+            {location.type}
+          </Badge>,
+          <Badge key="images" variant="secondary">
+            {location.imageCount}{" "}
+            {location.imageCount === 1 ? "photo" : "photos"}
+          </Badge>,
+        ],
+        route: {
+          to: "/locations/$id" as const,
+          params: { id: location.id },
+        },
+      })}
+    />
+  );
+}
+
 export function ProblemsOverview() {
   const api = useTRPC();
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -735,6 +808,11 @@ export function ProblemsOverview() {
       id: "categories",
       label: "Categories",
       count: problems.productsWithWrongCategory.length,
+    },
+    {
+      id: "ai-descriptions",
+      label: "AI Descriptions",
+      count: (problems.locationsWithoutAiDescription ?? []).length,
     },
   ].filter((cat) => cat.count > 0);
 
@@ -875,6 +953,15 @@ export function ProblemsOverview() {
       >
         <ProductsWithIslandedMappingsList
           products={problems.productsWithIslandedMappings}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["ai-descriptions"] = el;
+        }}
+      >
+        <LocationsWithoutAiDescriptionList
+          locations={problems.locationsWithoutAiDescription ?? []}
         />
       </div>
     </div>
