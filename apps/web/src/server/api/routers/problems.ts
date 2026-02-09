@@ -53,6 +53,9 @@ const emptyLocationSchema = z.object({
   type: z.string(),
   createdAt: z.date(),
   lastBulkInventory: z.date().nullable(),
+  aiDescription: z.string().nullable(),
+  firstImageUrl: z.string().nullable(),
+  firstImageId: z.string().nullable(),
 });
 
 const productWithNoImagesSchema = z.object({

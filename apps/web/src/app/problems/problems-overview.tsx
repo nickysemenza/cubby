@@ -1,3 +1,4 @@
+import { unsafeLocationId } from "@cubby/schemas/identifiers";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
@@ -11,8 +12,9 @@ import {
   Utensils,
   Zap,
 } from "lucide-react";
-import { useRef } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { toast } from "sonner";
+import { CardThumbnail } from "~/components/entity/card-thumbnail";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Badge } from "~/components/ui/badge";
@@ -25,6 +27,7 @@ import {
 } from "~/components/ui/card";
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon } from "~/entities/entities";
+import { queryKeys } from "~/lib/query-keys";
 import { formatCurrency } from "~/lib/utils";
 import type {
   DuplicateUniqueProduct,
@@ -41,6 +44,7 @@ import type {
   ProductWithWrongCategory,
 } from "~/server/repo/problems";
 import { useTRPC } from "~/trpc/react";
+import { AddInventoryDialog } from "./components/add-inventory-dialog";
 import { ProblemSection } from "./components/problem-section";
 
 // Inline problem list components
@@ -235,61 +239,109 @@ function InvalidInventoryAmountsList({
 }
 
 function EmptyLocationsList({ locations }: { locations: EmptyLocation[] }) {
-  return (
-    <ProblemSection
-      title="Empty Locations"
-      description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
-      entity="location"
-      items={locations}
-      emptyMessage="All leaf locations have inventory entries."
-      renderItem={(location) => {
-        const details = [
-          <div
-            key="created"
-            className="flex items-center gap-1 text-muted-foreground text-sm"
-          >
-            <Calendar className="h-3 w-3" />
-            Created {formatDistanceToNow(location.createdAt)} ago
-          </div>,
-        ];
+  const [addDialogLocation, setAddDialogLocation] =
+    useState<EmptyLocation | null>(null);
+  const queryClient = useQueryClient();
+  const api = useTRPC();
 
-        if (location.lastBulkInventory) {
+  return (
+    <>
+      <ProblemSection
+        title="Empty Locations"
+        description="Leaf locations with no inventory entries. Consider adding inventory or removing unused locations."
+        entity="location"
+        items={locations}
+        emptyMessage="All leaf locations have inventory entries."
+        renderItem={(location) => {
+          const details: ReactNode[] = [];
+
+          if (location.aiDescription) {
+            details.push(
+              <p
+                key="ai-desc"
+                className="line-clamp-2 text-muted-foreground text-sm"
+              >
+                {location.aiDescription}
+              </p>,
+            );
+          }
+
           details.push(
             <div
-              key="last-inventory"
+              key="created"
               className="flex items-center gap-1 text-muted-foreground text-sm"
             >
               <Calendar className="h-3 w-3" />
-              Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
-              ago
+              Created {formatDistanceToNow(location.createdAt)} ago
             </div>,
           );
-        }
 
-        return {
-          title: location.name,
-          badges: [
-            <Badge key="type" variant="outline" className="capitalize">
-              {location.type}
-            </Badge>,
-          ],
-          details,
-          route: {
-            to: "/locations/$id" as const,
-            params: { id: location.id },
-          },
-          editLabel: "View",
-          customActions: (
-            <Link
-              to="/inventory/bulk-edit"
-              search={{ locationId: location.id }}
-            >
-              <Button size="sm">Add Inventory</Button>
-            </Link>
-          ),
-        };
-      }}
-    />
+          if (location.lastBulkInventory) {
+            details.push(
+              <div
+                key="last-inventory"
+                className="flex items-center gap-1 text-muted-foreground text-sm"
+              >
+                <Calendar className="h-3 w-3" />
+                Last inventory {formatDistanceToNow(location.lastBulkInventory)}{" "}
+                ago
+              </div>,
+            );
+          }
+
+          const images =
+            location.firstImageUrl && location.firstImageId
+              ? [{ id: location.firstImageId, url: location.firstImageUrl }]
+              : [];
+
+          return {
+            title: location.name,
+            imageSlot: (
+              <CardThumbnail
+                images={images}
+                alt={location.name}
+                to="/locations/$id"
+                params={{ id: location.id }}
+              />
+            ),
+            badges: [
+              <Badge key="type" variant="outline" className="capitalize">
+                {location.type}
+              </Badge>,
+            ],
+            details,
+            route: {
+              to: "/locations/$id" as const,
+              params: { id: location.id },
+            },
+            editLabel: "View",
+            customActions: (
+              <Button size="sm" onClick={() => setAddDialogLocation(location)}>
+                Add Inventory
+              </Button>
+            ),
+          };
+        }}
+      />
+      {addDialogLocation && (
+        <AddInventoryDialog
+          open={!!addDialogLocation}
+          onOpenChange={(open) => {
+            if (!open) setAddDialogLocation(null);
+          }}
+          locationId={unsafeLocationId(addDialogLocation.id)}
+          locationName={addDialogLocation.name}
+          onSuccess={() => {
+            queryClient.invalidateQueries({
+              queryKey: [api.problems.getAllProblems.queryKey()],
+            });
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.inventory.list,
+            });
+          }}
+        />
+      )}
+    </>
   );
 }
 

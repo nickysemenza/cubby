@@ -37,6 +37,7 @@ type ProblemSectionProps<T> = {
     route: RoutePattern;
     editLabel?: string;
     customActions?: ReactNode;
+    imageSlot?: ReactNode;
   };
   groupBy?: (items: T[]) => { [key: string]: T[] };
   /** Only rendered when items exist */
@@ -118,6 +119,7 @@ export function ProblemSection<T>({
                     route,
                     editLabel = "Edit",
                     customActions,
+                    imageSlot,
                   } = renderItem(item);
 
                   return (
@@ -125,6 +127,7 @@ export function ProblemSection<T>({
                       key={`${itemTitle}-${route.params.id}`}
                       title={itemTitle}
                       subtitle={subtitle}
+                      imageSlot={imageSlot}
                       className="border-l border-l-border p-3"
                       actions={
                         <div className="flex gap-1">

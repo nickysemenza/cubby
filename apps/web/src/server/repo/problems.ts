@@ -91,6 +91,9 @@ export interface EmptyLocation {
   type: string;
   createdAt: Date;
   lastBulkInventory: Date | null;
+  aiDescription: string | null;
+  firstImageUrl: string | null;
+  firstImageId: string | null;
 }
 
 export interface ProductWithNoImages {
@@ -366,6 +369,21 @@ const findEmptyLocations = async (db: Database): Promise<EmptyLocation[]> => {
       type: location.type,
       createdAt: location.createdAt,
       lastBulkInventory: location.lastBulkInventory,
+      aiDescription: location.aiDescription,
+      firstImageUrl: sql<string | null>`(
+        SELECT "Image"."url" FROM "LocationImage"
+        JOIN "Image" ON "Image"."id" = "LocationImage"."imageId"
+        WHERE "LocationImage"."locationId" = "Location"."id"
+        ORDER BY "LocationImage"."createdAt" ASC
+        LIMIT 1
+      )`,
+      firstImageId: sql<string | null>`(
+        SELECT "Image"."id" FROM "LocationImage"
+        JOIN "Image" ON "Image"."id" = "LocationImage"."imageId"
+        WHERE "LocationImage"."locationId" = "Location"."id"
+        ORDER BY "LocationImage"."createdAt" ASC
+        LIMIT 1
+      )`,
     })
     .from(location)
     .where(
