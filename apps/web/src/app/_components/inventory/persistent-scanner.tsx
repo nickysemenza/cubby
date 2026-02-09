@@ -2,41 +2,34 @@
  * PersistentScanner - Always-on barcode scanner for mobile-first scanning.
  *
  * Features:
- * - Camera starts immediately on mount
- * - Full-width viewfinder with scan frame overlay
+ * - Camera starts immediately on mount via getUserMedia
+ * - Full-width viewfinder with horizontal barcode guide overlay
+ * - Animated scan line for visual feedback
+ * - Green flash on successful scan
  * - Torch (flashlight) toggle button
- * - Audio feedback on successful scan
- * - 30fps for faster recognition
+ * - Camera permission recovery with helpful instructions
+ *
+ * Uses barcode-detector (ZXing-C++ WASM) for fast detection.
  */
 
-import {
-  Html5Qrcode,
-  Html5QrcodeScannerState,
-  Html5QrcodeSupportedFormats,
-} from "html5-qrcode";
-import { Flashlight, FlashlightOff } from "lucide-react";
+import { CameraOff, Flashlight, FlashlightOff, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
+import {
+  BARCODE_FORMATS,
+  type BarcodeFormat,
+  QR_CODE_FORMATS,
+  useBarcodeScanner,
+} from "./useBarcodeScanner";
 
-export const BARCODE_FORMATS = [
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.CODE_128, // Added for non-UPC products
-];
-
-export const QR_CODE_FORMATS = [Html5QrcodeSupportedFormats.QR_CODE];
-
-// Global counter to ensure unique IDs across strict mode remounts
-let scannerIdCounter = 0;
+export { BARCODE_FORMATS, QR_CODE_FORMATS };
 
 interface PersistentScannerProps {
   onScan: (barcode: string) => void;
   onError?: (error: string) => void;
   enabled?: boolean;
-  formatsToSupport: Html5QrcodeSupportedFormats[];
+  formatsToSupport: BarcodeFormat[];
   scanHintText: string;
 }
 
@@ -47,160 +40,61 @@ export function PersistentScanner({
   formatsToSupport,
   scanHintText,
 }: PersistentScannerProps) {
-  const [containerId] = useState(
-    () => `persistent-scanner-${++scannerIdCounter}`,
-  );
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [torchEnabled, setTorchEnabled] = useState(false);
-  const [torchAvailable, setTorchAvailable] = useState(false);
-  const lastScanRef = useRef<string | null>(null);
-  const lastScanTimeRef = useRef<number>(0);
+  const [scanFlash, setScanFlash] = useState(false);
+  const flashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounce scans (prevent rapid duplicate scans)
   const handleScan = useCallback(
     (barcode: string) => {
-      const now = Date.now();
-      // Ignore if same barcode within 2 seconds
-      if (
-        barcode === lastScanRef.current &&
-        now - lastScanTimeRef.current < 2000
-      ) {
-        return;
-      }
-
-      lastScanRef.current = barcode;
-      lastScanTimeRef.current = now;
+      // Trigger visual flash
+      setScanFlash(true);
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
+      flashTimeoutRef.current = setTimeout(() => setScanFlash(false), 300);
 
       onScan(barcode);
     },
     [onScan],
   );
 
-  // Toggle torch
-  const toggleTorch = useCallback(async () => {
-    const scanner = scannerRef.current;
-    if (!scanner || !torchAvailable) return;
-
-    try {
-      const track = scanner.getRunningTrackCameraCapabilities();
-      if (track?.torchFeature()?.isSupported()) {
-        const newState = !torchEnabled;
-        await track.torchFeature().apply(newState);
-        setTorchEnabled(newState);
-      }
-    } catch (err) {
-      console.error("Torch toggle failed:", err);
-    }
-  }, [torchEnabled, torchAvailable]);
-
+  // Clean up flash timeout on unmount
   useEffect(() => {
-    if (!enabled) return;
-
-    let cancelled = false;
-
-    const startScanner = async () => {
-      const container = document.getElementById(containerId);
-      if (!container || cancelled) return;
-
-      const scanner = new Html5Qrcode(containerId, {
-        formatsToSupport,
-        verbose: false,
-      });
-
-      if (cancelled) return;
-      scannerRef.current = scanner;
-
-      try {
-        // Get available cameras
-        const cameras = await Html5Qrcode.getCameras();
-        if (cameras.length === 0) {
-          throw new Error("No cameras found");
-        }
-
-        // Prefer back camera
-        const backCamera = cameras.find(
-          (c) =>
-            c.label.toLowerCase().includes("back") ||
-            c.label.toLowerCase().includes("rear") ||
-            c.label.toLowerCase().includes("environment"),
-        );
-        const cameraId = backCamera?.id ?? cameras[0].id;
-
-        await scanner.start(
-          cameraId,
-          {
-            fps: 30, // Increased from 20 for faster recognition
-            disableFlip: true,
-            aspectRatio: 1.0, // Square viewfinder works better on mobile
-          },
-          (decodedText) => {
-            if (cancelled) return;
-            handleScan(decodedText);
-          },
-          () => {
-            // Ignore scan failures
-          },
-        );
-
-        if (!cancelled) {
-          setIsLoading(false);
-          setError(null);
-
-          // Check if torch is available
-          try {
-            const track = scanner.getRunningTrackCameraCapabilities();
-            if (track?.torchFeature()?.isSupported()) {
-              setTorchAvailable(true);
-            }
-          } catch {
-            // Torch not available
-          }
-        }
-      } catch (err) {
-        console.error("Scanner start error:", err);
-        if (!cancelled) {
-          setIsLoading(false);
-          const message = err instanceof Error ? err.message : String(err);
-          setError(message || "Failed to start scanner");
-          onError?.(message || "Failed to start scanner");
-        }
-      }
-    };
-
-    // Small delay to ensure DOM is ready
-    const timeoutId = setTimeout(startScanner, 100);
-
     return () => {
-      cancelled = true;
-      clearTimeout(timeoutId);
-      const currentScanner = scannerRef.current;
-      if (currentScanner) {
-        try {
-          const state = currentScanner.getState();
-          if (
-            state === Html5QrcodeScannerState.SCANNING ||
-            state === Html5QrcodeScannerState.PAUSED
-          ) {
-            currentScanner.stop().catch(() => {});
-          }
-        } catch {
-          // Ignore
-        }
-        scannerRef.current = null;
-      }
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     };
-  }, [containerId, enabled, handleScan, onError, formatsToSupport]);
+  }, []);
+
+  const {
+    videoRef,
+    status,
+    errorMessage,
+    torchAvailable,
+    torchEnabled,
+    toggleTorch,
+    retry,
+  } = useBarcodeScanner({
+    onScan: handleScan,
+    onError,
+    enabled,
+    formats: formatsToSupport,
+  });
 
   if (!enabled) {
     return null;
   }
 
+  const isQrMode = formatsToSupport.includes("qr_code");
+
   return (
-    <div className="relative w-full">
+    <div className="relative w-full overflow-hidden rounded-lg bg-black">
+      {/* Video element — camera feed */}
+      <video
+        ref={videoRef}
+        className="aspect-[4/3] w-full object-cover"
+        playsInline
+        muted
+      />
+
       {/* Loading overlay */}
-      {isLoading && (
+      {status === "loading" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80">
           <div className="flex flex-col items-center gap-2 text-white">
             <Spinner size="lg" />
@@ -210,28 +104,84 @@ export function PersistentScanner({
       )}
 
       {/* Error state */}
-      {error && (
+      {status === "error" && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
-          <div className="rounded-lg bg-destructive/90 p-4 text-center text-white">
-            <p className="font-medium">Camera Error</p>
-            <p className="mt-1 text-sm opacity-90">{error}</p>
+          <div className="flex flex-col items-center gap-3 rounded-lg bg-destructive/90 p-4 text-center text-white">
+            <CameraOff className="h-8 w-8 opacity-80" />
+            <div>
+              <p className="font-medium">Camera Error</p>
+              <p className="mt-1 text-sm opacity-90">{errorMessage}</p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={retry}
+              className="gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Try Again
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Scanner container */}
-      <div
-        id={containerId}
-        className="[&>video]:!h-full [&>video]:!w-full aspect-square w-full overflow-hidden rounded-lg bg-black [&>video]:object-cover"
-      />
+      {/* Permission denied state */}
+      {status === "permission_denied" && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/80 p-4">
+          <div className="flex max-w-xs flex-col items-center gap-3 rounded-lg bg-card p-5 text-center shadow-lg">
+            <CameraOff className="h-10 w-10 text-muted-foreground" />
+            <div>
+              <p className="font-medium text-foreground">
+                Camera access needed
+              </p>
+              <p className="mt-1.5 text-muted-foreground text-sm">
+                To scan barcodes, allow camera access in{" "}
+                <span className="font-medium text-foreground">
+                  Settings &gt; Safari &gt; Camera
+                </span>
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={retry}
+              className="gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Retry
+            </Button>
+          </div>
+        </div>
+      )}
 
-      {/* Scan frame overlay */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="h-48 w-48 rounded-lg border-2 border-white/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)]" />
-      </div>
+      {/* Viewfinder overlay — only when scanning */}
+      {status === "scanning" && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          {/* Darkened edges around the guide */}
+          {isQrMode ? (
+            /* Square guide for QR codes */
+            <div
+              className={`h-48 w-48 rounded-lg border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] transition-colors duration-150 ${
+                scanFlash
+                  ? "border-green-400 shadow-[0_0_0_9999px_rgba(0,0,0,0.4),0_0_20px_rgba(74,222,128,0.5)]"
+                  : "border-white/60"
+              }`}
+            />
+          ) : (
+            /* Wide horizontal guide for barcodes */
+            <div
+              className={`h-28 w-[85%] rounded-lg border-2 shadow-[0_0_0_9999px_rgba(0,0,0,0.4)] transition-colors duration-150 ${
+                scanFlash
+                  ? "border-green-400 shadow-[0_0_0_9999px_rgba(0,0,0,0.4),0_0_20px_rgba(74,222,128,0.5)]"
+                  : "border-white/60"
+              }`}
+            />
+          )}
+        </div>
+      )}
 
       {/* Torch button */}
-      {torchAvailable && !isLoading && !error && (
+      {torchAvailable && status === "scanning" && (
         <Button
           variant={torchEnabled ? "default" : "secondary"}
           size="icon"
@@ -250,10 +200,16 @@ export function PersistentScanner({
       )}
 
       {/* Scan hint */}
-      {!isLoading && !error && (
+      {status === "scanning" && (
         <div className="absolute inset-x-0 bottom-3 text-center">
-          <span className="rounded-full bg-black/60 px-3 py-1 text-sm text-white">
-            {scanHintText}
+          <span
+            className={`rounded-full px-3 py-1 text-sm transition-colors duration-150 ${
+              scanFlash
+                ? "bg-green-500/80 text-white"
+                : "bg-black/60 text-white"
+            }`}
+          >
+            {scanFlash ? "Scanned!" : scanHintText}
           </span>
         </div>
       )}
