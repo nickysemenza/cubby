@@ -16,6 +16,7 @@ import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import * as React from "react";
 import { GlobalCommandMenu } from "~/app/_components/command-menu";
+import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
 import { RouteErrorComponent } from "~/components/route-error";
@@ -181,11 +182,7 @@ function RootComponent() {
           <main className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
             <Outlet />
           </main>
-          <footer className="hidden border-t md:block">
-            <div className="mx-auto w-full max-w-7xl px-4 py-2 text-center text-muted-foreground text-xs md:px-6">
-              v {__GIT_COMMIT__}
-            </div>
-          </footer>
+          <AppFooter />
         </div>
         <BottomNav />
         <GlobalCommandMenu

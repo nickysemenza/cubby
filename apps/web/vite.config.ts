@@ -102,6 +102,7 @@ export default defineConfig(async () => {
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {
       __GIT_COMMIT__: JSON.stringify(gitCommit),
+      __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
       ...(isCloudflare ? { __CF_WORKERS__: "true" } : {}),
     },
     server: {
