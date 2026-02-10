@@ -27,6 +27,7 @@ export function BottomNav() {
   return (
     <nav
       className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden"
+      style={{ viewTransitionName: "bottom-nav" }}
       aria-label="Main navigation"
     >
       <div className="flex h-16 items-center justify-around">

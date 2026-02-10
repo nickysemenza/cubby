@@ -449,6 +449,12 @@
     }
   }
 
+  /* Keep bottom nav static during view transitions */
+  ::view-transition-old(bottom-nav),
+  ::view-transition-new(bottom-nav) {
+    animation: none;
+  }
+
   /* Auth page background with warm gradient */
   .auth-background {
     @apply bg-background;
