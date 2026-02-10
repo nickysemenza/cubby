@@ -1,11 +1,4 @@
 export {
-  brandColors,
-  semanticColors,
-  colors,
-  brandCssVars,
-} from "./colors";
-
-export {
   SHORTCODE_CHARS,
   SHORTCODE_RE,
   locationShortcode,
@@ -46,8 +39,6 @@ export {
   getLocationTypeColor,
 } from "./location-type-theme";
 export type { LocationType } from "./location-type-theme";
-
-export { withOpacity } from "./color-helpers";
 
 export {
   UNSPECIFIED_MANUFACTURER,

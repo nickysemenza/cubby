@@ -1,4 +1,3 @@
-import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { apiKey } from "better-auth/plugins";
@@ -19,7 +18,6 @@ export const auth = betterAuth({
     apiKey({
       enableSessionForAPIKeys: true,
     }),
-    expo(),
     tanstackStartCookies(), // Must be last
   ],
   trustedOrigins: ["cubby-mobile://"],
