@@ -12,6 +12,7 @@ import { Button, type buttonVariants } from "~/components/ui/button";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Field, FieldError, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { cn } from "~/lib/utils";
 import { DialogCompatibleCombobox } from "./combobox/combobox-dialog";
@@ -48,18 +49,9 @@ export interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
   entity: TEntity;
 }
 
-// Helper function to generate submit button text based on mode and pending state
-export function getSubmitButtonText(
-  mode: "create" | "edit",
-  isPending: boolean,
-): string {
-  return mode === "create"
-    ? isPending
-      ? "Creating..."
-      : "Create"
-    : isPending
-      ? "Saving..."
-      : "Save";
+// Helper function to generate submit button text based on mode
+export function getSubmitButtonText(mode: "create" | "edit"): string {
+  return mode === "create" ? "Create" : "Save";
 }
 
 // Form wrapper component with common layout and buttons
@@ -108,6 +100,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             disabled={isPending}
             variant={submitButtonVariant}
           >
+            {isPending && <Spinner size="sm" />}
             {submitButtonText}
           </Button>
           <Button

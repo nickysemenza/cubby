@@ -42,7 +42,7 @@ export const ImageThumbnail = ({
 
   return (
     <div className="flex h-full items-center justify-center">
-      <div className="thumbnail-ring relative aspect-square h-full overflow-hidden rounded-lg transition-all duration-200 hover:scale-105 hover:shadow-[var(--shadow-warm-lg)]">
+      <div className="thumbnail-ring relative aspect-square h-full overflow-hidden rounded-lg transition-all duration-150 hover:scale-105 hover:shadow-[var(--shadow-warm-lg)]">
         <ImageWithPreview
           src={image.url}
           alt={alt}

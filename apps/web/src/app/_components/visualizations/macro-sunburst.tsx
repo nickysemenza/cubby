@@ -364,7 +364,7 @@ function Sunburst({ data }: SunburstProps) {
                   ? `${macroTotals[macro].toFixed(0)}${getMacroUnit(macro)}`
                   : "-"}
               </span>
-              <span className="text-[9px] text-muted-foreground">
+              <span className="text-[10px] text-muted-foreground">
                 {MACRO_DISPLAY[macro].label}
               </span>
             </div>

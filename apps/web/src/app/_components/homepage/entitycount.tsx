@@ -37,7 +37,7 @@ function StatCard({
     <Link to={def.routes.list}>
       <Card
         className={cn(
-          "stat-card-glow group relative overflow-hidden p-3 transition-all duration-200",
+          "stat-card-glow group relative overflow-hidden p-3 transition-all duration-150",
           "hover:-translate-y-0.5 hover:shadow-[var(--shadow-warm-lg)]",
           "cursor-pointer border-l-4",
           "fade-in slide-in-from-bottom-2 animate-in",
@@ -48,7 +48,7 @@ function StatCard({
         <div className="relative flex items-center gap-3">
           <div
             className={cn(
-              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br transition-all duration-200 group-hover:rotate-3 group-hover:scale-110",
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br transition-all duration-150 group-hover:rotate-3 group-hover:scale-110",
               def.color.bg,
               def.color.text,
             )}

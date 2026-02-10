@@ -100,7 +100,7 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
               type="button"
               onClick={() => scrollTo(index)}
               className={cn(
-                "h-1.5 rounded-full transition-all duration-200",
+                "h-1.5 rounded-full transition-all duration-150",
                 index === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/50",
               )}
               aria-label={`Go to image ${index + 1}`}

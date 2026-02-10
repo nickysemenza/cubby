@@ -1,6 +1,7 @@
 // cf https://ui.shadcn.com/docs/components/data-table
 
 import type { Entity } from "@cubby/schemas/entity";
+import { useLocation } from "@tanstack/react-router";
 import {
   flexRender,
   type Table as ITable,
@@ -15,7 +16,14 @@ import {
   LayoutList,
   List,
 } from "lucide-react";
-import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { SpacedContainer } from "~/components/layout/spaced-container";
@@ -42,6 +50,9 @@ import { MobileListScreen } from "./MobileListScreen";
 import { SectionHeader } from "./SectionHeader";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
+
+// Scroll position cache for navigate-back restoration
+const scrollPositionCache = new Map<string, number>();
 
 // Estimated row height in pixels
 const ESTIMATED_ROW_HEIGHT = 35;
@@ -111,6 +122,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
+  const pathname = useLocation({ select: (l) => l.pathname });
 
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -168,11 +180,38 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const virtualRows = rowVirtualizer.getVirtualItems();
   const totalSize = rowVirtualizer.getTotalSize();
 
+  // Save scroll position on unmount for navigate-back restoration
+  const saveScrollPosition = useCallback(() => {
+    const el = tableContainerRef.current;
+    if (el && el.scrollTop > 0) {
+      scrollPositionCache.set(pathname, el.scrollTop);
+    } else {
+      scrollPositionCache.delete(pathname);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    return () => saveScrollPosition();
+  }, [saveScrollPosition]);
+
+  // Restore scroll position when data loads (rows become available)
+  const hasRestoredRef = useRef(false);
+  useEffect(() => {
+    if (hasRestoredRef.current || isMobile) return;
+    const savedPosition = scrollPositionCache.get(pathname);
+    if (savedPosition && rows.length > 0) {
+      // Use rAF to ensure the virtualizer has measured
+      requestAnimationFrame(() => {
+        tableContainerRef.current?.scrollTo(0, savedPosition);
+      });
+      hasRestoredRef.current = true;
+    }
+  }, [pathname, rows.length, isMobile]);
+
   const styles = {
     table:
       "text-xs leading-tight border-collapse border-spacing-0 [&_tr:nth-child(even)]:bg-[oklch(0.988_0.004_55)]",
-    header:
-      "h-8 px-2 py-1 text-[11px] font-medium text-foreground/80 bg-muted/30",
+    header: "h-8 px-2 py-1 text-xs font-medium text-foreground/80 bg-muted/30",
     filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
     cell: "h-9 px-2 py-1 align-middle overflow-hidden",
     row: "h-9 table-row-hover border-b border-border/30",
@@ -237,13 +276,29 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     }
 
     if (!rows.length) {
+      const state = table.getState();
+      const isFiltered = hasActiveFilters(
+        state.columnFilters,
+        state.globalFilter as string | undefined,
+      );
+      const clearFilters = isFiltered
+        ? () => {
+            table.resetColumnFilters();
+            table.setGlobalFilter("");
+          }
+        : undefined;
       const emptyContent = entity ? (
         <EntityEmptyState
           entity={entity}
-          isFiltered={hasActiveFilters(table.getState().columnFilters)}
+          isFiltered={isFiltered}
+          onClearFilters={clearFilters}
         />
       ) : (
-        <EntityEmptyState entity="product" isFiltered={true} />
+        <EntityEmptyState
+          entity="product"
+          isFiltered={true}
+          onClearFilters={clearFilters}
+        />
       );
       return renderStatusRow(emptyContent, "h-24");
     }
@@ -418,7 +473,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-medium text-[11px] hover:bg-muted/60"
+                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-medium text-xs hover:bg-muted/60"
                                   onClick={() =>
                                     header.column.toggleSorting(
                                       header.column.getIsSorted() === "asc",

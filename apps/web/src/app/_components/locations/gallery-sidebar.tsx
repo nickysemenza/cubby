@@ -294,7 +294,7 @@ function SidebarTreeNode({
           type="button"
           onClick={handleExpandClick}
           className={cn(
-            "flex h-5 w-5 items-center justify-center rounded transition-transform duration-200 hover:bg-muted-foreground/20",
+            "flex h-5 w-5 items-center justify-center rounded transition-transform duration-150 hover:bg-muted-foreground/20",
             !hasChildren && "invisible",
             isExpanded && "rotate-0",
           )}
@@ -302,7 +302,7 @@ function SidebarTreeNode({
           {hasChildren && (
             <ChevronRight
               className={cn(
-                "h-3.5 w-3.5 transition-transform duration-200",
+                "h-3.5 w-3.5 transition-transform duration-150",
                 isExpanded && "rotate-90",
               )}
             />
@@ -317,7 +317,7 @@ function SidebarTreeNode({
             size={28}
             previewSize={192}
             className={cn(
-              "rounded-md transition-all duration-200",
+              "rounded-md transition-all duration-150",
               isActive
                 ? "border-primary/30 bg-primary/10"
                 : "border-border/50 bg-muted/50 group-hover:border-border",
@@ -326,7 +326,7 @@ function SidebarTreeNode({
         ) : (
           <div
             className={cn(
-              "relative flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border transition-all duration-200",
+              "relative flex h-7 w-7 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border transition-all duration-150",
               isActive
                 ? "border-primary/30 bg-primary/10"
                 : "border-border/50 bg-muted/50 group-hover:border-border",
@@ -379,7 +379,7 @@ function SidebarTreeNode({
       {hasChildren && (
         <div
           className={cn(
-            "overflow-hidden transition-all duration-200",
+            "overflow-hidden transition-all duration-150",
             isExpanded ? "opacity-100" : "h-0 opacity-0",
           )}
         >

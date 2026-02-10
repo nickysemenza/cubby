@@ -64,6 +64,8 @@ interface EntityEmptyStateProps {
   entity: Entity;
   /** Override to show "no results" state (filtered empty) vs "truly empty" state */
   isFiltered?: boolean;
+  /** Callback to clear all active filters */
+  onClearFilters?: () => void;
 }
 
 /**
@@ -74,10 +76,11 @@ interface EntityEmptyStateProps {
 export function EntityEmptyState({
   entity,
   isFiltered = false,
+  onClearFilters,
 }: EntityEmptyStateProps) {
-  // If filtered, show generic "no results" message
+  // If filtered, show generic "no results" message with clear option
   if (isFiltered) {
-    return <FilteredEmptyState />;
+    return <FilteredEmptyState onClearFilters={onClearFilters} />;
   }
 
   const config = entityEmptyConfig[entity];
@@ -109,18 +112,32 @@ export function EntityEmptyState({
 }
 
 /** Generic empty state for filtered results */
-function FilteredEmptyState() {
+function FilteredEmptyState({
+  onClearFilters,
+}: {
+  onClearFilters?: () => void;
+}) {
   return (
     <Empty variant="minimal" className="py-6">
       <EmptyTitle>No results found</EmptyTitle>
       <EmptyDescription>
         Try adjusting your search or filters to find what you're looking for.
       </EmptyDescription>
+      {onClearFilters && (
+        <EmptyActions>
+          <Button size="sm" variant="outline" onClick={onClearFilters}>
+            Clear filters
+          </Button>
+        </EmptyActions>
+      )}
     </Empty>
   );
 }
 
-/** Check if a table has active filters */
-export function hasActiveFilters(columnFilters: unknown[]): boolean {
-  return columnFilters.length > 0;
+/** Check if a table has active filters (column filters or global search text) */
+export function hasActiveFilters(
+  columnFilters: unknown[],
+  globalFilter?: string,
+): boolean {
+  return columnFilters.length > 0 || (!!globalFilter && globalFilter !== "");
 }

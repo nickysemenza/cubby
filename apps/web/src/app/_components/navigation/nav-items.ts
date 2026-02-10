@@ -129,13 +129,13 @@ export const bottomNavItems: NavItem[] = [
   scan,
   inventory,
   locations,
+  recipes,
   search,
-  products,
 ];
 
 export const moreNavItems: NavItem[] = [
   home,
-  recipes,
+  products,
   ingredients,
   usda,
   dashboard,

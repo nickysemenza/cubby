@@ -208,7 +208,7 @@ function LocationCard({
         ) : null
       }
       onClick={onLocationSelect ? () => onLocationSelect(location) : undefined}
-      className="h-full transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+      className="h-full transition-all duration-150 hover:-translate-y-0.5 hover:shadow-md"
       detailsHref={`/locations/${location.id}`}
     >
       {/* Valuation row */}

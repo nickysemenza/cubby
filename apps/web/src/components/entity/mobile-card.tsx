@@ -109,13 +109,18 @@ export function MobileCard({
       >
         {/* Checkbox */}
         {selectable && (
-          <div className={cn("self-center", hasSecondLine && "row-span-2")}>
+          <div
+            className={cn(
+              "flex min-h-[44px] min-w-[44px] items-center justify-center self-center",
+              hasSecondLine && "row-span-2",
+            )}
+            onClickCapture={(e) => e.stopPropagation()}
+          >
             <Checkbox
               checked={selectable.isSelected}
               onCheckedChange={(checked) =>
                 selectable.onSelectionChange(!!checked)
               }
-              onClickCapture={(e) => e.stopPropagation()}
               className="shrink-0"
               aria-label="Select item"
             />
@@ -198,12 +203,18 @@ export function MobileCard({
       tabIndex={onClick ? 0 : undefined}
     >
       {selectable && (
-        <Checkbox
-          checked={selectable.isSelected}
-          onCheckedChange={(checked) => selectable.onSelectionChange(!!checked)}
-          className="mt-1"
-          aria-label="Select item"
-        />
+        <div
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center"
+          onClickCapture={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={selectable.isSelected}
+            onCheckedChange={(checked) =>
+              selectable.onSelectionChange(!!checked)
+            }
+            aria-label="Select item"
+          />
+        </div>
       )}
       <div className="min-w-0 flex-1 space-y-2">
         {(title || detailsHref || actions) && (

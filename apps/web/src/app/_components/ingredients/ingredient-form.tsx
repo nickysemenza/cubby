@@ -95,7 +95,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
     }
   };
 
-  const buttonText = getSubmitButtonText(mode, isPending);
+  const buttonText = getSubmitButtonText(mode);
 
   return (
     <FormWrapper

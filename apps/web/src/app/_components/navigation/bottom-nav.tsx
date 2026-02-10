@@ -86,7 +86,7 @@ export function BottomNav() {
             <SheetHeader className="px-4 pt-4 pb-2">
               <SheetTitle>Settings</SheetTitle>
             </SheetHeader>
-            <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-8">
+            <div className="safe-bottom flex flex-1 flex-col gap-1 overflow-y-auto px-4 pb-8">
               {/* Debug Toggle */}
               <Button
                 variant="ghost"

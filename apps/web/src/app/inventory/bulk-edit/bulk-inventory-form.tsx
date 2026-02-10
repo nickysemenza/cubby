@@ -224,7 +224,7 @@ export default function BulkInventoryForm() {
       onSubmit={onSubmit}
       error={error ?? undefined}
       isPending={isSubmitting}
-      submitButtonText={getSubmitButtonText("edit", isSubmitting)}
+      submitButtonText={getSubmitButtonText("edit")}
     >
       <div className="mb-6 max-w-md">
         <ComboboxFieldWithSearch

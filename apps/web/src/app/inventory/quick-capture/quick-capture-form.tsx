@@ -429,7 +429,7 @@ export default function QuickCaptureForm({
       onSubmit={onSubmit}
       error={error ?? undefined}
       isPending={isSubmitting}
-      submitButtonText={getSubmitButtonText("create", isSubmitting)}
+      submitButtonText={getSubmitButtonText("create")}
     >
       {/* Persistent Scanner Mode Toggle */}
       <Card className="mb-4">

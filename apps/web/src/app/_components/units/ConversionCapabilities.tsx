@@ -100,7 +100,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
       </div>
 
       {!compact && (
-        <div className="grid grid-cols-3 gap-1 text-[11px]">
+        <div className="grid grid-cols-3 gap-1 text-xs">
           {capabilities.map((capability) => {
             const label = formatKindsLabel(capability.from, capability.to);
             const FromIcon = kindIconMap[capability.from].Icon;

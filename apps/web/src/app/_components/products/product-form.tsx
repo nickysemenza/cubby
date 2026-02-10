@@ -263,7 +263,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     }
   };
 
-  const buttonText = getSubmitButtonText(mode, isPending);
+  const buttonText = getSubmitButtonText(mode);
 
   // Watch fields for conditional rendering
   const nameValue = form.watch("name");

@@ -8,24 +8,14 @@ import {
 
 describe("form-utils", () => {
   describe("getSubmitButtonText", () => {
-    test("returns 'Create' for create mode when not pending", () => {
-      const result = getSubmitButtonText("create", false);
+    test("returns 'Create' for create mode", () => {
+      const result = getSubmitButtonText("create");
       expect(result).toBe("Create");
     });
 
-    test("returns 'Creating...' for create mode when pending", () => {
-      const result = getSubmitButtonText("create", true);
-      expect(result).toBe("Creating...");
-    });
-
-    test("returns 'Save' for edit mode when not pending", () => {
-      const result = getSubmitButtonText("edit", false);
+    test("returns 'Save' for edit mode", () => {
+      const result = getSubmitButtonText("edit");
       expect(result).toBe("Save");
-    });
-
-    test("returns 'Saving...' for edit mode when pending", () => {
-      const result = getSubmitButtonText("edit", true);
-      expect(result).toBe("Saving...");
     });
   });
 

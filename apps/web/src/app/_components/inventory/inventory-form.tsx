@@ -118,7 +118,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
     }
   };
 
-  const buttonText = getSubmitButtonText(mode, isPending);
+  const buttonText = getSubmitButtonText(mode);
 
   return (
     <FormWrapper

@@ -138,7 +138,7 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
     }
   };
 
-  const buttonText = getSubmitButtonText(mode, isPending);
+  const buttonText = getSubmitButtonText(mode);
 
   return (
     <FormWrapper

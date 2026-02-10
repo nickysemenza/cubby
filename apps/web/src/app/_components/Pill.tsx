@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 
 /** Base className for pill styling - use for custom pill-like elements (e.g., Links) */
 export const pillClassName =
-  "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-[11px]";
+  "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-xs";
 
 interface PillProps {
   icon?: React.ReactNode;
@@ -39,7 +39,7 @@ export function Pill({
       {metadata && (
         <>
           <span className="shrink-0 text-muted-foreground/40">|</span>
-          <span className="shrink-0 text-[9px] text-muted-foreground">
+          <span className="shrink-0 text-[10px] text-muted-foreground">
             {metadata}
           </span>
         </>
