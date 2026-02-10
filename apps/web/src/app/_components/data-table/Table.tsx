@@ -7,7 +7,14 @@ import {
   type Row,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDown, ArrowUp, ArrowUpDown, Bug } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Bug,
+  LayoutList,
+  List,
+} from "lucide-react";
 import { Fragment, type ReactNode, useRef } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -32,6 +39,8 @@ import { DataTableToolbar } from "./data-table-toolbar";
 import { EntityEmptyState, hasActiveFilters } from "./entity-empty-states";
 import { HeaderFilter } from "./HeaderFilter";
 import { MobileListScreen } from "./MobileListScreen";
+import { SectionHeader } from "./SectionHeader";
+import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
 
 // Estimated row height in pixels
@@ -70,8 +79,12 @@ interface TTableProps<TItem> {
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
   };
-  /** Group configuration for mobile section headers */
+  /** Group configuration for section headers (mobile + desktop) */
   groupConfig?: GroupConfig<TItem>;
+  /** Whether grouping is currently active */
+  grouped?: boolean;
+  /** Toggle grouping on/off */
+  onGroupedChange?: (value: boolean) => void;
 }
 
 export default function RTable<TItem>(props: TTableProps<TItem>) {
@@ -90,6 +103,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     infiniteScroll,
     refreshControls,
     groupConfig,
+    grouped = false,
+    onGroupedChange,
   } = props;
 
   const { isDebugEnabled } = useDebug();
@@ -99,11 +114,24 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   const { rows } = table.getRowModel();
+
+  // Desktop group detection (server trusts ordering)
+  const groupedItems = useDesktopGroupedRows(rows, groupConfig, grouped);
+
+  // Estimated height for section headers (smaller than data rows)
+  const SECTION_HEADER_HEIGHT = 28;
+
   // Always virtualize for consistent rendering
+  const virtualizerCount = groupedItems ? groupedItems.length : rows.length;
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: virtualizerCount,
     getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    estimateSize: (index) => {
+      if (groupedItems && groupedItems[index].kind === "header") {
+        return SECTION_HEADER_HEIGHT;
+      }
+      return ESTIMATED_ROW_HEIGHT;
+    },
     overscan: OVERSCAN,
   });
 
@@ -190,6 +218,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       return renderStatusRow(emptyContent, "h-24");
     }
 
+    const colSpan = table.getAllColumns().length + (isDebugEnabled ? 1 : 0);
+
     // Always use virtualized rendering for consistent behavior
     return (
       <>
@@ -198,8 +228,30 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           <tr style={{ height: `${virtualRows[0].start}px` }} />
         )}
 
-        {/* Render only visible rows */}
+        {/* Render only visible rows (with optional group headers) */}
         {virtualRows.map((virtualRow) => {
+          if (groupedItems) {
+            const item = groupedItems[virtualRow.index];
+            if (item.kind === "header") {
+              return (
+                <TableRow
+                  key={`group-${item.title}`}
+                  className="border-border/30 border-b"
+                  style={{ height: `${virtualRow.size}px` }}
+                >
+                  <TableCell colSpan={colSpan} className="p-0">
+                    <SectionHeader
+                      title={item.title}
+                      count={item.count}
+                      color={item.color}
+                    />
+                  </TableCell>
+                </TableRow>
+              );
+            }
+            const row = rows[item.rowIndex];
+            return renderRow(row, { height: `${virtualRow.size}px` });
+          }
           const row = rows[virtualRow.index];
           return renderRow(row, { height: `${virtualRow.size}px` });
         })}
@@ -224,7 +276,30 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           {/* Attached Toolbar */}
           <DataTableToolbar
             table={table}
-            additionalContent={additionalToolbarContent}
+            additionalContent={
+              groupConfig && onGroupedChange ? (
+                <div className="flex items-center gap-2">
+                  {additionalToolbarContent}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 shrink-0 p-0"
+                    onClick={() => onGroupedChange(!grouped)}
+                    aria-label={
+                      grouped ? "Show flat list" : "Show grouped list"
+                    }
+                  >
+                    {grouped ? (
+                      <List className="h-4 w-4" />
+                    ) : (
+                      <LayoutList className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              ) : (
+                additionalToolbarContent
+              )
+            }
             actions={actions}
             bulkActionBar={bulkActionBar}
             className="border-border/50 border-b bg-muted/30 px-3 py-2"
@@ -394,6 +469,8 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           infiniteScroll={infiniteScroll}
           refreshControls={refreshControls}
           groupConfig={groupConfig}
+          grouped={grouped}
+          onGroupedChange={onGroupedChange}
         />
       )}
 

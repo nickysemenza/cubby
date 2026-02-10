@@ -26,6 +26,7 @@ type TRPCQueryOptionsFn<TFilters> = (params: {
   sort: { orderBy: string; direction: "asc" | "desc" };
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
+  groupBy?: string;
   // biome-ignore lint/suspicious/noExplicitAny: intentional
 }) => any;
 
@@ -34,6 +35,8 @@ export interface UseTableListOptions<TFilters> {
   queryOptions: TRPCQueryOptionsFn<TFilters>;
   buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
   tableStateOptions?: TableStateOptions;
+  /** DB column name to group by (prepends primary ORDER BY on server) */
+  groupBy?: string;
 }
 
 interface UseTableListReturn<TData = unknown> {
@@ -61,6 +64,7 @@ export function useTableList<TFilters, TData = unknown>({
   queryOptions,
   buildFilters,
   tableStateOptions,
+  groupBy,
 }: UseTableListOptions<TFilters>): UseTableListReturn<TData> {
   const tableState = useTableState(tableStateOptions);
 
@@ -81,8 +85,9 @@ export function useTableList<TFilters, TData = unknown>({
       sort: sortParams,
       pagination,
       filters,
+      ...(groupBy && { groupBy }),
     }),
-    [sortParams, pagination, filters],
+    [sortParams, pagination, filters, groupBy],
   );
 
   // CRITICAL: Memoize the result of calling queryOptions(queryParams)

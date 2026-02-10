@@ -126,6 +126,7 @@ export const productList = async (
   category: ProductCategory | undefined,
   sort: SortParams,
   pagination: PaginationParams,
+  groupBy?: string,
 ) => {
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
@@ -139,9 +140,12 @@ export const productList = async (
   );
 
   // Build order by using central sortableFields config
-  const orderByArray = buildOrderBy(product, sort, [
-    ...getSortableFields("product"),
-  ]);
+  const orderByArray = buildOrderBy(
+    product,
+    sort,
+    [...getSortableFields("product")],
+    groupBy,
+  );
 
   const { take, skip } = buildTakeSkip(pagination);
 

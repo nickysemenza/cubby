@@ -132,6 +132,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
+      groupBy?: string,
     ) => Promise<{ data: TOutput[]; count: number }>;
   };
   /** Entity type for enhanced error messages */
@@ -154,6 +155,7 @@ export function createEntityListProcedure<TOutput, TFilters>({
         input.filters,
         input.sort,
         input.pagination,
+        input.groupBy,
       );
       return buildPaginatedResponse(input.pagination, data, count);
     });
@@ -236,6 +238,7 @@ export function createEntityCrudProcedures<
       filters: TFilters,
       sort: SortParams,
       pagination: PaginationParams,
+      groupBy?: string,
     ) => Promise<{ data: TOutput[]; count: number }>;
     create: (
       ctx: ProtectedCrudServices,

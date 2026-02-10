@@ -218,6 +218,7 @@ export function LocationList() {
   );
   const groupConfig = useMemo(
     (): GroupConfig<LocationOutWithParentChildren> => ({
+      field: "type",
       keyFn: groupKeyFn,
       colorFn: groupColorFn,
     }),
@@ -233,6 +234,8 @@ export function LocationList() {
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    grouped,
+    onGroupedChange,
   } = useEntityList({
     entity: "location",
     queryOptions: api.location.list.queryOptions,
@@ -254,6 +257,7 @@ export function LocationList() {
     bulkActions,
     extraActions,
     infinite: true,
+    groupConfig,
   });
 
   return (
@@ -270,6 +274,8 @@ export function LocationList() {
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
         groupConfig={groupConfig}
+        grouped={grouped}
+        onGroupedChange={onGroupedChange}
       />
       <PreviewSheet />
       {deleteDialog}

@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 
 export interface GroupConfig<TItem> {
+  /** DB column name for server-side group ordering (e.g., "type", "category") */
+  field: string;
   /** Extract the group key from an item. Null/undefined becomes "(unspecified)". */
   keyFn: (item: TItem) => string | null | undefined;
   /** Get the accent color for a group key */
@@ -16,9 +18,8 @@ export type GroupedVirtualItem<TItem> =
  * of interleaved headers and rows. Sections are sorted alphabetically with
  * "(unspecified)" last.
  *
- * TODO: Move grouping to the backend so that paginated results don't split
- * groups across pages. Currently works because callers use infinite scroll
- * (all data loaded client-side), but would break with server-side pagination.
+ * Used by mobile list view for client-side grouping. Desktop tables use
+ * `useDesktopGroupedRows` which relies on server-side ordering (groupBy param).
  */
 export function useGroupedList<TItem>(
   data: TItem[],

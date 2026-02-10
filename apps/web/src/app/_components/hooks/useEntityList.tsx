@@ -10,7 +10,7 @@ import type {
 import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
 import { Trash } from "lucide-react";
 import type { ReactNode } from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
 import {
@@ -31,8 +31,8 @@ import {
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 import { useBulkActions } from "../data-table/useBulkActions";
+import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
-
 import {
   type InfiniteScrollControls,
   useInfiniteTableList,
@@ -92,6 +92,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   extraActions?: (row: TData) => ReactNode;
   /** Enable infinite scroll on mobile (default: false) */
   infinite?: boolean;
+  /** Group configuration — enables group toggle and server-side group ordering */
+  groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
   deletable?: {
     /** tRPC delete mutation options factory */
@@ -130,6 +132,12 @@ interface UseEntityListReturn<TData> {
     onRefresh: () => Promise<void>;
     isRefreshing: boolean;
   };
+  /** Whether grouping is currently active */
+  grouped: boolean;
+  /** Toggle grouping on/off */
+  onGroupedChange: (value: boolean) => void;
+  /** Group config (passed through for Table.tsx) */
+  groupConfig?: GroupConfig<TData>;
 }
 
 /**
@@ -158,9 +166,18 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   extraActions,
   deletable,
   infinite = false,
+  groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const queryClient = useQueryClient();
   const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
+  const [grouped, setGrouped] = useState(false);
+
+  const onGroupedChange = useCallback((value: boolean) => {
+    setGrouped(value);
+  }, []);
+
+  // Derive the groupBy field for server queries (only when grouped + groupConfig)
+  const groupByField = grouped && groupConfig ? groupConfig.field : undefined;
 
   // Create columnHelper once - CRITICAL to prevent infinite re-renders
   const columnHelper = useMemo(
@@ -377,6 +394,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
         queryOptions,
         buildFilters,
         tableStateOptions: mergedTableStateOptions,
+        groupBy: groupByField,
       })
     : null;
 
@@ -386,6 +404,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
         queryOptions,
         buildFilters,
         tableStateOptions: mergedTableStateOptions,
+        groupBy: groupByField,
       })
     : null;
 
@@ -580,5 +599,8 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     deleteDialog,
     infiniteScroll: infiniteResult?.infiniteScroll,
     refreshControls,
+    grouped,
+    onGroupedChange,
+    groupConfig,
   };
 }

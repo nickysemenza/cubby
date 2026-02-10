@@ -274,6 +274,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   );
   const groupConfig = useMemo(
     (): GroupConfig<ProductWithFoodOut> => ({
+      field: "category",
       keyFn: groupKeyFn,
       colorFn: groupColorFn,
     }),
@@ -293,6 +294,8 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     deleteDialog,
     infiniteScroll,
     refreshControls,
+    grouped,
+    onGroupedChange,
   } = useEntityList({
     entity: "product",
     queryOptions,
@@ -304,6 +307,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     deletable: deletableConfig,
     extraActions,
     infinite: true,
+    groupConfig,
   });
 
   return (
@@ -321,6 +325,8 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         infiniteScroll={infiniteScroll}
         refreshControls={refreshControls}
         groupConfig={groupConfig}
+        grouped={grouped}
+        onGroupedChange={onGroupedChange}
       />
       <PreviewSheet />
       {deleteDialog}

@@ -64,6 +64,7 @@ export class ProductService {
     categoryFilter: ProductCategory | undefined,
     sort: SortParams,
     pagination: PaginationParams,
+    groupBy?: string,
   ) {
     const { data: products, count } = await productListRepo(
       this.db,
@@ -73,6 +74,7 @@ export class ProductService {
       categoryFilter,
       sort,
       pagination,
+      groupBy,
     );
 
     const productsWithFood = await batchEnrichWithFood(

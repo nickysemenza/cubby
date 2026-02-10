@@ -50,8 +50,14 @@ const { list } = createEntityListProcedure({
     filters: locationFiltersSchema,
   },
   repository: {
-    list: async (services, filters, sort, pagination) => {
-      return await locationList(services.db, filters, sort, pagination);
+    list: async (services, filters, sort, pagination, groupBy) => {
+      return await locationList(
+        services.db,
+        filters,
+        sort,
+        pagination,
+        groupBy,
+      );
     },
   },
   entityName: "location",

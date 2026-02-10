@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { Table as ITable, Row } from "@tanstack/react-table";
 import { LayoutList, List } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Button } from "~/components/ui/button";
@@ -29,6 +29,10 @@ interface MobileListScreenProps<TItem> {
   refreshControls?: MobileRefreshControls;
   /** Group configuration — when provided, shows a toggle button */
   groupConfig?: GroupConfig<TItem>;
+  /** Whether grouping is currently active (controlled from parent) */
+  grouped?: boolean;
+  /** Toggle grouping on/off (controlled from parent) */
+  onGroupedChange?: (value: boolean) => void;
 }
 
 export function MobileListScreen<TItem>({
@@ -43,24 +47,25 @@ export function MobileListScreen<TItem>({
   infiniteScroll,
   refreshControls,
   groupConfig,
+  grouped = false,
+  onGroupedChange,
 }: MobileListScreenProps<TItem>) {
-  const [grouped, setGrouped] = useState(false);
-
-  const groupToggle = groupConfig ? (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="h-8 w-8 shrink-0 p-0"
-      onClick={() => setGrouped((prev) => !prev)}
-      aria-label={grouped ? "Show flat list" : "Show grouped list"}
-    >
-      {grouped ? (
-        <List className="h-4 w-4" />
-      ) : (
-        <LayoutList className="h-4 w-4" />
-      )}
-    </Button>
-  ) : null;
+  const groupToggle =
+    groupConfig && onGroupedChange ? (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-8 w-8 shrink-0 p-0"
+        onClick={() => onGroupedChange(!grouped)}
+        aria-label={grouped ? "Show flat list" : "Show grouped list"}
+      >
+        {grouped ? (
+          <List className="h-4 w-4" />
+        ) : (
+          <LayoutList className="h-4 w-4" />
+        )}
+      </Button>
+    ) : null;
 
   const toolbarContent = groupToggle ? (
     <div className="flex items-center gap-2">

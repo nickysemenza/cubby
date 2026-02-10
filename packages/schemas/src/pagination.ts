@@ -17,6 +17,7 @@ export const sortPaginationCombo = z.object({
   pagination: paginationParams
     .optional()
     .default({ pageIndex: 0, pageSize: 10 }),
+  groupBy: z.string().optional(),
 });
 
 export const buildTakeSkip = (pagination: PaginationParams) => {

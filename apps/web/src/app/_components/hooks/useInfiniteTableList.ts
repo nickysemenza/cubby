@@ -24,6 +24,7 @@ type TRPCQueryOptionsFn<TFilters> = (params: {
   sort: { orderBy: string; direction: "asc" | "desc" };
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
+  groupBy?: string;
   // biome-ignore lint/suspicious/noExplicitAny: intentional
 }) => any;
 
@@ -31,6 +32,8 @@ export interface UseInfiniteTableListOptions<TFilters> {
   queryOptions: TRPCQueryOptionsFn<TFilters>;
   buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
   tableStateOptions?: TableStateOptions;
+  /** DB column name to group by (prepends primary ORDER BY on server) */
+  groupBy?: string;
 }
 
 export interface InfiniteScrollControls {
@@ -63,6 +66,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
   queryOptions,
   buildFilters,
   tableStateOptions,
+  groupBy,
 }: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
   const tableState = useTableState(tableStateOptions);
 
@@ -82,8 +86,9 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
         sort: sortParams,
         pagination: { pageIndex: 0, pageSize: pagination.pageSize },
         filters,
+        ...(groupBy && { groupBy }),
       }),
-    [queryOptions, sortParams, pagination.pageSize, filters],
+    [queryOptions, sortParams, pagination.pageSize, filters, groupBy],
   );
 
   const {
@@ -103,6 +108,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
         sort: sortParams,
         pagination: { pageIndex: pageParam, pageSize: pagination.pageSize },
         filters,
+        ...(groupBy && { groupBy }),
       });
       // Call the queryFn from tRPC options
       return (await pageOptions.queryFn({

@@ -63,7 +63,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
     getByID: async (services, id: ProductId) => {
       return await services.services.product.getProductByID(id);
     },
-    list: async (services, filters, sort, pagination) => {
+    list: async (services, filters, sort, pagination, groupBy) => {
       return await services.services.product.productList(
         filters.nameFilter,
         filters.manufacturerFilter,
@@ -71,6 +71,7 @@ const { getByID, list, update } = createEntityCrudProcedures({
         filters.categoryFilter,
         sort,
         pagination,
+        groupBy,
       );
     },
     create: async (services, data) => {

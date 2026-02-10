@@ -287,6 +287,7 @@ export const locationList = async (
   filters: LocationFilters,
   sort: SortParams,
   pagination: PaginationParams,
+  groupBy?: string,
 ) => {
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
@@ -300,9 +301,12 @@ export const locationList = async (
   );
 
   // Build order by using central sortableFields config
-  const orderByClause = buildOrderBy(location, sort, [
-    ...getSortableFields("location"),
-  ]);
+  const orderByClause = buildOrderBy(
+    location,
+    sort,
+    [...getSortableFields("location")],
+    groupBy,
+  );
 
   const { take, skip } = buildTakeSkip(pagination);
 

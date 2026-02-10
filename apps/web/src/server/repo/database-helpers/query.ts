@@ -71,23 +71,40 @@ export function filterDeleted<T extends { deletedAt: Date | null }>(
  * Build order by clause from sort parameters.
  * Validates that the requested field is in the allowed list and returns
  * the appropriate asc/desc clause.
+ *
+ * When `groupBy` is provided and is in `allowedFields`, prepends a primary
+ * sort on that column (ASC NULLS LAST) so group members are contiguous.
+ * The user's chosen sort becomes the secondary sort within each group.
  */
 export const buildOrderBy = <T extends PgTable>(
   table: T,
   sort: SortParams,
   allowedFields: string[],
+  groupBy?: string,
 ): SQL[] => {
+  const clauses: SQL[] = [];
+
+  // Prepend group-by column as primary sort (if provided and valid)
+  if (groupBy && allowedFields.includes(groupBy) && groupBy !== sort.orderBy) {
+    const groupColumn = table[groupBy as keyof T] as AnyColumn | undefined;
+    if (groupColumn) {
+      clauses.push(sql`${groupColumn} asc nulls last`);
+    }
+  }
+
   if (!allowedFields.includes(sort.orderBy)) {
-    return [];
+    return clauses;
   }
   const column = table[sort.orderBy as keyof T] as AnyColumn | undefined;
-  if (!column) return [];
+  if (!column) return clauses;
   // ASC: nulls at end by default in Postgres
   // DESC: use NULLS LAST to put nulls at the bottom instead of the top
   if (sort.direction === "asc") {
-    return [asc(column)];
+    clauses.push(asc(column));
+  } else {
+    clauses.push(sql`${column} desc nulls last`);
   }
-  return [sql`${column} desc nulls last`];
+  return clauses;
 };
 
 /**
