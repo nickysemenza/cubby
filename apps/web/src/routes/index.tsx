@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { QuickActionsCard } from "~/app/_components/home/QuickActionsCard";
 import { RecentActivityFeed } from "~/app/_components/home/RecentActivityFeed";
 import EntityCount from "~/app/_components/homepage/entitycount";
+import { PageWrapper } from "~/components/layout/page-wrapper";
 
 export const Route = createFileRoute("/")({
   component: Home,
@@ -9,7 +10,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <div className="space-y-6">
+    <PageWrapper className="space-y-6">
       {/* Entity Stats */}
       <section>
         <h2 className="mb-3 font-medium text-muted-foreground text-sm">
@@ -23,6 +24,6 @@ function Home() {
         <RecentActivityFeed limit={6} />
         <QuickActionsCard />
       </div>
-    </div>
+    </PageWrapper>
   );
 }

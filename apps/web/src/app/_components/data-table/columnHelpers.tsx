@@ -224,7 +224,7 @@ export function createImageColumn<T extends BaseRow>(
     // h-px trick: setting height:1px on td makes h-full work on children
     // overflow-hidden prevents image from expanding the row
     meta: {
-      className: cn("h-px overflow-hidden px-0 py-0", options?.className),
+      className: cn("h-px w-10 overflow-hidden px-0 py-0", options?.className),
       mobile: options?.mobile ?? { slot: "image", priority: -10 },
     },
     cell: (info) => (

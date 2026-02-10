@@ -8,7 +8,7 @@ export const Route = createFileRoute("/ingredients/")({
 
 function IngredientsPage() {
   return (
-    <EntityLayout title="Ingredients">
+    <EntityLayout title="Ingredients" fullWidth>
       <IngredientList />
     </EntityLayout>
   );

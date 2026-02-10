@@ -13,6 +13,7 @@ function InventoryPage() {
   return (
     <EntityLayout
       title="Inventory"
+      fullWidth
       actions={
         <div className="flex flex-wrap gap-2">
           <InventoryActions />

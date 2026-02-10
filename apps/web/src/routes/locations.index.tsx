@@ -29,7 +29,7 @@ function LocationsPage() {
   const navigate = useNavigate({ from: Route.fullPath });
 
   return (
-    <EntityLayout title="Locations" actions={<LocationActions />}>
+    <EntityLayout title="Locations" actions={<LocationActions />} fullWidth>
       <Tabs
         value={view}
         onValueChange={(v) => navigate({ search: { view: v as ViewOption } })}

@@ -15,7 +15,7 @@ import {
   LayoutList,
   List,
 } from "lucide-react";
-import { Fragment, type ReactNode, useRef } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { ErrorDisplay } from "~/components/feedback/error-display";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { SpacedContainer } from "~/components/layout/spaced-container";
@@ -47,8 +47,10 @@ import type { GroupConfig } from "./useGroupedList";
 const ESTIMATED_ROW_HEIGHT = 35;
 // Number of rows to render outside the visible area
 const OVERSCAN = 5;
-// Max height for the table container (only applied for large datasets)
-const MAX_TABLE_HEIGHT = 600;
+// Minimum table height so it's always usable
+const MIN_TABLE_HEIGHT = 300;
+// Breathing room below the table
+const BOTTOM_PADDING = 32;
 
 interface TTableProps<TItem> {
   table: ITable<TItem>;
@@ -112,6 +114,34 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
 
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic table height: fill remaining viewport on desktop
+  const [maxHeight, setMaxHeight] = useState(600);
+
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (!el || isMobile) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const available = window.innerHeight - rect.top - BOTTOM_PADDING;
+      setMaxHeight(Math.max(available, MIN_TABLE_HEIGHT));
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [isMobile]);
+
+  // On desktop with infinite scroll, eagerly fetch all pages so client-side
+  // pagination works over the complete dataset. Mobile uses scroll-to-load.
+  useEffect(() => {
+    if (
+      !isMobile &&
+      infiniteScroll?.hasNextPage &&
+      !infiniteScroll.isFetchingNextPage
+    ) {
+      infiniteScroll.fetchNextPage();
+    }
+  }, [isMobile, infiniteScroll]);
 
   const { rows } = table.getRowModel();
 
@@ -309,7 +339,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           <div
             ref={tableContainerRef}
             className="overflow-auto"
-            style={{ maxHeight: `${MAX_TABLE_HEIGHT}px` }}
+            style={{ maxHeight: `${maxHeight}px` }}
           >
             <Table
               aria-label={ariaLabel}

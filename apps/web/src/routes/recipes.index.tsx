@@ -11,7 +11,7 @@ export const Route = createFileRoute("/recipes/")({
 
 function RecipesPage() {
   return (
-    <EntityLayout title="Recipes">
+    <EntityLayout title="Recipes" fullWidth>
       <RecipeList
         actions={
           <Link to="/recipes/new">

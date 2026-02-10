@@ -28,5 +28,6 @@ export function buildSelectColumn<T>(): ColumnDef<T> {
     ),
     enableSorting: false,
     enableHiding: false,
+    meta: { className: "w-10" },
   };
 }

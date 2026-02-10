@@ -57,7 +57,7 @@ export function InventoryValuationSummary({
     return (
       <div className={className}>
         <div className="text-muted-foreground text-xs">
-          Valuation: {formatCurrency(result.totalValuation)}
+          {formatCurrency(result.totalValuation)}
           {!hidePricingStatus && pricingSummary && (
             <span className="ml-1">({pricingSummary})</span>
           )}

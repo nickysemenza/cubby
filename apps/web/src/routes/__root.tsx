@@ -178,7 +178,7 @@ function RootComponent() {
               />
             </div>
           </div>
-          <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
+          <main className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
             <Outlet />
           </main>
           <footer className="hidden border-t md:block">

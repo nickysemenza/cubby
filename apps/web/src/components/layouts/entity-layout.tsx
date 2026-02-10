@@ -10,6 +10,7 @@ interface EntityLayoutProps {
   title?: string;
   actions?: ReactNode;
   requireAuth?: boolean;
+  fullWidth?: boolean;
 }
 
 export function EntityLayout({
@@ -17,6 +18,7 @@ export function EntityLayout({
   title,
   actions,
   requireAuth = true,
+  fullWidth,
 }: EntityLayoutProps) {
   const { data: session, isPending } = authClient.useSession();
 
@@ -32,7 +34,7 @@ export function EntityLayout({
 
   return (
     <HydrateClient>
-      <PageWrapper>
+      <PageWrapper fullWidth={fullWidth}>
         {(title || actions) && (
           <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
             {title && <h1 className="font-bold text-2xl">{title}</h1>}

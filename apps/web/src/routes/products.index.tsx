@@ -19,7 +19,7 @@ function ProductsPage() {
   const { category } = Route.useSearch();
 
   return (
-    <EntityLayout title="Products">
+    <EntityLayout title="Products" fullWidth>
       <ProductList
         initialCategory={category}
         actions={
