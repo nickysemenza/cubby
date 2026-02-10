@@ -19,7 +19,6 @@ export {
 export {
   createProduct,
   deleteProducts,
-  findProductByShortcode,
   getProductByID,
   getProductByShortcode,
   getProductsByShortcodes,
@@ -28,7 +27,7 @@ export {
   updateProduct,
 } from "./crud";
 // Helpers
-export { dbProductToAPI, foodLookupParamFromProduct } from "./helpers";
+export { foodLookupParamFromProduct } from "./helpers";
 
 // Lookup operations
 export {
@@ -38,10 +37,6 @@ export {
 } from "./lookup";
 
 // Pricing operations
-export {
-  backfillProductPrices,
-  findProductsWithStalePrices,
-  syncProductPrice,
-} from "./pricing";
+export { backfillProductPrices, findProductsWithStalePrices } from "./pricing";
 // Types
 export type { ProductDeepDB } from "./types";

@@ -1,4 +1,4 @@
-import type { RecipeId } from "@cubby/schemas/identifiers";
+import { unsafeRecipeId } from "@cubby/schemas/identifiers";
 import type {
   RecipeCreateInput,
   RecipeIngredientInput,
@@ -420,7 +420,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       // Only update if there are changes
       if (hasFieldChanges || imageChanges) {
         const updateData: RecipeUpdateInput = {
-          id: recipe.id as RecipeId,
+          id: unsafeRecipeId(recipe.id),
           data: {
             ...basicUpdates,
             sections: sectionUpdates,

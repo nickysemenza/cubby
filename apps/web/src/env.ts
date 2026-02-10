@@ -22,6 +22,7 @@ export const env = createEnv({
     BETTER_AUTH_SECRET: z.string().min(1),
     BETTER_AUTH_URL: z.string().url().optional(),
     ANTHROPIC_API_KEY: z.string().min(1).optional(),
+    PORT: z.coerce.number().int().positive().optional(),
   },
 
   clientPrefix: "VITE_",
@@ -46,6 +47,7 @@ export const env = createEnv({
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
     BETTER_AUTH_URL: process.env.BETTER_AUTH_URL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    PORT: process.env.PORT,
     VITE_APP_TITLE: import.meta.env.VITE_APP_TITLE,
   },
 

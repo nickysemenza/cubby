@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -130,7 +130,7 @@ export function useLocationHierarchy(
 
       return {
         name: location.name,
-        id: location.id as LocationId,
+        id: unsafeLocationId(location.id),
         type: location.type,
         value,
         directCount,
@@ -157,7 +157,7 @@ export function useLocationHierarchy(
 
     return {
       name: "All Locations",
-      id: "_root" as LocationId,
+      id: unsafeLocationId("_root"),
       type: "room" as LocationType,
       value:
         valuationMode === "equalWeight" ? allNodes.length : totalCount || 1,

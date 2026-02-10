@@ -1,5 +1,4 @@
 import { type ProductCategory, productCategory } from "@cubby/schemas/product";
-import { cn } from "~/lib/utils";
 import { getCategoryColor, getCategoryIcon } from "./category-theme";
 
 interface CategoryIconProps {
@@ -23,28 +22,6 @@ export function CategoryIcon({
       size={size}
       style={colored ? { color: getCategoryColor(category) } : undefined}
     />
-  );
-}
-
-interface CategoryIconWithLabelProps extends CategoryIconProps {
-  label?: string;
-  showLabel?: boolean;
-}
-
-export function CategoryIconWithLabel({
-  category,
-  label,
-  className,
-  size = 16,
-  showLabel = true,
-  colored,
-}: CategoryIconWithLabelProps) {
-  const displayLabel = label ?? category.replace("-", " ");
-  return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <CategoryIcon category={category} size={size} colored={colored} />
-      {showLabel && <span>{displayLabel}</span>}
-    </div>
   );
 }
 

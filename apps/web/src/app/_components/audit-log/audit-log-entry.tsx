@@ -14,7 +14,32 @@ import { cn } from "~/lib/utils";
 import type { RouterOutputs } from "~/trpc/react";
 import { EntityPillById } from "../EntityPillById";
 import { HoverableTimestamp } from "../HoverableTimestamp";
-import { ChangesList } from "../value-change";
+
+function formatChangeValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "(empty)";
+  if (typeof value === "object") return JSON.stringify(value);
+  const str = String(value);
+  return str.length > 500 ? `${str.slice(0, 500)}...` : str;
+}
+
+function ChangesList({
+  changes,
+}: {
+  changes: Record<string, { from: unknown; to: unknown }>;
+}) {
+  return (
+    <div className="space-y-1">
+      {Object.entries(changes).map(([field, { from, to }]) => (
+        <div key={field} className="flex items-center gap-1 text-xs">
+          <span className="font-medium text-muted-foreground">{field}:</span>
+          <span className="text-foreground">{formatChangeValue(from)}</span>
+          <span className="text-muted-foreground">&rarr;</span>
+          <span className="text-foreground">{formatChangeValue(to)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
 

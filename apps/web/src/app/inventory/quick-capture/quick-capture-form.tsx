@@ -288,7 +288,7 @@ export default function QuickCaptureForm({
 
       try {
         await createInventoryMutation.mutateAsync({
-          productId: product.id as ProductId,
+          productId: unsafeProductId(product.id),
           locationId,
           amount: { value: 1, unit: "each" },
         });

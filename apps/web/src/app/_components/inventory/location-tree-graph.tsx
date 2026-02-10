@@ -1,4 +1,4 @@
-import type { LocationId } from "@cubby/schemas/identifiers";
+import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import * as d3Hierarchy from "d3-hierarchy";
@@ -16,7 +16,7 @@ interface TreeNode {
 function transformToTreeNode(location: InfLocation): TreeNode {
   return {
     name: location.name,
-    id: location.id as LocationId,
+    id: unsafeLocationId(location.id),
     type: location.type,
     children: location.children?.map(transformToTreeNode),
   };
@@ -31,7 +31,7 @@ export default function LocationTreeGraph() {
     if (!data || data.length === 0) return null;
     return {
       name: "_root",
-      id: "_root" as LocationId,
+      id: unsafeLocationId("_root"),
       type: "room" as LocationType,
       children: data.map(transformToTreeNode),
     };

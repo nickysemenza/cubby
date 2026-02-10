@@ -9,7 +9,6 @@
 export {
   createRecipe,
   deleteRecipes,
-  findRecipeByShortcode,
   getRecipeByID,
   getRecipeByShortcode,
   insertCompactRecipe,
@@ -18,11 +17,7 @@ export {
   upsertRecipe,
 } from "./crud";
 // Helpers
-export {
-  dbRecipeToAPI,
-  dbRecipeToAPIShallow,
-  sectionIngredientToAPI,
-} from "./helpers";
+export { dbRecipeToAPIShallow } from "./helpers";
 // Types
 export type {
   ExistingRecipeWithSections,
@@ -32,5 +27,3 @@ export type {
 } from "./internal-types";
 // Analytics and queries
 export { getAllTags, getIngredientCooccurrence } from "./queries";
-// Update helpers (exported for potential reuse)
-export { processIngredient, processIngredients } from "./update-helpers";

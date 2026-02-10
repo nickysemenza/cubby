@@ -16,12 +16,6 @@ export {
   updateLocation,
   updateLocationAiDescription,
 } from "./crud";
-// Helpers
-export {
-  buildLocationWithChildren,
-  dbLocationToAPI,
-  dbLocationToAPIWithChildren,
-} from "./helpers";
 export type {
   LocationDeepDB,
   LocationFilters,
@@ -29,8 +23,6 @@ export type {
 } from "./internal-types";
 // Lookup operations
 export {
-  findLocationByName,
-  findLocationByShortcode,
   findOrCreateLocationByName,
   getLocationByShortcode,
   getLocationsByShortcodes,

@@ -244,8 +244,7 @@ export const calculateTotals = (
         missingByType.nutrients.push(ingName);
       }
     } catch (e) {
-      console.error(`Error calculating measures for ${ingName}`);
-      console.error(e);
+      console.error(`Error calculating measures for ${ingName}`, e);
       // If there's a general error, add to all missing categories
       missingByType.price.push(ingName);
       missingByType.weight.push(ingName);

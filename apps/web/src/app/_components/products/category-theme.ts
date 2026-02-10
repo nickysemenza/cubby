@@ -1,5 +1,4 @@
 import {
-  categoryColors,
   formatCategoryLabel,
   getCategoryColor,
   type ProductCategory,
@@ -19,37 +18,7 @@ import {
 import { assertNever } from "~/lib/assert";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
-export { categoryColors, formatCategoryLabel, getCategoryColor };
-
-/**
- * Product category color groups - color families with within-group variation
- * Groups provide visual recognition, variations provide individual distinction
- */
-type CategoryGroup =
-  | "food"
-  | "tools"
-  | "organization"
-  | "building"
-  | "tech"
-  | "home";
-
-const categoryToGroup: Record<ProductCategory, CategoryGroup> = {
-  food: "food",
-  tools: "tools",
-  "tool-consumables": "tools",
-  "tool-accessories": "tools",
-  storage: "organization",
-  hardware: "building",
-  electronics: "tech",
-  household: "home",
-  supplies: "home",
-};
-
-/**
- * Get the group for a product category (useful for logic based on grouping)
- */
-export const getCategoryGroup = (category: ProductCategory): CategoryGroup =>
-  categoryToGroup[category];
+export { formatCategoryLabel, getCategoryColor };
 
 /**
  * Get the icon component for a product category

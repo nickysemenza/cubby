@@ -44,7 +44,7 @@ function isKnownPrefix(prefix: string): prefix is TagPrefix {
 /**
  * Color palette for tag prefixes
  */
-export const tagPrefixColors: Record<TagPrefix, string> = {
+const tagPrefixColors: Record<TagPrefix, string> = {
   cuisine: "hsl(25, 75%, 50%)", // Orange
   author: "hsl(220, 65%, 50%)", // Blue
   cookbook: "hsl(280, 55%, 50%)", // Purple
@@ -56,14 +56,6 @@ export const tagPrefixColors: Record<TagPrefix, string> = {
  */
 export const getTagColor = (prefix: TagPrefix): string =>
   tagPrefixColors[prefix];
-
-/**
- * Get the color for a full tag string
- */
-export const getTagColorFromString = (tag: string): string => {
-  const { prefix } = parseTag(tag);
-  return getTagColor(prefix);
-};
 
 /**
  * Get the icon component for a tag prefix

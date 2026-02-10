@@ -1,8 +1,4 @@
-import {
-  getLocationTypeColor,
-  type LocationType,
-  locationTypeColors,
-} from "@cubby/shared";
+import { getLocationTypeColor, type LocationType } from "@cubby/shared";
 import {
   Box,
   FileBox,
@@ -17,7 +13,7 @@ import {
 import { assertNever } from "~/lib/assert";
 
 // Re-export colors/helpers from @cubby/shared for existing consumers
-export { getLocationTypeColor, locationTypeColors };
+export { getLocationTypeColor };
 
 /**
  * Location type color groups - color families with within-group variation

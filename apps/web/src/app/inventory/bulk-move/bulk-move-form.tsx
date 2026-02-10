@@ -14,7 +14,7 @@
  */
 
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
-import type { InventoryId } from "@cubby/schemas/identifiers";
+import { unsafeInventoryId } from "@cubby/schemas/identifiers";
 import type { BulkMoveItem } from "@cubby/schemas/inventory";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -208,7 +208,7 @@ export default function BulkMoveForm() {
 
     try {
       const items: BulkMoveItem[] = selectedItems.map((item) => ({
-        inventoryEntryId: item.inventoryEntryId as InventoryId,
+        inventoryEntryId: unsafeInventoryId(item.inventoryEntryId),
         quantity: {
           value: item.moveQuantity,
           unit: item.unit,
