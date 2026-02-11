@@ -191,33 +191,33 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
       icon: Package,
       content: (
         <div className="space-y-4">
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <QuickInventoryAdd
-                locationId={location.id}
-                onSuccess={() => {
-                  void queryClient.invalidateQueries({
-                    queryKey: [queryKeys.inventory.list],
-                  });
-                }}
-              />
+          <div className="space-y-3">
+            <QuickInventoryAdd
+              locationId={location.id}
+              onSuccess={() => {
+                void queryClient.invalidateQueries({
+                  queryKey: [queryKeys.inventory.list],
+                });
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDetectItemsOpen(true)}
+                disabled={(location.images ?? []).length === 0}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Detect Items
+              </Button>
+              <Link
+                to="/inventory/quick-capture"
+                search={{ locationId: location.id, scanner: true }}
+                className={cn(buttonVariants({ variant: "outline" }))}
+              >
+                <ScanBarcode className="mr-2 h-4 w-4" />
+                Scan Items
+              </Link>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => setDetectItemsOpen(true)}
-              disabled={(location.images ?? []).length === 0}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Detect Items
-            </Button>
-            <Link
-              to="/inventory/quick-capture"
-              search={{ locationId: location.id, scanner: true }}
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              <ScanBarcode className="mr-2 h-4 w-4" />
-              Scan Items
-            </Link>
           </div>
           <LocationInventoryTable locationId={location.id} />
         </div>

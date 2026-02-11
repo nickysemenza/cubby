@@ -1,7 +1,6 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
-  hasFoodIndicators,
   type ProductCreateInput,
   type ProductTopLevelOut,
   productCategory,
@@ -10,43 +9,32 @@ import {
   type UnitMappingInput,
   unitMappingInput,
 } from "@cubby/schemas/unitmapping";
-import { isMiscProduct, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { ndb, upc } from "@cubby/usda-schemas";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search } from "lucide-react";
-import { type FC, useEffect, useState } from "react";
+import { type FC, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
-import { ArrayFieldManager } from "~/components/forms/array-field-manager";
-import { Button } from "~/components/ui/button";
-import { Image } from "~/components/ui/image";
-import { Spinner } from "~/components/ui/spinner";
 import { useImageState } from "~/hooks/useImageState";
 import {
   extractPriceFromMappings,
   syncPriceToMappings,
 } from "~/lib/price-mapping-utils";
-import { useTRPCClient } from "~/trpc/react";
 import { ComboboxItem } from "../combobox/combobox-types";
 import {
   buildUpdateObject,
-  ComboboxFieldWithSearch,
   type CreateModeProps,
   detectComboboxIdChange,
   type EditModeProps,
   FormWrapper,
   getSubmitButtonText,
-  NullableNumericField,
-  SideBySideFields,
-  UnifiedTextField,
 } from "../form-utils";
-import { AmountFieldGroup } from "../inventory/amount-field-group";
-import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
-import { CategoryFieldWithAI } from "./category-field-with-ai";
+import type { PendingImage } from "../PendingImageUpload";
+import { ProductFormFields } from "./product-form-fields";
 
 // Form schema for product form (simple Zod schema without z.custom)
-const formSchema = z
+export const productFormSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
     manufacturer: z.string().min(1, "Manufacturer is required"),
@@ -66,7 +54,7 @@ const formSchema = z
     ndb_number: data.ndb_number === 0 ? null : data.ndb_number,
   }));
 
-type ProductFormValues = z.infer<typeof formSchema>;
+export type ProductFormValues = z.infer<typeof productFormSchema>;
 
 // Props for create mode
 interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
@@ -102,17 +90,8 @@ type ProductFormProps = CreateProductFormProps | EditProductFormProps;
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
   const { mode, isPending, error, onCancel } = props;
-  const {
-    handlePendingImagesChange,
-    handleRemovedImagesChange,
-    getImageData,
-    hasImageChanges,
-  } = useImageState();
-
-  // UPC lookup state
-  const [lookupImageUrl, setLookupImageUrl] = useState<string | null>(null);
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const trpcClient = useTRPCClient();
+  const imageState = useImageState();
+  const { getImageData, hasImageChanges } = imageState;
 
   // Get the product entity in edit mode
   const product = mode === "edit" ? props.entity : undefined;
@@ -122,7 +101,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   // Initialize form with default values or existing product data
   const form = useForm<ProductFormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: product ? product.name : (initialName ?? ""),
       manufacturer: product ? product.manufacturer : UNSPECIFIED_MANUFACTURER,
@@ -145,39 +124,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
     const priceAmount = extractPriceFromMappings(product?.unitMappings ?? []);
     form.setValue("price", priceAmount?.value ?? null);
   }, [product?.unitMappings, form]);
-
-  // Handle UPC lookup
-  const handleUpcLookup = async () => {
-    const upcValue = form.getValues("upc");
-    if (!upcValue) return;
-
-    setIsLookingUp(true);
-    try {
-      const result = await trpcClient.upc.lookup.query({ upc: upcValue });
-      if (result) {
-        // Auto-fill form fields from lookup result
-        if (result.name) {
-          form.setValue("name", result.name);
-        }
-        if (result.manufacturer) {
-          form.setValue("manufacturer", result.manufacturer);
-        } else if (result.brand) {
-          form.setValue("manufacturer", result.brand);
-        }
-        if (result.priceDollars) {
-          form.setValue("price", result.priceDollars);
-        }
-        // Store external image URL for display (read-only)
-        if (result.imageUrl) {
-          setLookupImageUrl(result.imageUrl);
-        }
-      }
-    } catch (err) {
-      console.error(`[Product Form] UPC lookup failed:`, err);
-    } finally {
-      setIsLookingUp(false);
-    }
-  };
 
   const handleSubmit = (values: ProductFormValues) => {
     // Sync price field to unitMappings before saving
@@ -265,19 +211,6 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
 
   const buttonText = getSubmitButtonText(mode);
 
-  // Watch fields for conditional rendering
-  const nameValue = form.watch("name");
-  const manufacturerValue = form.watch("manufacturer");
-  const ndbValue = form.watch("ndb_number");
-  const ingredientValue = form.watch("ingredient");
-
-  // Derived state from watched values
-  const isMisc = isMiscProduct(nameValue);
-  const isFoodForced = hasFoodIndicators({
-    ndb_number: ndbValue,
-    ingredientId: ingredientValue?.id,
-  });
-
   return (
     <FormWrapper
       form={form}
@@ -287,187 +220,13 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       onCancel={onCancel}
       submitButtonText={buttonText}
     >
-      {/* Start with model/name - primary identifiers for inventory */}
-      <SideBySideFields>
-        <UnifiedTextField
-          form={form}
-          name="model"
-          label="Model Number"
-          placeholder="Enter model number"
-          nullable={true}
-        />
-
-        <UnifiedTextField
-          form={form}
-          name="name"
-          label="Product Name"
-          placeholder="Enter product name"
-          nullable={false}
-        />
-      </SideBySideFields>
-
-      <UnifiedTextField
+      <ProductFormFields
         form={form}
-        name="notes"
-        label="Notes"
-        placeholder="Notes, URLs, etc."
-        nullable={true}
-      />
-
-      {/* Hide manufacturer, pricing, UPC, NDB, ingredient for misc products */}
-      {!isMisc && (
-        <>
-          <UnifiedTextField
-            form={form}
-            name="manufacturer"
-            label="Manufacturer"
-            placeholder="Enter manufacturer"
-            nullable={false}
-          />
-
-          <CategoryFieldWithAI
-            form={form}
-            name="category"
-            productName={nameValue}
-            manufacturer={manufacturerValue}
-            disabled={isFoodForced}
-            description={
-              isFoodForced
-                ? "Forced to 'food' (has NDB number or ingredient)"
-                : undefined
-            }
-          />
-
-          {/* Inventory-specific fields */}
-          <SideBySideFields>
-            <NullableNumericField
-              form={form}
-              step="1"
-              name="expectedQuantity"
-              label="Expected Quantity (1 for unique items)"
-              placeholder="Leave empty for unlimited"
-            />
-            <NullableNumericField
-              form={form}
-              step="0.01"
-              name="price"
-              label="Price per Item"
-              placeholder="e.g. 12.99"
-              prefix="$"
-            />
-          </SideBySideFields>
-
-          {/* Secondary identifiers with UPC lookup */}
-          <div className="space-y-2">
-            <div className="flex items-end gap-2">
-              <div className="flex-1">
-                <UnifiedTextField
-                  form={form}
-                  name="upc"
-                  label="UPC (Optional)"
-                  placeholder="12-digit UPC code"
-                  nullable={true}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleUpcLookup}
-                disabled={isLookingUp || !form.watch("upc")}
-                className="mb-[2px]"
-              >
-                {isLookingUp ? <Spinner /> : <Search className="h-4 w-4" />}
-                <span className="ml-1">Lookup</span>
-              </Button>
-            </div>
-            {lookupImageUrl && (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Image
-                  src={lookupImageUrl}
-                  alt="Product from UPC lookup"
-                  width={64}
-                  height={64}
-                  className="rounded border object-contain"
-                />
-                <span>Image will be imported on save</span>
-              </div>
-            )}
-          </div>
-
-          <NullableNumericField
-            form={form}
-            step="1"
-            name="ndb_number"
-            label="NDB Number (Optional)"
-            placeholder="NDB number (1000-99999)"
-          />
-          <ComboboxFieldWithSearch
-            form={form}
-            name="ingredient"
-            label="Ingredient"
-            searchType="ingredient"
-          />
-        </>
-      )}
-
-      {/* Show image upload in both create and edit modes */}
-      <PendingImageUpload
-        entityType="PRODUCT"
-        onImagesChange={handlePendingImagesChange}
+        imageHandlers={imageState}
         existingImages={
           mode === "edit" && product?.images ? product.images : []
         }
-        onExistingImagesRemove={handleRemovedImagesChange}
-        className="mt-4"
       />
-
-      {/* Hide unit mappings for misc products */}
-      {!isMisc && (
-        <ArrayFieldManager<UnitMappingInput, ProductFormValues>
-          form={form}
-          name="unitMappings"
-          title="Unit Mappings"
-          addButtonText="Add Mapping"
-          emptyValue={{
-            a: { value: 1, unit: "" },
-            b: { value: 1, unit: "" },
-            source: null,
-          }}
-        >
-          {(_, index) => (
-            <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <h5 className="font-medium text-sm">From</h5>
-                  <AmountFieldGroup
-                    form={form}
-                    valuePath={`unitMappings.${index}.a.value`}
-                    unitPath={`unitMappings.${index}.a.unit`}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <h5 className="font-medium text-sm">To</h5>
-                  <AmountFieldGroup
-                    form={form}
-                    valuePath={`unitMappings.${index}.b.value`}
-                    unitPath={`unitMappings.${index}.b.unit`}
-                  />
-                </div>
-              </div>
-
-              <UnifiedTextField
-                form={form}
-                name={`unitMappings.${index}.source`}
-                label="Source (Optional)"
-                placeholder="Enter source"
-                nullable={true}
-              />
-            </>
-          )}
-        </ArrayFieldManager>
-      )}
     </FormWrapper>
   );
 };

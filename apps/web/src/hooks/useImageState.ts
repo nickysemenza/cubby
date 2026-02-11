@@ -51,6 +51,15 @@ export function useImageState() {
     return pendingImages.length > 0 || removedImageIds.length > 0;
   };
 
+  /**
+   * Reset all image state (pending uploads and removed IDs).
+   * Useful when switching form modes or cancelling.
+   */
+  const reset = () => {
+    setPendingImages([]);
+    setRemovedImageIds([]);
+  };
+
   return {
     pendingImages,
     removedImageIds,
@@ -58,5 +67,6 @@ export function useImageState() {
     handleRemovedImagesChange,
     getImageData,
     hasImageChanges,
+    reset,
   };
 }

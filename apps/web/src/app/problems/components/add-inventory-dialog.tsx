@@ -25,7 +25,7 @@ export function AddInventoryDialog({
 }: AddInventoryDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add Inventory to {locationName}</DialogTitle>
           <DialogDescription>

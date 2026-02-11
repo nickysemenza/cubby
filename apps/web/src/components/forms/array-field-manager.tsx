@@ -31,6 +31,7 @@ interface ArrayFieldManagerProps<
     remove: (index: number) => void,
   ) => React.ReactNode;
   className?: string;
+  titleClassName?: string;
   itemClassName?: string;
   showRemoveButton?: boolean;
   maxItems?: number;
@@ -47,6 +48,7 @@ export const ArrayFieldManager = <
   emptyValue,
   children,
   className,
+  titleClassName,
   itemClassName,
   showRemoveButton = true,
   maxItems,
@@ -73,7 +75,7 @@ export const ArrayFieldManager = <
   return (
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center justify-between">
-        <h3 className="font-medium text-lg">{title}</h3>
+        <h3 className={cn("font-medium text-lg", titleClassName)}>{title}</h3>
         <Button
           type="button"
           variant="outline"
