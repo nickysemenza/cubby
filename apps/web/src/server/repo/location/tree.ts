@@ -14,7 +14,6 @@ import {
   locationType,
 } from "@cubby/schemas/location";
 import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
-import { createAppError } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import {
   type image,
@@ -23,6 +22,7 @@ import {
   locationImage,
   product,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 
 import { buildLocationWithChildren } from "./helpers";

@@ -4,15 +4,15 @@
  */
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { and, getTableName, inArray, isNull, sql } from "drizzle-orm";
+import { and, getTableName, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { FAILED_TO_INSERT, FAILED_TO_UPDATE } from "~/lib/error-messages";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { image, inventoryEntry } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
+import { notDeleted } from "./query";
 
 /**
  * Insert a single record and return it.
@@ -30,7 +30,7 @@ export const insertAndReturn = async <T extends PgTable>(
     const result = await client.insert(table).values(values).returning();
     const [created] = result as InferSelectModel<T>[];
     if (!created) {
-      throw new Error(FAILED_TO_INSERT);
+      throw new Error("Failed to insert record");
     }
     return created;
   });
@@ -78,7 +78,7 @@ export const updateAndReturn = async <T extends PgTable>(
         .where(where);
       const [existing] = result as InferSelectModel<T>[];
       if (!existing) {
-        throw new Error(FAILED_TO_UPDATE);
+        throw new Error("Failed to update record");
       }
       return existing;
     }
@@ -90,7 +90,7 @@ export const updateAndReturn = async <T extends PgTable>(
       .returning();
     const [updated] = result as InferSelectModel<T>[];
     if (!updated) {
-      throw new Error(FAILED_TO_UPDATE);
+      throw new Error("Failed to update record");
     }
     return updated;
   });
@@ -171,7 +171,7 @@ export async function batchUpsertInventory<
             inventoryEntry.locationId,
             entries.map((e) => e.locationId),
           ),
-          isNull(inventoryEntry.deletedAt),
+          notDeleted(inventoryEntry),
         ),
       );
 

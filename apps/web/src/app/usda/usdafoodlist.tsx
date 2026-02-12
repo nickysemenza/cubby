@@ -1,6 +1,8 @@
 import { type DataType, dataTypeEnum } from "@cubby/usda-schemas";
+import { useQuery } from "@tanstack/react-query";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useQueryWithTiming } from "~/hooks/useQueryWithTiming";
+import { useEffect, useRef, useState } from "react";
+import type { QueryTiming } from "~/lib/query-timing";
 import type { Flatten } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { createEntityPillColumn } from "../_components/data-table/columnHelpers";
@@ -22,12 +24,7 @@ export function USDAFoodList() {
   const tableState = useTableState({ initialSort: "fdc_id" });
 
   // Query data with params from table state
-  const {
-    data: foodsResp,
-    isLoading,
-    error,
-    timing,
-  } = useQueryWithTiming(
+  const query = useQuery(
     api.usda.list.queryOptions({
       sort: tableState.getSortParams(),
       pagination: tableState.pagination,
@@ -39,6 +36,29 @@ export function USDAFoodList() {
       },
     }),
   );
+
+  const { data: foodsResp, isLoading, error, isFetching } = query;
+
+  // Inline ref-based timing (replaces useQueryWithTiming hook)
+  const startTimeRef = useRef<number | null>(null);
+  const [timing, setTiming] = useState<QueryTiming>({
+    durationMs: null,
+    isFresh: false,
+  });
+
+  useEffect(() => {
+    if (isFetching && startTimeRef.current === null) {
+      startTimeRef.current = performance.now();
+    }
+  }, [isFetching]);
+
+  useEffect(() => {
+    if (!isFetching && startTimeRef.current !== null) {
+      const duration = Math.round(performance.now() - startTimeRef.current);
+      setTiming({ durationMs: duration, isFresh: true });
+      startTimeRef.current = null;
+    }
+  }, [isFetching]);
 
   const data = foodsResp?.items || [];
   const columnHelper = createColumnHelper<Flatten<typeof data>>();

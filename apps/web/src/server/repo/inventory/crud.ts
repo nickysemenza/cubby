@@ -3,6 +3,7 @@ import {
   type InventoryId,
   type LocationId,
   type ProductId,
+  unsafeInventoryId,
   unsafeProductId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -13,10 +14,14 @@ import {
 import { and, count, eq, inArray, not, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { computeInventoryValuation } from "~/lib/price-mapping-utils";
-import { createAppError } from "~/server/api/trpc";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inventoryEntry, location, product } from "~/server/db/schema";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { createAppError } from "~/server/errors/app-error";
+import {
+  computeChanges,
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/repo/audit-log";
 import {
   batchUpdateWithCaseWhen,
   buildOrderBy,
@@ -168,7 +173,7 @@ export const findInventoryWithStaleValuations = async (
 
     if (isStale) {
       staleEntries.push({
-        id: entry.id as InventoryId,
+        id: unsafeInventoryId(entry.id),
         storedValuation: entry.valuation,
         expectedValuation,
         productName: entry.Product.name,
@@ -598,13 +603,15 @@ export const deleteInventoryEntries = async (
       .set({ deletedAt: now })
       .where(inArray(inventoryEntry.id, ids));
 
-    // Log audit entries
-    for (const id of ids) {
-      await logAuditEntry(tx, actor, {
-        entityType: "inventory",
+    // Log audit entries in batch
+    await logAuditEntries(
+      tx,
+      actor,
+      ids.map((id) => ({
+        entityType: "inventory" as const,
         entityId: id,
-        action: "delete",
-      });
-    }
+        action: "delete" as const,
+      })),
+    );
   });
 };

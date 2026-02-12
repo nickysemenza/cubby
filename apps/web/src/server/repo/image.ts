@@ -4,7 +4,6 @@ import type {
 } from "@cubby/schemas/image";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
-import { createAppError } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -12,6 +11,7 @@ import {
   productImage,
   recipeImage,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   associatePendingImages,
   buildOrderBy,

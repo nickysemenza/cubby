@@ -25,7 +25,6 @@ import {
 import type { z } from "zod";
 import { getSortableFields } from "~/entities/entities";
 import { dedupe } from "~/misc/array-helpers";
-import { createAppError } from "~/server/api/trpc";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   type image,
@@ -36,6 +35,7 @@ import {
   type recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
   logAuditEntries,

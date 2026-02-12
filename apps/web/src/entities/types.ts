@@ -83,7 +83,6 @@ export interface EntityDefinition {
   label: string;
   basePath: string;
   pluralLabel: string;
-  shortcut?: string;
   /** Lucide icon component for UI elements */
   lucideIcon: LucideIcon;
   /** Color classes for visual entity identification */

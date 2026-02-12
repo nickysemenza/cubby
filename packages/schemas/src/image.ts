@@ -14,7 +14,19 @@ export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
 export const ImageStatus = z.enum(imageStatusValues);
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
-// Base schema for image data
+// Allowed image content types for upload validation
+export const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+] as const;
+export type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
+const imageContentType = z.enum(ALLOWED_IMAGE_TYPES);
+
+// Base schema for image data (contentType is string for DB output compatibility)
 const imageBase = z.object({
   url: z.url(),
   key: z.string(),
@@ -50,7 +62,7 @@ export type UpdateInputImages = z.infer<typeof updateInputImages>;
 // Schema for initiating an image upload without entity ID (for pending uploads)
 export const initiateUploadWithoutEntitySchema = z.object({
   filename: z.string(),
-  contentType: z.string(),
+  contentType: imageContentType,
   size: z.int().positive(),
   entityType: entityImage,
 });

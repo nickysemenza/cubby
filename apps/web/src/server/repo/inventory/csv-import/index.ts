@@ -22,10 +22,11 @@ import type {
   InventoryCSVRow,
 } from "@cubby/schemas/inventory";
 import type { ProductCategory } from "@cubby/schemas/product";
+import { getErrorMessage } from "~/lib/error-utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { Database } from "~/server/db";
 import { location, product } from "~/server/db/schema";
-import { logAuditEntry } from "~/server/repo/audit-log";
+import { type AuditEntryInput, logAuditEntries } from "~/server/repo/audit-log";
 import {
   buildInventoryResult,
   createInventoryCounters,
@@ -187,16 +188,12 @@ export const importInventoryFromCSV = async (
       }
     } catch (error) {
       console.error("Product import error:", error);
-      let message = "Unknown error";
-      if (error instanceof Error) {
-        message = error.message;
-      }
       pushErrorItem(
         items,
         counters,
         i,
         row.product_name,
-        message,
+        getErrorMessage(error),
         row.location_name,
       );
     }
@@ -298,7 +295,8 @@ export const importInventoryFromCSV = async (
       }
     });
 
-    // 4. Log audit entries (outside transaction, async)
+    // 4. Log audit entries in batch (outside transaction)
+    const auditEntries: AuditEntryInput[] = [];
     for (const item of items) {
       if (item.action !== "error" && item.productId) {
         const shouldLogProduct =
@@ -311,7 +309,7 @@ export const importInventoryFromCSV = async (
           item.action === "updated";
 
         if (shouldLogProduct && item.productWillBeCreated) {
-          await logAuditEntry(db, actor, {
+          auditEntries.push({
             entityType: "product",
             entityId: item.productId,
             action: "create",
@@ -319,16 +317,15 @@ export const importInventoryFromCSV = async (
         }
 
         if (shouldLogInventory) {
-          const inventoryAction =
-            item.action === "created" ? "create" : "update";
-          await logAuditEntry(db, actor, {
+          auditEntries.push({
             entityType: "inventory",
             entityId: item.productId,
-            action: inventoryAction,
+            action: item.action === "created" ? "create" : "update",
           });
         }
       }
     }
+    await logAuditEntries(db, actor, auditEntries);
   }
 
   return buildInventoryResult(counters, items);

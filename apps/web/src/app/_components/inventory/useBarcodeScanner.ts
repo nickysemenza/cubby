@@ -10,6 +10,7 @@
 
 import { BarcodeDetector } from "barcode-detector/ponyfill";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getErrorMessage } from "~/lib/error-utils";
 
 /** Barcode format strings supported by the BarcodeDetector API */
 export type BarcodeFormat =
@@ -217,9 +218,9 @@ export function useBarcodeScanner({
           setErrorMessage("Camera access was denied");
         } else {
           setStatus("error");
-          const message = err instanceof Error ? err.message : String(err);
-          setErrorMessage(message || "Failed to start camera");
-          onErrorRef.current?.(message || "Failed to start camera");
+          const message = getErrorMessage(err);
+          setErrorMessage(message);
+          onErrorRef.current?.(message);
         }
       }
     };

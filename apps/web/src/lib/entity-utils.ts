@@ -1,8 +1,3 @@
-import type { ReactNode } from "react";
-
-// Field names that typically contain entity images
-const IMAGE_FIELDS = ["image", "imageUrl", "thumbnail"] as const;
-
 // Type guard for checking if object has a property
 function hasProperty<K extends string>(
   obj: unknown,
@@ -55,19 +50,4 @@ export function extractEntityTitle<T>(rowData: T): string {
   }
 
   return "Unknown";
-}
-
-/**
- * Extracts image content from entity row data
- */
-export function getEntityImage(
-  rowData: Record<string, unknown>,
-): ReactNode | undefined {
-  for (const field of IMAGE_FIELDS) {
-    const value = rowData[field];
-    if (value !== null && value !== undefined) {
-      return value as ReactNode;
-    }
-  }
-  return undefined;
 }

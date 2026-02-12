@@ -7,8 +7,8 @@ import type { SortParams } from "@cubby/schemas/pagination";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, asc, ilike, inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { createAppError } from "~/server/api/trpc";
 import type { DrizzleTransaction } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
@@ -55,17 +55,6 @@ export const formatSearchTerm = (
  */
 export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);
-
-/**
- * Filter out soft-deleted items from an array.
- * Use this in transformation functions when Drizzle relations can't apply WHERE filters.
- */
-export function filterDeleted<T extends { deletedAt: Date | null }>(
-  items: T[] | undefined | null,
-): T[] {
-  if (!items) return [];
-  return items.filter((item) => item.deletedAt === null);
-}
 
 /**
  * Build order by clause from sort parameters.

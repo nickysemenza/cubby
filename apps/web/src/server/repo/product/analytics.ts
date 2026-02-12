@@ -4,14 +4,11 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  hasFoodIndicators,
-  type ProductCategory,
-} from "@cubby/schemas/product";
+import type { ProductCategory } from "@cubby/schemas/product";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { product, productImage } from "~/server/db/schema";
-import { logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntries } from "~/server/repo/audit-log";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 
 // Find products with expectedQuantity=1 that appear in multiple locations
@@ -122,7 +119,8 @@ export const countProductsNeedingFoodCategory = async (
 };
 
 /**
- * Find all products that have food indicators (UPC, NDB, or ingredient) but category is not "food".
+ * Find all products that have food indicators (NDB or ingredient) but category is not "food".
+ * Uses SQL WHERE predicates matching countProductsNeedingFoodCategory.
  * Used for food category backfill functionality.
  */
 export const findProductsNeedingFoodCategory = async (
@@ -140,22 +138,24 @@ export const findProductsNeedingFoodCategory = async (
 > => {
   const dbClient = getDb(db);
 
-  // Find products with food indicators but wrong category
-  const products = await dbClient.query.product.findMany({
-    where: notDeleted(product),
-    columns: {
-      id: true,
-      name: true,
-      manufacturer: true,
-      category: true,
-      upc: true,
-      ndb_number: true,
-      ingredientId: true,
-    },
-  });
-
-  // Filter to products with food indicators but wrong category
-  return products.filter((p) => hasFoodIndicators(p) && p.category !== "food");
+  return await dbClient
+    .select({
+      id: product.id,
+      name: product.name,
+      manufacturer: product.manufacturer,
+      category: product.category,
+      upc: product.upc,
+      ndb_number: product.ndb_number,
+      ingredientId: product.ingredientId,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        sql`${product.category} IS DISTINCT FROM 'food'`,
+        sql`((${product.ndb_number} IS NOT NULL AND ${product.ndb_number} > 0) OR ${product.ingredientId} IS NOT NULL)`,
+      ),
+    );
 };
 
 /**
@@ -284,17 +284,19 @@ export const backfillFoodCategories = async (
     .set({ category: "food" })
     .where(inArray(product.id, productIds));
 
-  // Log audit entries for each update
-  for (const p of productsToUpdate) {
-    await logAuditEntry(db, actor, {
-      entityType: "product",
+  // Log audit entries in batch
+  await logAuditEntries(
+    db,
+    actor,
+    productsToUpdate.map((p) => ({
+      entityType: "product" as const,
       entityId: p.id,
-      action: "update",
+      action: "update" as const,
       changes: {
         category: { from: p.category, to: "food" },
       },
-    });
-  }
+    })),
+  );
 
   return {
     updated: productsToUpdate.length,

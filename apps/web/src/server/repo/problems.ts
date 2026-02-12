@@ -22,6 +22,7 @@ import {
   findProductsWithNoImages,
   findProductsWithStalePrices,
 } from "~/server/repo/product";
+import { countProductsWithStalePrices } from "~/server/repo/product/pricing";
 
 // Interface for the complete problems result
 interface AllProblems {
@@ -766,7 +767,7 @@ export const findAllProblemsCount = async (
     countEmptyLocations(db),
     countProductsWithNoImages(db, { excludeIngredients: true }),
     countProductsNeedingFoodCategory(db),
-    findProductsWithStalePrices(db).then((r) => r.length),
+    countProductsWithStalePrices(db),
     findInventoryWithStaleValuations(db).then((r) => r.length),
     countProductsWithIslandedMappings(db),
     countLocationsWithoutAiDescription(db),

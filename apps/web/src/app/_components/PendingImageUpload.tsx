@@ -1,4 +1,8 @@
 import type { EntityImage } from "@cubby/schemas/entity";
+import {
+  ALLOWED_IMAGE_TYPES,
+  type AllowedImageType,
+} from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
 import { Camera, Link, X } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -129,10 +133,18 @@ export function PendingImageUpload({
       setUploading(true);
 
       try {
+        // Validate content type before uploading
+        if (!ALLOWED_IMAGE_TYPES.includes(file.type as AllowedImageType)) {
+          toast.error(
+            `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
+          );
+          return null;
+        }
+
         // Step 1: Get a presigned URL
         const initResult = await uploadImageMutation.mutateAsync({
           filename: file.name,
-          contentType: file.type,
+          contentType: file.type as AllowedImageType,
           size: file.size,
           entityType,
         });

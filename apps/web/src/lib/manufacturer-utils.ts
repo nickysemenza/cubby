@@ -8,18 +8,6 @@
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 
 /**
- * Normalize a manufacturer value:
- * - Empty/null/undefined becomes UNSPECIFIED_MANUFACTURER
- * - Whitespace is trimmed
- */
-export function normalizeManufacturer(
-  manufacturer: string | null | undefined,
-): string {
-  const trimmed = manufacturer?.trim();
-  return trimmed || UNSPECIFIED_MANUFACTURER;
-}
-
-/**
  * Check if a manufacturer value represents "unspecified"
  * (empty, null, whitespace-only, or the literal "(unspecified)" value)
  */

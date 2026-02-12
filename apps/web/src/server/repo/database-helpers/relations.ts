@@ -11,7 +11,7 @@
  * - extractImagesFromJoinTable() for image join tables
  * - mapRelation() for general relation arrays
  * - addProductSourceMetadata() for unit mappings
- * - filterDeleted() for simple arrays with deletedAt
+ * - Array.filter(item => item.deletedAt === null) for simple arrays with deletedAt
  */
 
 export const relations = {
@@ -64,6 +64,16 @@ export const relations = {
             image: true,
           },
         },
+      },
+    },
+    list: {
+      with: {
+        images: {
+          with: {
+            image: true,
+          },
+        },
+        unitMappings: true,
       },
     },
   },

@@ -22,6 +22,7 @@ import {
   inventoryUpdateInput,
 } from "@cubby/schemas/inventory";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   backfillInventoryValuations,
   bulkMoveInventoryEntries,
@@ -43,7 +44,7 @@ import {
   createDeleteProcedure,
   createEntityCrudProcedures,
 } from "../crud-factory";
-import { createAppError, createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 // Define filters schema for inventory entries
 const inventoryFiltersSchema = z.object({

@@ -19,7 +19,6 @@ import type {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { parseCompactRecipe } from "~/codec/parser";
 import { getSortableFields } from "~/entities/entities";
-import { createAppError } from "~/server/api/trpc";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   recipe,
@@ -27,6 +26,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
   logAuditEntries,
@@ -244,7 +244,10 @@ export const createRecipe = async (
       action: "create",
     });
 
-    const fullRecipe = await getRecipeByID(tx, createdRecipe.id as RecipeId);
+    const fullRecipe = await getRecipeByID(
+      tx,
+      unsafeRecipeId(createdRecipe.id),
+    );
     if (!fullRecipe) {
       throw new Error("Failed to retrieve created recipe");
     }

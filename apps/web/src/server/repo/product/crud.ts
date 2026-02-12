@@ -22,7 +22,6 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
 import { dedupe } from "~/misc/array-helpers";
-import { createAppError } from "~/server/api/trpc";
 import type { Database } from "~/server/db";
 import {
   image,
@@ -31,6 +30,7 @@ import {
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
   logAuditEntries,

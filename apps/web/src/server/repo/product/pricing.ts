@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { computeProductPrice } from "~/lib/price-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, productUnitMappings } from "~/server/db/schema";
-import { logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntries } from "~/server/repo/audit-log";
 import {
   getDb,
   notDeleted,
@@ -122,6 +122,40 @@ export const findProductsWithStalePrices = async (
 };
 
 /**
+ * Count products with stale or missing prices.
+ * Optimized variant that fetches minimal columns (no name/manufacturer).
+ */
+export const countProductsWithStalePrices = async (
+  db: Database,
+): Promise<number> => {
+  const dbClient = getDb(db);
+
+  const productsWithMappings = await dbClient.query.product.findMany({
+    where: notDeleted(product),
+    columns: { id: true, price: true },
+    with: { unitMappings: true },
+  });
+
+  let count = 0;
+  for (const prod of productsWithMappings) {
+    const computedPrice = computeProductPrice(prod.unitMappings);
+    const storedPrice = prod.price;
+    if (computedPrice === null && storedPrice === null) continue;
+    if (computedPrice !== null && storedPrice === null) {
+      count++;
+    } else if (
+      computedPrice !== null &&
+      storedPrice !== null &&
+      Math.abs(computedPrice - storedPrice) > 0.005
+    ) {
+      count++;
+    }
+  }
+
+  return count;
+};
+
+/**
  * Backfill product prices from unit mappings.
  * Updates all products with missing or stale prices.
  */
@@ -158,16 +192,6 @@ export const backfillProductPrices = async (
         .set({ price: prod.computedPrice })
         .where(eq(product.id, prod.id));
 
-      // Log audit entry
-      await logAuditEntry(tx, actor, {
-        entityType: "product",
-        entityId: prod.id,
-        action: "update",
-        changes: {
-          price: { from: prod.storedPrice, to: prod.computedPrice },
-        },
-      });
-
       updatedProducts.push({
         id: prod.id,
         name: prod.name,
@@ -175,6 +199,20 @@ export const backfillProductPrices = async (
         newPrice: prod.computedPrice,
       });
     }
+
+    // Log audit entries in batch
+    await logAuditEntries(
+      tx,
+      actor,
+      productsToUpdate.map((prod) => ({
+        entityType: "product" as const,
+        entityId: prod.id,
+        action: "update" as const,
+        changes: {
+          price: { from: prod.storedPrice, to: prod.computedPrice },
+        },
+      })),
+    );
 
     return {
       updated: updatedProducts.length,

@@ -18,6 +18,7 @@ import {
   recipeUpdateInput,
 } from "@cubby/schemas/recipe";
 import { z } from "zod";
+import { createAppError } from "~/server/errors/app-error";
 import {
   createRecipe,
   deleteRecipes,
@@ -29,18 +30,12 @@ import {
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
-import { seedRealRecipes } from "~/testdata/seed";
+import { scrapeToCompact } from "~/server/utils/scraper";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
 } from "../crud-factory";
-import {
-  createAppError,
-  createTRPCRouter,
-  protectedProcedure,
-  systemProcedure,
-} from "../trpc";
-import { scrapeToCompact } from "./scraper";
+import { createTRPCRouter, protectedProcedure, systemProcedure } from "../trpc";
 
 // Define filters schema for recipes
 const recipeFiltersSchema = z.object({
@@ -78,6 +73,8 @@ const { getByID, list, create, update } = createEntityCrudProcedures({
 });
 
 const seed = systemProcedure.mutation(async ({ ctx }) => {
+  // Dynamic import to avoid bundling test data in production
+  const { seedRealRecipes } = await import("~/testdata/seed");
   return await seedRealRecipes(ctx.db, ctx.actorContext);
 });
 const scrape = protectedProcedure

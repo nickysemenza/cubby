@@ -12,6 +12,7 @@ import {
   type FilterableComboboxItem,
 } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
+import { getErrorMessage } from "~/lib/error-utils";
 import { showAmountAndPrice } from "../inventory/format-amount";
 
 /** Re-export for convenience */
@@ -99,7 +100,7 @@ export function useEditableCell<T>({
       setOptimisticValue(parsed); // Show immediately
       setIsEditing(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(getErrorMessage(err));
     } finally {
       setIsPending(false);
     }
@@ -316,7 +317,7 @@ function EditableInputEditor<T>({
       await onSave(parsed);
       onCommit(parsed);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(getErrorMessage(err));
     } finally {
       setIsPending(false);
     }
@@ -456,7 +457,7 @@ function EditableSelectEditor({
       await onSave(selectedValue);
       onCommit(selectedValue);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(getErrorMessage(err));
     } finally {
       setIsPending(false);
     }
@@ -550,7 +551,7 @@ export function EditableAmountCell({
       setOptimisticAmount(newAmount);
       setIsEditing(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save");
+      toast.error(getErrorMessage(err));
     } finally {
       setIsPending(false);
     }
