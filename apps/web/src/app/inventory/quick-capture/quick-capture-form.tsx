@@ -186,7 +186,7 @@ export default function QuickCaptureForm({
     ...api.inventory.list.queryOptions({
       sort: { orderBy: "createdAt", direction: "desc" },
       pagination: { pageIndex: 0, pageSize: 20 },
-      filters: { locationIdFilter: focusedLocationId },
+      filters: { locationIdFilter: focusedLocationId! },
     }),
     enabled: !!focusedLocationId,
   });

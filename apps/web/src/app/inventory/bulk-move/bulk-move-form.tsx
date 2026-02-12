@@ -113,16 +113,14 @@ export default function BulkMoveForm() {
 
   // Fetch inventory items from source location
   const { data: inventoryItemsData, refetch: refetchInventoryItems } = useQuery(
-    api.inventory.list.queryOptions(
-      {
+    {
+      ...api.inventory.list.queryOptions({
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
-        filters: { locationIdFilter: sourceLocation?.id },
-      },
-      {
-        enabled: !!sourceLocation,
-      },
-    ),
+        filters: { locationIdFilter: sourceLocation!.id },
+      }),
+      enabled: !!sourceLocation,
+    },
   );
 
   // Build move items list when inventory data changes

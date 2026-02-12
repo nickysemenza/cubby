@@ -51,10 +51,7 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
 
   // Search query - 50 per entity type for full search page
   const { data, isLoading, error } = useQuery({
-    ...api.search.global.queryOptions({
-      query: query || "a",
-      limit: 50,
-    }),
+    ...api.search.global.queryOptions({ query, limit: 50 }),
     enabled: query.length > 0,
   });
 

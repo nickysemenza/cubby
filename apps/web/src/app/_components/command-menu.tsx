@@ -52,19 +52,19 @@ export function GlobalCommandMenu({
     ...trpc.location.getByShortcode.queryOptions({
       shortcode: search.toUpperCase(),
     }),
-    enabled: !!parsedShortcode && parsedShortcode.type === "location",
+    enabled: parsedShortcode?.type === "location",
   });
   const productQuery = useQuery({
     ...trpc.product.getByShortcode.queryOptions({
       shortcode: search.toUpperCase(),
     }),
-    enabled: !!parsedShortcode && parsedShortcode.type === "product",
+    enabled: parsedShortcode?.type === "product",
   });
   const recipeQuery = useQuery({
     ...trpc.recipe.getByShortcode.queryOptions({
       shortcode: search.toUpperCase(),
     }),
-    enabled: !!parsedShortcode && parsedShortcode.type === "recipe",
+    enabled: parsedShortcode?.type === "recipe",
   });
 
   const shortcodeResult =

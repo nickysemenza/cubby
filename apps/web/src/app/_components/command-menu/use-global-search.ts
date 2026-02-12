@@ -24,7 +24,7 @@ export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
 
   const { data, isLoading, isFetching } = useQuery({
     ...api.search.global.queryOptions({
-      query: debouncedQuery || "a", // Provide fallback to avoid validation error when disabled
+      query: debouncedQuery,
       limit: 5,
     }),
     enabled: shouldSearch,

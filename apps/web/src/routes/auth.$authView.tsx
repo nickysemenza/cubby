@@ -1,5 +1,5 @@
 import { AuthView } from "@daveyplate/better-auth-ui";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import {
   Apple,
   Carrot,
@@ -16,11 +16,14 @@ import {
 import { z } from "zod";
 
 const searchSchema = z.object({
-  redirect: z.string().optional(),
+  redirect: z.string().optional().catch(undefined),
 });
+
+const searchDefaults = { redirect: undefined } as const;
 
 export const Route = createFileRoute("/auth/$authView")({
   validateSearch: searchSchema,
+  search: { middlewares: [stripSearchParams(searchDefaults)] },
   component: AuthPage,
 });
 

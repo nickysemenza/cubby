@@ -9,7 +9,6 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Spinner } from "~/components/ui/spinner";
-import { authClient } from "~/lib/auth-client";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogEntryComponent } from "./audit-log-entry";
 
@@ -28,12 +27,10 @@ export function AuditLogList({
   limit = 20,
 }: AuditLogListProps) {
   const trpc = useTRPC();
-  const session = authClient.useSession();
-  const isAuthenticated = !!session.data?.user;
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery({
-      ...trpc.auditLog.list.infiniteQueryOptions(
+    useInfiniteQuery(
+      trpc.auditLog.list.infiniteQueryOptions(
         {
           entityType,
           entityId,
@@ -43,8 +40,7 @@ export function AuditLogList({
           getNextPageParam: (lastPage) => lastPage.nextCursor,
         },
       ),
-      enabled: isAuthenticated,
-    });
+    );
 
   if (isLoading) {
     return (

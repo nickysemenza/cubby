@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type {
   ColumnFiltersState,
   PaginationState,
@@ -43,6 +43,7 @@ interface UseTableListReturn<TData = unknown> {
   data: TData[];
   totalCount: number;
   isLoading: boolean;
+  isPlaceholderData: boolean;
   error: Error | null;
   tableState: ReturnType<typeof useTableState>;
   timing: QueryTiming;
@@ -103,13 +104,18 @@ export function useTableList<TFilters, TData = unknown>({
     error,
     isFetching,
     isRefetching,
+    isPlaceholderData,
     refetch,
-  } = useQuery(memoizedQueryOptions) as {
+  } = useQuery({
+    ...memoizedQueryOptions,
+    placeholderData: keepPreviousData,
+  }) as {
     data: ListQueryResponse<TData> | undefined;
     isLoading: boolean;
     error: Error | null;
     isFetching: boolean;
     isRefetching: boolean;
+    isPlaceholderData: boolean;
     refetch: () => Promise<unknown>;
   };
 
@@ -143,6 +149,7 @@ export function useTableList<TFilters, TData = unknown>({
     data: dataArray,
     totalCount: response?.meta?.totalCount ?? response?.count ?? 0,
     isLoading,
+    isPlaceholderData,
     error: error instanceof Error ? error : null,
     tableState,
     timing: timingRef.current, // Use ref instead of state to avoid triggering rerenders

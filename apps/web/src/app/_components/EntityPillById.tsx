@@ -1,5 +1,5 @@
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Spinner } from "~/components/ui/spinner";
 import { useTRPC } from "~/trpc/react";
@@ -28,7 +28,7 @@ export function EntityPillById({
     switch (entityType) {
       case "inventory":
         // Inventory entries don't have a getByID that returns product info
-        return { queryKey: ["invalid"], enabled: false };
+        return { queryKey: ["invalid"] as const, queryFn: skipToken };
       case "product":
         return trpc.product.getByID.queryOptions({ id: entityId });
       case "location":

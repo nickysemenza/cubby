@@ -9,217 +9,62 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ProblemsRouteImport } from './routes/problems'
-import { Route as PantryViewRouteImport } from './routes/pantry-view'
-import { Route as LabelsRouteImport } from './routes/labels'
-import { Route as InsightsRouteImport } from './routes/insights'
 import { Route as DocsRouteImport } from './routes/docs'
-import { Route as DashboardRouteImport } from './routes/dashboard'
-import { Route as ActivityRouteImport } from './routes/activity'
-import { Route as ShortcodeRouteImport } from './routes/$shortcode'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as UsdaIndexRouteImport } from './routes/usda.index'
-import { Route as SearchIndexRouteImport } from './routes/search.index'
-import { Route as RecipesIndexRouteImport } from './routes/recipes.index'
-import { Route as ProductsIndexRouteImport } from './routes/products.index'
-import { Route as LocationsIndexRouteImport } from './routes/locations.index'
-import { Route as InventoryIndexRouteImport } from './routes/inventory.index'
-import { Route as IngredientsIndexRouteImport } from './routes/ingredients.index'
-import { Route as ImagesIndexRouteImport } from './routes/images.index'
-import { Route as UsdaIdRouteImport } from './routes/usda.$id'
-import { Route as RecipesNewRouteImport } from './routes/recipes.new'
-import { Route as RecipesCompareRouteImport } from './routes/recipes.compare'
-import { Route as RecipesIdRouteImport } from './routes/recipes.$id'
-import { Route as ProductsNewRouteImport } from './routes/products.new'
-import { Route as ProductsIdRouteImport } from './routes/products.$id'
-import { Route as LocationsValidateRouteImport } from './routes/locations.validate'
-import { Route as LocationsNewRouteImport } from './routes/locations.new'
-import { Route as LocationsIdRouteImport } from './routes/locations.$id'
-import { Route as InventoryQuickCaptureRouteImport } from './routes/inventory.quick-capture'
-import { Route as InventoryNewRouteImport } from './routes/inventory.new'
-import { Route as InventoryBulkMoveRouteImport } from './routes/inventory.bulk-move'
-import { Route as InventoryBulkEditRouteImport } from './routes/inventory.bulk-edit'
-import { Route as InventoryIdRouteImport } from './routes/inventory.$id'
-import { Route as IngredientsNewRouteImport } from './routes/ingredients.new'
-import { Route as IngredientsIdRouteImport } from './routes/ingredients.$id'
-import { Route as ImagesIdRouteImport } from './routes/images.$id'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as ApiPanelRouteImport } from './routes/api/panel'
-import { Route as AccountAccountViewRouteImport } from './routes/account.$accountView'
-import { Route as UsdaUpcCodeRouteImport } from './routes/usda.upc.$code'
-import { Route as UsdaNdbCodeRouteImport } from './routes/usda.ndb.$code'
+import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
+import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
+import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
+import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
+import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
+import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
+import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
+import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
+import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
+import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
+import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
+import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
+import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
+import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
+import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
+import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
+import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
+import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
+import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
+import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
+import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
+import { Route as AuthenticatedInventoryQuickCaptureRouteImport } from './routes/_authenticated/inventory.quick-capture'
+import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
+import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
+import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
+import { Route as AuthenticatedInventoryIdRouteImport } from './routes/_authenticated/inventory.$id'
+import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
+import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
+import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
+import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
+import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
+import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 
-const ProblemsRoute = ProblemsRouteImport.update({
-  id: '/problems',
-  path: '/problems',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PantryViewRoute = PantryViewRouteImport.update({
-  id: '/pantry-view',
-  path: '/pantry-view',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LabelsRoute = LabelsRouteImport.update({
-  id: '/labels',
-  path: '/labels',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InsightsRoute = InsightsRouteImport.update({
-  id: '/insights',
-  path: '/insights',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ActivityRoute = ActivityRouteImport.update({
-  id: '/activity',
-  path: '/activity',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ShortcodeRoute = ShortcodeRouteImport.update({
-  id: '/$shortcode',
-  path: '/$shortcode',
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UsdaIndexRoute = UsdaIndexRouteImport.update({
-  id: '/usda/',
-  path: '/usda/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SearchIndexRoute = SearchIndexRouteImport.update({
-  id: '/search/',
-  path: '/search/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecipesIndexRoute = RecipesIndexRouteImport.update({
-  id: '/recipes/',
-  path: '/recipes/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProductsIndexRoute = ProductsIndexRouteImport.update({
-  id: '/products/',
-  path: '/products/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LocationsIndexRoute = LocationsIndexRouteImport.update({
-  id: '/locations/',
-  path: '/locations/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryIndexRoute = InventoryIndexRouteImport.update({
-  id: '/inventory/',
-  path: '/inventory/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IngredientsIndexRoute = IngredientsIndexRouteImport.update({
-  id: '/ingredients/',
-  path: '/ingredients/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImagesIndexRoute = ImagesIndexRouteImport.update({
-  id: '/images/',
-  path: '/images/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UsdaIdRoute = UsdaIdRouteImport.update({
-  id: '/usda/$id',
-  path: '/usda/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecipesNewRoute = RecipesNewRouteImport.update({
-  id: '/recipes/new',
-  path: '/recipes/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecipesCompareRoute = RecipesCompareRouteImport.update({
-  id: '/recipes/compare',
-  path: '/recipes/compare',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecipesIdRoute = RecipesIdRouteImport.update({
-  id: '/recipes/$id',
-  path: '/recipes/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProductsNewRoute = ProductsNewRouteImport.update({
-  id: '/products/new',
-  path: '/products/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProductsIdRoute = ProductsIdRouteImport.update({
-  id: '/products/$id',
-  path: '/products/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LocationsValidateRoute = LocationsValidateRouteImport.update({
-  id: '/locations/validate',
-  path: '/locations/validate',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LocationsNewRoute = LocationsNewRouteImport.update({
-  id: '/locations/new',
-  path: '/locations/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LocationsIdRoute = LocationsIdRouteImport.update({
-  id: '/locations/$id',
-  path: '/locations/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryQuickCaptureRoute = InventoryQuickCaptureRouteImport.update({
-  id: '/inventory/quick-capture',
-  path: '/inventory/quick-capture',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryNewRoute = InventoryNewRouteImport.update({
-  id: '/inventory/new',
-  path: '/inventory/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryBulkMoveRoute = InventoryBulkMoveRouteImport.update({
-  id: '/inventory/bulk-move',
-  path: '/inventory/bulk-move',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryBulkEditRoute = InventoryBulkEditRouteImport.update({
-  id: '/inventory/bulk-edit',
-  path: '/inventory/bulk-edit',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InventoryIdRoute = InventoryIdRouteImport.update({
-  id: '/inventory/$id',
-  path: '/inventory/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IngredientsNewRoute = IngredientsNewRouteImport.update({
-  id: '/ingredients/new',
-  path: '/ingredients/new',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const IngredientsIdRoute = IngredientsIdRouteImport.update({
-  id: '/ingredients/$id',
-  path: '/ingredients/$id',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImagesIdRoute = ImagesIdRouteImport.update({
-  id: '/images/$id',
-  path: '/images/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
@@ -232,21 +77,88 @@ const ApiPanelRoute = ApiPanelRouteImport.update({
   path: '/api/panel',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountAccountViewRoute = AccountAccountViewRouteImport.update({
-  id: '/account/$accountView',
-  path: '/account/$accountView',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
+  id: '/problems',
+  path: '/problems',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const UsdaUpcCodeRoute = UsdaUpcCodeRouteImport.update({
-  id: '/usda/upc/$code',
-  path: '/usda/upc/$code',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedPantryViewRoute = AuthenticatedPantryViewRouteImport.update({
+  id: '/pantry-view',
+  path: '/pantry-view',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
-const UsdaNdbCodeRoute = UsdaNdbCodeRouteImport.update({
-  id: '/usda/ndb/$code',
-  path: '/usda/ndb/$code',
-  getParentRoute: () => rootRouteImport,
+const AuthenticatedLabelsRoute = AuthenticatedLabelsRouteImport.update({
+  id: '/labels',
+  path: '/labels',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
+  id: '/insights',
+  path: '/insights',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedShortcodeRoute = AuthenticatedShortcodeRouteImport.update({
+  id: '/$shortcode',
+  path: '/$shortcode',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedUsdaIndexRoute = AuthenticatedUsdaIndexRouteImport.update({
+  id: '/usda/',
+  path: '/usda/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSearchIndexRoute =
+  AuthenticatedSearchIndexRouteImport.update({
+    id: '/search/',
+    path: '/search/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRecipesIndexRoute =
+  AuthenticatedRecipesIndexRouteImport.update({
+    id: '/recipes/',
+    path: '/recipes/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProductsIndexRoute =
+  AuthenticatedProductsIndexRouteImport.update({
+    id: '/products/',
+    path: '/products/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLocationsIndexRoute =
+  AuthenticatedLocationsIndexRouteImport.update({
+    id: '/locations/',
+    path: '/locations/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryIndexRoute =
+  AuthenticatedInventoryIndexRouteImport.update({
+    id: '/inventory/',
+    path: '/inventory/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsIndexRoute =
+  AuthenticatedIngredientsIndexRouteImport.update({
+    id: '/ingredients/',
+    path: '/ingredients/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedImagesIndexRoute =
+  AuthenticatedImagesIndexRouteImport.update({
+    id: '/images/',
+    path: '/images/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   id: '/api/trpc/$',
   path: '/api/trpc/$',
@@ -262,155 +174,271 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedUsdaIdRoute = AuthenticatedUsdaIdRouteImport.update({
+  id: '/usda/$id',
+  path: '/usda/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
+  id: '/recipes/new',
+  path: '/recipes/new',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRecipesCompareRoute =
+  AuthenticatedRecipesCompareRouteImport.update({
+    id: '/recipes/compare',
+    path: '/recipes/compare',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedRecipesIdRoute = AuthenticatedRecipesIdRouteImport.update({
+  id: '/recipes/$id',
+  path: '/recipes/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedProductsNewRoute =
+  AuthenticatedProductsNewRouteImport.update({
+    id: '/products/new',
+    path: '/products/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProductsIdRoute = AuthenticatedProductsIdRouteImport.update({
+  id: '/products/$id',
+  path: '/products/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedLocationsValidateRoute =
+  AuthenticatedLocationsValidateRouteImport.update({
+    id: '/locations/validate',
+    path: '/locations/validate',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLocationsNewRoute =
+  AuthenticatedLocationsNewRouteImport.update({
+    id: '/locations/new',
+    path: '/locations/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLocationsIdRoute =
+  AuthenticatedLocationsIdRouteImport.update({
+    id: '/locations/$id',
+    path: '/locations/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryQuickCaptureRoute =
+  AuthenticatedInventoryQuickCaptureRouteImport.update({
+    id: '/inventory/quick-capture',
+    path: '/inventory/quick-capture',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryNewRoute =
+  AuthenticatedInventoryNewRouteImport.update({
+    id: '/inventory/new',
+    path: '/inventory/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryBulkMoveRoute =
+  AuthenticatedInventoryBulkMoveRouteImport.update({
+    id: '/inventory/bulk-move',
+    path: '/inventory/bulk-move',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryBulkEditRoute =
+  AuthenticatedInventoryBulkEditRouteImport.update({
+    id: '/inventory/bulk-edit',
+    path: '/inventory/bulk-edit',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedInventoryIdRoute =
+  AuthenticatedInventoryIdRouteImport.update({
+    id: '/inventory/$id',
+    path: '/inventory/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsNewRoute =
+  AuthenticatedIngredientsNewRouteImport.update({
+    id: '/ingredients/new',
+    path: '/ingredients/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedIngredientsIdRoute =
+  AuthenticatedIngredientsIdRouteImport.update({
+    id: '/ingredients/$id',
+    path: '/ingredients/$id',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedImagesIdRoute = AuthenticatedImagesIdRouteImport.update({
+  id: '/images/$id',
+  path: '/images/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAccountAccountViewRoute =
+  AuthenticatedAccountAccountViewRouteImport.update({
+    id: '/account/$accountView',
+    path: '/account/$accountView',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedUsdaUpcCodeRoute =
+  AuthenticatedUsdaUpcCodeRouteImport.update({
+    id: '/usda/upc/$code',
+    path: '/usda/upc/$code',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedUsdaNdbCodeRoute =
+  AuthenticatedUsdaNdbCodeRouteImport.update({
+    id: '/usda/ndb/$code',
+    path: '/usda/ndb/$code',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/$shortcode': typeof ShortcodeRoute
-  '/activity': typeof ActivityRoute
-  '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
-  '/insights': typeof InsightsRoute
-  '/labels': typeof LabelsRoute
-  '/pantry-view': typeof PantryViewRoute
-  '/problems': typeof ProblemsRoute
-  '/account/$accountView': typeof AccountAccountViewRoute
+  '/$shortcode': typeof AuthenticatedShortcodeRoute
+  '/activity': typeof AuthenticatedActivityRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/insights': typeof AuthenticatedInsightsRoute
+  '/labels': typeof AuthenticatedLabelsRoute
+  '/pantry-view': typeof AuthenticatedPantryViewRoute
+  '/problems': typeof AuthenticatedProblemsRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
-  '/images/$id': typeof ImagesIdRoute
-  '/ingredients/$id': typeof IngredientsIdRoute
-  '/ingredients/new': typeof IngredientsNewRoute
-  '/inventory/$id': typeof InventoryIdRoute
-  '/inventory/bulk-edit': typeof InventoryBulkEditRoute
-  '/inventory/bulk-move': typeof InventoryBulkMoveRoute
-  '/inventory/new': typeof InventoryNewRoute
-  '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
-  '/locations/$id': typeof LocationsIdRoute
-  '/locations/new': typeof LocationsNewRoute
-  '/locations/validate': typeof LocationsValidateRoute
-  '/products/$id': typeof ProductsIdRoute
-  '/products/new': typeof ProductsNewRoute
-  '/recipes/$id': typeof RecipesIdRoute
-  '/recipes/compare': typeof RecipesCompareRoute
-  '/recipes/new': typeof RecipesNewRoute
-  '/usda/$id': typeof UsdaIdRoute
-  '/images/': typeof ImagesIndexRoute
-  '/ingredients/': typeof IngredientsIndexRoute
-  '/inventory/': typeof InventoryIndexRoute
-  '/locations/': typeof LocationsIndexRoute
-  '/products/': typeof ProductsIndexRoute
-  '/recipes/': typeof RecipesIndexRoute
-  '/search/': typeof SearchIndexRoute
-  '/usda/': typeof UsdaIndexRoute
+  '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/images/$id': typeof AuthenticatedImagesIdRoute
+  '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
+  '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
+  '/inventory/$id': typeof AuthenticatedInventoryIdRoute
+  '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
+  '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
+  '/inventory/new': typeof AuthenticatedInventoryNewRoute
+  '/inventory/quick-capture': typeof AuthenticatedInventoryQuickCaptureRoute
+  '/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/locations/new': typeof AuthenticatedLocationsNewRoute
+  '/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/products/$id': typeof AuthenticatedProductsIdRoute
+  '/products/new': typeof AuthenticatedProductsNewRoute
+  '/recipes/$id': typeof AuthenticatedRecipesIdRoute
+  '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/usda/ndb/$code': typeof UsdaNdbCodeRoute
-  '/usda/upc/$code': typeof UsdaUpcCodeRoute
+  '/images/': typeof AuthenticatedImagesIndexRoute
+  '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
+  '/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/locations/': typeof AuthenticatedLocationsIndexRoute
+  '/products/': typeof AuthenticatedProductsIndexRoute
+  '/recipes/': typeof AuthenticatedRecipesIndexRoute
+  '/search/': typeof AuthenticatedSearchIndexRoute
+  '/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
+  '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$shortcode': typeof ShortcodeRoute
-  '/activity': typeof ActivityRoute
-  '/dashboard': typeof DashboardRoute
   '/docs': typeof DocsRoute
-  '/insights': typeof InsightsRoute
-  '/labels': typeof LabelsRoute
-  '/pantry-view': typeof PantryViewRoute
-  '/problems': typeof ProblemsRoute
-  '/account/$accountView': typeof AccountAccountViewRoute
+  '/$shortcode': typeof AuthenticatedShortcodeRoute
+  '/activity': typeof AuthenticatedActivityRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/insights': typeof AuthenticatedInsightsRoute
+  '/labels': typeof AuthenticatedLabelsRoute
+  '/pantry-view': typeof AuthenticatedPantryViewRoute
+  '/problems': typeof AuthenticatedProblemsRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
-  '/images/$id': typeof ImagesIdRoute
-  '/ingredients/$id': typeof IngredientsIdRoute
-  '/ingredients/new': typeof IngredientsNewRoute
-  '/inventory/$id': typeof InventoryIdRoute
-  '/inventory/bulk-edit': typeof InventoryBulkEditRoute
-  '/inventory/bulk-move': typeof InventoryBulkMoveRoute
-  '/inventory/new': typeof InventoryNewRoute
-  '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
-  '/locations/$id': typeof LocationsIdRoute
-  '/locations/new': typeof LocationsNewRoute
-  '/locations/validate': typeof LocationsValidateRoute
-  '/products/$id': typeof ProductsIdRoute
-  '/products/new': typeof ProductsNewRoute
-  '/recipes/$id': typeof RecipesIdRoute
-  '/recipes/compare': typeof RecipesCompareRoute
-  '/recipes/new': typeof RecipesNewRoute
-  '/usda/$id': typeof UsdaIdRoute
-  '/images': typeof ImagesIndexRoute
-  '/ingredients': typeof IngredientsIndexRoute
-  '/inventory': typeof InventoryIndexRoute
-  '/locations': typeof LocationsIndexRoute
-  '/products': typeof ProductsIndexRoute
-  '/recipes': typeof RecipesIndexRoute
-  '/search': typeof SearchIndexRoute
-  '/usda': typeof UsdaIndexRoute
+  '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/images/$id': typeof AuthenticatedImagesIdRoute
+  '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
+  '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
+  '/inventory/$id': typeof AuthenticatedInventoryIdRoute
+  '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
+  '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
+  '/inventory/new': typeof AuthenticatedInventoryNewRoute
+  '/inventory/quick-capture': typeof AuthenticatedInventoryQuickCaptureRoute
+  '/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/locations/new': typeof AuthenticatedLocationsNewRoute
+  '/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/products/$id': typeof AuthenticatedProductsIdRoute
+  '/products/new': typeof AuthenticatedProductsNewRoute
+  '/recipes/$id': typeof AuthenticatedRecipesIdRoute
+  '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/usda/ndb/$code': typeof UsdaNdbCodeRoute
-  '/usda/upc/$code': typeof UsdaUpcCodeRoute
+  '/images': typeof AuthenticatedImagesIndexRoute
+  '/ingredients': typeof AuthenticatedIngredientsIndexRoute
+  '/inventory': typeof AuthenticatedInventoryIndexRoute
+  '/locations': typeof AuthenticatedLocationsIndexRoute
+  '/products': typeof AuthenticatedProductsIndexRoute
+  '/recipes': typeof AuthenticatedRecipesIndexRoute
+  '/search': typeof AuthenticatedSearchIndexRoute
+  '/usda': typeof AuthenticatedUsdaIndexRoute
+  '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
+  '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/$shortcode': typeof ShortcodeRoute
-  '/activity': typeof ActivityRoute
-  '/dashboard': typeof DashboardRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/docs': typeof DocsRoute
-  '/insights': typeof InsightsRoute
-  '/labels': typeof LabelsRoute
-  '/pantry-view': typeof PantryViewRoute
-  '/problems': typeof ProblemsRoute
-  '/account/$accountView': typeof AccountAccountViewRoute
+  '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
+  '/_authenticated/activity': typeof AuthenticatedActivityRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/insights': typeof AuthenticatedInsightsRoute
+  '/_authenticated/labels': typeof AuthenticatedLabelsRoute
+  '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
+  '/_authenticated/problems': typeof AuthenticatedProblemsRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
-  '/images/$id': typeof ImagesIdRoute
-  '/ingredients/$id': typeof IngredientsIdRoute
-  '/ingredients/new': typeof IngredientsNewRoute
-  '/inventory/$id': typeof InventoryIdRoute
-  '/inventory/bulk-edit': typeof InventoryBulkEditRoute
-  '/inventory/bulk-move': typeof InventoryBulkMoveRoute
-  '/inventory/new': typeof InventoryNewRoute
-  '/inventory/quick-capture': typeof InventoryQuickCaptureRoute
-  '/locations/$id': typeof LocationsIdRoute
-  '/locations/new': typeof LocationsNewRoute
-  '/locations/validate': typeof LocationsValidateRoute
-  '/products/$id': typeof ProductsIdRoute
-  '/products/new': typeof ProductsNewRoute
-  '/recipes/$id': typeof RecipesIdRoute
-  '/recipes/compare': typeof RecipesCompareRoute
-  '/recipes/new': typeof RecipesNewRoute
-  '/usda/$id': typeof UsdaIdRoute
-  '/images/': typeof ImagesIndexRoute
-  '/ingredients/': typeof IngredientsIndexRoute
-  '/inventory/': typeof InventoryIndexRoute
-  '/locations/': typeof LocationsIndexRoute
-  '/products/': typeof ProductsIndexRoute
-  '/recipes/': typeof RecipesIndexRoute
-  '/search/': typeof SearchIndexRoute
-  '/usda/': typeof UsdaIndexRoute
+  '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
+  '/_authenticated/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
+  '/_authenticated/ingredients/new': typeof AuthenticatedIngredientsNewRoute
+  '/_authenticated/inventory/$id': typeof AuthenticatedInventoryIdRoute
+  '/_authenticated/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
+  '/_authenticated/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
+  '/_authenticated/inventory/new': typeof AuthenticatedInventoryNewRoute
+  '/_authenticated/inventory/quick-capture': typeof AuthenticatedInventoryQuickCaptureRoute
+  '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
+  '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
+  '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/_authenticated/products/$id': typeof AuthenticatedProductsIdRoute
+  '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
+  '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
+  '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
+  '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
-  '/usda/ndb/$code': typeof UsdaNdbCodeRoute
-  '/usda/upc/$code': typeof UsdaUpcCodeRoute
+  '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
+  '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
+  '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
+  '/_authenticated/locations/': typeof AuthenticatedLocationsIndexRoute
+  '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
+  '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
+  '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
+  '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
+  '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
+  '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/docs'
     | '/$shortcode'
     | '/activity'
     | '/dashboard'
-    | '/docs'
     | '/insights'
     | '/labels'
     | '/pantry-view'
     | '/problems'
-    | '/account/$accountView'
     | '/api/panel'
     | '/auth/$authView'
+    | '/account/$accountView'
     | '/images/$id'
     | '/ingredients/$id'
     | '/ingredients/new'
@@ -428,6 +456,9 @@ export interface FileRouteTypes {
     | '/recipes/compare'
     | '/recipes/new'
     | '/usda/$id'
+    | '/api/auth/$'
+    | '/api/debug/timing'
+    | '/api/trpc/$'
     | '/images/'
     | '/ingredients/'
     | '/inventory/'
@@ -436,25 +467,22 @@ export interface FileRouteTypes {
     | '/recipes/'
     | '/search/'
     | '/usda/'
-    | '/api/auth/$'
-    | '/api/debug/timing'
-    | '/api/trpc/$'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/docs'
     | '/$shortcode'
     | '/activity'
     | '/dashboard'
-    | '/docs'
     | '/insights'
     | '/labels'
     | '/pantry-view'
     | '/problems'
-    | '/account/$accountView'
     | '/api/panel'
     | '/auth/$authView'
+    | '/account/$accountView'
     | '/images/$id'
     | '/ingredients/$id'
     | '/ingredients/new'
@@ -472,6 +500,9 @@ export interface FileRouteTypes {
     | '/recipes/compare'
     | '/recipes/new'
     | '/usda/$id'
+    | '/api/auth/$'
+    | '/api/debug/timing'
+    | '/api/trpc/$'
     | '/images'
     | '/ingredients'
     | '/inventory'
@@ -480,132 +511,68 @@ export interface FileRouteTypes {
     | '/recipes'
     | '/search'
     | '/usda'
-    | '/api/auth/$'
-    | '/api/debug/timing'
-    | '/api/trpc/$'
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
   id:
     | '__root__'
     | '/'
-    | '/$shortcode'
-    | '/activity'
-    | '/dashboard'
+    | '/_authenticated'
     | '/docs'
-    | '/insights'
-    | '/labels'
-    | '/pantry-view'
-    | '/problems'
-    | '/account/$accountView'
+    | '/_authenticated/$shortcode'
+    | '/_authenticated/activity'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/insights'
+    | '/_authenticated/labels'
+    | '/_authenticated/pantry-view'
+    | '/_authenticated/problems'
     | '/api/panel'
     | '/auth/$authView'
-    | '/images/$id'
-    | '/ingredients/$id'
-    | '/ingredients/new'
-    | '/inventory/$id'
-    | '/inventory/bulk-edit'
-    | '/inventory/bulk-move'
-    | '/inventory/new'
-    | '/inventory/quick-capture'
-    | '/locations/$id'
-    | '/locations/new'
-    | '/locations/validate'
-    | '/products/$id'
-    | '/products/new'
-    | '/recipes/$id'
-    | '/recipes/compare'
-    | '/recipes/new'
-    | '/usda/$id'
-    | '/images/'
-    | '/ingredients/'
-    | '/inventory/'
-    | '/locations/'
-    | '/products/'
-    | '/recipes/'
-    | '/search/'
-    | '/usda/'
+    | '/_authenticated/account/$accountView'
+    | '/_authenticated/images/$id'
+    | '/_authenticated/ingredients/$id'
+    | '/_authenticated/ingredients/new'
+    | '/_authenticated/inventory/$id'
+    | '/_authenticated/inventory/bulk-edit'
+    | '/_authenticated/inventory/bulk-move'
+    | '/_authenticated/inventory/new'
+    | '/_authenticated/inventory/quick-capture'
+    | '/_authenticated/locations/$id'
+    | '/_authenticated/locations/new'
+    | '/_authenticated/locations/validate'
+    | '/_authenticated/products/$id'
+    | '/_authenticated/products/new'
+    | '/_authenticated/recipes/$id'
+    | '/_authenticated/recipes/compare'
+    | '/_authenticated/recipes/new'
+    | '/_authenticated/usda/$id'
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
-    | '/usda/ndb/$code'
-    | '/usda/upc/$code'
+    | '/_authenticated/images/'
+    | '/_authenticated/ingredients/'
+    | '/_authenticated/inventory/'
+    | '/_authenticated/locations/'
+    | '/_authenticated/products/'
+    | '/_authenticated/recipes/'
+    | '/_authenticated/search/'
+    | '/_authenticated/usda/'
+    | '/_authenticated/usda/ndb/$code'
+    | '/_authenticated/usda/upc/$code'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ShortcodeRoute: typeof ShortcodeRoute
-  ActivityRoute: typeof ActivityRoute
-  DashboardRoute: typeof DashboardRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   DocsRoute: typeof DocsRoute
-  InsightsRoute: typeof InsightsRoute
-  LabelsRoute: typeof LabelsRoute
-  PantryViewRoute: typeof PantryViewRoute
-  ProblemsRoute: typeof ProblemsRoute
-  AccountAccountViewRoute: typeof AccountAccountViewRoute
   ApiPanelRoute: typeof ApiPanelRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
-  ImagesIdRoute: typeof ImagesIdRoute
-  IngredientsIdRoute: typeof IngredientsIdRoute
-  IngredientsNewRoute: typeof IngredientsNewRoute
-  InventoryIdRoute: typeof InventoryIdRoute
-  InventoryBulkEditRoute: typeof InventoryBulkEditRoute
-  InventoryBulkMoveRoute: typeof InventoryBulkMoveRoute
-  InventoryNewRoute: typeof InventoryNewRoute
-  InventoryQuickCaptureRoute: typeof InventoryQuickCaptureRoute
-  LocationsIdRoute: typeof LocationsIdRoute
-  LocationsNewRoute: typeof LocationsNewRoute
-  LocationsValidateRoute: typeof LocationsValidateRoute
-  ProductsIdRoute: typeof ProductsIdRoute
-  ProductsNewRoute: typeof ProductsNewRoute
-  RecipesIdRoute: typeof RecipesIdRoute
-  RecipesCompareRoute: typeof RecipesCompareRoute
-  RecipesNewRoute: typeof RecipesNewRoute
-  UsdaIdRoute: typeof UsdaIdRoute
-  ImagesIndexRoute: typeof ImagesIndexRoute
-  IngredientsIndexRoute: typeof IngredientsIndexRoute
-  InventoryIndexRoute: typeof InventoryIndexRoute
-  LocationsIndexRoute: typeof LocationsIndexRoute
-  ProductsIndexRoute: typeof ProductsIndexRoute
-  RecipesIndexRoute: typeof RecipesIndexRoute
-  SearchIndexRoute: typeof SearchIndexRoute
-  UsdaIndexRoute: typeof UsdaIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
   ApiTrpcSplatRoute: typeof ApiTrpcSplatRoute
-  UsdaNdbCodeRoute: typeof UsdaNdbCodeRoute
-  UsdaUpcCodeRoute: typeof UsdaUpcCodeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/problems': {
-      id: '/problems'
-      path: '/problems'
-      fullPath: '/problems'
-      preLoaderRoute: typeof ProblemsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pantry-view': {
-      id: '/pantry-view'
-      path: '/pantry-view'
-      fullPath: '/pantry-view'
-      preLoaderRoute: typeof PantryViewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/labels': {
-      id: '/labels'
-      path: '/labels'
-      fullPath: '/labels'
-      preLoaderRoute: typeof LabelsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/insights': {
-      id: '/insights'
-      path: '/insights'
-      fullPath: '/insights'
-      preLoaderRoute: typeof InsightsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/docs': {
       id: '/docs'
       path: '/docs'
@@ -613,25 +580,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DocsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/activity': {
-      id: '/activity'
-      path: '/activity'
-      fullPath: '/activity'
-      preLoaderRoute: typeof ActivityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/$shortcode': {
-      id: '/$shortcode'
-      path: '/$shortcode'
-      fullPath: '/$shortcode'
-      preLoaderRoute: typeof ShortcodeRouteImport
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -639,181 +592,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/usda/': {
-      id: '/usda/'
-      path: '/usda'
-      fullPath: '/usda/'
-      preLoaderRoute: typeof UsdaIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/search/': {
-      id: '/search/'
-      path: '/search'
-      fullPath: '/search/'
-      preLoaderRoute: typeof SearchIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recipes/': {
-      id: '/recipes/'
-      path: '/recipes'
-      fullPath: '/recipes/'
-      preLoaderRoute: typeof RecipesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/products/': {
-      id: '/products/'
-      path: '/products'
-      fullPath: '/products/'
-      preLoaderRoute: typeof ProductsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/locations/': {
-      id: '/locations/'
-      path: '/locations'
-      fullPath: '/locations/'
-      preLoaderRoute: typeof LocationsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/': {
-      id: '/inventory/'
-      path: '/inventory'
-      fullPath: '/inventory/'
-      preLoaderRoute: typeof InventoryIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ingredients/': {
-      id: '/ingredients/'
-      path: '/ingredients'
-      fullPath: '/ingredients/'
-      preLoaderRoute: typeof IngredientsIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/images/': {
-      id: '/images/'
-      path: '/images'
-      fullPath: '/images/'
-      preLoaderRoute: typeof ImagesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/usda/$id': {
-      id: '/usda/$id'
-      path: '/usda/$id'
-      fullPath: '/usda/$id'
-      preLoaderRoute: typeof UsdaIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recipes/new': {
-      id: '/recipes/new'
-      path: '/recipes/new'
-      fullPath: '/recipes/new'
-      preLoaderRoute: typeof RecipesNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recipes/compare': {
-      id: '/recipes/compare'
-      path: '/recipes/compare'
-      fullPath: '/recipes/compare'
-      preLoaderRoute: typeof RecipesCompareRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recipes/$id': {
-      id: '/recipes/$id'
-      path: '/recipes/$id'
-      fullPath: '/recipes/$id'
-      preLoaderRoute: typeof RecipesIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/products/new': {
-      id: '/products/new'
-      path: '/products/new'
-      fullPath: '/products/new'
-      preLoaderRoute: typeof ProductsNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/products/$id': {
-      id: '/products/$id'
-      path: '/products/$id'
-      fullPath: '/products/$id'
-      preLoaderRoute: typeof ProductsIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/locations/validate': {
-      id: '/locations/validate'
-      path: '/locations/validate'
-      fullPath: '/locations/validate'
-      preLoaderRoute: typeof LocationsValidateRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/locations/new': {
-      id: '/locations/new'
-      path: '/locations/new'
-      fullPath: '/locations/new'
-      preLoaderRoute: typeof LocationsNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/locations/$id': {
-      id: '/locations/$id'
-      path: '/locations/$id'
-      fullPath: '/locations/$id'
-      preLoaderRoute: typeof LocationsIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/quick-capture': {
-      id: '/inventory/quick-capture'
-      path: '/inventory/quick-capture'
-      fullPath: '/inventory/quick-capture'
-      preLoaderRoute: typeof InventoryQuickCaptureRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/new': {
-      id: '/inventory/new'
-      path: '/inventory/new'
-      fullPath: '/inventory/new'
-      preLoaderRoute: typeof InventoryNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/bulk-move': {
-      id: '/inventory/bulk-move'
-      path: '/inventory/bulk-move'
-      fullPath: '/inventory/bulk-move'
-      preLoaderRoute: typeof InventoryBulkMoveRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/bulk-edit': {
-      id: '/inventory/bulk-edit'
-      path: '/inventory/bulk-edit'
-      fullPath: '/inventory/bulk-edit'
-      preLoaderRoute: typeof InventoryBulkEditRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/inventory/$id': {
-      id: '/inventory/$id'
-      path: '/inventory/$id'
-      fullPath: '/inventory/$id'
-      preLoaderRoute: typeof InventoryIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ingredients/new': {
-      id: '/ingredients/new'
-      path: '/ingredients/new'
-      fullPath: '/ingredients/new'
-      preLoaderRoute: typeof IngredientsNewRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ingredients/$id': {
-      id: '/ingredients/$id'
-      path: '/ingredients/$id'
-      fullPath: '/ingredients/$id'
-      preLoaderRoute: typeof IngredientsIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/images/$id': {
-      id: '/images/$id'
-      path: '/images/$id'
-      fullPath: '/images/$id'
-      preLoaderRoute: typeof ImagesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/$authView': {
@@ -830,26 +608,110 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPanelRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/$accountView': {
-      id: '/account/$accountView'
-      path: '/account/$accountView'
-      fullPath: '/account/$accountView'
-      preLoaderRoute: typeof AccountAccountViewRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/problems': {
+      id: '/_authenticated/problems'
+      path: '/problems'
+      fullPath: '/problems'
+      preLoaderRoute: typeof AuthenticatedProblemsRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/usda/upc/$code': {
-      id: '/usda/upc/$code'
-      path: '/usda/upc/$code'
-      fullPath: '/usda/upc/$code'
-      preLoaderRoute: typeof UsdaUpcCodeRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/pantry-view': {
+      id: '/_authenticated/pantry-view'
+      path: '/pantry-view'
+      fullPath: '/pantry-view'
+      preLoaderRoute: typeof AuthenticatedPantryViewRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
-    '/usda/ndb/$code': {
-      id: '/usda/ndb/$code'
-      path: '/usda/ndb/$code'
-      fullPath: '/usda/ndb/$code'
-      preLoaderRoute: typeof UsdaNdbCodeRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/labels': {
+      id: '/_authenticated/labels'
+      path: '/labels'
+      fullPath: '/labels'
+      preLoaderRoute: typeof AuthenticatedLabelsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/insights': {
+      id: '/_authenticated/insights'
+      path: '/insights'
+      fullPath: '/insights'
+      preLoaderRoute: typeof AuthenticatedInsightsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/activity': {
+      id: '/_authenticated/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AuthenticatedActivityRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/$shortcode': {
+      id: '/_authenticated/$shortcode'
+      path: '/$shortcode'
+      fullPath: '/$shortcode'
+      preLoaderRoute: typeof AuthenticatedShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/usda/': {
+      id: '/_authenticated/usda/'
+      path: '/usda'
+      fullPath: '/usda/'
+      preLoaderRoute: typeof AuthenticatedUsdaIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/search/': {
+      id: '/_authenticated/search/'
+      path: '/search'
+      fullPath: '/search/'
+      preLoaderRoute: typeof AuthenticatedSearchIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/': {
+      id: '/_authenticated/recipes/'
+      path: '/recipes'
+      fullPath: '/recipes/'
+      preLoaderRoute: typeof AuthenticatedRecipesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/products/': {
+      id: '/_authenticated/products/'
+      path: '/products'
+      fullPath: '/products/'
+      preLoaderRoute: typeof AuthenticatedProductsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/': {
+      id: '/_authenticated/locations/'
+      path: '/locations'
+      fullPath: '/locations/'
+      preLoaderRoute: typeof AuthenticatedLocationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/': {
+      id: '/_authenticated/inventory/'
+      path: '/inventory'
+      fullPath: '/inventory/'
+      preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/': {
+      id: '/_authenticated/ingredients/'
+      path: '/ingredients'
+      fullPath: '/ingredients/'
+      preLoaderRoute: typeof AuthenticatedIngredientsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/images/': {
+      id: '/_authenticated/images/'
+      path: '/images'
+      fullPath: '/images/'
+      preLoaderRoute: typeof AuthenticatedImagesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/api/trpc/$': {
       id: '/api/trpc/$'
@@ -872,52 +734,239 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/usda/$id': {
+      id: '/_authenticated/usda/$id'
+      path: '/usda/$id'
+      fullPath: '/usda/$id'
+      preLoaderRoute: typeof AuthenticatedUsdaIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/new': {
+      id: '/_authenticated/recipes/new'
+      path: '/recipes/new'
+      fullPath: '/recipes/new'
+      preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/compare': {
+      id: '/_authenticated/recipes/compare'
+      path: '/recipes/compare'
+      fullPath: '/recipes/compare'
+      preLoaderRoute: typeof AuthenticatedRecipesCompareRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/recipes/$id': {
+      id: '/_authenticated/recipes/$id'
+      path: '/recipes/$id'
+      fullPath: '/recipes/$id'
+      preLoaderRoute: typeof AuthenticatedRecipesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/products/new': {
+      id: '/_authenticated/products/new'
+      path: '/products/new'
+      fullPath: '/products/new'
+      preLoaderRoute: typeof AuthenticatedProductsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/products/$id': {
+      id: '/_authenticated/products/$id'
+      path: '/products/$id'
+      fullPath: '/products/$id'
+      preLoaderRoute: typeof AuthenticatedProductsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/validate': {
+      id: '/_authenticated/locations/validate'
+      path: '/locations/validate'
+      fullPath: '/locations/validate'
+      preLoaderRoute: typeof AuthenticatedLocationsValidateRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/new': {
+      id: '/_authenticated/locations/new'
+      path: '/locations/new'
+      fullPath: '/locations/new'
+      preLoaderRoute: typeof AuthenticatedLocationsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations/$id': {
+      id: '/_authenticated/locations/$id'
+      path: '/locations/$id'
+      fullPath: '/locations/$id'
+      preLoaderRoute: typeof AuthenticatedLocationsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/quick-capture': {
+      id: '/_authenticated/inventory/quick-capture'
+      path: '/inventory/quick-capture'
+      fullPath: '/inventory/quick-capture'
+      preLoaderRoute: typeof AuthenticatedInventoryQuickCaptureRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/new': {
+      id: '/_authenticated/inventory/new'
+      path: '/inventory/new'
+      fullPath: '/inventory/new'
+      preLoaderRoute: typeof AuthenticatedInventoryNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/bulk-move': {
+      id: '/_authenticated/inventory/bulk-move'
+      path: '/inventory/bulk-move'
+      fullPath: '/inventory/bulk-move'
+      preLoaderRoute: typeof AuthenticatedInventoryBulkMoveRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/bulk-edit': {
+      id: '/_authenticated/inventory/bulk-edit'
+      path: '/inventory/bulk-edit'
+      fullPath: '/inventory/bulk-edit'
+      preLoaderRoute: typeof AuthenticatedInventoryBulkEditRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/inventory/$id': {
+      id: '/_authenticated/inventory/$id'
+      path: '/inventory/$id'
+      fullPath: '/inventory/$id'
+      preLoaderRoute: typeof AuthenticatedInventoryIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/new': {
+      id: '/_authenticated/ingredients/new'
+      path: '/ingredients/new'
+      fullPath: '/ingredients/new'
+      preLoaderRoute: typeof AuthenticatedIngredientsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ingredients/$id': {
+      id: '/_authenticated/ingredients/$id'
+      path: '/ingredients/$id'
+      fullPath: '/ingredients/$id'
+      preLoaderRoute: typeof AuthenticatedIngredientsIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/images/$id': {
+      id: '/_authenticated/images/$id'
+      path: '/images/$id'
+      fullPath: '/images/$id'
+      preLoaderRoute: typeof AuthenticatedImagesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/account/$accountView': {
+      id: '/_authenticated/account/$accountView'
+      path: '/account/$accountView'
+      fullPath: '/account/$accountView'
+      preLoaderRoute: typeof AuthenticatedAccountAccountViewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/usda/upc/$code': {
+      id: '/_authenticated/usda/upc/$code'
+      path: '/usda/upc/$code'
+      fullPath: '/usda/upc/$code'
+      preLoaderRoute: typeof AuthenticatedUsdaUpcCodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/usda/ndb/$code': {
+      id: '/_authenticated/usda/ndb/$code'
+      path: '/usda/ndb/$code'
+      fullPath: '/usda/ndb/$code'
+      preLoaderRoute: typeof AuthenticatedUsdaNdbCodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedShortcodeRoute: typeof AuthenticatedShortcodeRoute
+  AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
+  AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
+  AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
+  AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
+  AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
+  AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
+  AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
+  AuthenticatedIngredientsNewRoute: typeof AuthenticatedIngredientsNewRoute
+  AuthenticatedInventoryIdRoute: typeof AuthenticatedInventoryIdRoute
+  AuthenticatedInventoryBulkEditRoute: typeof AuthenticatedInventoryBulkEditRoute
+  AuthenticatedInventoryBulkMoveRoute: typeof AuthenticatedInventoryBulkMoveRoute
+  AuthenticatedInventoryNewRoute: typeof AuthenticatedInventoryNewRoute
+  AuthenticatedInventoryQuickCaptureRoute: typeof AuthenticatedInventoryQuickCaptureRoute
+  AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
+  AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
+  AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
+  AuthenticatedProductsIdRoute: typeof AuthenticatedProductsIdRoute
+  AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
+  AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
+  AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
+  AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
+  AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
+  AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
+  AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
+  AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
+  AuthenticatedLocationsIndexRoute: typeof AuthenticatedLocationsIndexRoute
+  AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
+  AuthenticatedRecipesIndexRoute: typeof AuthenticatedRecipesIndexRoute
+  AuthenticatedSearchIndexRoute: typeof AuthenticatedSearchIndexRoute
+  AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
+  AuthenticatedUsdaNdbCodeRoute: typeof AuthenticatedUsdaNdbCodeRoute
+  AuthenticatedUsdaUpcCodeRoute: typeof AuthenticatedUsdaUpcCodeRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedShortcodeRoute: AuthenticatedShortcodeRoute,
+  AuthenticatedActivityRoute: AuthenticatedActivityRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
+  AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
+  AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
+  AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
+  AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
+  AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
+  AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
+  AuthenticatedIngredientsNewRoute: AuthenticatedIngredientsNewRoute,
+  AuthenticatedInventoryIdRoute: AuthenticatedInventoryIdRoute,
+  AuthenticatedInventoryBulkEditRoute: AuthenticatedInventoryBulkEditRoute,
+  AuthenticatedInventoryBulkMoveRoute: AuthenticatedInventoryBulkMoveRoute,
+  AuthenticatedInventoryNewRoute: AuthenticatedInventoryNewRoute,
+  AuthenticatedInventoryQuickCaptureRoute:
+    AuthenticatedInventoryQuickCaptureRoute,
+  AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
+  AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
+  AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,
+  AuthenticatedProductsIdRoute: AuthenticatedProductsIdRoute,
+  AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
+  AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
+  AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
+  AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
+  AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
+  AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
+  AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
+  AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
+  AuthenticatedLocationsIndexRoute: AuthenticatedLocationsIndexRoute,
+  AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
+  AuthenticatedRecipesIndexRoute: AuthenticatedRecipesIndexRoute,
+  AuthenticatedSearchIndexRoute: AuthenticatedSearchIndexRoute,
+  AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,
+  AuthenticatedUsdaNdbCodeRoute: AuthenticatedUsdaNdbCodeRoute,
+  AuthenticatedUsdaUpcCodeRoute: AuthenticatedUsdaUpcCodeRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ShortcodeRoute: ShortcodeRoute,
-  ActivityRoute: ActivityRoute,
-  DashboardRoute: DashboardRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
   DocsRoute: DocsRoute,
-  InsightsRoute: InsightsRoute,
-  LabelsRoute: LabelsRoute,
-  PantryViewRoute: PantryViewRoute,
-  ProblemsRoute: ProblemsRoute,
-  AccountAccountViewRoute: AccountAccountViewRoute,
   ApiPanelRoute: ApiPanelRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
-  ImagesIdRoute: ImagesIdRoute,
-  IngredientsIdRoute: IngredientsIdRoute,
-  IngredientsNewRoute: IngredientsNewRoute,
-  InventoryIdRoute: InventoryIdRoute,
-  InventoryBulkEditRoute: InventoryBulkEditRoute,
-  InventoryBulkMoveRoute: InventoryBulkMoveRoute,
-  InventoryNewRoute: InventoryNewRoute,
-  InventoryQuickCaptureRoute: InventoryQuickCaptureRoute,
-  LocationsIdRoute: LocationsIdRoute,
-  LocationsNewRoute: LocationsNewRoute,
-  LocationsValidateRoute: LocationsValidateRoute,
-  ProductsIdRoute: ProductsIdRoute,
-  ProductsNewRoute: ProductsNewRoute,
-  RecipesIdRoute: RecipesIdRoute,
-  RecipesCompareRoute: RecipesCompareRoute,
-  RecipesNewRoute: RecipesNewRoute,
-  UsdaIdRoute: UsdaIdRoute,
-  ImagesIndexRoute: ImagesIndexRoute,
-  IngredientsIndexRoute: IngredientsIndexRoute,
-  InventoryIndexRoute: InventoryIndexRoute,
-  LocationsIndexRoute: LocationsIndexRoute,
-  ProductsIndexRoute: ProductsIndexRoute,
-  RecipesIndexRoute: RecipesIndexRoute,
-  SearchIndexRoute: SearchIndexRoute,
-  UsdaIndexRoute: UsdaIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
   ApiTrpcSplatRoute: ApiTrpcSplatRoute,
-  UsdaNdbCodeRoute: UsdaNdbCodeRoute,
-  UsdaUpcCodeRoute: UsdaUpcCodeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
