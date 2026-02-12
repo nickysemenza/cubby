@@ -3,7 +3,6 @@ import {
   instrumentDrizzle,
   instrumentDrizzleClient,
 } from "@kubiks/otel-drizzle";
-import { neonConfig } from "@neondatabase/serverless";
 import {
   drizzle as drizzleNodePostgres,
   type NodePgDatabase,
@@ -12,16 +11,6 @@ import pg from "pg";
 import { env } from "~/env";
 import type { Database } from "./db/database";
 import * as schema from "./db/schema";
-
-// Use the native WebSocket global (Node 22+, CF Workers) to avoid ws native
-// addon bundling issues on Vercel (bufferUtil.mask is not a function)
-neonConfig.webSocketConstructor = WebSocket;
-// Pipeline startup+auth messages to save 1-2 round trips per new connection
-neonConfig.pipelineConnect = "password";
-// Batch multiple protocol messages into single WebSocket frames
-neonConfig.coalesceWrites = true;
-// Skip redundant Postgres-level TLS inside the already-encrypted wss:// tunnel
-neonConfig.forceDisablePgSSL = true;
 
 // Re-export Database type for use throughout the application
 export type { Database };
@@ -34,16 +23,7 @@ export type { Database };
 // Use NodePgDatabase<schema> to avoid $client type mismatch.
 type DBClient = NodePgDatabase<typeof schema>;
 
-const createPoolClient = async (connectionString: string) => {
-  if (connectionString.includes("neon.tech")) {
-    // NeonPool extends pg.Pool — works over WebSocket, ideal for long-lived processes
-    const { Pool: NeonPool } = await import("@neondatabase/serverless");
-    const pool = new NeonPool({ connectionString });
-    const db = drizzleNodePostgres({ client: pool, schema });
-    instrumentDrizzleClient(db, { dbSystem: "postgresql", dbName: "cubby" });
-    return db;
-  }
-  // Standard node-postgres for traditional PostgreSQL connections
+const createPoolClient = (connectionString: string) => {
   const { Pool } = pg;
   const pool = new Pool({ connectionString });
   const instrumentedPool = instrumentDrizzle(pool);
@@ -79,7 +59,7 @@ export const withRequestDb = async <T>(
 };
 
 // ---------------------------------------------------------------------------
-// Module-level instance (Vercel / node-server only — NOT used on CF Workers)
+// Module-level instance (dev server only — NOT used on CF Workers)
 // ---------------------------------------------------------------------------
 
 // __CF_WORKERS__ is defined by Vite for CF builds — skip module-level pool
@@ -91,19 +71,19 @@ let moduleDb: DBClient | undefined;
 
 if (!isCFWorkers) {
   const globalForDb = globalThis as unknown as { db: DBClient | undefined };
-  moduleDb = globalForDb.db ?? (await createPoolClient(env.DATABASE_URL));
+  moduleDb = globalForDb.db ?? createPoolClient(env.DATABASE_URL);
   if (env.NODE_ENV !== "production") globalForDb.db = moduleDb;
 }
 
 // ---------------------------------------------------------------------------
-// Exported db / drizzle — uses AsyncLocalStorage on CF, module instance otherwise
+// Exported db / drizzle — uses AsyncLocalStorage on CF, module instance in dev
 // ---------------------------------------------------------------------------
 
 const getDbInstance = (): DBClient => {
   // CF Workers: read from per-request store
   const requestDb = requestDbStore.getStore();
   if (requestDb) return requestDb;
-  // Vercel / node-server: use module-level instance
+  // Dev server: use module-level instance
   if (moduleDb) return moduleDb;
   throw new Error(
     "No database instance available. On CF Workers, wrap the handler with withRequestDb().",

@@ -7,7 +7,7 @@ import {
 
 // Initialize OTEL before Sentry so Jaeger gets the global tracer provider.
 // Sentry.init() registers its own tracer provider, which would block ours.
-if (!process.env.VERCEL) {
+{
   const require = createRequire(import.meta.url);
   const { NodeSDK } = require("@opentelemetry/sdk-node");
   const { resourceFromAttributes } = require("@opentelemetry/resources");
@@ -59,5 +59,5 @@ Sentry.init({
   sendDefaultPii: true,
   // Disable Sentry tracing in dev — the NodeSDK above handles tracing for Jaeger.
   // Sentry's tracer provider conflicts, causing DB spans to land in separate traces.
-  tracesSampleRate: process.env.VERCEL ? 1.0 : 0,
+  tracesSampleRate: 0,
 });

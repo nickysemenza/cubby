@@ -9,7 +9,7 @@
 - Typecheck only: `pnpm run typecheck` (uses tsgo from TypeScript 7.0 preview for speed)
 - Typecheck with stable TypeScript: `pnpm run typecheck:stable` (fallback if tsgo has issues)
 - Dev server: `pnpm run dev`
-- Build: `pnpm run build`
+- Build (CF Workers): `pnpm run build:cf`
 - Test (unit): `pnpm run test`
 - Test (e2e): `pnpm run test:e2e` (Playwright)
 - DB migrations: `pnpm run db:migrate` (in `apps/web`)
@@ -186,9 +186,9 @@ Use these instead of inline patterns:
 | **Specific Item**   | "Kraft Macaroni & Cheese" | Has UPC, manufacturer, price, nutrition. Created via barcode scan. |
 | **Misc Collection** | "misc:random cables"      | Opaque placeholder. Just a name, no details. Prefix with `misc:`.  |
 
-## Cloudflare Workers Deployment
+## Deployment (CF Workers)
 
-`apps/web` supports CF Workers as an alternative to Vercel, controlled by `DEPLOY_TARGET=cloudflare`.
+Production deploys to Cloudflare Workers. Dev server runs plain Node.js via `vite dev`.
 
 ### Commands
 
@@ -203,19 +203,19 @@ Use these instead of inline patterns:
 | File | Purpose |
 |---|---|
 | `src/cf-server.ts` | Worker entry point — wraps each request with `withRequestDb()` |
-| `src/server/db.ts` | Dual-environment DB: per-request `pg.Client` via AsyncLocalStorage (CF) or module-level Pool (Vercel) |
+| `src/server/db.ts` | Per-request `pg.Client` via AsyncLocalStorage (CF) or module-level Pool (dev) |
 | `src/lib/recipebridge-cf.ts` | WASM wrapper using `?init` pattern for CF Workers |
 | `wrangler.jsonc` | Worker config (name, vars, Hyperdrive binding, compatibility flags) |
 | `vite.config.ts` | `cfWasmPlugin()` + conditional deploy plugin, `__CF_WORKERS__` define |
 
 ### Key Constraints
 
-- **Hyperdrive for database**: Hyperdrive pools TCP connections at CF's edge, eliminating per-request WebSocket/TLS/auth overhead. Connection string comes from `env.HYPERDRIVE.connectionString`, not a secret. Uses standard `pg.Client` (not `@neondatabase/serverless`).
+- **Hyperdrive for database**: Hyperdrive pools TCP connections at CF's edge, eliminating per-request WebSocket/TLS/auth overhead. Connection string comes from `env.HYPERDRIVE.connectionString`, not a secret. Uses standard `pg.Client`.
 - **Per-request pg.Client**: Each Worker invocation gets its own `pg.Client` handle via `withRequestDb()` + `AsyncLocalStorage`, even though Hyperdrive reuses underlying connections.
 - **WASM uses `?init` pattern**: `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts` which uses `import initWasm from "file.wasm?init"` (supported by `@cloudflare/vite-plugin`).
 - **`__CF_WORKERS__` dead code elimination**: `define: { __CF_WORKERS__: "true" }` in Vite config eliminates the module-level Pool creation from CF builds.
-- **Error visibility**: Nitro strips error details from 500s. `cf-server.ts` monkey-patches `console.error` to capture real errors for `wrangler tail`.
-- **OTel disabled**: Same as Vercel — already guarded by runtime checks.
+- **Error visibility**: `cf-server.ts` monkey-patches `console.error` to capture real error details for `wrangler tail`.
+- **OTel disabled in production**: OTel SDK only runs in dev (via `instrument.server.mjs`).
 
 ## Unit Conversion (WASM)
 

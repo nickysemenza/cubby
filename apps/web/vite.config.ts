@@ -65,36 +65,12 @@ function cfWasmPlugin(): Plugin {
 }
 
 export default defineConfig(async () => {
-  // CF Workers: use @cloudflare/vite-plugin (Vite Environment API) instead of
-  // Nitro. This handles Worker bundling, bindings, and the workerd runtime.
+  // CF Workers build: use @cloudflare/vite-plugin (Vite Environment API).
+  // Dev server runs without a deploy plugin (plain Node.js via vite dev).
   const deployPlugin: PluginOption[] = [];
   if (isCloudflare) {
     const { cloudflare } = await import("@cloudflare/vite-plugin");
     deployPlugin.push(cloudflare({ viteEnvironment: { name: "ssr" } }));
-  } else {
-    const { nitro } = await import("nitro/vite");
-    const preset =
-      (process.env.NITRO_PRESET as "vercel" | "node-server") || "vercel";
-    deployPlugin.push(
-      nitro({
-        preset,
-        // Force bundle captcha packages from better-auth-ui (unused but cause ESM/CJS issues)
-        noExternals: [
-          "@hcaptcha/react-hcaptcha",
-          "@hcaptcha/loader",
-          "@captchafox/react",
-          "@marsidev/react-turnstile",
-          "@wojtekmaj/react-recaptcha-v3",
-          "react-google-recaptcha",
-          "@daveyplate/better-auth-ui",
-        ],
-        // chokidar 3.x (via @tanstack/router-plugin) imports fsevents native
-        // addon (.node binary) that Rollup can't parse. Mark as external.
-        rollupConfig: {
-          external: ["fsevents"],
-        },
-      }),
-    );
   }
 
   return {
@@ -110,8 +86,8 @@ export default defineConfig(async () => {
       allowedHosts: ["nickys-macbook-air.tailnet-0eba.ts.net"],
     },
     ssr: {
-      // Externalize OpenTelemetry packages to avoid ESM/CJS compatibility issues.
-      // Not needed for CF Workers — the cloudflare plugin handles bundling.
+      // Externalize OpenTelemetry packages to avoid ESM/CJS compatibility issues in dev.
+      // Not needed for CF Workers builds — the cloudflare plugin handles bundling.
       external: isCloudflare
         ? []
         : [

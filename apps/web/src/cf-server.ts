@@ -1,13 +1,9 @@
-// CF Workers entry point.
+// CF Workers production entry point.
 //
-// Key differences from the Vercel/node-server entry:
 // 1. Dynamic import catches module-level errors (which would otherwise be silent 500s)
 // 2. Per-request database connections via withRequestDb — Hyperdrive provides pooled
 //    TCP connections, but each Worker invocation still needs its own pg.Client handle.
-//
-// Also intercepts console.error to capture real error details that Nitro's
-// HTTPError.toJSON() strips from unhandled errors (always returns
-// {"status":500,"message":"HTTPError"} with no stack trace or cause).
+// 3. Intercepts console.error to capture real error details for `wrangler tail`.
 
 import { withRequestDb } from "./server/db";
 

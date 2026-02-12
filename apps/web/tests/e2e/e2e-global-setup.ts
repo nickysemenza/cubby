@@ -1,5 +1,4 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -94,24 +93,11 @@ async function globalSetup(config: FullConfig): Promise<void> {
   let serverProcess: ChildProcess;
 
   if (useBuild) {
-    const serverEntry = path.join(webRoot, ".output/server/index.mjs");
-    if (!existsSync(serverEntry)) {
-      throw new Error(
-        `E2E_USE_BUILD is set but production build not found at ${serverEntry}. Run 'pnpm --filter @cubby/web build' first.`,
-      );
-    }
-
-    console.log(`[E2E Setup] Starting production server: node ${serverEntry}`);
-    serverProcess = spawn("node", [serverEntry], {
-      env: {
-        ...serverEnv,
-        PORT: "3001",
-        // Skip Sentry instrumentation for test runs
-        NITRO_NO_PREIMPORT: "true",
-      },
-      stdio: "pipe",
-      cwd: webRoot,
-    });
+    // Production builds output to dist/ for CF Workers — use wrangler dev to test them.
+    // E2E tests always use the dev server path.
+    throw new Error(
+      "E2E_USE_BUILD is not supported. Production builds use CF Workers (wrangler dev). Remove E2E_USE_BUILD and use the dev server instead.",
+    );
   } else {
     console.log("[E2E Setup] Starting dev server: pnpm run dev --port 3001");
     serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {

@@ -9,7 +9,6 @@
       "!.output",
       "!build",
       "!wasm",
-      "!.vercel",
       "!drizzle",
       "!src/components/ui",
       "!src/routeTree.gen.ts"
