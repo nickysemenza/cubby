@@ -111,6 +111,8 @@ export class AnthropicClient {
     }
     if (!this.adapter) {
       this.adapter = anthropicText("claude-haiku-4-5", {
+        baseURL:
+          "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/anthropic",
         apiKey: this.apiKey,
       });
     }
