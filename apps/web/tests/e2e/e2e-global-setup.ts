@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -78,8 +78,6 @@ async function globalSetup(config: FullConfig): Promise<void> {
 
   // 2. Start server with this database
   const webRoot = path.join(__dirname, "../..");
-  const useBuild = process.env.E2E_USE_BUILD === "true";
-
   const serverEnv = {
     ...process.env,
     // Use E2E_DATABASE_URL to bypass Vite's .env loading which would override DATABASE_URL
@@ -90,22 +88,12 @@ async function globalSetup(config: FullConfig): Promise<void> {
     DOTENV_PRIVATE_KEY: "",
   };
 
-  let serverProcess: ChildProcess;
-
-  if (useBuild) {
-    // Production builds output to dist/ for CF Workers — use wrangler dev to test them.
-    // E2E tests always use the dev server path.
-    throw new Error(
-      "E2E_USE_BUILD is not supported. Production builds use CF Workers (wrangler dev). Remove E2E_USE_BUILD and use the dev server instead.",
-    );
-  } else {
-    console.log("[E2E Setup] Starting dev server: pnpm run dev --port 3001");
-    serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {
-      env: serverEnv,
-      stdio: "pipe",
-      cwd: webRoot,
-    });
-  }
+  console.log("[E2E Setup] Starting dev server: pnpm run dev --port 3001");
+  const serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {
+    env: serverEnv,
+    stdio: "pipe",
+    cwd: webRoot,
+  });
 
   // Capture server output for debugging
   serverProcess.stdout?.on("data", (data: Buffer) => {
