@@ -199,25 +199,6 @@ export const createCallerFactory = t.createCallerFactory;
  */
 export const createTRPCRouter = t.router;
 
-/**
- * Middleware for timing procedure execution and adding an artificial delay in development.
- *
- * You can remove this if you don't like it, but it can help catch unwanted waterfalls by simulating
- * network latency that would occur in production but not in local development.
- */
-const timingMiddleware = t.middleware(async ({ next, path }) => {
-  const start = Date.now();
-
-  const result = await next();
-
-  const end = Date.now();
-  if (process.env.NODE_ENV === "development") {
-    console.log(`[TRPC] ${path} took ${end - start}ms to execute`);
-  }
-
-  return result;
-});
-
 const tracingMiddleWare = t.middleware(async (opts) => {
   const tracer = getTracer();
   return tracer.startActiveSpan(
@@ -298,9 +279,7 @@ const isAuthed = t.middleware(({ next, ctx }) => {
  * guarantee that a user querying is authorized, but you can still access user session data if they
  * are logged in.
  */
-export const publicProcedure = t.procedure
-  .use(timingMiddleware)
-  .use(tracingMiddleWare);
+export const publicProcedure = t.procedure.use(tracingMiddleWare);
 
 export const protectedProcedure = publicProcedure.use(isAuthed);
 
