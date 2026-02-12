@@ -13,10 +13,8 @@ test.describe("Main navigation", () => {
     const inventoryLink = bottomNav.getByRole("link", { name: "Inventory" });
     await expect(inventoryLink).toBeVisible({ timeout: 5000 });
 
-    // Click the link and wait for navigation
+    // Click the link — unauthenticated users get redirected to sign-in by the _authenticated layout
     await inventoryLink.click();
-    await page.waitForURL(/\/inventory/, { timeout: 10000 });
-    // Unauthenticated users see the sign-in prompt instead of the page heading
-    await expect(page.getByText(/Sign in to access Inventory/i)).toBeVisible();
+    await page.waitForURL(/\/auth\/sign-in/, { timeout: 15000 });
   });
 });

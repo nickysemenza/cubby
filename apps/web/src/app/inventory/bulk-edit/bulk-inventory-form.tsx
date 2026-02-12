@@ -114,7 +114,7 @@ export default function BulkInventoryForm() {
       ...api.inventory.list.queryOptions({
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
-        filters: { locationIdFilter: selectedLocation!.id },
+        filters: { locationIdFilter: selectedLocation?.id ?? "" },
       }),
       enabled: !!selectedLocation,
     },

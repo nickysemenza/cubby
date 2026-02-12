@@ -117,7 +117,7 @@ export default function BulkMoveForm() {
       ...api.inventory.list.queryOptions({
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: { pageIndex: 0, pageSize: 100 },
-        filters: { locationIdFilter: sourceLocation!.id },
+        filters: { locationIdFilter: sourceLocation?.id ?? "" },
       }),
       enabled: !!sourceLocation,
     },
