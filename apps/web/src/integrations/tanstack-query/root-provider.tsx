@@ -73,7 +73,9 @@ export function getContext() {
       onError: (error) => {
         const details = getAppErrorDetails(error);
         const isExpectedError =
-          details.code === "NOT_FOUND" || details.code === "UNAUTHORIZED";
+          details.code === "NOT_FOUND" ||
+          details.code === "UNAUTHORIZED" ||
+          details.code === "BAD_REQUEST";
         if (isExpectedError) return;
         toast.error(getErrorMessage(error));
       },

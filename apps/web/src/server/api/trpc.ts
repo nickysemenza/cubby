@@ -146,9 +146,13 @@ const t = initTRPC.context<typeof createTRPCContext>().create({
 
       return {
         ...shape,
-        message: `${shape.message}: ${zodError.issues
-          .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-          .join(", ")}`,
+        message: zodError.issues
+          .map((issue) =>
+            issue.path.length > 0
+              ? `${issue.path.join(".")}: ${issue.message}`
+              : issue.message,
+          )
+          .join(", "),
         data: {
           ...shape.data,
           zodError: zodError.flatten(),
