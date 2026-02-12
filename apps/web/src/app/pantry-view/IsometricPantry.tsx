@@ -51,13 +51,15 @@
 
 import type { InfLocation } from "@cubby/schemas/location";
 import {
+  formatCategoryLabel,
   getCategoryColor,
   getLocationTypeColor,
   type LocationType,
   type ProductCategory,
+  productCategoryValues,
 } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/ui/button";
@@ -117,6 +119,7 @@ interface FurnitureItem {
   amount: string;
   color: string;
   inventoryId: string;
+  valuation: number | null;
 }
 
 interface FurniturePiece {
@@ -138,6 +141,8 @@ interface FurniturePiece {
   parentGroupId: string;
   /** Immediate parent location name for group labels */
   parentGroupName: string;
+  isEmpty: boolean;
+  totalValuation: number;
 }
 
 interface ZoneData {
@@ -169,6 +174,7 @@ interface HoverTarget {
   detail?: string;
   screenX: number;
   screenY: number;
+  locationId: string;
 }
 
 // ─── Projection ──────────────────────────────────────────────────────────────
@@ -738,6 +744,7 @@ function getItemHeight(category: ProductCategory | null): number {
 interface InventoryData {
   id: string;
   amount: { value: number; unit: string };
+  valuation: number | null;
   product: { name: string; category: ProductCategory | null };
   location: { id: string; name: string; type: LocationType };
 }
@@ -764,8 +771,13 @@ function collectPiecesFromSubtree(
     groupName: string,
   ) {
     const items = itemsByLocation.get(node.id) ?? [];
-    if (items.length > 0) {
+    // Create pieces for furniture-type locations even if empty (ghost furniture)
+    if (!isContainerType(node.type)) {
       const spec = getFurnitureSpec(node.type);
+      const totalValuation = items.reduce(
+        (sum, it) => sum + (it.valuation ?? 0),
+        0,
+      );
       pieces.push({
         gx: 0,
         gy: 0,
@@ -782,6 +794,8 @@ function collectPiecesFromSubtree(
         path,
         parentGroupId: groupId,
         parentGroupName: groupName,
+        isEmpty: items.length === 0,
+        totalValuation,
       });
     }
 
@@ -829,6 +843,7 @@ function buildRooms(
       amount: `${inv.amount.value} ${inv.amount.unit}`,
       color: getCategoryColor(inv.product.category),
       inventoryId: inv.id,
+      valuation: inv.valuation,
     });
   }
 
@@ -862,6 +877,10 @@ function buildRooms(
       const containerItems = itemsByLocation.get(container.id) ?? [];
       if (containerItems.length > 0) {
         const spec = getFurnitureSpec("table");
+        const totalValuation = containerItems.reduce(
+          (sum, it) => sum + (it.valuation ?? 0),
+          0,
+        );
         pieces.push({
           gx: 0,
           gy: 0,
@@ -878,10 +897,13 @@ function buildRooms(
           path: zonePath,
           parentGroupId: container.id,
           parentGroupName: container.name,
+          isEmpty: false,
+          totalValuation,
         });
       }
 
-      if (pieces.length === 0) continue;
+      // Skip zones with no pieces, or zones where ALL pieces are empty ghosts
+      if (pieces.length === 0 || pieces.every((p) => p.isEmpty)) continue;
 
       let totalItems = 0;
       for (const p of pieces) totalItems += p.items.length;
@@ -906,10 +928,14 @@ function buildRooms(
         rootNode.name,
         child.name,
       ]);
-      // Also include the child itself if it has items
+      // Also include the child itself if it has items (or as ghost furniture)
       const childItems = itemsByLocation.get(child.id) ?? [];
-      if (childItems.length > 0) {
+      if (!isContainerType(child.type)) {
         const spec = getFurnitureSpec(child.type);
+        const totalValuation = childItems.reduce(
+          (sum, it) => sum + (it.valuation ?? 0),
+          0,
+        );
         childPieces.push({
           gx: 0,
           gy: 0,
@@ -926,6 +952,8 @@ function buildRooms(
           path: [rootNode.name, child.name],
           parentGroupId: rootNode.id,
           parentGroupName: rootNode.name,
+          isEmpty: childItems.length === 0,
+          totalValuation,
         });
       }
       defaultPieces.push(...childPieces);
@@ -934,6 +962,10 @@ function buildRooms(
     const roomDirectItems = itemsByLocation.get(rootNode.id) ?? [];
     if (roomDirectItems.length > 0) {
       const spec = getFurnitureSpec("table");
+      const totalValuation = roomDirectItems.reduce(
+        (sum, it) => sum + (it.valuation ?? 0),
+        0,
+      );
       defaultPieces.push({
         gx: 0,
         gy: 0,
@@ -950,10 +982,12 @@ function buildRooms(
         path: [rootNode.name],
         parentGroupId: rootNode.id,
         parentGroupName: rootNode.name,
+        isEmpty: false,
+        totalValuation,
       });
     }
 
-    if (defaultPieces.length > 0) {
+    if (defaultPieces.length > 0 && !defaultPieces.every((p) => p.isEmpty)) {
       let totalItems = 0;
       for (const p of defaultPieces) totalItems += p.items.length;
 
@@ -1260,6 +1294,7 @@ function hitTestPieces(
             detail: `${item.amount} — ${breadcrumb}`,
             screenX: 0,
             screenY: 0,
+            locationId: piece.locationId,
           };
         }
         itemIdx++;
@@ -1304,12 +1339,17 @@ function hitTestPieces(
       pointInPolygon(worldX, worldY, [ftl, ftr, fbr, fbottom, fbottomL, fbl])
     ) {
       const breadcrumb = piece.path.join(" > ");
+      const valuationStr =
+        piece.totalValuation > 0
+          ? ` — $${piece.totalValuation.toFixed(2)}`
+          : "";
       return {
         type: "furniture",
         label: piece.name,
-        detail: `${breadcrumb} — ${piece.items.length} item${piece.items.length !== 1 ? "s" : ""}`,
+        detail: `${breadcrumb} — ${piece.items.length} item${piece.items.length !== 1 ? "s" : ""}${valuationStr}`,
         screenX: 0,
         screenY: 0,
+        locationId: piece.locationId,
       };
     }
   }
@@ -1437,6 +1477,45 @@ function drawGroupLabels(
   }
 }
 
+// ─── Valuation Heat ─────────────────────────────────────────────────────────
+
+function getValuationTint(
+  totalValuation: number,
+  maxValuation: number,
+): string | null {
+  if (totalValuation <= 0 || maxValuation <= 0) return null;
+  // sqrt normalization for perceptually even distribution
+  const t = Math.sqrt(totalValuation / maxValuation);
+  // amber (40, 100%, 50%) → red (0, 100%, 45%) scale
+  const h = 40 - t * 40;
+  const l = 50 - t * 5;
+  const a = 0.15 + t * 0.25;
+  return `hsla(${h}, 100%, ${l}%, ${a})`;
+}
+
+function drawValuationOverlay(
+  ctx: CanvasRenderingContext2D,
+  piece: FurniturePiece,
+  cx: number,
+  cy: number,
+  tint: string,
+) {
+  const { gx, gy, w, d, h, gz } = piece;
+  const tbl = toScreen(gx, gy, gz + h, cx, cy);
+  const tbr = toScreen(gx + w, gy, gz + h, cx, cy);
+  const tfr = toScreen(gx + w, gy + d, gz + h, cx, cy);
+  const tfl = toScreen(gx, gy + d, gz + h, cx, cy);
+
+  ctx.fillStyle = tint;
+  ctx.beginPath();
+  ctx.moveTo(tbl.x, tbl.y);
+  ctx.lineTo(tbr.x, tbr.y);
+  ctx.lineTo(tfr.x, tfr.y);
+  ctx.lineTo(tfl.x, tfl.y);
+  ctx.closePath();
+  ctx.fill();
+}
+
 // ─── Rendering ──────────────────────────────────────────────────────────────
 
 function renderScene(
@@ -1491,10 +1570,26 @@ function renderScene(
     // Draw group labels on back wall (subtle, above furniture groups)
     drawGroupLabels(ctx, sortedPieces, roomCx, roomCy);
 
+    // Compute max valuation for heat tinting across all pieces in the scene
+    let maxValuation = 0;
     for (const piece of sortedPieces) {
+      if (piece.totalValuation > maxValuation)
+        maxValuation = piece.totalValuation;
+    }
+
+    for (const piece of sortedPieces) {
+      // Ghost pieces rendered translucently
+      if (piece.isEmpty) ctx.globalAlpha = 0.25;
+
       drawFloorShadow(ctx, piece, roomCx, roomCy);
       const drawFn = getDrawFunction(piece.locationType);
       drawFn(ctx, piece, roomCx, roomCy, hoveredItemId);
+
+      // Valuation heat overlay on furniture top face
+      const tint = getValuationTint(piece.totalValuation, maxValuation);
+      if (tint) drawValuationOverlay(ctx, piece, roomCx, roomCy, tint);
+
+      if (piece.isEmpty) ctx.globalAlpha = 1.0;
     }
   }
 
@@ -1630,16 +1725,59 @@ function drawTitle(
   );
 }
 
+// ─── Category Legend ─────────────────────────────────────────────────────────
+
+function CategoryLegend() {
+  return (
+    <div className="absolute bottom-4 left-4 rounded-lg bg-black/70 px-3 py-2 backdrop-blur-sm">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+        {productCategoryValues.map((cat) => (
+          <div key={cat} className="flex items-center gap-1.5">
+            <div
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
+              style={{ backgroundColor: getCategoryColor(cat) }}
+            />
+            <span className="text-[10px] text-white/60 leading-none">
+              {formatCategoryLabel(cat)}
+            </span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <div
+            className="h-2.5 w-2.5 shrink-0 rounded-sm"
+            style={{ backgroundColor: getCategoryColor(null) }}
+          />
+          <span className="text-[10px] text-white/60 leading-none">
+            uncategorized
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── React Component ────────────────────────────────────────────────────────
 
 export function IsometricPantry() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [hoverTarget, setHoverTarget] = useState<HoverTarget | null>(null);
   const [camera, setCamera] = useState<Camera | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef({ startX: 0, startY: 0, camX: 0, camY: 0 });
+  const touchRef = useRef({
+    lastTouchX: 0,
+    lastTouchY: 0,
+    startTouchX: 0,
+    startTouchY: 0,
+    lastPinchDist: 0,
+    isTouching: false,
+    touchMoved: false,
+  });
+  const cameraRef = useRef<Camera | null>(null);
+  const roomsRef = useRef<RoomData[]>([]);
 
   const api = useTRPC();
 
@@ -1751,6 +1889,132 @@ export function IsometricPantry() {
     return () => canvas.removeEventListener("wheel", handleWheel);
   }, []);
 
+  // Sync refs so touch handlers can read current values without dependencies
+  useEffect(() => {
+    cameraRef.current = camera;
+  }, [camera]);
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
+
+  // Touch support (iOS PWA)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    function getPinchDist(e: TouchEvent): number {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    }
+
+    function handleTouchStart(e: TouchEvent) {
+      e.preventDefault();
+      const t = touchRef.current;
+      if (e.touches.length === 1) {
+        const touch = e.touches[0];
+        t.lastTouchX = touch.clientX;
+        t.lastTouchY = touch.clientY;
+        t.startTouchX = touch.clientX;
+        t.startTouchY = touch.clientY;
+        t.isTouching = true;
+        t.touchMoved = false;
+      } else if (e.touches.length === 2) {
+        t.lastPinchDist = getPinchDist(e);
+        // Track midpoint for panning during pinch
+        t.lastTouchX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        t.lastTouchY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        t.touchMoved = true; // pinch is always a "move"
+      }
+    }
+
+    function handleTouchMove(e: TouchEvent) {
+      e.preventDefault();
+      const t = touchRef.current;
+      const cam = cameraRef.current;
+      if (!cam) return;
+
+      if (e.touches.length === 1 && t.isTouching) {
+        const touch = e.touches[0];
+        const dx = touch.clientX - t.lastTouchX;
+        const dy = touch.clientY - t.lastTouchY;
+        t.lastTouchX = touch.clientX;
+        t.lastTouchY = touch.clientY;
+        if (
+          Math.abs(touch.clientX - t.startTouchX) > 5 ||
+          Math.abs(touch.clientY - t.startTouchY) > 5
+        ) {
+          t.touchMoved = true;
+        }
+        setCamera((prev) =>
+          prev ? { ...prev, x: prev.x + dx, y: prev.y + dy } : prev,
+        );
+      } else if (e.touches.length === 2) {
+        const newDist = getPinchDist(e);
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const rect = canvas!.getBoundingClientRect();
+        const canvasX = midX - rect.left;
+        const canvasY = midY - rect.top;
+
+        if (t.lastPinchDist > 0) {
+          const ratio = newDist / t.lastPinchDist;
+          setCamera((prev) => {
+            if (!prev) return prev;
+            const newZoom = Math.max(
+              MIN_ZOOM,
+              Math.min(MAX_ZOOM, prev.zoom * ratio),
+            );
+            const dx = canvasX - prev.x;
+            const dy = canvasY - prev.y;
+            const scale = newZoom / prev.zoom;
+            return {
+              x: canvasX - dx * scale,
+              y: canvasY - dy * scale,
+              zoom: newZoom,
+            };
+          });
+        }
+
+        t.lastPinchDist = newDist;
+        t.lastTouchX = midX;
+        t.lastTouchY = midY;
+      }
+    }
+
+    function handleTouchEnd(e: TouchEvent) {
+      e.preventDefault();
+      const t = touchRef.current;
+      if (!t.touchMoved && t.isTouching && e.changedTouches.length > 0) {
+        // Tap — hit-test and navigate
+        const touch = e.changedTouches[0];
+        const rect = canvas!.getBoundingClientRect();
+        const mouseX = touch.clientX - rect.left;
+        const mouseY = touch.clientY - rect.top;
+        const cam = cameraRef.current;
+        if (cam) {
+          const hit = hitTestRooms(mouseX, mouseY, roomsRef.current, cam);
+          if (hit) {
+            navigate({
+              to: "/locations/$id",
+              params: { id: hit.locationId },
+            });
+          }
+        }
+      }
+      t.isTouching = false;
+      t.lastPinchDist = 0;
+    }
+
+    canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+    canvas.addEventListener("touchend", handleTouchEnd, { passive: false });
+    return () => {
+      canvas.removeEventListener("touchstart", handleTouchStart);
+      canvas.removeEventListener("touchmove", handleTouchMove);
+      canvas.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [navigate]);
+
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       setIsDragging(true);
@@ -1797,7 +2061,33 @@ export function IsometricPantry() {
     [camera, isDragging, rooms],
   );
 
-  const handleMouseUp = useCallback(() => setIsDragging(false), []);
+  // Click-to-navigate: distinguish click vs drag by displacement threshold
+  const handleMouseUp = useCallback(
+    (e: React.MouseEvent) => {
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      const displacement = Math.sqrt(dx * dx + dy * dy);
+
+      if (displacement < 5 && camera) {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          const hit = hitTestRooms(mouseX, mouseY, rooms, camera);
+          if (hit) {
+            navigate({
+              to: "/locations/$id",
+              params: { id: hit.locationId },
+            });
+          }
+        }
+      }
+
+      setIsDragging(false);
+    },
+    [camera, rooms, navigate],
+  );
 
   const handleMouseLeave = useCallback(() => {
     setIsDragging(false);
@@ -1841,7 +2131,7 @@ export function IsometricPantry() {
     <div ref={containerRef} className="relative h-full w-full">
       <canvas
         ref={canvasRef}
-        className="block h-full w-full"
+        className="block h-full w-full touch-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -1866,6 +2156,7 @@ export function IsometricPantry() {
         <Maximize2 className="mr-1 h-4 w-4" />
         Reset View
       </Button>
+      <CategoryLegend />
     </div>
   );
 }
