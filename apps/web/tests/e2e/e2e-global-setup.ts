@@ -76,24 +76,37 @@ async function globalSetup(config: FullConfig): Promise<void> {
 
   console.log(`[E2E Setup] Using database: ${databaseConfig.database}`);
 
-  // 2. Start server with this database
+  // 2. Start wrangler dev against the CF Workers build
   const webRoot = path.join(__dirname, "../..");
-  const serverEnv = {
-    ...process.env,
-    // Use E2E_DATABASE_URL to bypass Vite's .env loading which would override DATABASE_URL
-    E2E_DATABASE_URL: databaseUrl,
-    // Also set DATABASE_URL as fallback
-    DATABASE_URL: databaseUrl,
-    // Prevent dotenvx from overriding our DATABASE_URL
-    DOTENV_PRIVATE_KEY: "",
-  };
 
-  console.log("[E2E Setup] Starting dev server: pnpm run dev --port 3001");
-  const serverProcess = spawn("pnpm", ["run", "dev", "--port", "3001"], {
-    env: serverEnv,
-    stdio: "pipe",
-    cwd: webRoot,
-  });
+  console.log("[E2E Setup] Starting wrangler dev on port 3001");
+  const serverProcess = spawn(
+    "npx",
+    [
+      "wrangler",
+      "dev",
+      "--config",
+      "dist/server/wrangler.json",
+      "--port",
+      "3001",
+      "--var",
+      `BETTER_AUTH_SECRET:${process.env.BETTER_AUTH_SECRET || "e2e-test-secret"}`,
+      "--var",
+      `DATABASE_URL:${databaseUrl}`,
+      "--var",
+      "R2_ACCESS_KEY_ID:dummy",
+      "--var",
+      "R2_SECRET_ACCESS_KEY:dummy",
+    ],
+    {
+      env: {
+        ...process.env,
+        WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: databaseUrl,
+      },
+      stdio: "pipe",
+      cwd: webRoot,
+    },
+  );
 
   // Capture server output for debugging
   serverProcess.stdout?.on("data", (data: Buffer) => {

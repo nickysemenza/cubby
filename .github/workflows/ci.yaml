@@ -286,10 +286,7 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: cd apps/web && npx playwright install chromium
       - name: Build web app for E2E
-        run: pnpm --filter @cubby/web build
-        env:
-          NODE_ENV: production
-          NITRO_PRESET: node-server
+        run: pnpm --filter @cubby/web run build:cf
       - name: Run Playwright tests
         id: e2e-test
         run: cd apps/web && npx playwright test
