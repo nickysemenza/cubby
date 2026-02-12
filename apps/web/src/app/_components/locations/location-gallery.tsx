@@ -13,11 +13,11 @@ import {
 import type { z } from "zod";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Button } from "~/components/ui/button";
-import { useIsMobile } from "~/hooks/use-mobile";
 import {
   type EmptyFilter,
   useGalleryViewState,
 } from "~/hooks/useGalleryViewState";
+import { useIsMobile } from "~/hooks/useMobile";
 import { useTRPC } from "~/trpc/react";
 import { GalleryHeader } from "./gallery-header";
 import { GallerySidebar } from "./gallery-sidebar";

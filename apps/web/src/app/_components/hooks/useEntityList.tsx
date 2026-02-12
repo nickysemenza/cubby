@@ -1,35 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   ColumnDef,
+  ColumnHelper,
   OnChangeFn,
   RowSelectionState,
   Table,
 } from "@tanstack/react-table";
-import { type ColumnHelper, createColumnHelper } from "@tanstack/react-table";
-import { Trash } from "lucide-react";
+import { createColumnHelper } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { DeleteEntityDialog } from "~/components/dialogs/delete-entity-dialog";
-import {
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "~/components/ui/dropdown-menu";
-import { entities, getSortableFields } from "~/entities/entities";
+import { entities } from "~/entities/entities";
 import type { QueryTiming } from "~/lib/query-timing";
 import { BulkActionBar } from "../data-table/BulkActionBar";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
-import {
-  createActionsColumn,
-  createCreatedAtColumn,
-  createImageColumn,
-  createNameColumn,
-  createUnitMappingsColumn,
-  type FilterConfig,
-} from "../data-table/columnHelpers";
-import { buildSelectColumn } from "../data-table/row-selection";
 import { useBulkActions } from "../data-table/useBulkActions";
 import type { GroupConfig } from "../data-table/useGroupedList";
 import { useTableConfig } from "../data-table/useTableConfig";
@@ -37,6 +21,8 @@ import {
   type InfiniteScrollControls,
   useInfiniteTableList,
 } from "./useInfiniteTableList";
+import { useOptimisticDelete } from "./useOptimisticDelete";
+import { type FilterInput, useStandardColumns } from "./useStandardColumns";
 import { type UseTableListOptions, useTableList } from "./useTableList";
 
 /** Base interface for entities in list views */
@@ -46,17 +32,6 @@ interface BaseListRow {
   createdAt?: string | Date;
   images?: Array<{ id: string; url: string; filename: string }>;
 }
-
-/** Filter definition for use in useEntityList options */
-interface FilterDef {
-  id: string;
-  placeholder: string;
-  filterType?: "text" | "select";
-  options?: Array<{ value: string; label: string }>;
-}
-
-/** Simple filter definition - string expands to text filter with placeholder */
-type FilterInput = string | FilterDef;
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional
 type AnyColumnDef<TData> = ColumnDef<TData, any>;
@@ -168,8 +143,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   infinite = false,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
-  const queryClient = useQueryClient();
-  const [deleteTarget, setDeleteTarget] = useState<TData | null>(null);
   const [grouped, setGrouped] = useState(false);
 
   const onGroupedChange = useCallback((value: boolean) => {
@@ -185,136 +158,26 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [],
   );
 
-  // Memoize the mutation options to prevent infinite re-renders
-  const deleteMutationOptions = useMemo(() => {
-    if (!deletable) return null;
+  // Optimistic delete: mutation, bulk action, extra actions, dialog
+  const { deleteBulkAction, combinedExtraActions, deleteDialog } =
+    useOptimisticDelete<TData>({ deletable, extraActions });
 
-    // Get base mutation options from tRPC
-    const baseMutationOptions = deletable.mutationOptions({
-      onSuccess: () => {
-        toast.success(`${deletable.entityLabel} deleted`);
-        // Refetch to ensure data is in sync with server
-        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        for (const key of deletable.invalidateKeys) {
-          void queryClient.invalidateQueries({ queryKey: [key as unknown[]] });
-        }
-      },
-      onError: (err) => {
-        toast.error(
-          err.message ||
-            `Failed to delete ${deletable.entityLabel.toLowerCase()}`,
-        );
-      },
-    }) as Record<string, unknown>;
-
-    // Extend with optimistic updates
-    return {
-      ...baseMutationOptions,
-      onMutate: async (variables: { ids: string[] }) => {
-        // Cancel any outgoing refetches to prevent them from overwriting optimistic update
-        // Wrap keys in array to match tRPC's nested structure: [["entity", "list"], {...}]
-        for (const key of deletable.invalidateKeys) {
-          await queryClient.cancelQueries({ queryKey: [key as unknown[]] });
-        }
-
-        // Snapshot the previous value for rollback
-        const previousData: Array<unknown> = [];
-        for (const key of deletable.invalidateKeys) {
-          const currentData = queryClient.getQueryData([key as unknown[]]);
-          previousData.push(currentData);
-        }
-
-        // Optimistically remove deleted items from all relevant queries
-        for (const key of deletable.invalidateKeys) {
-          queryClient.setQueryData([key as unknown[]], (old: unknown) => {
-            if (!old || typeof old !== "object") {
-              return old;
-            }
-            if (
-              !("data" in old) ||
-              !Array.isArray((old as { data?: unknown }).data)
-            ) {
-              return old;
-            }
-
-            const oldData = old as { data: Array<{ id: string }> };
-            const newData = {
-              ...oldData,
-              data: oldData.data.filter(
-                (item) => !variables.ids.includes(item.id),
-              ),
-            };
-            return newData;
-          });
-        }
-
-        return { previousData };
-      },
-      onError: (
-        err: unknown,
-        _variables: unknown,
-        context: { previousData?: unknown[] } | undefined,
-      ) => {
-        // Roll back optimistic update on error
-        if (context?.previousData) {
-          deletable.invalidateKeys.forEach((key, index) => {
-            // Wrap key in array to match tRPC's nested structure
-            queryClient.setQueryData(
-              [key as unknown[]],
-              context.previousData?.[index],
-            );
-          });
-        }
-        // Call the base onError from tRPC (cast to avoid type mismatch)
-        if (baseMutationOptions.onError) {
-          (
-            baseMutationOptions.onError as (
-              err: unknown,
-              variables: unknown,
-              context: unknown,
-            ) => void
-          )(err, _variables, context);
-        }
-      },
-    };
-  }, [deletable, queryClient]);
-
-  // Delete mutation (only created if deletable is provided)
-  const deleteMutation = deleteMutationOptions
-    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
-      useMutation(deleteMutationOptions as Parameters<typeof useMutation>[0])
-    : null;
   // Combine user's bulk actions with delete bulk action if deletable is provided
   const effectiveBulkActions = useMemo(():
     | BulkActionsConfig<TData>
     | undefined => {
-    if (!deletable && !bulkActions) return undefined;
-
-    const deleteAction = deletable
-      ? {
-          id: "delete" as const,
-          label: "Delete",
-          icon: <Trash className="h-4 w-4" />,
-          requiresConfirmation: true,
-          onExecute: async (selectedRows: { original: TData }[]) => {
-            await deleteMutation!.mutateAsync({
-              ids: selectedRows.map((row) => row.original.id),
-            });
-            return { success: true };
-          },
-        }
-      : null;
+    if (!deleteBulkAction && !bulkActions) return undefined;
 
     const userActions = bulkActions?.actions ?? [];
-    const combinedActions = deleteAction
-      ? [...userActions, deleteAction]
+    const combinedActions = deleteBulkAction
+      ? [...userActions, deleteBulkAction]
       : userActions;
 
     return {
       ...bulkActions,
       actions: combinedActions,
     };
-  }, [deletable, bulkActions, deleteMutation]);
+  }, [deleteBulkAction, bulkActions]);
 
   // Use bulk actions hook if config is provided
   const bulkActionsState = effectiveBulkActions
@@ -331,48 +194,11 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     ? true
     : (enableRowSelection ?? false);
 
-  // Combine user's extra actions with delete action if deletable is provided
-  const combinedExtraActions = useMemo(() => {
-    if (!deletable && !extraActions) return undefined;
-
-    return (row: TData) => (
-      <>
-        {extraActions?.(row)}
-        {deletable && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteTarget(row);
-              }}
-            >
-              <Trash className="mr-2 h-4 w-4" />
-              Delete
-            </DropdownMenuItem>
-          </>
-        )}
-      </>
-    );
-  }, [deletable, extraActions]);
-  // Stabilize filters array - only update when serialized content changes
-  // This prevents re-renders when consumer passes new array literal each render
-  const filtersKey = JSON.stringify(filters);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - using filtersKey for deep comparison
-  const stableFilters = useMemo(() => filters, [filtersKey]);
-
-  // Stabilize columns array - only update when length changes
-  // (column definitions are typically static, changes in length indicate real updates)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional - columns are static, length change indicates real update
-  const stableColumns = useMemo(() => customColumns, [customColumns.length]);
-
   // Memoize entity config to prevent re-renders when entity doesn't change
-  const { standardColumns, hasUnitMappings, defaultSort } = useMemo(() => {
+  const { hasUnitMappings, defaultSort } = useMemo(() => {
     const entityConfig = entities[entity];
     const listConfig = entityConfig.list;
     return {
-      standardColumns: listConfig?.standardColumns ?? [],
       hasUnitMappings: listConfig?.hasUnitMappings ?? false,
       defaultSort: listConfig?.defaultSort ?? "createdAt",
     };
@@ -431,90 +257,17 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   const shouldUseMappings = hasUnitMappings && getMappings;
   const effectiveMappingsMap = shouldUseMappings ? mappingsMap : null;
 
-  // Build columns array with standard columns - memoized to prevent infinite re-renders
-  const allColumns = useMemo(() => {
-    // Convert FilterDef to FilterConfig for column meta
-    const getFilterConfig = (columnId: string): FilterConfig | undefined => {
-      const filterDef = stableFilters.find((f) =>
-        typeof f === "string" ? f === columnId : f.id === columnId,
-      );
-      if (!filterDef) return undefined;
-      if (typeof filterDef === "string") {
-        return { placeholder: `Filter by ${filterDef}...` };
-      }
-      return {
-        placeholder: filterDef.placeholder,
-        filterType: filterDef.filterType,
-        options: filterDef.options,
-      };
-    };
-
-    const cols: AnyColumnDef<TData>[] = [];
-
-    // Prepend select column if row selection is enabled
-    if (effectiveEnableRowSelection) {
-      cols.push(buildSelectColumn<TData>());
-    }
-
-    // Prepend standard columns
-    if (standardColumns.includes("image")) {
-      cols.push(createImageColumn(columnHelper, { entity }));
-    }
-    if (standardColumns.includes("name")) {
-      const nameFilterConfig = getFilterConfig("name");
-      cols.push(
-        createNameColumn(
-          columnHelper,
-          entity,
-          "name" as keyof TData,
-          nameFilterConfig ? { filterConfig: nameFilterConfig } : undefined,
-        ),
-      );
-    }
-
-    // Add custom columns with automatic enableSorting based on sortableFields
-    const sortableFields = getSortableFields(entity);
-    const processedColumns = stableColumns.map((col) => {
-      // If enableSorting is explicitly set, respect it
-      if (col.enableSorting !== undefined) return col;
-      // Get column id from id or accessorKey (need to cast for accessorKey access)
-      const accessorCol = col as { accessorKey?: string };
-      const colId = col.id ?? accessorCol.accessorKey ?? null;
-      // Auto-disable sorting for columns not in sortableFields
-      const canSort = colId ? sortableFields.includes(colId) : false;
-      return { ...col, enableSorting: canSort };
-    });
-    cols.push(...processedColumns);
-
-    // Append unit mappings column if configured
-    if (shouldUseMappings && effectiveMappingsMap) {
-      cols.push(createUnitMappingsColumn(columnHelper, effectiveMappingsMap));
-    }
-
-    // Append createdAt column
-    if (standardColumns.includes("createdAt")) {
-      cols.push(createCreatedAtColumn(columnHelper));
-    }
-
-    // Append actions column (always last)
-    cols.push(
-      createActionsColumn(columnHelper, entity, {
-        extraActions: combinedExtraActions,
-      }),
-    );
-
-    return cols;
-  }, [
-    columnHelper,
-    stableColumns,
+  // Build columns array with standard columns
+  const allColumns = useStandardColumns<TData>({
     entity,
-    shouldUseMappings,
-    standardColumns,
-    effectiveMappingsMap,
-    stableFilters,
-    effectiveEnableRowSelection,
+    columnHelper,
+    customColumns,
+    filters,
+    enableRowSelection: effectiveEnableRowSelection,
     combinedExtraActions,
-  ]);
+    mappingsMap: effectiveMappingsMap,
+    hasUnitMappings,
+  });
 
   // Memoize getRowId to prevent recreating on every render
   const getRowId = useMemo(
@@ -556,36 +309,6 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
         />
       ) : null,
     [bulkActionsState, effectiveBulkActions, table],
-  );
-
-  // Build delete dialog element if deletable is enabled
-  const deleteDialog = useMemo(
-    () =>
-      deletable ? (
-        <DeleteEntityDialog
-          open={deleteTarget !== null}
-          onOpenChange={(open) => !open && setDeleteTarget(null)}
-          items={
-            deleteTarget
-              ? [
-                  {
-                    id: deleteTarget.id,
-                    name: deleteTarget.name ?? deleteTarget.id,
-                  },
-                ]
-              : []
-          }
-          entityType={deletable.entityLabel}
-          onDelete={async () => {
-            if (deleteTarget) {
-              await deleteMutation!.mutateAsync({ ids: [deleteTarget.id] });
-              setDeleteTarget(null);
-            }
-          }}
-          isPending={deleteMutation?.isPending ?? false}
-        />
-      ) : null,
-    [deletable, deleteTarget, deleteMutation],
   );
 
   return {

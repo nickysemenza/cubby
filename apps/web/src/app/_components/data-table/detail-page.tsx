@@ -3,8 +3,8 @@ import type { FC } from "react";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntityIcon, entities } from "~/entities/entities";
-import { useIsMobile } from "~/hooks/use-mobile";
 import { useDebug } from "~/hooks/useDebug";
+import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import JsonRenderer from "../json-renderer";
 

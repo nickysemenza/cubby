@@ -16,7 +16,7 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useStableColumnState } from "../_components/hooks/useStableColumnState";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
-import { getIngredientName } from "../_components/recipe/recipeutils";
+import { getIngredientName } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 import {
   type CalculateTotalsResult,

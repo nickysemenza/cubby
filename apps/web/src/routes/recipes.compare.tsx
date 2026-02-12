@@ -5,7 +5,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
-import { getIngredientName } from "~/app/_components/recipe/recipeutils";
+import { getIngredientName } from "~/app/_components/recipe/recipe-utils";
 import {
   type CalculateTotalsResult,
   calculateTotals,

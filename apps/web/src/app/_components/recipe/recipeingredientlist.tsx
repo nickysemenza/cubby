@@ -25,7 +25,7 @@ import RTable from "../data-table/Table";
 import { EntityPillLink } from "../EntityPill";
 import { tryFormatAmount } from "../inventory/format-amount";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
-import { getIngredientName } from "./recipeutils";
+import { getIngredientName } from "./recipe-utils";
 
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];

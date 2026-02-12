@@ -1,6 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { wasm } from "~/lib/wasm";
-import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
+import { getGlobalInstructionNumber, getIngredientName } from "./recipe-utils";
 
 export const NYTView: React.FC<{
   recipe: RecipeOut;

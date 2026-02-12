@@ -18,7 +18,7 @@ import { MobileCard } from "~/components/entity/mobile-card";
 import { MobileCardSkeletonList } from "~/components/feedback/mobile-card-skeleton";
 import { Input } from "~/components/ui/input";
 import { entities } from "~/entities/entities";
-import { useIsMobile } from "~/hooks/use-mobile";
+import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../data-table/Table";

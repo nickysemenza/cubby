@@ -1,6 +1,6 @@
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, test } from "vitest";
-import { getGlobalInstructionNumber, getIngredientName } from "./recipeutils";
+import { getGlobalInstructionNumber, getIngredientName } from "./recipe-utils";
 
 test("recipe utils", () => {
   const recipe: RecipeOut = {

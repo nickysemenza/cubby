@@ -36,6 +36,7 @@ export const generatePresignedUploadUrl = async ({
     Bucket: env.R2_BUCKET_NAME,
     Key: key,
     ContentType: contentType,
+    CacheControl: "public, max-age=31536000, immutable",
   });
 
   const signedUrl = await getSignedUrl(s3Client, command, {
@@ -124,6 +125,7 @@ const uploadToS3 = async (params: {
     Key: params.key,
     Body: params.body,
     ContentType: params.contentType,
+    CacheControl: "public, max-age=31536000, immutable",
   });
 
   await s3Client.send(command);

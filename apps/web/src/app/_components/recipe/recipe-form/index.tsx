@@ -46,6 +46,10 @@ import {
   useIngredientImport,
 } from "./ingredient-preview-table";
 import { InstructionFieldArray } from "./instruction-field-array";
+import {
+  haveIngredientsChanged,
+  haveInstructionsChanged,
+} from "./recipe-form-utils";
 import { TagInput } from "./tag-input";
 import {
   formSchema,
@@ -53,7 +57,6 @@ import {
   type RecipeFormProps,
   type RecipeFormValues,
 } from "./types";
-import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
 
 // Yield and Servings fields with smart hide behavior
 const YieldServingsFields: FC<{

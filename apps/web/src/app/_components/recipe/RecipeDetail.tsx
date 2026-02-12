@@ -23,8 +23,8 @@ import EntityImageList from "../EntityImageList";
 import { NYTView } from "./NYTView";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipeTagList } from "./recipe-tag";
+import { getIngredientName } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
-import { getIngredientName } from "./recipeutils";
 
 /** Get effective servings: explicit servings, or yield value if unit is "servings" */
 function getEffectiveServings(recipe: RecipeOut): number | null {

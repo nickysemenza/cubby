@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import {
+  haveIngredientsChanged,
+  haveInstructionsChanged,
+} from "./recipe-form-utils";
 import type { IngItem } from "./types";
-import { haveIngredientsChanged, haveInstructionsChanged } from "./utils";
 
 describe("haveIngredientsChanged", () => {
   const baseIngredient: IngItem = {

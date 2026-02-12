@@ -31,10 +31,45 @@ export class USDAClient {
         tracestate: () => getTraceHeaders().tracestate ?? "",
       },
       api: async (args) => {
+        // Use CF Cache API for individual food lookups (GET /api/foods/:id)
+        const cache =
+          typeof caches !== "undefined"
+            ? (caches as unknown as { default: Cache }).default
+            : null;
+        const isGetFood =
+          args.method === "GET" && args.path.includes("/api/foods/");
+
+        if (cache && isGetFood) {
+          const cached = await cache.match(args.path);
+          if (cached) {
+            return {
+              status: cached.status,
+              body: await cached.json(),
+              headers: cached.headers,
+            };
+          }
+        }
+
         const response = await fetch(args.path, {
           ...args,
           signal: AbortSignal.timeout(5_000),
         });
+
+        // Cache successful getFood responses for 24 hours
+        if (cache && isGetFood && response.ok) {
+          const body = await response.clone().text();
+          cache.put(
+            args.path,
+            new Response(body, {
+              status: response.status,
+              headers: {
+                "Content-Type": "application/json",
+                "Cache-Control": "public, max-age=86400",
+              },
+            }),
+          );
+        }
+
         return {
           status: response.status,
           body: await response.json(),

@@ -20,14 +20,11 @@ import {
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { upc } from "@cubby/usda-schemas";
 import { z } from "zod";
-import { getErrorMessage } from "~/lib/error-utils";
 import {
   backfillFoodCategories,
   backfillProductPrices,
   deleteProducts,
-  findProductByUPC,
   findProductsNeedingFoodCategory,
-  findProductsWithNoImages,
   findProductsWithStalePrices,
   getCategoryDistribution,
   getProductByShortcode,
@@ -36,6 +33,11 @@ import {
 } from "~/server/repo/product";
 import { importImageFromUPC } from "~/server/services/image-import";
 import { productWithFoodOut } from "~/server/services/product.service";
+import {
+  backfillUPCImages as backfillUPCImagesService,
+  findOrCreateByUPC as findOrCreateByUPCService,
+  getUPCImageBackfillCount as getUPCImageBackfillCountService,
+} from "~/server/services/product-orchestration.service";
 import {
   createDeleteProcedure,
   createEntityCrudProcedures,
@@ -144,89 +146,17 @@ const findOrCreateByUPC = protectedProcedure
   .input(
     z.object({
       upc: upc,
-      defaultName: z.string().optional(), // Fallback if all lookups fail
+      defaultName: z.string().optional(),
     }),
   )
   .output(productTopLevelOut)
   .mutation(async ({ ctx, input }) => {
-    // 1. Check if product with this UPC already exists
-    const existing = await findProductByUPC(ctx.db, input.upc);
-    if (existing) {
-      return existing;
-    }
-
-    // 2. Lookup in USDA database (food items)
-    const food = await ctx.usdaClient.findFood({
-      kind: "upc",
-      gtin_upc: input.upc,
-    });
-
-    if (food) {
-      // Found in USDA - create product with USDA data
-      return await quickCreateProduct(
-        ctx.db,
-        {
-          name: food.foodInfo.description,
-          manufacturer:
-            food.brandedFoodInfo?.brand_owner ??
-            food.brandedFoodInfo?.brand_name ??
-            UNSPECIFIED_MANUFACTURER,
-          upc: input.upc,
-          expectedQuantity: null,
-          model: null,
-        },
-        ctx.actorContext,
-      );
-    }
-
-    // 3. Lookup in UPC worker (general products - tools, electronics, etc.)
-    const upcLookup = await ctx.upcLookupClient.lookup(input.upc);
-
-    if (upcLookup) {
-      // Found in UPC worker - create product with UPC lookup data
-      const newProduct = await quickCreateProduct(
-        ctx.db,
-        {
-          name: upcLookup.name,
-          manufacturer:
-            upcLookup.manufacturer ??
-            upcLookup.brand ??
-            UNSPECIFIED_MANUFACTURER,
-          upc: input.upc,
-          expectedQuantity: null,
-          model: null,
-          price: upcLookup.priceDollars ?? null,
-        },
-        ctx.actorContext,
-      );
-
-      // Import image from UPC lookup if available (non-blocking)
-      if (upcLookup.imageUrl) {
-        try {
-          await importImageFromUPC(
-            ctx.db,
-            ctx.upcLookupClient,
-            input.upc,
-            unsafeProductId(newProduct.id),
-          );
-        } catch (error) {
-          console.error(`[findOrCreateByUPC] Image import failed:`, error);
-        }
-      }
-
-      return newProduct;
-    }
-
-    // 4. Nothing found anywhere - create with defaults
-    return await quickCreateProduct(
+    return findOrCreateByUPCService(
       ctx.db,
-      {
-        name: input.defaultName ?? `Product ${input.upc}`,
-        manufacturer: UNSPECIFIED_MANUFACTURER,
-        upc: input.upc,
-        expectedQuantity: null,
-        model: null,
-      },
+      ctx.usdaClient,
+      ctx.upcLookupClient,
+      input.upc,
+      input.defaultName,
       ctx.actorContext,
     );
   });
@@ -251,90 +181,14 @@ const backfillUPCImages = protectedProcedure
     }),
   )
   .mutation(async ({ ctx }) => {
-    // Find products without images, then filter to those with UPC for backfill
-    const allNoImages = await findProductsWithNoImages(ctx.db);
-    const productsWithUPC = allNoImages.filter(
-      (p): p is typeof p & { upc: string } => p.upc != null,
-    );
-
-    const details: Array<{
-      productId: string;
-      productName: string;
-      upc: string;
-      status: "imported" | "failed" | "skipped";
-      error?: string;
-    }> = [];
-
-    let imported = 0;
-    let failed = 0;
-    let skipped = 0;
-
-    // Process in parallel batches of 10
-    const BATCH_SIZE = 10;
-    for (let i = 0; i < productsWithUPC.length; i += BATCH_SIZE) {
-      const batch = productsWithUPC.slice(i, i + BATCH_SIZE);
-
-      const batchResults = await Promise.all(
-        batch.map(async (p) => {
-          try {
-            const result = await importImageFromUPC(
-              ctx.db,
-              ctx.upcLookupClient,
-              p.upc,
-              unsafeProductId(p.id),
-            );
-
-            if (result) {
-              return {
-                productId: p.id,
-                productName: p.name,
-                upc: p.upc,
-                status: "imported" as const,
-              };
-            } else {
-              return {
-                productId: p.id,
-                productName: p.name,
-                upc: p.upc,
-                status: "skipped" as const,
-                error: "No image found in UPC lookup",
-              };
-            }
-          } catch (error) {
-            return {
-              productId: p.id,
-              productName: p.name,
-              upc: p.upc,
-              status: "failed" as const,
-              error: getErrorMessage(error),
-            };
-          }
-        }),
-      );
-
-      for (const result of batchResults) {
-        details.push(result);
-        if (result.status === "imported") imported++;
-        else if (result.status === "skipped") skipped++;
-        else failed++;
-      }
-    }
-
-    return {
-      found: productsWithUPC.length,
-      imported,
-      failed,
-      skipped,
-      details,
-    };
+    return backfillUPCImagesService(ctx.db, ctx.upcLookupClient);
   });
 
 // Get count of products with UPC but no images (for UI preview)
 const getUPCImageBackfillCount = protectedProcedure
   .output(z.object({ count: z.number() }))
   .query(async ({ ctx }) => {
-    const products = await findProductsWithNoImages(ctx.db);
-    return { count: products.filter((p) => p.upc != null).length };
+    return getUPCImageBackfillCountService(ctx.db);
   });
 
 // Get count of products with food indicators but wrong category
