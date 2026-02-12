@@ -15,6 +15,13 @@ import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 import { bottomNavItems, moreNavItems } from "./nav-items";
 
+const buildDateFormatter = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+});
+
+const buildDate = buildDateFormatter.format(new Date(__BUILD_DATE__));
+
 export function BottomNav() {
   const pathname = useLocation().pathname;
   const [isOpen, setIsOpen] = useState(false);
@@ -138,6 +145,9 @@ export function BottomNav() {
                   </SheetClose>
                 );
               })}
+              <div className="mt-auto pt-4 text-center text-muted-foreground text-xs">
+                {buildDate} · {__GIT_COMMIT__}
+              </div>
             </div>
           </SheetContent>
         </Sheet>
