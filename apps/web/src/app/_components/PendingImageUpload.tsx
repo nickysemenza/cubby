@@ -186,6 +186,38 @@ export function PendingImageUpload({
     [entityType, uploadImageMutation, pendingImages, onImagesChange],
   );
 
+  // Handle clipboard paste
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      if (uploading || importing) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (!file) continue;
+
+          e.preventDefault();
+
+          const extension = item.type.split("/")[1] || "png";
+          const namedFile = new File(
+            [file],
+            `pasted-image-${Date.now()}.${extension}`,
+            { type: file.type },
+          );
+
+          uploadFile(namedFile);
+          return;
+        }
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
+  }, [uploadFile, uploading, importing]);
+
   // Handle file upload from input
   const handleFileUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -300,6 +332,9 @@ export function PendingImageUpload({
             Import
           </Button>
         </div>
+        <p className="text-muted-foreground text-xs">
+          You can also paste an image from your clipboard
+        </p>
       </div>
 
       {(uploading || importing) && (
