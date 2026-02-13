@@ -61,9 +61,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
       </Button>
 
       {!aiStatus?.available && (
-        <p className="text-muted-foreground text-sm">
-          AI not configured (add ANTHROPIC_API_KEY)
-        </p>
+        <p className="text-muted-foreground text-sm">AI not configured</p>
       )}
 
       {aiStatus?.available && !hasImages && (

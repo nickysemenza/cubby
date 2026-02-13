@@ -106,7 +106,7 @@ export class AnthropicClient {
   private getAdapter() {
     if (!this.apiKey) {
       throw new Error(
-        "ANTHROPIC_API_KEY is not configured. Add it to your .env file.",
+        "AI_GATEWAY_API_KEY is not configured. Add it to your .env file.",
       );
     }
     if (!this.adapter) {
@@ -251,7 +251,7 @@ let anthropicClient: AnthropicClient | null = null;
 
 export function getAnthropicClient(): AnthropicClient {
   if (!anthropicClient) {
-    anthropicClient = new AnthropicClient(env.ANTHROPIC_API_KEY);
+    anthropicClient = new AnthropicClient(env.AI_GATEWAY_API_KEY);
   }
   return anthropicClient;
 }

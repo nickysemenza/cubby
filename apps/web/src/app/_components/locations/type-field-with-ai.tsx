@@ -109,7 +109,7 @@ export function TypeFieldWithAI<
           </TooltipTrigger>
           <TooltipContent>
             {!aiStatus?.available
-              ? "AI not configured (add ANTHROPIC_API_KEY)"
+              ? "AI not configured"
               : !locationName.trim()
                 ? "Enter location name first"
                 : "Use AI to suggest type"}

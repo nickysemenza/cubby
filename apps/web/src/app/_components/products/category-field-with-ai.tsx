@@ -114,7 +114,7 @@ export function CategoryFieldWithAI<
           </TooltipTrigger>
           <TooltipContent>
             {!aiStatus?.available
-              ? "AI not configured (add ANTHROPIC_API_KEY)"
+              ? "AI not configured"
               : !productName.trim()
                 ? "Enter product name first"
                 : !manufacturer.trim()

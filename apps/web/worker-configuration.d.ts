@@ -19,7 +19,7 @@ declare namespace Cloudflare {
     E2E_TEST_USER_PASSWORD: string;
     UPC_LOOKUP_API_URL: string;
     UPC_LOOKUP_API_KEY: string;
-    ANTHROPIC_API_KEY: string;
+    AI_GATEWAY_API_KEY: string;
     BETTER_AUTH_SECRET: string;
   }
 }
@@ -47,7 +47,7 @@ declare namespace NodeJS {
         | "E2E_TEST_USER_PASSWORD"
         | "UPC_LOOKUP_API_URL"
         | "UPC_LOOKUP_API_KEY"
-        | "ANTHROPIC_API_KEY"
+        | "AI_GATEWAY_API_KEY"
         | "BETTER_AUTH_SECRET"
       >
     > {}

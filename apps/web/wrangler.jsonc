@@ -49,6 +49,6 @@
   //   BETTER_AUTH_SECRET
   //   R2_ACCESS_KEY_ID
   //   R2_SECRET_ACCESS_KEY
-  //   ANTHROPIC_API_KEY (optional)
+  //   AI_GATEWAY_API_KEY (optional)
   // Note: DATABASE_URL is provided by the Hyperdrive binding, not a secret.
 }
