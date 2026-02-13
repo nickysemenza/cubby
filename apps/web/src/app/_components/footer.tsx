@@ -57,7 +57,8 @@ export function AppFooter() {
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-2 text-muted-foreground text-xs md:px-6">
         <div className="flex items-center gap-3">
           <span>
-            {buildDate} · {__GIT_COMMIT__}
+            {buildDate} ·{" "}
+            <span title={__GIT_COMMIT_MSG__}>{__GIT_COMMIT__}</span>
           </span>
           <EntityCounts />
         </div>

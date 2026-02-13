@@ -14,6 +14,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const gitCommit = execSync("git rev-parse --short HEAD", {
   encoding: "utf-8",
 }).trim();
+const gitCommitMsg = execSync("git log -1 --pretty=%s", {
+  encoding: "utf-8",
+}).trim();
 
 /**
  * Stub pg-native for CF Workers. Vite emits a bare `throw` for unresolvable
@@ -78,6 +81,7 @@ export default defineConfig(async () => {
     // CF Workers build-time flag for dead code elimination in db.ts
     define: {
       __GIT_COMMIT__: JSON.stringify(gitCommit),
+      __GIT_COMMIT_MSG__: JSON.stringify(gitCommitMsg),
       __BUILD_DATE__: JSON.stringify(new Date().toISOString()),
       ...(isCloudflare ? { __CF_WORKERS__: "true" } : {}),
     },
