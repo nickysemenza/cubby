@@ -19,6 +19,7 @@ import {
 import { AmountFieldGroup } from "../inventory/amount-field-group";
 import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
 import { CategoryFieldWithAI } from "./category-field-with-ai";
+import { IdentifyProductButton } from "./identify-product-with-ai";
 
 type ImageHandlers = Pick<
   ReturnType<typeof useImageState>,
@@ -29,6 +30,8 @@ interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
   form: UseFormReturn<TFieldValues>;
   imageHandlers: ImageHandlers;
   existingImages?: PendingImage[];
+  /** Pending images for AI product identification */
+  pendingImages?: PendingImage[];
   /** When true, skips the Name+Model SideBySideFields row */
   hideNameField?: boolean;
   /** When true, skips the Price field (rendered by parent instead) */
@@ -48,6 +51,7 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
   form,
   imageHandlers,
   existingImages = [],
+  pendingImages = [],
   hideNameField = false,
   hidePrice = false,
   compact = false,
@@ -302,6 +306,10 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
         onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
         className="mt-4"
       />
+
+      {pendingImages.length > 0 && (
+        <IdentifyProductButton form={form} pendingImages={pendingImages} />
+      )}
 
       {!isMisc && (
         <ArrayFieldManager<UnitMappingInput, TFieldValues>

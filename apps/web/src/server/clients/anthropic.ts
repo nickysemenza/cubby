@@ -7,6 +7,10 @@ import {
   type LocationTypeSuggestion,
   locationDescriptionSchema,
   locationTypeSuggestionSchema,
+  type ParsedSearch,
+  type ProductIdentification,
+  parsedSearchSchema,
+  productIdentificationSchema,
 } from "@cubby/schemas/ai";
 import { type LocationType, locationType } from "@cubby/schemas/location";
 import {
@@ -96,6 +100,30 @@ Rules:
 3. For ambiguous names, consider the most likely physical form
 4. Names with numbers often indicate shelves or drawers (e.g., "Shelf 3", "Drawer 2")
 5. Names mentioning "workbench" or "station" are typically areas or tables`;
+}
+
+function buildProductIdentificationSystemPrompt(): string {
+  const categoryList = productCategoryValues
+    .map((cat) => `- "${cat}": ${CATEGORY_DESCRIPTIONS[cat]}`)
+    .join("\n");
+
+  return `You are a product identification assistant. Given one or more photos of a product, identify what it is.
+
+Extract:
+- "name": the product name WITHOUT the brand (e.g., "packing tape roll", "digital scale")
+- "manufacturer": the brand/manufacturer if visible, or "(unspecified)" if not identifiable
+- "category": the most appropriate category from the list below, or null if unclear
+- "model": the model number if visible on the product/packaging, or null
+
+Available categories:
+${categoryList}
+
+Rules:
+1. Read any text visible on the product or packaging (labels, brand names, model numbers)
+2. If multiple products are visible, identify the most prominent one
+3. Be specific with product names but exclude the brand (brand goes in manufacturer)
+4. For items you can't clearly identify, use a generic descriptive name
+5. Only set model to a value if you can clearly read a model number`;
 }
 
 export class AnthropicClient {
@@ -242,6 +270,73 @@ Determine the appropriate type for this location and explain your reasoning.`,
         },
       ],
       outputSchema: detectedInventorySchema,
+    });
+  }
+  async identifyProduct(imageUrls: string[]): Promise<ProductIdentification> {
+    const adapter = this.getAdapter();
+
+    const imageParts: ImagePart<AnthropicImageMetadata>[] = imageUrls.map(
+      (url) => ({
+        type: "image",
+        source: { type: "url", value: url },
+      }),
+    );
+
+    return chat({
+      adapter,
+      systemPrompts: [buildProductIdentificationSystemPrompt()],
+      messages: [
+        {
+          role: "user",
+          content: [
+            ...imageParts,
+            {
+              type: "text",
+              content:
+                "Identify this product from the photo(s). Determine the product name, manufacturer, category, and model number if visible.",
+            },
+          ],
+        },
+      ],
+      outputSchema: productIdentificationSchema,
+    });
+  }
+
+  async parseSearchQuery(
+    query: string,
+    locationNames: string[],
+  ): Promise<ParsedSearch> {
+    const adapter = this.getAdapter();
+
+    const locationList =
+      locationNames.length > 0
+        ? `\n\nKnown locations in the system:\n${locationNames.map((n) => `- ${n}`).join("\n")}`
+        : "";
+
+    return chat({
+      adapter,
+      systemPrompts: [
+        `You are an inventory search assistant. Parse natural language queries into structured search filters.
+
+Extract:
+- "productName": the product or item the user is looking for (null if not specified)
+- "locationName": the location the user is asking about (null if not specified)
+- "interpretation": a short human-readable summary of what you understood (e.g., "Looking for canned tomatoes across all locations")
+
+Rules:
+1. Match location names against the known locations list when possible
+2. If the user mentions a location not in the list, use their text as-is
+3. Strip filler words like "where are", "find me", "show me", "do I have"
+4. For product names, keep the essential search terms (e.g., "canned tomatoes" not "the canned tomatoes")
+5. Use singular forms for product names (e.g., "nailer" not "nailers", "tomato" not "tomatoes") since products are stored in singular form${locationList}`,
+      ],
+      messages: [
+        {
+          role: "user",
+          content: query,
+        },
+      ],
+      outputSchema: parsedSearchSchema,
     });
   }
 }

@@ -19,6 +19,7 @@ import { EntityPillLink } from "../_components/EntityPill";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { AiSearchBar } from "../_components/inventory/ai-search-bar";
 import { tryFormatAmount } from "../_components/inventory/format-amount";
 import { MoveInventoryDialog } from "../_components/inventory/move-inventory-dialog";
 import type { InventoryItem } from "../_components/locations/calculate-inventory-valuation";
@@ -182,6 +183,7 @@ export function InventoryItemList() {
 
   return (
     <div>
+      <AiSearchBar table={table} />
       <RTable
         table={table}
         additionalToolbarContent={

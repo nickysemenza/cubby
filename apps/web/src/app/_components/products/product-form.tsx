@@ -226,6 +226,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         existingImages={
           mode === "edit" && product?.images ? product.images : []
         }
+        pendingImages={imageState.pendingImages}
       />
     </FormWrapper>
   );

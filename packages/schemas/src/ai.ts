@@ -52,3 +52,22 @@ export const detectedInventorySchema = z.object({
   summary: z.string(),
 });
 export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
+
+// Product identification from photo analysis
+export const productIdentificationSchema = z.object({
+  name: z.string(),
+  manufacturer: z.string(),
+  category: productCategory.nullable(),
+  model: z.string().nullable(),
+  confidence,
+  reasoning: z.string(),
+});
+export type ProductIdentification = z.infer<typeof productIdentificationSchema>;
+
+// Parsed natural language search query
+export const parsedSearchSchema = z.object({
+  productName: z.string().nullable(),
+  locationName: z.string().nullable(),
+  interpretation: z.string(),
+});
+export type ParsedSearch = z.infer<typeof parsedSearchSchema>;

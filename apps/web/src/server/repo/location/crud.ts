@@ -370,6 +370,18 @@ export const findLocationsNeedingAiDescription = async (
     }));
 };
 
+/**
+ * Get all non-deleted location names.
+ * Used by AI search to ground location name parsing against real data.
+ */
+export const getLocationNames = async (db: Database): Promise<string[]> => {
+  const results = await getDb(db)
+    .select({ name: location.name })
+    .from(location)
+    .where(notDeleted(location));
+  return results.map((r) => r.name);
+};
+
 export const getLocationById = async (
   db: Database | DrizzleTransaction,
   id: LocationId,

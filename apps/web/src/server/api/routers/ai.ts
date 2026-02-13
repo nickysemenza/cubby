@@ -3,10 +3,13 @@ import {
   detectedInventorySchema,
   locationDescriptionSchema,
   locationTypeSuggestionSchema,
+  parsedSearchSchema,
+  productIdentificationSchema,
 } from "@cubby/schemas/ai";
 import { locationId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 import { getAnthropicClient } from "~/server/clients/anthropic";
+import { getLocationNames } from "~/server/repo/location/crud";
 import {
   backfillLocationDescriptions,
   describeLocation,
@@ -71,5 +74,24 @@ export const aiRouter = createTRPCRouter({
     .output(z.object({ analyzed: z.number(), total: z.number() }))
     .mutation(async ({ ctx }) => {
       return backfillLocationDescriptions(ctx.db);
+    }),
+  identifyProduct: protectedProcedure
+    .input(
+      z.object({
+        imageUrls: z.array(z.string().url()).min(1).max(5),
+      }),
+    )
+    .output(productIdentificationSchema)
+    .mutation(async ({ input }) => {
+      const client = getAnthropicClient();
+      return client.identifyProduct(input.imageUrls);
+    }),
+  parseSearch: protectedProcedure
+    .input(z.object({ query: z.string().min(1) }))
+    .output(parsedSearchSchema)
+    .mutation(async ({ ctx, input }) => {
+      const client = getAnthropicClient();
+      const locationNames = await getLocationNames(ctx.db);
+      return client.parseSearchQuery(input.query, locationNames);
     }),
 });
