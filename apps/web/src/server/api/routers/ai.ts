@@ -1,4 +1,5 @@
 import {
+  categoryAuditSchema,
   categorySuggestionSchema,
   detectedInventorySchema,
   locationDescriptionSchema,
@@ -8,8 +9,12 @@ import {
 } from "@cubby/schemas/ai";
 import { locationId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
-import { getAnthropicClient } from "~/server/clients/anthropic";
+import {
+  CATEGORY_DESCRIPTIONS,
+  getAnthropicClient,
+} from "~/server/clients/anthropic";
 import { getLocationNames } from "~/server/repo/location/crud";
+import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
   backfillLocationDescriptions,
   describeLocation,
@@ -93,5 +98,12 @@ export const aiRouter = createTRPCRouter({
       const client = getAnthropicClient();
       const locationNames = await getLocationNames(ctx.db);
       return client.parseSearchQuery(input.query, locationNames);
+    }),
+  auditCategories: protectedProcedure
+    .output(categoryAuditSchema)
+    .mutation(async ({ ctx }) => {
+      const client = getAnthropicClient();
+      const products = await getProductSummaryForAudit(ctx.db);
+      return client.auditCategories(products, CATEGORY_DESCRIPTIONS);
     }),
 });

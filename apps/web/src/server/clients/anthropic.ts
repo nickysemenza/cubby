@@ -1,5 +1,7 @@
 import {
+  type CategoryAudit,
   type CategorySuggestion,
+  categoryAuditSchema,
   categorySuggestionSchema,
   type DetectedInventory,
   detectedInventorySchema,
@@ -26,7 +28,7 @@ import { env } from "~/env";
 
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
-const CATEGORY_DESCRIPTIONS = {
+export const CATEGORY_DESCRIPTIONS = {
   food: "Consumable food items: flour, olive oil, canned tomatoes, spices, meat, produce, beverages",
   tools:
     "Power and hand tools: drills, saws, grinders, screwdrivers, wrenches, measuring tools",
@@ -298,6 +300,52 @@ Determine the appropriate type for this location and explain your reasoning.`,
         },
       ],
       outputSchema: productIdentificationSchema,
+    });
+  }
+
+  async auditCategories(
+    products: Array<{
+      name: string;
+      manufacturer: string;
+      category: string | null;
+    }>,
+    existingCategories: Record<string, string>,
+  ): Promise<CategoryAudit> {
+    const adapter = this.getAdapter();
+
+    const categoryList = Object.entries(existingCategories)
+      .map(([cat, desc]) => `- "${cat}": ${desc}`)
+      .join("\n");
+
+    const productList = products
+      .map(
+        (p) =>
+          `- ${p.name} (${p.manufacturer}) [${p.category ?? "uncategorized"}]`,
+      )
+      .join("\n");
+
+    return chat({
+      adapter,
+      systemPrompts: [
+        `You are a product catalog analyst. Given a list of products and the current category definitions, identify gaps — clusters of products that would benefit from a new category.
+
+Current categories:
+${categoryList}
+
+Rules:
+1. Only suggest new categories if there is a meaningful cluster of products (at least 3) that don't fit well into existing categories
+2. Don't suggest categories that heavily overlap with existing ones
+3. Use lowercase kebab-case for category names (e.g., "automotive", "craft-supplies")
+4. If the current categories cover the catalog well, return an empty suggestions array
+5. For each suggestion, list existing product names that would move to the new category`,
+      ],
+      messages: [
+        {
+          role: "user",
+          content: `Review these ${products.length} products and suggest any missing categories:\n\n${productList}`,
+        },
+      ],
+      outputSchema: categoryAuditSchema,
     });
   }
 

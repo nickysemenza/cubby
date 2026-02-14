@@ -71,3 +71,18 @@ export const parsedSearchSchema = z.object({
   interpretation: z.string(),
 });
 export type ParsedSearch = z.infer<typeof parsedSearchSchema>;
+
+// Category audit schema - AI suggests missing categories
+export const categoryAuditSchema = z.object({
+  suggestions: z.array(
+    z.object({
+      categoryName: z.string(),
+      description: z.string(),
+      productNames: z.array(z.string()),
+      reasoning: z.string(),
+    }),
+  ),
+  summary: z.string(),
+});
+
+export type CategoryAudit = z.infer<typeof categoryAuditSchema>;

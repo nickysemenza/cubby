@@ -14,6 +14,7 @@ export {
   findProductsNeedingFoodCategory,
   findProductsWithNoImages,
   getCategoryDistribution,
+  getProductSummaryForAudit,
 } from "./analytics";
 // CRUD operations
 export {

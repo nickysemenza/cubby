@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BarChart3 } from "lucide-react";
+import { CategoryAudit } from "~/app/_components/insights/category-audit";
 import LocationTreemap from "~/app/_components/inventory/location-treemap";
 import IngredientNetwork from "~/app/_components/visualizations/ingredient-network";
 import LocationSunburst from "~/app/_components/visualizations/location-sunburst";
@@ -60,6 +61,16 @@ function InsightsPage() {
           Larger nodes indicate ingredients used in more recipes.
         </p>
         <IngredientNetwork />
+      </section>
+
+      {/* Category Audit Section */}
+      <section className="space-y-4">
+        <h2 className="font-heading font-semibold text-xl">Category Audit</h2>
+        <p className="text-muted-foreground text-sm">
+          Use AI to analyze your product catalog and suggest new categories that
+          could better organize your inventory.
+        </p>
+        <CategoryAudit />
       </section>
     </div>
   );

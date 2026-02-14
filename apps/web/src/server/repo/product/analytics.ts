@@ -259,6 +259,25 @@ export const getCategoryDistribution = async (
 };
 
 /**
+ * Get a lightweight product summary for AI category audit.
+ * Returns name, manufacturer, and category for all non-deleted products.
+ */
+export const getProductSummaryForAudit = async (
+  db: Database,
+): Promise<
+  Array<{ name: string; manufacturer: string; category: string | null }>
+> => {
+  return getDb(db)
+    .select({
+      name: product.name,
+      manufacturer: product.manufacturer,
+      category: product.category,
+    })
+    .from(product)
+    .where(notDeleted(product));
+};
+
+/**
  * Backfill food category for all products with food indicators.
  * Returns the count of products updated.
  */
