@@ -32,6 +32,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -50,12 +51,11 @@ import { MobileListScreen } from "./MobileListScreen";
 import { SectionHeader } from "./SectionHeader";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
+import { densityConfig, useTableDensity } from "./useTableDensity";
 
 // Scroll position cache for navigate-back restoration
 const scrollPositionCache = new Map<string, number>();
 
-// Estimated row height in pixels
-const ESTIMATED_ROW_HEIGHT = 35;
 // Number of rows to render outside the visible area
 const OVERSCAN = 5;
 // Minimum table height so it's always usable
@@ -123,9 +123,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
   const pathname = useLocation({ select: (l) => l.pathname });
+  const { density } = useTableDensity();
+  const dConfig = densityConfig[density];
 
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard navigation: focused row index (desktop only)
+  const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
 
   // Dynamic table height: fill remaining viewport on desktop
   const [maxHeight, setMaxHeight] = useState(600);
@@ -172,7 +177,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
       if (groupedItems && groupedItems[index].kind === "header") {
         return SECTION_HEADER_HEIGHT;
       }
-      return ESTIMATED_ROW_HEIGHT;
+      return dConfig.rowHeight;
     },
     overscan: OVERSCAN,
   });
@@ -209,12 +214,12 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   }, [pathname, rows.length, isMobile]);
 
   const styles = {
-    table:
-      "text-xs leading-tight border-collapse border-spacing-0 [&_tr:nth-child(even)]:bg-[oklch(0.988_0.004_55)]",
-    header: "h-8 px-2 py-1 text-xs font-medium text-foreground/80 bg-muted/30",
+    table: "text-xs leading-tight border-collapse border-spacing-0",
+    header:
+      "h-8 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50",
     filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
-    cell: "h-9 px-2 py-1 align-middle overflow-hidden",
-    row: "h-9 table-row-hover border-b border-border/30",
+    cell: cn(dConfig.cellClass, "overflow-hidden align-middle"),
+    row: cn(dConfig.rowClass, "table-row-hover border-border/30 border-b"),
     sortIcon: "h-3 w-3",
   };
 
@@ -223,7 +228,11 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
     <TableRow
       key={row.id}
       data-state={row.getIsSelected() && "selected"}
-      className={cn(styles.row, onRowClick && "cursor-pointer")}
+      className={cn(
+        styles.row,
+        onRowClick && "cursor-pointer",
+        focusedRowIndex === row.index && "ring-2 ring-primary/30 ring-inset",
+      )}
       onClick={onRowClick ? () => onRowClick(row) : undefined}
       style={style}
     >
@@ -393,15 +402,50 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           {/* Scrollable container for virtualization */}
           <div
             ref={tableContainerRef}
-            className="overflow-auto"
+            className="overflow-auto outline-none"
             style={{ maxHeight: `${maxHeight}px` }}
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard row navigation requires focusable container
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (
+                e.key === "ArrowDown" ||
+                e.key === "ArrowUp" ||
+                e.key === "Enter"
+              ) {
+                e.preventDefault();
+                const rowCount = rows.length;
+                if (rowCount === 0) return;
+
+                if (
+                  e.key === "Enter" &&
+                  focusedRowIndex !== null &&
+                  onRowClick
+                ) {
+                  const row = rows[focusedRowIndex];
+                  if (row) onRowClick(row);
+                  return;
+                }
+
+                const next =
+                  focusedRowIndex === null
+                    ? 0
+                    : e.key === "ArrowDown"
+                      ? Math.min(focusedRowIndex + 1, rowCount - 1)
+                      : Math.max(focusedRowIndex - 1, 0);
+                setFocusedRowIndex(next);
+                rowVirtualizer.scrollToIndex(next, { align: "auto" });
+              }
+              if (e.key === "Escape") {
+                setFocusedRowIndex(null);
+              }
+            }}
           >
             <Table
               aria-label={ariaLabel}
               className={cn(styles.table)}
               containerClassName="overflow-visible"
             >
-              <TableHeader className="sticky top-0 z-20 bg-background [&_tr]:border-b-0">
+              <TableHeader className="sticky top-0 z-20 bg-background shadow-[0_1px_3px_rgba(58,53,48,0.08)] [&_tr]:border-b-0">
                 {table.getHeaderGroups().map((headerGroup) => {
                   // Check if any column has a filter config
                   const hasAnyFilters = headerGroup.headers.some(
@@ -467,13 +511,14 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                               className={cn(
                                 header.column.columnDef.meta?.className,
                                 styles.header,
+                                sortDirection && "bg-[oklch(0.95_0.03_30)]",
                               )}
                             >
                               {canSort ? (
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-medium text-xs hover:bg-muted/60"
+                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-semibold text-[10px] uppercase tracking-wider hover:bg-muted/60"
                                   onClick={() =>
                                     header.column.toggleSorting(
                                       header.column.getIsSorted() === "asc",
@@ -535,6 +580,43 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                 })}
               </TableHeader>
               <TableBody>{renderTableBody()}</TableBody>
+              {/* Footer aggregation row — only when data is loaded */}
+              {rows.length > 0 &&
+                (() => {
+                  const footerGroups = table.getFooterGroups();
+                  const hasFooter = footerGroups.some((fg) =>
+                    fg.headers.some((h) => h.column.columnDef.footer),
+                  );
+                  if (!hasFooter) return null;
+                  return (
+                    <TableFooter className="sticky bottom-0 border-t bg-muted/50 font-medium text-xs">
+                      {footerGroups.map((footerGroup) => (
+                        <TableRow
+                          key={footerGroup.id}
+                          className="hover:bg-muted/50"
+                        >
+                          {footerGroup.headers.map((header) => (
+                            <TableCell
+                              key={header.id}
+                              colSpan={header.colSpan}
+                              className={cn(
+                                "px-2 py-1.5",
+                                header.column.columnDef.meta?.className,
+                              )}
+                            >
+                              {header.isPlaceholder
+                                ? null
+                                : flexRender(
+                                    header.column.columnDef.footer,
+                                    header.getContext(),
+                                  )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableFooter>
+                  );
+                })()}
             </Table>
           </div>
         </div>

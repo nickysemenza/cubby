@@ -7,7 +7,12 @@ interface NoneStateProps {
 
 export const NoneState: FC<NoneStateProps> = ({ className }) => {
   return (
-    <span className={cn("select-none text-muted-foreground/40", className)}>
+    <span
+      className={cn(
+        "select-none text-[10px] text-muted-foreground/30",
+        className,
+      )}
+    >
       —
     </span>
   );

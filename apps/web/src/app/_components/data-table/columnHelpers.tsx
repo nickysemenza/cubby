@@ -108,13 +108,20 @@ export function createNameColumn<T extends BaseRow>(
     mobile?: MobileColumnMeta;
   },
 ) {
+  const entityConfig = entities[entity];
   const config = {
     id: String(fieldName),
     enableSorting: true,
     meta: {
-      className: "min-w-0 w-40 max-w-56",
+      className: "min-w-0 w-48 max-w-72",
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
+    },
+    footer: (info: {
+      table: { getFilteredRowModel: () => { rows: unknown[] } };
+    }) => {
+      const count = info.table.getFilteredRowModel().rows.length;
+      return `${count} ${count === 1 ? entityConfig.label.toLowerCase() : entityConfig.pluralLabel.toLowerCase()}`;
     },
     cell: (info: CellContext<T, T[keyof T]>) => {
       const value = String(info.getValue());
@@ -601,8 +608,21 @@ export function createCurrencyColumn<
     id: String(accessor),
     header: options?.header,
     meta: {
-      className: options?.className,
+      className: options?.className ?? "w-20 text-right font-mono tabular-nums",
       mobile: options?.mobile,
+    },
+    footer: (info) => {
+      const rows = info.table.getFilteredRowModel().rows;
+      const sum = rows.reduce((acc, row) => {
+        const val = row.getValue<number | null>(info.column.id);
+        return val != null ? acc + val : acc;
+      }, 0);
+      if (sum === 0) return null;
+      return (
+        <span className="font-mono text-[oklch(0.45_0.12_145)] tabular-nums">
+          {formatCurrency(sum)}
+        </span>
+      );
     },
     cell: (info) => {
       const val = info.getValue();
@@ -616,14 +636,24 @@ export function createCurrencyColumn<
             }
             config={{ type: "currency" }}
             renderValue={(v) =>
-              v !== null ? formatCurrency(v) : <NoneState />
+              v !== null ? (
+                <span className="text-[oklch(0.45_0.12_145)]">
+                  {formatCurrency(v)}
+                </span>
+              ) : (
+                <NoneState />
+              )
             }
           />
         );
       }
 
       if (val === null || val === undefined) return <NoneState />;
-      return formatCurrency(val);
+      return (
+        <span className="text-[oklch(0.45_0.12_145)]">
+          {formatCurrency(val)}
+        </span>
+      );
     },
   });
 }
@@ -894,6 +924,9 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
   return columnHelper.accessor((row) => row[accessor] as Amount, {
     id: String(accessor),
     header: options.header ?? "Amount",
+    meta: {
+      className: "font-mono tabular-nums",
+    },
     cell: (info) => {
       const amount = info.getValue();
       const row = info.row.original;

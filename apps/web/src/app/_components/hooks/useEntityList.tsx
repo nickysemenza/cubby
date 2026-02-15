@@ -67,6 +67,8 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   extraActions?: (row: TData) => ReactNode;
   /** Enable infinite scroll on mobile (default: false) */
   infinite?: boolean;
+  /** Columns hidden by default (user can toggle via View menu) */
+  initialColumnVisibility?: Record<string, boolean>;
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
@@ -141,6 +143,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   extraActions,
   deletable,
   infinite = false,
+  initialColumnVisibility,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
@@ -290,6 +293,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     enableRowSelection: effectiveEnableRowSelection,
     rowSelection: effectiveRowSelection,
     onRowSelectionChange: effectiveOnRowSelectionChange,
+    initialColumnVisibility,
   });
 
   // Build bulk action bar element if bulk actions configured

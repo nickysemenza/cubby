@@ -307,6 +307,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     deletable: deletableConfig,
     extraActions,
     infinite: true,
+    initialColumnVisibility: { ndb_number: false },
     groupConfig,
   });
 

@@ -32,15 +32,15 @@ export function DataTableToolbar<TData>({
 
   return (
     <div className={cn("flex items-center justify-between gap-2", className)}>
-      {/* Show bulk action bar when present, otherwise show view options */}
-      {bulkActionBar ??
-        (showViewOptions ? <DataTableViewOptions table={table} /> : <div />)}
+      <div className="flex items-center gap-2">
+        {showViewOptions && <DataTableViewOptions table={table} />}
+        {bulkActionBar}
+      </div>
 
       <div className="flex flex-1 items-center justify-end gap-2">
         {additionalContent}
 
-        {/* Hide reset when bulk action bar is active to reduce clutter */}
-        {isFiltered && !bulkActionBar && (
+        {isFiltered && (
           <Button
             variant="ghost"
             size="sm"

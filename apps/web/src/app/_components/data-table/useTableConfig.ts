@@ -1,6 +1,9 @@
 import {
   type ColumnDef,
   getCoreRowModel,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   type OnChangeFn,
@@ -8,7 +11,7 @@ import {
   type Table,
   useReactTable,
 } from "@tanstack/react-table";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { TableStateReturn } from "./useTableState";
 
 interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
@@ -33,6 +36,8 @@ interface UseTableConfigOptions<TData, GlobalFilterData = unknown> {
   rowSelection?: RowSelectionState;
   /** Callback when row selection changes */
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+  /** Columns hidden by default (user can toggle via View menu) */
+  initialColumnVisibility?: Record<string, boolean>;
 }
 
 export function useTableConfig<TData, GlobalFilterData>({
@@ -49,6 +54,7 @@ export function useTableConfig<TData, GlobalFilterData>({
   enableRowSelection,
   rowSelection,
   onRowSelectionChange,
+  initialColumnVisibility,
 }: UseTableConfigOptions<TData, GlobalFilterData>): Table<TData> {
   const {
     sorting,
@@ -59,10 +65,20 @@ export function useTableConfig<TData, GlobalFilterData>({
     setPagination,
   } = tableState;
 
+  const [columnVisibility, setColumnVisibility] = useState<
+    Record<string, boolean>
+  >(initialColumnVisibility ?? {});
+
   // Memoize row models - these are stable functions
-  const coreRowModel = useMemo(() => getCoreRowModel(), []);
-  const paginationRowModel = useMemo(() => getPaginationRowModel(), []);
-  const sortedRowModel = useMemo(() => getSortedRowModel(), []);
+  const coreRowModel = useMemo(() => getCoreRowModel<TData>(), []);
+  const filteredRowModel = useMemo(() => getFilteredRowModel<TData>(), []);
+  const facetedRowModel = useMemo(() => getFacetedRowModel<TData>(), []);
+  const facetedUniqueValues = useMemo(
+    () => getFacetedUniqueValues<TData>(),
+    [],
+  );
+  const paginationRowModel = useMemo(() => getPaginationRowModel<TData>(), []);
+  const sortedRowModel = useMemo(() => getSortedRowModel<TData>(), []);
 
   // Memoize table options to prevent recreating on every render
   const tableOptions = useMemo(
@@ -70,11 +86,15 @@ export function useTableConfig<TData, GlobalFilterData>({
       data,
       columns,
       getCoreRowModel: coreRowModel,
+      getFilteredRowModel: filteredRowModel,
+      getFacetedRowModel: facetedRowModel,
+      getFacetedUniqueValues: facetedUniqueValues,
       getPaginationRowModel: paginationRowModel,
       getSortedRowModel: sortedRowModel,
       onPaginationChange: setPagination,
       onSortingChange: setSorting,
       onColumnFiltersChange: setColumnFilters,
+      onColumnVisibilityChange: setColumnVisibility,
       manualSorting,
       manualFiltering,
       manualPagination,
@@ -86,6 +106,7 @@ export function useTableConfig<TData, GlobalFilterData>({
       state: {
         sorting,
         columnFilters,
+        columnVisibility,
         pagination,
         ...(globalFilter ? { globalFilter } : {}),
         ...(rowSelection ? { rowSelection } : {}),
@@ -96,12 +117,16 @@ export function useTableConfig<TData, GlobalFilterData>({
       data,
       columns,
       coreRowModel,
+      filteredRowModel,
+      facetedRowModel,
+      facetedUniqueValues,
       paginationRowModel,
       sortedRowModel,
       sorting,
       setSorting,
       columnFilters,
       setColumnFilters,
+      columnVisibility,
       pagination,
       setPagination,
       manualSorting,
