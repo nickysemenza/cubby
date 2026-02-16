@@ -2,7 +2,7 @@
   "name": "cubby",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.28.0",
+  "packageManager": "pnpm@10.29.3",
   "scripts": {
     "dev": "pnpm -r dev",
     "dev:log": "pnpm -r --reporter append-only dev",
