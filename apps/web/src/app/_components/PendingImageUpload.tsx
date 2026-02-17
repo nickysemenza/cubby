@@ -23,6 +23,8 @@ export interface PendingImage {
   key: string;
 }
 
+const EMPTY_IMAGES: PendingImage[] = [];
+
 interface PendingImageUploadProps {
   entityType: EntityImage;
   onImagesChange?: (images: PendingImage[]) => void;
@@ -34,7 +36,7 @@ interface PendingImageUploadProps {
 export function PendingImageUpload({
   entityType,
   onImagesChange,
-  existingImages = [],
+  existingImages = EMPTY_IMAGES,
   onExistingImagesRemove,
   className = "",
 }: PendingImageUploadProps) {
@@ -55,10 +57,12 @@ export function PendingImageUpload({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const api = useTRPC();
 
-  // Initialize existing images from props
-  useEffect(() => {
+  // Sync state from prop during render (React recommended pattern)
+  const [prevExistingImages, setPrevExistingImages] = useState(existingImages);
+  if (existingImages !== prevExistingImages) {
+    setPrevExistingImages(existingImages);
     setCurrentExistingImages(existingImages);
-  }, [existingImages]);
+  }
 
   // tRPC mutation for initiating an upload
   const uploadImageMutation = useMutation(

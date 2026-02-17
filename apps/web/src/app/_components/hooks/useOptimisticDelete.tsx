@@ -151,15 +151,21 @@ export function useOptimisticDelete<
     };
   }, [deletable, queryClient]);
 
-  // Delete mutation (only created if deletable is provided)
-  const deleteMutation = deleteMutationOptions
-    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
-      useMutation(deleteMutationOptions as Parameters<typeof useMutation>[0])
-    : null;
+  // Always call useMutation unconditionally (Rules of Hooks).
+  // When deletable is not configured, pass a no-op mutation function.
+  const noopMutationOptions = useMemo(
+    () => ({ mutationFn: async () => {} }),
+    [],
+  );
+  const deleteMutation = useMutation(
+    (deleteMutationOptions ?? noopMutationOptions) as Parameters<
+      typeof useMutation
+    >[0],
+  );
 
   // Build delete bulk action
   const deleteBulkAction = useMemo((): BulkAction<TData> | null => {
-    if (!deletable || !deleteMutation) return null;
+    if (!deletable) return null;
 
     return {
       id: "delete" as const,
@@ -173,7 +179,7 @@ export function useOptimisticDelete<
         return { success: true };
       },
     };
-  }, [deletable, deleteMutation]);
+  }, [deletable, deleteMutation.mutateAsync]);
 
   // Combine user's extra actions with delete action if deletable is provided
   const combinedExtraActions = useMemo(() => {
@@ -221,11 +227,11 @@ export function useOptimisticDelete<
           entityType={deletable.entityLabel}
           onDelete={async () => {
             if (deleteTarget) {
-              await deleteMutation!.mutateAsync({ ids: [deleteTarget.id] });
+              await deleteMutation.mutateAsync({ ids: [deleteTarget.id] });
               setDeleteTarget(null);
             }
           }}
-          isPending={deleteMutation?.isPending ?? false}
+          isPending={deletable ? deleteMutation.isPending : false}
         />
       ) : null,
     [deletable, deleteTarget, deleteMutation],

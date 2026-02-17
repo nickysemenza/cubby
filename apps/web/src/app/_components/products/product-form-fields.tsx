@@ -21,6 +21,8 @@ import { type PendingImage, PendingImageUpload } from "../PendingImageUpload";
 import { CategoryFieldWithAI } from "./category-field-with-ai";
 import { IdentifyProductButton } from "./identify-product-with-ai";
 
+const EMPTY_PENDING_IMAGES: PendingImage[] = [];
+
 type ImageHandlers = Pick<
   ReturnType<typeof useImageState>,
   "handlePendingImagesChange" | "handleRemovedImagesChange"
@@ -50,8 +52,8 @@ interface ProductFormFieldsProps<TFieldValues extends FieldValues> {
 export function ProductFormFields<TFieldValues extends FieldValues>({
   form,
   imageHandlers,
-  existingImages = [],
-  pendingImages = [],
+  existingImages = EMPTY_PENDING_IMAGES,
+  pendingImages = EMPTY_PENDING_IMAGES,
   hideNameField = false,
   hidePrice = false,
   compact = false,

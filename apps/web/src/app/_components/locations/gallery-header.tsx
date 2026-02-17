@@ -14,6 +14,8 @@ import { cn } from "~/lib/utils";
 import { LocationBreadcrumb } from "./location-breadcrumb";
 import { locationTypeOptionsWithTheme } from "./location-icons";
 
+const EMPTY_BREADCRUMB: InfLocation[] = [];
+
 interface GalleryHeaderProps {
   searchTerm: string;
   onSearchChange: (term: string) => void;
@@ -38,7 +40,7 @@ export function GalleryHeader({
   onEmptyFilterChange,
   hideNonMatching,
   onHideNonMatchingChange,
-  breadcrumbPath = [],
+  breadcrumbPath = EMPTY_BREADCRUMB,
   onBreadcrumbClick,
   stats,
   className,

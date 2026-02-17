@@ -442,9 +442,12 @@ function EditableSelectEditor({
   const [selectedValue, setSelectedValue] = useState<string | null>(value);
   const [isPending, setIsPending] = useState(false);
 
-  useEffect(() => {
+  // Sync state from prop during render (React recommended pattern)
+  const [prevValue, setPrevValue] = useState<string | null>(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setSelectedValue(value);
-  }, [value]);
+  }
 
   const handleSave = useCallback(async () => {
     if (selectedValue === value) {

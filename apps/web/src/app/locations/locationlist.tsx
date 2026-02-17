@@ -45,12 +45,9 @@ export function LocationList() {
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(() => [queryKeys.location.list] as const, []);
 
-  // Memoize mutation function to prevent recreating on every render
-  const mutationFn = useMemo(() => api.location.update.mutationOptions, [api]);
-
   // Mutation for inline editing (name, type)
   const updateLocationMutation = useUpdateMutation({
-    mutationFn,
+    mutationFn: api.location.update.mutationOptions,
     entity: "location",
     invalidateKeys,
   });

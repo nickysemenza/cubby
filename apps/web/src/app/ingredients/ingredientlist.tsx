@@ -39,15 +39,9 @@ export function IngredientList() {
     [],
   );
 
-  // Memoize mutation function to prevent recreating on every render
-  const mutationFn = useMemo(
-    () => api.ingredient.update.mutationOptions,
-    [api],
-  );
-
   // Mutation for inline editing (name)
   const updateIngredientMutation = useUpdateMutation({
-    mutationFn,
+    mutationFn: api.ingredient.update.mutationOptions,
     entity: "ingredient",
     invalidateKeys,
   });

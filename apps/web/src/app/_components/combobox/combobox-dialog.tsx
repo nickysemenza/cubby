@@ -61,6 +61,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
   const debouncedInput = useDebounce(inputValue, 300);
+  const listboxId = React.useId();
 
   // Use a ref to store the dialog and input elements
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -116,6 +117,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
         variant="outline"
         role="combobox"
         aria-expanded={open}
+        aria-controls={listboxId}
         aria-label={label}
         className="w-full min-w-[200px] justify-between truncate"
         onClick={(e) => {
@@ -147,7 +149,11 @@ export function DialogCompatibleCombobox<TId extends string = string>({
             />
           </div>
 
-          <div className="max-h-[300px] overflow-y-auto">
+          <div
+            id={listboxId}
+            role="listbox"
+            className="max-h-[300px] overflow-y-auto"
+          >
             {isLoading ? (
               <SimpleLoading />
             ) : items.length === 0 ? (

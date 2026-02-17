@@ -37,6 +37,8 @@ export interface UseTableListOptions<TFilters> {
   tableStateOptions?: TableStateOptions;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
+  /** Disable the query (hook still called but query doesn't fire) */
+  enabled?: boolean;
 }
 
 interface UseTableListReturn<TData = unknown> {
@@ -66,6 +68,7 @@ export function useTableList<TFilters, TData = unknown>({
   buildFilters,
   tableStateOptions,
   groupBy,
+  enabled = true,
 }: UseTableListOptions<TFilters>): UseTableListReturn<TData> {
   const tableState = useTableState(tableStateOptions);
 
@@ -108,6 +111,7 @@ export function useTableList<TFilters, TData = unknown>({
     refetch,
   } = useQuery({
     ...memoizedQueryOptions,
+    enabled,
     placeholderData: keepPreviousData,
   }) as {
     data: ListQueryResponse<TData> | undefined;

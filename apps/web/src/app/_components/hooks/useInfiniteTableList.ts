@@ -34,6 +34,8 @@ export interface UseInfiniteTableListOptions<TFilters> {
   tableStateOptions?: TableStateOptions;
   /** DB column name to group by (prepends primary ORDER BY on server) */
   groupBy?: string;
+  /** Disable the query (hook still called but query doesn't fire) */
+  enabled?: boolean;
 }
 
 export interface InfiniteScrollControls {
@@ -67,6 +69,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
   buildFilters,
   tableStateOptions,
   groupBy,
+  enabled = true,
 }: UseInfiniteTableListOptions<TFilters>): UseInfiniteTableListReturn<TData> {
   const tableState = useTableState(tableStateOptions);
 
@@ -101,6 +104,7 @@ export function useInfiniteTableList<TFilters, TData = unknown>({
     isRefetching,
     refetch,
   } = useInfiniteQuery({
+    enabled,
     queryKey: [...baseOptions.queryKey, "__infinite__"],
     queryFn: async ({ pageParam }: { pageParam: number }) => {
       // Build query options for the requested page

@@ -182,17 +182,23 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     };
   }, [deleteBulkAction, bulkActions]);
 
-  // Use bulk actions hook if config is provided
-  const bulkActionsState = effectiveBulkActions
-    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - config is stable per usage
-      useBulkActions({ config: effectiveBulkActions })
-    : null;
+  // Always call useBulkActions unconditionally (Rules of Hooks).
+  // When no bulk actions configured, pass an empty config.
+  const EMPTY_BULK_CONFIG = useMemo(
+    (): BulkActionsConfig<TData> => ({ actions: [] }),
+    [],
+  );
+  const bulkActionsState = useBulkActions({
+    config: effectiveBulkActions ?? EMPTY_BULK_CONFIG,
+  });
 
   // Determine effective row selection state - bulk actions takes precedence
-  const effectiveRowSelection =
-    bulkActionsState?.rowSelection ?? rowSelection ?? {};
-  const effectiveOnRowSelectionChange =
-    bulkActionsState?.onRowSelectionChange ?? onRowSelectionChange;
+  const effectiveRowSelection = effectiveBulkActions
+    ? bulkActionsState.rowSelection
+    : (rowSelection ?? {});
+  const effectiveOnRowSelectionChange = effectiveBulkActions
+    ? bulkActionsState.onRowSelectionChange
+    : onRowSelectionChange;
   const effectiveEnableRowSelection = effectiveBulkActions
     ? true
     : (enableRowSelection ?? false);
@@ -216,26 +222,23 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     [defaultSort, tableStateOptions],
   );
 
-  // Use infinite or paginated table list hook
-  const infiniteResult = infinite
-    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - `infinite` is stable per usage
-      useInfiniteTableList<TFilters, TData>({
-        queryOptions,
-        buildFilters,
-        tableStateOptions: mergedTableStateOptions,
-        groupBy: groupByField,
-      })
-    : null;
+  // Always call both hooks unconditionally (Rules of Hooks).
+  // The unused hook has enabled: false so its query won't fire.
+  const infiniteResult = useInfiniteTableList<TFilters, TData>({
+    queryOptions,
+    buildFilters,
+    tableStateOptions: mergedTableStateOptions,
+    groupBy: groupByField,
+    enabled: infinite,
+  });
 
-  const paginatedResult = !infinite
-    ? // biome-ignore lint/correctness/useHookAtTopLevel: Conditional use is intentional - `infinite` is stable per usage
-      useTableList<TFilters, TData>({
-        queryOptions,
-        buildFilters,
-        tableStateOptions: mergedTableStateOptions,
-        groupBy: groupByField,
-      })
-    : null;
+  const paginatedResult = useTableList<TFilters, TData>({
+    queryOptions,
+    buildFilters,
+    tableStateOptions: mergedTableStateOptions,
+    groupBy: groupByField,
+    enabled: !infinite,
+  });
 
   const {
     data,
@@ -245,7 +248,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     tableState,
     timing,
     refreshControls,
-  } = infiniteResult ?? paginatedResult!;
+  } = infinite ? infiniteResult : paginatedResult;
 
   // Load unit mappings synchronously if getMappings is provided
   const mappingsMap = useMemo(() => {
@@ -299,7 +302,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   // Build bulk action bar element if bulk actions configured
   const bulkActionBar = useMemo(
     () =>
-      bulkActionsState && effectiveBulkActions ? (
+      effectiveBulkActions ? (
         <BulkActionBar
           selectedCount={bulkActionsState.selectedCount}
           selectedRows={table.getFilteredSelectedRowModel().rows}
@@ -324,7 +327,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     timing,
     bulkActionBar,
     deleteDialog,
-    infiniteScroll: infiniteResult?.infiniteScroll,
+    infiniteScroll: infinite ? infiniteResult.infiniteScroll : undefined,
     refreshControls,
     grouped,
     onGroupedChange,

@@ -45,12 +45,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
   // Memoize invalidate keys to prevent recreating on every render
   const invalidateKeys = useMemo(() => [queryKeys.product.list] as const, []);
 
-  // Memoize mutation function to prevent recreating on every render
-  const mutationFn = useMemo(() => api.product.update.mutationOptions, [api]);
-
   // Mutation for inline editing (price, category, etc.)
   const updateProductMutation = useUpdateMutation({
-    mutationFn,
+    mutationFn: api.product.update.mutationOptions,
     entity: "product",
     invalidateKeys,
   });
@@ -69,15 +66,9 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     [initialFilter],
   );
 
-  // Memoize delete mutation function to prevent recreating on every render
-  const deleteMutationFn = useMemo(
-    () => api.product.delete.mutationOptions,
-    [api],
-  );
-
   // Use stable deletable config hook to prevent infinite render loop
   const deletableConfig = useDeletableConfig({
-    mutationFn: deleteMutationFn,
+    mutationFn: api.product.delete.mutationOptions,
     entityLabel: "Product",
     invalidateKeys: [[queryKeys.product.list]],
   });
