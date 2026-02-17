@@ -6,7 +6,6 @@ import {
   DollarSign,
   Eye,
   FolderTree,
-  ImageIcon,
   Info,
   Package,
   Plus,
@@ -27,7 +26,6 @@ import { queryKeys } from "~/lib/query-keys";
 import { cn } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { DetailPage, type DetailSection } from "../data-table/detail-page";
-import EntityImageList from "../EntityImageList";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { QuickInventoryAdd } from "../inventory/quick-inventory-add";
 import { AiDescriptionSection } from "./ai-description-section";
@@ -87,12 +85,6 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
           <InventoryValuationSummary locationId={location.id} variant="full" />
         </div>
       ),
-    },
-    // Custom section: Images (positioned before child locations)
-    {
-      title: "Images",
-      icon: ImageIcon,
-      content: <EntityImageList images={location.images ?? []} />,
     },
     // Custom section: AI Description
     {

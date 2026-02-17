@@ -6,6 +6,7 @@ import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
+import { EntityHero } from "../EntityHero";
 import JsonRenderer from "../json-renderer";
 
 export interface DetailSection {
@@ -52,6 +53,10 @@ export const DetailPage: FC<DetailPageProps> = ({
 
       {/* Grid sections */}
       <div className="grid gap-3 sm:gap-6 md:grid-cols-2">
+        {/* Image card — desktop only, first in grid */}
+        {!isMobile && heroImages && heroImages.length > 0 && (
+          <EntityHero images={heroImages} />
+        )}
         {sections.map((section, index) => (
           <Card
             key={section.title}

@@ -60,7 +60,7 @@ export const entities: Record<Entity, EntityDefinition> = {
       list: "/products",
       new: "/products/new",
     },
-    detail: { commonSections: ["images", "unit-mappings", "history"] },
+    detail: { commonSections: ["unit-mappings", "history"] },
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",

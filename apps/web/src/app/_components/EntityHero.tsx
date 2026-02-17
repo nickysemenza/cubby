@@ -1,0 +1,96 @@
+import { Link } from "@tanstack/react-router";
+import { ImageIcon } from "lucide-react";
+import { type FC, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Image } from "~/components/ui/image";
+import { cn } from "~/lib/utils";
+
+interface HeroImage {
+  id: string;
+  url: string;
+  filename: string;
+}
+
+interface EntityHeroProps {
+  images: HeroImage[];
+}
+
+/**
+ * Desktop image card for entity detail pages.
+ * Renders as a Card in the grid with a prominent primary image
+ * and optional thumbnail strip for multiple images.
+ */
+export const EntityHero: FC<EntityHeroProps> = ({ images }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  if (images.length === 0) return null;
+
+  const activeImage = images[activeIndex];
+
+  return (
+    <Card
+      className={cn(
+        "transition-all duration-150",
+        "md:hover:-translate-y-0.5 md:hover:shadow-md",
+        "fade-in slide-in-from-bottom-2 animate-in",
+      )}
+      style={{ animationFillMode: "both" }}
+    >
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-2">
+          <ImageIcon className="h-4 w-4 text-muted-foreground" />
+          <CardTitle className="text-base">Images</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {/* Primary image */}
+        <Link
+          to="/images/$id"
+          params={{ id: activeImage.id }}
+          className="group block"
+        >
+          <div className="relative aspect-video overflow-hidden rounded-md">
+            <Image
+              src={activeImage.url}
+              alt={activeImage.filename}
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            />
+          </div>
+        </Link>
+
+        {/* Thumbnail strip for multiple images */}
+        {images.length > 1 && (
+          <div className="flex items-center gap-2">
+            <div className="flex gap-2 overflow-x-auto">
+              {images.map((image, index) => (
+                <button
+                  key={image.id}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  className={cn(
+                    "relative h-12 w-12 flex-shrink-0 overflow-hidden rounded-md transition-all",
+                    index === activeIndex
+                      ? "ring-2 ring-primary ring-offset-2"
+                      : "opacity-60 hover:opacity-100",
+                  )}
+                >
+                  <Image
+                    src={image.url}
+                    alt={image.filename}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+            <Link
+              to="/images"
+              className="ml-auto flex-shrink-0 text-muted-foreground text-sm hover:text-foreground"
+            >
+              View All
+            </Link>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
