@@ -7,8 +7,9 @@ import { z } from "zod";
 /**
  * MCP Server for Cubby inventory and product management.
  *
- * Each request creates a fresh McpServer + transport (required by the SDK
- * for stateless mode — transport can't be reused and server can't reconnect).
+ * The McpServer + tools are created once (module scope). Only the transport
+ * is per-request — the SDK requires a fresh transport in stateless mode,
+ * but the server itself is stateless and safe to reuse.
  */
 
 // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller type
@@ -114,7 +115,11 @@ function createMcpServer() {
   return server;
 }
 
-/** Handle an authenticated MCP request (per-request server+transport for stateless mode) */
+/**
+ * Handle an authenticated MCP request.
+ * Per-request server+transport: the SDK's McpServer.connect() can only be
+ * called once per instance, and the transport can't be reused in stateless mode.
+ */
 export async function handleMcpRequest(
   request: Request,
   authInfo: AuthInfo,
@@ -128,6 +133,20 @@ export async function handleMcpRequest(
   return transport.handleRequest(request, { authInfo });
 }
 
+const pageSize = z
+  .number()
+  .int()
+  .min(1)
+  .max(100)
+  .optional()
+  .describe("Items per page (default 50, max 100)");
+const pageIndex = z
+  .number()
+  .int()
+  .min(0)
+  .optional()
+  .describe("Page index, 0-based (default 0)");
+
 function registerTools(server: McpServer) {
   // ---------------------------------------------------------------------------
   // Inventory tools
@@ -140,11 +159,8 @@ function registerTools(server: McpServer) {
       productName: z.string().optional().describe("Filter by product name"),
       locationName: z.string().optional().describe("Filter by location name"),
       locationId: z.string().optional().describe("Filter by exact location ID"),
-      pageIndex: z
-        .number()
-        .optional()
-        .describe("Page index, 0-based (default 0)"),
-      pageSize: z.number().optional().describe("Items per page (default 50)"),
+      pageIndex,
+      pageSize,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -156,8 +172,8 @@ function registerTools(server: McpServer) {
         },
         sort: { orderBy: "createdAt", direction: "desc" },
         pagination: {
-          pageIndex: (params.pageIndex as number) ?? 0,
-          pageSize: (params.pageSize as number) ?? 50,
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 50,
         },
       });
       return json({
@@ -202,21 +218,32 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "update_inventory_entry",
-    "Update an inventory entry's amount, product, or location.",
+    "Update an inventory entry's amount, product, or location. When updating amount, both value and unit must be provided together.",
     {
       id: z.string().describe("Inventory entry ID"),
-      value: z.number().optional().describe("New quantity value"),
-      unit: z.string().optional().describe("New unit"),
+      value: z
+        .number()
+        .optional()
+        .describe("New quantity value (requires unit)"),
+      unit: z.string().optional().describe("New unit (requires value)"),
       productId: z.string().optional().describe("New product ID"),
       locationId: z.string().optional().describe("New location ID"),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const data: Record<string, unknown> = {};
-      if (params.value !== undefined || params.unit !== undefined) {
-        data.amount = {
-          value: (params.value as number) ?? 0,
-          unit: (params.unit as string) ?? "each",
+      // Require both value and unit together to avoid silent defaults
+      if (params.value !== undefined && params.unit !== undefined) {
+        data.amount = { value: params.value, unit: params.unit };
+      } else if (params.value !== undefined || params.unit !== undefined) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Both value and unit must be provided together when updating amount.",
+            },
+          ],
+          isError: true,
         };
       }
       if (params.productId !== undefined) data.productId = params.productId;
@@ -290,11 +317,8 @@ function registerTools(server: McpServer) {
       manufacturer: z.string().optional().describe("Filter by manufacturer"),
       upc: z.string().optional().describe("Filter by UPC code"),
       category: z.string().optional().describe("Filter by category"),
-      pageIndex: z
-        .number()
-        .optional()
-        .describe("Page index, 0-based (default 0)"),
-      pageSize: z.number().optional().describe("Items per page (default 50)"),
+      pageIndex,
+      pageSize,
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
@@ -307,8 +331,8 @@ function registerTools(server: McpServer) {
         },
         sort: { orderBy: "name", direction: "asc" },
         pagination: {
-          pageIndex: (params.pageIndex as number) ?? 0,
-          pageSize: (params.pageSize as number) ?? 50,
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 50,
         },
       });
       return json({
@@ -421,13 +445,26 @@ function registerTools(server: McpServer) {
   server.tool(
     "list_locations",
     "List all locations with optional name filter. Use to resolve location names to IDs.",
-    { nameFilter: z.string().optional().describe("Filter by location name") },
+    {
+      nameFilter: z.string().optional().describe("Filter by location name"),
+      pageIndex,
+      pageSize: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe("Items per page (default 200, max 200)"),
+    },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.location.list({
         filters: { nameFilter: params.nameFilter },
         sort: { orderBy: "name", direction: "asc" },
-        pagination: { pageIndex: 0, pageSize: 200 },
+        pagination: {
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 200,
+        },
       });
       return json({
         totalCount: result.meta.totalCount,
@@ -449,6 +486,64 @@ function registerTools(server: McpServer) {
     }),
   );
 
+  server.tool(
+    "create_location",
+    "Create a new location. Use list_locations to find a parent location ID.",
+    {
+      name: z.string().describe("Location name"),
+      type: z
+        .string()
+        .optional()
+        .describe("Location type (e.g. 'room', 'shelf', 'drawer', 'box')"),
+      parentId: z
+        .string()
+        .optional()
+        .describe("Parent location ID for nesting"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.location.create({
+        name: params.name,
+        type: params.type,
+        parentId: params.parentId,
+      });
+      return json(slimLocation(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "update_location",
+    "Update a location's name, type, or parent.",
+    {
+      id: z.string().describe("Location ID"),
+      name: z.string().optional().describe("New name"),
+      type: z.string().optional().describe("New type"),
+      parentId: z.string().optional().describe("New parent location ID"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const { id, ...data } = params;
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([, v]) => v !== undefined),
+      );
+      const result = await caller.location.update({ id, data: cleanData });
+      return json(slimLocation(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "delete_locations",
+    "Soft-delete locations by IDs. Fails if locations have inventory entries.",
+    {
+      ids: z.array(z.string()).describe("Array of location IDs to delete"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      await caller.location.delete({ ids: params.ids });
+      return json({ deleted: (params.ids as string[]).length });
+    }),
+  );
+
   // ---------------------------------------------------------------------------
   // Search tools
   // ---------------------------------------------------------------------------
@@ -458,13 +553,19 @@ function registerTools(server: McpServer) {
     "Search across all entities (products, locations, inventory, recipes).",
     {
       query: z.string().describe("Search query"),
-      limit: z.number().optional().describe("Max results (default 10)"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe("Max results (default 10, max 50)"),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);
       const result = await caller.search.global({
         query: params.query,
-        limit: (params.limit as number) ?? 10,
+        limit: params.limit ?? 10,
       });
       return json(result);
     }),

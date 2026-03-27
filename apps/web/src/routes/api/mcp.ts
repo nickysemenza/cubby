@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+// Dynamic imports: static imports of the MCP SDK cause the entire server to
+// crash during Vite HMR. Deferring to request time isolates the failure.
 async function handler({ request }: { request: Request }) {
   try {
     const { handleMcpRequest } = await import("~/server/mcp/server");
@@ -42,7 +44,7 @@ async function handler({ request }: { request: Request }) {
     });
   } catch (error) {
     console.error("[MCP] Error:", error);
-    return new Response(JSON.stringify({ error: String(error) }), {
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });
@@ -54,7 +56,6 @@ export const Route = createFileRoute("/api/mcp")({
     handlers: {
       GET: handler,
       POST: handler,
-      DELETE: handler,
     },
   },
 });
