@@ -17,6 +17,7 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       enableSessionForAPIKeys: true,
+      rateLimit: { enabled: false },
     }),
     tanstackStartCookies(), // Must be last
   ],

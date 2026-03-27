@@ -1,5 +1,12 @@
 {
   "mcpServers": {
+    "cubby": {
+      "type": "http",
+      "url": "http://localhost:3000/api/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    },
     "postgres": {
       "command": "npx",
       "args": [

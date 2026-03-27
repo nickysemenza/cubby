@@ -113,6 +113,7 @@ export function Provider({
         navigate={(href) => navigate({ to: href })}
         replace={(href) => navigate({ to: href, replace: true })}
         Link={Link}
+        apiKey
       >
         <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
           {children}

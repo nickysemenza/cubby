@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as ApiPanelRouteImport } from './routes/api/panel'
+import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
@@ -75,6 +76,11 @@ const AuthAuthViewRoute = AuthAuthViewRouteImport.update({
 const ApiPanelRoute = ApiPanelRouteImport.update({
   id: '/api/panel',
   path: '/api/panel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
@@ -300,6 +306,7 @@ export interface FileRoutesByFullPath {
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
@@ -344,6 +351,7 @@ export interface FileRoutesByTo {
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
@@ -390,6 +398,7 @@ export interface FileRoutesById {
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
+  '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
@@ -436,6 +445,7 @@ export interface FileRouteTypes {
     | '/labels'
     | '/pantry-view'
     | '/problems'
+    | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
@@ -480,6 +490,7 @@ export interface FileRouteTypes {
     | '/labels'
     | '/pantry-view'
     | '/problems'
+    | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
@@ -525,6 +536,7 @@ export interface FileRouteTypes {
     | '/_authenticated/labels'
     | '/_authenticated/pantry-view'
     | '/_authenticated/problems'
+    | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
     | '/_authenticated/account/$accountView'
@@ -564,6 +576,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   DocsRoute: typeof DocsRoute
+  ApiMcpRoute: typeof ApiMcpRoute
   ApiPanelRoute: typeof ApiPanelRoute
   AuthAuthViewRoute: typeof AuthAuthViewRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -606,6 +619,13 @@ declare module '@tanstack/react-router' {
       path: '/api/panel'
       fullPath: '/api/panel'
       preLoaderRoute: typeof ApiPanelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/problems': {
@@ -962,6 +982,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   DocsRoute: DocsRoute,
+  ApiMcpRoute: ApiMcpRoute,
   ApiPanelRoute: ApiPanelRoute,
   AuthAuthViewRoute: AuthAuthViewRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

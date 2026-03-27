@@ -67,3 +67,6 @@ certificates
 .playwright-mcp/
 
 .worktrees/
+
+# MCP config (contains API keys)
+.mcp.json
