@@ -12,8 +12,12 @@ import {
 } from "~/components/ui/card";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
+import { CategoryTreemap } from "./charts/category-treemap";
+import { CategoryTrend } from "./charts/category-trend";
 import { PurchaseDonut } from "./charts/purchase-donut";
+import { SpendingOverTime } from "./charts/spending-over-time";
 import { SubcategoryBars } from "./charts/subcategory-bars";
+import { TaskCalendar } from "./charts/task-calendar";
 import { formatDateRange, PurchaseList, StatusIcon, TaskList } from "./shared";
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
@@ -110,7 +114,20 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         purchaseCount={purchases.length}
       />
 
-      {/* Charts */}
+      {/* Spending over time */}
+      {purchases.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-heading font-semibold text-lg">
+            Spending Over Time
+          </h2>
+          <SpendingOverTime
+            purchases={purchases}
+            costEstimate={project.costEstimate}
+          />
+        </section>
+      )}
+
+      {/* Category breakdown charts */}
       {purchases.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="space-y-3">
@@ -126,6 +143,32 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
             <SubcategoryBars purchases={purchases} />
           </section>
         </div>
+      )}
+
+      {/* Category treemap + trend */}
+      {purchases.length > 0 && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="space-y-3">
+            <h2 className="font-heading font-semibold text-lg">
+              Category Treemap
+            </h2>
+            <CategoryTreemap purchases={purchases} />
+          </section>
+          <section className="space-y-3">
+            <h2 className="font-heading font-semibold text-lg">
+              Category Trend
+            </h2>
+            <CategoryTrend purchases={purchases} />
+          </section>
+        </div>
+      )}
+
+      {/* Task calendar */}
+      {tasks.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-heading font-semibold text-lg">Task Timeline</h2>
+          <TaskCalendar tasks={tasks} />
+        </section>
       )}
 
       {/* Tasks */}
