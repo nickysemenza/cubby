@@ -16,6 +16,13 @@ import type {
   NotionTask,
 } from "~/server/clients/notion";
 import { useTRPC } from "~/trpc/react";
+import { AllCategoryDonut } from "./charts/all-category-donut";
+import { BudgetHealth } from "./charts/budget-health";
+import { CostVsEstimate } from "./charts/cost-vs-estimate";
+import { MonthlyTrend } from "./charts/monthly-trend";
+import { ProjectTimeline } from "./charts/project-timeline";
+import { SpendingByProject } from "./charts/spending-by-project";
+import { SpendingHeatmap } from "./charts/spending-heatmap";
 import { formatDateRange, PurchaseList, StatusIcon, TaskList } from "./shared";
 
 export function ProjectsDashboard() {
@@ -58,6 +65,58 @@ export function ProjectsDashboard() {
       </div>
 
       <SummaryCards projects={projects} tasks={tasks} purchases={purchases} />
+
+      {/* Charts */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-3">
+          <h2 className="font-heading font-semibold text-lg">
+            Cost vs Estimate
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            Projects with both spending and an estimate
+          </p>
+          <CostVsEstimate projects={projects} purchases={purchases} />
+        </section>
+        <section className="space-y-3">
+          <h2 className="font-heading font-semibold text-lg">Budget Health</h2>
+          <p className="text-muted-foreground text-xs">
+            Top 12 projects by % of estimate spent
+          </p>
+          <BudgetHealth projects={projects} purchases={purchases} />
+        </section>
+      </div>
+
+      <section className="space-y-3">
+        <h2 className="font-heading font-semibold text-lg">
+          Top 10 Projects by Spending
+        </h2>
+        <SpendingByProject purchases={purchases} />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-heading font-semibold text-lg">Project Timeline</h2>
+        <ProjectTimeline projects={projects} />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-heading font-semibold text-lg">
+          Monthly Spending Trend
+        </h2>
+        <MonthlyTrend purchases={purchases} />
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="space-y-3">
+          <h2 className="font-heading font-semibold text-lg">Category Split</h2>
+          <AllCategoryDonut purchases={purchases} />
+        </section>
+        <section className="space-y-3">
+          <h2 className="font-heading font-semibold text-lg">
+            Spending Heatmap
+          </h2>
+          <SpendingHeatmap purchases={purchases} />
+        </section>
+      </div>
 
       <section className="space-y-4">
         <h2 className="font-heading font-semibold text-xl">Active Projects</h2>
