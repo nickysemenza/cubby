@@ -27,6 +27,7 @@ import { ZodError } from "zod";
 import { env } from "~/env";
 import { auth as betterAuth } from "~/lib/auth";
 import { getErrorMessage } from "~/lib/error-utils";
+import { NotionClient } from "~/server/clients/notion";
 import { UPCLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -56,6 +57,9 @@ const mapProductToTopLevelOut = (
  * Helper function to build crud services for both production and test contexts
  */
 const buildCrudServices = (db: Database) => {
+  const notionClient = env.NOTION_API_KEY
+    ? new NotionClient(env.NOTION_API_KEY)
+    : null;
   const usdaClient = new USDAClient(env.USDA_API_URL);
   const upcLookupClient = new UPCLookupClient(
     env.UPC_LOOKUP_API_URL,
@@ -72,6 +76,7 @@ const buildCrudServices = (db: Database) => {
 
   return {
     db,
+    notionClient,
     usdaClient,
     upcLookupClient,
     usdaService,

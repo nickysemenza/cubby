@@ -2,6 +2,7 @@ import {
   Activity,
   AlertTriangle,
   ExternalLink,
+  Hammer,
   Home,
   LayoutDashboard,
   ScanBarcode,
@@ -117,6 +118,13 @@ const images: NavItem = {
   isActive: (p) => p.startsWith("/images"),
 };
 
+const projects: NavItem = {
+  href: "/projects",
+  label: "Projects",
+  icon: Hammer,
+  isActive: (p) => p.startsWith("/projects"),
+};
+
 const apiPanel: NavItem = {
   href: "/api/panel",
   label: "API Panel",
@@ -138,6 +146,7 @@ export const moreNavItems: NavItem[] = [
   products,
   ingredients,
   usda,
+  projects,
   dashboard,
   activity,
   insights,

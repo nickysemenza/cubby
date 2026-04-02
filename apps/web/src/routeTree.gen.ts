@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as ApiPanelRouteImport } from './routes/api/panel'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
+import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
@@ -82,6 +83,11 @@ const ApiMcpRoute = ApiMcpRouteImport.update({
   id: '/api/mcp',
   path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
+  id: '/projects',
+  path: '/projects',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
   id: '/problems',
@@ -306,6 +312,7 @@ export interface FileRoutesByFullPath {
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/projects': typeof AuthenticatedProjectsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -398,6 +406,7 @@ export interface FileRoutesById {
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
+  '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -445,6 +454,7 @@ export interface FileRouteTypes {
     | '/labels'
     | '/pantry-view'
     | '/problems'
+    | '/projects'
     | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
@@ -490,6 +500,7 @@ export interface FileRouteTypes {
     | '/labels'
     | '/pantry-view'
     | '/problems'
+    | '/projects'
     | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
@@ -536,6 +547,7 @@ export interface FileRouteTypes {
     | '/_authenticated/labels'
     | '/_authenticated/pantry-view'
     | '/_authenticated/problems'
+    | '/_authenticated/projects'
     | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
@@ -627,6 +639,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/mcp'
       preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/projects': {
+      id: '/_authenticated/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/problems': {
       id: '/_authenticated/problems'
@@ -905,6 +924,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
+  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
@@ -943,6 +963,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
+  AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
