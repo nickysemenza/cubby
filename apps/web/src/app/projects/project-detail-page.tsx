@@ -18,6 +18,7 @@ import { PurchaseDonut } from "./charts/purchase-donut";
 import { SpendingOverTime } from "./charts/spending-over-time";
 import { SubcategoryBars } from "./charts/subcategory-bars";
 import { TaskCalendar } from "./charts/task-calendar";
+import { NotionPageContent } from "./notion-content";
 import { formatDateRange, PurchaseList, StatusIcon, TaskList } from "./shared";
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
@@ -62,6 +63,16 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-8">
+      {/* Cover image */}
+      {project.coverImage && (
+        <img
+          src={project.coverImage}
+          alt=""
+          className="-mx-4 -mt-4 mb-0 h-48 w-[calc(100%+2rem)] rounded-t-lg object-cover sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]"
+          loading="lazy"
+        />
+      )}
+
       {/* Header */}
       <div className="space-y-3">
         <Link
@@ -74,7 +85,10 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
 
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
-            <h1 className="font-bold font-heading text-3xl">{project.name}</h1>
+            <h1 className="font-bold font-heading text-3xl">
+              {project.icon && `${project.icon} `}
+              {project.name}
+            </h1>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="gap-1">
                 <StatusIcon status={project.status} />
@@ -185,6 +199,12 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
           Purchases ({purchases.length})
         </h2>
         <PurchaseList purchases={purchases} />
+      </section>
+
+      {/* Notion page content */}
+      <section className="space-y-4">
+        <h2 className="font-heading font-semibold text-xl">Notes</h2>
+        <NotionPageContent pageId={project.id} />
       </section>
     </div>
   );

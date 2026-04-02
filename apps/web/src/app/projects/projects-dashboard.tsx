@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -23,6 +24,13 @@ import { MonthlyTrend } from "./charts/monthly-trend";
 import { ProjectTimeline } from "./charts/project-timeline";
 import { SpendingByProject } from "./charts/spending-by-project";
 import { SpendingHeatmap } from "./charts/spending-heatmap";
+import { TaskStatusBoard } from "./charts/task-status-board";
+import {
+  DashboardFilters,
+  emptyFilters,
+  type Filters,
+} from "./dashboard-filters";
+import { NeedsAttention } from "./needs-attention";
 import { formatDateRange, PurchaseList, StatusIcon, TaskList } from "./shared";
 
 export function ProjectsDashboard() {
@@ -31,6 +39,7 @@ export function ProjectsDashboard() {
     ...api.notion.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
   });
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -55,7 +64,76 @@ export function ProjectsDashboard() {
     );
   }
 
-  const { projects, tasks, purchases } = data;
+  return (
+    <DashboardContent
+      data={data}
+      filters={filters}
+      onFiltersChange={setFilters}
+    />
+  );
+}
+
+function DashboardContent({
+  data,
+  filters,
+  onFiltersChange,
+}: {
+  data: {
+    projects: NotionProject[];
+    tasks: NotionTask[];
+    purchases: NotionPurchase[];
+  };
+  filters: Filters;
+  onFiltersChange: (f: Filters) => void;
+}) {
+  // Extract available filter options
+  const availableStatuses = useMemo(
+    () =>
+      Array.from(
+        new Set(data.projects.map((p) => p.status).filter(Boolean)),
+      ) as string[],
+    [data.projects],
+  );
+  const availableKinds = useMemo(
+    () =>
+      Array.from(
+        new Set(data.projects.map((p) => p.kind).filter(Boolean)),
+      ) as string[],
+    [data.projects],
+  );
+  const availableLocations = useMemo(
+    () => Array.from(new Set(data.projects.flatMap((p) => p.location))),
+    [data.projects],
+  );
+
+  // Apply filters
+  const { projects, tasks, purchases } = useMemo(() => {
+    let projects = data.projects;
+
+    if (filters.statuses.size > 0) {
+      projects = projects.filter(
+        (p) => p.status && filters.statuses.has(p.status),
+      );
+    }
+    if (filters.kinds.size > 0) {
+      projects = projects.filter((p) => p.kind && filters.kinds.has(p.kind));
+    }
+    if (filters.locations.size > 0) {
+      projects = projects.filter((p) =>
+        p.location.some((l) => filters.locations.has(l)),
+      );
+    }
+
+    const projectNames = new Set(projects.map((p) => p.name));
+    const tasks = data.tasks.filter(
+      (t) => !t.projectName || projectNames.has(t.projectName),
+    );
+    const purchases = data.purchases.filter(
+      (p) => !p.projectName || projectNames.has(p.projectName),
+    );
+
+    return { projects, tasks, purchases };
+  }, [data, filters]);
 
   return (
     <div className="space-y-8">
@@ -65,6 +143,16 @@ export function ProjectsDashboard() {
       </div>
 
       <SummaryCards projects={projects} tasks={tasks} purchases={purchases} />
+
+      <DashboardFilters
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        availableStatuses={availableStatuses}
+        availableKinds={availableKinds}
+        availableLocations={availableLocations}
+      />
+
+      <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
 
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -90,7 +178,7 @@ export function ProjectsDashboard() {
         <h2 className="font-heading font-semibold text-lg">
           Top 10 Projects by Spending
         </h2>
-        <SpendingByProject purchases={purchases} />
+        <SpendingByProject purchases={purchases} projects={projects} />
       </section>
 
       <section className="space-y-3">
@@ -117,6 +205,16 @@ export function ProjectsDashboard() {
           <SpendingHeatmap purchases={purchases} />
         </section>
       </div>
+
+      <section className="space-y-3">
+        <h2 className="font-heading font-semibold text-lg">
+          Task Status Board
+        </h2>
+        <p className="text-muted-foreground text-xs">
+          Top 15 projects, sorted by date
+        </p>
+        <TaskStatusBoard tasks={tasks} projects={projects} />
+      </section>
 
       <section className="space-y-4">
         <h2 className="font-heading font-semibold text-xl">Active Projects</h2>
@@ -251,9 +349,21 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
 function ProjectCard({ project }: { project: NotionProject }) {
   return (
     <Link to="/projects/$id" params={{ id: project.id }} className="block">
-      <Card size="sm" className="transition-colors hover:bg-muted/50">
+      <Card
+        size="sm"
+        className="overflow-hidden transition-colors hover:bg-muted/50"
+      >
+        {project.coverImage && (
+          <img
+            src={project.coverImage}
+            alt=""
+            className="h-32 w-full object-cover"
+            loading="lazy"
+          />
+        )}
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
+            {project.icon && <span>{project.icon}</span>}
             <span className="truncate">{project.name}</span>
             <a
               href={project.notionUrl}

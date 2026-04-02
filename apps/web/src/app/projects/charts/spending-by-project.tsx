@@ -1,27 +1,35 @@
 import { ResponsiveBar } from "@nivo/bar";
+import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
+import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 
 export function SpendingByProject({
   purchases,
+  projects,
 }: {
   purchases: NotionPurchase[];
+  projects: NotionProject[];
 }) {
-  const data = useMemo(() => {
+  const navigate = useNavigate();
+
+  const { data, projectIdMap } = useMemo(() => {
+    const nameToId = new Map(projects.map((p) => [p.name, p.id]));
     const byProject = new Map<string, number>();
     for (const p of purchases) {
       const name = p.projectName ?? "Unassigned";
       byProject.set(name, (byProject.get(name) ?? 0) + (p.cost ?? 0));
     }
 
-    return Array.from(byProject.entries())
+    const data = Array.from(byProject.entries())
       .filter(([, v]) => v > 0)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 10)
       .reverse()
       .map(([project, cost]) => ({ project, cost }));
-  }, [purchases]);
+
+    return { data, projectIdMap: nameToId };
+  }, [purchases, projects]);
 
   if (data.length === 0) {
     return <p className="text-muted-foreground text-sm">No spending data.</p>;
@@ -54,6 +62,10 @@ export function SpendingByProject({
         labelTextColor="white"
         enableGridX
         enableGridY={false}
+        onClick={(bar) => {
+          const id = projectIdMap.get(bar.indexValue as string);
+          if (id) navigate({ to: "/projects/$id", params: { id } });
+        }}
         tooltip={({ indexValue, value }) => (
           <div className="rounded-md bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-border">
             <strong>{indexValue}</strong>: {formatCurrency(value, 0)}
