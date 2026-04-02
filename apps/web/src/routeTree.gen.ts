@@ -15,7 +15,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthAuthViewRouteImport } from './routes/auth.$authView'
 import { Route as ApiPanelRouteImport } from './routes/api/panel'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
-import { Route as AuthenticatedProjectsRouteImport } from './routes/_authenticated/projects'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
@@ -26,6 +25,7 @@ import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authentica
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
 import { Route as AuthenticatedSearchIndexRouteImport } from './routes/_authenticated/search.index'
 import { Route as AuthenticatedRecipesIndexRouteImport } from './routes/_authenticated/recipes.index'
+import { Route as AuthenticatedProjectsIndexRouteImport } from './routes/_authenticated/projects.index'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
 import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
@@ -38,6 +38,7 @@ import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
+import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
 import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
@@ -83,11 +84,6 @@ const ApiMcpRoute = ApiMcpRouteImport.update({
   id: '/api/mcp',
   path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedProjectsRoute = AuthenticatedProjectsRouteImport.update({
-  id: '/projects',
-  path: '/projects',
-  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
   id: '/problems',
@@ -139,6 +135,12 @@ const AuthenticatedRecipesIndexRoute =
   AuthenticatedRecipesIndexRouteImport.update({
     id: '/recipes/',
     path: '/recipes/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProjectsIndexRoute =
+  AuthenticatedProjectsIndexRouteImport.update({
+    id: '/projects/',
+    path: '/projects/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProductsIndexRoute =
@@ -205,6 +207,11 @@ const AuthenticatedRecipesCompareRoute =
 const AuthenticatedRecipesIdRoute = AuthenticatedRecipesIdRouteImport.update({
   id: '/recipes/$id',
   path: '/recipes/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedProjectsIdRoute = AuthenticatedProjectsIdRouteImport.update({
+  id: '/projects/$id',
+  path: '/projects/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedProductsNewRoute =
@@ -312,7 +319,6 @@ export interface FileRoutesByFullPath {
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
-  '/projects': typeof AuthenticatedProjectsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -330,6 +336,7 @@ export interface FileRoutesByFullPath {
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
+  '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
@@ -342,6 +349,7 @@ export interface FileRoutesByFullPath {
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/locations/': typeof AuthenticatedLocationsIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
+  '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/search/': typeof AuthenticatedSearchIndexRoute
   '/usda/': typeof AuthenticatedUsdaIndexRoute
@@ -358,7 +366,6 @@ export interface FileRoutesByTo {
   '/labels': typeof AuthenticatedLabelsRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
-  '/projects': typeof AuthenticatedProjectsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -376,6 +383,7 @@ export interface FileRoutesByTo {
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
+  '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
@@ -388,6 +396,7 @@ export interface FileRoutesByTo {
   '/inventory': typeof AuthenticatedInventoryIndexRoute
   '/locations': typeof AuthenticatedLocationsIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
+  '/projects': typeof AuthenticatedProjectsIndexRoute
   '/recipes': typeof AuthenticatedRecipesIndexRoute
   '/search': typeof AuthenticatedSearchIndexRoute
   '/usda': typeof AuthenticatedUsdaIndexRoute
@@ -406,7 +415,6 @@ export interface FileRoutesById {
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
-  '/_authenticated/projects': typeof AuthenticatedProjectsRoute
   '/api/mcp': typeof ApiMcpRoute
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
@@ -424,6 +432,7 @@ export interface FileRoutesById {
   '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
   '/_authenticated/products/$id': typeof AuthenticatedProductsIdRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
+  '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
@@ -436,6 +445,7 @@ export interface FileRoutesById {
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/_authenticated/locations/': typeof AuthenticatedLocationsIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
+  '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/_authenticated/recipes/': typeof AuthenticatedRecipesIndexRoute
   '/_authenticated/search/': typeof AuthenticatedSearchIndexRoute
   '/_authenticated/usda/': typeof AuthenticatedUsdaIndexRoute
@@ -454,7 +464,6 @@ export interface FileRouteTypes {
     | '/labels'
     | '/pantry-view'
     | '/problems'
-    | '/projects'
     | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
@@ -472,6 +481,7 @@ export interface FileRouteTypes {
     | '/locations/validate'
     | '/products/$id'
     | '/products/new'
+    | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
@@ -484,6 +494,7 @@ export interface FileRouteTypes {
     | '/inventory/'
     | '/locations/'
     | '/products/'
+    | '/projects/'
     | '/recipes/'
     | '/search/'
     | '/usda/'
@@ -500,7 +511,6 @@ export interface FileRouteTypes {
     | '/labels'
     | '/pantry-view'
     | '/problems'
-    | '/projects'
     | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
@@ -518,6 +528,7 @@ export interface FileRouteTypes {
     | '/locations/validate'
     | '/products/$id'
     | '/products/new'
+    | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
     | '/recipes/new'
@@ -530,6 +541,7 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/locations'
     | '/products'
+    | '/projects'
     | '/recipes'
     | '/search'
     | '/usda'
@@ -547,7 +559,6 @@ export interface FileRouteTypes {
     | '/_authenticated/labels'
     | '/_authenticated/pantry-view'
     | '/_authenticated/problems'
-    | '/_authenticated/projects'
     | '/api/mcp'
     | '/api/panel'
     | '/auth/$authView'
@@ -565,6 +576,7 @@ export interface FileRouteTypes {
     | '/_authenticated/locations/validate'
     | '/_authenticated/products/$id'
     | '/_authenticated/products/new'
+    | '/_authenticated/projects/$id'
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
     | '/_authenticated/recipes/new'
@@ -577,6 +589,7 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/'
     | '/_authenticated/locations/'
     | '/_authenticated/products/'
+    | '/_authenticated/projects/'
     | '/_authenticated/recipes/'
     | '/_authenticated/search/'
     | '/_authenticated/usda/'
@@ -639,13 +652,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/mcp'
       preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/projects': {
-      id: '/_authenticated/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof AuthenticatedProjectsRouteImport
-      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/problems': {
       id: '/_authenticated/problems'
@@ -715,6 +721,13 @@ declare module '@tanstack/react-router' {
       path: '/recipes'
       fullPath: '/recipes/'
       preLoaderRoute: typeof AuthenticatedRecipesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/': {
+      id: '/_authenticated/projects/'
+      path: '/projects'
+      fullPath: '/projects/'
+      preLoaderRoute: typeof AuthenticatedProjectsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/': {
@@ -799,6 +812,13 @@ declare module '@tanstack/react-router' {
       path: '/recipes/$id'
       fullPath: '/recipes/$id'
       preLoaderRoute: typeof AuthenticatedRecipesIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/projects/$id': {
+      id: '/_authenticated/projects/$id'
+      path: '/projects/$id'
+      fullPath: '/projects/$id'
+      preLoaderRoute: typeof AuthenticatedProjectsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/new': {
@@ -924,7 +944,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
-  AuthenticatedProjectsRoute: typeof AuthenticatedProjectsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
@@ -939,6 +958,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
   AuthenticatedProductsIdRoute: typeof AuthenticatedProductsIdRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
+  AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
@@ -948,6 +968,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
   AuthenticatedLocationsIndexRoute: typeof AuthenticatedLocationsIndexRoute
   AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
+  AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
   AuthenticatedRecipesIndexRoute: typeof AuthenticatedRecipesIndexRoute
   AuthenticatedSearchIndexRoute: typeof AuthenticatedSearchIndexRoute
   AuthenticatedUsdaIndexRoute: typeof AuthenticatedUsdaIndexRoute
@@ -963,7 +984,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
-  AuthenticatedProjectsRoute: AuthenticatedProjectsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
@@ -979,6 +999,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,
   AuthenticatedProductsIdRoute: AuthenticatedProductsIdRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
+  AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
   AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
@@ -988,6 +1009,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
   AuthenticatedLocationsIndexRoute: AuthenticatedLocationsIndexRoute,
   AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
+  AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
   AuthenticatedRecipesIndexRoute: AuthenticatedRecipesIndexRoute,
   AuthenticatedSearchIndexRoute: AuthenticatedSearchIndexRoute,
   AuthenticatedUsdaIndexRoute: AuthenticatedUsdaIndexRoute,

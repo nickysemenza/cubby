@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { ProjectsDashboard } from "~/app/projects/projects-dashboard";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 
-export const Route = createFileRoute("/_authenticated/projects")({
+export const Route = createFileRoute("/_authenticated/projects/")({
   component: ProjectsPage,
   head: () => ({ meta: [{ title: "Projects | cubby" }] }),
 });

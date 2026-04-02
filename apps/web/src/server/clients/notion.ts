@@ -19,6 +19,7 @@ export type NotionProject = {
   location: string[];
   costEstimate: number | null;
   date: string | null;
+  dateEnd: string | null;
   notionUrl: string;
 };
 
@@ -88,6 +89,13 @@ function getNumber(prop: PropertyValue | undefined): number | null {
 function getDateStart(prop: PropertyValue | undefined): string | null {
   if (prop?.type === "date") {
     return prop.date?.start ?? null;
+  }
+  return null;
+}
+
+function getDateEnd(prop: PropertyValue | undefined): string | null {
+  if (prop?.type === "date") {
+    return prop.date?.end ?? null;
   }
   return null;
 }
@@ -167,6 +175,7 @@ export class NotionClient {
         location: getMultiSelect(p["location"]),
         costEstimate: getNumber(p["cost estimate"]),
         date: getDateStart(p["Date"]),
+        dateEnd: getDateEnd(p["Date"]),
         notionUrl: getPageUrl(page),
       };
     });
