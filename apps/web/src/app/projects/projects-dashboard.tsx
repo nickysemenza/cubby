@@ -25,6 +25,7 @@ import { MonthlyTrend } from "./charts/monthly-trend";
 import { ProjectTimeline } from "./charts/project-timeline";
 import { SpendingByProject } from "./charts/spending-by-project";
 import { SpendingHeatmap } from "./charts/spending-heatmap";
+import { TaskHeatmap } from "./charts/task-heatmap";
 import { TaskStatusBoard } from "./charts/task-status-board";
 import {
   DashboardFilters,
@@ -32,7 +33,13 @@ import {
   type Filters,
 } from "./dashboard-filters";
 import { NeedsAttention } from "./needs-attention";
-import { formatDateRange, PurchaseList, StatusIcon, TaskList } from "./shared";
+import {
+  formatDateRange,
+  ProjectTable,
+  PurchaseList,
+  StatusIcon,
+  TaskList,
+} from "./shared";
 
 export function ProjectsDashboard() {
   const api = useTRPC();
@@ -218,6 +225,14 @@ function DashboardContent({
       </div>
 
       <section className="space-y-3">
+        <h2 className="font-heading font-semibold text-lg">Task Heatmap</h2>
+        <p className="text-muted-foreground text-xs">
+          Task due dates across all projects
+        </p>
+        <TaskHeatmap tasks={tasks} />
+      </section>
+
+      <section className="space-y-3">
         <h2 className="font-heading font-semibold text-lg">
           Task Status Board
         </h2>
@@ -228,7 +243,12 @@ function DashboardContent({
       </section>
 
       <section className="space-y-4">
-        <h2 className="font-heading font-semibold text-xl">Active Projects</h2>
+        <h2 className="font-heading font-semibold text-xl">All Projects</h2>
+        <ProjectTable projects={projects} purchases={purchases} />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="font-heading font-semibold text-xl">Project Gallery</h2>
         <ProjectCards projects={projects} />
       </section>
 

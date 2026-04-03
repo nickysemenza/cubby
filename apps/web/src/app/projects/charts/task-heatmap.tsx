@@ -1,24 +1,19 @@
 import { ResponsiveCalendar } from "@nivo/calendar";
 import { useMemo, useState } from "react";
-import { formatCurrency } from "~/lib/utils";
-import type { NotionPurchase } from "~/server/clients/notion";
-import { formatDate } from "../shared";
+import type { NotionTask } from "~/server/clients/notion";
+import { formatDate, StatusIcon } from "../shared";
 
-export function SpendingHeatmap({
-  purchases,
-}: {
-  purchases: NotionPurchase[];
-}) {
+export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const { data, from, to, itemsByDay } = useMemo(() => {
     const byDay = new Map<string, number>();
-    const itemsByDay = new Map<string, NotionPurchase[]>();
-    for (const p of purchases) {
-      if (!p.date || !p.cost) continue;
-      byDay.set(p.date, (byDay.get(p.date) ?? 0) + p.cost);
-      if (!itemsByDay.has(p.date)) itemsByDay.set(p.date, []);
-      itemsByDay.get(p.date)!.push(p);
+    const itemsByDay = new Map<string, NotionTask[]>();
+    for (const t of tasks) {
+      if (!t.due) continue;
+      byDay.set(t.due, (byDay.get(t.due) ?? 0) + 1);
+      if (!itemsByDay.has(t.due)) itemsByDay.set(t.due, []);
+      itemsByDay.get(t.due)!.push(t);
     }
 
     const data = Array.from(byDay.entries()).map(([day, value]) => ({
@@ -31,16 +26,18 @@ export function SpendingHeatmap({
 
     const dates = data.map((d) => d.day).sort();
     return { data, from: dates[0], to: dates[dates.length - 1], itemsByDay };
-  }, [purchases]);
+  }, [tasks]);
 
   if (data.length === 0) {
-    return <p className="text-muted-foreground text-sm">No dated purchases.</p>;
+    return (
+      <p className="text-muted-foreground text-sm">No tasks with due dates.</p>
+    );
   }
 
   const yearSpan =
     new Date(to).getFullYear() - new Date(from).getFullYear() + 1;
   const chartHeight = Math.max(180, yearSpan * 160);
-  const selectedItems: NotionPurchase[] = selectedDay
+  const selectedItems: NotionTask[] = selectedDay
     ? (itemsByDay.get(selectedDay) ?? [])
     : [];
 
@@ -53,10 +50,10 @@ export function SpendingHeatmap({
           to={to}
           emptyColor="#f0f0f0"
           colors={[
-            "hsl(142, 40%, 80%)",
-            "hsl(142, 45%, 65%)",
-            "hsl(142, 50%, 50%)",
-            "hsl(142, 55%, 35%)",
+            "hsl(210, 50%, 80%)",
+            "hsl(210, 55%, 65%)",
+            "hsl(210, 60%, 50%)",
+            "hsl(210, 65%, 35%)",
           ]}
           margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
           yearSpacing={40}
@@ -70,9 +67,10 @@ export function SpendingHeatmap({
           }}
           tooltip={({ day, value }) => (
             <div className="rounded-md bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-border">
-              <strong>{day}</strong>: {formatCurrency(Number(value), 0)} spent
+              <strong>{day}</strong>: {value} task
+              {Number(value) !== 1 ? "s" : ""} due
               <div className="text-muted-foreground text-xs">
-                Click to see items
+                Click to see tasks
               </div>
             </div>
           )}
@@ -86,14 +84,8 @@ export function SpendingHeatmap({
         <div className="rounded-md border bg-muted/30 p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="font-medium text-sm">
-              {formatDate(selectedDay)} —{" "}
-              {formatCurrency(
-                selectedItems.reduce(
-                  (s: number, p: NotionPurchase) => s + (p.cost ?? 0),
-                  0,
-                ),
-                0,
-              )}
+              {formatDate(selectedDay)} — {selectedItems.length} task
+              {selectedItems.length !== 1 ? "s" : ""}
             </span>
             <button
               type="button"
@@ -104,27 +96,21 @@ export function SpendingHeatmap({
             </button>
           </div>
           <div className="space-y-1">
-            {selectedItems.map((p) => (
+            {selectedItems.map((t) => (
               <a
-                key={p.id}
-                href={p.notionUrl}
+                key={t.id}
+                href={t.notionUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
+                className="flex items-center gap-2 rounded px-2 py-1 text-xs hover:bg-muted"
               >
-                <span className="truncate">{p.name}</span>
-                <div className="flex shrink-0 items-center gap-2">
-                  {p.projectName && (
-                    <span className="text-muted-foreground">
-                      {p.projectName}
-                    </span>
-                  )}
-                  {p.cost != null && (
-                    <span className="font-medium">
-                      {formatCurrency(p.cost, 0)}
-                    </span>
-                  )}
-                </div>
+                <StatusIcon status={t.status} />
+                <span className="truncate">{t.name}</span>
+                {t.projectName && (
+                  <span className="ml-auto shrink-0 text-muted-foreground">
+                    {t.projectName}
+                  </span>
+                )}
               </a>
             ))}
           </div>

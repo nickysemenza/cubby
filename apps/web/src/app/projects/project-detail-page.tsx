@@ -17,7 +17,7 @@ import { CategoryTrend } from "./charts/category-trend";
 import { PurchaseDonut } from "./charts/purchase-donut";
 import { SpendingOverTime } from "./charts/spending-over-time";
 import { SubcategoryBars } from "./charts/subcategory-bars";
-import { TaskCalendar } from "./charts/task-calendar";
+import { TaskHeatmap } from "./charts/task-heatmap";
 import { NotionPageContent } from "./notion-content";
 import { formatDateRange, PurchaseList, StatusIcon, TaskList } from "./shared";
 
@@ -181,7 +181,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
       {tasks.length > 0 && (
         <section className="space-y-3">
           <h2 className="font-heading font-semibold text-lg">Task Timeline</h2>
-          <TaskCalendar tasks={tasks} />
+          <TaskHeatmap tasks={tasks} />
         </section>
       )}
 
