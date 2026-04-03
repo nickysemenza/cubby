@@ -2,6 +2,7 @@ import { ResponsiveLine } from "@nivo/line";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
+import { nivoChartTheme } from "../shared";
 
 export function SpendingOverTime({
   purchases,
@@ -104,18 +105,7 @@ export function SpendingOverTime({
             : []
         }
         theme={{
-          text: { fill: "hsl(var(--foreground))" },
-          axis: {
-            ticks: {
-              text: { fill: "hsl(var(--muted-foreground))", fontSize: 11 },
-            },
-          },
-          grid: {
-            line: { stroke: "hsl(var(--border))", strokeWidth: 1 },
-          },
-          crosshair: {
-            line: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 },
-          },
+          ...nivoChartTheme,
         }}
       />
     </div>

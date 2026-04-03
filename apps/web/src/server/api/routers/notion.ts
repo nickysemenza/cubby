@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 export const notionRouter = createTRPCRouter({
-  dashboard: publicProcedure.query(async ({ ctx }) => {
+  dashboard: protectedProcedure.query(async ({ ctx }) => {
     if (!ctx.notionClient) return null;
 
     const [projects, tasks, purchases] = await Promise.all([
@@ -32,7 +32,7 @@ export const notionRouter = createTRPCRouter({
   }),
 
   /** Separate query for cover images — loaded lazily so dashboard isn't blocked. */
-  projectImages: publicProcedure.query(async ({ ctx }) => {
+  projectImages: protectedProcedure.query(async ({ ctx }) => {
     if (!ctx.notionClient) return {};
 
     const projects = await ctx.notionClient.queryProjects();
@@ -52,7 +52,7 @@ export const notionRouter = createTRPCRouter({
     return allImages;
   }),
 
-  projectContent: publicProcedure
+  projectContent: protectedProcedure
     .input(z.object({ pageId: z.string() }))
     .query(async ({ ctx, input }) => {
       if (!ctx.notionClient) return null;

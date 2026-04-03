@@ -442,7 +442,7 @@ export class NotionClient {
 
   /** Fetch the first image from each project's page content. */
   async getProjectImages(pageIds: string[]): Promise<Record<string, string>> {
-    return this.cachedTrace("projectImages", "getProjectImages", async () => {
+    return this.traced("getProjectImages", async () => {
       const images: Record<string, string> = {};
 
       await Promise.all(
@@ -498,57 +498,61 @@ export class NotionClient {
 
   /** Fetch page content blocks for rendering. */
   async getPageContent(pageId: string): Promise<NotionBlock[]> {
-    return this.traced(`getPageContent(${pageId})`, async () => {
-      const blocks: NotionBlock[] = [];
-      let cursor: string | undefined;
+    return this.cachedTrace(
+      `pageContent:${pageId}`,
+      `getPageContent`,
+      async () => {
+        const blocks: NotionBlock[] = [];
+        let cursor: string | undefined;
 
-      do {
-        const response: ListBlockChildrenResponse =
-          await this.client.blocks.children.list({
-            block_id: pageId,
-            page_size: 100,
-            start_cursor: cursor,
-          });
-
-        for (const block of response.results) {
-          if (!("type" in block)) continue;
-          const typed = block as BlockObjectResponse;
-
-          // Handle column lists by flattening
-          if (typed.type === "column_list" && typed.has_children) {
-            const columns = await this.client.blocks.children.list({
-              block_id: typed.id,
-              page_size: 10,
+        do {
+          const response: ListBlockChildrenResponse =
+            await this.client.blocks.children.list({
+              block_id: pageId,
+              page_size: 100,
+              start_cursor: cursor,
             });
-            const columnChildren: NotionBlock[] = [];
-            for (const col of columns.results) {
-              if (!("type" in col) || !col.has_children) continue;
-              const children = await this.client.blocks.children.list({
-                block_id: col.id,
-                page_size: 50,
+
+          for (const block of response.results) {
+            if (!("type" in block)) continue;
+            const typed = block as BlockObjectResponse;
+
+            // Handle column lists by flattening
+            if (typed.type === "column_list" && typed.has_children) {
+              const columns = await this.client.blocks.children.list({
+                block_id: typed.id,
+                page_size: 10,
               });
-              for (const child of children.results) {
-                if (!("type" in child)) continue;
-                const nb = blockToNotionBlock(child as BlockObjectResponse);
-                if (nb) columnChildren.push(nb);
+              const columnChildren: NotionBlock[] = [];
+              for (const col of columns.results) {
+                if (!("type" in col) || !col.has_children) continue;
+                const children = await this.client.blocks.children.list({
+                  block_id: col.id,
+                  page_size: 50,
+                });
+                for (const child of children.results) {
+                  if (!("type" in child)) continue;
+                  const nb = blockToNotionBlock(child as BlockObjectResponse);
+                  if (nb) columnChildren.push(nb);
+                }
               }
+              if (columnChildren.length > 0) {
+                blocks.push({ type: "columns", children: columnChildren });
+              }
+              continue;
             }
-            if (columnChildren.length > 0) {
-              blocks.push({ type: "columns", children: columnChildren });
-            }
-            continue;
+
+            const nb = blockToNotionBlock(typed);
+            if (nb) blocks.push(nb);
           }
 
-          const nb = blockToNotionBlock(typed);
-          if (nb) blocks.push(nb);
-        }
+          cursor = response.has_more
+            ? (response.next_cursor ?? undefined)
+            : undefined;
+        } while (cursor);
 
-        cursor = response.has_more
-          ? (response.next_cursor ?? undefined)
-          : undefined;
-      } while (cursor);
-
-      return blocks;
-    });
+        return blocks;
+      },
+    );
   }
 }

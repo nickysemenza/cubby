@@ -8,8 +8,6 @@ import type {
 import { ProjectPill } from "./project-pill";
 import { formatDate } from "./shared";
 
-const TODAY = new Date().toISOString().slice(0, 10);
-
 export function NeedsAttention({
   projects,
   tasks,
@@ -25,8 +23,9 @@ export function NeedsAttention({
   );
 
   const { overdueTasks, stalledProjects, missingEstimates } = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
     const overdueTasks = tasks.filter(
-      (t) => t.due && t.due < TODAY && t.status !== "Done",
+      (t) => t.due && t.due < today && t.status !== "Done",
     );
 
     const thirtyDaysAgo = new Date();

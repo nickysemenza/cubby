@@ -12,18 +12,19 @@ import {
 } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { formatCurrency } from "~/lib/utils";
+import { dedupe } from "~/misc/array-helpers";
 import type {
   NotionProject,
   NotionPurchase,
   NotionTask,
 } from "~/server/clients/notion";
 import { useTRPC } from "~/trpc/react";
-import { AllCategoryDonut } from "./charts/all-category-donut";
 import { BudgetHealth } from "./charts/budget-health";
 import { CostVsEstimate } from "./charts/cost-vs-estimate";
 import { DependencyGraph } from "./charts/dependency-graph";
 import { MonthlyTrend } from "./charts/monthly-trend";
 import { ProjectTimeline } from "./charts/project-timeline";
+import { PurchaseDonut } from "./charts/purchase-donut";
 import { SpendingByProject } from "./charts/spending-by-project";
 import { SpendingHeatmap } from "./charts/spending-heatmap";
 import { TaskHeatmap } from "./charts/task-heatmap";
@@ -115,20 +116,15 @@ function DashboardContent({
 }) {
   const availableStatuses = useMemo(
     () =>
-      Array.from(
-        new Set(data.projects.map((p) => p.status).filter(Boolean)),
-      ) as string[],
+      dedupe(data.projects.map((p) => p.status).filter(Boolean) as string[]),
     [data.projects],
   );
   const availableKinds = useMemo(
-    () =>
-      Array.from(
-        new Set(data.projects.map((p) => p.kind).filter(Boolean)),
-      ) as string[],
+    () => dedupe(data.projects.map((p) => p.kind).filter(Boolean) as string[]),
     [data.projects],
   );
   const availableLocations = useMemo(
-    () => Array.from(new Set(data.projects.flatMap((p) => p.location))),
+    () => dedupe(data.projects.flatMap((p) => p.location)),
     [data.projects],
   );
 
@@ -260,7 +256,11 @@ function DashboardContent({
                 <h2 className="font-heading font-semibold text-lg">
                   Category Split
                 </h2>
-                <AllCategoryDonut purchases={purchases} />
+                <PurchaseDonut
+                  purchases={purchases}
+                  height={300}
+                  centerLabel="All projects"
+                />
               </section>
               <section className="space-y-3">
                 <h2 className="font-heading font-semibold text-lg">

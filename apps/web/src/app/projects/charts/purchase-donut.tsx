@@ -11,11 +11,19 @@ type DonutDatum = {
   color: string;
 };
 
-export function PurchaseDonut({ purchases }: { purchases: NotionPurchase[] }) {
+export function PurchaseDonut({
+  purchases,
+  height = 350,
+  centerLabel = "Total cost",
+}: {
+  purchases: NotionPurchase[];
+  height?: number;
+  centerLabel?: string;
+}) {
   const { data, total } = useMemo(() => {
     const byCategory = new Map<string, number>();
     for (const p of purchases) {
-      const cat = p.category ?? "uncategorized";
+      const cat = p.category ?? "other";
       byCategory.set(cat, (byCategory.get(cat) ?? 0) + (p.cost ?? 0));
     }
 
@@ -38,7 +46,7 @@ export function PurchaseDonut({ purchases }: { purchases: NotionPurchase[] }) {
   }
 
   return (
-    <div className="h-[350px]">
+    <div style={{ height }}>
       <ResponsivePie
         data={data}
         colors={(d) => d.data.color}
@@ -84,7 +92,7 @@ export function PurchaseDonut({ purchases }: { purchases: NotionPurchase[] }) {
                 className="text-xs"
                 style={{ fill: "hsl(var(--muted-foreground))" }}
               >
-                Total cost
+                {centerLabel}
               </tspan>
             </text>
           ),

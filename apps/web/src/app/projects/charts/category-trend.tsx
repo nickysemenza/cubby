@@ -2,28 +2,13 @@ import { ResponsiveLine } from "@nivo/line";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
-import { CATEGORY_COLORS } from "../shared";
-
-function normalizeCategoryKey(category: string | null): string {
-  if (!category) return "other";
-  const key = category
-    .replace(/^[^\w]*/, "")
-    .trim()
-    .toLowerCase();
-  if (key in CATEGORY_COLORS) return key;
-  return "other";
-}
-
-function monthKey(dateStr: string): string {
-  // "2025-03-15" → "2025-03"
-  return dateStr.slice(0, 7);
-}
-
-function monthLabel(key: string): string {
-  const [year, month] = key.split("-");
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-}
+import {
+  CATEGORY_COLORS,
+  monthKey,
+  monthLabel,
+  nivoChartTheme,
+  normalizeCategoryKey,
+} from "../shared";
 
 export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
   const data = useMemo(() => {
@@ -129,20 +114,7 @@ export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
             itemTextColor: "hsl(var(--muted-foreground))",
           },
         ]}
-        theme={{
-          text: { fill: "hsl(var(--foreground))" },
-          axis: {
-            ticks: {
-              text: { fill: "hsl(var(--muted-foreground))", fontSize: 11 },
-            },
-          },
-          grid: {
-            line: { stroke: "hsl(var(--border))", strokeWidth: 1 },
-          },
-          crosshair: {
-            line: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 },
-          },
-        }}
+        theme={nivoChartTheme}
       />
     </div>
   );

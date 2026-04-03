@@ -2,33 +2,22 @@ import { ResponsiveBar } from "@nivo/bar";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
-import { CATEGORY_COLORS } from "../shared";
+import {
+  CATEGORY_COLORS,
+  nivoChartTheme,
+  normalizeCategoryKey,
+} from "../shared";
 
 type BarDatum = {
   subcategory: string;
   materials: number;
   tools: number;
   services: number;
-  uncategorized: number;
+  other: number;
   total: number;
 };
 
-const CATEGORY_KEYS = [
-  "materials",
-  "tools",
-  "services",
-  "uncategorized",
-] as const;
-
-function normalizeCategoryKey(category: string | null): string {
-  if (!category) return "uncategorized";
-  const key = category
-    .replace(/^[^\w]*/, "")
-    .trim()
-    .toLowerCase();
-  if (key in CATEGORY_COLORS) return key;
-  return "uncategorized";
-}
+const CATEGORY_KEYS = ["materials", "tools", "services", "other"] as const;
 
 export function SubcategoryBars({
   purchases,
@@ -49,7 +38,7 @@ export function SubcategoryBars({
           materials: 0,
           tools: 0,
           services: 0,
-          uncategorized: 0,
+          other: 0,
         });
       }
       const entry = grouped.get(sub)!;
@@ -119,18 +108,7 @@ export function SubcategoryBars({
             itemTextColor: "hsl(var(--muted-foreground))",
           },
         ]}
-        theme={{
-          text: { fill: "hsl(var(--foreground))" },
-          axis: {
-            ticks: { text: { fill: "hsl(var(--muted-foreground))" } },
-          },
-          grid: {
-            line: { stroke: "hsl(var(--border))", strokeWidth: 1 },
-          },
-          legends: {
-            text: { fill: "hsl(var(--muted-foreground))" },
-          },
-        }}
+        theme={nivoChartTheme}
       />
     </div>
   );

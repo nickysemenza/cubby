@@ -301,7 +301,7 @@ function ForceGraph({
         {linkPositions.map((link, i) => {
           const source = link.source as GraphNode;
           const target = link.target as GraphNode;
-          if (!source.x || !target.x) return null;
+          if (source.x == null || target.x == null) return null;
 
           const dx = target.x - source.x;
           const dy = (target.y ?? 0) - (source.y ?? 0);

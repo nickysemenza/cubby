@@ -2,8 +2,8 @@ import { ResponsiveLine } from "@nivo/line";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
+import { monthKey, monthLabel, nivoChartTheme } from "../shared";
 
-// Deterministic color palette for projects
 const PROJECT_COLORS = [
   "hsl(210, 60%, 55%)",
   "hsl(330, 55%, 55%)",
@@ -14,16 +14,6 @@ const PROJECT_COLORS = [
   "hsl(45, 70%, 50%)",
   "hsl(0, 55%, 50%)",
 ];
-
-function monthKey(dateStr: string): string {
-  return dateStr.slice(0, 7);
-}
-
-function monthLabel(key: string): string {
-  const [year, month] = key.split("-");
-  const date = new Date(Number(year), Number(month) - 1, 1);
-  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
-}
 
 export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
   const data = useMemo(() => {
@@ -127,12 +117,7 @@ export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
             symbolShape: "circle",
           },
         ]}
-        theme={{
-          text: { fill: "#333" },
-          axis: { ticks: { text: { fill: "#666", fontSize: 11 } } },
-          grid: { line: { stroke: "#e5e5e5", strokeWidth: 1 } },
-          crosshair: { line: { stroke: "#999", strokeWidth: 1 } },
-        }}
+        theme={nivoChartTheme}
       />
     </div>
   );

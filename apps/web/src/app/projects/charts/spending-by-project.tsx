@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
+import { nivoChartTheme } from "../shared";
 
 export function SpendingByProject({
   purchases,
@@ -71,11 +72,7 @@ export function SpendingByProject({
             <strong>{indexValue}</strong>: {formatCurrency(value, 0)}
           </div>
         )}
-        theme={{
-          text: { fill: "#333" },
-          axis: { ticks: { text: { fill: "#666" } } },
-          grid: { line: { stroke: "#e5e5e5", strokeWidth: 1 } },
-        }}
+        theme={nivoChartTheme}
       />
     </div>
   );

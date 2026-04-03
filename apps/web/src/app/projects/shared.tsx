@@ -35,12 +35,48 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 export function getCategoryColor(category: string | null): string {
   if (!category) return "hsl(0, 0%, 65%)";
+  return CATEGORY_COLORS[normalizeCategoryKey(category)] ?? "hsl(0, 0%, 65%)";
+}
+
+export function normalizeCategoryKey(category: string | null): string {
+  if (!category) return "other";
   const key = category
     .replace(/^[^\w]*/, "")
     .trim()
     .toLowerCase();
-  return CATEGORY_COLORS[key] ?? "hsl(0, 0%, 65%)";
+  if (key in CATEGORY_COLORS) return key;
+  return "other";
 }
+
+// -- Date helpers --
+
+export function monthKey(dateStr: string): string {
+  return dateStr.slice(0, 7);
+}
+
+export function monthLabel(key: string): string {
+  const [year, month] = key.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+  return date.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+// -- Chart theme (consistent across all Nivo charts) --
+
+export const nivoChartTheme = {
+  text: { fill: "hsl(var(--foreground))" },
+  axis: {
+    ticks: { text: { fill: "hsl(var(--muted-foreground))", fontSize: 11 } },
+  },
+  grid: {
+    line: { stroke: "hsl(var(--border))", strokeWidth: 1 },
+  },
+  crosshair: {
+    line: { stroke: "hsl(var(--muted-foreground))", strokeWidth: 1 },
+  },
+  legends: {
+    text: { fill: "hsl(var(--muted-foreground))" },
+  },
+};
 
 // -- Status Icon --
 
