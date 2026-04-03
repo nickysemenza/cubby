@@ -5,6 +5,8 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints/blocks";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints/common";
 import type { QueryDataSourceResponse } from "@notionhq/client/build/src/api-endpoints/data-sources";
+import { getErrorMessage } from "~/lib/error-utils";
+import { getTracer, TraceNames } from "~/server/tracing";
 
 // Data source IDs from the Notion "Project Tracker" page (collection:// URLs)
 const DATA_SOURCE_IDS = {
@@ -248,6 +250,22 @@ function blockToNotionBlock(block: BlockObjectResponse): NotionBlock | null {
   }
 }
 
+// -- Cache (module-level, survives across requests in dev) --
+
+const cache = new Map<string, { data: unknown; expires: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached<T>(key: string): T | undefined {
+  const entry = cache.get(key);
+  if (entry && Date.now() < entry.expires) return entry.data as T;
+  cache.delete(key);
+  return undefined;
+}
+
+function setCache(key: string, data: unknown): void {
+  cache.set(key, { data, expires: Date.now() + CACHE_TTL });
+}
+
 // -- Client --
 
 export class NotionClient {
@@ -255,6 +273,38 @@ export class NotionClient {
 
   constructor(apiKey: string) {
     this.client = new Client({ auth: apiKey });
+  }
+
+  private async traced<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+    const tracer = getTracer();
+    return tracer.startActiveSpan(
+      TraceNames.api("notion", operation),
+      async (span) => {
+        try {
+          const res = await fn();
+          span.setStatus({ code: 1 });
+          return res;
+        } catch (e) {
+          span.setStatus({ code: 2, message: getErrorMessage(e) });
+          throw e;
+        } finally {
+          span.end();
+        }
+      },
+    );
+  }
+
+  private async cachedTrace<T>(
+    key: string,
+    operation: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const cached = getCached<T>(key);
+    if (cached !== undefined) return cached;
+
+    const result = await this.traced(operation, fn);
+    setCache(key, result);
+    return result;
   }
 
   /** Paginate through all results for a data source query. */
@@ -271,12 +321,7 @@ export class NotionClient {
     let cursor: string | undefined;
 
     do {
-      const response = await this.client.dataSources.query({
-        data_source_id: dataSourceId,
-        page_size: 100,
-        start_cursor: cursor,
-        ...opts,
-      });
+      const response = await this.queryWithRetry(dataSourceId, cursor, opts);
       pages.push(...extractPages(response));
       cursor = response.has_more
         ? (response.next_cursor ?? undefined)
@@ -286,173 +331,224 @@ export class NotionClient {
     return pages;
   }
 
-  async queryProjects(): Promise<NotionProject[]> {
-    const pages = await this.queryAll(DATA_SOURCE_IDS.projects);
+  /** Single page query with retry on 504/timeout. */
+  private async queryWithRetry(
+    dataSourceId: string,
+    cursor: string | undefined,
+    opts?: {
+      sorts?: Array<{
+        property: string;
+        direction: "ascending" | "descending";
+      }>;
+    },
+    retries = 3,
+  ): Promise<QueryDataSourceResponse> {
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        return await this.client.dataSources.query({
+          data_source_id: dataSourceId,
+          page_size: 100,
+          start_cursor: cursor,
+          ...opts,
+        });
+      } catch (e: unknown) {
+        const isRetryable =
+          e instanceof Error &&
+          (e.message.includes("timed out") ||
+            e.message.includes("504") ||
+            e.message.includes("502") ||
+            e.message.includes("rate_limited") ||
+            e.message.includes("429"));
 
-    return pages.map((page) => {
-      const p = page.properties;
-      return {
-        id: page.id,
-        name: getTitle(p["Name"]),
-        status: getStatus(p["Status"]),
-        kind: getSelect(p["kind"]),
-        location: getMultiSelect(p["location"]),
-        costEstimate: getNumber(p["cost estimate"]),
-        date: getDateStart(p["Date"]),
-        dateEnd: getDateEnd(p["Date"]),
-        icon: getPageIcon(page),
-        coverImage: getPageCover(page),
-        blockedBy: getRelationIds(p["Blocked by"]),
-        blocking: getRelationIds(p["Blocking"]),
-        notionUrl: getPageUrl(page),
-      };
+        if (!isRetryable || attempt === retries - 1) throw e;
+
+        const delay = 1000 * 2 ** attempt; // 1s, 2s, 4s
+        console.warn(
+          `[notion] Retry ${attempt + 1}/${retries} after ${delay}ms: ${getErrorMessage(e)}`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    throw new Error("unreachable");
+  }
+
+  async queryProjects(): Promise<NotionProject[]> {
+    return this.cachedTrace("projects", "queryProjects", async () => {
+      const pages = await this.queryAll(DATA_SOURCE_IDS.projects);
+
+      return pages.map((page) => {
+        const p = page.properties;
+        return {
+          id: page.id,
+          name: getTitle(p["Name"]),
+          status: getStatus(p["Status"]),
+          kind: getSelect(p["kind"]),
+          location: getMultiSelect(p["location"]),
+          costEstimate: getNumber(p["cost estimate"]),
+          date: getDateStart(p["Date"]),
+          dateEnd: getDateEnd(p["Date"]),
+          icon: getPageIcon(page),
+          coverImage: getPageCover(page),
+          blockedBy: getRelationIds(p["Blocked by"]),
+          blocking: getRelationIds(p["Blocking"]),
+          notionUrl: getPageUrl(page),
+        };
+      });
     });
   }
 
   async queryTasks(): Promise<NotionTask[]> {
-    const pages = await this.queryAll(DATA_SOURCE_IDS.tasks);
+    return this.cachedTrace("tasks", "queryTasks", async () => {
+      const pages = await this.queryAll(DATA_SOURCE_IDS.tasks);
 
-    return pages.map((page) => {
-      const p = page.properties;
-      return {
-        id: page.id,
-        name: getTitle(p["Name"]),
-        status: getStatus(p["Status"]),
-        due: getDateStart(p["Due"]),
-        category: getSelect(p["category"]),
-        projectName: getRelationId(p["project"]),
-        notionUrl: getPageUrl(page),
-      };
+      return pages.map((page) => {
+        const p = page.properties;
+        return {
+          id: page.id,
+          name: getTitle(p["Name"]),
+          status: getStatus(p["Status"]),
+          due: getDateStart(p["Due"]),
+          category: getSelect(p["category"]),
+          projectName: getRelationId(p["project"]),
+          notionUrl: getPageUrl(page),
+        };
+      });
     });
   }
 
   async queryPurchases(): Promise<NotionPurchase[]> {
-    const pages = await this.queryAll(DATA_SOURCE_IDS.purchases, {
-      sorts: [{ property: "Date", direction: "descending" }],
-    });
+    return this.cachedTrace("purchases", "queryPurchases", async () => {
+      const pages = await this.queryAll(DATA_SOURCE_IDS.purchases, {
+        sorts: [{ property: "Date", direction: "descending" }],
+      });
 
-    return pages.map((page) => {
-      const p = page.properties;
-      return {
-        id: page.id,
-        name: getTitle(p["Name"]),
-        cost: getNumber(p["cost"]),
-        date: getDateStart(p["Date"]),
-        category: getSelect(p["category"]),
-        subcategory: getSelect(p["subcategory"]),
-        purchaser: getSelect(p["purchaser"]),
-        projectName: getRelationId(p["Project"]),
-        url: getUrl(p["URL"]),
-        notionUrl: getPageUrl(page),
-      };
+      return pages.map((page) => {
+        const p = page.properties;
+        return {
+          id: page.id,
+          name: getTitle(p["Name"]),
+          cost: getNumber(p["cost"]),
+          date: getDateStart(p["Date"]),
+          category: getSelect(p["category"]),
+          subcategory: getSelect(p["subcategory"]),
+          purchaser: getSelect(p["purchaser"]),
+          projectName: getRelationId(p["Project"]),
+          url: getUrl(p["URL"]),
+          notionUrl: getPageUrl(page),
+        };
+      });
     });
   }
 
   /** Fetch the first image from each project's page content. */
   async getProjectImages(pageIds: string[]): Promise<Record<string, string>> {
-    const images: Record<string, string> = {};
+    return this.cachedTrace("projectImages", "getProjectImages", async () => {
+      const images: Record<string, string> = {};
 
-    await Promise.all(
-      pageIds.map(async (pageId) => {
-        try {
-          const response = await this.client.blocks.children.list({
-            block_id: pageId,
-            page_size: 20,
-          });
-          for (const block of response.results) {
-            if (!("type" in block)) continue;
-            const url = getImageUrl(block as BlockObjectResponse);
-            if (url) {
-              images[pageId] = url;
-              break;
-            }
-            // Check column children for images
-            if (
-              (block as BlockObjectResponse).type === "column_list" &&
-              block.has_children
-            ) {
-              const columns = await this.client.blocks.children.list({
-                block_id: block.id,
-                page_size: 10,
-              });
-              for (const col of columns.results) {
-                if (!("type" in col) || !col.has_children) continue;
-                const colChildren = await this.client.blocks.children.list({
-                  block_id: col.id,
-                  page_size: 5,
+      await Promise.all(
+        pageIds.map(async (pageId) => {
+          try {
+            const response = await this.client.blocks.children.list({
+              block_id: pageId,
+              page_size: 20,
+            });
+            for (const block of response.results) {
+              if (!("type" in block)) continue;
+              const url = getImageUrl(block as BlockObjectResponse);
+              if (url) {
+                images[pageId] = url;
+                break;
+              }
+              // Check column children for images
+              if (
+                (block as BlockObjectResponse).type === "column_list" &&
+                block.has_children
+              ) {
+                const columns = await this.client.blocks.children.list({
+                  block_id: block.id,
+                  page_size: 10,
                 });
-                for (const child of colChildren.results) {
-                  if (!("type" in child)) continue;
-                  const colUrl = getImageUrl(child as BlockObjectResponse);
-                  if (colUrl) {
-                    images[pageId] = colUrl;
-                    return;
+                for (const col of columns.results) {
+                  if (!("type" in col) || !col.has_children) continue;
+                  const colChildren = await this.client.blocks.children.list({
+                    block_id: col.id,
+                    page_size: 5,
+                  });
+                  for (const child of colChildren.results) {
+                    if (!("type" in child)) continue;
+                    const colUrl = getImageUrl(child as BlockObjectResponse);
+                    if (colUrl) {
+                      images[pageId] = colUrl;
+                      return;
+                    }
                   }
                 }
+                if (images[pageId]) return;
               }
-              if (images[pageId]) return;
             }
+          } catch {
+            // Skip pages that fail
           }
-        } catch {
-          // Skip pages that fail
-        }
-      }),
-    );
+        }),
+      );
 
-    return images;
+      return images;
+    });
   }
 
   /** Fetch page content blocks for rendering. */
   async getPageContent(pageId: string): Promise<NotionBlock[]> {
-    const blocks: NotionBlock[] = [];
-    let cursor: string | undefined;
+    return this.traced(`getPageContent(${pageId})`, async () => {
+      const blocks: NotionBlock[] = [];
+      let cursor: string | undefined;
 
-    do {
-      const response: ListBlockChildrenResponse =
-        await this.client.blocks.children.list({
-          block_id: pageId,
-          page_size: 100,
-          start_cursor: cursor,
-        });
-
-      for (const block of response.results) {
-        if (!("type" in block)) continue;
-        const typed = block as BlockObjectResponse;
-
-        // Handle column lists by flattening
-        if (typed.type === "column_list" && typed.has_children) {
-          const columns = await this.client.blocks.children.list({
-            block_id: typed.id,
-            page_size: 10,
+      do {
+        const response: ListBlockChildrenResponse =
+          await this.client.blocks.children.list({
+            block_id: pageId,
+            page_size: 100,
+            start_cursor: cursor,
           });
-          const columnChildren: NotionBlock[] = [];
-          for (const col of columns.results) {
-            if (!("type" in col) || !col.has_children) continue;
-            const children = await this.client.blocks.children.list({
-              block_id: col.id,
-              page_size: 50,
+
+        for (const block of response.results) {
+          if (!("type" in block)) continue;
+          const typed = block as BlockObjectResponse;
+
+          // Handle column lists by flattening
+          if (typed.type === "column_list" && typed.has_children) {
+            const columns = await this.client.blocks.children.list({
+              block_id: typed.id,
+              page_size: 10,
             });
-            for (const child of children.results) {
-              if (!("type" in child)) continue;
-              const nb = blockToNotionBlock(child as BlockObjectResponse);
-              if (nb) columnChildren.push(nb);
+            const columnChildren: NotionBlock[] = [];
+            for (const col of columns.results) {
+              if (!("type" in col) || !col.has_children) continue;
+              const children = await this.client.blocks.children.list({
+                block_id: col.id,
+                page_size: 50,
+              });
+              for (const child of children.results) {
+                if (!("type" in child)) continue;
+                const nb = blockToNotionBlock(child as BlockObjectResponse);
+                if (nb) columnChildren.push(nb);
+              }
             }
+            if (columnChildren.length > 0) {
+              blocks.push({ type: "columns", children: columnChildren });
+            }
+            continue;
           }
-          if (columnChildren.length > 0) {
-            blocks.push({ type: "columns", children: columnChildren });
-          }
-          continue;
+
+          const nb = blockToNotionBlock(typed);
+          if (nb) blocks.push(nb);
         }
 
-        const nb = blockToNotionBlock(typed);
-        if (nb) blocks.push(nb);
-      }
+        cursor = response.has_more
+          ? (response.next_cursor ?? undefined)
+          : undefined;
+      } while (cursor);
 
-      cursor = response.has_more
-        ? (response.next_cursor ?? undefined)
-        : undefined;
-    } while (cursor);
-
-    return blocks;
+      return blocks;
+    });
   }
 }

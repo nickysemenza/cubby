@@ -24,26 +24,32 @@ export const notionRouter = createTRPCRouter({
       projectName: (p.projectName && projectMap.get(p.projectName)) ?? null,
     }));
 
-    // Fetch cover images for projects without a page-level cover
-    const projectsNeedingImages = projects.filter((p) => !p.coverImage);
-    const contentImages =
-      projectsNeedingImages.length > 0
-        ? await ctx.notionClient.getProjectImages(
-            projectsNeedingImages.map((p) => p.id),
-          )
-        : {};
-
-    // Merge content images into projects (page-level cover takes precedence)
-    const projectsWithImages = projects.map((p) => ({
-      ...p,
-      coverImage: p.coverImage ?? contentImages[p.id] ?? null,
-    }));
-
     return {
-      projects: projectsWithImages,
+      projects,
       tasks: tasksWithNames,
       purchases: purchasesWithNames,
     };
+  }),
+
+  /** Separate query for cover images — loaded lazily so dashboard isn't blocked. */
+  projectImages: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.notionClient) return {};
+
+    const projects = await ctx.notionClient.queryProjects();
+    const needImages = projects.filter((p) => !p.coverImage);
+    if (needImages.length === 0) return {};
+
+    const contentImages = await ctx.notionClient.getProjectImages(
+      needImages.map((p) => p.id),
+    );
+
+    // Merge page-level covers with content images
+    const allImages: Record<string, string> = {};
+    for (const p of projects) {
+      const img = p.coverImage ?? contentImages[p.id];
+      if (img) allImages[p.id] = img;
+    }
+    return allImages;
   }),
 
   projectContent: publicProcedure

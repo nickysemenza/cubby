@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { formatCurrency } from "~/lib/utils";
 import type {
   NotionProject,
@@ -47,13 +48,31 @@ export function ProjectsDashboard() {
     ...api.notion.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
   });
+  // Load images lazily — doesn't block dashboard render
+  const { data: imageMap } = useQuery({
+    ...api.notion.projectImages.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+  });
   const [filters, setFilters] = useState<Filters>(emptyFilters);
+
+  // Merge lazily-loaded images into project data
+  const dataWithImages = useMemo(() => {
+    if (!data) return null;
+    if (!imageMap) return data;
+    return {
+      ...data,
+      projects: data.projects.map((p) => ({
+        ...p,
+        coverImage: p.coverImage ?? imageMap[p.id] ?? null,
+      })),
+    };
+  }, [data, imageMap]);
 
   if (isLoading) {
     return <DashboardSkeleton />;
   }
 
-  if (!data) {
+  if (!dataWithImages) {
     return (
       <div className="space-y-4">
         <h1 className="font-bold font-heading text-3xl">Projects</h1>
@@ -74,7 +93,7 @@ export function ProjectsDashboard() {
 
   return (
     <DashboardContent
-      data={data}
+      data={dataWithImages}
       filters={filters}
       onFiltersChange={setFilters}
     />
@@ -94,7 +113,6 @@ function DashboardContent({
   filters: Filters;
   onFiltersChange: (f: Filters) => void;
 }) {
-  // Extract available filter options
   const availableStatuses = useMemo(
     () =>
       Array.from(
@@ -114,7 +132,6 @@ function DashboardContent({
     [data.projects],
   );
 
-  // Apply filters
   const { projects, tasks, purchases } = useMemo(() => {
     let projects = data.projects;
 
@@ -144,7 +161,7 @@ function DashboardContent({
   }, [data, filters]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Hammer className="h-8 w-8" />
         <h1 className="font-bold font-heading text-3xl">Projects</h1>
@@ -162,105 +179,134 @@ function DashboardContent({
 
       <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
 
-      {/* Charts */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-3">
-          <h2 className="font-heading font-semibold text-lg">
-            Cost vs Estimate
-          </h2>
-          <p className="text-muted-foreground text-xs">
-            Projects with both spending and an estimate
-          </p>
-          <CostVsEstimate projects={projects} purchases={purchases} />
-        </section>
-        <section className="space-y-3">
-          <h2 className="font-heading font-semibold text-lg">Budget Health</h2>
-          <p className="text-muted-foreground text-xs">
-            Top 12 projects by % of estimate spent
-          </p>
-          <BudgetHealth projects={projects} purchases={purchases} />
-        </section>
-      </div>
+      <Tabs defaultValue="overview">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="charts">Charts</TabsTrigger>
+          <TabsTrigger value="data">Data</TabsTrigger>
+          <TabsTrigger value="gallery">Gallery</TabsTrigger>
+        </TabsList>
 
-      <section className="space-y-3">
-        <h2 className="font-heading font-semibold text-lg">
-          Top 10 Projects by Spending
-        </h2>
-        <SpendingByProject purchases={purchases} projects={projects} />
-      </section>
+        <TabsContent value="overview">
+          <div className="space-y-6 pt-4">
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="space-y-3">
+                <h2 className="font-heading font-semibold text-lg">
+                  Cost vs Estimate
+                </h2>
+                <p className="text-muted-foreground text-xs">
+                  Projects with both spending and an estimate
+                </p>
+                <CostVsEstimate projects={projects} purchases={purchases} />
+              </section>
+              <section className="space-y-3">
+                <h2 className="font-heading font-semibold text-lg">
+                  Budget Health
+                </h2>
+                <p className="text-muted-foreground text-xs">
+                  Top 12 projects by % of estimate spent
+                </p>
+                <BudgetHealth projects={projects} purchases={purchases} />
+              </section>
+            </div>
 
-      <section className="space-y-3">
-        <h2 className="font-heading font-semibold text-lg">Project Timeline</h2>
-        <ProjectTimeline projects={projects} />
-      </section>
+            <section className="space-y-3">
+              <h2 className="font-heading font-semibold text-lg">
+                Top 10 Projects by Spending
+              </h2>
+              <SpendingByProject purchases={purchases} projects={projects} />
+            </section>
 
-      <section className="space-y-3">
-        <h2 className="font-heading font-semibold text-lg">
-          Project Dependencies
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          Arrows show blocking relationships between projects
-        </p>
-        <DependencyGraph projects={projects} />
-      </section>
+            <section className="space-y-3">
+              <h2 className="font-heading font-semibold text-lg">
+                Task Status Board
+              </h2>
+              <p className="text-muted-foreground text-xs">
+                Top 15 projects, sorted by date
+              </p>
+              <TaskStatusBoard tasks={tasks} projects={projects} />
+            </section>
+          </div>
+        </TabsContent>
 
-      <section className="space-y-3">
-        <h2 className="font-heading font-semibold text-lg">
-          Monthly Spending Trend
-        </h2>
-        <MonthlyTrend purchases={purchases} />
-      </section>
+        <TabsContent value="charts">
+          <div className="space-y-6 pt-4">
+            <section className="space-y-3">
+              <h2 className="font-heading font-semibold text-lg">
+                Project Timeline
+              </h2>
+              <ProjectTimeline projects={projects} />
+            </section>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <section className="space-y-3">
-          <h2 className="font-heading font-semibold text-lg">Category Split</h2>
-          <AllCategoryDonut purchases={purchases} />
-        </section>
-        <section className="space-y-3">
-          <h2 className="font-heading font-semibold text-lg">
-            Spending Heatmap
-          </h2>
-          <SpendingHeatmap purchases={purchases} />
-        </section>
-      </div>
+            <section className="space-y-3">
+              <h2 className="font-heading font-semibold text-lg">
+                Project Dependencies
+              </h2>
+              <p className="text-muted-foreground text-xs">
+                Arrows show blocking relationships between projects
+              </p>
+              <DependencyGraph projects={projects} />
+            </section>
 
-      <section className="space-y-3">
-        <h2 className="font-heading font-semibold text-lg">Task Heatmap</h2>
-        <p className="text-muted-foreground text-xs">
-          Task due dates across all projects
-        </p>
-        <TaskHeatmap tasks={tasks} />
-      </section>
+            <section className="space-y-3">
+              <h2 className="font-heading font-semibold text-lg">
+                Monthly Spending Trend
+              </h2>
+              <MonthlyTrend purchases={purchases} />
+            </section>
 
-      <section className="space-y-3">
-        <h2 className="font-heading font-semibold text-lg">
-          Task Status Board
-        </h2>
-        <p className="text-muted-foreground text-xs">
-          Top 15 projects, sorted by date
-        </p>
-        <TaskStatusBoard tasks={tasks} projects={projects} />
-      </section>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <section className="space-y-3">
+                <h2 className="font-heading font-semibold text-lg">
+                  Category Split
+                </h2>
+                <AllCategoryDonut purchases={purchases} />
+              </section>
+              <section className="space-y-3">
+                <h2 className="font-heading font-semibold text-lg">
+                  Spending Heatmap
+                </h2>
+                <SpendingHeatmap purchases={purchases} />
+              </section>
+            </div>
 
-      <section className="space-y-4">
-        <h2 className="font-heading font-semibold text-xl">All Projects</h2>
-        <ProjectTable projects={projects} purchases={purchases} />
-      </section>
+            <section className="space-y-3">
+              <h2 className="font-heading font-semibold text-lg">
+                Task Heatmap
+              </h2>
+              <p className="text-muted-foreground text-xs">
+                Task due dates across all projects
+              </p>
+              <TaskHeatmap tasks={tasks} />
+            </section>
+          </div>
+        </TabsContent>
 
-      <section className="space-y-4">
-        <h2 className="font-heading font-semibold text-xl">Project Gallery</h2>
-        <ProjectCards projects={projects} />
-      </section>
+        <TabsContent value="data">
+          <div className="space-y-6 pt-4">
+            <section className="space-y-4">
+              <h2 className="font-heading font-semibold text-xl">Projects</h2>
+              <ProjectTable projects={projects} purchases={purchases} />
+            </section>
 
-      <section className="space-y-4">
-        <h2 className="font-heading font-semibold text-xl">Tasks</h2>
-        <TaskList tasks={tasks} />
-      </section>
+            <section className="space-y-4">
+              <h2 className="font-heading font-semibold text-xl">Tasks</h2>
+              <TaskList tasks={tasks} />
+            </section>
 
-      <section className="space-y-4">
-        <h2 className="font-heading font-semibold text-xl">Recent Purchases</h2>
-        <PurchaseList purchases={purchases} />
-      </section>
+            <section className="space-y-4">
+              <h2 className="font-heading font-semibold text-xl">Purchases</h2>
+              <PurchaseList purchases={purchases} />
+            </section>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="gallery">
+          <div className="pt-4">
+            <ProjectCards projects={projects} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
