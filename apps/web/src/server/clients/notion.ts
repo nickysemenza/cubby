@@ -26,6 +26,8 @@ export type NotionProject = {
   dateEnd: string | null;
   icon: string | null;
   coverImage: string | null;
+  blockedBy: string[];
+  blocking: string[];
   notionUrl: string;
 };
 
@@ -119,6 +121,13 @@ function getUrl(prop: PropertyValue | undefined): string | null {
     return prop.url;
   }
   return null;
+}
+
+function getRelationIds(prop: PropertyValue | undefined): string[] {
+  if (prop?.type === "relation") {
+    return prop.relation.map((r) => r.id);
+  }
+  return [];
 }
 
 function getRelationId(prop: PropertyValue | undefined): string | null {
@@ -293,6 +302,8 @@ export class NotionClient {
         dateEnd: getDateEnd(p["Date"]),
         icon: getPageIcon(page),
         coverImage: getPageCover(page),
+        blockedBy: getRelationIds(p["Blocked by"]),
+        blocking: getRelationIds(p["Blocking"]),
         notionUrl: getPageUrl(page),
       };
     });

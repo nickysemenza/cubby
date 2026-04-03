@@ -20,6 +20,7 @@ import { useTRPC } from "~/trpc/react";
 import { AllCategoryDonut } from "./charts/all-category-donut";
 import { BudgetHealth } from "./charts/budget-health";
 import { CostVsEstimate } from "./charts/cost-vs-estimate";
+import { DependencyGraph } from "./charts/dependency-graph";
 import { MonthlyTrend } from "./charts/monthly-trend";
 import { ProjectTimeline } from "./charts/project-timeline";
 import { SpendingByProject } from "./charts/spending-by-project";
@@ -184,6 +185,16 @@ function DashboardContent({
       <section className="space-y-3">
         <h2 className="font-heading font-semibold text-lg">Project Timeline</h2>
         <ProjectTimeline projects={projects} />
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-heading font-semibold text-lg">
+          Project Dependencies
+        </h2>
+        <p className="text-muted-foreground text-xs">
+          Arrows show blocking relationships between projects
+        </p>
+        <DependencyGraph projects={projects} />
       </section>
 
       <section className="space-y-3">
@@ -357,7 +368,7 @@ function ProjectCard({ project }: { project: NotionProject }) {
           <img
             src={project.coverImage}
             alt=""
-            className="h-32 w-full object-cover"
+            className="aspect-[16/9] w-full object-cover"
             loading="lazy"
           />
         )}
