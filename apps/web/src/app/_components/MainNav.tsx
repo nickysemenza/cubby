@@ -2,6 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import {
   Bug,
   BugOff,
+  Hammer,
   Home,
   LayoutDashboard,
   Search,
@@ -109,6 +110,18 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         >
           <InventoryIcon className="h-4 w-4" />
           Inventory
+        </Link>
+
+        <Link
+          to="/projects"
+          className={cn(
+            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+            !pathName.startsWith("/projects") && "text-muted-foreground",
+          )}
+          aria-current={pathName.startsWith("/projects") ? "page" : undefined}
+        >
+          <Hammer className="h-4 w-4" />
+          Projects
         </Link>
 
         {session.data?.user && (

@@ -2,7 +2,17 @@ import type { SearchableEntity } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { BookOpen, MapPin, Package, Search, Settings } from "lucide-react";
+import {
+  BookOpen,
+  ClipboardList,
+  ExternalLink,
+  Hammer,
+  MapPin,
+  Package,
+  Search,
+  Settings,
+  ShoppingCart,
+} from "lucide-react";
 import * as React from "react";
 import {
   CommandDialog,
@@ -45,8 +55,33 @@ export function GlobalCommandMenu({
   const { results, filteredActions, isLoading, isEmpty } =
     useGlobalSearch(search);
 
-  // Shortcode detection and lookup
+  // Notion data — already cached from dashboard, filter client-side
   const trpc = useTRPC();
+  const { data: notionData } = useQuery({
+    ...trpc.notion.dashboard.queryOptions(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const notionResults = React.useMemo(() => {
+    if (!notionData || !search || search.length < 2) return null;
+    const q = search.toLowerCase();
+
+    const projects = notionData.projects
+      .filter((p) => p.name.toLowerCase().includes(q))
+      .slice(0, 5);
+    const tasks = notionData.tasks
+      .filter((t) => t.name.toLowerCase().includes(q))
+      .slice(0, 5);
+    const purchases = notionData.purchases
+      .filter((p) => p.name.toLowerCase().includes(q))
+      .slice(0, 5);
+
+    if (projects.length === 0 && tasks.length === 0 && purchases.length === 0)
+      return null;
+    return { projects, tasks, purchases };
+  }, [notionData, search]);
+
+  // Shortcode detection and lookup
   const parsedShortcode = parseShortcode(search);
   const locationQuery = useQuery({
     ...trpc.location.getByShortcode.queryOptions({
@@ -160,7 +195,7 @@ export function GlobalCommandMenu({
       className="sm:max-w-2xl"
     >
       <CommandInput
-        placeholder="Search products, recipes, locations..."
+        placeholder="Search products, recipes, locations, projects..."
         value={search}
         onValueChange={setSearch}
       />
@@ -173,7 +208,7 @@ export function GlobalCommandMenu({
         )}
 
         {/* Empty state */}
-        {isEmpty && !isLoading && !shortcodeResult && (
+        {isEmpty && !isLoading && !shortcodeResult && !notionResults && (
           <CommandEmpty>No results found.</CommandEmpty>
         )}
 
@@ -254,6 +289,98 @@ export function GlobalCommandMenu({
                 See all results for "{search}"
               </CommandItem>
             </CommandGroup>
+          </>
+        )}
+
+        {/* Notion results — filtered from cached dashboard data */}
+        {notionResults && !isLoading && (
+          <>
+            {notionResults.projects.length > 0 && (
+              <CommandGroup heading="Projects (Notion)">
+                {notionResults.projects.map((p) => (
+                  <CommandItem
+                    key={`notion-project-${p.id}`}
+                    onSelect={() => {
+                      navigate({
+                        to: "/projects/$id",
+                        params: { id: p.id },
+                      });
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                      {p.icon ? (
+                        <span className="text-base">{p.icon}</span>
+                      ) : (
+                        <Hammer className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{p.name}</div>
+                      <div className="truncate text-muted-foreground text-xs">
+                        {[p.status, p.kind].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {notionResults.tasks.length > 0 && (
+              <CommandGroup heading="Tasks (Notion)">
+                {notionResults.tasks.map((t) => (
+                  <CommandItem
+                    key={`notion-task-${t.id}`}
+                    onSelect={() => {
+                      window.open(t.notionUrl, "_blank");
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                      <ClipboardList className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{t.name}</div>
+                      <div className="truncate text-muted-foreground text-xs">
+                        {[t.status, t.projectName].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {notionResults.purchases.length > 0 && (
+              <CommandGroup heading="Purchases (Notion)">
+                {notionResults.purchases.map((p) => (
+                  <CommandItem
+                    key={`notion-purchase-${p.id}`}
+                    onSelect={() => {
+                      window.open(p.notionUrl, "_blank");
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                      <ShoppingCart className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{p.name}</div>
+                      <div className="truncate text-muted-foreground text-xs">
+                        {[
+                          p.cost != null ? `$${p.cost.toLocaleString()}` : null,
+                          p.projectName,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    </div>
+                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
           </>
         )}
 
