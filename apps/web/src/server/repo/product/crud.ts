@@ -18,7 +18,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
 import { dedupe } from "~/misc/array-helpers";
@@ -27,6 +27,7 @@ import {
   image,
   inventoryEntry,
   product,
+  productExternalId,
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
@@ -172,7 +173,13 @@ export const createProduct = async (
   data: ProductCreateInput,
   actor: ActorContext,
 ): Promise<ProductTopLevelOut> => {
-  const { ingredientId, unitMappings, pendingImageIds, ...productData } = data;
+  const {
+    ingredientId,
+    unitMappings,
+    externalIds,
+    pendingImageIds,
+    ...productData
+  } = data;
 
   // Auto-correct category to "food" if product has food indicators
   const category = hasFoodIndicators({ ...data, ingredientId })
@@ -207,6 +214,18 @@ export const createProduct = async (
       await syncProductPrice(tx, unsafeProductId(newProduct.id));
     }
 
+    // If there are external IDs, create them
+    if (externalIds && externalIds.length > 0) {
+      await tx.insert(productExternalId).values(
+        externalIds.map((eid) => ({
+          productId: newProduct.id,
+          source: eid.source,
+          externalId: eid.externalId,
+          url: eid.url ?? null,
+        })),
+      );
+    }
+
     // Associate images if provided
     let images: Array<typeof image.$inferSelect> = [];
     if (pendingImageIds && pendingImageIds.length > 0) {
@@ -232,10 +251,19 @@ export const createProduct = async (
       action: "create",
     });
 
+    // Fetch created external IDs for the response
+    const createdExternalIds =
+      externalIds && externalIds.length > 0
+        ? await tx.query.productExternalId.findMany({
+            where: eq(productExternalId.productId, newProduct.id),
+          })
+        : [];
+
     // Construct and validate the response object
     const result = {
       ...newProduct,
       images,
+      externalIds: createdExternalIds,
     };
 
     return parseWithContext(productTopLevelOut, result, {
@@ -255,6 +283,7 @@ export const updateProduct = async (
   const {
     ingredientId,
     unitMappings,
+    externalIds,
     pendingImageIds,
     removeImageIds,
     ...productData
@@ -372,6 +401,58 @@ export const updateProduct = async (
       await syncProductPrice(tx, productId);
     }
 
+    // If externalIds is provided, handle the updates (same diff pattern as unitMappings)
+    if (externalIds !== undefined) {
+      const existingExternalIds = await tx.query.productExternalId.findMany({
+        where: and(
+          eq(productExternalId.productId, productId),
+          isNull(productExternalId.deletedAt),
+        ),
+      });
+
+      const toDelete = existingExternalIds.filter(
+        (e) => !externalIds.some((eid) => eid.id === e.id),
+      );
+      const toCreate = externalIds.filter((e) => e.id === undefined);
+      const toUpdate = externalIds.filter(
+        (e): e is typeof e & { id: string } => e.id !== undefined,
+      );
+
+      if (toDelete.length > 0) {
+        await tx
+          .update(productExternalId)
+          .set({ deletedAt: new Date() })
+          .where(
+            inArray(
+              productExternalId.id,
+              toDelete.map((e) => e.id),
+            ),
+          );
+      }
+
+      if (toCreate.length > 0) {
+        await tx.insert(productExternalId).values(
+          toCreate.map((eid) => ({
+            productId,
+            source: eid.source,
+            externalId: eid.externalId,
+            url: eid.url ?? null,
+          })),
+        );
+      }
+
+      for (const eid of toUpdate) {
+        await tx
+          .update(productExternalId)
+          .set({
+            source: eid.source,
+            externalId: eid.externalId,
+            url: eid.url ?? null,
+          })
+          .where(eq(productExternalId.id, eid.id));
+      }
+    }
+
     // Add new images if provided
     if (pendingImageIds && pendingImageIds.length > 0) {
       await associatePendingImages(
@@ -424,10 +505,19 @@ export const updateProduct = async (
       });
     }
 
+    // Fetch current external IDs for the response
+    const currentExternalIds = await tx.query.productExternalId.findMany({
+      where: and(
+        eq(productExternalId.productId, updated.id),
+        isNull(productExternalId.deletedAt),
+      ),
+    });
+
     // Construct and validate the response object
     const result = {
       ...updated,
       images: extractImagesFromJoinTable(productImages),
+      externalIds: currentExternalIds,
     };
 
     return parseWithContext(productTopLevelOut, result, {
@@ -562,9 +652,15 @@ export const deleteProducts = async (
       columns: { id: true, productId: true },
     });
 
+    const cascadedExternalIds = await tx.query.productExternalId.findMany({
+      where: inArray(productExternalId.productId, ids),
+      columns: { id: true, productId: true },
+    });
+
     // Group cascaded items by product ID for audit logging
     const mappingsByProduct = new Map<string, number>();
     const imagesByProduct = new Map<string, number>();
+    const externalIdsByProduct = new Map<string, number>();
 
     for (const mapping of cascadedMappings) {
       mappingsByProduct.set(
@@ -580,11 +676,24 @@ export const deleteProducts = async (
       );
     }
 
+    for (const eid of cascadedExternalIds) {
+      externalIdsByProduct.set(
+        eid.productId,
+        (externalIdsByProduct.get(eid.productId) ?? 0) + 1,
+      );
+    }
+
     // Soft delete unit mappings
     await tx
       .update(productUnitMappings)
       .set({ deletedAt: now })
       .where(inArray(productUnitMappings.productId, ids));
+
+    // Soft delete external IDs
+    await tx
+      .update(productExternalId)
+      .set({ deletedAt: now })
+      .where(inArray(productExternalId.productId, ids));
 
     // Soft delete product images
     await tx
@@ -603,12 +712,17 @@ export const deleteProducts = async (
       const mappingCount = mappingsByProduct.get(id) ?? 0;
       const imageCount = imagesByProduct.get(id) ?? 0;
 
+      const externalIdCount = externalIdsByProduct.get(id) ?? 0;
+
       const changes: Record<string, { from: unknown; to: unknown }> = {};
       if (mappingCount > 0) {
         changes.cascadedUnitMappings = { from: mappingCount, to: 0 };
       }
       if (imageCount > 0) {
         changes.cascadedImages = { from: imageCount, to: 0 };
+      }
+      if (externalIdCount > 0) {
+        changes.cascadedExternalIds = { from: externalIdCount, to: 0 };
       }
 
       return {

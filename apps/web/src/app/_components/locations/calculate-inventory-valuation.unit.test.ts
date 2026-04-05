@@ -57,6 +57,7 @@ function makeInventoryItem(params: {
       createdAt: now,
       updatedAt: now,
       unitMappings: [],
+      externalIds: [],
     },
   };
 }

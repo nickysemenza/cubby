@@ -121,6 +121,7 @@ describe("importInventoryFromCSV", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );

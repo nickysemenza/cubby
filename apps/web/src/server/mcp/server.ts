@@ -103,6 +103,7 @@ function slimProduct(p: Record<string, unknown>) {
     category: p.category,
     price: p.price,
     expectedQuantity: p.expectedQuantity,
+    externalIds: p.externalIds,
   };
 }
 
@@ -393,6 +394,29 @@ function registerTools(server: McpServer) {
       price: z.number().optional().describe("New price"),
       category: z.string().optional().describe("New category"),
       notes: z.string().optional().describe("Notes or URLs"),
+      externalIds: z
+        .array(
+          z.object({
+            id: z
+              .string()
+              .optional()
+              .describe("Existing external ID record ID (for updates)"),
+            source: z
+              .string()
+              .describe("Source name (e.g. 'amazon', 'mcmaster', 'mouser')"),
+            externalId: z
+              .string()
+              .describe("The identifier (ASIN, part number, etc.)"),
+            url: z
+              .string()
+              .optional()
+              .describe("Direct link to the product page"),
+          }),
+        )
+        .optional()
+        .describe(
+          "External identifiers. Replaces all existing IDs when provided.",
+        ),
     },
     withErrorHandling(async (params, extra) => {
       const caller = getCaller(extra);

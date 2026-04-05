@@ -21,6 +21,7 @@ export const relations = {
         Product: {
           with: {
             unitMappings: true,
+            externalIds: true,
             images: {
               with: {
                 image: true,
@@ -46,6 +47,7 @@ export const relations = {
       with: {
         Ingredient: true,
         unitMappings: true,
+        externalIds: true,
         InventoryEntry: {
           with: {
             location: {
@@ -74,6 +76,7 @@ export const relations = {
           },
         },
         unitMappings: true,
+        externalIds: true,
       },
     },
   },
@@ -142,6 +145,7 @@ export const relations = {
         Product: {
           with: {
             unitMappings: true,
+            externalIds: true,
             images: {
               with: {
                 image: true,

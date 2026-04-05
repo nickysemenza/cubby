@@ -2,6 +2,7 @@ import { productCategoryValues, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { ndb, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { dbTimestampsOut } from "./common";
+import { externalIdInput, externalIdOut } from "./external-id";
 import { ingredientId, productId, productShortcode } from "./identifiers";
 import { imageOut, updateInputImages } from "./image";
 import { unitMappingInput } from "./unitmapping";
@@ -57,6 +58,7 @@ export const productCreateInput = productBase
     category: productCategory.nullable().optional(),
     ingredientId: ingredientId.nullable(),
     unitMappings: z.array(unitMappingInput).default([]),
+    externalIds: z.array(externalIdInput).default([]),
   })
   .merge(updateInputImages);
 
@@ -72,6 +74,7 @@ export const productTopLevelOut = z
     id: productId,
     shortcode: productShortcode,
     images: z.array(imageOut).default([]),
+    externalIds: z.array(externalIdOut).default([]),
     price: z.number().nullable(), // Denormalized price from unit mappings
   })
   .extend(productBase.shape)

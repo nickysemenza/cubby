@@ -50,6 +50,7 @@ export const dbInventoryEntryToAPI: (
       id: unsafeProductId(Product.id),
       shortcode: unsafeProductShortcode(Product.shortcode),
       unitMappings: addProductSourceMetadata(Product.id, Product.unitMappings),
+      externalIds: Product.externalIds.filter((eid) => eid.deletedAt === null),
       images: extractImagesFromJoinTable(Product.images),
     },
   };

@@ -235,6 +235,32 @@ export const product = pgTable(
   }),
 );
 
+// ProductExternalId table - generic external identifiers (Amazon ASIN, McMaster part number, etc.)
+export const productExternalId = pgTable(
+  "ProductExternalId",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    productId: uuid("productId")
+      .notNull()
+      .references(() => product.id),
+    source: text("source").notNull(), // e.g. "amazon", "mcmaster", "mouser"
+    externalId: text("externalId").notNull(), // The actual identifier (ASIN, part number, etc.)
+    url: text("url"), // Optional direct link to the product page
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt", { mode: "date" })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt", { mode: "date" }),
+  },
+  (table) => ({
+    productIdIdx: index("ProductExternalId_productId_idx").on(table.productId),
+    sourceProductUnique: uniqueIndex("ProductExternalId_product_source_key")
+      .on(table.productId, table.source)
+      .where(sql`${table.deletedAt} IS NULL`),
+  }),
+);
+
 // ProductUnitMappings table
 export const productUnitMappings = pgTable(
   "ProductUnitMappings",
@@ -498,9 +524,20 @@ export const productRelations = relations(product, ({ one, many }) => ({
     references: [ingredient.id],
   }),
   unitMappings: many(productUnitMappings),
+  externalIds: many(productExternalId),
   InventoryEntry: many(inventoryEntry),
   images: many(productImage),
 }));
+
+export const productExternalIdRelations = relations(
+  productExternalId,
+  ({ one }) => ({
+    product: one(product, {
+      fields: [productExternalId.productId],
+      references: [product.id],
+    }),
+  }),
+);
 
 export const productUnitMappingsRelations = relations(
   productUnitMappings,

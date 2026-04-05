@@ -159,6 +159,35 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
         <EntityPillLink entity="usda-food" data={product.food} />
       ) : undefined,
     },
+    ...(product.externalIds && product.externalIds.length > 0
+      ? [
+          {
+            label: "External IDs",
+            value: (
+              <div className="flex flex-wrap gap-1">
+                {product.externalIds.map((eid) => {
+                  const label = `${eid.source}: ${eid.externalId}`;
+                  return eid.url ? (
+                    <a
+                      key={eid.id}
+                      href={eid.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      <Badge variant="outline">{label}</Badge>
+                    </a>
+                  ) : (
+                    <Badge key={eid.id} variant="outline">
+                      {label}
+                    </Badge>
+                  );
+                })}
+              </div>
+            ),
+          },
+        ]
+      : []),
     {
       label: "Inventory Locations",
       value:

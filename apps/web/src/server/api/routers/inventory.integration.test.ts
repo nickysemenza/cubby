@@ -57,6 +57,7 @@ describe("inventory router", () => {
         expectedQuantity: null,
         ingredientId: null,
         unitMappings: [],
+        externalIds: [],
       },
       TEST_ACTOR,
     );
@@ -541,6 +542,7 @@ describe("inventory router", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -747,6 +749,7 @@ describe("inventory router", () => {
               source: "manual",
             },
           ],
+          externalIds: [],
         },
         TEST_ACTOR,
       );

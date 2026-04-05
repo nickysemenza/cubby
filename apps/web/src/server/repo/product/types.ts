@@ -8,6 +8,7 @@ import type {
   inventoryEntry,
   location,
   product,
+  productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 
@@ -18,6 +19,7 @@ import type {
 export type ProductDeepDB = typeof product.$inferSelect & {
   Ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+  externalIds: Array<typeof productExternalId.$inferSelect>;
   InventoryEntry: Array<
     typeof inventoryEntry.$inferSelect & {
       location: typeof location.$inferSelect & {

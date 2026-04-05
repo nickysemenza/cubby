@@ -1,3 +1,4 @@
+import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import { hasFoodIndicators } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { isMiscProduct } from "@cubby/shared";
@@ -368,6 +369,46 @@ export function ProductFormFields<TFieldValues extends FieldValues>({
           )}
         </ArrayFieldManager>
       )}
+
+      <ArrayFieldManager<ExternalIdInput, TFieldValues>
+        form={form}
+        name={"externalIds" as Path<TFieldValues>}
+        title="External IDs"
+        addButtonText="Add External ID"
+        titleClassName={compact ? "text-sm" : undefined}
+        className={compact ? "space-y-2" : undefined}
+        emptyValue={{
+          source: "",
+          externalId: "",
+          url: undefined,
+        }}
+      >
+        {(_, index) => (
+          <>
+            <SideBySideFields>
+              <UnifiedTextField
+                form={form}
+                name={`externalIds.${index}.source` as Path<TFieldValues>}
+                label="Source"
+                placeholder="e.g. amazon, mcmaster, mouser"
+              />
+              <UnifiedTextField
+                form={form}
+                name={`externalIds.${index}.externalId` as Path<TFieldValues>}
+                label="Identifier"
+                placeholder="e.g. B08N5WRWNW"
+              />
+            </SideBySideFields>
+            <UnifiedTextField
+              form={form}
+              name={`externalIds.${index}.url` as Path<TFieldValues>}
+              label="URL (Optional)"
+              placeholder="https://..."
+              nullable={true}
+            />
+          </>
+        )}
+      </ArrayFieldManager>
     </>
   );
 

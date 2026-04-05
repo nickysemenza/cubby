@@ -40,6 +40,7 @@ describe("product repository", () => {
       expectedQuantity: null,
       ingredientId: null,
       unitMappings: [],
+      externalIds: [],
     };
 
     // Create the product
@@ -100,6 +101,7 @@ describe("product repository", () => {
           ingredientId: null,
           expectedQuantity: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -167,6 +169,7 @@ describe("product repository", () => {
       expectedQuantity: null,
       ingredientId: null,
       unitMappings: [],
+      externalIds: [],
     };
 
     // Create the product
@@ -237,6 +240,7 @@ describe("product repository", () => {
       expectedQuantity: null,
       ingredientId: unsafeIngredientId(ingredient.id),
       unitMappings: [],
+      externalIds: [],
     };
 
     // Create the product
@@ -284,6 +288,7 @@ describe("product repository", () => {
       expectedQuantity: null,
       ingredientId: unsafeIngredientId(ingredient1.id),
       unitMappings: [],
+      externalIds: [],
     };
 
     // Create the product
@@ -344,6 +349,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -373,6 +379,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -402,6 +409,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -430,6 +438,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -458,6 +467,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -487,6 +497,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -514,6 +525,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -529,6 +541,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );
@@ -566,6 +579,7 @@ describe("product repository", () => {
           expectedQuantity: null,
           ingredientId: null,
           unitMappings: [],
+          externalIds: [],
         },
         TEST_ACTOR,
       );

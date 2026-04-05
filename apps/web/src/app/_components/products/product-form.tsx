@@ -1,3 +1,4 @@
+import { externalIdInput } from "@cubby/schemas/external-id";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import {
@@ -47,6 +48,7 @@ export const productFormSchema = z
     price: z.number().positive().nullable(), // Shortcut for 1 each → $X mapping
     ingredient: ComboboxItem.nullable(), // Ingredient association
     unitMappings: z.array(unitMappingInput),
+    externalIds: z.array(externalIdInput),
   })
   .transform((data) => ({
     ...data,
@@ -116,6 +118,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       price: null, // Will be set async in useEffect
       ingredient: product?.ingredient || null,
       unitMappings: product?.unitMappings ?? [],
+      externalIds: product?.externalIds ?? [],
     },
   });
 
@@ -146,6 +149,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         expectedQuantity: values.expectedQuantity,
         ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
         unitMappings: unitMappingsWithPrice,
+        externalIds: values.externalIds,
         ...getImageData(true), // Apply pending images for creation
       };
 
@@ -185,6 +189,14 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         JSON.stringify(unitMappingsWithPrice)
       ) {
         updates.unitMappings = unitMappingsWithPrice;
+      }
+
+      // Check for external ID changes
+      if (
+        JSON.stringify(product.externalIds) !==
+        JSON.stringify(values.externalIds)
+      ) {
+        updates.externalIds = values.externalIds;
       }
 
       // Check if we have any changes (field changes or image changes)

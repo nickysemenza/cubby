@@ -567,6 +567,7 @@ describe("calculateTotals", () => {
             createdAt: new Date(),
             updatedAt: new Date(),
             images: [],
+            externalIds: [],
             unitMappings: [
               {
                 id: "map1",
@@ -644,6 +645,7 @@ describe("calculateTotals", () => {
             createdAt: new Date(),
             updatedAt: new Date(),
             images: [],
+            externalIds: [],
             unitMappings: [
               {
                 id: "map3",
@@ -817,6 +819,7 @@ describe("calculateTotals", () => {
             createdAt: new Date(),
             updatedAt: new Date(),
             images: [],
+            externalIds: [],
             unitMappings: [
               {
                 id: "map1",
@@ -929,6 +932,7 @@ describe("calculateTotals", () => {
             createdAt: new Date(),
             updatedAt: new Date(),
             images: [],
+            externalIds: [],
             unitMappings: [
               {
                 id: "map5",

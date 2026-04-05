@@ -15,6 +15,7 @@
     "./ingredient-cooccurrence": "./src/ingredient-cooccurrence.ts",
     "./image": "./src/image.ts",
     "./unitmapping": "./src/unitmapping.ts",
+    "./external-id": "./src/external-id.ts",
     "./product": "./src/product.ts",
     "./location": "./src/location.ts",
     "./inventory": "./src/inventory.ts",

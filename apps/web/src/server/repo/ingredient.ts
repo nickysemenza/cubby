@@ -30,6 +30,7 @@ import {
   type image,
   ingredient,
   product,
+  type productExternalId,
   type productUnitMappings,
   type recipe,
   type recipeSection,
@@ -109,6 +110,7 @@ type IngredientDeepDB = typeof ingredient.$inferSelect & {
   Product: Array<
     typeof product.$inferSelect & {
       unitMappings: Array<typeof productUnitMappings.$inferSelect>;
+      externalIds: Array<typeof productExternalId.$inferSelect>;
       images: Array<{
         image: typeof image.$inferSelect;
       }>;
@@ -138,6 +140,7 @@ const dbIngredientToAPI = async (
       id: unsafeProductId(prod.id),
       shortcode: unsafeProductShortcode(prod.shortcode),
       images: extractImagesFromJoinTable(prod.images),
+      externalIds: prod.externalIds.filter((eid) => eid.deletedAt === null),
       unitMappings: addProductSourceMetadata(prod.id, prod.unitMappings),
     };
   });

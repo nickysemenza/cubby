@@ -62,6 +62,7 @@ function createFixtureProduct(
     upc: null,
     ndb_number: null,
     images: [],
+    externalIds: [],
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

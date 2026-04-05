@@ -142,6 +142,7 @@ export async function batchFindProductsByNameManufacturer(
           notes: p.notes,
           price: p.price,
           images: extractImagesFromJoinTable(p.images),
+          externalIds: p.externalIds.filter((eid) => eid.deletedAt === null),
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
         });
@@ -334,6 +335,7 @@ export async function batchFindProductsByUPC(
           notes: p.notes,
           price: null, // Price will be computed from unit mappings
           images: extractImagesFromJoinTable(p.images),
+          externalIds: p.externalIds.filter((eid) => eid.deletedAt === null),
           createdAt: p.createdAt,
           updatedAt: p.updatedAt,
         });
@@ -381,6 +383,7 @@ export async function batchFindProductsByIds(
         notes: p.notes,
         price: null, // Price will be computed from unit mappings
         images: extractImagesFromJoinTable(p.images),
+        externalIds: p.externalIds.filter((eid) => eid.deletedAt === null),
         createdAt: p.createdAt,
         updatedAt: p.updatedAt,
       });

@@ -58,6 +58,7 @@ export const dbProductToAPI = (
   const {
     Ingredient,
     unitMappings,
+    externalIds,
     InventoryEntry,
     images,
     shortcode,
@@ -69,6 +70,7 @@ export const dbProductToAPI = (
     shortcode: shortcode ? unsafeProductShortcode(shortcode) : null,
     ingredient: Ingredient,
     unitMappings: addProductSourceMetadata(productData.id, unitMappings),
+    externalIds: externalIds.filter((eid) => eid.deletedAt === null),
     images: extractImagesFromJoinTable(images),
     inventoryEntry: mapRelation(InventoryEntry, (entry) => {
       const {
