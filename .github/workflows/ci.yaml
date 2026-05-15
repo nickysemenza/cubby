@@ -22,6 +22,8 @@ permissions:
   contents: read
   actions: read
   checks: write
+  # dorny/paths-filter calls listFiles on the PR via the GitHub API
+  pull-requests: read
   # https://github.com/dorny/test-reporter/issues/149
 jobs:
   detect-changes:
@@ -61,7 +63,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.30.3
+          version: 10.33.4
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
         if: steps.wasm-cache.outputs.cache-hit != 'true'
