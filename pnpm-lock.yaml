@@ -190,6 +190,9 @@ importers:
       '@base-ui/react':
         specifier: ^1.1.0
         version: 1.4.1(@types/react@19.2.13)(date-fns@4.1.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@better-auth/api-key':
+        specifier: ^1.6.11
+        version: 1.6.11(@better-auth/core@1.6.11(@better-auth/utils@0.4.0)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.0)(better-call@1.3.5(zod@4.4.3))(jose@6.2.3)(kysely@0.28.17)(nanostores@1.3.0))(@better-auth/utils@0.4.0)(better-auth@1.6.11(324aa81dfce46de6485fd41ca118cec9))
       '@cubby/recipebridge':
         specifier: workspace:*
         version: link:../../packages/wasm
