@@ -22,6 +22,8 @@ permissions:
   contents: read
   actions: read
   checks: write
+  # dorny/paths-filter calls listFiles on the PR via the GitHub API
+  pull-requests: read
   # https://github.com/dorny/test-reporter/issues/149
 jobs:
   detect-changes:
