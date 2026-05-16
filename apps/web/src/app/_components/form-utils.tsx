@@ -184,10 +184,7 @@ export function NullableNumericField<
           step,
           placeholder,
           ...field,
-          value:
-            (field.value as number | null) !== null
-              ? (field.value as number).toString()
-              : "",
+          value: field.value != null ? (field.value as number).toString() : "",
           onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
             const value = e.target.value;
             const numberValue = value ? parseFloat(value) : null;
