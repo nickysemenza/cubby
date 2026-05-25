@@ -161,7 +161,7 @@ jobs:
           fail-on-error: false
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
@@ -217,7 +217,7 @@ jobs:
           fail-on-error: false
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: nickysemenza/cubby
