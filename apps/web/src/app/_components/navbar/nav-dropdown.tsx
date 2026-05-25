@@ -29,9 +29,10 @@ export const NavDropdown = ({ label, items, icon: Icon }: NavDropdownProps) => {
           "flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
           isGroupActive ? "text-foreground" : "text-muted-foreground",
         )}
+        title={label}
       >
         {Icon && <Icon className="h-4 w-4" />}
-        {label}
+        <span className="hidden xl:inline">{label}</span>
         <ChevronDown className="h-3 w-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-44">

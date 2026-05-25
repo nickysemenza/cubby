@@ -5,6 +5,8 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 export const auth = betterAuth({
   database: drizzleAdapter(drizzle, {
     provider: "pg",
@@ -21,6 +23,9 @@ export const auth = betterAuth({
     }),
     tanstackStartCookies(), // Must be last
   ],
-  trustedOrigins: ["cubby-mobile://"],
+  trustedOrigins: [
+    "cubby-mobile://",
+    ...(isDev ? ["http://localhost:3000", "http://127.0.0.1:3000"] : []),
+  ],
   socialProviders: {},
 });

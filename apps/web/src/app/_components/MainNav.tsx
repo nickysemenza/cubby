@@ -69,9 +69,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             pathName !== "/" && "text-muted-foreground",
           )}
           aria-current={pathName === "/" ? "page" : undefined}
+          title="Home"
         >
           <HomeIcon className="h-4 w-4" />
-          Home
+          <span className="hidden xl:inline">Home</span>
         </Link>
 
         <Link
@@ -81,9 +82,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             !pathName.startsWith("/products") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/products") ? "page" : undefined}
+          title="Products"
         >
           <ProductsIcon className="h-4 w-4" />
-          Products
+          <span className="hidden xl:inline">Products</span>
         </Link>
 
         <NavDropdown label="Kitchen" items={kitchenItems} icon={KitchenIcon} />
@@ -95,9 +97,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             !pathName.startsWith("/locations") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/locations") ? "page" : undefined}
+          title="Locations"
         >
           <LocationsIcon className="h-4 w-4" />
-          Locations
+          <span className="hidden xl:inline">Locations</span>
         </Link>
 
         <Link
@@ -107,9 +110,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             !pathName.startsWith("/inventory") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/inventory") ? "page" : undefined}
+          title="Inventory"
         >
           <InventoryIcon className="h-4 w-4" />
-          Inventory
+          <span className="hidden xl:inline">Inventory</span>
         </Link>
 
         <Link
@@ -119,9 +123,10 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
             !pathName.startsWith("/projects") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/projects") ? "page" : undefined}
+          title="Projects"
         >
           <Hammer className="h-4 w-4" />
-          Projects
+          <span className="hidden xl:inline">Projects</span>
         </Link>
 
         {session.data?.user && (

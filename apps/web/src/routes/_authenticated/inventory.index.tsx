@@ -1,8 +1,7 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { InventoryActions } from "~/app/inventory/inventory-actions";
 import { InventoryItemList } from "~/app/inventory/inventoryitemlist";
 import { EntityLayout } from "~/components/layouts/entity-layout";
-import { Button } from "~/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/inventory/")({
   component: InventoryPage,
@@ -17,9 +16,6 @@ function InventoryPage() {
       actions={
         <div className="flex flex-wrap gap-2">
           <InventoryActions />
-          <Link to="/inventory/new">
-            <Button>Add Inventory</Button>
-          </Link>
         </div>
       }
     >

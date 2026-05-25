@@ -114,6 +114,14 @@ export function Provider({
         replace={(href) => navigate({ to: href, replace: true })}
         Link={Link}
         apiKey
+        toast={({ variant, message }) => {
+          const text = message ?? "Something went wrong.";
+          if (variant === "error") toast.error(text);
+          else if (variant === "success") toast.success(text);
+          else if (variant === "warning") toast.warning(text);
+          else if (variant === "info") toast.info(text);
+          else toast(text);
+        }}
       >
         <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
           {children}
