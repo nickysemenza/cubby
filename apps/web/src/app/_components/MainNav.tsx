@@ -65,10 +65,11 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         <Link
           to="/"
           className={cn(
-            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+            "nav-link-animated inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             pathName !== "/" && "text-muted-foreground",
           )}
           aria-current={pathName === "/" ? "page" : undefined}
+          data-status={pathName === "/" ? "active" : undefined}
           title="Home"
         >
           <HomeIcon className="h-4 w-4" />
@@ -78,10 +79,11 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         <Link
           to="/products"
           className={cn(
-            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+            "nav-link-animated inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/products") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/products") ? "page" : undefined}
+          data-status={pathName.startsWith("/products") ? "active" : undefined}
           title="Products"
         >
           <ProductsIcon className="h-4 w-4" />
@@ -93,10 +95,11 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         <Link
           to="/locations"
           className={cn(
-            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+            "nav-link-animated inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/locations") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/locations") ? "page" : undefined}
+          data-status={pathName.startsWith("/locations") ? "active" : undefined}
           title="Locations"
         >
           <LocationsIcon className="h-4 w-4" />
@@ -106,10 +109,11 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         <Link
           to="/inventory"
           className={cn(
-            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+            "nav-link-animated inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/inventory") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/inventory") ? "page" : undefined}
+          data-status={pathName.startsWith("/inventory") ? "active" : undefined}
           title="Inventory"
         >
           <InventoryIcon className="h-4 w-4" />
@@ -119,10 +123,11 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
         <Link
           to="/projects"
           className={cn(
-            "inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
+            "nav-link-animated inline-flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary",
             !pathName.startsWith("/projects") && "text-muted-foreground",
           )}
           aria-current={pathName.startsWith("/projects") ? "page" : undefined}
+          data-status={pathName.startsWith("/projects") ? "active" : undefined}
           title="Projects"
         >
           <Hammer className="h-4 w-4" />

@@ -1,8 +1,10 @@
 import { ResponsivePie } from "@nivo/pie";
+import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { getCategoryColor } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 type DonutDatum = {
   id: string;
@@ -42,7 +44,7 @@ export function PurchaseDonut({
   }, [purchases]);
 
   if (data.length === 0) {
-    return <p className="text-muted-foreground text-sm">No purchase data.</p>;
+    return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
   }
 
   return (

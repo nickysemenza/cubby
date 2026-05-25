@@ -1,6 +1,8 @@
+import { Gauge } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
+import { ChartEmpty } from "./chart-empty";
 
 type ProjectBudget = {
   name: string;
@@ -39,11 +41,7 @@ export function BudgetHealth({
   }, [projects, purchases]);
 
   if (data.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No projects with estimates.
-      </p>
-    );
+    return <ChartEmpty icon={Gauge} title="No projects with estimates." />;
   }
 
   const maxPct = Math.max(...data.map((d) => d.pct), 100);

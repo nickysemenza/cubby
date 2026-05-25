@@ -1,7 +1,9 @@
 import { ResponsiveCalendar } from "@nivo/calendar";
+import { CalendarClock } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { NotionTask } from "~/server/clients/notion";
 import { formatDate, StatusIcon } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -29,9 +31,7 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
   }, [tasks]);
 
   if (data.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">No tasks with due dates.</p>
-    );
+    return <ChartEmpty icon={CalendarClock} title="No tasks with due dates." />;
   }
 
   const yearSpan =

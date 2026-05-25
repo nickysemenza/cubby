@@ -11,6 +11,7 @@ import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
 import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { PageHero } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
@@ -76,10 +77,12 @@ function RecipeDetailPage() {
 
   return (
     <PageWrapper>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-bold text-2xl">{recipe.name}</h1>
-        <div className="flex gap-2">
-          {!isEditing ? (
+      <PageHero
+        variant="detail"
+        entity="recipe"
+        title={recipe.name}
+        actions={
+          !isEditing ? (
             <>
               <Button onClick={startEditing} variant="outline" size="sm">
                 <Edit className="mr-2 h-4 w-4" />
@@ -92,9 +95,9 @@ function RecipeDetailPage() {
               <X className="mr-2 h-4 w-4" />
               Cancel
             </Button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />

@@ -16,7 +16,7 @@ export function Image({ src, alt, className, style, ...props }: ImageProps) {
   return (
     <>
       {isLoading && (
-        <div className={cn("animate-pulse bg-muted", className)} style={style} />
+        <div className={cn("skeleton-shimmer", className)} style={style} />
       )}
       <img
         src={src}

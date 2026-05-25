@@ -1,9 +1,10 @@
 import { useNavigate } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
-import { RotateCcw } from "lucide-react";
+import { Network, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { NotionProject } from "~/server/clients/notion";
+import { ChartEmpty } from "./chart-empty";
 
 const STATUS_COLORS: Record<string, string> = {
   Done: "hsl(142, 50%, 50%)",
@@ -73,11 +74,7 @@ export function DependencyGraph({ projects }: { projects: NotionProject[] }) {
   }, [projects]);
 
   if (nodes.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        No project dependencies found.
-      </p>
-    );
+    return <ChartEmpty icon={Network} title="No project dependencies found." />;
   }
 
   return <ForceGraph nodes={nodes} links={links} />;

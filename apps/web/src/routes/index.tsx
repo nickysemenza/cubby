@@ -10,7 +10,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <PageWrapper className="space-y-6">
+    <PageWrapper className="gradient-mesh space-y-6">
       {/* Entity Stats */}
       <section>
         <h2 className="mb-3 font-medium text-muted-foreground text-sm">

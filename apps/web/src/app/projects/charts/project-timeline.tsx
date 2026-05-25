@@ -1,7 +1,9 @@
+import { CalendarRange } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import type { NotionProject } from "~/server/clients/notion";
 import { formatDate } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 const STATUS_COLORS: Record<string, string> = {
   Done: "hsl(142, 50%, 50%)",
@@ -42,9 +44,7 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
   }, [projects]);
 
   if (items.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">No projects with dates.</p>
-    );
+    return <ChartEmpty icon={CalendarRange} title="No projects with dates." />;
   }
 
   const marginLeft = 160;

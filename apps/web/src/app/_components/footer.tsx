@@ -53,22 +53,33 @@ function EntityCounts() {
 
 export function AppFooter() {
   return (
-    <footer className="hidden border-t md:block">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-2 text-muted-foreground text-xs md:px-6">
+    <footer className="safe-bottom border-t">
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-2 font-mono text-[10px] text-muted-foreground uppercase tracking-[0.12em] md:px-6">
         <div className="flex items-center gap-3">
           <span>
             {buildDate} ·{" "}
             <span title={__GIT_COMMIT_MSG__}>{__GIT_COMMIT__}</span>
           </span>
-          <EntityCounts />
+          <span className="hidden sm:inline">
+            <EntityCounts />
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-muted-foreground/60">⌘K to search</span>
+        <div className="flex items-center gap-2">
+          <span className="hidden text-muted-foreground/60 sm:inline">
+            ⌘K to search
+          </span>
+          <span
+            aria-hidden="true"
+            className="hidden text-muted-foreground/40 sm:inline"
+          >
+            ·
+          </span>
           <a
             href="https://github.com/nickysemenza/recipehub"
             target="_blank"
             rel="noopener noreferrer"
             className="text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="GitHub repository"
           >
             <Github className="h-3.5 w-3.5" />
           </a>

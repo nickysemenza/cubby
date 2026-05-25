@@ -7,18 +7,18 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  ExternalLink,
-  ListTodo,
-  ShieldAlert,
-} from "lucide-react";
+import { ExternalLink, Hammer, ListTodo, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
 import RTable from "~/app/_components/data-table/Table";
 import { Badge } from "~/components/ui/badge";
-import { formatCurrency } from "~/lib/utils";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyIcon,
+  EmptyTitle,
+} from "~/components/ui/empty";
+import { getStatusBadgeProps } from "~/lib/status-colors";
+import { cn, formatCurrency } from "~/lib/utils";
 import type {
   NotionProject,
   NotionPurchase,
@@ -81,18 +81,12 @@ export const nivoChartTheme = {
 // -- Status Icon --
 
 export function StatusIcon({ status }: { status: string | null }) {
-  switch (status) {
-    case "Done":
-      return <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />;
-    case "In progress":
-      return <Clock className="h-4 w-4 shrink-0 text-blue-500" />;
-    case "Blocked":
-      return <ShieldAlert className="h-4 w-4 shrink-0 text-red-500" />;
-    case "Planning":
-      return <ListTodo className="h-4 w-4 shrink-0 text-purple-500" />;
-    default:
-      return <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />;
-  }
+  const { icon: Icon, className } = getStatusBadgeProps("project", status);
+  // Extract just the text color from the bg+text className tuple.
+  const textClass =
+    className.split(" ").find((c) => c.startsWith("text-")) ??
+    "text-muted-foreground";
+  return Icon ? <Icon className={cn("h-4 w-4 shrink-0", textClass)} /> : null;
 }
 
 // -- Date formatting --
@@ -200,7 +194,14 @@ export function TaskList({ tasks }: { tasks: NotionTask[] }) {
   });
 
   if (tasks.length === 0) {
-    return <p className="text-muted-foreground text-sm">No tasks found.</p>;
+    return (
+      <Empty variant="minimal" className="py-6">
+        <EmptyHeader>
+          <EmptyIcon icon={ListTodo} />
+          <EmptyTitle>No tasks found</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return <RTable table={table} />;
@@ -293,7 +294,14 @@ export function PurchaseList({ purchases }: { purchases: NotionPurchase[] }) {
   });
 
   if (purchases.length === 0) {
-    return <p className="text-muted-foreground text-sm">No purchases found.</p>;
+    return (
+      <Empty variant="minimal" className="py-6">
+        <EmptyHeader>
+          <EmptyIcon icon={ShoppingCart} />
+          <EmptyTitle>No purchases found</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return <RTable table={table} />;
@@ -434,7 +442,14 @@ export function ProjectTable({
   });
 
   if (projects.length === 0) {
-    return <p className="text-muted-foreground text-sm">No projects found.</p>;
+    return (
+      <Empty variant="minimal" className="py-6">
+        <EmptyHeader>
+          <EmptyIcon icon={Hammer} />
+          <EmptyTitle>No projects found</EmptyTitle>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return <RTable table={table} />;

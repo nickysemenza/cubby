@@ -1,4 +1,5 @@
 import { ResponsiveBar } from "@nivo/bar";
+import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
@@ -7,6 +8,7 @@ import {
   nivoChartTheme,
   normalizeCategoryKey,
 } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 type BarDatum = {
   subcategory: string;
@@ -56,7 +58,7 @@ export function SubcategoryBars({
   }, [purchases]);
 
   if (data.length === 0) {
-    return <p className="text-muted-foreground text-sm">No purchase data.</p>;
+    return <ChartEmpty icon={ShoppingBag} title="No purchase data." />;
   }
 
   const chartHeight = Math.max(300, data.length * 32 + 60);

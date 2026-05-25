@@ -1,8 +1,10 @@
 import { ResponsiveCalendar } from "@nivo/calendar";
+import { CalendarDays } from "lucide-react";
 import { useMemo, useState } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { formatDate } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 export function SpendingHeatmap({
   purchases,
@@ -34,7 +36,7 @@ export function SpendingHeatmap({
   }, [purchases]);
 
   if (data.length === 0) {
-    return <p className="text-muted-foreground text-sm">No dated purchases.</p>;
+    return <ChartEmpty icon={CalendarDays} title="No dated purchases." />;
   }
 
   const yearSpan =

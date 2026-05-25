@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { CategoryTreemap } from "./charts/category-treemap";
@@ -275,13 +276,13 @@ function CostSummary({
 function DetailSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-      <div className="h-10 w-64 animate-pulse rounded bg-muted" />
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-10 w-64" />
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
-        <div className="h-24 animate-pulse rounded-lg bg-muted" />
+        <Skeleton className="h-24 rounded-lg" />
+        <Skeleton className="h-24 rounded-lg" />
       </div>
-      <div className="h-[350px] animate-pulse rounded-lg bg-muted" />
+      <Skeleton className="h-[350px] rounded-lg" />
     </div>
   );
 }

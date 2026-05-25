@@ -26,9 +26,10 @@ export const NavDropdown = ({ label, items, icon: Icon }: NavDropdownProps) => {
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
-          "flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
+          "nav-link-animated flex items-center gap-1.5 font-medium text-sm transition-colors hover:text-primary focus:outline-none",
           isGroupActive ? "text-foreground" : "text-muted-foreground",
         )}
+        data-status={isGroupActive ? "active" : undefined}
         title={label}
       >
         {Icon && <Icon className="h-4 w-4" />}

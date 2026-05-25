@@ -119,6 +119,7 @@
   --brand-terra-light: #d98a68;
   --brand-cream: #fdfbf7;
   --brand-shelf: #5c5550;
+  --brand-sage: oklch(0.94 0.025 145);
 
   /* Warm shadows - earthy tones for depth */
   --shadow-warm-sm:

@@ -1,8 +1,10 @@
 import { ResponsiveLine } from "@nivo/line";
+import { TrendingUp } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { nivoChartTheme } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 export function SpendingOverTime({
   purchases,
@@ -35,9 +37,7 @@ export function SpendingOverTime({
   }, [purchases]);
 
   if (data.length === 0) {
-    return (
-      <p className="text-muted-foreground text-sm">No dated purchase data.</p>
-    );
+    return <ChartEmpty icon={TrendingUp} title="No dated purchase data." />;
   }
 
   const maxY = data[0].data[data[0].data.length - 1].y;

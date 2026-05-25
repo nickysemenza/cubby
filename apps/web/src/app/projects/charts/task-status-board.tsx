@@ -1,5 +1,7 @@
+import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
 import type { NotionProject, NotionTask } from "~/server/clients/notion";
+import { ChartEmpty } from "./chart-empty";
 
 const STATUS_ORDER = ["Not started", "later", "In progress", "Blocked", "Done"];
 const STATUS_COLORS: Record<string, string> = {
@@ -67,7 +69,7 @@ export function TaskStatusBoard({
   }, [tasks, projects]);
 
   if (projectRows.length === 0) {
-    return <p className="text-muted-foreground text-sm">No task data.</p>;
+    return <ChartEmpty icon={ListChecks} title="No task data." />;
   }
 
   const maxCount = Math.max(

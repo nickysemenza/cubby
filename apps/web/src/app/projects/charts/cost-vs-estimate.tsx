@@ -1,8 +1,10 @@
 import { ResponsiveBar } from "@nivo/bar";
+import { DollarSign } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoChartTheme } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 type Datum = {
   project: string;
@@ -42,7 +44,7 @@ export function CostVsEstimate({
   }, [projects, purchases]);
 
   if (data.length === 0) {
-    return <p className="text-muted-foreground text-sm">No cost data.</p>;
+    return <ChartEmpty icon={DollarSign} title="No cost data." />;
   }
 
   const chartHeight = Math.max(250, data.length * 50 + 60);

@@ -1,9 +1,11 @@
 import { ResponsiveBar } from "@nivo/bar";
 import { useNavigate } from "@tanstack/react-router";
+import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoChartTheme } from "../shared";
+import { ChartEmpty } from "./chart-empty";
 
 export function SpendingByProject({
   purchases,
@@ -33,7 +35,7 @@ export function SpendingByProject({
   }, [purchases, projects]);
 
   if (data.length === 0) {
-    return <p className="text-muted-foreground text-sm">No spending data.</p>;
+    return <ChartEmpty icon={Wallet} title="No spending data." />;
   }
 
   const chartHeight = Math.max(250, data.length * 32 + 60);

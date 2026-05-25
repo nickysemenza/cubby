@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { USDAFoodList } from "~/app/usda/usdafoodlist";
 import { PageWrapper } from "~/components/layout/page-wrapper";
+import { PageHero } from "~/components/layouts/page-hero";
 
 export const Route = createFileRoute("/_authenticated/usda/")({
   component: USDAPage,
@@ -9,8 +10,8 @@ export const Route = createFileRoute("/_authenticated/usda/")({
 function USDAPage() {
   return (
     <PageWrapper>
-      <div className="fade-in mb-6 flex animate-in items-center justify-between duration-300">
-        <h1 className="font-bold font-heading text-2xl">USDA Foods</h1>
+      <div className="fade-in animate-in duration-300">
+        <PageHero variant="list" entity="usda-food" title="USDA Foods" />
       </div>
       <USDAFoodList />
     </PageWrapper>

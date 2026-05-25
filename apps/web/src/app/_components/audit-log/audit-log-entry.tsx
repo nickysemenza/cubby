@@ -10,6 +10,7 @@ import {
   CollapsibleTrigger,
 } from "~/components/ui/collapsible";
 import { EntityIcon, entities } from "~/entities/entities";
+import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 import type { RouterOutputs } from "~/trpc/react";
 import { EntityPillById } from "../EntityPillById";
@@ -43,22 +44,6 @@ function ChangesList({
 
 type AuditLogEntry = RouterOutputs["auditLog"]["list"]["entries"][number];
 
-// Map actions to badge variants - using theme colors
-const actionConfig: Record<string, { label: string; className: string }> = {
-  create: {
-    label: "Created",
-    className: "bg-secondary text-secondary-foreground",
-  },
-  update: {
-    label: "Updated",
-    className: "bg-slate/20 text-slate",
-  },
-  delete: {
-    label: "Deleted",
-    className: "bg-destructive/15 text-destructive",
-  },
-};
-
 interface AuditLogEntryProps {
   entry: AuditLogEntry;
   showEntityLink?: boolean;
@@ -72,10 +57,7 @@ export function AuditLogEntryComponent({
   const hasChanges = entry.changes && Object.keys(entry.changes).length > 0;
 
   const entityConfig = entities[entry.entityType as AuditEntityType];
-  const action = actionConfig[entry.action] ?? {
-    label: entry.action,
-    className: "bg-muted text-muted-foreground",
-  };
+  const action = getStatusBadgeProps("audit", entry.action);
 
   const userInitials = entry.user?.name
     ? entry.user.name

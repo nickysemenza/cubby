@@ -10,6 +10,14 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyIcon,
+  EmptyTitle,
+} from "~/components/ui/empty";
+import { Skeleton } from "~/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
@@ -395,7 +403,17 @@ function ProjectCards({ projects }: { projects: NotionProject[] }) {
   const done = projects.filter((p) => p.status === "Done");
 
   if (active.length === 0 && done.length === 0) {
-    return <p className="text-muted-foreground text-sm">No projects found.</p>;
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyIcon icon={Hammer} />
+          <EmptyTitle>No projects found</EmptyTitle>
+          <EmptyDescription>
+            Adjust your filters or check your Notion workspace for projects.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
   }
 
   return (
@@ -487,13 +505,14 @@ function ProjectCard({ project }: { project: NotionProject }) {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="h-8 w-48 animate-pulse rounded bg-muted" />
+      <Skeleton className="h-8 w-48" />
       <div className="grid gap-4 sm:grid-cols-3">
         {Array.from({ length: 3 }, (_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-lg bg-muted" />
+          // biome-ignore lint/suspicious/noArrayIndexKey: placeholder cards have no stable identity
+          <Skeleton key={i} className="h-24 rounded-lg" />
         ))}
       </div>
-      <div className="h-64 animate-pulse rounded-lg bg-muted" />
+      <Skeleton className="h-64 rounded-lg" />
     </div>
   );
 }

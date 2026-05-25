@@ -1,8 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FC } from "react";
+import { PageHero } from "~/components/layouts/page-hero";
 import { ImageGallery } from "~/components/media/image-gallery";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { EntityIcon, entities } from "~/entities/entities";
+import { entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
@@ -44,12 +45,14 @@ export const DetailPage: FC<DetailPageProps> = ({
         </div>
       )}
 
-      <h1 className="hidden items-center gap-2 font-heading font-semibold text-xl tracking-tight sm:flex sm:text-2xl">
-        <EntityIcon entity={entity} colored className="h-6 w-6" />
-        <span>
-          {entityDetails.label}: <span className="text-foreground">{name}</span>
-        </span>
-      </h1>
+      <div className="hidden sm:block">
+        <PageHero
+          variant="detail"
+          entity={entity}
+          eyebrow={entityDetails.label}
+          title={name}
+        />
+      </div>
 
       {/* Grid sections */}
       <div className="grid gap-3 sm:gap-6 md:grid-cols-2">

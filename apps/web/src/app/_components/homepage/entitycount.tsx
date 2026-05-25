@@ -3,6 +3,7 @@ import type { SortParams } from "@cubby/schemas/pagination";
 import { useQueries } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Card } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { entities } from "~/entities/entities";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
@@ -61,7 +62,7 @@ function StatCard({
           </div>
           <div className="min-w-0 flex-1">
             {isLoading ? (
-              <div className="h-7 w-12 animate-pulse rounded bg-muted" />
+              <Skeleton className="h-7 w-12" />
             ) : isError ? (
               <p className="font-heading font-semibold text-2xl text-muted-foreground leading-none tracking-tight">
                 —
