@@ -108,8 +108,7 @@ const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
   databaseConfig.host = "localhost";
-  // Always use port 5555 (mapped from container's 5432)
-  databaseConfig.port = 5555;
+  databaseConfig.port = 5432;
   return databaseConfig;
 };
 

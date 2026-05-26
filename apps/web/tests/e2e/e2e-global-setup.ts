@@ -19,10 +19,8 @@ const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
 const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
-  const isCI = !!process.env.CI;
   databaseConfig.host = "localhost";
-  // In CI, postgres runs on 5432; locally we use 5555 (mapped from container's 5432)
-  databaseConfig.port = isCI ? 5432 : 5555;
+  databaseConfig.port = 5432;
   return databaseConfig;
 };
 
