@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
+import { MarkdownText } from "~/components/markdown-lite";
 import {
   CommandDialog,
   CommandEmpty,
@@ -548,9 +549,9 @@ function AnswerView({
       {!isPending && result && (
         <>
           <CommandGroup heading={`Answer · "${query}"`}>
-            <div className="whitespace-pre-wrap px-2 py-2 text-sm leading-relaxed">
+            <MarkdownText className="px-2 py-2 text-sm leading-relaxed">
               {result.answer}
-            </div>
+            </MarkdownText>
           </CommandGroup>
 
           {result.sources.length > 0 && (

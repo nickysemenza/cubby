@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { entityTypeMap } from "~/app/_components/search/search-utils";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
+import { MarkdownText } from "~/components/markdown-lite";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
@@ -72,8 +73,10 @@ function AskPage() {
         <div className="space-y-4">
           {/* Answer */}
           <Card>
-            <CardContent className="whitespace-pre-wrap pt-4 text-sm leading-relaxed">
-              {result.answer}
+            <CardContent className="pt-4">
+              <MarkdownText className="text-sm leading-relaxed">
+                {result.answer}
+              </MarkdownText>
             </CardContent>
           </Card>
 
