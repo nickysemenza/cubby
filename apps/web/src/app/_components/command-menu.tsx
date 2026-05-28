@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { MarkdownText } from "~/components/markdown-lite";
+import { MarkdownText } from "~/components/markdown";
 import {
   CommandDialog,
   CommandEmpty,

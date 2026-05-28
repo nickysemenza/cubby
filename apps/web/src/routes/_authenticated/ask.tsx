@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { entityTypeMap } from "~/app/_components/search/search-utils";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
-import { MarkdownText } from "~/components/markdown-lite";
+import { MarkdownText } from "~/components/markdown";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
