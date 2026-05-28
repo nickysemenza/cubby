@@ -1,8 +1,10 @@
+import type { AgentResult } from "@cubby/schemas/agent";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  ArrowLeft,
   BookOpen,
   ClipboardList,
   ExternalLink,
@@ -12,8 +14,10 @@ import {
   Search,
   Settings,
   ShoppingCart,
+  Sparkles,
 } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import {
   CommandDialog,
   CommandEmpty,
@@ -24,7 +28,7 @@ import {
   CommandSeparator,
 } from "~/components/ui/command";
 import { Spinner } from "~/components/ui/spinner";
-import { entities } from "~/entities/entities";
+import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";
@@ -57,6 +61,26 @@ export function GlobalCommandMenu({
 
   // Notion data — already cached from dashboard, filter client-side
   const trpc = useTRPC();
+
+  // --- Agent ("Ask Cubby") ---
+  // Opt-in: the agent only runs when the user explicitly selects the Ask item.
+  // Keyword/shortcode fast paths stay instant and untouched.
+  const [answerMode, setAnswerMode] = React.useState(false);
+  const askAgent = useMutation(
+    trpc.agent.ask.mutationOptions({
+      onError: (error) => toast.error(error.message),
+    }),
+  );
+  const runAsk = (query: string) => {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) return;
+    setAnswerMode(true);
+    askAgent.mutate({ query: trimmed });
+  };
+  const exitAnswerMode = () => {
+    setAnswerMode(false);
+    askAgent.reset();
+  };
   const { data: notionData } = useQuery({
     ...trpc.notion.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
@@ -136,12 +160,14 @@ export function GlobalCommandMenu({
     return () => document.removeEventListener("keydown", down);
   }, [open, setOpen]);
 
-  // Reset search when dialog closes
+  // Reset search and answer mode when dialog closes
   React.useEffect(() => {
     if (!open) {
       setSearch("");
+      setAnswerMode(false);
+      askAgent.reset();
     }
-  }, [open]);
+  }, [open, askAgent]);
 
   const goToEntity = (entityType: SearchableEntity, id: string) => {
     const entity = entities[entityTypeMap[entityType]];
@@ -200,249 +226,385 @@ export function GlobalCommandMenu({
         onValueChange={setSearch}
       />
       <CommandList className="max-h-96">
-        {/* Loading state */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-6">
-            <Spinner className="text-muted-foreground" />
-          </div>
-        )}
-
-        {/* Empty state */}
-        {isEmpty && !isLoading && !shortcodeResult && !notionResults && (
-          <CommandEmpty>No results found.</CommandEmpty>
-        )}
-
-        {/* Shortcode result - appears at top when typing a valid shortcode */}
-        {parsedShortcode && shortcodeResult && (
-          <CommandGroup heading="Shortcode">
-            <CommandItem
-              onSelect={goToShortcode}
-              className="flex items-center gap-2"
-            >
-              {parsedShortcode.type === "location" ? (
-                <MapPin className="h-4 w-4" />
-              ) : parsedShortcode.type === "product" ? (
-                <Package className="h-4 w-4" />
-              ) : (
-                <BookOpen className="h-4 w-4" />
-              )}
-              <span>{shortcodeResult.name}</span>
-              <span className="ml-auto font-mono text-muted-foreground text-xs">
-                {search.toUpperCase()}
-              </span>
-            </CommandItem>
-          </CommandGroup>
-        )}
-
-        {/* Search Results - grouped by entity type with icon placeholders */}
-        {hasResults && !isLoading && (
+        {answerMode ? (
+          <AnswerView
+            query={search}
+            isPending={askAgent.isPending}
+            result={askAgent.data ?? null}
+            showToolCalls={isDevtoolsVisible}
+            onBack={exitAnswerMode}
+            onSelectSource={(entityType, id) => goToEntity(entityType, id)}
+          />
+        ) : (
           <>
-            {groupedResults.map((group) => (
-              <CommandGroup key={group.entityType} heading={group.label}>
-                {group.items.map((item) => {
-                  const enrichment = getEnrichmentText(item);
+            {/* Ask Cubby — opt-in agent, pinned at top while searching */}
+            {hasSearch && (
+              <CommandGroup>
+                <CommandItem
+                  value={`ask-cubby-${search}`}
+                  onSelect={() => runAsk(search)}
+                  className="flex items-center gap-3"
+                >
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  <span className="truncate">
+                    Ask Cubby:{" "}
+                    <span className="text-muted-foreground">"{search}"</span>
+                  </span>
+                </CommandItem>
+              </CommandGroup>
+            )}
 
-                  return (
-                    <CommandItem
-                      key={`${item.entityType}-${item.id}`}
-                      onSelect={() => goToEntity(item.entityType, item.id)}
-                      className="flex items-center gap-3"
-                    >
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt=""
-                          className="h-8 w-8 shrink-0 rounded object-cover"
-                        />
-                      ) : (
+            {/* Loading state */}
+            {isLoading && (
+              <div className="flex items-center justify-center py-6">
+                <Spinner className="text-muted-foreground" />
+              </div>
+            )}
+
+            {/* Empty state */}
+            {isEmpty && !isLoading && !shortcodeResult && !notionResults && (
+              <CommandEmpty>No results found.</CommandEmpty>
+            )}
+
+            {/* Shortcode result - appears at top when typing a valid shortcode */}
+            {parsedShortcode && shortcodeResult && (
+              <CommandGroup heading="Shortcode">
+                <CommandItem
+                  onSelect={goToShortcode}
+                  className="flex items-center gap-2"
+                >
+                  {parsedShortcode.type === "location" ? (
+                    <MapPin className="h-4 w-4" />
+                  ) : parsedShortcode.type === "product" ? (
+                    <Package className="h-4 w-4" />
+                  ) : (
+                    <BookOpen className="h-4 w-4" />
+                  )}
+                  <span>{shortcodeResult.name}</span>
+                  <span className="ml-auto font-mono text-muted-foreground text-xs">
+                    {search.toUpperCase()}
+                  </span>
+                </CommandItem>
+              </CommandGroup>
+            )}
+
+            {/* Search Results - grouped by entity type with icon placeholders */}
+            {hasResults && !isLoading && (
+              <>
+                {groupedResults.map((group) => (
+                  <CommandGroup key={group.entityType} heading={group.label}>
+                    {group.items.map((item) => {
+                      const enrichment = getEnrichmentText(item);
+
+                      return (
+                        <CommandItem
+                          key={`${item.entityType}-${item.id}`}
+                          onSelect={() => goToEntity(item.entityType, item.id)}
+                          className="flex items-center gap-3"
+                        >
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt=""
+                              className="h-8 w-8 shrink-0 rounded object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                              <SearchResultItemIcon
+                                item={item}
+                                className="h-4 w-4 shrink-0"
+                              />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm">{item.name}</div>
+                            {(item.subtitle || enrichment) && (
+                              <div className="truncate text-muted-foreground text-xs">
+                                {[item.subtitle, enrichment]
+                                  .filter(Boolean)
+                                  .join(" · ")}
+                              </div>
+                            )}
+                          </div>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                ))}
+                <CommandGroup>
+                  <CommandItem
+                    onSelect={() => {
+                      navigate({ to: "/search", search: { q: search } });
+                      setOpen(false);
+                    }}
+                    className="justify-center text-muted-foreground"
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    See all results for "{search}"
+                  </CommandItem>
+                </CommandGroup>
+              </>
+            )}
+
+            {/* Notion results — filtered from cached dashboard data */}
+            {notionResults && !isLoading && (
+              <>
+                {notionResults.projects.length > 0 && (
+                  <CommandGroup heading="Projects (Notion)">
+                    {notionResults.projects.map((p) => (
+                      <CommandItem
+                        key={`notion-project-${p.id}`}
+                        onSelect={() => {
+                          navigate({
+                            to: "/projects/$id",
+                            params: { id: p.id },
+                          });
+                          setOpen(false);
+                        }}
+                        className="flex items-center gap-3"
+                      >
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
-                          <SearchResultItemIcon
-                            item={item}
-                            className="h-4 w-4 shrink-0"
-                          />
+                          {p.icon ? (
+                            <span className="text-base">{p.icon}</span>
+                          ) : (
+                            <Hammer className="h-4 w-4" />
+                          )}
                         </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm">{item.name}</div>
-                        {(item.subtitle || enrichment) && (
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm">{p.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
-                            {[item.subtitle, enrichment]
+                            {[p.status, p.kind].filter(Boolean).join(" · ")}
+                          </div>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+                {notionResults.tasks.length > 0 && (
+                  <CommandGroup heading="Tasks (Notion)">
+                    {notionResults.tasks.map((t) => (
+                      <CommandItem
+                        key={`notion-task-${t.id}`}
+                        onSelect={() => {
+                          window.open(t.notionUrl, "_blank");
+                          setOpen(false);
+                        }}
+                        className="flex items-center gap-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                          <ClipboardList className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm">{t.name}</div>
+                          <div className="truncate text-muted-foreground text-xs">
+                            {[t.status, t.projectName]
                               .filter(Boolean)
                               .join(" · ")}
                           </div>
-                        )}
-                      </div>
+                        </div>
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+                {notionResults.purchases.length > 0 && (
+                  <CommandGroup heading="Purchases (Notion)">
+                    {notionResults.purchases.map((p) => (
+                      <CommandItem
+                        key={`notion-purchase-${p.id}`}
+                        onSelect={() => {
+                          window.open(p.notionUrl, "_blank");
+                          setOpen(false);
+                        }}
+                        className="flex items-center gap-3"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                          <ShoppingCart className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm">{p.name}</div>
+                          <div className="truncate text-muted-foreground text-xs">
+                            {[
+                              p.cost != null
+                                ? `$${p.cost.toLocaleString()}`
+                                : null,
+                              p.projectName,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </div>
+                        </div>
+                        <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                )}
+              </>
+            )}
+
+            {/* Quick Actions - show when searching and matching */}
+            {hasSearch && filteredActions.length > 0 && !isLoading && (
+              <>
+                {hasResults && <CommandSeparator />}
+                <CommandGroup heading="Quick Actions">
+                  {filteredActions.map((action) => (
+                    <CommandItem
+                      key={action.id}
+                      onSelect={() => goToPage(action.path)}
+                    >
+                      <action.icon className="h-4 w-4" />
+                      <span>{action.name}</span>
                     </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            ))}
-            <CommandGroup>
-              <CommandItem
-                onSelect={() => {
-                  navigate({ to: "/search", search: { q: search } });
-                  setOpen(false);
-                }}
-                className="justify-center text-muted-foreground"
-              >
-                <Search className="mr-2 h-4 w-4" />
-                See all results for "{search}"
-              </CommandItem>
-            </CommandGroup>
-          </>
-        )}
+                  ))}
+                </CommandGroup>
+              </>
+            )}
 
-        {/* Notion results — filtered from cached dashboard data */}
-        {notionResults && !isLoading && (
-          <>
-            {notionResults.projects.length > 0 && (
-              <CommandGroup heading="Projects (Notion)">
-                {notionResults.projects.map((p) => (
+            {/* Default view when not searching */}
+            {!hasSearch && !isLoading && (
+              <>
+                <CommandGroup heading="Quick Actions">
+                  {filteredActions.map((action) => (
+                    <CommandItem
+                      key={action.id}
+                      onSelect={() => goToPage(action.path)}
+                    >
+                      <action.icon className="h-4 w-4" />
+                      <span>{action.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                <CommandSeparator />
+                <CommandGroup heading="Go to">
+                  {Object.values(entities).map((entity) => (
+                    <CommandItem
+                      key={entity.basePath}
+                      onSelect={() => goToPage(`/${entity.basePath}`)}
+                    >
+                      <entity.lucideIcon className="h-4 w-4" />
+                      <span>{entity.pluralLabel}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+                <CommandSeparator />
+                <CommandGroup heading="Settings">
                   <CommandItem
-                    key={`notion-project-${p.id}`}
                     onSelect={() => {
-                      navigate({
-                        to: "/projects/$id",
-                        params: { id: p.id },
-                      });
+                      toggleDevtools();
                       setOpen(false);
                     }}
-                    className="flex items-center gap-3"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
-                      {p.icon ? (
-                        <span className="text-base">{p.icon}</span>
-                      ) : (
-                        <Hammer className="h-4 w-4" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{p.name}</div>
-                      <div className="truncate text-muted-foreground text-xs">
-                        {[p.status, p.kind].filter(Boolean).join(" · ")}
-                      </div>
-                    </div>
+                    <Settings className="h-4 w-4" />
+                    <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
                   </CommandItem>
-                ))}
-              </CommandGroup>
+                </CommandGroup>
+              </>
             )}
-            {notionResults.tasks.length > 0 && (
-              <CommandGroup heading="Tasks (Notion)">
-                {notionResults.tasks.map((t) => (
-                  <CommandItem
-                    key={`notion-task-${t.id}`}
-                    onSelect={() => {
-                      window.open(t.notionUrl, "_blank");
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-3"
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
-                      <ClipboardList className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{t.name}</div>
-                      <div className="truncate text-muted-foreground text-xs">
-                        {[t.status, t.projectName].filter(Boolean).join(" · ")}
-                      </div>
-                    </div>
-                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-            {notionResults.purchases.length > 0 && (
-              <CommandGroup heading="Purchases (Notion)">
-                {notionResults.purchases.map((p) => (
-                  <CommandItem
-                    key={`notion-purchase-${p.id}`}
-                    onSelect={() => {
-                      window.open(p.notionUrl, "_blank");
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-3"
-                  >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
-                      <ShoppingCart className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm">{p.name}</div>
-                      <div className="truncate text-muted-foreground text-xs">
-                        {[
-                          p.cost != null ? `$${p.cost.toLocaleString()}` : null,
-                          p.projectName,
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </div>
-                    </div>
-                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            )}
-          </>
-        )}
-
-        {/* Quick Actions - show when searching and matching */}
-        {hasSearch && filteredActions.length > 0 && !isLoading && (
-          <>
-            {hasResults && <CommandSeparator />}
-            <CommandGroup heading="Quick Actions">
-              {filteredActions.map((action) => (
-                <CommandItem
-                  key={action.id}
-                  onSelect={() => goToPage(action.path)}
-                >
-                  <action.icon className="h-4 w-4" />
-                  <span>{action.name}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </>
-        )}
-
-        {/* Default view when not searching */}
-        {!hasSearch && !isLoading && (
-          <>
-            <CommandGroup heading="Quick Actions">
-              {filteredActions.map((action) => (
-                <CommandItem
-                  key={action.id}
-                  onSelect={() => goToPage(action.path)}
-                >
-                  <action.icon className="h-4 w-4" />
-                  <span>{action.name}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Go to">
-              {Object.values(entities).map((entity) => (
-                <CommandItem
-                  key={entity.basePath}
-                  onSelect={() => goToPage(`/${entity.basePath}`)}
-                >
-                  <entity.lucideIcon className="h-4 w-4" />
-                  <span>{entity.pluralLabel}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-            <CommandSeparator />
-            <CommandGroup heading="Settings">
-              <CommandItem
-                onSelect={() => {
-                  toggleDevtools();
-                  setOpen(false);
-                }}
-              >
-                <Settings className="h-4 w-4" />
-                <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
-              </CommandItem>
-            </CommandGroup>
           </>
         )}
       </CommandList>
     </CommandDialog>
+  );
+}
+
+interface AnswerViewProps {
+  query: string;
+  isPending: boolean;
+  result: AgentResult | null;
+  showToolCalls: boolean;
+  onBack: () => void;
+  onSelectSource: (entityType: SearchableEntity, id: string) => void;
+}
+
+/** Answer-mode body for the command palette: spinner → answer + cited sources. */
+function AnswerView({
+  query,
+  isPending,
+  result,
+  showToolCalls,
+  onBack,
+  onSelectSource,
+}: AnswerViewProps) {
+  return (
+    <>
+      <CommandGroup>
+        <CommandItem
+          value="ask-back"
+          onSelect={onBack}
+          className="flex items-center gap-2 text-muted-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to search</span>
+        </CommandItem>
+      </CommandGroup>
+
+      {isPending && (
+        <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
+          <Spinner />
+          Thinking…
+        </div>
+      )}
+
+      {!isPending && result && (
+        <>
+          <CommandGroup heading={`Answer · "${query}"`}>
+            <div className="whitespace-pre-wrap px-2 py-2 text-sm leading-relaxed">
+              {result.answer}
+            </div>
+          </CommandGroup>
+
+          {result.sources.length > 0 && (
+            <CommandGroup heading="Sources">
+              {result.sources.map((source) => (
+                <CommandItem
+                  key={`${source.entityType}-${source.id}`}
+                  value={`source-${source.entityType}-${source.id}`}
+                  onSelect={() => onSelectSource(source.entityType, source.id)}
+                  className="flex items-center gap-3"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                    <EntityIcon
+                      entity={entityTypeMap[source.entityType]}
+                      colored
+                      className="h-4 w-4 shrink-0"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm">{source.name}</div>
+                    {source.detail && (
+                      <div className="truncate text-muted-foreground text-xs">
+                        {source.detail}
+                      </div>
+                    )}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
+          {showToolCalls && result.toolCalls.length > 0 && (
+            <CommandGroup heading="Tool calls">
+              <div className="space-y-1 px-2 py-1">
+                {result.toolCalls.map((call, i) => (
+                  <div
+                    // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
+                    key={i}
+                    className="flex items-center gap-2 font-mono text-muted-foreground text-xs"
+                  >
+                    <span
+                      className={call.ok ? "text-primary" : "text-destructive"}
+                    >
+                      {call.ok ? "✓" : "✗"}
+                    </span>
+                    <span>{call.tool}</span>
+                    <span className="ml-auto">{call.durationMs}ms</span>
+                  </div>
+                ))}
+              </div>
+            </CommandGroup>
+          )}
+        </>
+      )}
+    </>
   );
 }
