@@ -1,42 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isReadOnlyTool } from "./mcp-bridge";
-import { extractSources, stripNarration } from "./runtime";
-
-describe("stripNarration", () => {
-  it("removes a leading narration clause glued to the answer", () => {
-    expect(
-      stripNarration(
-        "Now let me check what inventory is in that location.Your bathroom contains items.",
-      ),
-    ).toBe("Your bathroom contains items.");
-  });
-
-  it("handles colon-terminated narration", () => {
-    expect(
-      stripNarration(
-        "Now let me get the inventory:The bathroom contains items.",
-      ),
-    ).toBe("The bathroom contains items.");
-  });
-
-  it("strips an 'I'll …' lead-in", () => {
-    expect(
-      stripNarration(
-        "I'll search for fireplace rocks.Fireplace rocks are in the garage.",
-      ),
-    ).toBe("Fireplace rocks are in the garage.");
-  });
-
-  it("leaves a clean answer untouched", () => {
-    const clean = "Your fireplace rocks are in the garage. You have 1 each.";
-    expect(stripNarration(clean)).toBe(clean);
-  });
-
-  it("never strips everything — falls back to the original", () => {
-    // A degenerate answer that is only narration: keep something rather than ""
-    expect(stripNarration("Let me check.").length).toBeGreaterThan(0);
-  });
-});
+import { extractSources } from "./runtime";
 
 describe("extractSources", () => {
   const record = (tool: string, result: unknown) => ({

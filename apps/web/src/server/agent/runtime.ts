@@ -42,25 +42,6 @@ function candidateObjects(result: unknown): Record<string, unknown>[] {
   return [];
 }
 
-/**
- * Strip leading tool-use narration that Haiku emits between tool calls.
- * `chat({ stream: false })` concatenates assistant text across the whole agent
- * loop, so inter-tool narration ("Now let me check…") ends up glued to the
- * real answer. Proper fix is to consume the stream and keep only the final
- * turn's text; this is a safe stopgap that only removes a leading clause
- * starting with a narration verb, up to its first sentence/colon boundary.
- */
-export function stripNarration(text: string): string {
-  const narration =
-    /^\s*(?:now\s+)?(?:let me|let's|i'll|i will|i'm going to|i am going to|first,?\s+let me|let me go ahead and)\b[^.:]*[.:]\s*/i;
-  let out = text;
-  // Haiku sometimes stacks two narration clauses (one per tool call).
-  for (let i = 0; i < 3 && narration.test(out); i++) {
-    out = out.replace(narration, "");
-  }
-  return out.trim().length > 0 ? out.trim() : text.trim();
-}
-
 const MAX_SOURCES = 12;
 
 /** Best-effort extraction of cited entities from the tools the agent ran. */
@@ -120,19 +101,31 @@ export async function runAgent(
   const toolset = await createAgentToolset(caller);
 
   try {
-    const answer = await chat({
+    // Consume the stream and keep only the final text segment. The agent loop
+    // emits ordered parts — [text(narration), tool-call, tool-result, text(answer)]
+    // — where TOOL_CALL_START separates segments. Resetting on each tool call
+    // discards inter-tool narration so we're left with the post-final-tool
+    // answer. (A plain `stream: false` would concatenate every segment.)
+    const stream = chat({
       adapter,
       systemPrompts: [SYSTEM_PROMPT],
       messages: [{ role: "user", content: query }],
       tools: toolset.tools,
       agentLoopStrategy: maxIterations(5),
-      stream: false,
     });
 
+    let answer = "";
+    for await (const chunk of stream) {
+      if (chunk.type === "TEXT_MESSAGE_CONTENT") {
+        answer += chunk.delta ?? "";
+      } else if (chunk.type === "TOOL_CALL_START") {
+        // Text gathered before a tool call was narration — drop it.
+        answer = "";
+      }
+    }
+
     return {
-      answer: stripNarration(
-        typeof answer === "string" ? answer : String(answer),
-      ),
+      answer: answer.trim(),
       sources: extractSources(toolset.records),
       toolCalls: toolset.records.map((record) => ({
         tool: record.tool,
