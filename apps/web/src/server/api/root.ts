@@ -2,6 +2,7 @@ import { createTRPCRouter } from "~/server/api/trpc";
 import { agentRouter } from "./routers/agent";
 import { aiRouter } from "./routers/ai";
 import { auditLogRouter } from "./routers/audit-log";
+import { captureRouter } from "./routers/capture";
 import { imageRouter } from "./routers/image";
 import { ingredientRouter } from "./routers/ingredient";
 import { inventoryRouter } from "./routers/inventory";
@@ -22,6 +23,7 @@ import { usdaRouter } from "./routers/usda";
 export const appRouter = createTRPCRouter({
   agent: agentRouter,
   ai: aiRouter,
+  capture: captureRouter,
   recipe: recipeRouter,
   ingredient: ingredientRouter,
   location: locationRouter,

@@ -20,6 +20,7 @@ import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedCaptureRouteImport } from './routes/_authenticated/capture'
 import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
@@ -109,6 +110,11 @@ const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedCaptureRoute = AuthenticatedCaptureRouteImport.update({
+  id: '/capture',
+  path: '/capture',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
@@ -321,6 +327,7 @@ export interface FileRoutesByFullPath {
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ask': typeof AuthenticatedAskRoute
+  '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -369,6 +376,7 @@ export interface FileRoutesByTo {
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ask': typeof AuthenticatedAskRoute
+  '/capture': typeof AuthenticatedCaptureRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -419,6 +427,7 @@ export interface FileRoutesById {
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ask': typeof AuthenticatedAskRoute
+  '/_authenticated/capture': typeof AuthenticatedCaptureRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
@@ -469,6 +478,7 @@ export interface FileRouteTypes {
     | '/$shortcode'
     | '/activity'
     | '/ask'
+    | '/capture'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -517,6 +527,7 @@ export interface FileRouteTypes {
     | '/$shortcode'
     | '/activity'
     | '/ask'
+    | '/capture'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -566,6 +577,7 @@ export interface FileRouteTypes {
     | '/_authenticated/$shortcode'
     | '/_authenticated/activity'
     | '/_authenticated/ask'
+    | '/_authenticated/capture'
     | '/_authenticated/dashboard'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
@@ -698,6 +710,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/capture': {
+      id: '/_authenticated/capture'
+      path: '/capture'
+      fullPath: '/capture'
+      preLoaderRoute: typeof AuthenticatedCaptureRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/ask': {
@@ -959,6 +978,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedShortcodeRoute: typeof AuthenticatedShortcodeRoute
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAskRoute: typeof AuthenticatedAskRoute
+  AuthenticatedCaptureRoute: typeof AuthenticatedCaptureRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
@@ -1000,6 +1020,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedShortcodeRoute: AuthenticatedShortcodeRoute,
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAskRoute: AuthenticatedAskRoute,
+  AuthenticatedCaptureRoute: AuthenticatedCaptureRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,

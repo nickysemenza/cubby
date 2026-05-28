@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  Camera,
   ExternalLink,
   Hammer,
   Home,
@@ -24,6 +25,13 @@ const scan: NavItem = {
   label: "Scan",
   icon: ScanBarcode,
   isActive: (p) => p === "/inventory/quick-capture",
+};
+
+const captureShelf: NavItem = {
+  href: "/capture",
+  label: "Scan a shelf",
+  icon: Camera,
+  isActive: (p) => p.startsWith("/capture"),
 };
 
 const inventory: NavItem = {
@@ -143,6 +151,7 @@ export const bottomNavItems: NavItem[] = [
 
 export const moreNavItems: NavItem[] = [
   home,
+  captureShelf,
   products,
   ingredients,
   usda,
@@ -163,4 +172,4 @@ export const reportsItems: NavItem[] = [
   problems,
 ];
 
-export const desktopMoreItems: NavItem[] = [images, apiPanel];
+export const desktopMoreItems: NavItem[] = [captureShelf, images, apiPanel];
