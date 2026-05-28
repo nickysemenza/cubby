@@ -34,8 +34,20 @@ export const agentResultSchema = z.object({
 });
 export type AgentResult = z.infer<typeof agentResultSchema>;
 
-/** Input for `agent.ask`. */
+/** Input for `agent.ask` / `agent.askStream`. */
 export const agentAskInputSchema = z.object({
   query: z.string().min(1).max(1000),
 });
 export type AgentAskInput = z.infer<typeof agentAskInputSchema>;
+
+/**
+ * Events yielded by the streaming agent (`agent.askStream`).
+ * - `tool`: a tool call started — the client should discard any text shown so
+ *   far (it was inter-tool narration) and may show a "looking up…" status.
+ * - `delta`: a chunk of answer text to append.
+ * - `done`: terminal event carrying the cited sources + tool-call telemetry.
+ */
+export type AgentStreamEvent =
+  | { type: "tool"; tool: string }
+  | { type: "delta"; text: string }
+  | { type: "done"; sources: AgentSource[]; toolCalls: AgentToolCall[] };

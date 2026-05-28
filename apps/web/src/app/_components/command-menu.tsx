@@ -1,7 +1,7 @@
 import type { AgentResult } from "@cubby/schemas/agent";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -33,6 +33,7 @@ import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
 import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";
+import { useAgentStream } from "./hooks/useAgentStream";
 import {
   entityTypeMap,
   getEnrichmentText,
@@ -65,23 +66,25 @@ export function GlobalCommandMenu({
 
   // --- Agent ("Ask Cubby") ---
   // Opt-in: the agent only runs when the user explicitly selects the Ask item.
-  // Keyword/shortcode fast paths stay instant and untouched.
+  // Keyword/shortcode fast paths stay instant and untouched. Streams the
+  // answer for a progressive "typing" reveal.
   const [answerMode, setAnswerMode] = React.useState(false);
-  const askAgent = useMutation(
-    trpc.agent.ask.mutationOptions({
-      onError: (error) => toast.error(error.message),
-    }),
-  );
+  const agent = useAgentStream();
   const runAsk = (query: string) => {
     const trimmed = query.trim();
     if (trimmed.length === 0) return;
     setAnswerMode(true);
-    askAgent.mutate({ query: trimmed });
+    agent.ask(trimmed);
   };
   const exitAnswerMode = () => {
     setAnswerMode(false);
-    askAgent.reset();
+    agent.reset();
   };
+  // Surface stream errors as a toast.
+  const agentError = agent.error;
+  React.useEffect(() => {
+    if (agentError) toast.error(agentError);
+  }, [agentError]);
   const { data: notionData } = useQuery({
     ...trpc.notion.dashboard.queryOptions(),
     staleTime: 5 * 60 * 1000,
@@ -166,9 +169,9 @@ export function GlobalCommandMenu({
     if (!open) {
       setSearch("");
       setAnswerMode(false);
-      askAgent.reset();
+      agent.reset();
     }
-  }, [open, askAgent]);
+  }, [open, agent.reset]);
 
   const goToEntity = (entityType: SearchableEntity, id: string) => {
     const entity = entities[entityTypeMap[entityType]];
@@ -230,8 +233,11 @@ export function GlobalCommandMenu({
         {answerMode ? (
           <AnswerView
             query={search}
-            isPending={askAgent.isPending}
-            result={askAgent.data ?? null}
+            answer={agent.answer}
+            toolStatus={agent.toolStatus}
+            isStreaming={agent.isStreaming}
+            sources={agent.result?.sources ?? []}
+            toolCalls={agent.result?.toolCalls ?? []}
             showToolCalls={isDevtoolsVisible}
             onBack={exitAnswerMode}
             onSelectSource={(entityType, id) => goToEntity(entityType, id)}
@@ -510,18 +516,32 @@ export function GlobalCommandMenu({
 
 interface AnswerViewProps {
   query: string;
-  isPending: boolean;
-  result: AgentResult | null;
+  answer: string;
+  toolStatus: string | null;
+  isStreaming: boolean;
+  sources: AgentResult["sources"];
+  toolCalls: AgentResult["toolCalls"];
   showToolCalls: boolean;
   onBack: () => void;
   onSelectSource: (entityType: SearchableEntity, id: string) => void;
 }
 
-/** Answer-mode body for the command palette: spinner → answer + cited sources. */
+/** Turn a tool name like "list_inventory" into "inventory" for status text. */
+function humanizeTool(tool: string): string {
+  return tool.replace(/^(list|get|search|find)_/, "").replace(/_/g, " ");
+}
+
+/**
+ * Answer-mode body for the command palette: streams the answer in, shows a
+ * "looking up…" status during tool calls, then cited sources on completion.
+ */
 function AnswerView({
   query,
-  isPending,
-  result,
+  answer,
+  toolStatus,
+  isStreaming,
+  sources,
+  toolCalls,
   showToolCalls,
   onBack,
   onSelectSource,
@@ -539,72 +559,71 @@ function AnswerView({
         </CommandItem>
       </CommandGroup>
 
-      {isPending && (
+      {/* Status line while the agent is working and no text is showing yet */}
+      {isStreaming && answer.length === 0 && (
         <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground text-sm">
           <Spinner />
-          Thinking…
+          {toolStatus ? `Looking up ${humanizeTool(toolStatus)}…` : "Thinking…"}
         </div>
       )}
 
-      {!isPending && result && (
-        <>
-          <CommandGroup heading={`Answer · "${query}"`}>
-            <MarkdownText className="px-2 py-2 text-sm leading-relaxed">
-              {result.answer}
-            </MarkdownText>
-          </CommandGroup>
+      {/* Answer text — rendered live as deltas stream in */}
+      {answer.length > 0 && (
+        <CommandGroup heading={`Answer · "${query}"`}>
+          <MarkdownText className="px-2 py-2 text-sm leading-relaxed">
+            {answer}
+          </MarkdownText>
+        </CommandGroup>
+      )}
 
-          {result.sources.length > 0 && (
-            <CommandGroup heading="Sources">
-              {result.sources.map((source) => (
-                <CommandItem
-                  key={`${source.entityType}-${source.id}`}
-                  value={`source-${source.entityType}-${source.id}`}
-                  onSelect={() => onSelectSource(source.entityType, source.id)}
-                  className="flex items-center gap-3"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
-                    <EntityIcon
-                      entity={entityTypeMap[source.entityType]}
-                      colored
-                      className="h-4 w-4 shrink-0"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm">{source.name}</div>
-                    {source.detail && (
-                      <div className="truncate text-muted-foreground text-xs">
-                        {source.detail}
-                      </div>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          )}
-
-          {showToolCalls && result.toolCalls.length > 0 && (
-            <CommandGroup heading="Tool calls">
-              <div className="space-y-1 px-2 py-1">
-                {result.toolCalls.map((call, i) => (
-                  <div
-                    // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
-                    key={i}
-                    className="flex items-center gap-2 font-mono text-muted-foreground text-xs"
-                  >
-                    <span
-                      className={call.ok ? "text-primary" : "text-destructive"}
-                    >
-                      {call.ok ? "✓" : "✗"}
-                    </span>
-                    <span>{call.tool}</span>
-                    <span className="ml-auto">{call.durationMs}ms</span>
-                  </div>
-                ))}
+      {/* Sources + tool calls appear once the run completes */}
+      {!isStreaming && sources.length > 0 && (
+        <CommandGroup heading="Sources">
+          {sources.map((source) => (
+            <CommandItem
+              key={`${source.entityType}-${source.id}`}
+              value={`source-${source.entityType}-${source.id}`}
+              onSelect={() => onSelectSource(source.entityType, source.id)}
+              className="flex items-center gap-3"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted/50">
+                <EntityIcon
+                  entity={entityTypeMap[source.entityType]}
+                  colored
+                  className="h-4 w-4 shrink-0"
+                />
               </div>
-            </CommandGroup>
-          )}
-        </>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm">{source.name}</div>
+                {source.detail && (
+                  <div className="truncate text-muted-foreground text-xs">
+                    {source.detail}
+                  </div>
+                )}
+              </div>
+            </CommandItem>
+          ))}
+        </CommandGroup>
+      )}
+
+      {!isStreaming && showToolCalls && toolCalls.length > 0 && (
+        <CommandGroup heading="Tool calls">
+          <div className="space-y-1 px-2 py-1">
+            {toolCalls.map((call, i) => (
+              <div
+                // biome-ignore lint/suspicious/noArrayIndexKey: ordered log, no stable id
+                key={i}
+                className="flex items-center gap-2 font-mono text-muted-foreground text-xs"
+              >
+                <span className={call.ok ? "text-primary" : "text-destructive"}>
+                  {call.ok ? "✓" : "✗"}
+                </span>
+                <span>{call.tool}</span>
+                <span className="ml-auto">{call.durationMs}ms</span>
+              </div>
+            ))}
+          </div>
+        </CommandGroup>
       )}
     </>
   );

@@ -1,4 +1,8 @@
-import type { AgentResult, AgentSource } from "@cubby/schemas/agent";
+import type {
+  AgentResult,
+  AgentSource,
+  AgentStreamEvent,
+} from "@cubby/schemas/agent";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
 import { getAnthropicClient } from "~/server/clients/anthropic";
@@ -89,23 +93,24 @@ export function extractSources(records: ToolCallRecord[]): AgentSource[] {
 }
 
 /**
- * Run one agent turn: drive the @tanstack/ai tool-calling loop over the
- * read-only MCP toolset, then assemble a structured result with citations.
+ * Drive the @tanstack/ai tool-calling loop over the read-only MCP toolset,
+ * yielding stream events as they happen.
+ *
+ * The agent loop emits ordered parts — [text(narration), tool-call,
+ * tool-result, text(answer)] — where TOOL_CALL_START separates segments. We
+ * forward text deltas and tool-call starts; consumers reset accumulated text
+ * on each `tool` event so only the post-final-tool text survives as the answer
+ * (a plain `stream: false` would concatenate every segment, narration included).
  */
-export async function runAgent(
+export async function* runAgentStream(
   // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller
   caller: any,
   query: string,
-): Promise<AgentResult> {
+): AsyncGenerator<AgentStreamEvent> {
   const adapter = getAnthropicClient().getTextAdapter();
   const toolset = await createAgentToolset(caller);
 
   try {
-    // Consume the stream and keep only the final text segment. The agent loop
-    // emits ordered parts — [text(narration), tool-call, tool-result, text(answer)]
-    // — where TOOL_CALL_START separates segments. Resetting on each tool call
-    // discards inter-tool narration so we're left with the post-final-tool
-    // answer. (A plain `stream: false` would concatenate every segment.)
     const stream = chat({
       adapter,
       systemPrompts: [SYSTEM_PROMPT],
@@ -114,18 +119,16 @@ export async function runAgent(
       agentLoopStrategy: maxIterations(5),
     });
 
-    let answer = "";
     for await (const chunk of stream) {
       if (chunk.type === "TEXT_MESSAGE_CONTENT") {
-        answer += chunk.delta ?? "";
+        yield { type: "delta", text: chunk.delta ?? "" };
       } else if (chunk.type === "TOOL_CALL_START") {
-        // Text gathered before a tool call was narration — drop it.
-        answer = "";
+        yield { type: "tool", tool: chunk.toolCallName ?? "" };
       }
     }
 
-    return {
-      answer: answer.trim(),
+    yield {
+      type: "done",
       sources: extractSources(toolset.records),
       toolCalls: toolset.records.map((record) => ({
         tool: record.tool,
@@ -137,4 +140,32 @@ export async function runAgent(
   } finally {
     await toolset.close();
   }
+}
+
+/**
+ * Non-streaming convenience: collect {@link runAgentStream} into a final
+ * {@link AgentResult}. Applies the same segment-reset logic (drop text before
+ * each tool call) so the answer is the post-final-tool text.
+ */
+export async function runAgent(
+  // biome-ignore lint/suspicious/noExplicitAny: server-side tRPC caller
+  caller: any,
+  query: string,
+): Promise<AgentResult> {
+  let answer = "";
+  let sources: AgentResult["sources"] = [];
+  let toolCalls: AgentResult["toolCalls"] = [];
+
+  for await (const event of runAgentStream(caller, query)) {
+    if (event.type === "delta") {
+      answer += event.text;
+    } else if (event.type === "tool") {
+      answer = "";
+    } else {
+      sources = event.sources;
+      toolCalls = event.toolCalls;
+    }
+  }
+
+  return { answer: answer.trim(), sources, toolCalls };
 }

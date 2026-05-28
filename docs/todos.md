@@ -1,3 +1,7 @@
+## Future: Agent ("Ask Cubby")
+
+- [ ] **`find_cookable_recipes` tool**: Add a `server.tool("find_cookable_recipes", …)` in `apps/web/src/server/mcp/server.ts` that cross-references `recipe.list` ingredients against current inventory, so "what can I make tonight?" works in ⌘K and for external MCP clients. The agent runtime + bridge already pick up any new MCP tool automatically (subject to the read-only allowlist — `find_` is allowed).
+
 ## Future: WASM Conversion Capabilities
 
 Now that all unit conversions go through WASM with compound unit support:

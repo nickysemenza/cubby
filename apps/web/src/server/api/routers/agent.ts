@@ -1,5 +1,5 @@
 import { agentAskInputSchema, agentResultSchema } from "@cubby/schemas/agent";
-import { runAgent } from "~/server/agent/runtime";
+import { runAgent, runAgentStream } from "~/server/agent/runtime";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 /**
@@ -29,5 +29,19 @@ export const agentRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const caller = await buildCaller(ctx);
       return runAgent(caller, input.query);
+    }),
+
+  /**
+   * Streaming variant: yields tool/delta/done events as the agent loop runs,
+   * for a progressive "typing" reveal. Streams over httpBatchStreamLink (no
+   * subscription/SSE infra needed). Consumed via the vanilla client's
+   * `for await`. No `.output()` — the generator's return type drives client
+   * inference.
+   */
+  askStream: protectedProcedure
+    .input(agentAskInputSchema)
+    .query(async function* ({ ctx, input }) {
+      const caller = await buildCaller(ctx);
+      yield* runAgentStream(caller, input.query);
     }),
 });
