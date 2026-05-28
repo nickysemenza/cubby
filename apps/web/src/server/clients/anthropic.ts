@@ -152,6 +152,14 @@ export class AnthropicClient {
     return !!this.apiKey;
   }
 
+  /**
+   * Expose the shared text adapter so the agent runtime can drive its own
+   * tool-calling `chat()` loop without re-constructing the gateway client.
+   */
+  getTextAdapter() {
+    return this.getAdapter();
+  }
+
   async suggestCategory(
     productName: string,
     manufacturer: string,

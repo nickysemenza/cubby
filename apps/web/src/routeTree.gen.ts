@@ -20,6 +20,7 @@ import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authentic
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedInsightsRouteImport } from './routes/_authenticated/insights'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
 import { Route as AuthenticatedUsdaIndexRouteImport } from './routes/_authenticated/usda.index'
@@ -108,6 +109,11 @@ const AuthenticatedInsightsRoute = AuthenticatedInsightsRouteImport.update({
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
+  id: '/ask',
+  path: '/ask',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
@@ -314,6 +320,7 @@ export interface FileRoutesByFullPath {
   '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
+  '/ask': typeof AuthenticatedAskRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -361,6 +368,7 @@ export interface FileRoutesByTo {
   '/docs': typeof DocsRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
   '/activity': typeof AuthenticatedActivityRoute
+  '/ask': typeof AuthenticatedAskRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/insights': typeof AuthenticatedInsightsRoute
   '/labels': typeof AuthenticatedLabelsRoute
@@ -410,6 +418,7 @@ export interface FileRoutesById {
   '/docs': typeof DocsRoute
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
+  '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/insights': typeof AuthenticatedInsightsRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
@@ -459,6 +468,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/$shortcode'
     | '/activity'
+    | '/ask'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -506,6 +516,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/$shortcode'
     | '/activity'
+    | '/ask'
     | '/dashboard'
     | '/insights'
     | '/labels'
@@ -554,6 +565,7 @@ export interface FileRouteTypes {
     | '/docs'
     | '/_authenticated/$shortcode'
     | '/_authenticated/activity'
+    | '/_authenticated/ask'
     | '/_authenticated/dashboard'
     | '/_authenticated/insights'
     | '/_authenticated/labels'
@@ -686,6 +698,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/ask': {
+      id: '/_authenticated/ask'
+      path: '/ask'
+      fullPath: '/ask'
+      preLoaderRoute: typeof AuthenticatedAskRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/activity': {
@@ -939,6 +958,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedShortcodeRoute: typeof AuthenticatedShortcodeRoute
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
+  AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedInsightsRoute: typeof AuthenticatedInsightsRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
@@ -979,6 +999,7 @@ interface AuthenticatedRouteChildren {
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedShortcodeRoute: AuthenticatedShortcodeRoute,
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
+  AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedInsightsRoute: AuthenticatedInsightsRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,

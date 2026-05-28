@@ -23,6 +23,7 @@
     "./search": "./src/search.ts",
     "./audit": "./src/audit.ts",
     "./ai": "./src/ai.ts",
+    "./agent": "./src/agent.ts",
     "./combo": "./src/combo.ts"
   },
   "scripts": {

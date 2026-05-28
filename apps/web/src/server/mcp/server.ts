@@ -132,7 +132,7 @@ function slimProduct(p: Record<string, unknown>) {
   };
 }
 
-function createMcpServer() {
+export function createMcpServer() {
   const server = new McpServer({
     name: "cubby",
     version: "1.0.0",
