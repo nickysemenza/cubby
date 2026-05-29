@@ -1,5 +1,7 @@
 # Meal Planning & BOM Production Design
 
+> **Superseded by [2026-05-29-meal-planning-implementation-plan.md](2026-05-29-meal-planning-implementation-plan.md).** This remains the design rationale, but its schema (`organizationId`, `ADD COLUMN yield`) and the `convertAmount` helper are stale — see "What changed" in the implementation plan before building.
+
 ## Overview
 
 Add meal planning, recipe costing, shopping list generation, and inventory consumption for home use. Builds on existing recipe costing infrastructure (`calculateTotals`, WASM unit conversions).

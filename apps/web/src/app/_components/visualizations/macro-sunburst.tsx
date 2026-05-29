@@ -2,8 +2,8 @@ import { TIER1_NUTRIENTS } from "@cubby/usda-schemas";
 import { Link } from "@tanstack/react-router";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { IngredientDataItem } from "~/app/_components/units/univ-conversion";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import type { IngredientDataItem } from "~/lib/recipe-costing";
 import { VisualizationPlaceholder } from "./visualization-placeholder";
 
 // Define which macros to show and their display properties

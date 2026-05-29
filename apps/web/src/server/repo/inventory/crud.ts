@@ -1,3 +1,4 @@
+import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type InventoryId,
@@ -583,6 +584,31 @@ export const getInventoryByLocationIds = async (
   });
 
   return results.map(dbInventoryEntryToAPI);
+};
+
+/**
+ * Get all non-deleted inventory amounts for a set of products (batch query to
+ * avoid N+1). Returns flat {productId, amount} pairs; the caller groups and
+ * converts them, since each entry's unit can differ and naive summing is wrong.
+ */
+export const getInventoryForProducts = async (
+  db: Database,
+  productIds: ProductId[],
+): Promise<Array<{ productId: ProductId; amount: Amount }>> => {
+  if (productIds.length === 0) return [];
+
+  const rows = await getDb(db).query.inventoryEntry.findMany({
+    where: and(
+      inArray(inventoryEntry.productId, productIds),
+      notDeleted(inventoryEntry),
+    ),
+    columns: { productId: true, amount: true },
+  });
+
+  return rows.map((row) => ({
+    productId: unsafeProductId(row.productId),
+    amount: row.amount,
+  }));
 };
 
 /**

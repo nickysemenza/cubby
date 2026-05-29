@@ -8,15 +8,15 @@ import {
 import { useMemo } from "react";
 import { NutrientsSummary } from "~/app/_components/units/NutrientsSummary";
 import {
+  EntitySummaryCard,
+  type RecipeSummaryData,
+} from "~/components/entity/entity-summary-card";
+import {
   type CalculateTotalsResult,
   calculateTotals,
   createIngredientData,
   type IngredientDataItem,
-} from "~/app/_components/units/univ-conversion";
-import {
-  EntitySummaryCard,
-  type RecipeSummaryData,
-} from "~/components/entity/entity-summary-card";
+} from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { renderValueOrError } from "~/misc/result";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";

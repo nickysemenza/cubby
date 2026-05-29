@@ -4,16 +4,16 @@ import { useQueries } from "@tanstack/react-query";
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";
 import { useMemo, useState } from "react";
-import {
-  type CalculateTotalsResult,
-  calculateTotals,
-  createIngredientData,
-} from "~/app/_components/units/univ-conversion";
 import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
 import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import {
+  type CalculateTotalsResult,
+  calculateTotals,
+  createIngredientData,
+} from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";

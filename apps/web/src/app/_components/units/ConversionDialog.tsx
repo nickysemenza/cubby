@@ -25,13 +25,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { safeConvertAmount } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
 import { ConversionCapabilities } from "./ConversionCapabilities";
 import { kindIconMap } from "./kind-icons";
 import { UnitMappingGraph } from "./UnitMappingGraph";
 import { UnitMappingsTable } from "./unitmappingstable";
-import { safeConvertAmount } from "./univ-conversion";
 
 const formSchema = z.object({
   amount: amount,

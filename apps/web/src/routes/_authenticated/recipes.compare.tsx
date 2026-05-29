@@ -11,13 +11,13 @@ import { ArrowLeft, Plus, X } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
 import { getIngredientName } from "~/app/_components/recipe/recipe-utils";
-import {
-  type CalculateTotalsResult,
-  calculateTotals,
-} from "~/app/_components/units/univ-conversion";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  type CalculateTotalsResult,
+  calculateTotals,
+} from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";

@@ -7,15 +7,15 @@ import {
 import type { SectionIngredientOut } from "@cubby/schemas/recipe";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { beforeAll, describe, expect, test } from "vitest";
-import { ensureWasm } from "~/lib/wasm";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import {
   calculateTotals,
   convertAmountToNutrients,
   convertAmountToPrice,
   createEmptyNutrients,
   getGramAndNutrient,
-} from "./univ-conversion";
+} from "~/lib/recipe-costing";
+import { ensureWasm } from "~/lib/wasm";
+import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 
 // Initialize WASM before all tests
 beforeAll(async () => {

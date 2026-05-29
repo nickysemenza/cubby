@@ -7,10 +7,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { convertAmountToPrice } from "~/lib/recipe-costing";
 import { wasm } from "~/lib/wasm";
 import { renderValueOrError } from "~/misc/result";
 import ValidInvalidIcon from "../icons/valid-invalid";
-import { convertAmountToPrice } from "../units/univ-conversion";
 
 /**
  * Helper function for displaying amount and price

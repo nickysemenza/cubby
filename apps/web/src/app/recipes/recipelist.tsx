@@ -6,6 +6,10 @@ import { ExternalLink, Scale } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { queryKeys } from "~/lib/query-keys";
+import {
+  type CalculateTotalsResult,
+  calculateTotals,
+} from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC, useTRPCClient } from "~/trpc/react";
@@ -18,10 +22,6 @@ import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
 import { getIngredientName } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
-import {
-  type CalculateTotalsResult,
-  calculateTotals,
-} from "../_components/units/univ-conversion";
 
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */

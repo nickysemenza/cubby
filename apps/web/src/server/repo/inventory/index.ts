@@ -11,6 +11,7 @@ export {
   getInventoryByLocationIds,
   getInventoryCountsByLocations,
   getInventoryEntryByID,
+  getInventoryForProducts,
   inventoryentryList,
   updateInventoryEntry,
 } from "./crud";

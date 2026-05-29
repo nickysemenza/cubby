@@ -8,9 +8,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { safeConvertAmount } from "~/lib/recipe-costing";
 import { ConversionDialog } from "./ConversionDialog";
 import { formatKindsLabel, kindIconMap } from "./kind-icons";
-import { safeConvertAmount } from "./univ-conversion";
 
 interface ConversionCapabilitiesProps {
   mappings: UnitMapping[];

@@ -34,6 +34,7 @@ import type { Database } from "~/server/db";
 import { db } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { findProductsByFoodIdentifier } from "~/server/repo/product";
+import { AvailabilityService } from "~/server/services/availability.service";
 import { IngredientService } from "~/server/services/ingredient.service";
 import { ProductService } from "~/server/services/product.service";
 import { USDAService } from "~/server/services/usda.service";
@@ -69,9 +70,11 @@ const buildCrudServices = (db: Database) => {
     const products = await findProductsByFoodIdentifier(db, lookup);
     return products.map(mapProductToTopLevelOut);
   });
+  const ingredient = new IngredientService(db, usdaClient);
   const services = {
     product: new ProductService(db, usdaClient),
-    ingredient: new IngredientService(db, usdaClient),
+    ingredient,
+    availability: new AvailabilityService(db, ingredient),
   };
 
   return {
