@@ -267,6 +267,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
           form={form}
           valuePath="amount.value"
           unitPath="amount.unit"
+          compact
         />
         <Button type="submit" size="sm" disabled={create.isPending}>
           {create.isPending ? <Spinner className="mr-1" /> : null}

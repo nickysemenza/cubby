@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
+import { cn } from "~/lib/utils";
 import {
   NullableNumericField,
   SideBySideFields,
@@ -14,6 +15,8 @@ interface AmountFieldGroupProps<
   valuePath: Path<TFieldValues>;
   unitPath: Path<TFieldValues>;
   step?: string;
+  /** Compact mode for dense rows: shorter labels ("Qty"/"Unit") + tighter width. */
+  compact?: boolean;
 }
 
 export function AmountFieldGroup<
@@ -23,6 +26,7 @@ export function AmountFieldGroup<
   valuePath,
   unitPath,
   step = "1",
+  compact = false,
 }: AmountFieldGroupProps<TFieldValues>): ReactNode {
   // Function to get unit icon if enabled
   const getIcon = (x: string | null): ReactNode | undefined => {
@@ -31,19 +35,23 @@ export function AmountFieldGroup<
   };
 
   return (
-    <SideBySideFields className="min-w-[13rem] space-x-3">
+    <SideBySideFields
+      className={cn(
+        compact ? "min-w-[10rem] space-x-2" : "min-w-[13rem] space-x-3",
+      )}
+    >
       <NullableNumericField
         form={form}
         name={valuePath}
-        label="Amount Value"
-        placeholder="Enter amount"
+        label={compact ? "Qty" : "Amount Value"}
+        placeholder={compact ? "1" : "Enter amount"}
         step={step}
       />
       <UnifiedTextField
         form={form}
         name={unitPath}
-        label="Amount Unit"
-        placeholder="Enter unit"
+        label={compact ? "Unit" : "Amount Unit"}
+        placeholder={compact ? "each" : "Enter unit"}
         nullable={false}
         getIcon={getIcon}
       />
