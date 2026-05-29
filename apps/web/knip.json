@@ -5,7 +5,8 @@
     "src/routes/**/*.tsx",
     "src/routes/**/*.ts",
     "src/styles.css",
-    "src/instrumentation.ts",
+    "src/server.ts",
+    "src/lib/recipebridge-cf.ts",
     "src/integrations/**/*.{ts,tsx}",
     "drizzle.config.ts",
     "instrument.server.mjs"

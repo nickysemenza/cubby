@@ -6,10 +6,6 @@
       "entry": "src/**/*.ts",
       "ignoreDependencies": ["@cubby/.+"]
     },
-    "apps/upc-scout": {
-      "entry": "src/**/*.ts",
-      "ignoreDependencies": ["@cubby/.+"]
-    },
     "apps/usda-api": {
       "entry": "src/**/*.ts",
       "ignoreDependencies": ["@cubby/.+"]
