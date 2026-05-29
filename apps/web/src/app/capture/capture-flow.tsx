@@ -247,7 +247,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-[10rem] flex-1">
+        <div className="min-w-[8rem] flex-[3]">
           <ComboboxFieldWithSearch
             form={form}
             name="product"
@@ -255,7 +255,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
             searchType="product"
           />
         </div>
-        <div className="min-w-[10rem] flex-1">
+        <div className="min-w-[8rem] flex-[3]">
           <ComboboxFieldWithSearch
             form={form}
             name="location"
@@ -263,12 +263,14 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
             searchType="location"
           />
         </div>
-        <AmountFieldGroup
-          form={form}
-          valuePath="amount.value"
-          unitPath="amount.unit"
-          compact
-        />
+        <div className="min-w-[7rem] flex-[2]">
+          <AmountFieldGroup
+            form={form}
+            valuePath="amount.value"
+            unitPath="amount.unit"
+            compact
+          />
+        </div>
         <Button type="submit" size="sm" disabled={create.isPending}>
           {create.isPending ? <Spinner className="mr-1" /> : null}
           Add
