@@ -73,8 +73,6 @@ declare module "@tanstack/react-table" {
   }
 }
 
-// Initialize dayjs relative time plugin
-
 interface BaseRow {
   id: string | number;
   name?: string;

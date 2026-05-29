@@ -1,5 +1,4 @@
-import dayjs from "dayjs";
-import relativeTime from "dayjs/plugin/relativeTime";
+import { format, formatDistanceToNow } from "date-fns";
 import {
   Tooltip,
   TooltipContent,
@@ -10,11 +9,11 @@ import {
 type HoverableTimestampProps = {
   timestamp: string | Date;
 };
-dayjs.extend(relativeTime);
 
 export function HoverableTimestamp({ timestamp }: HoverableTimestampProps) {
-  const formattedDate = dayjs(timestamp).format("YYYY-MM-DD HH:mm:ss");
-  const relativeTime = dayjs(timestamp).fromNow();
+  const date = new Date(timestamp);
+  const formattedDate = format(date, "yyyy-MM-dd HH:mm:ss");
+  const relativeTime = formatDistanceToNow(date, { addSuffix: true });
 
   return (
     <TooltipProvider>
