@@ -93,8 +93,10 @@ test.describe("Create Product with Ingredient", () => {
 
     // Expect redirect to product detail page
     await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
+    // PageHero renders the entity label ("Product") as an eyebrow above the
+    // <h1>, which is the bare product name.
     await expect(
-      page.getByRole("heading", { name: `Product: ${productName}` }),
+      page.getByRole("heading", { level: 1, name: productName }),
     ).toBeVisible({ timeout: 10000 });
   });
 });
