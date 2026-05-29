@@ -14,19 +14,16 @@ import {
   requiredLocationField,
   requiredProductField,
 } from "~/app/_components/form-fields";
-import {
-  ComboboxFieldWithSearch,
-  FormWrapper,
-} from "~/app/_components/form-utils";
+import { ComboboxFieldWithSearch } from "~/app/_components/form-utils";
 import { AmountFieldGroup } from "~/app/_components/inventory/amount-field-group";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent } from "~/components/ui/card";
 import { Image } from "~/components/ui/image";
 import { Spinner } from "~/components/ui/spinner";
 import { getErrorMessage } from "~/lib/error-utils";
+import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { useTRPC } from "~/trpc/react";
 
 const confidenceVariant = {
@@ -214,55 +211,68 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
     });
   };
 
-  return (
-    <Card className={added ? "opacity-60" : undefined}>
-      <CardContent className="space-y-3 pt-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate font-medium text-sm">{proposal.name}</div>
-            <div className="truncate text-muted-foreground text-xs">
-              {[proposal.manufacturer, `${proposal.quantity} ${proposal.unit}`]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
-          </div>
-          <Badge variant={confidenceVariant[proposal.confidence]}>
-            {proposal.confidence}
-          </Badge>
-        </div>
+  const meta = [
+    isUnspecifiedManufacturer(proposal.manufacturer)
+      ? null
+      : proposal.manufacturer,
+    `${proposal.quantity} ${proposal.unit}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
-        {added ? (
-          <div className="flex items-center gap-2 text-secondary-foreground text-sm">
-            <Check className="h-4 w-4 text-primary" />
-            Added to inventory
-          </div>
-        ) : (
-          <FormWrapper
+  if (added) {
+    return (
+      <div className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2 text-muted-foreground text-sm">
+        <Check className="h-4 w-4 shrink-0 text-primary" />
+        <span className="truncate">Added {proposal.name} to inventory</span>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={form.handleSubmit(onSubmit)}
+      className="space-y-2 rounded-lg border border-border/50 p-3"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <span className="font-medium text-sm">{proposal.name}</span>
+          {meta && (
+            <span className="ml-1.5 text-muted-foreground text-xs">{meta}</span>
+          )}
+        </div>
+        <Badge variant={confidenceVariant[proposal.confidence]}>
+          {proposal.confidence}
+        </Badge>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[10rem] flex-1">
+          <ComboboxFieldWithSearch
             form={form}
-            onSubmit={onSubmit}
-            isPending={create.isPending}
-            submitButtonText="Add to inventory"
-          >
-            <ComboboxFieldWithSearch
-              form={form}
-              name="product"
-              label="Product"
-              searchType="product"
-            />
-            <ComboboxFieldWithSearch
-              form={form}
-              name="location"
-              label="Location"
-              searchType="location"
-            />
-            <AmountFieldGroup
-              form={form}
-              valuePath="amount.value"
-              unitPath="amount.unit"
-            />
-          </FormWrapper>
-        )}
-      </CardContent>
-    </Card>
+            name="product"
+            label="Product"
+            searchType="product"
+          />
+        </div>
+        <div className="min-w-[10rem] flex-1">
+          <ComboboxFieldWithSearch
+            form={form}
+            name="location"
+            label="Location"
+            searchType="location"
+          />
+        </div>
+        <AmountFieldGroup
+          form={form}
+          valuePath="amount.value"
+          unitPath="amount.unit"
+        />
+        <Button type="submit" size="sm" disabled={create.isPending}>
+          {create.isPending ? <Spinner className="mr-1" /> : null}
+          Add
+        </Button>
+      </div>
+    </form>
   );
 }
