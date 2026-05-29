@@ -33,9 +33,9 @@ test.describe("Create Product", () => {
     await expect(page).toHaveURL(/\/products\/[a-f0-9-]+/, { timeout: 15000 });
     // PageHero renders the entity label ("Product") as an eyebrow above the
     // <h1>, which is the bare product name.
-    await expect(
-      page.getByRole("heading", { level: 1, name }),
-    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible({
+      timeout: 10000,
+    });
 
     // Basic Information section should exist
     await expect(page.getByText("Basic Information")).toBeVisible();
