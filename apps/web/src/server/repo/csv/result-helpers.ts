@@ -9,8 +9,6 @@ import {
   type FieldChange,
   INVENTORY_CSV_ACTIONS,
   type InventoryCSVAction,
-  LOCATION_CSV_ACTIONS,
-  type LocationCSVAction,
 } from "@cubby/schemas/csv";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type {
@@ -42,13 +40,6 @@ export function incrementCounter<TAction extends string>(
   action: TAction,
 ): void {
   counters[action]++;
-}
-
-/**
- * Create counters for location CSV operations
- */
-export function createLocationCounters(): ResultCounters<LocationCSVAction> {
-  return createCounters(LOCATION_CSV_ACTIONS);
 }
 
 /** Type alias for inventory counters */

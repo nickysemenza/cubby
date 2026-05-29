@@ -39,31 +39,3 @@ export function getAppErrorDetails(error: unknown): AppErrorDetails {
     message: typeof error === "string" ? error : "An error occurred",
   };
 }
-
-/**
- * Returns true if an error is not worth retrying (logical/4xx or known reasons).
- */
-function isNonRetriableError(details: AppErrorDetails): boolean {
-  const c = details.code;
-  if (!c) return false;
-  return (
-    c === "UNAUTHORIZED" ||
-    c === "FORBIDDEN" ||
-    c === "PRECONDITION_FAILED" ||
-    c === "BAD_REQUEST" ||
-    c === "CONFLICT" ||
-    c === "NOT_FOUND"
-  );
-}
-
-/**
- * Helper used by React Query `retry` fn.
- */
-export function shouldRetryQuery(
-  failureCount: number,
-  error: unknown,
-): boolean {
-  const details = getAppErrorDetails(error);
-  if (isNonRetriableError(details)) return false;
-  return failureCount < 3;
-}

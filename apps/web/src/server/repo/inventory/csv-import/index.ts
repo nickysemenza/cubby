@@ -49,10 +49,7 @@ import {
 import { processRowInMemory } from "./row-processor-inmemory";
 
 // Re-export utilities that may be used externally
-export {
-  createOrUpdatePriceMapping,
-  createUnitMappingsFromString,
-} from "./unit-mapping-handler";
+export { createOrUpdatePriceMapping } from "./unit-mapping-handler";
 
 interface ImportOptions {
   dryRun?: boolean;
