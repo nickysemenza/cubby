@@ -4,5 +4,11 @@ set -e
 # Run Biome on staged files (auto-fixes and formats)
 pnpm exec biome check --staged --write --no-errors-on-unmatched
 
+# Biome's --write edits files in place but does NOT re-stage them. Re-stage the
+# already-staged paths so its fixes land in the commit; without this the
+# pre-format version is committed and CI's format:check fails on it.
+# (Caveat: for a partially-staged file this also stages its unstaged changes.)
+git update-index --again
+
 # Run TypeScript checks across all packages (tsgo is ~10x faster than tsc)
 pnpm typecheck
