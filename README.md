@@ -2,6 +2,19 @@
 
 Recipe database and home inventory database, tied together. A personal pantry-and-cooking system: track what you own, where it lives, what it cost, and what you can cook with it.
 
+## 🎯 Why Cubby
+
+Cubby is a personal system — built for my own household, not a product for strangers. Its north-star is the **recipe ↔ inventory tie**: knowing what I can actually cook from what I physically own, where it lives, and what it costs. Most tools do recipes *or* a pantry list; Cubby joins the two, so *"what can I make tonight, and what would it cost?"* becomes a query instead of a guess.
+
+It's three things at once: an earnest daily-use home utility, a playground for a modern stack (TanStack Start, Cloudflare Workers, Rust/WASM, agentic AI), and a place to hold a high engineering bar on something I actually use.
+
+**Cubby is _not_:**
+
+- A **multi-tenant SaaS** — no public sign-ups, billing, or tenant-isolation work
+- **Cross-platform** — mobile is iOS-only by design
+- A **social app** — no feeds, public recipe sharing, or community
+- A **commerce tool** — no in-app buying, ordering, or cross-store price-shopping
+
 ## ✨ Capabilities
 
 **Inventory**
@@ -270,11 +283,25 @@ usdaClient.getFoodSummaryByID(fdcId);
 
 ## 🗺️ Roadmap
 
-Canonical plans live in [docs/plans/](docs/plans/) — these are pointers, not summaries (so they don't rot):
+Framed as **Now / Next / Later** (no dates — it's a personal project). Canonical plans live in [docs/plans/](docs/plans/); the links are pointers, not summaries, so they don't rot.
 
-- **Meal planning + shopping list + recipe scaling** → [docs/plans/2025-12-18-meal-planning-bom-design.md](docs/plans/2025-12-18-meal-planning-bom-design.md)
-- **Mobile-first / offline PWA + swipe gestures** → [docs/plans/2026-01-05-mobile-first-experience-design.md](docs/plans/2026-01-05-mobile-first-experience-design.md)
-- **WASM conversion extensions** (price-per-nutrient, daily-value %, nutrient density) → [docs/todos.md](docs/todos.md)
+### Now
+
+- **Meal planning + shopping list + recipe scaling** — turns the recipe↔inventory tie into daily utility: plan meals on a calendar, scale recipes, generate shopping lists from shortages, and consume inventory when a meal is cooked → [docs/plans/2025-12-18-meal-planning-bom-design.md](docs/plans/2025-12-18-meal-planning-bom-design.md)
+
+### Next
+
+- **Mobile / offline PWA** — service-worker offline, swipe-to-delete, pull-to-refresh, performance → [docs/plans/2026-01-05-mobile-first-experience-design.md](docs/plans/2026-01-05-mobile-first-experience-design.md)
+- **AI deepening** — *"what can I make tonight?"* via a `find_cookable_recipes` MCP tool, smarter Ask Cubby, better photo capture → [docs/todos.md](docs/todos.md)
+- **Nutrition & cost intelligence** — price-per-nutrient, daily-value %, and nutrient-density comparisons via WASM conversion extensions → [docs/todos.md](docs/todos.md)
+- **Household sharing** — replace the org plugin with a simple shared-household model + magic-link invites (e.g. share with a partner) → [docs/todos.md](docs/todos.md)
+
+### Later
+
+- **Meal planning v2** — expiration-aware suggestions, FEFO consumption, meal templates, nutrition goals
+- **WASM deep cuts** — batch recipe parsing, custom unit aliases, inventory depletion preview
+- **Location drag-drop** in the tree view
+- **Engineering backlog** — replace the CSV import pipeline with direct tRPC calls; document test-placement criteria
 
 ## 📚 Further Docs
 
