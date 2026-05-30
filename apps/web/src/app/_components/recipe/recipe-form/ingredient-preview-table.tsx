@@ -37,6 +37,77 @@ function formatAmounts(amounts: WAmount[]): string {
   return amounts.map(formatAmount).join(", ");
 }
 
+interface ParsedIngredient {
+  raw: string;
+  parsed: WIngredient;
+}
+
+interface IngredientMatch {
+  id: string;
+  name: string;
+  aliases: string[];
+}
+
+/**
+ * Parse ingredient lines via WASM and match each unique parsed name against the
+ * ingredient DB. Shared by IngredientPreviewTable (display) and useIngredientImport
+ * (form import) so the parse + lookup logic lives in exactly one place.
+ *
+ * Returns a Map keyed by parsed name: a value of `null` means "looked up, not found",
+ * while a missing key means "still loading".
+ */
+function useParsedIngredientMatches(ingredientLines: string[]) {
+  const api = useTRPC();
+
+  const parsedIngredients = useMemo<ParsedIngredient[]>(
+    () =>
+      ingredientLines.map((line) => ({
+        raw: line,
+        parsed: wasm.parse_ingredient(line),
+      })),
+    [ingredientLines],
+  );
+
+  const uniqueIngredientNames = useMemo(
+    () => dedupe(parsedIngredients.map((p) => p.parsed.name)),
+    [parsedIngredients],
+  );
+
+  // useQueries returns a new array every render; combine applies structural
+  // sharing to keep ingredientMatchMap referentially stable (see CLAUDE.md).
+  const { ingredientMatchMap, isLoading } = useQueries({
+    queries: uniqueIngredientNames.map((name) => ({
+      ...api.ingredient.getByName.queryOptions({ nameFilter: name }),
+      staleTime: 30000,
+      enabled: name.length > 0,
+    })),
+    combine: (results) => {
+      const map = new Map<string, IngredientMatch | null>();
+      uniqueIngredientNames.forEach((name, index) => {
+        const query = results[index];
+        if (query && !query.isLoading) {
+          map.set(
+            name,
+            query.data
+              ? {
+                  id: query.data.id,
+                  name: query.data.name,
+                  aliases: query.data.aliases,
+                }
+              : null,
+          );
+        }
+      });
+      return {
+        ingredientMatchMap: map,
+        isLoading: results.some((q) => q.isLoading),
+      };
+    },
+  });
+
+  return { parsedIngredients, ingredientMatchMap, isLoading };
+}
+
 export interface ParsedIngredientWithMatch {
   raw: string;
   parsed: WIngredient;
@@ -57,53 +128,22 @@ export function IngredientPreviewTable({
   const api = useTRPC();
   const queryClient = useQueryClient();
 
-  // Parse ingredients via WASM
-  const parsedIngredients = useMemo(() => {
-    return ingredientLines.map((line) => ({
-      raw: line,
-      parsed: wasm.parse_ingredient(line),
-    }));
-  }, [ingredientLines]);
-
-  // Extract unique ingredient names for DB lookup
-  const ingredientNames = useMemo(
-    () => parsedIngredients.map((p) => p.parsed.name),
-    [parsedIngredients],
-  );
-  const uniqueIngredientNames = dedupe(ingredientNames);
-
-  // Query DB for each unique ingredient name
-  const { ingredientMatchMap, isLoadingIngredients } = useQueries({
-    queries: uniqueIngredientNames.map((name) => ({
-      ...api.ingredient.getByName.queryOptions({ nameFilter: name }),
-      staleTime: 30000,
-      enabled: name.length > 0,
-    })),
-    combine: (results) => {
-      const map = new Map<string, { id: string; name: string } | null>();
-      uniqueIngredientNames.forEach((name, index) => {
-        const query = results[index];
-        if (query && !query.isLoading) {
-          map.set(
-            name,
-            query.data ? { id: query.data.id, name: query.data.name } : null,
-          );
-        }
-      });
-      return {
-        ingredientMatchMap: map,
-        isLoadingIngredients: results.some((q) => q.isLoading),
-      };
-    },
-  });
+  const {
+    parsedIngredients,
+    ingredientMatchMap,
+    isLoading: isLoadingIngredients,
+  } = useParsedIngredientMatches(ingredientLines);
 
   // Combine parsed ingredients with match data
   const ingredientsWithMatch: ParsedIngredientWithMatch[] = useMemo(() => {
-    return parsedIngredients.map((p) => ({
-      ...p,
-      match: ingredientMatchMap.get(p.parsed.name) ?? null,
-      isLoading: !ingredientMatchMap.has(p.parsed.name),
-    }));
+    return parsedIngredients.map((p) => {
+      const match = ingredientMatchMap.get(p.parsed.name) ?? null;
+      return {
+        ...p,
+        match: match ? { id: match.id, name: match.name } : null,
+        isLoading: !ingredientMatchMap.has(p.parsed.name),
+      };
+    });
   }, [parsedIngredients, ingredientMatchMap]);
 
   // State for ingredient creation dialog
@@ -247,88 +287,43 @@ export function useIngredientImport(ingredientLines: string[]) {
   const api = useTRPC();
   const queryClient = useQueryClient();
 
-  // Parse ingredients via WASM
-  const parsedIngredients = useMemo(() => {
-    return ingredientLines.map((line) => ({
-      raw: line,
-      parsed: wasm.parse_ingredient(line),
-    }));
-  }, [ingredientLines]);
+  const { parsedIngredients, ingredientMatchMap, isLoading } =
+    useParsedIngredientMatches(ingredientLines);
 
-  // Extract unique ingredient names for DB lookup
-  const ingredientNames = useMemo(
-    () => parsedIngredients.map((p) => p.parsed.name),
-    [parsedIngredients],
-  );
-  const uniqueIngredientNames = dedupe(ingredientNames);
-
-  // Query DB for each unique ingredient name
-  const {
-    ingredientMatchMap,
-    isLoading,
-    namesForHighlighting,
-    missingIngredients,
-  } = useQueries({
-    queries: uniqueIngredientNames.map((name) => ({
-      ...api.ingredient.getByName.queryOptions({ nameFilter: name }),
-      staleTime: 30000,
-      enabled: name.length > 0,
-    })),
-    combine: (results) => {
-      // Build match map
-      const map = new Map<
-        string,
-        { id: string; name: string; aliases: string[] } | null
-      >();
-      uniqueIngredientNames.forEach((name, index) => {
-        const query = results[index];
-        if (query && !query.isLoading) {
-          map.set(
-            name,
-            query.data
-              ? {
-                  id: query.data.id,
-                  name: query.data.name,
-                  aliases: query.data.aliases,
-                }
-              : null,
-          );
+  const { namesForHighlighting, missingIngredients } = useMemo(() => {
+    // Names to highlight in instructions: parsed names + matched canonical names + aliases
+    const names = new Set<string>();
+    parsedIngredients.forEach((p) => {
+      if (p.parsed.name.length > 0) {
+        names.add(p.parsed.name);
+      }
+      const match = ingredientMatchMap.get(p.parsed.name);
+      if (match) {
+        names.add(match.name);
+        for (const alias of match.aliases) {
+          names.add(alias);
         }
-      });
+      }
+    });
 
-      // Collect names for highlighting
-      const names = new Set<string>();
-      parsedIngredients.forEach((p) => {
-        if (p.parsed.name.length > 0) {
-          names.add(p.parsed.name);
-        }
-        const match = map.get(p.parsed.name);
-        if (match) {
-          names.add(match.name);
-          for (const alias of match.aliases) {
-            names.add(alias);
-          }
-        }
-      });
+    // Parsed names with no existing match (created on import). A still-loading
+    // name has no map entry yet, so it counts as missing until the lookup settles.
+    const missing = dedupe(
+      parsedIngredients
+        .filter(
+          (p) =>
+            !ingredientMatchMap.has(p.parsed.name) ||
+            ingredientMatchMap.get(p.parsed.name) === null,
+        )
+        .filter((p) => p.parsed.name.length > 0)
+        .map((p) => p.parsed.name),
+    );
 
-      // Get missing ingredients
-      const missing = dedupe(
-        parsedIngredients
-          .filter(
-            (p) => !map.has(p.parsed.name) || map.get(p.parsed.name) === null,
-          )
-          .filter((p) => p.parsed.name.length > 0)
-          .map((p) => p.parsed.name),
-      );
-
-      return {
-        ingredientMatchMap: map,
-        isLoading: results.some((q) => q.isLoading),
-        namesForHighlighting: Array.from(names),
-        missingIngredients: missing,
-      };
-    },
-  });
+    return {
+      namesForHighlighting: Array.from(names),
+      missingIngredients: missing,
+    };
+  }, [parsedIngredients, ingredientMatchMap]);
 
   // Create ingredient mutation
   const createIngredientMutation = useMutation(
