@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda-schemas";
-import { and, eq, ilike } from "drizzle-orm";
+import { and, eq, ilike, type SQL } from "drizzle-orm";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { parseWithContext } from "~/lib/zod-utils";
 import type { Database } from "~/server/db";
@@ -54,13 +54,17 @@ export const findProductsByFoodIdentifier = async (
   }));
 };
 
-// Find a product by UPC code (excludes soft-deleted)
-export const findProductByUPC = async (
+/**
+ * Run a single-product lookup and transform it to the API shape.
+ * Shared by all the findProductBy* functions below: the only thing that varies
+ * between them is the `where` condition.
+ */
+const findProductToAPI = async (
   db: Database,
-  upcCode: string,
+  where: SQL | undefined,
 ): Promise<ProductTopLevelOut | null> => {
   const res = await getDb(db).query.product.findFirst({
-    where: and(eq(product.upc, upcCode), notDeleted(product)),
+    where,
     with: {
       images: {
         with: {
@@ -87,43 +91,27 @@ export const findProductByUPC = async (
   );
 };
 
+// Find a product by UPC code (excludes soft-deleted)
+export const findProductByUPC = (
+  db: Database,
+  upcCode: string,
+): Promise<ProductTopLevelOut | null> =>
+  findProductToAPI(db, and(eq(product.upc, upcCode), notDeleted(product)));
+
 // Find a product by name and manufacturer (internal helper, excludes soft-deleted)
-const findProductByNameAndManufacturer = async (
+const findProductByNameAndManufacturer = (
   db: Database,
   name: string,
   manufacturer: string,
-): Promise<ProductTopLevelOut | null> => {
-  const res = await getDb(db).query.product.findFirst({
-    where: and(
+): Promise<ProductTopLevelOut | null> =>
+  findProductToAPI(
+    db,
+    and(
       ilike(product.name, name),
       ilike(product.manufacturer, manufacturer),
       notDeleted(product),
     ),
-    with: {
-      images: {
-        with: {
-          image: true,
-        },
-      },
-    },
-  });
-
-  if (!res) {
-    return null;
-  }
-
-  return parseWithContext(
-    productTopLevelOut,
-    {
-      ...res,
-      images: extractImagesFromJoinTable(res.images),
-    },
-    {
-      entityType: "Product",
-      identifier: { id: res.id, name: res.name },
-    },
   );
-};
 
 /**
  * Find a product by name with fuzzy manufacturer matching
@@ -144,31 +132,9 @@ export const findProductByNameFuzzyManufacturer = async (
 ): Promise<ProductTopLevelOut | null> => {
   // If incoming manufacturer is unspecified, match by name only (excludes soft-deleted)
   if (isUnspecifiedManufacturer(manufacturer)) {
-    const res = await getDb(db).query.product.findFirst({
-      where: and(ilike(product.name, name), notDeleted(product)),
-      with: {
-        images: {
-          with: {
-            image: true,
-          },
-        },
-      },
-    });
-
-    if (!res) {
-      return null;
-    }
-
-    return parseWithContext(
-      productTopLevelOut,
-      {
-        ...res,
-        images: extractImagesFromJoinTable(res.images),
-      },
-      {
-        entityType: "Product",
-        identifier: { id: res.id, name: res.name },
-      },
+    return findProductToAPI(
+      db,
+      and(ilike(product.name, name), notDeleted(product)),
     );
   }
 
@@ -184,34 +150,12 @@ export const findProductByNameFuzzyManufacturer = async (
   }
 
   // Fallback: try to match a product with "(unspecified)" manufacturer (excludes soft-deleted)
-  const unspecifiedMatch = await getDb(db).query.product.findFirst({
-    where: and(
+  return findProductToAPI(
+    db,
+    and(
       ilike(product.name, name),
       ilike(product.manufacturer, UNSPECIFIED_MANUFACTURER),
       notDeleted(product),
     ),
-    with: {
-      images: {
-        with: {
-          image: true,
-        },
-      },
-    },
-  });
-
-  if (!unspecifiedMatch) {
-    return null;
-  }
-
-  return parseWithContext(
-    productTopLevelOut,
-    {
-      ...unspecifiedMatch,
-      images: extractImagesFromJoinTable(unspecifiedMatch.images),
-    },
-    {
-      entityType: "Product",
-      identifier: { id: unspecifiedMatch.id, name: unspecifiedMatch.name },
-    },
   );
 };

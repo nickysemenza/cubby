@@ -57,6 +57,11 @@ import { generateUniqueProductShortcode } from "~/server/repo/shortcode-utils";
 import { dbProductToAPI } from "./helpers";
 import { syncProductPrice } from "./pricing";
 import type { ProductDeepDB } from "./types";
+import {
+  syncProductExternalIds,
+  syncProductImages,
+  syncProductUnitMappings,
+} from "./update-helpers";
 
 export const getProductByID = async (db: Database, id: ProductId) => {
   const res = await getDb(db).query.product.findFirst({
@@ -338,143 +343,15 @@ export const updateProduct = async (
       eq(product.id, id),
     );
 
-    const productId = id;
-
-    // If unitMappings is provided, handle the updates efficiently
+    // Reconcile child collections against the incoming desired state.
+    // (unit mappings also resync the denormalized price + inventory valuations)
     if (unitMappings !== undefined) {
-      // Get existing mappings
-      const existingMappings = await tx.query.productUnitMappings.findMany({
-        where: eq(productUnitMappings.productId, productId),
-      });
-
-      // Find mappings to delete (exist in DB but not in new data)
-      const toDelete = existingMappings.filter(
-        (m: typeof productUnitMappings.$inferSelect) =>
-          !unitMappings.some((um) => um.id === m.id),
-      );
-
-      // Find mappings to create (exist in new data but not in DB)
-      const toCreate = unitMappings.filter(
-        (m: (typeof unitMappings)[number]) => m.id === undefined,
-      );
-
-      // Find mappings to update (exist in both)
-      const toUpdate = unitMappings.filter(
-        (m): m is typeof m & { id: string } => m.id !== undefined,
-      );
-
-      // Delete removed mappings
-      if (toDelete.length > 0) {
-        await tx.delete(productUnitMappings).where(
-          inArray(
-            productUnitMappings.id,
-            toDelete.map((m) => m.id),
-          ),
-        );
-      }
-
-      // Create new mappings
-      if (toCreate.length > 0) {
-        await tx.insert(productUnitMappings).values(
-          toCreate.map((mapping) => ({
-            productId,
-            a: mapping.a,
-            b: mapping.b,
-            source: mapping.source,
-          })),
-        );
-      }
-
-      // Update existing mappings
-      for (const mapping of toUpdate) {
-        await tx
-          .update(productUnitMappings)
-          .set({
-            a: mapping.a,
-            b: mapping.b,
-            source: mapping.source,
-          })
-          .where(eq(productUnitMappings.id, mapping.id));
-      }
-
-      // Sync the product price after all unit mapping changes
-      await syncProductPrice(tx, productId);
+      await syncProductUnitMappings(tx, id, unitMappings);
     }
-
-    // If externalIds is provided, handle the updates (same diff pattern as unitMappings)
     if (externalIds !== undefined) {
-      const existingExternalIds = await tx.query.productExternalId.findMany({
-        where: and(
-          eq(productExternalId.productId, productId),
-          isNull(productExternalId.deletedAt),
-        ),
-      });
-
-      const toDelete = existingExternalIds.filter(
-        (e) => !externalIds.some((eid) => eid.id === e.id),
-      );
-      const toCreate = externalIds.filter((e) => e.id === undefined);
-      const toUpdate = externalIds.filter(
-        (e): e is typeof e & { id: string } => e.id !== undefined,
-      );
-
-      if (toDelete.length > 0) {
-        await tx
-          .update(productExternalId)
-          .set({ deletedAt: new Date() })
-          .where(
-            inArray(
-              productExternalId.id,
-              toDelete.map((e) => e.id),
-            ),
-          );
-      }
-
-      if (toCreate.length > 0) {
-        await tx.insert(productExternalId).values(
-          toCreate.map((eid) => ({
-            productId,
-            source: eid.source,
-            externalId: eid.externalId,
-            url: eid.url ?? null,
-          })),
-        );
-      }
-
-      for (const eid of toUpdate) {
-        await tx
-          .update(productExternalId)
-          .set({
-            source: eid.source,
-            externalId: eid.externalId,
-            url: eid.url ?? null,
-          })
-          .where(eq(productExternalId.id, eid.id));
-      }
+      await syncProductExternalIds(tx, id, externalIds);
     }
-
-    // Add new images if provided
-    if (pendingImageIds && pendingImageIds.length > 0) {
-      await associatePendingImages(
-        tx,
-        productImage,
-        "productId",
-        updated.id,
-        pendingImageIds,
-      );
-    }
-
-    // Remove images if requested
-    if (removeImageIds && removeImageIds.length > 0) {
-      await tx
-        .delete(productImage)
-        .where(
-          and(
-            eq(productImage.productId, updated.id),
-            inArray(productImage.imageId, removeImageIds),
-          ),
-        );
-    }
+    await syncProductImages(tx, id, pendingImageIds, removeImageIds);
 
     // Fetch all associated images
     const productImages = await tx.query.productImage.findMany({
