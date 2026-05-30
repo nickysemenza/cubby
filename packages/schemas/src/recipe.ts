@@ -14,17 +14,22 @@ export const recipeYieldSchema = z.object({
 });
 export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 
+// Shared building blocks for a recipe's writable fields. Defined once here so the
+// output (recipeTopLevel), API input (recipeCreateInput), and the form's formSchema
+// stay in sync. Each consumer applies its own null/optional wrapper because the
+// optionality legitimately differs per layer (output uses nullish, input uses
+// nullable+optional, the form always sends the key as null).
+export const recipeMeta = z.object({ url: z.url().nullable() }).nullable();
+export const recipeServings = z.number().int().positive();
+export const recipeTags = z.array(z.string());
+
 const ingredientOut = baseEntitySchema;
 
 export const recipeTopLevel = baseEntitySchema.extend({
-  meta: z
-    .object({
-      url: z.url().nullable(),
-    })
-    .nullable(),
+  meta: recipeMeta,
   yield: recipeYieldSchema.nullish(),
-  servings: z.number().int().positive().nullish(),
-  tags: z.array(z.string()).nullish(),
+  servings: recipeServings.nullish(),
+  tags: recipeTags.nullish(),
 });
 
 // Create a base schema with common fields
@@ -109,10 +114,10 @@ export const recipeSectionInput = z.object({
 export const recipeCreateInput = z
   .object({
     name: z.string(),
-    meta: recipeTopLevel.shape.meta,
+    meta: recipeMeta,
     yield: recipeYieldSchema.nullable().optional(),
-    servings: z.number().int().positive().nullable().optional(),
-    tags: z.array(z.string()).nullable().optional(),
+    servings: recipeServings.nullable().optional(),
+    tags: recipeTags.nullable().optional(),
     sections: z.array(recipeSectionInput),
   })
   .extend(createInputImages.shape);

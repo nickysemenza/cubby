@@ -4,27 +4,32 @@ import {
   type RecipeCreateInput,
   type RecipeOut,
   type RecipeUpdateInput,
-  recipeTopLevel,
+  recipeMeta,
+  recipeServings,
+  recipeTags,
   recipeYieldSchema,
 } from "@cubby/schemas/recipe";
 import { z } from "zod";
 import { ComboboxItem } from "../../combobox/combobox-types";
 import type { PendingImage } from "../../PendingImageUpload";
 
+// Fields shared by both ingredient-union variants. Mirrors the schema package's
+// sectioningredientOut base + extend idiom so the form union is defined once.
+const ingItemBase = z.object({
+  id: z.string().uuid().optional(),
+  amounts: z.array(amount),
+});
+
 const ingItem = z.discriminatedUnion("type", [
-  z.object({
-    id: z.string().uuid().optional(),
+  ingItemBase.extend({
     type: z.literal("ingredient"),
     ingredient: ComboboxItem,
     recipe: z.null(),
-    amounts: z.array(amount),
   }),
-  z.object({
-    id: z.string().uuid().optional(),
+  ingItemBase.extend({
     type: z.literal("recipe"),
     ingredient: z.null(),
     recipe: ComboboxItem,
-    amounts: z.array(amount),
   }),
 ]);
 
@@ -32,10 +37,10 @@ export type IngItem = z.infer<typeof ingItem>;
 // Form schema for recipe form
 export const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  meta: recipeTopLevel.shape.meta,
+  meta: recipeMeta,
   yield: recipeYieldSchema.nullable(),
-  servings: z.number().int().positive().nullable(),
-  tags: z.array(z.string()).nullable(),
+  servings: recipeServings.nullable(),
+  tags: recipeTags.nullable(),
   sections: z.array(
     z.object({
       id: z.uuid().optional(),

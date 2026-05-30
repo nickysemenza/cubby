@@ -54,6 +54,9 @@ export const dbRecipeToAPIShallow: (
 ) => z.infer<typeof recipeTopLevel> = (recipeData) => {
   const { SourceType, SourceData, ...restOfRecipe } = recipeData;
   return {
+    // The DB stores provenance as SourceType + SourceData; the API exposes a single
+    // meta.url. This derivation is deliberately kept (rather than collapsing the two
+    // columns into one nullable sourceUrl) to avoid a DB migration + backfill.
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
@@ -70,6 +73,8 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
 
   return {
     ...restOfRecipe,
+    // See dbRecipeToAPIShallow: SourceType/SourceData -> meta.url derivation is kept
+    // deliberately to avoid a DB migration.
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
@@ -79,7 +84,8 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
       return {
         ...restOfSection,
         ingredients: mapRelation(ingredients, sectionIngredientToAPI),
-        // Map JSON instructions array to the expected format
+        // The DB stores each instruction as { text }, the API/form use { instruction }.
+        // This rename is deliberately kept to avoid a JSONB migration + backfill.
         instructions: Array.isArray(instructions)
           ? instructions.map((instruction: { text: string }) => {
               return { instruction: instruction.text };
