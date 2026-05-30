@@ -53,6 +53,7 @@ import { generateUniqueRecipeShortcode } from "~/server/repo/shortcode-utils";
 import { dbRecipeToAPI } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
 import {
+  deleteAllSections,
   handleSectionUpdates,
   processIngredients,
   updateRecipeBasicProperties,
@@ -271,28 +272,23 @@ export const upsertRecipe = async (
   });
 
   if (existingRecipe) {
-    // Recipe exists - soft delete existing sections and recreate with new data
+    // Recipe exists - replace its sections with the new data.
     return await withTransaction(db, async (tx) => {
-      // First soft delete ingredients that reference the sections
+      // Hard-delete the existing sections and their ingredients before re-inserting.
+      // Replacing sections during an edit/re-import is internal churn, not a
+      // user-facing recipe deletion, so we hard-delete (matching updateRecipe ->
+      // handleSectionUpdates -> deleteAllSections) rather than soft-delete. Soft-deleting
+      // here left dead RecipeSection/RecipeSectionIngredient rows that accumulated
+      // unboundedly on every re-upsert (e.g. repeated `npm run load-data`/seed runs).
+      // Recipe-level deletion remains a soft delete with audit logging in deleteRecipes().
       const existingSections = await tx.query.recipeSection.findMany({
         where: eq(recipeSection.recipeId, existingRecipe.id),
         columns: { id: true },
       });
-
-      if (existingSections.length > 0) {
-        const sectionIds = existingSections.map((s) => s.id);
-        const now = new Date();
-        await tx
-          .update(recipeSectionIngredient)
-          .set({ deletedAt: now })
-          .where(inArray(recipeSectionIngredient.recipeSectionId, sectionIds));
-
-        // Now soft delete the sections
-        await tx
-          .update(recipeSection)
-          .set({ deletedAt: now })
-          .where(eq(recipeSection.recipeId, existingRecipe.id));
-      }
+      await deleteAllSections(
+        tx,
+        existingSections.map((s) => s.id),
+      );
 
       // Process ingredients for the update (same as in createRecipe)
       const processedSections = input.sections.map((section) => {

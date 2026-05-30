@@ -1,11 +1,15 @@
 import type { ParsedCompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { unsafeUserId } from "@cubby/schemas/identifiers";
-import { eq, ne } from "drizzle-orm";
+import { eq, inArray, ne } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
-import { recipe, recipeSection } from "~/server/db/schema";
+import {
+  recipe,
+  recipeSection,
+  recipeSectionIngredient,
+} from "~/server/db/schema";
 import { upsertRecipeFromCompact } from "./compactrecipe";
 import { getDb } from "./database-helpers";
 
@@ -216,7 +220,27 @@ describe("upsertRecipeFromCompact", () => {
     expect(ingredientCountAfter).toBe(2);
     expect(ingredientCountAfter).toBeLessThan(ingredientCountBefore);
 
-    // Verify no orphaned records exist
+    // Verify no dangling section/ingredient rows remain for this recipe.
+    // Section replacement hard-deletes the old rows (matching updateRecipe), so these
+    // raw queries — which do NOT filter soft-deletes — must see exactly the new rows,
+    // not the union of old + new. This guards against the unbounded dead-row
+    // accumulation that soft-deleting old sections used to cause on repeated upserts.
+    const allSectionsForRecipe = await getDb(db).query.recipeSection.findMany({
+      where: eq(recipeSection.recipeId, afterUpdate!.id),
+    });
+    expect(allSectionsForRecipe).toHaveLength(1);
+
+    const allIngredientsForRecipe = await getDb(
+      db,
+    ).query.recipeSectionIngredient.findMany({
+      where: inArray(
+        recipeSectionIngredient.recipeSectionId,
+        allSectionsForRecipe.map((s) => s.id),
+      ),
+    });
+    expect(allIngredientsForRecipe).toHaveLength(2);
+
+    // Verify no orphaned records exist for any other recipe either
     const orphanedSections = await getDb(db).query.recipeSection.findMany({
       where: ne(recipeSection.recipeId, afterUpdate!.id),
     });

@@ -186,7 +186,12 @@ export async function updateRecipeImages(
 }
 
 /**
- * Delete all sections and their ingredients for a recipe.
+ * Hard-delete the given sections and their ingredients.
+ *
+ * Section replacement is internal churn, not a user-facing entity deletion, so both
+ * recipe-mutation paths (updateRecipe via handleSectionUpdates, and upsertRecipe) use
+ * this hard delete to keep their semantics consistent and avoid accumulating dead rows.
+ * Ingredients are deleted first to respect the recipeSectionId foreign key.
  */
 export async function deleteAllSections(
   tx: DrizzleTransaction,
