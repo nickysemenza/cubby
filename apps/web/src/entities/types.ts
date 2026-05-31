@@ -1,12 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 
 // Re-export entity types from @cubby/schemas for backward compatibility
-export {
-  type Entity,
-  type EntityImage,
-  entityImage,
-  entitySchema,
-} from "@cubby/schemas/entity";
+export type { Entity } from "@cubby/schemas/entity";
 
 /** All valid entity detail routes (e.g., /products/$id) */
 export type EntityDetailRoute =
@@ -19,7 +14,7 @@ export type EntityDetailRoute =
   | "/images/$id";
 
 /** All valid entity list routes (e.g., /products) */
-export type EntityListRoute =
+type EntityListRoute =
   | "/ingredients"
   | "/products"
   | "/recipes"
@@ -29,7 +24,7 @@ export type EntityListRoute =
   | "/images";
 
 /** All valid entity "new" routes (e.g., /products/new) */
-export type EntityNewRoute =
+type EntityNewRoute =
   | "/ingredients/new"
   | "/products/new"
   | "/recipes/new"

@@ -6,7 +6,7 @@ import { type QuickAction, quickActions } from "./quick-actions";
 
 const DEBOUNCE_MS = 300;
 
-export interface UseGlobalSearchResult {
+interface UseGlobalSearchResult {
   results:
     | ReturnType<typeof useTRPC>["search"]["global"]["~types"]["output"]
     | undefined;

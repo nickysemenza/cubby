@@ -36,7 +36,7 @@ interface SlotValue {
   value: ReactNode;
 }
 
-export interface MobileListRowModel<TItem> {
+interface MobileListRowModel<TItem> {
   row: Row<TItem>;
   title: string;
   subtitle?: ReactNode;

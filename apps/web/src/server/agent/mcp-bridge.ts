@@ -30,7 +30,7 @@ export interface ToolCallRecord {
   result: unknown;
 }
 
-export interface AgentToolset {
+interface AgentToolset {
   tools: Tool[];
   /** Mutated in place as the agent loop calls tools. */
   records: ToolCallRecord[];

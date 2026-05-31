@@ -43,7 +43,7 @@ export function incrementCounter<TAction extends string>(
 }
 
 /** Type alias for inventory counters */
-export type InventoryCounters = ResultCounters<InventoryCSVAction>;
+type InventoryCounters = ResultCounters<InventoryCSVAction>;
 
 /**
  * Create counters for inventory CSV operations

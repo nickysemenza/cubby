@@ -28,7 +28,7 @@ type TRPCQueryOptionsFn<TFilters> = (params: {
   // biome-ignore lint/suspicious/noExplicitAny: intentional
 }) => any;
 
-export interface UseInfiniteTableListOptions<TFilters> {
+interface UseInfiniteTableListOptions<TFilters> {
   queryOptions: TRPCQueryOptionsFn<TFilters>;
   buildFilters: (tableState: ReturnType<typeof useTableState>) => TFilters;
   tableStateOptions?: TableStateOptions;

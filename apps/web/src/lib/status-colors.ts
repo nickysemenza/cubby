@@ -7,7 +7,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-export interface StatusBadgeProps {
+interface StatusBadgeProps {
   label: string;
   /** Tailwind classes for bg + text using theme tokens. */
   className: string;
@@ -73,7 +73,7 @@ const DOMAINS = {
   project: projectStatus,
 } as const;
 
-export type StatusDomain = keyof typeof DOMAINS;
+type StatusDomain = keyof typeof DOMAINS;
 
 /**
  * Get badge styling for a status value within a domain.

@@ -35,7 +35,7 @@ type EditableSelectConfig = {
   placeholder?: string;
 };
 
-export type EditableConfig =
+type EditableConfig =
   | EditableInputConfig
   | EditableCurrencyConfig
   | EditableSelectConfig;

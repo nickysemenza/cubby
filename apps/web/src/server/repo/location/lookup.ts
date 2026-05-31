@@ -28,7 +28,7 @@ import { dbLocationToAPI } from "./helpers";
  * Find a location by its unique name (case-insensitive)
  * Returns null if not found (excludes soft-deleted)
  */
-export const findLocationByName = async (
+const findLocationByName = async (
   db: Database,
   name: string,
 ): Promise<LocationId | null> => {
@@ -42,7 +42,7 @@ export const findLocationByName = async (
  * Find a location by its shortcode
  * Returns null if not found (excludes soft-deleted)
  */
-export const findLocationByShortcode = async (
+const findLocationByShortcode = async (
   db: Database,
   shortcode: string,
 ): Promise<LocationId | null> => {

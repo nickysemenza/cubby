@@ -2,7 +2,7 @@ import type { Row } from "@tanstack/react-table";
 import { useMemo } from "react";
 import type { GroupConfig } from "./useGroupedList";
 
-export type DesktopGroupItem =
+type DesktopGroupItem =
   | { kind: "header"; title: string; count: number; color: string }
   | { kind: "row"; rowIndex: number };
 

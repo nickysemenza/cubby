@@ -47,7 +47,7 @@ import type {
  * Returns the valuation value to store.
  * Accepts both Database and DrizzleTransaction for use within transactions.
  */
-export const computeValuationForEntry = async (
+const computeValuationForEntry = async (
   db: Database | DrizzleTransaction,
   productId: ProductId,
   amountValue: number,

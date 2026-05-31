@@ -27,12 +27,12 @@ const titleVariants = cva("font-heading tracking-tight", {
   defaultVariants: { variant: "list" },
 });
 
-export interface PageHeroMetaItem {
+interface PageHeroMetaItem {
   icon?: LucideIcon;
   label: ReactNode;
 }
 
-export interface PageHeroProps extends VariantProps<typeof heroVariants> {
+interface PageHeroProps extends VariantProps<typeof heroVariants> {
   title: ReactNode;
   /** Small uppercase label above the title (e.g. "Pantry" above "Locations"). */
   eyebrow?: ReactNode;

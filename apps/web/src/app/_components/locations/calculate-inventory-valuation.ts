@@ -62,7 +62,7 @@ export function formatPricingStatusSummary(
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
-export type InventoryValuationResult = {
+type InventoryValuationResult = {
   totalValuation: number;
   breakdown: InventoryValuationBreakdown[];
   pricingStatus: PricingStatus;

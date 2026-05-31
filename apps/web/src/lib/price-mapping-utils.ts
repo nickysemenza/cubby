@@ -30,7 +30,7 @@ const isSingleEach = (amount: Amount): boolean =>
  * Checks if a mapping is a canonical price mapping (1 each <-> $X)
  * Works in either direction (a or b can be the price).
  */
-export const isCanonicalPriceMapping = (mapping: {
+const isCanonicalPriceMapping = (mapping: {
   a: Amount;
   b: Amount;
 }): boolean => {

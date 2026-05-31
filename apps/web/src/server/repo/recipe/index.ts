@@ -18,12 +18,5 @@ export {
 } from "./crud";
 // Helpers
 export { dbRecipeToAPIShallow } from "./helpers";
-// Types
-export type {
-  ExistingRecipeWithSections,
-  RecipeDeepDB,
-  RecipeFilters,
-  SectionIngredientDB,
-} from "./internal-types";
 // Analytics and queries
 export { getAllTags, getIngredientCooccurrence } from "./queries";

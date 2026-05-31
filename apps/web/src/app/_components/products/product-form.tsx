@@ -35,7 +35,7 @@ import type { PendingImage } from "../PendingImageUpload";
 import { ProductFormFields } from "./product-form-fields";
 
 // Form schema for product form (simple Zod schema without z.custom)
-export const productFormSchema = z
+const productFormSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
     manufacturer: z.string().min(1, "Manufacturer is required"),
@@ -56,7 +56,7 @@ export const productFormSchema = z
     ndb_number: data.ndb_number === 0 ? null : data.ndb_number,
   }));
 
-export type ProductFormValues = z.infer<typeof productFormSchema>;
+type ProductFormValues = z.infer<typeof productFormSchema>;
 
 // Props for create mode
 interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {

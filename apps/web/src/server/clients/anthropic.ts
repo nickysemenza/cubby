@@ -128,7 +128,7 @@ Rules:
 5. Only set model to a value if you can clearly read a model number`;
 }
 
-export class AnthropicClient {
+class AnthropicClient {
   private adapter: ReturnType<typeof createAnthropicChat> | null = null;
 
   constructor(private apiKey: string | undefined) {}

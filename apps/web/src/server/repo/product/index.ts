@@ -39,5 +39,3 @@ export {
 
 // Pricing operations
 export { backfillProductPrices, findProductsWithStalePrices } from "./pricing";
-// Types
-export type { ProductDeepDB } from "./types";

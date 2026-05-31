@@ -9,7 +9,7 @@ export interface GroupConfig<TItem> {
   colorFn: (key: string) => string;
 }
 
-export type GroupedVirtualItem<TItem> =
+type GroupedVirtualItem<TItem> =
   | { kind: "header"; title: string; count: number; color: string }
   | { kind: "row"; item: TItem; index: number };
 

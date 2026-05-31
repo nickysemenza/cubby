@@ -30,7 +30,7 @@ import type { ExistingRecipeWithSections } from "./internal-types";
  * For regular ingredients, returns the ingredient ID.
  * For recipe references, finds or creates an ingredient pointing to the recipe.
  */
-export const processIngredient = async (
+const processIngredient = async (
   tx: DrizzleTransaction,
   ingredientInput: z.infer<typeof recipeIngredientInput>,
 ): Promise<{
@@ -208,7 +208,7 @@ export async function deleteAllSections(
 /**
  * Create a new recipe section with ingredients.
  */
-export async function createSectionWithIngredients(
+async function createSectionWithIngredients(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   sectionInput: NonNullable<RecipeUpdateInput["data"]["sections"]>[number],
@@ -239,7 +239,7 @@ export async function createSectionWithIngredients(
 /**
  * Update an existing section's ingredients.
  */
-export async function updateSectionIngredients(
+async function updateSectionIngredients(
   tx: DrizzleTransaction,
   sectionId: string,
   ingredientUpdates: NonNullable<
@@ -313,7 +313,7 @@ export async function updateSectionIngredients(
 /**
  * Update an existing recipe section.
  */
-export async function updateExistingSection(
+async function updateExistingSection(
   tx: DrizzleTransaction,
   sectionUpdate: NonNullable<RecipeUpdateInput["data"]["sections"]>[number] & {
     id: string;

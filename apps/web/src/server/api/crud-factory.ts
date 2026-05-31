@@ -48,7 +48,7 @@ export interface CrudServices {
  * Use this type for repository callbacks in protected procedures to avoid
  * non-null assertions (!) on actorContext.
  */
-export interface ProtectedCrudServices extends CrudServices {
+interface ProtectedCrudServices extends CrudServices {
   actorContext: ActorContext;
 }
 

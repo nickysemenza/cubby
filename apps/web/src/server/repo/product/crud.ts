@@ -80,7 +80,7 @@ export const getProductByID = async (db: Database, id: ProductId) => {
  * Find a product by its shortcode
  * Returns null if not found
  */
-export const findProductByShortcode = async (
+const findProductByShortcode = async (
   db: Database,
   shortcode: string,
 ): Promise<ProductId | null> => {

@@ -282,7 +282,7 @@ export const getImageById = async (
  * Get an image by its S3 key
  * Returns null if not found (used for checking if image already exists in DB)
  */
-export const getImageByKey = async (
+const getImageByKey = async (
   db: Database,
   key: string,
 ): Promise<{ id: string; url: string; key: string } | null> => {

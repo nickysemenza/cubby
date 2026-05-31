@@ -31,11 +31,7 @@ export const BARCODE_FORMATS: BarcodeFormat[] = [
 
 export const QR_CODE_FORMATS: BarcodeFormat[] = ["qr_code"];
 
-export type ScannerStatus =
-  | "loading"
-  | "scanning"
-  | "error"
-  | "permission_denied";
+type ScannerStatus = "loading" | "scanning" | "error" | "permission_denied";
 
 interface UseBarcodeSccannerOptions {
   /** Called when a barcode is detected */

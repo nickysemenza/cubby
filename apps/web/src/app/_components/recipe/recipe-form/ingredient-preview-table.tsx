@@ -108,7 +108,7 @@ function useParsedIngredientMatches(ingredientLines: string[]) {
   return { parsedIngredients, ingredientMatchMap, isLoading };
 }
 
-export interface ParsedIngredientWithMatch {
+interface ParsedIngredientWithMatch {
   raw: string;
   parsed: WIngredient;
   match: {

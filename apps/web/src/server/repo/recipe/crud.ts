@@ -77,7 +77,7 @@ export const getRecipeByID = async (
 /**
  * Find a recipe by shortcode and return its ID.
  */
-export const findRecipeByShortcode = async (
+const findRecipeByShortcode = async (
   db: Database,
   shortcode: string,
 ): Promise<RecipeId | null> => {

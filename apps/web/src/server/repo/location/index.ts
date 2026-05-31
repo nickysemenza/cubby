@@ -16,11 +16,6 @@ export {
   updateLocation,
   updateLocationAiDescription,
 } from "./crud";
-export type {
-  LocationDeepDB,
-  LocationFilters,
-  LocationWithParentChild,
-} from "./internal-types";
 // Lookup operations
 export {
   findOrCreateLocationByName,

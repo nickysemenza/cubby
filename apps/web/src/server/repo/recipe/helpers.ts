@@ -23,7 +23,7 @@ type RecipeSelect = typeof recipe.$inferSelect;
  * Convert a recipe section ingredient DB record to API type.
  * Handles both regular ingredients and recipe references.
  */
-export const sectionIngredientToAPI = (
+const sectionIngredientToAPI = (
   sectionIngredient: SectionIngredientDB,
 ): SectionIngredient => {
   if (sectionIngredient.ingredient?.Recipe) {

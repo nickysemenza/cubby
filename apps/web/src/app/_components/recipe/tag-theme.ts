@@ -12,7 +12,7 @@ import {
  * - Prefixed: "cuisine:thai", "author:kenji", "cookbook:ottolenghi"
  * - Plain: "quick", "kid-approved", "make-ahead"
  */
-export type TagPrefix = "cuisine" | "author" | "cookbook" | "none";
+type TagPrefix = "cuisine" | "author" | "cookbook" | "none";
 
 /**
  * Extract prefix and value from a tag string
