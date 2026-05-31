@@ -31,6 +31,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
+import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";
 import { useAgentStream } from "./hooks/useAgentStream";
@@ -432,9 +433,7 @@ export function GlobalCommandMenu({
                           <div className="truncate text-sm">{p.name}</div>
                           <div className="truncate text-muted-foreground text-xs">
                             {[
-                              p.cost != null
-                                ? `$${p.cost.toLocaleString()}`
-                                : null,
+                              p.cost != null ? formatCurrency(p.cost, 0) : null,
                               p.projectName,
                             ]
                               .filter(Boolean)

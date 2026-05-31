@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Badge } from "~/components/ui/badge";
+import { formatCurrency } from "~/lib/utils";
 import type { NotionProject } from "~/server/clients/notion";
 import { formatDateRange, StatusIcon } from "./shared";
 
@@ -42,7 +43,7 @@ function ProjectTooltip({ project }: { project: NotionProject }) {
             <div>Location: {project.location.join(", ")}</div>
           )}
           {project.costEstimate != null && (
-            <div>Estimate: ${project.costEstimate.toLocaleString()}</div>
+            <div>Estimate: {formatCurrency(project.costEstimate, 0)}</div>
           )}
         </div>
       </div>

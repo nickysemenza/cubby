@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { count, sql } from "drizzle-orm";
 import { env } from "~/env";
+import { getErrorMessage } from "~/lib/error-utils";
 import { db } from "~/server/db";
 import { product } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
@@ -23,7 +24,7 @@ async function measure(
     return {
       label,
       durationMs: Math.round(performance.now() - start),
-      error: e instanceof Error ? e.message : String(e),
+      error: getErrorMessage(e),
     };
   }
 }

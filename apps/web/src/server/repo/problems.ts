@@ -1,6 +1,6 @@
 import { isMiscProduct } from "@cubby/shared";
 import { upc as upcSchema } from "@cubby/usda-schemas";
-import { and, eq, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   inventoryEntry,
@@ -230,7 +230,7 @@ const findInvalidUPCs = async (db: Database): Promise<InvalidUPC[]> => {
 
   // Find products with UPCs
   const productsWithUPCs = await getDb(db).query.product.findMany({
-    where: sql`${product.deletedAt} IS NULL AND ${product.upc} IS NOT NULL`,
+    where: and(notDeleted(product), isNotNull(product.upc)),
     columns: {
       id: true,
       name: true,
@@ -579,7 +579,7 @@ const countOrphanedProducts = async (db: Database): Promise<number> => {
 
 const countInvalidUPCs = async (db: Database): Promise<number> => {
   const productsWithUPCs = await getDb(db).query.product.findMany({
-    where: sql`${product.deletedAt} IS NULL AND ${product.upc} IS NOT NULL`,
+    where: and(notDeleted(product), isNotNull(product.upc)),
     columns: {
       name: true,
       upc: true,

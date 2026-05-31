@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { type Tool, toolDefinition } from "@tanstack/ai";
+import { getErrorMessage } from "~/lib/error-utils";
 import { createMcpServer } from "~/server/mcp/server";
 
 /**
@@ -106,7 +107,7 @@ export async function createAgentToolset(
           }
         } catch (error) {
           ok = false;
-          text = error instanceof Error ? error.message : String(error);
+          text = getErrorMessage(error);
           parsed = text;
         }
 
