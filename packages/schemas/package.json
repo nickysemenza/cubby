@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./availability": "./src/availability.ts",
     "./codec": "./src/codec.ts",
     "./entity": "./src/entity.ts",
     "./identifiers": "./src/identifiers.ts",

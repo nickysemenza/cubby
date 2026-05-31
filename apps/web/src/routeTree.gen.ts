@@ -43,6 +43,7 @@ import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authentica
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
 import { Route as AuthenticatedProductsIdRouteImport } from './routes/_authenticated/products.$id'
+import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
 import { Route as AuthenticatedLocationsValidateRouteImport } from './routes/_authenticated/locations.validate'
 import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedLocationsIdRouteImport } from './routes/_authenticated/locations.$id'
@@ -237,6 +238,12 @@ const AuthenticatedProductsIdRoute = AuthenticatedProductsIdRouteImport.update({
   path: '/products/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedMealsSuggestionsRoute =
+  AuthenticatedMealsSuggestionsRouteImport.update({
+    id: '/meals/suggestions',
+    path: '/meals/suggestions',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLocationsValidateRoute =
   AuthenticatedLocationsValidateRouteImport.update({
     id: '/locations/validate',
@@ -348,6 +355,7 @@ export interface FileRoutesByFullPath {
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
@@ -397,6 +405,7 @@ export interface FileRoutesByTo {
   '/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/products/$id': typeof AuthenticatedProductsIdRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
@@ -448,6 +457,7 @@ export interface FileRoutesById {
   '/_authenticated/locations/$id': typeof AuthenticatedLocationsIdRoute
   '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
   '/_authenticated/locations/validate': typeof AuthenticatedLocationsValidateRoute
+  '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
   '/_authenticated/products/$id': typeof AuthenticatedProductsIdRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
@@ -499,6 +509,7 @@ export interface FileRouteTypes {
     | '/locations/$id'
     | '/locations/new'
     | '/locations/validate'
+    | '/meals/suggestions'
     | '/products/$id'
     | '/products/new'
     | '/projects/$id'
@@ -548,6 +559,7 @@ export interface FileRouteTypes {
     | '/locations/$id'
     | '/locations/new'
     | '/locations/validate'
+    | '/meals/suggestions'
     | '/products/$id'
     | '/products/new'
     | '/projects/$id'
@@ -598,6 +610,7 @@ export interface FileRouteTypes {
     | '/_authenticated/locations/$id'
     | '/_authenticated/locations/new'
     | '/_authenticated/locations/validate'
+    | '/_authenticated/meals/suggestions'
     | '/_authenticated/products/$id'
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$id'
@@ -873,6 +886,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/meals/suggestions': {
+      id: '/_authenticated/meals/suggestions'
+      path: '/meals/suggestions'
+      fullPath: '/meals/suggestions'
+      preLoaderRoute: typeof AuthenticatedMealsSuggestionsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/locations/validate': {
       id: '/_authenticated/locations/validate'
       path: '/locations/validate'
@@ -996,6 +1016,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLocationsIdRoute: typeof AuthenticatedLocationsIdRoute
   AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
   AuthenticatedLocationsValidateRoute: typeof AuthenticatedLocationsValidateRoute
+  AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
   AuthenticatedProductsIdRoute: typeof AuthenticatedProductsIdRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
@@ -1039,6 +1060,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedLocationsIdRoute: AuthenticatedLocationsIdRoute,
   AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
   AuthenticatedLocationsValidateRoute: AuthenticatedLocationsValidateRoute,
+  AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
   AuthenticatedProductsIdRoute: AuthenticatedProductsIdRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,

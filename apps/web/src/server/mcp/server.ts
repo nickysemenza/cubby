@@ -132,6 +132,18 @@ function slimProduct(p: Record<string, unknown>) {
   };
 }
 
+/** Strip heavy fields from recipe list rows (drops nested sections/images). */
+function slimRecipe(r: Record<string, unknown>) {
+  return {
+    id: r.id,
+    name: r.name,
+    shortcode: r.shortcode,
+    yield: r.yield,
+    servings: r.servings,
+    tags: r.tags,
+  };
+}
+
 export function createMcpServer() {
   const server = new McpServer({
     name: "cubby",
@@ -615,6 +627,77 @@ function registerTools(server: McpServer) {
       const result = await caller.search.global({
         query: params.query,
         limit: params.limit ?? 10,
+      });
+      return json(result);
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Recipe tools (read-only)
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "list_recipes",
+    "List recipes by name. Returns id, name, shortcode, yield, servings, tags.",
+    {
+      query: z
+        .string()
+        .optional()
+        .describe("Filter by recipe name (substring)"),
+      pageIndex,
+      pageSize,
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.list({
+        filters: { nameFilter: params.query },
+        sort: { orderBy: "name", direction: "asc" },
+        pagination: {
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 50,
+        },
+      });
+      return json({
+        meta: result.meta,
+        items: result.items.map((r: Record<string, unknown>) => slimRecipe(r)),
+      });
+    }),
+  );
+
+  server.tool(
+    "get_recipe",
+    "Get a recipe by ID, including sections, ingredients, and instructions.",
+    { id: z.string().describe("Recipe ID") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.getByID({ id: params.id });
+      return json(result);
+    }),
+  );
+
+  server.tool(
+    "find_cookable_recipes",
+    "Rank recipes by how well current inventory covers their ingredients — answers 'what can I make right now?'. Each result includes a coverage ratio (0..1) and the list of missing ingredients.",
+    {
+      minCoverage: z
+        .number()
+        .min(0)
+        .max(1)
+        .optional()
+        .describe("Only return recipes with at least this coverage (0..1)"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .optional()
+        .describe("Max recipes to return (default 24, max 100)"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.suggestions.getMakeable({
+        minCoverage: params.minCoverage,
+        limit: params.limit,
       });
       return json(result);
     }),

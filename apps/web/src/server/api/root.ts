@@ -12,6 +12,7 @@ import { problemsRouter } from "./routers/problems";
 import { productRouter } from "./routers/product";
 import { recipeRouter } from "./routers/recipe";
 import { searchRouter } from "./routers/search";
+import { suggestionsRouter } from "./routers/suggestions";
 import { upcRouter } from "./routers/upc";
 import { usdaRouter } from "./routers/usda";
 
@@ -36,6 +37,7 @@ export const appRouter = createTRPCRouter({
   problems: problemsRouter,
   auditLog: auditLogRouter,
   search: searchRouter,
+  suggestions: suggestionsRouter,
 });
 
 // export type definition of API

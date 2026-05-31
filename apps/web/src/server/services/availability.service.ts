@@ -1,3 +1,8 @@
+import type {
+  IngredientAvailability,
+  IngredientAvailabilityStatus,
+  RecipeAvailability,
+} from "@cubby/schemas/availability";
 import type { Amount } from "@cubby/schemas/codec";
 import {
   type IngredientId,
@@ -17,47 +22,16 @@ import type {
   IngredientWithFoodOut,
 } from "./ingredient.service";
 
+// Output types live in @cubby/schemas/availability (single source of truth, shared
+// with the suggestions router's .output()). Re-exported for existing importers.
+export type {
+  IngredientAvailability,
+  IngredientAvailabilityStatus,
+  RecipeAvailability,
+};
+
 /** Tiny tolerance so float rounding doesn't flip an exact match to "short". */
 const COVERAGE_EPSILON = 1e-6;
-
-export type IngredientAvailabilityStatus =
-  | "ok" // enough on hand
-  | "short" // some on hand, but not enough
-  | "missing" // none on hand
-  | "unconvertible" // on hand, but its unit can't be reconciled with the need
-  | "subrecipe"; // the ingredient is itself a recipe (not resolved in v1)
-
-export interface IngredientAvailability {
-  ingredientId: IngredientId | null;
-  name: string;
-  /** What the recipe needs (first amount), as authored — for display. */
-  need: Amount | null;
-  /**
-   * Unit in which `needValue`/`haveValue` are compared: grams ("g") when a
-   * weight basis is available (the common case for food), otherwise the
-   * recipe's own unit. null when the row has no amount or is a sub-recipe.
-   */
-  basisUnit: string | null;
-  /** `need` expressed in `basisUnit`. */
-  needValue: number | null;
-  /** Total on hand expressed in `basisUnit`; null if it couldn't be measured. */
-  haveValue: number | null;
-  status: IngredientAvailabilityStatus;
-}
-
-export interface RecipeAvailability {
-  recipeId: RecipeId;
-  recipeName: string;
-  /** Fraction of resolvable ingredients fully covered (0..1). */
-  coverage: number;
-  /** Count of resolvable (non-subrecipe) ingredients. */
-  totalIngredients: number;
-  /** Count with status "ok". */
-  availableIngredients: number;
-  ingredients: IngredientAvailability[];
-  /** Names of resolvable ingredients that are not fully covered. */
-  missing: string[];
-}
 
 /**
  * Cross-references a recipe's ingredients against current inventory, reconciling

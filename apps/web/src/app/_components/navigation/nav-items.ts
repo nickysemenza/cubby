@@ -9,6 +9,7 @@ import {
   ScanBarcode,
   Search,
   TrendingUp,
+  Utensils,
 } from "lucide-react";
 import { entities } from "~/entities/entities";
 
@@ -54,6 +55,13 @@ const recipes: NavItem = {
   label: "Recipes",
   icon: entities.recipe.lucideIcon,
   isActive: (p) => p.startsWith("/recipes"),
+};
+
+const meals: NavItem = {
+  href: "/meals/suggestions",
+  label: "Meals",
+  icon: Utensils,
+  isActive: (p) => p.startsWith("/meals"),
 };
 
 const search: NavItem = {
@@ -163,7 +171,7 @@ export const moreNavItems: NavItem[] = [
   images,
 ];
 
-export const kitchenItems: NavItem[] = [ingredients, recipes, usda];
+export const kitchenItems: NavItem[] = [ingredients, recipes, meals, usda];
 
 export const reportsItems: NavItem[] = [
   dashboard,
