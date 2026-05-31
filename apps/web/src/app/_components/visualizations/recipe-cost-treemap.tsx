@@ -9,6 +9,12 @@ import { VisualizationPlaceholder } from "./visualization-placeholder";
 interface CostNode {
   name: string;
   id: string | null;
+  // Unique identity per rendered cell: the recipeSectionIngredient row id.
+  // `id` above is the ingredient id, which is NOT unique here — the same
+  // ingredient can legitimately appear in multiple sections (or twice in one),
+  // so keying cells by it produced React "duplicate key" warnings. `id` is kept
+  // for the ingredient link; `rowKey` is the stable per-row React key.
+  rowKey: string;
   value: number; // Cost in dollars
   percentage: number;
   hasPrice: boolean;
@@ -43,6 +49,8 @@ export default function RecipeCostTreemap({
             : "Unknown";
 
       const id = ing.type === "ingredient" ? ing.ingredient.id : null;
+      // ing.id is the recipeSectionIngredient row id — unique per rendered cell.
+      const rowKey = ing.id;
 
       const priceResult = ing.priceInfo?.price;
       if (priceResult?.success && priceResult.value.value > 0) {
@@ -50,6 +58,7 @@ export default function RecipeCostTreemap({
         pricedItems.push({
           name,
           id,
+          rowKey,
           value: cost,
           percentage: totalCost > 0 ? (cost / totalCost) * 100 : 0,
           hasPrice: true,
@@ -58,6 +67,7 @@ export default function RecipeCostTreemap({
         unpricedItems.push({
           name,
           id,
+          rowKey,
           value: 1, // Placeholder value for layout
           percentage: 0,
           hasPrice: false,
@@ -162,7 +172,7 @@ function Treemap({ data }: TreemapProps) {
           if (width < 4 || height < 4) return null;
 
           return (
-            <g key={`${node.data.name}-${node.data.id ?? "no-id"}`}>
+            <g key={node.data.rowKey}>
               {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 treemap visualization hover interaction */}
               <rect
                 x={node.x0}
