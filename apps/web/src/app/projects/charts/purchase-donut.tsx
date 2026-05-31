@@ -2,6 +2,7 @@ import { ResponsivePie } from "@nivo/pie";
 import { ShoppingBag } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
+import { sumByKey } from "~/misc/array-helpers";
 import type { NotionPurchase } from "~/server/clients/notion";
 import { getCategoryColor } from "../shared";
 import { ChartEmpty } from "./chart-empty";
@@ -23,11 +24,11 @@ export function PurchaseDonut({
   centerLabel?: string;
 }) {
   const { data, total } = useMemo(() => {
-    const byCategory = new Map<string, number>();
-    for (const p of purchases) {
-      const cat = p.category ?? "other";
-      byCategory.set(cat, (byCategory.get(cat) ?? 0) + (p.cost ?? 0));
-    }
+    const byCategory = sumByKey(
+      purchases,
+      (p) => p.category ?? "other",
+      (p) => p.cost,
+    );
 
     const data: DonutDatum[] = Array.from(byCategory.entries())
       .filter(([, value]) => value > 0)

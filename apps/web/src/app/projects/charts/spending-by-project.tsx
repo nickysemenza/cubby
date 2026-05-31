@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
+import { sumByKey } from "~/misc/array-helpers";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { nivoChartTheme } from "../shared";
 import { ChartEmpty } from "./chart-empty";
@@ -18,11 +19,11 @@ export function SpendingByProject({
 
   const { data, projectIdMap } = useMemo(() => {
     const nameToId = new Map(projects.map((p) => [p.name, p.id]));
-    const byProject = new Map<string, number>();
-    for (const p of purchases) {
-      const name = p.projectName ?? "Unassigned";
-      byProject.set(name, (byProject.get(name) ?? 0) + (p.cost ?? 0));
-    }
+    const byProject = sumByKey(
+      purchases,
+      (p) => p.projectName ?? "Unassigned",
+      (p) => p.cost,
+    );
 
     const data = Array.from(byProject.entries())
       .filter(([, v]) => v > 0)

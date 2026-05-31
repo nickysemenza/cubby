@@ -1,6 +1,7 @@
 import { Gauge } from "lucide-react";
 import { useMemo } from "react";
 import { formatCurrency } from "~/lib/utils";
+import { sumByKey } from "~/misc/array-helpers";
 import type { NotionProject, NotionPurchase } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
 
@@ -19,14 +20,11 @@ export function BudgetHealth({
   purchases: NotionPurchase[];
 }) {
   const data = useMemo(() => {
-    const costByProject = new Map<string, number>();
-    for (const p of purchases) {
-      if (!p.projectName || !p.cost) continue;
-      costByProject.set(
-        p.projectName,
-        (costByProject.get(p.projectName) ?? 0) + p.cost,
-      );
-    }
+    const costByProject = sumByKey(
+      purchases.filter((p) => p.projectName && p.cost),
+      (p) => p.projectName,
+      (p) => p.cost,
+    );
 
     return projects
       .filter((p) => p.costEstimate && p.costEstimate > 0)
