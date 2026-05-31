@@ -3,9 +3,7 @@ import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useQueries } from "@tanstack/react-query";
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";
-import { useMemo, useState } from "react";
-import MacroSunburst from "~/app/_components/visualizations/macro-sunburst";
-import RecipeCostTreemap from "~/app/_components/visualizations/recipe-cost-treemap";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
@@ -25,6 +23,15 @@ import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipeTagList } from "./recipe-tag";
 import { getIngredientName } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
+
+// Nivo + d3-hierarchy are heavy and only render in the "charts" view, so keep
+// them out of the recipe-detail route chunk until that tab is opened.
+const MacroSunburst = lazy(
+  () => import("~/app/_components/visualizations/macro-sunburst"),
+);
+const RecipeCostTreemap = lazy(
+  () => import("~/app/_components/visualizations/recipe-cost-treemap"),
+);
 
 /** Get effective servings: explicit servings, or yield value if unit is "servings" */
 function getEffectiveServings(recipe: RecipeOut): number | null {
@@ -248,43 +255,51 @@ const RecipeDetail: React.FC<{
           {/* Yield/Servings Summary */}
           <RecipeSummaryCard recipe={recipe} totals={totals} />
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
-              <CardHeader className="bg-muted/50 px-4 py-3">
-                <CardTitle className="font-medium text-base">
-                  Cost Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                {ingredientDataItems.length > 0 ? (
-                  <RecipeCostTreemap
-                    ingredients={ingredientDataItems}
-                    totalCost={totals?.price ?? 0}
-                  />
-                ) : (
-                  <div className="h-[300px]">
-                    <SimpleLoading />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="bg-muted/50 px-4 py-3">
-                <CardTitle className="font-medium text-base">
-                  Nutrition Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                {ingredientDataItems.length > 0 ? (
-                  <MacroSunburst ingredients={ingredientDataItems} />
-                ) : (
-                  <div className="h-[300px]">
-                    <SimpleLoading />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <Suspense
+            fallback={
+              <div className="h-[300px]">
+                <SimpleLoading />
+              </div>
+            }
+          >
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader className="bg-muted/50 px-4 py-3">
+                  <CardTitle className="font-medium text-base">
+                    Cost Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  {ingredientDataItems.length > 0 ? (
+                    <RecipeCostTreemap
+                      ingredients={ingredientDataItems}
+                      totalCost={totals?.price ?? 0}
+                    />
+                  ) : (
+                    <div className="h-[300px]">
+                      <SimpleLoading />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="bg-muted/50 px-4 py-3">
+                  <CardTitle className="font-medium text-base">
+                    Nutrition Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  {ingredientDataItems.length > 0 ? (
+                    <MacroSunburst ingredients={ingredientDataItems} />
+                  ) : (
+                    <div className="h-[300px]">
+                      <SimpleLoading />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </Suspense>
         </div>
       )}
 

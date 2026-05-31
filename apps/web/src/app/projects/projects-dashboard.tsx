@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Calendar, DollarSign, ExternalLink, Hammer } from "lucide-react";
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import {
   Card,
@@ -27,16 +27,7 @@ import type {
   NotionTask,
 } from "~/server/clients/notion";
 import { useTRPC } from "~/trpc/react";
-import { BudgetHealth } from "./charts/budget-health";
-import { CostVsEstimate } from "./charts/cost-vs-estimate";
-import { DependencyGraph } from "./charts/dependency-graph";
-import { MonthlyTrend } from "./charts/monthly-trend";
-import { ProjectTimeline } from "./charts/project-timeline";
-import { PurchaseDonut } from "./charts/purchase-donut";
-import { SpendingByProject } from "./charts/spending-by-project";
-import { SpendingHeatmap } from "./charts/spending-heatmap";
-import { TaskHeatmap } from "./charts/task-heatmap";
-import { TaskStatusBoard } from "./charts/task-status-board";
+
 import {
   DashboardFilters,
   emptyFilters,
@@ -50,6 +41,51 @@ import {
   StatusIcon,
   TaskList,
 } from "./shared";
+
+// Charts are Nivo/d3-heavy and each tab's panel is unmounted until selected, so
+// lazy-load them to keep their code out of the dashboard chunk until a tab opens.
+const BudgetHealth = lazy(() =>
+  import("./charts/budget-health").then((m) => ({ default: m.BudgetHealth })),
+);
+const CostVsEstimate = lazy(() =>
+  import("./charts/cost-vs-estimate").then((m) => ({
+    default: m.CostVsEstimate,
+  })),
+);
+const DependencyGraph = lazy(() =>
+  import("./charts/dependency-graph").then((m) => ({
+    default: m.DependencyGraph,
+  })),
+);
+const MonthlyTrend = lazy(() =>
+  import("./charts/monthly-trend").then((m) => ({ default: m.MonthlyTrend })),
+);
+const ProjectTimeline = lazy(() =>
+  import("./charts/project-timeline").then((m) => ({
+    default: m.ProjectTimeline,
+  })),
+);
+const PurchaseDonut = lazy(() =>
+  import("./charts/purchase-donut").then((m) => ({ default: m.PurchaseDonut })),
+);
+const SpendingByProject = lazy(() =>
+  import("./charts/spending-by-project").then((m) => ({
+    default: m.SpendingByProject,
+  })),
+);
+const SpendingHeatmap = lazy(() =>
+  import("./charts/spending-heatmap").then((m) => ({
+    default: m.SpendingHeatmap,
+  })),
+);
+const TaskHeatmap = lazy(() =>
+  import("./charts/task-heatmap").then((m) => ({ default: m.TaskHeatmap })),
+);
+const TaskStatusBoard = lazy(() =>
+  import("./charts/task-status-board").then((m) => ({
+    default: m.TaskStatusBoard,
+  })),
+);
 
 export function ProjectsDashboard() {
   const api = useTRPC();
@@ -192,102 +228,106 @@ function DashboardContent({
         </TabsList>
 
         <TabsContent value="overview">
-          <div className="space-y-6 pt-4">
-            <div className="grid gap-6 lg:grid-cols-2">
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            <div className="space-y-6 pt-4">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="space-y-3">
+                  <h2 className="font-heading font-semibold text-lg">
+                    Cost vs Estimate
+                  </h2>
+                  <p className="text-muted-foreground text-xs">
+                    Projects with both spending and an estimate
+                  </p>
+                  <CostVsEstimate projects={projects} purchases={purchases} />
+                </section>
+                <section className="space-y-3">
+                  <h2 className="font-heading font-semibold text-lg">
+                    Budget Health
+                  </h2>
+                  <p className="text-muted-foreground text-xs">
+                    Top 12 projects by % of estimate spent
+                  </p>
+                  <BudgetHealth projects={projects} purchases={purchases} />
+                </section>
+              </div>
+
               <section className="space-y-3">
                 <h2 className="font-heading font-semibold text-lg">
-                  Cost vs Estimate
+                  Top 10 Projects by Spending
                 </h2>
-                <p className="text-muted-foreground text-xs">
-                  Projects with both spending and an estimate
-                </p>
-                <CostVsEstimate projects={projects} purchases={purchases} />
+                <SpendingByProject purchases={purchases} projects={projects} />
               </section>
+
               <section className="space-y-3">
                 <h2 className="font-heading font-semibold text-lg">
-                  Budget Health
+                  Task Status Board
                 </h2>
                 <p className="text-muted-foreground text-xs">
-                  Top 12 projects by % of estimate spent
+                  Top 15 projects, sorted by date
                 </p>
-                <BudgetHealth projects={projects} purchases={purchases} />
+                <TaskStatusBoard tasks={tasks} projects={projects} />
               </section>
             </div>
-
-            <section className="space-y-3">
-              <h2 className="font-heading font-semibold text-lg">
-                Top 10 Projects by Spending
-              </h2>
-              <SpendingByProject purchases={purchases} projects={projects} />
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="font-heading font-semibold text-lg">
-                Task Status Board
-              </h2>
-              <p className="text-muted-foreground text-xs">
-                Top 15 projects, sorted by date
-              </p>
-              <TaskStatusBoard tasks={tasks} projects={projects} />
-            </section>
-          </div>
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="charts">
-          <div className="space-y-6 pt-4">
-            <section className="space-y-3">
-              <h2 className="font-heading font-semibold text-lg">
-                Project Timeline
-              </h2>
-              <ProjectTimeline projects={projects} />
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="font-heading font-semibold text-lg">
-                Project Dependencies
-              </h2>
-              <p className="text-muted-foreground text-xs">
-                Arrows show blocking relationships between projects
-              </p>
-              <DependencyGraph projects={projects} />
-            </section>
-
-            <section className="space-y-3">
-              <h2 className="font-heading font-semibold text-lg">
-                Monthly Spending Trend
-              </h2>
-              <MonthlyTrend purchases={purchases} />
-            </section>
-
-            <div className="grid gap-6 lg:grid-cols-2">
+          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+            <div className="space-y-6 pt-4">
               <section className="space-y-3">
                 <h2 className="font-heading font-semibold text-lg">
-                  Category Split
+                  Project Timeline
                 </h2>
-                <PurchaseDonut
-                  purchases={purchases}
-                  height={300}
-                  centerLabel="All projects"
-                />
+                <ProjectTimeline projects={projects} />
               </section>
+
               <section className="space-y-3">
                 <h2 className="font-heading font-semibold text-lg">
-                  Spending Heatmap
+                  Project Dependencies
                 </h2>
-                <SpendingHeatmap purchases={purchases} />
+                <p className="text-muted-foreground text-xs">
+                  Arrows show blocking relationships between projects
+                </p>
+                <DependencyGraph projects={projects} />
+              </section>
+
+              <section className="space-y-3">
+                <h2 className="font-heading font-semibold text-lg">
+                  Monthly Spending Trend
+                </h2>
+                <MonthlyTrend purchases={purchases} />
+              </section>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="space-y-3">
+                  <h2 className="font-heading font-semibold text-lg">
+                    Category Split
+                  </h2>
+                  <PurchaseDonut
+                    purchases={purchases}
+                    height={300}
+                    centerLabel="All projects"
+                  />
+                </section>
+                <section className="space-y-3">
+                  <h2 className="font-heading font-semibold text-lg">
+                    Spending Heatmap
+                  </h2>
+                  <SpendingHeatmap purchases={purchases} />
+                </section>
+              </div>
+
+              <section className="space-y-3">
+                <h2 className="font-heading font-semibold text-lg">
+                  Task Heatmap
+                </h2>
+                <p className="text-muted-foreground text-xs">
+                  Task due dates across all projects
+                </p>
+                <TaskHeatmap tasks={tasks} />
               </section>
             </div>
-
-            <section className="space-y-3">
-              <h2 className="font-heading font-semibold text-lg">
-                Task Heatmap
-              </h2>
-              <p className="text-muted-foreground text-xs">
-                Task due dates across all projects
-              </p>
-              <TaskHeatmap tasks={tasks} />
-            </section>
-          </div>
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="data">
