@@ -11,6 +11,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, productUnitMappings } from "~/server/db/schema";
 import { logAuditEntries } from "~/server/repo/audit-log";
 import {
+  batchUpdateWithCaseWhen,
   getDb,
   notDeleted,
   withTransaction,
@@ -178,27 +179,23 @@ export const backfillProductPrices = async (
   }
 
   return await withTransaction(db, async (tx) => {
-    const updatedProducts: Array<{
-      id: string;
-      name: string;
-      oldPrice: number | null;
-      newPrice: number | null;
-    }> = [];
-
-    for (const prod of productsToUpdate) {
-      // Update the product's price
-      await tx
-        .update(product)
-        .set({ price: prod.computedPrice })
-        .where(eq(product.id, prod.id));
-
-      updatedProducts.push({
+    // Single CASE WHEN statement instead of one UPDATE per product, so the
+    // transaction holds its locks for one round-trip regardless of catalog size.
+    await batchUpdateWithCaseWhen(
+      tx,
+      product,
+      productsToUpdate.map((prod) => ({
         id: prod.id,
-        name: prod.name,
-        oldPrice: prod.storedPrice,
-        newPrice: prod.computedPrice,
-      });
-    }
+        price: prod.computedPrice,
+      })),
+    );
+
+    const updatedProducts = productsToUpdate.map((prod) => ({
+      id: prod.id,
+      name: prod.name,
+      oldPrice: prod.storedPrice,
+      newPrice: prod.computedPrice,
+    }));
 
     // Log audit entries in batch
     await logAuditEntries(
