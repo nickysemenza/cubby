@@ -413,6 +413,11 @@ export function useIngredientResolver() {
   const createIngredientMutation = useMutation(
     api.ingredient.create.mutationOptions(),
   );
+  // Progress across the sequential resolve loop, for user-visible feedback.
+  const [progress, setProgress] = useState<{ done: number; total: number }>({
+    done: 0,
+    total: 0,
+  });
 
   const resolveGroups = async (groups: string[][]): Promise<IngItem[][]> => {
     // Parse every line up front, dropping blanks and unparseable (empty-name) lines.
@@ -425,8 +430,10 @@ export function useIngredientResolver() {
     );
 
     // Resolve each unique name once: look up, then create if missing.
+    const uniqueNames = dedupe(parsedGroups.flat().map((p) => p.name));
+    setProgress({ done: 0, total: uniqueNames.length });
     const resolved = new Map<string, { id: string; name: string }>();
-    for (const name of dedupe(parsedGroups.flat().map((p) => p.name))) {
+    for (const name of uniqueNames) {
       const existing = await queryClient.fetchQuery(
         api.ingredient.getByName.queryOptions({ nameFilter: name }),
       );
@@ -436,6 +443,7 @@ export function useIngredientResolver() {
             .mutateAsync({ name, aliases: [] })
             .then((created) => ({ id: created.id, name: created.name }));
       resolved.set(name, match);
+      setProgress((p) => ({ ...p, done: p.done + 1 }));
     }
 
     return parsedGroups.map((parsed) =>
@@ -457,5 +465,9 @@ export function useIngredientResolver() {
     );
   };
 
-  return { resolveGroups, isResolving: createIngredientMutation.isPending };
+  return {
+    resolveGroups,
+    isResolving: createIngredientMutation.isPending,
+    progress,
+  };
 }

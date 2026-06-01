@@ -11,11 +11,22 @@ import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Import, Plus, Trash } from "lucide-react";
 import { type FC, useId, useMemo, useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
+import { toast } from "sonner";
 import type { z } from "zod";
 import {
   getOptionalIngredientId,
   getOptionalRecipeId,
 } from "~/app/_components/form-fields";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import {
   Collapsible,
@@ -259,54 +270,98 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   });
 
   // Imperative per-section ingredient resolver for scraped recipes.
-  const { resolveGroups, isResolving } = useIngredientResolver();
+  const { resolveGroups, isResolving, progress } = useIngredientResolver();
+
+  // Scraped image URL, handed to PendingImageUpload for auto-import.
+  const [scrapedImageUrl, setScrapedImageUrl] = useState<string | null>(null);
+  // True while an overwrite-confirmation dialog is open for a scrape.
+  const [confirmScrapeOpen, setConfirmScrapeOpen] = useState(false);
 
   // Watch URL field for scrape button
   const urlValue = useWatch({ control: form.control, name: "meta.url" });
 
-  // Handle URL scraping - populates the structured section editor directly,
+  // Does the form already hold user-entered content a scrape would clobber?
+  const formHasContent = () =>
+    form
+      .getValues("sections")
+      .some(
+        (s) =>
+          (s.ingredients?.length ?? 0) > 0 ||
+          (s.instructions?.length ?? 0) > 0 ||
+          (s.name?.trim().length ?? 0) > 0,
+      );
+
+  // Scrape the URL and populate the structured section editor directly,
   // preserving section names and boundaries (auto-creates missing ingredients).
-  const handleScrape = async () => {
+  const doScrape = async () => {
     if (!urlValue) return;
     try {
       const result = await scrapeMutation.mutateAsync(urlValue);
-      if (result?.sections.length) {
-        // Set recipe name if empty
-        if (!form.getValues("name")) {
-          form.setValue("name", result.name);
-        }
-
-        // Resolve each section's ingredient lines into structured form
-        // ingredients, then replace the section editor with the scraped sections.
-        const ingredientGroups = await resolveGroups(
-          result.sections.map((section) => section.ingredients),
-        );
-        replaceSections(
-          result.sections.map((section, i) => ({
-            name: section.name ?? null,
-            ingredients: ingredientGroups[i] ?? [],
-            instructions: section.instructions.map((instruction) => ({
-              instruction,
-            })),
-          })),
-        );
-
-        // Set servings if available from scraper
-        if (result.servings) {
-          form.setValue("servings", result.servings);
-        }
-
-        // Set yield if available from scraper (already parsed by Rust)
-        if (result.recipe_yield) {
-          form.setValue("yield", {
-            value: result.recipe_yield.value,
-            unit: result.recipe_yield.unit,
-          });
-        }
+      if (!result?.sections.length) {
+        toast.error("No recipe found at that URL.");
+        return;
       }
-    } catch {
-      // Error handled by mutation
+
+      // Set recipe name if empty
+      if (!form.getValues("name")) {
+        form.setValue("name", result.name);
+      }
+
+      // Resolve each section's ingredient lines into structured form
+      // ingredients, then replace the section editor with the scraped sections.
+      const ingredientGroups = await resolveGroups(
+        result.sections.map((section) => section.ingredients),
+      );
+      replaceSections(
+        result.sections.map((section, i) => ({
+          name: section.name ?? null,
+          ingredients: ingredientGroups[i] ?? [],
+          instructions: section.instructions.map((instruction) => ({
+            instruction,
+          })),
+        })),
+      );
+
+      // Set servings if available from scraper
+      if (result.servings) {
+        form.setValue("servings", result.servings);
+      }
+
+      // Set yield if available from scraper (already parsed by Rust)
+      if (result.recipe_yield) {
+        form.setValue("yield", {
+          value: result.recipe_yield.value,
+          unit: result.recipe_yield.unit,
+        });
+      }
+
+      // Hand any scraped image to PendingImageUpload for auto-import.
+      if (result.image) {
+        setScrapedImageUrl(result.image);
+      }
+
+      const ingredientCount = ingredientGroups.reduce(
+        (sum, group) => sum + group.length,
+        0,
+      );
+      toast.success(
+        `Imported ${ingredientCount} ingredient${ingredientCount === 1 ? "" : "s"} across ${result.sections.length} section${result.sections.length === 1 ? "" : "s"}.`,
+      );
+    } catch (error) {
+      // Mutation failures (scrape fetch, ingredient create) are already toasted
+      // by the global MutationCache onError handler; just log for debugging.
+      console.error("Scrape failed:", error);
     }
+  };
+
+  // Guard the scrape behind a confirmation when it would overwrite existing work.
+  const handleScrape = () => {
+    if (!urlValue) return;
+    if (formHasContent()) {
+      setConfirmScrapeOpen(true);
+      return;
+    }
+    void doScrape();
   };
 
   // Handle import - auto-creates missing ingredients and populates form
@@ -506,6 +561,11 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               Scrape
             </Button>
           </div>
+          {isResolving && progress.total > 0 && (
+            <p className="text-muted-foreground text-xs">
+              Resolving ingredients {progress.done}/{progress.total}…
+            </p>
+          )}
         </Field>
       </SideBySideFields>
 
@@ -639,6 +699,7 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         onImagesChange={handlePendingImagesChange}
         existingImages={mode === "edit" && recipe?.images ? recipe.images : []}
         onExistingImagesRemove={handleRemovedImagesChange}
+        autoImportUrl={scrapedImageUrl}
         className="mt-4"
       />
 
@@ -740,6 +801,31 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
           </Button>
         </div>
       </div>
+
+      <AlertDialog open={confirmScrapeOpen} onOpenChange={setConfirmScrapeOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Replace current recipe contents?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Scraping will replace the ingredients and instructions you've
+              already entered with the imported recipe. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmScrapeOpen(false);
+                void doScrape();
+              }}
+            >
+              Replace
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </FormWrapper>
   );
 };

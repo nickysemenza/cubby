@@ -40,6 +40,8 @@ export const compactRecipeSchema = z.object({
   recipe_yield: compactRecipeYield.optional(),
   // Optional servings as integer (extracted from yield if unit is "serving(s)")
   servings: z.number().optional(),
+  // Optional image URL extracted by the scraper.
+  image: z.string().optional(),
 });
 export type CompactRecipe = z.infer<typeof compactRecipeSchema>;
 

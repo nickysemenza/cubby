@@ -31,6 +31,9 @@ interface PendingImageUploadProps {
   existingImages?: PendingImage[]; // Existing images passed from parent component
   onExistingImagesRemove?: (removedImageIds: string[]) => void; // Track removed existing images
   className?: string;
+  // When set, automatically import this URL once (e.g. an image found by the
+  // recipe scraper). Re-imports only when the value changes to a new URL.
+  autoImportUrl?: string | null;
 }
 
 export function PendingImageUpload({
@@ -39,6 +42,7 @@ export function PendingImageUpload({
   existingImages = EMPTY_IMAGES,
   onExistingImagesRemove,
   className = "",
+  autoImportUrl,
 }: PendingImageUploadProps) {
   const imageInputId = useId();
   const [uploading, setUploading] = useState(false);
@@ -82,49 +86,63 @@ export function PendingImageUpload({
     }),
   );
 
-  // Handle importing an image from URL
-  const handleImportFromUrl = useCallback(async () => {
-    const trimmed = imageUrl.trim();
-    if (!trimmed) return;
+  // Import an image from an explicit URL (shared by the manual input and the
+  // scraper auto-import).
+  const importUrl = useCallback(
+    async (rawUrl: string, { silent = false }: { silent?: boolean } = {}) => {
+      const trimmed = rawUrl.trim();
+      if (!trimmed) return;
 
-    try {
-      new URL(trimmed);
-    } catch {
-      toast.error("Please enter a valid URL");
-      return;
+      try {
+        new URL(trimmed);
+      } catch {
+        if (!silent) toast.error("Please enter a valid URL");
+        return;
+      }
+
+      setImporting(true);
+      try {
+        const result = await importFromUrlMutation.mutateAsync({
+          url: trimmed,
+          entityType,
+        });
+
+        const newImage: PendingImage = {
+          id: result.imageId,
+          url: result.url,
+          filename: result.filename,
+          key: result.key,
+        };
+
+        const updatedImages = [...pendingImages, newImage];
+        setPendingImages(updatedImages);
+        onImagesChange?.(updatedImages);
+        setImageUrl("");
+        toast.success("Image imported successfully!");
+      } catch (error) {
+        toast.error(`Import failed: ${getErrorMessage(error)}`);
+      } finally {
+        setImporting(false);
+      }
+    },
+    [entityType, importFromUrlMutation, pendingImages, onImagesChange],
+  );
+
+  // Handle importing an image from the manual URL input.
+  const handleImportFromUrl = useCallback(
+    () => importUrl(imageUrl),
+    [importUrl, imageUrl],
+  );
+
+  // Auto-import a scraper-provided image URL once per distinct value. Failures
+  // are silent here — the recipe is the primary import; the image is best-effort.
+  const [autoImported, setAutoImported] = useState<string | null>(null);
+  useEffect(() => {
+    if (autoImportUrl && autoImportUrl !== autoImported) {
+      setAutoImported(autoImportUrl);
+      void importUrl(autoImportUrl, { silent: true });
     }
-
-    setImporting(true);
-    try {
-      const result = await importFromUrlMutation.mutateAsync({
-        url: trimmed,
-        entityType,
-      });
-
-      const newImage: PendingImage = {
-        id: result.imageId,
-        url: result.url,
-        filename: result.filename,
-        key: result.key,
-      };
-
-      const updatedImages = [...pendingImages, newImage];
-      setPendingImages(updatedImages);
-      onImagesChange?.(updatedImages);
-      setImageUrl("");
-      toast.success("Image imported successfully!");
-    } catch (error) {
-      toast.error(`Import failed: ${getErrorMessage(error)}`);
-    } finally {
-      setImporting(false);
-    }
-  }, [
-    imageUrl,
-    entityType,
-    importFromUrlMutation,
-    pendingImages,
-    onImagesChange,
-  ]);
+  }, [autoImportUrl, autoImported, importUrl]);
 
   // Upload a file (used by both file input and camera)
   const uploadFile = useCallback(

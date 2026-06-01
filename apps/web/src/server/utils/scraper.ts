@@ -20,16 +20,24 @@ export const scrapeToCompact = async (url: string): Promise<CompactRecipe> => {
   const compact: CompactRecipe = WCompactToCompact(scraped);
   return compact;
 };
-const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
+// Section names must be 2+ chars to satisfy recipeSectionInput validation
+// downstream; drop anything shorter (or blank) to an unnamed section.
+const sanitizeSectionName = (name: string | undefined): string | null => {
+  const trimmed = name?.trim();
+  return trimmed && trimmed.length >= 2 ? trimmed : null;
+};
+
+export const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
   return {
     name: wCompact.name ?? "",
     sections: wCompact.sections.map((section) => ({
-      name: section.name ?? null,
+      name: sanitizeSectionName(section.name),
       ingredients: section.ingredients,
       instructions: section.instructions,
     })),
-    // Pass through yield and servings from scraper (already parsed by Rust)
+    // Pass through yield, servings, and image from scraper (parsed by Rust)
     recipe_yield: wCompact.recipe_yield,
     servings: wCompact.servings,
+    image: wCompact.image,
   };
 };
