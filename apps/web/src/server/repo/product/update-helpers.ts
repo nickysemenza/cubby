@@ -7,14 +7,17 @@
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import {
   productExternalId,
   productImage,
   productUnitMappings,
 } from "~/server/db/schema";
-import { associatePendingImages } from "~/server/repo/database-helpers";
+import {
+  associatePendingImages,
+  notDeleted,
+} from "~/server/repo/database-helpers";
 
 import { syncProductPrice } from "./pricing";
 
@@ -89,7 +92,7 @@ export async function syncProductExternalIds(
   const existingExternalIds = await tx.query.productExternalId.findMany({
     where: and(
       eq(productExternalId.productId, productId),
-      isNull(productExternalId.deletedAt),
+      notDeleted(productExternalId),
     ),
   });
 

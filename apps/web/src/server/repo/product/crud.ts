@@ -18,7 +18,7 @@ import {
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
-import { and, count, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { getSortableFields } from "~/entities/entities";
 import { parseWithContext } from "~/lib/zod-utils";
 import { dedupe } from "~/misc/array-helpers";
@@ -386,7 +386,7 @@ export const updateProduct = async (
     const currentExternalIds = await tx.query.productExternalId.findMany({
       where: and(
         eq(productExternalId.productId, updated.id),
-        isNull(productExternalId.deletedAt),
+        notDeleted(productExternalId),
       ),
     });
 

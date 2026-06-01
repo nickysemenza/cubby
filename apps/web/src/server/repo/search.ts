@@ -6,7 +6,7 @@ import type {
   RecipeSearchResult,
   SearchResultItem,
 } from "@cubby/schemas/search";
-import { and, eq, ilike, or, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
   ingredient,
@@ -15,7 +15,7 @@ import {
   product,
   recipe,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "./database-helpers";
+import { formatSearchTerm, getDb, notDeleted } from "./database-helpers";
 
 /**
  * Global search across all entity types using parallel queries.
@@ -27,7 +27,6 @@ export async function globalSearch(
   limitPerType = 5,
 ): Promise<SearchResultItem[]> {
   const client = getDb(db);
-  const searchPattern = `%${query}%`;
 
   // Run 5 parallel queries - each returns its discriminated union variant
   const [products, recipes, ingredients, locations, inventory] =
@@ -61,9 +60,9 @@ export async function globalSearch(
           and(
             notDeleted(product),
             or(
-              ilike(product.name, searchPattern),
-              ilike(product.manufacturer, searchPattern),
-              ilike(product.upc, searchPattern),
+              formatSearchTerm(product.name, query),
+              formatSearchTerm(product.manufacturer, query),
+              formatSearchTerm(product.upc, query),
             ),
           ),
         )
@@ -93,7 +92,7 @@ export async function globalSearch(
           )`.as("ingredientCount"),
         })
         .from(recipe)
-        .where(and(notDeleted(recipe), ilike(recipe.name, searchPattern)))
+        .where(and(notDeleted(recipe), formatSearchTerm(recipe.name, query)))
         .limit(limitPerType) as Promise<RecipeSearchResult[]>,
 
       // Ingredient: search name
@@ -114,7 +113,7 @@ export async function globalSearch(
         })
         .from(ingredient)
         .where(
-          and(notDeleted(ingredient), ilike(ingredient.name, searchPattern)),
+          and(notDeleted(ingredient), formatSearchTerm(ingredient.name, query)),
         )
         .limit(limitPerType) as Promise<IngredientSearchResult[]>,
 
@@ -147,7 +146,9 @@ export async function globalSearch(
           )`.as("childCount"),
         })
         .from(location)
-        .where(and(notDeleted(location), ilike(location.name, searchPattern)))
+        .where(
+          and(notDeleted(location), formatSearchTerm(location.name, query)),
+        )
         .limit(limitPerType) as Promise<LocationSearchResult[]>,
 
       // Inventory: join with product and location
@@ -176,8 +177,8 @@ export async function globalSearch(
           and(
             notDeleted(inventoryEntry),
             or(
-              ilike(product.name, searchPattern),
-              ilike(location.name, searchPattern),
+              formatSearchTerm(product.name, query),
+              formatSearchTerm(location.name, query),
             ),
           ),
         )
