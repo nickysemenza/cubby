@@ -6,6 +6,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@cubby/web", "run", "dev"],
       "port": 3000
+    },
+    {
+      "name": "usda-api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@cubby/usda-api", "run", "dev"],
+      "port": 8080
     }
   ]
 }
