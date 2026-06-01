@@ -228,9 +228,16 @@ interface WRecipeYield {
     unit: string;
 }
 
-interface WCompactRecipe {
+interface WRecipeSection {
+    /** Component label (e.g., "For the sauce"); absent for the main/only section */
+    name?: string;
     ingredients: string[];
     instructions: string[];
+}
+
+interface WCompactRecipe {
+    /** Recipe components; most recipes have a single unnamed section */
+    sections: WRecipeSection[];
     name?: string;
     url?: string;
     image?: string;

@@ -20,6 +20,7 @@ const convertParsedCompactToRecipeInput = async (
       },
       sections: await Promise.all(
         recipe.sections.map(async (section) => ({
+          name: section.name ?? null,
           instructions: section.instructions.map((instruction) => ({
             instruction,
           })),

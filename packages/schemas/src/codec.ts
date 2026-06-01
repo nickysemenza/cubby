@@ -26,6 +26,7 @@ const parsedIngredient = z.object({
 // ingredient is represented: an unparsed string before WASM, a parsedIngredient after.
 const compactSection = <T extends z.ZodTypeAny>(ingredients: T) =>
   z.object({
+    name: z.string().nullable().optional(),
     ingredients: z.array(ingredients),
     instructions: z.array(z.string()),
   });

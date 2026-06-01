@@ -6,6 +6,7 @@ export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
     name: raw.name,
     meta: raw.meta,
     sections: raw.sections.map((section) => ({
+      name: section.name,
       ingredients: section.ingredients.map((ingredient) => {
         const parsed = wasm.parse_ingredient(ingredient);
         return {

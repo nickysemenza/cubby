@@ -23,12 +23,11 @@ export const scrapeToCompact = async (url: string): Promise<CompactRecipe> => {
 const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
   return {
     name: wCompact.name ?? "",
-    sections: [
-      {
-        ingredients: wCompact.ingredients,
-        instructions: wCompact.instructions,
-      },
-    ],
+    sections: wCompact.sections.map((section) => ({
+      name: section.name ?? null,
+      ingredients: section.ingredients,
+      instructions: section.instructions,
+    })),
     // Pass through yield and servings from scraper (already parsed by Rust)
     recipe_yield: wCompact.recipe_yield,
     servings: wCompact.servings,
