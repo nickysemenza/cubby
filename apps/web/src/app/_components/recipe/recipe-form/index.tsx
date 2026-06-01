@@ -264,14 +264,19 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     if (!urlValue) return;
     try {
       const result = await scrapeMutation.mutateAsync(urlValue);
-      if (result?.sections[0]) {
+      if (result?.sections.length) {
         // Set recipe name if empty
         if (!form.getValues("name")) {
           form.setValue("name", result.name);
         }
-        // Populate textareas and open collapsible
-        setTextImportIngredients(result.sections[0].ingredients.join("\n"));
-        setTextImportInstructions(result.sections[0].instructions.join("\n"));
+        // Populate textareas and open collapsible. The text-import boxes are flat,
+        // so flatten across every section (a scraped recipe may have several).
+        setTextImportIngredients(
+          result.sections.flatMap((s) => s.ingredients).join("\n"),
+        );
+        setTextImportInstructions(
+          result.sections.flatMap((s) => s.instructions).join("\n"),
+        );
         setTextImportOpen(true);
 
         // Set servings if available from scraper
