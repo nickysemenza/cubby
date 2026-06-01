@@ -50,6 +50,12 @@ const trpcClient = createTRPCClient<TRPCRouter>({
     httpBatchStreamLink({
       transformer: superjson,
       url: getUrl(),
+      // Cap the batched-GET URL length so large fan-outs (e.g. the cookbook
+      // import previewing hundreds of unique ingredients via getByName) split
+      // into several requests instead of one giant URL that exceeds the server's
+      // header-size limit (431 Request Header Fields Too Large). Kept well under
+      // the typical 16KB request-line limit to leave room for cookies/headers.
+      maxURLLength: 8000,
       headers: () => {
         const headers = new Headers();
         headers.set("x-trpc-source", "tanstack-start");

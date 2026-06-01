@@ -6,6 +6,7 @@
   "exports": {
     "./availability": "./src/availability.ts",
     "./codec": "./src/codec.ts",
+    "./cookbook": "./src/cookbook.ts",
     "./entity": "./src/entity.ts",
     "./identifiers": "./src/identifiers.ts",
     "./common": "./src/common.ts",

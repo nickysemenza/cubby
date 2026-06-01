@@ -8,6 +8,7 @@ export const auditSourceSchema = z.enum([
   "ui",
   "csv_import",
   "sheets_import",
+  "epub_import",
   "api",
 ]);
 export type AuditSource = z.infer<typeof auditSourceSchema>;

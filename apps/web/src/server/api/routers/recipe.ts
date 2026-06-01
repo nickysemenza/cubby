@@ -23,10 +23,12 @@ import {
   createRecipe,
   deleteRecipes,
   getAllTags,
+  getCookbookRecipeTitles,
   getIngredientCooccurrence,
   getRecipeByID,
   getRecipeByShortcode,
   insertCompactRecipe,
+  insertCookbookRecipe,
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
@@ -87,6 +89,25 @@ const insertCompact = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     return await insertCompactRecipe(input, ctx.db, ctx.actorContext);
   });
+// Import one recipe extracted from an EPUB cookbook, scoped to its book so
+// re-imports upsert by (book, title) and stamp "Book" provenance.
+const insertCookbook = protectedProcedure
+  .input(z.object({ recipe: compactRecipeSchema, book: z.string().min(1) }))
+  .output(z.object({ id: z.uuid() }))
+  .mutation(async ({ ctx, input }) => {
+    return await insertCookbookRecipe(input.recipe, input.book, ctx.db, {
+      ...ctx.actorContext,
+      source: "epub_import",
+    });
+  });
+// Titles already imported from a given book, so the import preview can flag
+// recipes a re-import would update.
+const getCookbookTitles = protectedProcedure
+  .input(z.object({ book: z.string().min(1) }))
+  .output(z.array(z.string()))
+  .query(async ({ ctx, input }) => {
+    return await getCookbookRecipeTitles(ctx.db, input.book);
+  });
 
 // Import co-occurrence schema and types
 
@@ -118,6 +139,8 @@ const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
 
 export const recipeRouter = createTRPCRouter({
   insertCompact,
+  insertCookbook,
+  getCookbookTitles,
   scrape,
   seed,
   getByID,

@@ -43,6 +43,8 @@ extern "C" {
     pub type WAmountKind;
     #[wasm_bindgen(typescript_type = "NutrientConversionResult")]
     pub type NutrientConversionResult;
+    #[wasm_bindgen(typescript_type = "WYieldResult")]
+    pub type WYieldResult;
 }
 
 // JS <-> Rust serde boundary
@@ -171,6 +173,26 @@ pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WCompactRecipe, Str
         .and_then(|r| to_js(&r, "recipe").map(Into::into))
 }
 
+/// Parse a freeform yield string ("Makes about 12 pancakes", "Serves 4") into a
+/// structured `{ recipe_yield?, servings? }`, using the same parser the web
+/// scraper uses for JSON-LD yields (so cookbook and web yields stay consistent).
+#[wasm_bindgen]
+pub fn parse_yield(input: &str) -> Result<WYieldResult, String> {
+    #[derive(Serialize)]
+    struct YieldResult {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        recipe_yield: Option<recipe_scraper::RecipeYield>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        servings: Option<u32>,
+    }
+    let (recipe_yield, servings) = recipe_scraper::parse_yield_string(input);
+    to_js(&YieldResult {
+        recipe_yield,
+        servings,
+    }, "yield")
+    .map(Into::into)
+}
+
 #[wasm_bindgen]
 pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<RichItems, String> {
     RichParser::new(ingredient_names)
@@ -226,6 +248,11 @@ interface WUnitMapping {
 interface WRecipeYield {
     value: number;
     unit: string;
+}
+
+interface WYieldResult {
+    recipe_yield?: WRecipeYield;
+    servings?: number;
 }
 
 interface WRecipeSection {

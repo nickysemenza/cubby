@@ -1,5 +1,5 @@
 import type { WCompactRecipe } from "@cubby/recipebridge";
-import type { CompactRecipe } from "@cubby/schemas/codec";
+import { type CompactRecipe, sanitizeSectionName } from "@cubby/schemas/codec";
 import { wasm } from "~/lib/wasm";
 
 const scrapeRecipe = async (url: string) => {
@@ -20,13 +20,6 @@ export const scrapeToCompact = async (url: string): Promise<CompactRecipe> => {
   const compact: CompactRecipe = WCompactToCompact(scraped);
   return compact;
 };
-// Section names must be 2+ chars to satisfy recipeSectionInput validation
-// downstream; drop anything shorter (or blank) to an unnamed section.
-const sanitizeSectionName = (name: string | undefined): string | null => {
-  const trimmed = name?.trim();
-  return trimmed && trimmed.length >= 2 ? trimmed : null;
-};
-
 export const WCompactToCompact = (wCompact: WCompactRecipe): CompactRecipe => {
   return {
     name: wCompact.name ?? "",

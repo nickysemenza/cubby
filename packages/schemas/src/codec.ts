@@ -22,6 +22,16 @@ const parsedIngredient = z.object({
   modifier: z.string().optional(),
 });
 
+// Section names must be 2+ chars to satisfy recipeSectionInput validation
+// downstream; drop anything shorter (or blank) to an unnamed section. Shared by
+// the URL scraper and the EPUB cookbook adapter so both apply one rule.
+export const sanitizeSectionName = (
+  name: string | undefined | null,
+): string | null => {
+  const trimmed = name?.trim();
+  return trimmed && trimmed.length >= 2 ? trimmed : null;
+};
+
 // A compact recipe section. The raw and parsed pipeline stages differ only in how an
 // ingredient is represented: an unparsed string before WASM, a parsedIngredient after.
 const compactSection = <T extends z.ZodTypeAny>(ingredients: T) =>
@@ -50,5 +60,7 @@ const parsedCompactRecipeSchema = z.object({
   name: z.string(),
   meta: compactMeta,
   sections: z.array(compactSection(parsedIngredient)),
+  recipe_yield: compactRecipeYield.optional(),
+  servings: z.number().optional(),
 });
 export type ParsedCompactRecipe = z.infer<typeof parsedCompactRecipeSchema>;

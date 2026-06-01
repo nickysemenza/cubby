@@ -38,6 +38,7 @@ import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedUsdaIdRouteImport } from './routes/_authenticated/usda.$id'
 import { Route as AuthenticatedRecipesNewRouteImport } from './routes/_authenticated/recipes.new'
+import { Route as AuthenticatedRecipesImportCookbookRouteImport } from './routes/_authenticated/recipes.import-cookbook'
 import { Route as AuthenticatedRecipesCompareRouteImport } from './routes/_authenticated/recipes.compare'
 import { Route as AuthenticatedRecipesIdRouteImport } from './routes/_authenticated/recipes.$id'
 import { Route as AuthenticatedProjectsIdRouteImport } from './routes/_authenticated/projects.$id'
@@ -211,6 +212,12 @@ const AuthenticatedRecipesNewRoute = AuthenticatedRecipesNewRouteImport.update({
   path: '/recipes/new',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedRecipesImportCookbookRoute =
+  AuthenticatedRecipesImportCookbookRouteImport.update({
+    id: '/recipes/import-cookbook',
+    path: '/recipes/import-cookbook',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedRecipesCompareRoute =
   AuthenticatedRecipesCompareRouteImport.update({
     id: '/recipes/compare',
@@ -361,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -411,6 +419,7 @@ export interface FileRoutesByTo {
   '/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -463,6 +472,7 @@ export interface FileRoutesById {
   '/_authenticated/projects/$id': typeof AuthenticatedProjectsIdRoute
   '/_authenticated/recipes/$id': typeof AuthenticatedRecipesIdRoute
   '/_authenticated/recipes/compare': typeof AuthenticatedRecipesCompareRoute
+  '/_authenticated/recipes/import-cookbook': typeof AuthenticatedRecipesImportCookbookRoute
   '/_authenticated/recipes/new': typeof AuthenticatedRecipesNewRoute
   '/_authenticated/usda/$id': typeof AuthenticatedUsdaIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -515,6 +525,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
+    | '/recipes/import-cookbook'
     | '/recipes/new'
     | '/usda/$id'
     | '/api/auth/$'
@@ -565,6 +576,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/recipes/$id'
     | '/recipes/compare'
+    | '/recipes/import-cookbook'
     | '/recipes/new'
     | '/usda/$id'
     | '/api/auth/$'
@@ -616,6 +628,7 @@ export interface FileRouteTypes {
     | '/_authenticated/projects/$id'
     | '/_authenticated/recipes/$id'
     | '/_authenticated/recipes/compare'
+    | '/_authenticated/recipes/import-cookbook'
     | '/_authenticated/recipes/new'
     | '/_authenticated/usda/$id'
     | '/api/auth/$'
@@ -851,6 +864,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRecipesNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/recipes/import-cookbook': {
+      id: '/_authenticated/recipes/import-cookbook'
+      path: '/recipes/import-cookbook'
+      fullPath: '/recipes/import-cookbook'
+      preLoaderRoute: typeof AuthenticatedRecipesImportCookbookRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/recipes/compare': {
       id: '/_authenticated/recipes/compare'
       path: '/recipes/compare'
@@ -1022,6 +1042,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProjectsIdRoute: typeof AuthenticatedProjectsIdRoute
   AuthenticatedRecipesIdRoute: typeof AuthenticatedRecipesIdRoute
   AuthenticatedRecipesCompareRoute: typeof AuthenticatedRecipesCompareRoute
+  AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
@@ -1066,6 +1087,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProjectsIdRoute: AuthenticatedProjectsIdRoute,
   AuthenticatedRecipesIdRoute: AuthenticatedRecipesIdRoute,
   AuthenticatedRecipesCompareRoute: AuthenticatedRecipesCompareRoute,
+  AuthenticatedRecipesImportCookbookRoute:
+    AuthenticatedRecipesImportCookbookRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,

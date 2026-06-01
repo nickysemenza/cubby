@@ -52,9 +52,19 @@ export const recipe = pgTable(
     shortcodeUnique: uniqueIndex("Recipe_shortcode_unique")
       .on(table.shortcode)
       .where(sql`${table.deletedAt} IS NULL`),
+    // Non-cookbook recipes keep a globally-unique name. EPUB-imported recipes
+    // are excluded here and instead keyed by (name, book) below, so the same
+    // title can appear in different cookbooks (and alongside a web recipe).
     nameUnique: uniqueIndex("Recipe_name_key")
       .on(table.name)
-      .where(sql`${table.deletedAt} IS NULL`),
+      .where(
+        sql`${table.deletedAt} IS NULL AND ${table.SourceType} IS DISTINCT FROM 'Book'`,
+      ),
+    // A cookbook recipe's identity is (book, title): unique per book, but the
+    // same title may recur across books. SourceData holds the book name.
+    bookTitleUnique: uniqueIndex("Recipe_book_title_key")
+      .on(table.name, table.SourceData)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.SourceType} = 'Book'`),
     createdAtIdx: index("Recipe_createdAt_idx").on(table.createdAt),
     sourceTypeIdx: index("Recipe_SourceType_idx").on(table.SourceType),
     // GIN index for full-text search on name

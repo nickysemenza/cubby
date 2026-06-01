@@ -16,7 +16,7 @@ import type {
   RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { parseCompactRecipe } from "~/codec/parser";
 import { getSortableFields } from "~/entities/entities";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -32,7 +32,10 @@ import {
   logAuditEntries,
   logAuditEntry,
 } from "~/server/repo/audit-log";
-import { upsertRecipeFromCompact } from "~/server/repo/compactrecipe";
+import {
+  upsertCookbookRecipeFromCompact,
+  upsertRecipeFromCompact,
+} from "~/server/repo/compactrecipe";
 import {
   associatePendingImages,
   batchInsert,
@@ -92,6 +95,26 @@ const findRecipeByShortcode = async (
 };
 
 /**
+ * Titles of non-deleted recipes already imported from a given cookbook
+ * (SourceType='Book', SourceData=book). Used by the import preview to flag
+ * recipes that a re-import would update.
+ */
+export const getCookbookRecipeTitles = async (
+  db: Database,
+  book: string,
+): Promise<string[]> => {
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(
+      eq(recipe.SourceType, "Book"),
+      eq(recipe.SourceData, book),
+      notDeleted(recipe),
+    ),
+    columns: { name: true },
+  });
+  return rows.map((r) => r.name);
+};
+
+/**
  * Get a recipe by shortcode.
  */
 export const getRecipeByShortcode = async (
@@ -115,6 +138,20 @@ export const insertCompactRecipe = (
 ) => {
   const parsed = parseCompactRecipe(recipeInput);
   return upsertRecipeFromCompact(parsed, db, actor);
+};
+
+/**
+ * Insert a recipe extracted from an EPUB cookbook, scoped to its book so
+ * re-imports upsert by (book, title). See {@link upsertCookbookRecipe}.
+ */
+export const insertCookbookRecipe = (
+  recipeInput: CompactRecipe,
+  bookName: string,
+  db: Database,
+  actor: ActorContext,
+) => {
+  const parsed = parseCompactRecipe(recipeInput);
+  return upsertCookbookRecipeFromCompact(parsed, bookName, db, actor);
 };
 
 /**
@@ -159,6 +196,13 @@ export const recipeList = async (
   return { data: items, count: totalCount };
 };
 
+// Provenance override for recipes whose source isn't a website URL (e.g. EPUB
+// cookbooks → SourceType "Book"). When omitted, source derives from meta.url.
+type RecipeProvenance = {
+  sourceType: "Book" | "Website" | "Other";
+  sourceData: string | null;
+};
+
 /**
  * Create a new recipe.
  */
@@ -166,9 +210,13 @@ export const createRecipe = async (
   db: Database,
   recipeInput: RecipeCreateInput,
   actor: ActorContext,
+  provenance?: RecipeProvenance,
 ): Promise<RecipeOut> => {
-  const sourceType = recipeInput.meta?.url ? "Website" : "Other";
-  const sourceData = recipeInput.meta?.url || null;
+  const sourceType =
+    provenance?.sourceType ?? (recipeInput.meta?.url ? "Website" : "Other");
+  const sourceData = provenance
+    ? provenance.sourceData
+    : recipeInput.meta?.url || null;
   const { pendingImageIds } = recipeInput;
 
   // Create the recipe in a transaction
@@ -257,100 +305,143 @@ export const createRecipe = async (
 };
 
 /**
- * Upsert a recipe (create or update based on name match).
+ * Replace a recipe's sections wholesale: hard-delete the existing sections and
+ * their ingredients, then insert the new ones. Hard-delete (not soft) because
+ * replacing sections during an edit/re-import is internal churn, not a
+ * user-facing deletion — soft-deleting here left dead RecipeSection /
+ * RecipeSectionIngredient rows that accumulated on every re-upsert. Recipe-level
+ * deletion remains a soft delete with audit logging in deleteRecipes().
  */
-export const upsertRecipe = async (
+const replaceRecipeSections = async (
+  tx: DrizzleTransaction,
+  recipeId: string,
+  sections: RecipeCreateInput["sections"],
+) => {
+  const existingSections = await tx.query.recipeSection.findMany({
+    where: eq(recipeSection.recipeId, recipeId),
+    columns: { id: true },
+  });
+  await deleteAllSections(
+    tx,
+    existingSections.map((s) => s.id),
+  );
+
+  for (const section of sections) {
+    const createdSection = await insertAndReturn(tx, recipeSection, {
+      recipeId,
+      name: section.name,
+      instructions:
+        section.instructions?.map((instruction) => ({
+          text: instruction.instruction,
+        })) ?? [],
+    });
+
+    if (section.ingredients && section.ingredients.length > 0) {
+      await batchInsert(
+        tx,
+        recipeSectionIngredient,
+        section.ingredients.map((ing) => ({
+          recipeSectionId: createdSection.id,
+          ingredientId: ing.ingredientId as string,
+          amounts: ing.amounts,
+        })),
+      );
+    }
+  }
+};
+
+/**
+ * Shared upsert core: find an existing recipe with `matchWhere`; if found,
+ * refresh its provenance and replace its sections; otherwise create it. The two
+ * public upserts differ only in how they identify "the same recipe" and what
+ * provenance they stamp.
+ */
+const upsertRecipeMatching = async (
   input: RecipeCreateInput,
   db: Database,
   actor: ActorContext,
+  matchWhere: SQL | undefined,
+  provenance: RecipeProvenance,
 ): Promise<{ id: string }> => {
-  const dbClient = getDb(db);
-
-  // Check if recipe already exists by name (excludes soft-deleted)
-  const existingRecipe = await dbClient.query.recipe.findFirst({
-    where: and(eq(recipe.name, input.name), notDeleted(recipe)),
+  const existingRecipe = await getDb(db).query.recipe.findFirst({
+    where: matchWhere,
   });
 
-  if (existingRecipe) {
-    // Recipe exists - replace its sections with the new data.
-    return await withTransaction(db, async (tx) => {
-      // Hard-delete the existing sections and their ingredients before re-inserting.
-      // Replacing sections during an edit/re-import is internal churn, not a
-      // user-facing recipe deletion, so we hard-delete (matching updateRecipe ->
-      // handleSectionUpdates -> deleteAllSections) rather than soft-delete. Soft-deleting
-      // here left dead RecipeSection/RecipeSectionIngredient rows that accumulated
-      // unboundedly on every re-upsert (e.g. repeated `npm run load-data`/seed runs).
-      // Recipe-level deletion remains a soft delete with audit logging in deleteRecipes().
-      const existingSections = await tx.query.recipeSection.findMany({
-        where: eq(recipeSection.recipeId, existingRecipe.id),
-        columns: { id: true },
-      });
-      await deleteAllSections(
-        tx,
-        existingSections.map((s) => s.id),
-      );
-
-      // Process ingredients for the update (same as in createRecipe)
-      const processedSections = input.sections.map((section) => {
-        const processedIngredients = (section.ingredients || []).map(
-          (ingredientInput) => ({
-            ingredientId: ingredientInput.ingredientId,
-            amounts: ingredientInput.amounts,
-          }),
-        );
-
-        return {
-          name: section.name,
-          processedIngredients,
-          instructions: section.instructions,
-        };
-      });
-
-      // Update the recipe with new data
-      const updatedRecipe = await updateAndReturn(
-        tx,
-        recipe,
-        {
-          SourceType: input.meta?.url ? "Website" : "Other",
-          SourceData: input.meta?.url || null,
-          updatedAt: new Date(),
-        },
-        eq(recipe.id, existingRecipe.id),
-      );
-
-      // Create new sections
-      for (const section of processedSections) {
-        const createdSection = await insertAndReturn(tx, recipeSection, {
-          recipeId: updatedRecipe.id,
-          name: section.name,
-          instructions:
-            section.instructions?.map((instruction) => ({
-              text: instruction.instruction,
-            })) ?? [],
-        });
-
-        // Create ingredients for this section
-        if (section.processedIngredients.length > 0) {
-          await batchInsert(
-            tx,
-            recipeSectionIngredient,
-            section.processedIngredients.map((ing) => ({
-              recipeSectionId: createdSection.id,
-              ingredientId: ing.ingredientId as string,
-              amounts: ing.amounts,
-            })),
-          );
-        }
-      }
-
-      return { id: updatedRecipe.id };
-    });
-  } else {
-    // Recipe doesn't exist - create new one
-    const created = await createRecipe(db, input, actor);
+  if (!existingRecipe) {
+    const created = await createRecipe(db, input, actor, provenance);
     return { id: created.id };
   }
+
+  return await withTransaction(db, async (tx) => {
+    const updatedRecipe = await updateAndReturn(
+      tx,
+      recipe,
+      {
+        SourceType: provenance.sourceType,
+        SourceData: provenance.sourceData,
+        updatedAt: new Date(),
+      },
+      eq(recipe.id, existingRecipe.id),
+    );
+    await replaceRecipeSections(tx, updatedRecipe.id, input.sections);
+    return { id: updatedRecipe.id };
+  });
 };
+
+/**
+ * Upsert a recipe (create or update based on name match).
+ *
+ * Cookbook recipes are keyed by (book, title) via {@link upsertCookbookRecipe},
+ * so they're excluded from the name match here — otherwise scraping a website
+ * whose title matches a cookbook recipe would clobber the cookbook recipe.
+ */
+export const upsertRecipe = (
+  input: RecipeCreateInput,
+  db: Database,
+  actor: ActorContext,
+): Promise<{ id: string }> =>
+  upsertRecipeMatching(
+    input,
+    db,
+    actor,
+    and(
+      eq(recipe.name, input.name),
+      notDeleted(recipe),
+      sql`${recipe.SourceType} IS DISTINCT FROM 'Book'`,
+    ),
+    {
+      sourceType: input.meta?.url ? "Website" : "Other",
+      sourceData: input.meta?.url || null,
+    },
+  );
+
+/**
+ * Upsert a recipe extracted from an EPUB cookbook.
+ *
+ * Unlike {@link upsertRecipe} (which keys on name alone and stamps Website/Other
+ * provenance), a cookbook recipe's identity is **(book, title)**: we match on
+ * SourceType="Book" AND SourceData=bookName AND name. This keeps the same title
+ * in two different books distinct, never collides with a website-scraped recipe
+ * of the same name, and makes re-importing a book idempotent for stable titles.
+ */
+export const upsertCookbookRecipe = (
+  input: RecipeCreateInput,
+  bookName: string,
+  db: Database,
+  actor: ActorContext,
+): Promise<{ id: string }> =>
+  upsertRecipeMatching(
+    input,
+    db,
+    actor,
+    and(
+      eq(recipe.name, input.name),
+      eq(recipe.SourceType, "Book"),
+      eq(recipe.SourceData, bookName),
+      notDeleted(recipe),
+    ),
+    { sourceType: "Book", sourceData: bookName },
+  );
 
 /**
  * Update an existing recipe.

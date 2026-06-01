@@ -5,7 +5,7 @@ import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { Database } from "../db";
 import { withTransaction } from "./database-helpers";
 import { findOrCreateIngredient } from "./ingredient";
-import { upsertRecipe } from "./recipe";
+import { upsertCookbookRecipe, upsertRecipe } from "./recipe";
 
 // Convert ParsedCompactRecipe to RecipeCreateInput format
 const convertParsedCompactToRecipeInput = async (
@@ -18,6 +18,8 @@ const convertParsedCompactToRecipeInput = async (
       meta: {
         url: recipe.meta?.url ?? null,
       },
+      yield: recipe.recipe_yield ?? null,
+      servings: recipe.servings ?? null,
       sections: await Promise.all(
         recipe.sections.map(async (section) => ({
           name: section.name ?? null,
@@ -54,4 +56,16 @@ export const upsertRecipeFromCompact = async (
 
   // Use the centralized upsert logic
   return await upsertRecipe(recipeInput, db, actor);
+};
+
+export const upsertCookbookRecipeFromCompact = async (
+  recipe: ParsedCompactRecipe,
+  bookName: string,
+  db: Database,
+  actor: ActorContext,
+) => {
+  const recipeInput = await convertParsedCompactToRecipeInput(recipe, db);
+
+  // (book, title)-scoped upsert + "Book" provenance.
+  return await upsertCookbookRecipe(recipeInput, bookName, db, actor);
 };
