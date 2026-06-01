@@ -44,6 +44,7 @@ import { IngredientFieldArray } from "./ingredient-field-array";
 import {
   IngredientPreviewTable,
   useIngredientImport,
+  useIngredientResolver,
 } from "./ingredient-preview-table";
 import { InstructionFieldArray } from "./instruction-field-array";
 import {
@@ -251,15 +252,20 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     append: appendSection,
     remove: removeSection,
     move: moveSection,
+    replace: replaceSections,
   } = useFieldArray({
     control: form.control,
     name: "sections",
   });
 
+  // Imperative per-section ingredient resolver for scraped recipes.
+  const { resolveGroups, isResolving } = useIngredientResolver();
+
   // Watch URL field for scrape button
   const urlValue = useWatch({ control: form.control, name: "meta.url" });
 
-  // Handle URL scraping - opens collapsible and populates textareas
+  // Handle URL scraping - populates the structured section editor directly,
+  // preserving section names and boundaries (auto-creates missing ingredients).
   const handleScrape = async () => {
     if (!urlValue) return;
     try {
@@ -269,15 +275,21 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         if (!form.getValues("name")) {
           form.setValue("name", result.name);
         }
-        // Populate textareas and open collapsible. The text-import boxes are flat,
-        // so flatten across every section (a scraped recipe may have several).
-        setTextImportIngredients(
-          result.sections.flatMap((s) => s.ingredients).join("\n"),
+
+        // Resolve each section's ingredient lines into structured form
+        // ingredients, then replace the section editor with the scraped sections.
+        const ingredientGroups = await resolveGroups(
+          result.sections.map((section) => section.ingredients),
         );
-        setTextImportInstructions(
-          result.sections.flatMap((s) => s.instructions).join("\n"),
+        replaceSections(
+          result.sections.map((section, i) => ({
+            name: section.name ?? null,
+            ingredients: ingredientGroups[i] ?? [],
+            instructions: section.instructions.map((instruction) => ({
+              instruction,
+            })),
+          })),
         );
-        setTextImportOpen(true);
 
         // Set servings if available from scraper
         if (result.servings) {
@@ -483,10 +495,10 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
               variant="outline"
               size="sm"
               onClick={handleScrape}
-              disabled={!urlValue || scrapeMutation.isPending}
+              disabled={!urlValue || scrapeMutation.isPending || isResolving}
               className="shrink-0"
             >
-              {scrapeMutation.isPending ? (
+              {scrapeMutation.isPending || isResolving ? (
                 <Spinner className="mr-1" />
               ) : (
                 <Import className="mr-1 h-4 w-4" />

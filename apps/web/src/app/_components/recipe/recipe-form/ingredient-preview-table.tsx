@@ -398,3 +398,64 @@ export function useIngredientImport(ingredientLines: string[]) {
     isImporting: createIngredientMutation.isPending,
   };
 }
+
+/**
+ * Imperatively resolve grouped ingredient lines (e.g. one group per scraped
+ * recipe section) into structured form ingredients, creating any missing
+ * ingredients in the DB. Unlike useIngredientImport — which reactively tracks a
+ * single flat textarea and collapses everything into one section — this
+ * preserves section grouping. Each unique name is resolved once across all
+ * groups, so a name repeated across sections is only created once.
+ */
+export function useIngredientResolver() {
+  const api = useTRPC();
+  const queryClient = useQueryClient();
+  const createIngredientMutation = useMutation(
+    api.ingredient.create.mutationOptions(),
+  );
+
+  const resolveGroups = async (groups: string[][]): Promise<IngItem[][]> => {
+    // Parse every line up front, dropping blanks and unparseable (empty-name) lines.
+    const parsedGroups = groups.map((lines) =>
+      lines
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => wasm.parse_ingredient(line))
+        .filter((parsed) => parsed.name.length > 0),
+    );
+
+    // Resolve each unique name once: look up, then create if missing.
+    const resolved = new Map<string, { id: string; name: string }>();
+    for (const name of dedupe(parsedGroups.flat().map((p) => p.name))) {
+      const existing = await queryClient.fetchQuery(
+        api.ingredient.getByName.queryOptions({ nameFilter: name }),
+      );
+      const match = existing
+        ? { id: existing.id, name: existing.name }
+        : await createIngredientMutation
+            .mutateAsync({ name, aliases: [] })
+            .then((created) => ({ id: created.id, name: created.name }));
+      resolved.set(name, match);
+    }
+
+    return parsedGroups.map((parsed) =>
+      parsed.map((p) => {
+        const match = resolved.get(p.name);
+        if (!match) {
+          throw new Error(`No match found for ingredient: ${p.name}`);
+        }
+        return {
+          type: "ingredient" as const,
+          ingredient: { id: match.id, name: match.name },
+          recipe: null,
+          amounts: p.amounts.map((a) => ({
+            value: a.value,
+            unit: a.unit,
+          })) as Amount[],
+        };
+      }),
+    );
+  };
+
+  return { resolveGroups, isResolving: createIngredientMutation.isPending };
+}
