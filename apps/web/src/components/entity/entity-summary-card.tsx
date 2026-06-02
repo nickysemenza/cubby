@@ -3,6 +3,7 @@ import * as React from "react";
 import { z } from "zod";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { GridContainer } from "~/components/layout/grid-container";
+import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { formatCurrency } from "~/lib/utils";
 
@@ -82,21 +83,29 @@ const SUMMARY_NUTRIENT_CODES = ["208", "203"] as const; // kcal, protein
 
 // Helper functions for each summary type
 const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
-  const formatWithCoverage = (
+  // Builds one metric: a clean value plus an optional small coverage caption.
+  // Keeping coverage out of the value prevents the big number from wrapping into
+  // adjacent grid columns.
+  const buildMetric = (
+    label: string,
     value: number,
     missingCount: number,
     total: number,
     unit: string,
     prefix = "",
-  ) => {
+  ): SummaryItem => {
     const successCount = total - missingCount;
     if (successCount === 0) {
-      return "No data available";
+      return { label, value: "No data available" };
     }
-    if (successCount === total) {
-      return `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit}`;
-    }
-    return `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit} (${successCount}/${total} ingredients)`;
+    return {
+      label,
+      value: `${prefix}${value.toFixed(value < 10 ? 2 : 0)}${unit}`,
+      caption:
+        successCount === total
+          ? undefined
+          : `${successCount}/${total} ingredients`,
+    };
   };
 
   // Generate nutrient items for priority nutrients
@@ -104,70 +113,76 @@ const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
     const value = data.nutrients[code] ?? 0;
     const displayName = getNutrientDisplayName(code);
     const unit = getNutrientUnit(code).toLowerCase();
-    return {
-      label: `Total ${displayName}`,
+    return buildMetric(
+      `Total ${displayName}`,
       value,
-      formatter: () =>
-        formatWithCoverage(
-          value,
-          data.missingByType.nutrients.length,
-          data.totalIngredients,
-          code === "208" ? " kcal" : unit, // Special formatting for kcal
-        ),
-    };
+      data.missingByType.nutrients.length,
+      data.totalIngredients,
+      code === "208" ? " kcal" : unit, // Special formatting for kcal
+    );
   });
 
   return [
-    {
-      label: "Total Cost",
-      value: data.price,
-      formatter: () =>
-        formatWithCoverage(
-          data.price,
-          data.missingByType.price.length,
-          data.totalIngredients,
-          "",
-          "$",
-        ),
-    },
-    {
-      label: "Total Weight",
-      value: data.weight,
-      formatter: () =>
-        formatWithCoverage(
-          data.weight,
-          data.missingByType.weight.length,
-          data.totalIngredients,
-          "g",
-        ),
-    },
+    buildMetric(
+      "Total Cost",
+      data.price,
+      data.missingByType.price.length,
+      data.totalIngredients,
+      "",
+      "$",
+    ),
+    buildMetric(
+      "Total Weight",
+      data.weight,
+      data.missingByType.weight.length,
+      data.totalIngredients,
+      "g",
+    ),
     ...nutrientItems,
-    ...(data.missingByType.price.length > 0 ||
-    data.missingByType.weight.length > 0 ||
-    data.missingByType.nutrients.length > 0
-      ? [
-          {
-            label: "Missing Data",
-            value: "",
-            formatter: () => {
-              const parts = [];
-              if (data.missingByType.price.length > 0) {
-                parts.push(`Price (${data.missingByType.price.join(", ")})`);
-              }
-              if (data.missingByType.weight.length > 0) {
-                parts.push(`Weight (${data.missingByType.weight.join(", ")})`);
-              }
-              if (data.missingByType.nutrients.length > 0) {
-                parts.push(
-                  `Nutrition (${data.missingByType.nutrients.join(", ")})`,
-                );
-              }
-              return parts.join(", ");
-            },
-          },
-        ]
-      : []),
   ];
+};
+
+// Missing-data footer, rendered below the summary grid for recipes so the long
+// list of ingredient names doesn't dominate a single cramped grid cell.
+const MissingDataFooter: React.FC<{
+  missingByType: RecipeSummaryData["missingByType"];
+}> = ({ missingByType }) => {
+  const categories = [
+    { label: "Price", names: missingByType.price },
+    { label: "Weight", names: missingByType.weight },
+    { label: "Nutrition", names: missingByType.nutrients },
+  ].filter((c) => c.names.length > 0);
+
+  if (categories.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-4 space-y-2 border-foreground/10 border-t pt-3">
+      <div className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+        Missing data
+      </div>
+      {categories.map((category) => (
+        <div
+          key={category.label}
+          className="flex flex-wrap items-baseline gap-1.5"
+        >
+          <span className="font-medium text-foreground text-sm">
+            {category.label}
+            <span className="text-muted-foreground">
+              {" "}
+              · {category.names.length}
+            </span>
+          </span>
+          {category.names.map((name) => (
+            <Badge key={name} variant="outline" className="font-normal">
+              {name}
+            </Badge>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 };
 
 const formatNutritionSummary = (data: NutritionSummaryData): SummaryItem[] => [
@@ -272,12 +287,20 @@ export const EntitySummaryCard: React.FC<EntitySummaryCardProps> = ({
           {items.map((item) => (
             <div key={item.label}>
               <div className="text-muted-foreground text-sm">{item.label}</div>
-              <div className="font-medium">
+              <div className="font-semibold text-foreground text-lg">
                 {item.formatter ? item.formatter(item.value) : item.value}
               </div>
+              {item.caption && (
+                <div className="text-muted-foreground text-xs">
+                  {item.caption}
+                </div>
+              )}
             </div>
           ))}
         </GridContainer>
+        {summaryData.type === "recipe" && (
+          <MissingDataFooter missingByType={summaryData.data.missingByType} />
+        )}
       </CardContent>
     </Card>
   );

@@ -18,7 +18,7 @@ import {
   type IngredientDataItem,
 } from "~/lib/recipe-costing";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { renderValueOrError } from "~/misc/result";
+import { renderValueOrMissing } from "~/misc/result";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
@@ -88,7 +88,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
         return (
-          measure && renderValueOrError(measure, (m) => tryFormatAmount(m))
+          measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
         );
       },
     }),
@@ -98,7 +98,7 @@ export const RecipeIngredientList: React.FC<{
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
         return (
-          measure && renderValueOrError(measure, (m) => tryFormatAmount(m))
+          measure && renderValueOrMissing(measure, (m) => tryFormatAmount(m))
         );
       },
     }),
@@ -109,7 +109,7 @@ export const RecipeIngredientList: React.FC<{
         const nutrientResult = props.row.original.priceInfo?.nutrient;
         return (
           nutrientResult &&
-          renderValueOrError(nutrientResult, (nutrients) => (
+          renderValueOrMissing(nutrientResult, (nutrients) => (
             <NutrientsSummary nutrients={nutrients} />
           ))
         );
@@ -155,7 +155,7 @@ export const RecipeIngredientList: React.FC<{
         }
 
         const mappings = id ? (mappingsMap[id] ?? []) : [];
-        return <UnitMappingDisplay mappings={mappings} title="" />;
+        return <UnitMappingDisplay mappings={mappings} title="" compact />;
       },
     }),
     // Actions column - links to ingredient or recipe detail

@@ -22,59 +22,62 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     0,
   );
 
-  return (
+  // Meta row (ingredient/step counts, source) — shared between layouts.
+  const metaInfo = (
     <div
-      className={`relative overflow-hidden rounded-xl ${hasImage ? "h-64 sm:h-80 md:h-96" : "bg-muted py-12"}`}
+      className={`flex flex-wrap items-center gap-4 text-sm ${hasImage ? "text-white/90" : "text-muted-foreground"}`}
     >
-      {hasImage && (
-        <>
-          <Image
-            src={heroImage.url}
-            alt={recipe.name}
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{ boxShadow: "inset 0 0 120px 40px rgba(0,0,0,0.4)" }}
-          />
-        </>
+      <div className="flex items-center gap-1.5">
+        <Users size={16} />
+        <span>{totalIngredients} ingredients</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <Clock size={16} />
+        <span>{totalSteps} steps</span>
+      </div>
+      {recipe.meta?.url && (
+        <a
+          href={recipe.meta.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 hover:underline"
+        >
+          <ExternalLink size={16} />
+          <span>Source</span>
+        </a>
       )}
+    </div>
+  );
+
+  // No image: the recipe title already shows in the page header, so don't repeat
+  // it — render a slim meta band instead of an empty hero block.
+  if (!hasImage) {
+    return (
+      <div className="page-header-accent rounded-xl bg-muted/60 px-6 py-5 ring-1 ring-foreground/10">
+        {metaInfo}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-64 overflow-hidden rounded-xl sm:h-80 md:h-96">
+      <Image
+        src={heroImage.url}
+        alt={recipe.name}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ boxShadow: "inset 0 0 120px 40px rgba(0,0,0,0.4)" }}
+      />
 
       {/* Content */}
-      <div
-        className={`relative z-10 flex h-full flex-col justify-end p-6 sm:p-8 ${!hasImage ? "items-start" : ""}`}
-      >
-        <h2
-          className={`font-bold text-3xl tracking-tight sm:text-4xl md:text-5xl ${hasImage ? "text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)]" : ""}`}
-        >
+      <div className="relative z-10 flex h-full flex-col justify-end p-6 sm:p-8">
+        <h2 className="font-bold text-3xl text-white tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)] sm:text-4xl md:text-5xl">
           {recipe.name}
         </h2>
-
-        {/* Meta info */}
-        <div
-          className={`mt-4 flex flex-wrap gap-4 text-sm ${hasImage ? "text-white/90" : "text-muted-foreground"}`}
-        >
-          <div className="flex items-center gap-1.5">
-            <Users size={16} />
-            <span>{totalIngredients} ingredients</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Clock size={16} />
-            <span>{totalSteps} steps</span>
-          </div>
-          {recipe.meta?.url && (
-            <a
-              href={recipe.meta.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:underline"
-            >
-              <ExternalLink size={16} />
-              <span>Source</span>
-            </a>
-          )}
-        </div>
+        <div className="mt-4">{metaInfo}</div>
       </div>
     </div>
   );

@@ -49,18 +49,21 @@ export function NutrientsSummary({
   }
 
   return (
-    <div className="space-y-1 text-xs">
+    <div className="flex flex-wrap gap-1 text-xs">
       {displayNutrients.map((code) => {
         const value = nutrients[code] ?? 0;
         const unit = getNutrientUnit(code).toLowerCase();
         const displayName = getNutrientDisplayName(code).toUpperCase();
 
         return (
-          <div key={code} className="border border-muted px-2 py-1">
-            <span className="font-medium text-subtle">{displayName}:</span>{" "}
-            <span className="text-highlight">{value.toFixed(1)}</span>{" "}
+          <span
+            key={code}
+            className="inline-flex items-baseline gap-1 whitespace-nowrap rounded-sm bg-muted px-1.5 py-0.5"
+          >
+            <span className="font-medium text-subtle">{displayName}</span>
+            <span className="text-highlight">{value.toFixed(1)}</span>
             <span className="text-muted-foreground">{unit}</span>
-          </div>
+          </span>
         );
       })}
     </div>
