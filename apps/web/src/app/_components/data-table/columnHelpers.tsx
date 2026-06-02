@@ -189,6 +189,7 @@ export function createCreatedAtColumn<T extends BaseRow>(
 ) {
   return columnHelper.accessor((row) => row.createdAt, {
     id: "createdAt",
+    header: "Created",
     meta: {
       mobile: { slot: "hidden" },
     },
