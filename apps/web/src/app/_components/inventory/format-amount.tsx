@@ -37,7 +37,7 @@ export const showAmountAndPrice = (
   const price = convertAmountToPrice(amount, mappings);
   return (
     <div className="flex flex-col">
-      <div>{renderValueOrError(price, (p) => wasm.format_amount(p))}</div>
+      <div>{renderValueOrError(price, (p) => tryFormatAmount(p))}</div>
       <div>{tryFormatAmount(amount)}</div>
     </div>
   );
@@ -50,6 +50,12 @@ export const showAmountAndPrice = (
 export const tryFormatAmount = (amount: WAmount): string => {
   try {
     const formatted = wasm.format_amount(amount);
+    // WASM renders money with a trailing symbol ("0.01 $"); show it as proper
+    // currency instead ("$0.01"), matching how amounts read everywhere else.
+    const money = formatted.match(/^(.+?)\s*\$$/);
+    if (money) {
+      return `$${money[1]}`;
+    }
     // Preserve "each" - WASM normalizes to "whole" but we want to keep user's input
     if (amount.unit === "each" && formatted.includes("whole")) {
       return formatted.replace(/\bwhole\b/g, "each");
