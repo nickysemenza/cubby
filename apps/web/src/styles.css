@@ -71,6 +71,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* iOS PWA target: suppress the default gray tap-highlight box; we provide
+       our own warm active: states for press feedback. */
+    -webkit-tap-highlight-color: transparent;
   }
 
   input:focus,

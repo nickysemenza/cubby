@@ -98,7 +98,8 @@ export function MobileCard({
             : selectable || imageSlot
               ? "grid-cols-[auto_1fr_auto]"
               : "grid-cols-[1fr_auto]",
-          onClick && "cursor-pointer",
+          // Touch devices have no :hover — give a pressed state so taps register.
+          onClick && "cursor-pointer transition-colors active:bg-muted/50",
           className,
         )}
         onClick={onClick}
@@ -193,7 +194,8 @@ export function MobileCard({
       className={cn(
         "fade-in flex animate-in items-start gap-3 rounded-lg border border-l-4 bg-card p-3 shadow-sm transition-all duration-300 hover:shadow-md",
         borderColor,
-        onClick && "cursor-pointer",
+        // Touch devices have no :hover — give a pressed state so taps register.
+        onClick && "cursor-pointer active:bg-muted/40",
         className,
       )}
       onClick={onClick}

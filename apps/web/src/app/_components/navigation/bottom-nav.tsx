@@ -47,7 +47,7 @@ export function BottomNav() {
               key={item.href}
               to={item.href}
               className={cn(
-                "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+                "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
                 active
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",
@@ -72,7 +72,7 @@ export function BottomNav() {
               <button
                 type="button"
                 className={cn(
-                  "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
+                  "flex min-h-[48px] min-w-[48px] flex-1 flex-col items-center justify-center gap-0.5 transition-colors active:bg-muted/60",
                   isMoreActive
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground",
