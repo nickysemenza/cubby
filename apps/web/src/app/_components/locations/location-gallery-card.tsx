@@ -148,7 +148,7 @@ export const LocationGalleryCard = forwardRef<
                 <Link
                   to="/products/$id"
                   params={{ id: product.id }}
-                  className="line-clamp-2 flex-1 text-[10px] leading-tight hover:text-primary"
+                  className="line-clamp-2 flex-1 text-2xs leading-tight hover:text-primary"
                 >
                   {product.name}
                 </Link>
@@ -156,7 +156,7 @@ export const LocationGalleryCard = forwardRef<
             ))}
           </div>
         ) : (
-          <div className="flex items-center justify-center gap-1.5 py-2 text-[10px] text-muted-foreground">
+          <div className="flex items-center justify-center gap-1.5 py-2 text-2xs text-muted-foreground">
             <EntityIcon entity="inventory" className="h-3 w-3 opacity-40" />
             <span>Empty</span>
           </div>

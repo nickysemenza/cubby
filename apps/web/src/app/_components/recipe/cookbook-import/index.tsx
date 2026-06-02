@@ -357,7 +357,7 @@ function RecipeCard({
             </span>
           )}
           {alreadyImported && (
-            <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs dark:bg-amber-950 dark:text-amber-400">
+            <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs">
               already imported · will update
             </span>
           )}

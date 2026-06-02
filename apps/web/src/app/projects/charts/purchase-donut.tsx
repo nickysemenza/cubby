@@ -59,7 +59,7 @@ export function PurchaseDonut({
         cornerRadius={3}
         activeOuterRadiusOffset={6}
         arcLinkLabelsSkipAngle={10}
-        arcLinkLabelsTextColor="hsl(var(--foreground))"
+        arcLinkLabelsTextColor="var(--foreground)"
         arcLinkLabelsColor={{ from: "color" }}
         arcLinkLabel={(d) => `${d.label} ${formatCurrency(d.value, 0)}`}
         arcLabelsSkipAngle={20}
@@ -84,7 +84,7 @@ export function PurchaseDonut({
               y={centerY}
               textAnchor="middle"
               dominantBaseline="central"
-              style={{ fill: "hsl(var(--foreground))" }}
+              style={{ fill: "var(--foreground)" }}
             >
               <tspan x={centerX} dy="-0.5em" className="font-bold text-xl">
                 {formatCurrency(total, 0)}
@@ -93,7 +93,7 @@ export function PurchaseDonut({
                 x={centerX}
                 dy="1.4em"
                 className="text-xs"
-                style={{ fill: "hsl(var(--muted-foreground))" }}
+                style={{ fill: "var(--muted-foreground)" }}
               >
                 {centerLabel}
               </tspan>

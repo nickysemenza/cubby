@@ -39,7 +39,7 @@ export function Pill({
       {metadata && (
         <>
           <span className="shrink-0 text-muted-foreground/40">|</span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">
+          <span className="shrink-0 text-2xs text-muted-foreground">
             {metadata}
           </span>
         </>

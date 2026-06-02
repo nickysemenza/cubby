@@ -28,14 +28,16 @@ import type {
 // -- Category colors (matching Notion chart palette) --
 
 export const CATEGORY_COLORS: Record<string, string> = {
-  materials: "hsl(210, 60%, 55%)",
-  tools: "hsl(330, 55%, 60%)",
-  services: "hsl(30, 65%, 55%)",
+  materials: "var(--chart-1)",
+  tools: "var(--chart-5)",
+  services: "var(--chart-2)",
 };
 
 export function getCategoryColor(category: string | null): string {
-  if (!category) return "hsl(0, 0%, 65%)";
-  return CATEGORY_COLORS[normalizeCategoryKey(category)] ?? "hsl(0, 0%, 65%)";
+  if (!category) return "var(--chart-neutral)";
+  return (
+    CATEGORY_COLORS[normalizeCategoryKey(category)] ?? "var(--chart-neutral)"
+  );
 }
 
 export function normalizeCategoryKey(category: string | null): string {

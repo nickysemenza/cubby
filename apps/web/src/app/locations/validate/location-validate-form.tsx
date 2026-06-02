@@ -318,9 +318,7 @@ export function LocationValidateForm({
                 <div
                   key={child.id}
                   className={`flex items-center gap-2 text-sm ${
-                    isScanned
-                      ? "text-green-700 dark:text-green-400"
-                      : "text-muted-foreground"
+                    isScanned ? "text-green-700" : "text-muted-foreground"
                   }`}
                 >
                   {isScanned ? (
@@ -340,14 +338,14 @@ export function LocationValidateForm({
         {/* Unexpected scans */}
         {unexpected.length > 0 && (
           <div className="space-y-2">
-            <h4 className="font-medium text-blue-700 text-sm dark:text-blue-400">
+            <h4 className="font-medium text-blue-700 text-sm">
               Unexpected ({unexpected.length})
             </h4>
             <div className="space-y-1">
               {unexpected.map((item) => (
                 <div
                   key={item.shortcode}
-                  className="flex items-center gap-2 text-blue-700 text-sm dark:text-blue-400"
+                  className="flex items-center gap-2 text-blue-700 text-sm"
                 >
                   <CircleHelp className="h-4 w-4 shrink-0" />
                   <LocationIcon type={item.location.type} size={14} />
@@ -385,7 +383,7 @@ export function LocationValidateForm({
 
       {/* Confirmed */}
       {confirmed.length > 0 && (
-        <Card className="border-green-300 dark:border-green-800">
+        <Card className="border-green-300">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 font-medium text-sm">
               <Check className="h-4 w-4 text-green-600" />
@@ -410,7 +408,7 @@ export function LocationValidateForm({
 
       {/* Missing */}
       {missing.length > 0 && (
-        <Card className="border-amber-300 dark:border-amber-800">
+        <Card className="border-amber-300">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 font-medium text-sm">
               <CircleAlert className="h-4 w-4 text-amber-600" />
@@ -434,7 +432,7 @@ export function LocationValidateForm({
 
       {/* Unexpected */}
       {unexpected.length > 0 && (
-        <Card className="border-blue-300 dark:border-blue-800">
+        <Card className="border-blue-300">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 font-medium text-sm">
               <CircleHelp className="h-4 w-4 text-blue-600" />

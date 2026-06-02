@@ -145,11 +145,11 @@ function Treemap({ data }: TreemapProps) {
   const getNodeColor = useCallback(
     (node: d3Hierarchy.HierarchyRectangularNode<CostNode>) => {
       if (!node.data.hasPrice) {
-        return "hsl(220, 10%, 85%)"; // Gray for unpriced
+        return "hsl(40, 6%, 82%)"; // Warm grey for unpriced
       }
-      // Green gradient based on percentage
-      const lightness = Math.max(35, 65 - node.data.percentage * 0.5);
-      return `hsl(142, 55%, ${lightness}%)`;
+      // Warm terracotta gradient: bigger cost share -> deeper
+      const lightness = Math.max(38, 68 - node.data.percentage * 0.5);
+      return `hsl(36, 55%, ${lightness}%)`;
     },
     [],
   );
@@ -180,7 +180,7 @@ function Treemap({ data }: TreemapProps) {
                 width={width}
                 height={height}
                 fill={getNodeColor(node)}
-                stroke={isHovered ? "hsl(var(--primary))" : "white"}
+                stroke={isHovered ? "var(--primary)" : "white"}
                 strokeWidth={isHovered ? 2 : 1}
                 rx={3}
                 className="cursor-pointer transition-opacity hover:opacity-90"
@@ -229,7 +229,7 @@ function Treemap({ data }: TreemapProps) {
                     </div>
                     {node.data.hasPrice && width > 60 && height > 45 && (
                       <div
-                        className="mt-0.5 text-[10px] text-white/80"
+                        className="mt-0.5 text-2xs text-white/80"
                         style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
                       >
                         {formatCurrency(node.data.value)} (
@@ -237,7 +237,7 @@ function Treemap({ data }: TreemapProps) {
                       </div>
                     )}
                     {!node.data.hasPrice && width > 60 && height > 45 && (
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">
+                      <div className="mt-0.5 text-2xs text-muted-foreground">
                         No price
                       </div>
                     )}

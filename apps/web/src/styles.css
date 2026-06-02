@@ -17,6 +17,12 @@
   --font-mono:
     "JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code",
     "Roboto Mono", Consolas, "Courier New", monospace;
+
+  /* Sub-xs caption sizes - a home for what used to be arbitrary text-[10px]/[8px] */
+  --text-2xs: 0.625rem; /* 10px */
+  --text-2xs--line-height: 0.875rem;
+  --text-3xs: 0.5rem; /* 8px */
+  --text-3xs--line-height: 0.75rem;
 }
 
 /*
@@ -118,6 +124,8 @@
   --brand-terracotta: #c2603d;
   --brand-terra-light: #d98a68;
   --brand-cream: #fdfbf7;
+  /* Warm paper - one step deeper than cream so cards lift off the page */
+  --brand-paper: oklch(0.972 0.012 74);
   --brand-shelf: #5c5550;
   --brand-sage: oklch(0.94 0.025 145);
 
@@ -133,8 +141,8 @@
     0 20px 40px -8px rgba(58, 53, 48, 0.2),
     0 8px 16px -4px rgba(58, 53, 48, 0.12);
 
-  /* Core colors */
-  --background: var(--brand-cream);
+  /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
+  --background: var(--brand-paper);
   --foreground: var(--brand-foreground);
   --card: var(--brand-cream);
   --card-foreground: var(--brand-foreground);
@@ -172,6 +180,32 @@
   --glow: var(--brand-terra-light);
   --plum: oklch(0.55 0.14 320); /* Warm plum - recipes */
   --slate: oklch(0.55 0.06 55); /* Warm brown-slate */
+
+  /* Positive / money - warm-leaning green (replaces ad-hoc inline oklch) */
+  --positive: oklch(0.52 0.1 150);
+
+  /* Warm categorical chart ramp - harmonious but distinguishable.
+     orange / gold / green / red / plum / teal / brown / taupe */
+  --chart-1: oklch(0.63 0.15 42); /* terracotta */
+  --chart-2: oklch(0.76 0.13 80); /* honey */
+  --chart-3: oklch(0.58 0.09 140); /* olive-sage */
+  --chart-4: oklch(0.6 0.13 8); /* dusty rose */
+  --chart-5: oklch(0.5 0.13 345); /* warm plum */
+  --chart-6: oklch(0.7 0.05 200); /* muted teal */
+  --chart-7: oklch(0.45 0.06 55); /* deep clay */
+  --chart-8: oklch(0.66 0.04 70); /* warm taupe */
+
+  /* Sequential ramp for heatmaps: cream -> terracotta */
+  --chart-seq-1: oklch(0.95 0.02 70);
+  --chart-seq-2: oklch(0.88 0.06 58);
+  --chart-seq-3: oklch(0.8 0.1 50);
+  --chart-seq-4: oklch(0.71 0.13 45);
+  --chart-seq-5: oklch(0.63 0.15 42);
+
+  /* Semantic chart tones */
+  --chart-positive: var(--chart-3);
+  --chart-negative: var(--destructive);
+  --chart-neutral: var(--chart-8);
 
   /* Refined border radius (6px base) */
   --radius: 0.375rem;
@@ -214,6 +248,23 @@
   --color-glow: var(--glow);
   --color-plum: var(--plum);
   --color-slate: var(--slate);
+  --color-positive: var(--positive);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-seq-1: var(--chart-seq-1);
+  --color-chart-seq-2: var(--chart-seq-2);
+  --color-chart-seq-3: var(--chart-seq-3);
+  --color-chart-seq-4: var(--chart-seq-4);
+  --color-chart-seq-5: var(--chart-seq-5);
+  --color-chart-positive: var(--chart-positive);
+  --color-chart-negative: var(--chart-negative);
+  --color-chart-neutral: var(--chart-neutral);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

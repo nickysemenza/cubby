@@ -14,34 +14,35 @@ export const productCategoryValues = [
 export type ProductCategory = (typeof productCategoryValues)[number];
 
 /**
- * Color palette for product categories - color families with variations
- * Each group has a base hue, items vary by lightness/saturation
+ * Color palette for product categories - warm-anchored families with variations.
+ * Each group keeps a distinct earthy hue; items vary by lightness/chroma.
+ * Tuned to harmonize with the app's warm palette (no cold blue/teal/purple).
  */
 export const categoryColors: Record<ProductCategory | "uncategorized", string> =
   {
-    // Food group (green)
-    food: "hsl(142, 55%, 45%)",
+    // Food group (warm green)
+    food: "oklch(0.58 0.09 140)",
 
-    // Tools group (blue family)
-    tools: "hsl(220, 55%, 45%)", // base (darker)
-    "tool-consumables": "hsl(220, 55%, 55%)", // lighter
-    "tool-accessories": "hsl(220, 45%, 40%)", // muted/darker
+    // Tools group (earthy clay/brown family)
+    tools: "oklch(0.5 0.07 50)", // base (darker)
+    "tool-consumables": "oklch(0.62 0.07 55)", // lighter
+    "tool-accessories": "oklch(0.44 0.05 58)", // muted/darker
 
-    // Organization group (orange)
-    storage: "hsl(35, 55%, 50%)",
+    // Organization group (honey/amber)
+    storage: "oklch(0.7 0.12 70)",
 
-    // Building group (red)
-    hardware: "hsl(0, 55%, 50%)",
+    // Building group (warm brick-red)
+    hardware: "oklch(0.6 0.13 8)",
 
-    // Tech group (purple)
-    electronics: "hsl(280, 55%, 50%)",
+    // Tech group (warm plum)
+    electronics: "oklch(0.5 0.13 345)",
 
-    // Home group (teal family)
-    household: "hsl(180, 45%, 45%)", // base
-    supplies: "hsl(180, 55%, 55%)", // lighter/brighter
+    // Home group (muted warm teal family)
+    household: "oklch(0.6 0.06 198)", // base
+    supplies: "oklch(0.68 0.07 196)", // lighter/brighter
 
-    // Fallback
-    uncategorized: "hsl(0, 0%, 65%)",
+    // Fallback (warm grey)
+    uncategorized: "oklch(0.7 0.02 70)",
   };
 
 /**

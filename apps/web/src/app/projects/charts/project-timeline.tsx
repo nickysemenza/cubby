@@ -1,16 +1,10 @@
 import { CalendarRange } from "lucide-react";
 import { useMemo, useRef } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { getStatusChartColor } from "~/lib/status-colors";
 import type { NotionProject } from "~/server/clients/notion";
 import { formatDate } from "../shared";
 import { ChartEmpty } from "./chart-empty";
-
-const STATUS_COLORS: Record<string, string> = {
-  Done: "hsl(142, 50%, 50%)",
-  "In progress": "hsl(210, 60%, 55%)",
-  Planning: "hsl(270, 50%, 60%)",
-  "Not started": "#999",
-};
 
 export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -94,7 +88,7 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
               y1={marginTop - 5}
               x2={tick.x}
               y2={chartHeight - 10}
-              stroke="#e5e5e5"
+              stroke="var(--border)"
               strokeWidth={1}
             />
             <text
@@ -102,7 +96,7 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
               y={marginTop - 10}
               textAnchor="middle"
               fontSize={11}
-              fill="#666"
+              fill="var(--muted-foreground)"
             >
               {tick.label}
             </text>
@@ -115,7 +109,7 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
           const x1 = toX(item.start);
           const x2 = toX(item.end);
           const barW = Math.max(x2 - x1, 4);
-          const color = STATUS_COLORS[item.status ?? ""] ?? "#999";
+          const color = getStatusChartColor(item.status);
 
           return (
             <g key={item.id}>
@@ -126,7 +120,7 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
                 textAnchor="end"
                 dominantBaseline="central"
                 fontSize={12}
-                fill="#333"
+                fill="var(--foreground)"
               >
                 {item.name.length > 20
                   ? `${item.name.slice(0, 20)}...`

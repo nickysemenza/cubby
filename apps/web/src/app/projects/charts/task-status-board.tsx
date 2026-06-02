@@ -1,16 +1,10 @@
 import { ListChecks } from "lucide-react";
 import { useMemo } from "react";
+import { getStatusChartColor } from "~/lib/status-colors";
 import type { NotionProject, NotionTask } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
 
 const STATUS_ORDER = ["Not started", "later", "In progress", "Blocked", "Done"];
-const STATUS_COLORS: Record<string, string> = {
-  "Not started": "#94a3b8",
-  later: "#fb923c",
-  "In progress": "#3b82f6",
-  Blocked: "#ef4444",
-  Done: "#22c55e",
-};
 
 export function TaskStatusBoard({
   tasks,
@@ -108,7 +102,7 @@ export function TaskStatusBoard({
               {statuses.map((status) => {
                 const count = grid.get(row.name)?.get(status) ?? 0;
                 const intensity = count / maxCount;
-                const color = STATUS_COLORS[status] ?? "#94a3b8";
+                const color = getStatusChartColor(status);
 
                 return (
                   <td key={status} className="px-2 py-1.5 text-center">

@@ -50,7 +50,7 @@ export function SpendingByProject({
         layout="horizontal"
         margin={{ top: 10, right: 80, bottom: 30, left: 160 }}
         padding={0.3}
-        colors={["hsl(210, 60%, 55%)"]}
+        colors={["var(--chart-1)"]}
         borderRadius={2}
         axisBottom={{
           format: (v: number) => formatCurrency(v, 0),

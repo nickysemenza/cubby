@@ -266,8 +266,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                   y2={target.y}
                   stroke={
                     highlighted || isSelected
-                      ? "hsl(var(--primary))"
-                      : "hsl(220, 10%, 60%)"
+                      ? "var(--primary)"
+                      : "var(--border)"
                   }
                   strokeWidth={getLinkWidth(link.weight)}
                   strokeOpacity={opacity}
@@ -304,10 +304,8 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
               >
                 <circle
                   r={radius}
-                  fill={
-                    isHovered ? "hsl(var(--primary))" : "hsl(220, 55%, 50%)"
-                  }
-                  stroke={isHovered ? "hsl(var(--primary))" : "white"}
+                  fill={isHovered ? "var(--primary)" : "var(--chart-3)"}
+                  stroke={isHovered ? "var(--primary)" : "var(--card)"}
                   strokeWidth={isHovered ? 3 : 2}
                   opacity={connected ? 1 : 0.2}
                   className="transition-opacity"
@@ -316,7 +314,7 @@ function NetworkGraph({ nodes, edges }: NetworkGraphProps) {
                   <text
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-white font-semibold text-[10px]"
+                    className="pointer-events-none fill-white font-semibold text-2xs"
                     style={{ textShadow: "0 1px 3px rgba(0,0,0,0.7)" }}
                   >
                     {truncatedName}

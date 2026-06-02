@@ -73,9 +73,10 @@ function Treemap({ data }: TreemapProps) {
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const isEmpty = node.data.totalCount === 0;
       const lightness = Math.min(75, 35 + node.depth * 15);
-      const saturation = isEmpty ? 10 : 55;
+      const saturation = isEmpty ? 12 : 50;
       const adjustedLightness = isEmpty ? lightness + 20 : lightness;
-      return `hsl(220, ${saturation}%, ${adjustedLightness}%)`;
+      // Warm amber/terracotta gradient by depth (was cold blue hsl(220))
+      return `hsl(42, ${saturation}%, ${adjustedLightness}%)`;
     },
     [],
   );
@@ -108,7 +109,7 @@ function Treemap({ data }: TreemapProps) {
                 width={width}
                 height={height}
                 fill={getNodeColor(node)}
-                stroke={isHovered ? "hsl(var(--primary))" : "white"}
+                stroke={isHovered ? "var(--primary)" : "white"}
                 strokeWidth={isHovered ? 2 : 1}
                 rx={4}
                 className="cursor-pointer transition-opacity hover:opacity-90"
@@ -145,12 +146,12 @@ function Treemap({ data }: TreemapProps) {
                         <span className="truncate">{node.data.name}</span>
                       </Link>
                       {width > 160 && node.data.totalCount > 0 && (
-                        <span className="shrink-0 text-[10px] text-white/80">
+                        <span className="shrink-0 text-2xs text-white/80">
                           · {node.data.totalCount}
                         </span>
                       )}
                       {width > 220 && node.data.totalValuation > 0 && (
-                        <span className="shrink-0 text-[10px] text-white/80">
+                        <span className="shrink-0 text-2xs text-white/80">
                           · {formatCurrency(node.data.totalValuation, 0)}
                           {(node.data.totalPricingStatus.missingPricing.count >
                             0 ||
@@ -169,7 +170,7 @@ function Treemap({ data }: TreemapProps) {
                         </span>
                       )}
                       {width > 120 && node.data.totalCount === 0 && (
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                        <span className="shrink-0 text-2xs text-muted-foreground">
                           · empty
                         </span>
                       )}

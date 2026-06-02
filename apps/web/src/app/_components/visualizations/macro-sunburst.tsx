@@ -16,7 +16,7 @@ const MACRO_DISPLAY: Record<
   kcal: { color: { h: 30, s: 70, l: 50 }, label: "Calories" }, // Orange
   protein: { color: { h: 350, s: 65, l: 50 }, label: "Protein" }, // Red/Pink
   fat: { color: { h: 45, s: 80, l: 55 }, label: "Fat" }, // Yellow
-  carbs: { color: { h: 200, s: 60, l: 50 }, label: "Carbs" }, // Blue/Teal
+  carbs: { color: { h: 198, s: 30, l: 48 }, label: "Carbs" }, // Muted warm teal
 } as const;
 
 // Get the nutrient code for a macro key using the centralized definition
@@ -185,7 +185,7 @@ function Sunburst({ data }: SunburstProps) {
     (node: d3Hierarchy.HierarchyRectangularNode<MacroNode>) => {
       // Get the macro type (either from this node or parent)
       const macroKey = node.data.macro ?? node.parent?.data.macro;
-      if (!macroKey) return "hsl(220, 10%, 70%)";
+      if (!macroKey) return "hsl(40, 8%, 70%)";
 
       const color = MACRO_DISPLAY[macroKey].color;
       // Outer ring (ingredients) is lighter
@@ -282,7 +282,7 @@ function Sunburst({ data }: SunburstProps) {
                 <path
                   d={arc(node)}
                   fill={getNodeColor(node)}
-                  stroke={isHovered ? "hsl(var(--primary))" : "white"}
+                  stroke={isHovered ? "var(--primary)" : "white"}
                   strokeWidth={isHovered ? 2 : 0.5}
                   className="cursor-pointer transition-opacity hover:opacity-90"
                   onMouseEnter={() => setHoveredNode(node)}
@@ -295,7 +295,7 @@ function Sunburst({ data }: SunburstProps) {
                     transform={`rotate(${labelPos.rotation}, ${labelPos.x}, ${labelPos.y})`}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className="pointer-events-none fill-white font-medium text-[10px]"
+                    className="pointer-events-none fill-white font-medium text-2xs"
                     style={{ textShadow: "0 1px 2px rgba(0,0,0,0.4)" }}
                   >
                     {node.data.name}
@@ -306,7 +306,7 @@ function Sunburst({ data }: SunburstProps) {
           })}
 
           {/* Center circle with summary */}
-          <circle r={radius * 0.25} fill="hsl(var(--background))" />
+          <circle r={radius * 0.25} fill="var(--background)" />
           <text
             textAnchor="middle"
             y={-6}
@@ -317,7 +317,7 @@ function Sunburst({ data }: SunburstProps) {
           <text
             textAnchor="middle"
             y={10}
-            className="fill-muted-foreground text-[10px]"
+            className="fill-muted-foreground text-2xs"
           >
             {centerText.secondary}
           </text>
@@ -349,7 +349,7 @@ function Sunburst({ data }: SunburstProps) {
       )}
 
       {/* Legend with totals */}
-      <div className="absolute right-2 bottom-2 flex gap-4 rounded bg-background/80 px-2 py-1.5 text-[10px] backdrop-blur">
+      <div className="absolute right-2 bottom-2 flex gap-4 rounded bg-background/80 px-2 py-1.5 text-2xs backdrop-blur">
         {(Object.keys(MACRO_DISPLAY) as MacroKey[]).map((macro) => (
           <div key={macro} className="flex items-center gap-1.5">
             <div
@@ -364,7 +364,7 @@ function Sunburst({ data }: SunburstProps) {
                   ? `${macroTotals[macro].toFixed(0)}${getMacroUnit(macro)}`
                   : "-"}
               </span>
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 {MACRO_DISPLAY[macro].label}
               </span>
             </div>

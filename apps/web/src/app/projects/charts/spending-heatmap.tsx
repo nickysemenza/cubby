@@ -53,18 +53,18 @@ export function SpendingHeatmap({
           data={data}
           from={from}
           to={to}
-          emptyColor="#f0f0f0"
+          emptyColor="var(--muted)"
           colors={[
-            "hsl(142, 40%, 80%)",
-            "hsl(142, 45%, 65%)",
-            "hsl(142, 50%, 50%)",
-            "hsl(142, 55%, 35%)",
+            "oklch(0.9 0.04 150)",
+            "oklch(0.78 0.07 150)",
+            "oklch(0.65 0.09 150)",
+            "oklch(0.52 0.1 150)",
           ]}
           margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
           yearSpacing={40}
-          monthBorderColor="#e0e0e0"
+          monthBorderColor="var(--border)"
           dayBorderWidth={1}
-          dayBorderColor="#ffffff"
+          dayBorderColor="var(--card)"
           onClick={(day) => {
             if ("value" in day && day.value) {
               setSelectedDay(selectedDay === day.day ? null : day.day);
@@ -79,8 +79,8 @@ export function SpendingHeatmap({
             </div>
           )}
           theme={{
-            text: { fill: "#333" },
-            labels: { text: { fill: "#666", fontSize: 11 } },
+            text: { fill: "var(--foreground)" },
+            labels: { text: { fill: "var(--muted-foreground)", fontSize: 11 } },
           }}
         />
       </div>

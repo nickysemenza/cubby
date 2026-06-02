@@ -643,7 +643,7 @@ function MobileGalleryDrillDown({
                   inventoryItems={inventoryByLocation.get(location.id) ?? []}
                 />
                 {hasChildren && (
-                  <div className="mt-0.5 text-center text-[10px] text-muted-foreground">
+                  <div className="mt-0.5 text-center text-2xs text-muted-foreground">
                     {location.children!.length} sub-location
                     {location.children!.length !== 1 ? "s" : ""}
                   </div>

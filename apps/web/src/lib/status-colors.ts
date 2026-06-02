@@ -68,6 +68,23 @@ const projectStatus: Record<string, StatusBadgeProps> = {
   },
 };
 
+/**
+ * Project status -> chart fill color, using the warm chart tokens.
+ * Single source of truth for SVG/nivo charts (which can't use Tailwind classes).
+ */
+const projectStatusChartColor: Record<string, string> = {
+  Done: "var(--chart-positive)",
+  "In progress": "var(--chart-1)",
+  Blocked: "var(--chart-negative)",
+  Planning: "var(--chart-5)",
+  "Not started": "var(--chart-neutral)",
+  later: "var(--chart-2)",
+};
+
+export function getStatusChartColor(value: string | null | undefined): string {
+  return (value && projectStatusChartColor[value]) || "var(--chart-neutral)";
+}
+
 const DOMAINS = {
   audit: auditStatus,
   project: projectStatus,

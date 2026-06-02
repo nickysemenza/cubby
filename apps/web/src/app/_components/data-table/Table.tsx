@@ -216,7 +216,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
   const styles = {
     table: "text-xs leading-tight border-collapse border-spacing-0",
     header:
-      "h-8 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50",
+      "h-8 px-2 py-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground bg-muted/50",
     filterRow: "h-7 px-2 py-0.5 bg-muted/30 border-b border-border/50",
     cell: cn(dConfig.cellClass, "overflow-hidden align-middle"),
     row: cn(dConfig.rowClass, "table-row-hover border-border/30 border-b"),
@@ -518,7 +518,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-semibold text-[10px] uppercase tracking-wider hover:bg-muted/60"
+                                  className="group -ml-2 h-6 justify-start gap-1 px-2 font-semibold text-2xs uppercase tracking-wider hover:bg-muted/60"
                                   onClick={() =>
                                     header.column.toggleSorting(
                                       header.column.getIsSorted() === "asc",

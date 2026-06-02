@@ -19,31 +19,32 @@ export const locationTypeValues = [
 export type LocationType = (typeof locationTypeValues)[number];
 
 /**
- * Location type colors - color families with variations
- * Each group has a base hue, items vary by lightness/saturation
+ * Location type colors - warm-anchored color families with variations.
+ * Each group keeps a distinct earthy hue; items vary by lightness/chroma.
+ * Tuned to harmonize with the app's warm palette (no cold cyan/lime).
  */
 export const locationTypeColors: Record<LocationType, string> = {
   // Spaces group (warm brown family)
-  room: "hsl(25, 50%, 45%)", // base
-  area: "hsl(25, 40%, 55%)", // lighter/muted
+  room: "oklch(0.5 0.08 50)", // base
+  area: "oklch(0.6 0.06 52)", // lighter/muted
 
-  // Surfaces group (lime green family)
-  table: "hsl(100, 45%, 45%)", // base
-  cart: "hsl(100, 55%, 50%)", // brighter
-  shelf: "hsl(100, 35%, 40%)", // muted/darker
+  // Surfaces group (olive-sage family)
+  table: "oklch(0.58 0.08 135)", // base
+  cart: "oklch(0.64 0.09 130)", // brighter
+  shelf: "oklch(0.5 0.06 138)", // muted/darker
 
-  // Storage group (rose/pink family)
-  cabinet: "hsl(330, 45%, 50%)", // base
-  drawer: "hsl(330, 55%, 55%)", // lighter
+  // Storage group (warm plum-rose family)
+  cabinet: "oklch(0.55 0.11 350)", // base
+  drawer: "oklch(0.62 0.12 352)", // lighter
 
-  // Containers group (cyan family)
-  box: "hsl(190, 50%, 45%)", // base
-  crate: "hsl(190, 45%, 40%)", // darker
-  "half-crate": "hsl(190, 50%, 50%)", // slightly lighter
-  "quarter-crate": "hsl(190, 48%, 48%)", // between crate and half-crate
-  "milk-crate": "hsl(190, 55%, 55%)", // lighter
-  "tote-bin": "hsl(190, 40%, 42%)", // muted
-  bag: "hsl(190, 60%, 52%)", // brighter
+  // Containers group (muted warm teal family)
+  box: "oklch(0.58 0.07 200)", // base
+  crate: "oklch(0.52 0.06 202)", // darker
+  "half-crate": "oklch(0.62 0.07 198)", // slightly lighter
+  "quarter-crate": "oklch(0.6 0.07 199)", // between crate and half-crate
+  "milk-crate": "oklch(0.68 0.07 196)", // lighter
+  "tote-bin": "oklch(0.54 0.05 202)", // muted
+  bag: "oklch(0.64 0.08 195)", // brighter
 };
 
 /**

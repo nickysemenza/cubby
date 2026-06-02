@@ -356,7 +356,7 @@ function SidebarTreeNode({
         {(location.totalItemCount ?? 0) > 0 && (
           <div
             className={cn(
-              "flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-[10px] transition-colors",
+              "flex items-center gap-1 rounded-full px-1.5 py-0.5 font-medium text-2xs transition-colors",
               isActive
                 ? "bg-primary/20 text-primary"
                 : "bg-muted text-muted-foreground group-hover:bg-muted/80",

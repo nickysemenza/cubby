@@ -1737,7 +1737,7 @@ function CategoryLegend() {
               className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ backgroundColor: getCategoryColor(cat) }}
             />
-            <span className="text-[10px] text-white/60 leading-none">
+            <span className="text-2xs text-white/60 leading-none">
               {formatCategoryLabel(cat)}
             </span>
           </div>
@@ -1747,7 +1747,7 @@ function CategoryLegend() {
             className="h-2.5 w-2.5 shrink-0 rounded-sm"
             style={{ backgroundColor: getCategoryColor(null) }}
           />
-          <span className="text-[10px] text-white/60 leading-none">
+          <span className="text-2xs text-white/60 leading-none">
             uncategorized
           </span>
         </div>

@@ -23,7 +23,7 @@ export function SectionHeader({ title, count, color }: SectionHeaderProps) {
       <span className="font-semibold text-foreground/80 text-xs capitalize">
         {title}
       </span>
-      <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium text-[10px] text-foreground/50 leading-none">
+      <span className="rounded-full bg-foreground/10 px-1.5 py-0.5 font-medium text-2xs text-foreground/50 leading-none">
         {count}
       </span>
     </div>

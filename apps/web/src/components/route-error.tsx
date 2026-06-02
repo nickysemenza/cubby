@@ -184,7 +184,7 @@ export function RouteErrorComponent({ error, reset }: ErrorComponentProps) {
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                   Stack trace
                 </summary>
-                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-[10px] text-muted-foreground">
+                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap text-2xs text-muted-foreground">
                   {stack}
                 </pre>
               </details>

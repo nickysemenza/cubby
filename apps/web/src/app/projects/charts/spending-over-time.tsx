@@ -63,7 +63,7 @@ export function SpendingOverTime({
         }}
         enableArea
         areaOpacity={0.1}
-        colors={["hsl(210, 60%, 55%)"]}
+        colors={["var(--chart-1)"]}
         pointSize={6}
         pointColor="white"
         pointBorderWidth={2}

@@ -107,7 +107,7 @@ export function SubcategoryBars({
             itemHeight: 20,
             symbolSize: 12,
             symbolShape: "circle",
-            itemTextColor: "hsl(var(--muted-foreground))",
+            itemTextColor: "var(--muted-foreground)",
           },
         ]}
         theme={nivoChartTheme}

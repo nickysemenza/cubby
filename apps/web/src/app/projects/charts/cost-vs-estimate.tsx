@@ -59,10 +59,10 @@ export function CostVsEstimate({
         padding={0.2}
         innerPadding={2}
         colors={({ id, data: d }) => {
-          if (id === "estimate") return "#d4d4d4";
+          if (id === "estimate") return "var(--chart-neutral)";
           return d.actual > d.estimate && d.estimate > 0
-            ? "hsl(0, 65%, 50%)"
-            : "hsl(210, 60%, 55%)";
+            ? "var(--chart-negative)"
+            : "var(--chart-1)";
         }}
         borderRadius={2}
         axisBottom={{

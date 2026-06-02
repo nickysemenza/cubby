@@ -60,7 +60,7 @@ export function BottomNav() {
                   aria-hidden="true"
                 />
               )}
-              <span className="font-medium text-[10px]">{item.label}</span>
+              <span className="font-medium text-2xs">{item.label}</span>
             </Link>
           );
         })}
@@ -85,7 +85,7 @@ export function BottomNav() {
               className={cn("h-5 w-5", isMoreActive && "scale-110")}
               aria-hidden="true"
             />
-            <span className="font-medium text-[10px]">Settings</span>
+            <span className="font-medium text-2xs">Settings</span>
           </SheetTrigger>
           <SheetContent
             side="bottom"

@@ -41,7 +41,7 @@ export function HeaderFilter<TData>({
   }
 
   const inputClassName =
-    "h-5 text-[10px] px-1.5 bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
+    "h-5 text-2xs px-1.5 bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
 
   // Enrich select options with faceted counts
   // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API

@@ -103,9 +103,10 @@ function Sunburst({ data }: SunburstProps) {
     (node: d3Hierarchy.HierarchyRectangularNode<LocationHierarchyNode>) => {
       const isEmpty = node.data.totalCount === 0;
       const lightness = Math.min(75, 35 + node.depth * 12);
-      const saturation = isEmpty ? 10 : 55;
+      const saturation = isEmpty ? 12 : 50;
       const adjustedLightness = isEmpty ? lightness + 20 : lightness;
-      return `hsl(220, ${saturation}%, ${adjustedLightness}%)`;
+      // Warm amber/terracotta gradient by depth (was cold blue hsl(220))
+      return `hsl(42, ${saturation}%, ${adjustedLightness}%)`;
     },
     [],
   );
@@ -159,7 +160,7 @@ function Sunburst({ data }: SunburstProps) {
                 <path
                   d={arc(node)}
                   fill={getNodeColor(node)}
-                  stroke={isHovered ? "hsl(var(--primary))" : "white"}
+                  stroke={isHovered ? "var(--primary)" : "white"}
                   strokeWidth={isHovered ? 2 : 0.5}
                   className="cursor-pointer transition-opacity hover:opacity-90"
                   onMouseEnter={() => setHoveredNode(node)}
@@ -172,9 +173,9 @@ function Sunburst({ data }: SunburstProps) {
                     transform={`rotate(${labelPos.rotation}, ${labelPos.x}, ${labelPos.y})`}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    className={`pointer-events-none font-medium text-[10px] ${
+                    className={`pointer-events-none font-medium text-2xs ${
                       node.data.totalCount === 0
-                        ? "fill-slate-600"
+                        ? "fill-muted-foreground"
                         : "fill-white"
                     }`}
                     style={{ textShadow: "0 1px 2px rgba(0,0,0,0.3)" }}
@@ -189,7 +190,7 @@ function Sunburst({ data }: SunburstProps) {
           })}
 
           {/* Center circle with summary */}
-          <circle r={radius * 0.2} fill="hsl(var(--background))" />
+          <circle r={radius * 0.2} fill="var(--background)" />
           <text
             textAnchor="middle"
             dominantBaseline="middle"

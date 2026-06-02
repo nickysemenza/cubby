@@ -111,7 +111,7 @@ export function CategoryTrend({ purchases }: { purchases: NotionPurchase[] }) {
             itemHeight: 20,
             symbolSize: 10,
             symbolShape: "circle",
-            itemTextColor: "hsl(var(--muted-foreground))",
+            itemTextColor: "var(--muted-foreground)",
           },
         ]}
         theme={nivoChartTheme}

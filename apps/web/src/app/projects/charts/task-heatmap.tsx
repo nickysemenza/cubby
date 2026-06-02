@@ -48,18 +48,18 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
           data={data}
           from={from}
           to={to}
-          emptyColor="#f0f0f0"
+          emptyColor="var(--muted)"
           colors={[
-            "hsl(210, 50%, 80%)",
-            "hsl(210, 55%, 65%)",
-            "hsl(210, 60%, 50%)",
-            "hsl(210, 65%, 35%)",
+            "var(--chart-seq-2)",
+            "var(--chart-seq-3)",
+            "var(--chart-seq-4)",
+            "var(--chart-seq-5)",
           ]}
           margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
           yearSpacing={40}
-          monthBorderColor="#e0e0e0"
+          monthBorderColor="var(--border)"
           dayBorderWidth={1}
-          dayBorderColor="#ffffff"
+          dayBorderColor="var(--card)"
           onClick={(day) => {
             if ("value" in day && day.value) {
               setSelectedDay(selectedDay === day.day ? null : day.day);
@@ -75,8 +75,8 @@ export function TaskHeatmap({ tasks }: { tasks: NotionTask[] }) {
             </div>
           )}
           theme={{
-            text: { fill: "#333" },
-            labels: { text: { fill: "#666", fontSize: 11 } },
+            text: { fill: "var(--foreground)" },
+            labels: { text: { fill: "var(--muted-foreground)", fontSize: 11 } },
           }}
         />
       </div>

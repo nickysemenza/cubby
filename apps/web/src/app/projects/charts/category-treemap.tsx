@@ -82,7 +82,7 @@ export function CategoryTreemap({
           return getCategoryColor(category);
         }}
         borderWidth={2}
-        borderColor="#ffffff"
+        borderColor="var(--card)"
         nodeOpacity={0.9}
         tooltip={({ node }) => (
           <div className="rounded-md bg-popover px-3 py-2 text-sm shadow-md ring-1 ring-border">

@@ -113,7 +113,7 @@ export function RecipeList({ actions }: RecipeListProps) {
           return (
             <span title={`${withPrice}/${totals.totalIngredients} ingredients`}>
               {formatCurrency(totals.price)}
-              <span className="ml-1 text-[10px] text-muted-foreground">
+              <span className="ml-1 text-2xs text-muted-foreground">
                 ({withPrice}/{totals.totalIngredients})
               </span>
             </span>
@@ -146,7 +146,7 @@ export function RecipeList({ actions }: RecipeListProps) {
               title={`${withNutrients}/${totals.totalIngredients} ingredients`}
             >
               {Math.round(calories)} kcal
-              <span className="ml-1 text-[10px] text-muted-foreground">
+              <span className="ml-1 text-2xs text-muted-foreground">
                 ({withNutrients}/{totals.totalIngredients})
               </span>
             </span>

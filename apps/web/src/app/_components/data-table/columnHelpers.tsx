@@ -617,7 +617,7 @@ export function createCurrencyColumn<
       }, 0);
       if (sum === 0) return null;
       return (
-        <span className="font-mono text-[oklch(0.45_0.12_145)] tabular-nums">
+        <span className="font-mono text-positive tabular-nums">
           {formatCurrency(sum)}
         </span>
       );
@@ -635,9 +635,7 @@ export function createCurrencyColumn<
             config={{ type: "currency" }}
             renderValue={(v) =>
               v !== null ? (
-                <span className="text-[oklch(0.45_0.12_145)]">
-                  {formatCurrency(v)}
-                </span>
+                <span className="text-positive">{formatCurrency(v)}</span>
               ) : (
                 <NoneState />
               )
@@ -647,11 +645,7 @@ export function createCurrencyColumn<
       }
 
       if (val === null || val === undefined) return <NoneState />;
-      return (
-        <span className="text-[oklch(0.45_0.12_145)]">
-          {formatCurrency(val)}
-        </span>
-      );
+      return <span className="text-positive">{formatCurrency(val)}</span>;
     },
   });
 }

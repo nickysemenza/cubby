@@ -3,16 +3,9 @@ import * as d3Force from "d3-force";
 import { Network, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
+import { getStatusChartColor } from "~/lib/status-colors";
 import type { NotionProject } from "~/server/clients/notion";
 import { ChartEmpty } from "./chart-empty";
-
-const STATUS_COLORS: Record<string, string> = {
-  Done: "hsl(142, 50%, 50%)",
-  "In progress": "hsl(210, 60%, 55%)",
-  Planning: "hsl(270, 50%, 60%)",
-  "Not started": "#999",
-  Blocked: "hsl(0, 55%, 50%)",
-};
 
 interface GraphNode extends d3Force.SimulationNodeDatum {
   id: string;
@@ -281,7 +274,7 @@ function ForceGraph({
             markerHeight="6"
             orient="auto"
           >
-            <polygon points="0 0, 10 3.5, 0 7" fill="#999" />
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--muted-foreground)" />
           </marker>
         </defs>
 
@@ -319,7 +312,7 @@ function ForceGraph({
               y1={source.y}
               x2={x2}
               y2={y2}
-              stroke={isHighlighted ? "#333" : "#ccc"}
+              stroke={isHighlighted ? "var(--foreground)" : "var(--border)"}
               strokeWidth={isHighlighted ? 2.5 : 1.5}
               markerEnd="url(#arrowhead)"
               style={{ transition: "stroke 0.15s, stroke-width 0.15s" }}
@@ -330,7 +323,7 @@ function ForceGraph({
         {/* Nodes */}
         {nodePositions.map((node) => {
           const isHovered = hoveredNode === node.id;
-          const color = STATUS_COLORS[node.status ?? ""] ?? "#999";
+          const color = getStatusChartColor(node.status);
           const isDone = node.status === "Done";
 
           return (
@@ -349,7 +342,7 @@ function ForceGraph({
                 r={node.radius}
                 fill={color}
                 opacity={isDone ? 0.5 : 0.85}
-                stroke={isHovered ? "#333" : "white"}
+                stroke={isHovered ? "var(--foreground)" : "var(--card)"}
                 strokeWidth={isHovered ? 3 : 2}
                 style={{ transition: "all 0.15s" }}
               />
@@ -367,7 +360,7 @@ function ForceGraph({
                 y={node.radius + 14}
                 textAnchor="middle"
                 fontSize={11}
-                fill="#333"
+                fill="var(--foreground)"
                 fontWeight={isHovered ? 600 : 400}
                 style={{ pointerEvents: "none" }}
               >

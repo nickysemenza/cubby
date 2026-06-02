@@ -5,14 +5,14 @@ import type { NotionPurchase } from "~/server/clients/notion";
 import { monthKey, monthLabel, nivoChartTheme } from "../shared";
 
 const PROJECT_COLORS = [
-  "hsl(210, 60%, 55%)",
-  "hsl(330, 55%, 55%)",
-  "hsl(30, 65%, 55%)",
-  "hsl(142, 50%, 45%)",
-  "hsl(270, 50%, 55%)",
-  "hsl(180, 50%, 45%)",
-  "hsl(45, 70%, 50%)",
-  "hsl(0, 55%, 50%)",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--chart-6)",
+  "var(--chart-7)",
+  "var(--chart-8)",
 ];
 
 export function MonthlyTrend({ purchases }: { purchases: NotionPurchase[] }) {
