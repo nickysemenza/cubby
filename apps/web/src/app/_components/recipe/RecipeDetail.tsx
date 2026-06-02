@@ -6,7 +6,10 @@ import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { ToggleGroup, ToggleGroupItem } from "~/components/ui/toggle-group";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import {
   type CalculateTotalsResult,
   calculateTotals,
@@ -139,13 +142,27 @@ const RecipeSummaryCard: React.FC<{
   );
 };
 
-type ViewMode = "magazine" | "nyt" | "table" | "charts";
+export type RecipeViewMode = "magazine" | "nyt" | "table" | "charts";
+
+export const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
+  { value: "magazine", label: "Magazine", icon: BookOpen },
+  { value: "nyt", label: "NYT", icon: Newspaper },
+  { value: "table", label: "Table", icon: Table2 },
+  { value: "charts", label: "Charts", icon: BarChart3 },
+];
 
 const RecipeDetail: React.FC<{
   recipe: RecipeOut;
-}> = ({ recipe }) => {
+  /** Controlled view mode (e.g. URL-driven on the detail route). */
+  view?: RecipeViewMode;
+  onViewChange?: (view: RecipeViewMode) => void;
+}> = ({ recipe, view: controlledView, onViewChange }) => {
   const api = useTRPC();
-  const [viewMode, setViewMode] = useState<ViewMode>("magazine");
+  // Controlled when the parent supplies view/onViewChange; otherwise self-managed
+  // (e.g. the search preview panel embeds this without URL state).
+  const [internalView, setInternalView] = useState<RecipeViewMode>("magazine");
+  const viewMode = controlledView ?? internalView;
+  const setViewMode = onViewChange ?? setInternalView;
 
   const ingredients: SectionIngredientOut[] = useMemo(
     () => recipe.sections.flatMap((section) => section.ingredients.flat()),
@@ -207,33 +224,13 @@ const RecipeDetail: React.FC<{
         {recipe.tags && recipe.tags.length > 0 && (
           <RecipeTagList tags={recipe.tags} />
         )}
-        <ToggleGroup
+        <ViewSwitcher
           className="ml-auto"
-          variant="outline"
-          size="sm"
-          value={[viewMode]}
-          onValueChange={(values) => {
-            const v = values[0] as ViewMode | undefined;
-            if (v) setViewMode(v);
-          }}
-        >
-          <ToggleGroupItem value="magazine" aria-label="Magazine view">
-            <BookOpen className="mr-2 h-4 w-4" />
-            Magazine
-          </ToggleGroupItem>
-          <ToggleGroupItem value="nyt" aria-label="NYT view">
-            <Newspaper className="mr-2 h-4 w-4" />
-            NYT
-          </ToggleGroupItem>
-          <ToggleGroupItem value="table" aria-label="Table view">
-            <Table2 className="mr-2 h-4 w-4" />
-            Table
-          </ToggleGroupItem>
-          <ToggleGroupItem value="charts" aria-label="Charts view">
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Charts
-          </ToggleGroupItem>
-        </ToggleGroup>
+          ariaLabel="Recipe view"
+          options={RECIPE_VIEW_OPTIONS}
+          value={viewMode}
+          onValueChange={setViewMode}
+        />
       </div>
 
       {/* View Components */}

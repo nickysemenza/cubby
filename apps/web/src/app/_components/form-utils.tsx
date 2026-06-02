@@ -54,6 +54,14 @@ export function getSubmitButtonText(mode: "create" | "edit"): string {
   return mode === "create" ? "Create" : "Save";
 }
 
+// Active-tense label shown while a submit is in flight, so the pending state
+// reads clearly (not just a static label with a spinner).
+function getPendingButtonText(text: string): string {
+  if (text === "Save") return "Saving…";
+  if (text === "Create") return "Creating…";
+  return `${text}…`;
+}
+
 // Form wrapper component with common layout and buttons
 export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   form,
@@ -101,7 +109,9 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
             variant={submitButtonVariant}
           >
             {isPending && <Spinner size="sm" />}
-            {submitButtonText}
+            {isPending
+              ? getPendingButtonText(submitButtonText)
+              : submitButtonText}
           </Button>
           <Button
             type="button"

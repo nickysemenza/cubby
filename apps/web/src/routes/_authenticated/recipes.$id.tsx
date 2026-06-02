@@ -9,7 +9,9 @@ import { Edit, X } from "lucide-react";
 import { z } from "zod";
 import { useEntityDelete } from "~/app/_components/hooks/useEntityDelete";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
-import RecipeDetail from "~/app/_components/recipe/RecipeDetail";
+import RecipeDetail, {
+  type RecipeViewMode,
+} from "~/app/_components/recipe/RecipeDetail";
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { PageHero } from "~/components/layouts/page-hero";
 import { RouteErrorComponent } from "~/components/route-error";
@@ -21,9 +23,13 @@ import { useTRPC } from "~/trpc/react";
 
 const searchSchema = z.object({
   edit: z.boolean().optional().catch(undefined),
+  view: z
+    .enum(["magazine", "nyt", "table", "charts"])
+    .optional()
+    .catch(undefined),
 });
 
-const searchDefaults = { edit: undefined } as const;
+const searchDefaults = { edit: undefined, view: undefined } as const;
 
 export const Route = createFileRoute("/_authenticated/recipes/$id")({
   ssr: false,
@@ -47,8 +53,20 @@ export const Route = createFileRoute("/_authenticated/recipes/$id")({
 
 function RecipeDetailPage() {
   const { id } = Route.useParams();
-  const { edit: isEditing } = Route.useSearch();
+  const { edit: isEditing, view } = Route.useSearch();
   const navigate = useNavigate();
+
+  const recipeView: RecipeViewMode = view ?? "magazine";
+  const setRecipeView = (next: RecipeViewMode) => {
+    // Keep the default ("magazine") out of the URL for clean links.
+    navigate({
+      to: ".",
+      search: (prev) => ({
+        ...prev,
+        view: next === "magazine" ? undefined : next,
+      }),
+    });
+  };
   const api = useTRPC();
 
   const { data: recipe } = useSuspenseQuery(
@@ -102,7 +120,11 @@ function RecipeDetailPage() {
       {isEditing ? (
         <EditRecipeForm recipe={recipe} onCancel={stopEditing} />
       ) : (
-        <RecipeDetail recipe={recipe} />
+        <RecipeDetail
+          recipe={recipe}
+          view={recipeView}
+          onViewChange={setRecipeView}
+        />
       )}
 
       <DeleteDialog />

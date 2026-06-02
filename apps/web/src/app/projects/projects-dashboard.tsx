@@ -18,7 +18,10 @@ import {
   EmptyTitle,
 } from "~/components/ui/empty";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  ViewSwitcher,
+  type ViewSwitcherOption,
+} from "~/components/ui/view-switcher";
 import { formatCurrency } from "~/lib/utils";
 import { dedupe } from "~/misc/array-helpers";
 import type {
@@ -86,6 +89,15 @@ const TaskStatusBoard = lazy(() =>
     default: m.TaskStatusBoard,
   })),
 );
+
+type DashboardView = "overview" | "charts" | "data" | "gallery";
+
+const DASHBOARD_VIEW_OPTIONS: ViewSwitcherOption<DashboardView>[] = [
+  { value: "overview", label: "Overview" },
+  { value: "charts", label: "Charts" },
+  { value: "data", label: "Data" },
+  { value: "gallery", label: "Gallery" },
+];
 
 export function ProjectsDashboard() {
   const api = useTRPC();
@@ -158,6 +170,7 @@ function DashboardContent({
   filters: Filters;
   onFiltersChange: (f: Filters) => void;
 }) {
+  const [view, setView] = useState<DashboardView>("overview");
   const availableStatuses = useMemo(
     () =>
       dedupe(data.projects.map((p) => p.status).filter(Boolean) as string[]),
@@ -219,15 +232,15 @@ function DashboardContent({
 
       <NeedsAttention projects={projects} tasks={tasks} purchases={purchases} />
 
-      <Tabs defaultValue="overview">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="charts">Charts</TabsTrigger>
-          <TabsTrigger value="data">Data</TabsTrigger>
-          <TabsTrigger value="gallery">Gallery</TabsTrigger>
-        </TabsList>
+      <div className="space-y-4">
+        <ViewSwitcher
+          ariaLabel="Dashboard view"
+          options={DASHBOARD_VIEW_OPTIONS}
+          value={view}
+          onValueChange={setView}
+        />
 
-        <TabsContent value="overview">
+        {view === "overview" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <div className="space-y-6 pt-4">
               <div className="grid gap-6 lg:grid-cols-2">
@@ -269,9 +282,9 @@ function DashboardContent({
               </section>
             </div>
           </Suspense>
-        </TabsContent>
+        )}
 
-        <TabsContent value="charts">
+        {view === "charts" && (
           <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
             <div className="space-y-6 pt-4">
               <section className="space-y-3">
@@ -328,9 +341,9 @@ function DashboardContent({
               </section>
             </div>
           </Suspense>
-        </TabsContent>
+        )}
 
-        <TabsContent value="data">
+        {view === "data" && (
           <div className="space-y-6 pt-4">
             <section className="space-y-4">
               <h2 className="font-heading font-semibold text-xl">Projects</h2>
@@ -347,14 +360,14 @@ function DashboardContent({
               <PurchaseList purchases={purchases} />
             </section>
           </div>
-        </TabsContent>
+        )}
 
-        <TabsContent value="gallery">
+        {view === "gallery" && (
           <div className="pt-4">
             <ProjectCards projects={projects} />
           </div>
-        </TabsContent>
-      </Tabs>
+        )}
+      </div>
     </div>
   );
 }

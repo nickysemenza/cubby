@@ -1,5 +1,4 @@
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useId, useMemo, useState } from "react";
 import { type NodeRendererProps, Tree } from "react-arborist";
@@ -8,7 +7,7 @@ import { Badge } from "~/components/ui/badge";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { EntityIcon } from "~/entities/entities";
-import { useTRPC } from "~/trpc/react";
+import { useLocationTree } from "~/hooks/useLocationTree";
 import { LocationIcon } from "../locations/location-icons";
 
 // Tree node types for react-arborist
@@ -111,8 +110,7 @@ export const LocationTree = ({ data }: LocationTreeProps) => {
 
 /** Data-fetching wrapper - fetches locations via tRPC and renders LocationTree */
 const LocationTreeView = () => {
-  const api = useTRPC();
-  const locations = useQuery(api.location.makeTree.queryOptions());
+  const locations = useLocationTree();
 
   if (!locations.data) return null;
 

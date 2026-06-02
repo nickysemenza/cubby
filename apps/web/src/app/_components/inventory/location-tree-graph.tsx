@@ -1,10 +1,9 @@
 import { type LocationId, unsafeLocationId } from "@cubby/schemas/identifiers";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
-import { useQuery } from "@tanstack/react-query";
 import * as d3Hierarchy from "d3-hierarchy";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EntityPillLink } from "~/app/_components/EntityPill";
-import { useTRPC } from "~/trpc/react";
+import { useLocationTree } from "~/hooks/useLocationTree";
 
 interface TreeNode {
   name: string;
@@ -23,8 +22,7 @@ function transformToTreeNode(location: InfLocation): TreeNode {
 }
 
 export default function LocationTreeGraph() {
-  const api = useTRPC();
-  const locations = useQuery(api.location.makeTree.queryOptions());
+  const locations = useLocationTree();
   const data = locations.data;
 
   const treeData = useMemo(() => {

@@ -58,7 +58,12 @@ export const DetailPage: FC<DetailPageProps> = ({
       <div className="grid gap-3 sm:gap-6 md:grid-cols-2">
         {/* Image card — desktop only, first in grid */}
         {!isMobile && heroImages && heroImages.length > 0 && (
-          <EntityHero images={heroImages} />
+          <div
+            className="fade-in slide-in-from-bottom-2 animate-in"
+            style={{ animationFillMode: "both" }}
+          >
+            <EntityHero images={heroImages} />
+          </div>
         )}
         {sections.map((section, index) => (
           <Card
