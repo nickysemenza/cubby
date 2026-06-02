@@ -1,0 +1,89 @@
+[
+  {
+    "meta": {
+      "title": "Apple Galette",
+      "description": "A rustic free-form tart that forgives an imperfect crust.",
+      "recipe_yield": "Makes one 10-inch galette",
+      "times": { "active": "30 minutes", "total": "2 hours" },
+      "equipment": ["rimmed baking sheet", "rolling pin"],
+      "notes": [
+        "Do Ahead: the dough can be made up to 2 days ahead.",
+        "Serve with crème fraîche."
+      ],
+      "category": "Desserts",
+      "page": "212"
+    },
+    "sections": [
+      {
+        "name": "For the crust",
+        "ingredients": ["1 recipe The Only Piecrust (this page)"],
+        "instructions": ["Roll the dough into a 12-inch round."]
+      },
+      {
+        "name": "For the filling",
+        "ingredients": [
+          "3 large apples, peeled and thinly sliced",
+          "1/3 cup sugar",
+          "1 tablespoon all-purpose flour"
+        ],
+        "instructions": [
+          "Toss the apples with the sugar and flour.",
+          "Mound the filling in the center, leaving a 2-inch border.",
+          "Fold the border over and bake at 400°F until golden."
+        ]
+      }
+    ],
+    "source": "smitten-kitchen.epub",
+    "url": "smitten-kitchen.epub#OEBPS/galette.xhtml",
+    "references": [
+      {
+        "title": "The Only Piecrust",
+        "line": "1 recipe The Only Piecrust (this page)",
+        "confidence": "title_match"
+      }
+    ]
+  },
+  {
+    "meta": {
+      "title": "The Only Piecrust"
+    },
+    "sections": [
+      {
+        "ingredients": [
+          "2 1/2 cups all-purpose flour",
+          "1 cup cold unsalted butter, cubed",
+          "1 teaspoon salt"
+        ],
+        "instructions": [
+          "Pulse the flour and salt, then cut in the butter.",
+          "Add ice water until the dough just holds together."
+        ]
+      }
+    ],
+    "source": "smitten-kitchen.epub",
+    "url": "smitten-kitchen.epub#OEBPS/piecrust.xhtml",
+    "references": []
+  },
+  {
+    "meta": {
+      "title": "Weeknight Tomato Soup",
+      "recipe_yield": "Serves 4",
+      "times": { "total": "25 minutes" }
+    },
+    "sections": [
+      {
+        "ingredients": [
+          "2 tablespoons olive oil",
+          "1 onion, diced",
+          "1 (28-ounce) can whole peeled tomatoes"
+        ],
+        "instructions": [
+          "Sweat the onion, add the tomatoes, simmer, and blend."
+        ]
+      }
+    ],
+    "source": "smitten-kitchen.epub",
+    "url": "smitten-kitchen.epub#OEBPS/soup.xhtml",
+    "references": []
+  }
+]

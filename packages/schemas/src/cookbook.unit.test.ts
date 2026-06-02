@@ -1,7 +1,25 @@
 import { describe, expect, test } from "vitest";
+import cookbookSample from "./__fixtures__/cookbook.sample.json";
 import { cookbookRecipesSchema } from "./cookbook";
 
 describe("cookbookRecipesSchema", () => {
+  // Drift alarm for the unspoken syntax agreement with ../ingredient-parser.
+  // `cookbook.sample.json` is a faithful `food-cli scrape-epub <book>.epub --json`
+  // payload (the `recipe-epub` crate's `Vec<CookbookRecipe>`). If the Rust output
+  // shape changes, regenerate the fixture and update `cookbook.ts` to match:
+  //   cargo run -p food-cli -- scrape-epub <book>.epub --json > \
+  //     packages/schemas/src/__fixtures__/cookbook.sample.json
+  test("accepts a real food-cli cookbook JSON payload", () => {
+    const result = cookbookRecipesSchema.safeParse(cookbookSample);
+
+    expect(result.success).toBe(true);
+    // Spot-check the shape survived: named sections, metadata, and a resolved
+    // cross-recipe reference all round-trip.
+    expect(result.data?.[0]?.meta.title).toBe("Apple Galette");
+    expect(result.data?.[0]?.sections[0]?.name).toBe("For the crust");
+    expect(result.data?.[0]?.references[0]?.confidence).toBe("title_match");
+  });
+
   test("accepts a food-cli --json array (instructions default to [])", () => {
     const result = cookbookRecipesSchema.safeParse([
       {
