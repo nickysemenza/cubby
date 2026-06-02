@@ -356,23 +356,24 @@
     Visual depth utilities - gradients and textures for atmosphere
   */
 
-  /* Gradient mesh background - subtle colorful atmosphere */
+  /* Gradient mesh background - subtle colorful atmosphere.
+     Fixed + full-bleed so the radial blooms fade out softly against the
+     viewport instead of clipping to a hard edge at the content container. */
   .gradient-mesh {
     position: relative;
   }
   .gradient-mesh::before {
     content: "";
-    position: absolute;
+    position: fixed;
     inset: 0;
-    background-color: var(--background);
     background-image:
-      radial-gradient(at 40% 20%, var(--highlight) 0px, transparent 50%),
-      radial-gradient(at 80% 0%, var(--subtle) 0px, transparent 50%),
-      radial-gradient(at 0% 50%, var(--glow) 0px, transparent 50%),
-      radial-gradient(at 80% 80%, var(--plum) 0px, transparent 40%);
-    opacity: 0.12;
+      radial-gradient(at 30% 0%, var(--highlight) 0px, transparent 45%),
+      radial-gradient(at 85% 5%, var(--subtle) 0px, transparent 45%),
+      radial-gradient(at 0% 30%, var(--glow) 0px, transparent 40%),
+      radial-gradient(at 95% 60%, var(--plum) 0px, transparent 35%);
+    opacity: 0.1;
     pointer-events: none;
-    z-index: 0;
+    z-index: -1;
   }
   .gradient-mesh > * {
     position: relative;
