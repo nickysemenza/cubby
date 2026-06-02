@@ -1,5 +1,10 @@
+import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import { unsafeIngredientId, unsafeUserId } from "@cubby/schemas/identifiers";
+import {
+  unsafeIngredientId,
+  unsafeRecipeId,
+  unsafeUserId,
+} from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { and, eq } from "drizzle-orm";
 import { buildTestDB } from "tooling/test-setup";
@@ -10,6 +15,8 @@ import { getDb } from "./database-helpers";
 import { createIngredient } from "./ingredient";
 import {
   getCookbookRecipeTitles,
+  getRecipeByID,
+  insertCookbookRecipe,
   upsertCookbookRecipe,
   upsertRecipe,
 } from "./recipe";
@@ -187,5 +194,72 @@ describe("upsertCookbookRecipe", () => {
 
     const titles = await getCookbookRecipeTitles(db, "Book A");
     expect(titles.sort()).toEqual(["Pancakes", "Waffles"]);
+  });
+
+  // A raw cookbook CompactRecipe (ingredient lines are strings, parsed server-side).
+  const compact = (name: string, ingredients: string[]): CompactRecipe => ({
+    name,
+    sections: [{ name: null, ingredients, instructions: [] }],
+  });
+
+  const piecrustRef = {
+    title: "The Only Piecrust",
+    line: "1 recipe The Only Piecrust",
+    confidence: "title_match" as const,
+  };
+
+  it("links a cross-recipe reference as a sub-recipe (two-pass)", async () => {
+    // Pass 1: both recipes imported flat (no references resolved yet).
+    const piecrust = await insertCookbookRecipe(
+      compact("The Only Piecrust", ["2 cups flour"]),
+      "Book A",
+      [],
+      db,
+      TEST_ACTOR,
+    );
+    await insertCookbookRecipe(
+      compact("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
+      "Book A",
+      [],
+      db,
+      TEST_ACTOR,
+    );
+
+    // Pass 2: re-import the galette with its reference → links to the piecrust.
+    const galette = await insertCookbookRecipe(
+      compact("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
+      "Book A",
+      [piecrustRef],
+      db,
+      TEST_ACTOR,
+    );
+
+    const full = await getRecipeByID(db, unsafeRecipeId(galette.id));
+    const ingredients = full!.sections.flatMap((s) => s.ingredients);
+    const linked = ingredients.find((ing) => ing.type === "recipe");
+    expect(linked).toBeDefined();
+    expect(linked?.recipe?.id).toBe(piecrust.id);
+    // The non-reference line ("3 apples") stays a flat ingredient.
+    expect(ingredients.some((ing) => ing.type === "ingredient")).toBe(true);
+  });
+
+  it("leaves a reference whose target isn't imported as a flat ingredient", async () => {
+    const galette = await insertCookbookRecipe(
+      compact("Galette", ["1 recipe Missing Dough"]),
+      "Book A",
+      [
+        {
+          title: "Missing Dough",
+          line: "1 recipe Missing Dough",
+          confidence: "title_match",
+        },
+      ],
+      db,
+      TEST_ACTOR,
+    );
+
+    const full = await getRecipeByID(db, unsafeRecipeId(galette.id));
+    const ingredients = full!.sections.flatMap((s) => s.ingredients);
+    expect(ingredients.every((ing) => ing.type === "ingredient")).toBe(true);
   });
 });

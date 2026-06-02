@@ -5,6 +5,7 @@
 
 import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import type { RecipeRef } from "@cubby/schemas/cookbook";
 import { type RecipeId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -33,7 +34,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
-  upsertCookbookRecipeFromCompact,
+  upsertCookbookRecipeWithRefs,
   upsertRecipeFromCompact,
 } from "~/server/repo/compactrecipe";
 import {
@@ -114,6 +115,29 @@ export const getCookbookRecipeTitles = async (
   return rows.map((r) => r.name);
 };
 
+// Normalize a title for cross-recipe reference matching (trim + lowercase).
+const normalizeTitle = (title: string): string => title.trim().toLowerCase();
+
+/**
+ * Map of normalized title → recipe id for a book's non-deleted recipes. Used to
+ * resolve cookbook cross-references (`RecipeRef.title`) to the recipe they point
+ * at. A whole book is bounded, so one query over all its recipes is fine.
+ */
+export const getCookbookRecipeIdsByTitle = async (
+  db: Database,
+  book: string,
+): Promise<Map<string, string>> => {
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(
+      eq(recipe.SourceType, "Book"),
+      eq(recipe.SourceData, book),
+      notDeleted(recipe),
+    ),
+    columns: { id: true, name: true },
+  });
+  return new Map(rows.map((r) => [normalizeTitle(r.name), r.id]));
+};
+
 /**
  * Get a recipe by shortcode.
  */
@@ -143,15 +167,26 @@ export const insertCompactRecipe = (
 /**
  * Insert a recipe extracted from an EPUB cookbook, scoped to its book so
  * re-imports upsert by (book, title). See {@link upsertCookbookRecipe}.
+ *
+ * `references` are cross-recipe pointers (recipe-epub's `resolve_references`):
+ * any ingredient line matching a reference whose target recipe already exists in
+ * the book is linked as a sub-recipe instead of a flat ingredient. Pass empty on
+ * the first pass; re-import with references once all the book's recipes exist.
  */
 export const insertCookbookRecipe = (
   recipeInput: CompactRecipe,
   bookName: string,
+  references: RecipeRef[],
   db: Database,
   actor: ActorContext,
 ) => {
-  const parsed = parseCompactRecipe(recipeInput);
-  return upsertCookbookRecipeFromCompact(parsed, bookName, db, actor);
+  return upsertCookbookRecipeWithRefs(
+    recipeInput,
+    bookName,
+    references,
+    db,
+    actor,
+  );
 };
 
 /**

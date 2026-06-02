@@ -17,6 +17,7 @@ import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
 import { getErrorMessage } from "~/lib/error-utils";
+import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
@@ -88,6 +89,19 @@ export function CookbookImport() {
     [existingTitles],
   );
 
+  // A cross-recipe reference only links if its target recipe will exist after
+  // import: either it's a selected recipe in this batch, or already in the book.
+  const linkableTitles = useMemo(() => {
+    const titles = new Set<string>();
+    for (const t of existingTitleSet) titles.add(t.trim().toLowerCase());
+    if (recipes) {
+      for (const i of selected) {
+        titles.add(recipes[i].meta.title.trim().toLowerCase());
+      }
+    }
+    return titles;
+  }, [recipes, selected, existingTitleSet]);
+
   // Parse + validate cookbook JSON from either an uploaded file or pasted text
   // (e.g. `food-cli scrape-epub book.epub --json | pbcopy`).
   const loadFromText = (text: string) => {
@@ -139,15 +153,22 @@ export function CookbookImport() {
   const runImport = async () => {
     if (!recipes || !book.trim()) return;
     setImporting(true);
+    const bookName = book.trim();
+    const indices = [...selected].sort((a, b) => a - b);
+
+    // Pass 1: create/update every selected recipe with flat ingredients.
     // Sequential to keep ingredient find-or-create races minimal.
-    for (const i of [...selected].sort((a, b) => a - b)) {
+    const succeeded = new Set<number>();
+    for (const i of indices) {
       setResults((prev) => new Map(prev).set(i, { status: "importing" }));
       try {
         const { id } = await insertCookbook.mutateAsync({
           recipe: compacts[i],
-          book: book.trim(),
+          book: bookName,
+          references: [],
         });
         setResults((prev) => new Map(prev).set(i, { status: "done", id }));
+        succeeded.add(i);
       } catch (error) {
         setResults((prev) =>
           new Map(prev).set(i, {
@@ -157,6 +178,23 @@ export function CookbookImport() {
         );
       }
     }
+
+    // Pass 2: every selected recipe now has an id, so re-import the ones that
+    // reference others — those lines link to the existing book recipes instead
+    // of creating flat ingredients. Linking is best-effort (keep pass-1 result).
+    for (const i of indices) {
+      if (!succeeded.has(i) || recipes[i].references.length === 0) continue;
+      try {
+        await insertCookbook.mutateAsync({
+          recipe: compacts[i],
+          book: bookName,
+          references: recipes[i].references,
+        });
+      } catch {
+        // ignore — the recipe is already imported; only the links failed
+      }
+    }
+
     setImporting(false);
     toast.success("Cookbook import finished");
   };
@@ -262,6 +300,7 @@ export function CookbookImport() {
                 onToggle={() => toggle(i)}
                 result={results.get(i)}
                 alreadyImported={existingTitleSet.has(recipe.meta.title.trim())}
+                linkableTitles={linkableTitles}
               />
             ))}
           </div>
@@ -285,6 +324,7 @@ function RecipeCard({
   onToggle,
   result,
   alreadyImported,
+  linkableTitles,
 }: {
   recipe: CookbookRecipe;
   compact: CompactRecipe;
@@ -292,6 +332,7 @@ function RecipeCard({
   onToggle: () => void;
   result: ImportResult | undefined;
   alreadyImported: boolean;
+  linkableTitles: Set<string>;
 }) {
   // Ingredient names across the whole recipe, so instructions in one section can
   // highlight ingredients defined in another (matches the recipe-form preview).
@@ -343,6 +384,35 @@ function RecipeCard({
         <ImportStatus result={result} />
       </CardHeader>
       <CardContent>
+        {recipe.references.length > 0 && (
+          <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
+            <span className="text-muted-foreground">Uses:</span>
+            {recipe.references.map((ref) => {
+              const linkable = linkableTitles.has(
+                ref.title.trim().toLowerCase(),
+              );
+              return (
+                <span
+                  key={ref.title}
+                  title={
+                    linkable
+                      ? `Will link (${ref.confidence})`
+                      : "Target recipe not in this import — stays an ingredient"
+                  }
+                  className={cn(
+                    "rounded-sm px-1.5 py-0.5 font-medium",
+                    linkable
+                      ? "bg-accent/20 text-accent-foreground"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  → {ref.title}
+                  {!linkable && " (not imported)"}
+                </span>
+              );
+            })}
+          </div>
+        )}
         <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
           {/* Ingredients */}
           <div className="space-y-2">

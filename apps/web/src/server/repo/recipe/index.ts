@@ -9,6 +9,7 @@
 export {
   createRecipe,
   deleteRecipes,
+  getCookbookRecipeIdsByTitle,
   getCookbookRecipeTitles,
   getRecipeByID,
   getRecipeByShortcode,
@@ -23,3 +24,4 @@ export {
 export { dbRecipeToAPIShallow } from "./helpers";
 // Analytics and queries
 export { getAllTags, getIngredientCooccurrence } from "./queries";
+export { findOrCreateRecipeLinkIngredient } from "./update-helpers";

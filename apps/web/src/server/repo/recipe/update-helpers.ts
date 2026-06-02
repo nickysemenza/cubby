@@ -30,6 +30,40 @@ import type { ExistingRecipeWithSections } from "./internal-types";
  * For regular ingredients, returns the ingredient ID.
  * For recipe references, finds or creates an ingredient pointing to the recipe.
  */
+/**
+ * Find or create the synthetic `ingredient` row that points at a recipe (the
+ * "sub-recipe" link). One per referenced recipe; named `Recipe: <name>`.
+ * Rendering auto-detects it as a `type:"recipe"` section ingredient via the
+ * `ingredient.recipeId` relation. Shared by `processIngredient` and the cookbook
+ * import's reference linking.
+ */
+export const findOrCreateRecipeLinkIngredient = async (
+  tx: DrizzleTransaction,
+  recipeId: string,
+): Promise<string> => {
+  const existing = await tx.query.ingredient.findFirst({
+    where: eq(ingredient.recipeId, recipeId),
+  });
+  if (existing) {
+    return existing.id;
+  }
+
+  const recipeRecord = await tx.query.recipe.findFirst({
+    where: eq(recipe.id, recipeId),
+    columns: { name: true },
+  });
+  if (!recipeRecord) {
+    throw new Error(`Recipe with ID ${recipeId} not found`);
+  }
+
+  const newIngredient = await insertAndReturn(tx, ingredient, {
+    name: `Recipe: ${recipeRecord.name}`,
+    aliases: [],
+    recipeId,
+  });
+  return newIngredient.id;
+};
+
 const processIngredient = async (
   tx: DrizzleTransaction,
   ingredientInput: z.infer<typeof recipeIngredientInput>,
@@ -46,39 +80,11 @@ const processIngredient = async (
   }
 
   // For recipe types, find or create an ingredient that points to the recipe
-  // Find any existing ingredient that already points to this recipe
-  const recipeIngredient = await tx.query.ingredient.findFirst({
-    where: eq(ingredient.recipeId, ingredientInput.recipeId),
-  });
-
-  // If found, use the existing ingredient
-  if (recipeIngredient) {
-    return {
-      ingredientId: recipeIngredient.id,
-      amounts: ingredientInput.amounts,
-    };
-  }
-
-  // Otherwise, create a new ingredient that points to the recipe
-  // First get the recipe name
-  const recipeRecord = await tx.query.recipe.findFirst({
-    where: eq(recipe.id, ingredientInput.recipeId),
-    columns: { name: true },
-  });
-
-  if (!recipeRecord) {
-    throw new Error(`Recipe with ID ${ingredientInput.recipeId} not found`);
-  }
-
-  // Create a new ingredient that points to this recipe
-  const newIngredient = await insertAndReturn(tx, ingredient, {
-    name: `Recipe: ${recipeRecord.name}`,
-    aliases: [],
-    recipeId: ingredientInput.recipeId,
-  });
-
   return {
-    ingredientId: newIngredient.id,
+    ingredientId: await findOrCreateRecipeLinkIngredient(
+      tx,
+      ingredientInput.recipeId,
+    ),
     amounts: ingredientInput.amounts,
   };
 };

@@ -32,6 +32,17 @@ const cookbookRecipeSection = z.object({
   instructions: z.array(z.string()).default([]),
 });
 
+// A detected reference from one recipe to another in the same cookbook
+// (recipe-epub's `resolve_references()`): the verbatim ingredient `line` points
+// at another recipe's `title`. `linked` = confirmed by an EPUB anchor href;
+// `title_match` = the title appears in the line.
+export const recipeRefSchema = z.object({
+  title: z.string(),
+  line: z.string(),
+  confidence: z.enum(["linked", "title_match"]),
+});
+export type RecipeRef = z.infer<typeof recipeRefSchema>;
+
 export const cookbookRecipeSchema = z.object({
   meta: cookbookRecipeMeta,
   sections: z.array(cookbookRecipeSection),
@@ -39,6 +50,9 @@ export const cookbookRecipeSchema = z.object({
   source: z.string().optional(),
   // Synthetic `source#doc_path`, not a real URL; provenance only.
   url: z.string().optional(),
+  // Cross-recipe references (other recipes in the same book this one uses as
+  // ingredients). Defaults to empty for older JSON without the field.
+  references: z.array(recipeRefSchema).default([]),
 });
 export type CookbookRecipe = z.infer<typeof cookbookRecipeSchema>;
 

@@ -7,6 +7,7 @@
  */
 
 import { compactRecipeSchema } from "@cubby/schemas/codec";
+import { recipeRefSchema } from "@cubby/schemas/cookbook";
 import { type RecipeId, recipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientCooccurrence,
@@ -92,13 +93,24 @@ const insertCompact = protectedProcedure
 // Import one recipe extracted from an EPUB cookbook, scoped to its book so
 // re-imports upsert by (book, title) and stamp "Book" provenance.
 const insertCookbook = protectedProcedure
-  .input(z.object({ recipe: compactRecipeSchema, book: z.string().min(1) }))
+  .input(
+    z.object({
+      recipe: compactRecipeSchema,
+      book: z.string().min(1),
+      // Cross-recipe references; on a second pass, lines matching these link to
+      // the referenced book recipe instead of creating a flat ingredient.
+      references: z.array(recipeRefSchema).default([]),
+    }),
+  )
   .output(z.object({ id: z.uuid() }))
   .mutation(async ({ ctx, input }) => {
-    return await insertCookbookRecipe(input.recipe, input.book, ctx.db, {
-      ...ctx.actorContext,
-      source: "epub_import",
-    });
+    return await insertCookbookRecipe(
+      input.recipe,
+      input.book,
+      input.references,
+      ctx.db,
+      { ...ctx.actorContext, source: "epub_import" },
+    );
   });
 // Titles already imported from a given book, so the import preview can flag
 // recipes a re-import would update.
