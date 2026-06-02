@@ -45,7 +45,7 @@ export const showAmountAndPrice = (
 
 /**
  * Safely formats a measure, returning error string on failure.
- * Preserves "each" unit - WASM normalizes to "whole" but we keep user's input.
+ * Re-attaches "each" - WASM renders bare counts (Unit::Whole) unit-less.
  */
 export const tryFormatAmount = (amount: WAmount): string => {
   try {
@@ -56,9 +56,10 @@ export const tryFormatAmount = (amount: WAmount): string => {
     if (money) {
       return `$${money[1]}`;
     }
-    // Preserve "each" - WASM normalizes to "whole" but we want to keep user's input
-    if (amount.unit === "each" && formatted.includes("whole")) {
-      return formatted.replace(/\bwhole\b/g, "each");
+    // "each" parses to Unit::Whole, which renders unit-less ("3", "2 - 4");
+    // re-attach the user's "each" so it stays visible ("3 each", "2 - 4 each").
+    if (amount.unit === "each") {
+      return `${formatted} each`;
     }
     return formatted;
   } catch (error) {

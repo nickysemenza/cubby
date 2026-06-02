@@ -75,14 +75,11 @@ test("recipe utils", () => {
 });
 
 /**
- * CHARACTERIZATION — documents CURRENT, intentionally-wrong behavior: a unitless
- * yield renders the parser's "whole" sentinel ("18 whole"). The fix is to drop
- * the unit when it equals "whole" (and flip the assertion below), alongside the
- * deferred ingredient-parser work. See the plan.
+ * A unitless yield carries the parser's "whole" sentinel; formatYield drops it
+ * so "18 whole" renders as "18". Real units render normally.
  */
-test('formatYield currently leaks the "whole" unit', () => {
-  // TODO(whole): should become "18" once we drop the "whole" unit.
-  expect(formatYield({ value: 18, unit: "whole" })).toEqual("18 whole");
+test("formatYield drops the bare-count 'whole' unit", () => {
+  expect(formatYield({ value: 18, unit: "whole" })).toEqual("18");
   // Real units render normally:
   expect(formatYield({ value: 12, unit: "servings" })).toEqual("12 servings");
 });
