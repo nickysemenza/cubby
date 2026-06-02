@@ -203,21 +203,25 @@ function DevtoolsWrapper() {
   }
 
   // Wrapped in a Fragment so the JSX is still valid after
-  // @tanstack/devtools-vite strips <TanStackDevtools/> from production builds.
+  // @tanstack/devtools-vite strips <TanStackDevtools/> from production builds
+  // (the stripped return collapses to `return (<></>);`, not `return ();`).
   return (
-    <TanStackDevtools
-      config={{
-        position: "bottom-right",
-        openHotkey: [],
-      }}
-      plugins={[
-        {
-          name: "Tanstack Router",
-          render: <TanStackRouterDevtoolsPanel />,
-        },
-        TanStackQueryDevtools,
-      ]}
-    />
+    // biome-ignore lint/complexity/noUselessFragments: load-bearing — removing it breaks the production build (see comment above).
+    <>
+      <TanStackDevtools
+        config={{
+          position: "bottom-right",
+          openHotkey: [],
+        }}
+        plugins={[
+          {
+            name: "Tanstack Router",
+            render: <TanStackRouterDevtoolsPanel />,
+          },
+          TanStackQueryDevtools,
+        ]}
+      />
+    </>
   );
 }
 
