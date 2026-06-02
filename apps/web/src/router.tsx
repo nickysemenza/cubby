@@ -22,18 +22,31 @@ export const getRouter = () => {
     defaultErrorComponent: RouteErrorComponent,
   });
 
-  // Initialize Sentry on client only
+  // Initialize Sentry on client only. Dev keeps error reporting AND tracing,
+  // but drops Replay and console-breadcrumb capture: those two are what turn a
+  // flood of console.error warnings (e.g. a React setState-in-render warning)
+  // into a 30s+ main-thread freeze — Replay serializes the DOM and captures
+  // every console call. Tracing is safe; it doesn't run per console.error.
   if (!router.isServer) {
+    const isProd = import.meta.env.PROD;
     Sentry.init({
       dsn: "https://a50b2f76dd1586f95cdd29cd13a6c0dc@o83311.ingest.us.sentry.io/4508775559135232",
       sendDefaultPii: true,
       tracesSampleRate: 1.0,
-      replaysSessionSampleRate: 0.1,
-      replaysOnErrorSampleRate: 1.0,
-      integrations: [
-        Sentry.tanstackRouterBrowserTracingIntegration(router),
-        Sentry.replayIntegration(),
-      ],
+      replaysSessionSampleRate: isProd ? 0.1 : 0,
+      replaysOnErrorSampleRate: isProd ? 1.0 : 0,
+      integrations: isProd
+        ? [
+            Sentry.tanstackRouterBrowserTracingIntegration(router),
+            Sentry.replayIntegration(),
+          ]
+        : [Sentry.tanstackRouterBrowserTracingIntegration(router)],
+      // Don't record console output as breadcrumbs in dev — capturing hundreds
+      // of warnings per second is the work that balloons into the freeze.
+      beforeBreadcrumb: isProd
+        ? undefined
+        : (breadcrumb) =>
+            breadcrumb.category === "console" ? null : breadcrumb,
     });
   }
 

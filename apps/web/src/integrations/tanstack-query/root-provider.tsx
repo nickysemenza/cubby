@@ -31,6 +31,16 @@ const Link = ({
   </TanStackLink>
 );
 
+// React Query fires these cache error callbacks from inside its notify cycle,
+// which can land during React's render/commit phase (e.g. a background query
+// rejecting while a route is still mounting). Calling sonner's toast() there
+// updates the <Toaster> store mid-mount and triggers React's "Can't perform a
+// state update on a component that hasn't mounted yet" warning. Deferring to a
+// macrotask guarantees the toast fires after the current commit.
+function deferToastError(error: unknown) {
+  setTimeout(() => toast.error(getErrorMessage(error)), 0);
+}
+
 function getUrl() {
   const base = (() => {
     if (typeof window !== "undefined") return "";
@@ -83,12 +93,12 @@ export function getContext() {
           details.code === "UNAUTHORIZED" ||
           details.code === "BAD_REQUEST";
         if (isExpectedError) return;
-        toast.error(getErrorMessage(error));
+        deferToastError(error);
       },
     }),
     mutationCache: new MutationCache({
       onError: (error) => {
-        toast.error(getErrorMessage(error));
+        deferToastError(error);
       },
     }),
   });
