@@ -40,8 +40,10 @@ export function HeaderFilter<TData>({
     }
   }
 
+  // Dense filter row: flatten the global chunky input treatment (drop the 2px
+  // border + offset shadow) so dozens of tiny filters don't read as heavy boxes.
   const inputClassName =
-    "h-5 text-2xs px-1.5 bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
+    "h-5 text-2xs px-1.5 border shadow-none bg-background/80 border-border/60 placeholder:text-muted-foreground/50 focus-visible:ring-1 focus-visible:ring-primary/40 focus-visible:border-primary/40";
 
   // Enrich select options with faceted counts
   // biome-ignore lint/correctness/useExhaustiveDependencies: column.getFacetedUniqueValues is stable API

@@ -5,14 +5,59 @@ import { cn } from "~/lib/utils";
 function Card({
   className,
   size = "default",
+  emphasis = "soft",
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: React.ComponentProps<"div"> & {
+  size?: "default" | "sm";
+  /** "chunky" swaps the soft ring for a tactile 2px border + offset shadow. */
+  emphasis?: "soft" | "chunky";
+}) {
   return (
     <div
       data-slot="card"
       data-size={size}
+      data-emphasis={emphasis}
       className={cn(
-        "ring-foreground/10 bg-card text-card-foreground group/card flex flex-col gap-4 overflow-hidden rounded-lg py-4 text-xs/relaxed ring-1 has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
+        "bg-card text-card-foreground group/card flex flex-col gap-4 overflow-hidden rounded-lg py-4 text-xs/relaxed has-[>img:first-child]:pt-0 data-[size=sm]:gap-3 data-[size=sm]:py-3 *:[img:first-child]:rounded-t-lg *:[img:last-child]:rounded-b-lg",
+        emphasis === "chunky"
+          ? "border-[var(--border-chunky)] border-2 shadow-[var(--shadow-chunky)]"
+          : "ring-foreground/10 ring-1",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/**
+ * A clickable, radio-style card for "pick one of these" surfaces (e.g. choosing
+ * a location to move items into). Selected = thick foreground border + offset
+ * shadow; unselected = a thin inner ring. The border width is reserved on both
+ * states (transparent when unselected) so selecting never shifts layout.
+ */
+function SelectableCard({
+  className,
+  selected = false,
+  size = "default",
+  ...props
+}: React.ComponentProps<"button"> & {
+  selected?: boolean;
+  size?: "default" | "sm";
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      data-slot="card"
+      data-size={size}
+      data-selected={selected}
+      className={cn(
+        "bg-card text-card-foreground group/card ease-cozy flex w-full flex-col gap-1 overflow-hidden rounded-lg px-4 py-3 text-left text-xs/relaxed transition-all outline-none",
+        "focus-visible:ring-ring/40 focus-visible:ring-2",
+        selected
+          ? "border-[var(--border-chunky)] border-2 shadow-[var(--shadow-chunky)]"
+          : "hover:border-foreground/40 border-2 border-transparent ring-1 ring-border/80 ring-inset",
         className,
       )}
       {...props}
@@ -97,4 +142,5 @@ export {
   CardAction,
   CardDescription,
   CardContent,
+  SelectableCard,
 };

@@ -37,9 +37,10 @@ function StatCard({
   return (
     <Link to={def.routes.list}>
       <Card
+        emphasis="chunky"
         className={cn(
-          "stat-card-glow group relative overflow-hidden p-3 transition-all duration-150",
-          "hover:-translate-y-0.5 hover:shadow-[var(--shadow-warm-lg)]",
+          "stat-card-glow group relative overflow-hidden p-3 transition-all duration-150 ease-cozy",
+          "hover:-translate-x-px hover:-translate-y-px hover:shadow-[var(--shadow-chunky-lg)]",
           "cursor-pointer border-l-4",
           "fade-in slide-in-from-bottom-2 animate-in",
           def.color.text.replace("text-", "border-l-"),
@@ -72,7 +73,7 @@ function StatCard({
                 {formatCount(count ?? 0)}
               </p>
             )}
-            <p className="mt-1 truncate text-muted-foreground text-xs">
+            <p className="mt-1 truncate font-mono text-muted-foreground text-xs">
               {def.pluralLabel}
             </p>
           </div>

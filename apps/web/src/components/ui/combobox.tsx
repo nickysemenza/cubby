@@ -62,9 +62,9 @@ export function FilterableCombobox({
         ref={triggerRef}
         className={cn(
           // Structure
-          "flex w-full items-center justify-between gap-1.5 rounded-md border px-2 h-7",
+          "flex w-full items-center justify-between gap-1.5 rounded-md border-2 px-2 h-7",
           // Colors & background
-          "border-input bg-input/20",
+          "border-[var(--border-chunky)] shadow-[var(--shadow-chunky-sm)] bg-input/20",
           "hover:bg-input/30",
           // Focus states
           "focus-visible:border-ring focus-visible:ring-ring/30 focus-visible:ring-[2px]",
@@ -111,7 +111,7 @@ export function FilterableCombobox({
               // Size constraints - match trigger width
               "w-(--anchor-width)",
               // Shape & depth
-              "rounded-md border border-border/50 shadow-lg",
+              "rounded-md border-2 border-[var(--border-chunky)] shadow-[var(--shadow-chunky)]",
               // Animation
               "data-open:animate-in data-closed:animate-out",
               "data-closed:fade-out-0 data-open:fade-in-0",

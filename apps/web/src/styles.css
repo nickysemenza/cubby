@@ -165,6 +165,19 @@
     0 20px 40px -8px rgba(58, 53, 48, 0.2),
     0 8px 16px -4px rgba(58, 53, 48, 0.12);
 
+  /* Chunky offset shadows - crisp zero-blur drop for the tactile, soft-
+     neobrutalist chrome (turbopuffer-style). Warm foreground, softened so it
+     reads as a gentle brown lift rather than a loud black slab. Used via
+     shadow-[var(--shadow-chunky)] arbitrary utilities. Two knobs tune the
+     whole "chunky" treatment app-wide: these offsets/alpha and --border-chunky. */
+  --shadow-chunky-sm: 1.5px 1.5px 0 0
+    oklch(from var(--brand-foreground) l c h / 0.5);
+  --shadow-chunky: 2px 2px 0 0 oklch(from var(--brand-foreground) l c h / 0.55);
+  --shadow-chunky-lg: 3px 3px 0 0
+    oklch(from var(--brand-foreground) l c h / 0.55);
+  /* Border for chunky chrome - a soft brown outline, not a stark black line. */
+  --border-chunky: oklch(from var(--brand-foreground) l c h / 0.55);
+
   /* Core colors - 3-step surface elevation: muted < paper(bg) < cream(card) */
   --background: var(--brand-paper);
   --foreground: var(--brand-foreground);
