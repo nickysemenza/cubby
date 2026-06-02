@@ -705,7 +705,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="font-medium text-lg">Recipe Sections</h3>
+          <h3 className="font-sans font-semibold text-foreground text-sm">
+            Recipe Sections
+          </h3>
         </div>
 
         {sectionFields.map((sectionField, sectionIndex) => (

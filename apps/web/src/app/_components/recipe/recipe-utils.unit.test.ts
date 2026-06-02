@@ -1,6 +1,10 @@
 import type { RecipeOut, SectionIngredient } from "@cubby/schemas/recipe";
 import { expect, test } from "vitest";
-import { getGlobalInstructionNumber, getIngredientName } from "./recipe-utils";
+import {
+  formatYield,
+  getGlobalInstructionNumber,
+  getIngredientName,
+} from "./recipe-utils";
 
 test("recipe utils", () => {
   const recipe: RecipeOut = {
@@ -68,4 +72,17 @@ test("recipe utils", () => {
   expect(si).toBeDefined();
   if (!si) return;
   expect(getIngredientName(si)).toEqual("flour-r");
+});
+
+/**
+ * CHARACTERIZATION — documents CURRENT, intentionally-wrong behavior: a unitless
+ * yield renders the parser's "whole" sentinel ("18 whole"). The fix is to drop
+ * the unit when it equals "whole" (and flip the assertion below), alongside the
+ * deferred ingredient-parser work. See the plan.
+ */
+test('formatYield currently leaks the "whole" unit', () => {
+  // TODO(whole): should become "18" once we drop the "whole" unit.
+  expect(formatYield({ value: 18, unit: "whole" })).toEqual("18 whole");
+  // Real units render normally:
+  expect(formatYield({ value: 12, unit: "servings" })).toEqual("12 servings");
 });

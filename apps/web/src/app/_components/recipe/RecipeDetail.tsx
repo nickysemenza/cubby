@@ -24,7 +24,7 @@ import EntityImageList from "../EntityImageList";
 import { NYTView } from "./NYTView";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipeTagList } from "./recipe-tag";
-import { getIngredientName } from "./recipe-utils";
+import { formatYield, getIngredientName } from "./recipe-utils";
 import { RecipeIngredientList } from "./recipeingredientlist";
 
 // Nivo + d3-hierarchy are heavy and only render in the "charts" view, so keep
@@ -82,7 +82,7 @@ const RecipeSummaryCard: React.FC<{
             <div>
               <div className="text-muted-foreground text-sm">Makes</div>
               <div className="font-medium text-lg">
-                {recipe.yield!.value} {recipe.yield!.unit}
+                {formatYield(recipe.yield!)}
               </div>
             </div>
           )}

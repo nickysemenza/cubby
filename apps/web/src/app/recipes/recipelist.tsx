@@ -20,7 +20,10 @@ import { useEntityPreview } from "../_components/hooks/useEntityPreview";
 import { useStableColumnState } from "../_components/hooks/useStableColumnState";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
-import { getIngredientName } from "../_components/recipe/recipe-utils";
+import {
+  formatYield,
+  getIngredientName,
+} from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 
 interface RecipeListProps {
@@ -85,7 +88,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         },
         cell: (info) => {
           const recipe = info.row.original;
-          if (recipe.yield) return `${recipe.yield.value} ${recipe.yield.unit}`;
+          if (recipe.yield) return formatYield(recipe.yield);
           if (recipe.servings) return `${recipe.servings} servings`;
           return <NoneState />;
         },

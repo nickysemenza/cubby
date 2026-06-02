@@ -75,7 +75,14 @@ export const ArrayFieldManager = <
   return (
     <div className={cn("space-y-4", className)}>
       <div className="flex items-center justify-between">
-        <h3 className={cn("font-medium text-lg", titleClassName)}>{title}</h3>
+        <h3
+          className={cn(
+            "font-sans font-semibold text-foreground text-sm",
+            titleClassName,
+          )}
+        >
+          {title}
+        </h3>
         <Button
           type="button"
           variant="outline"
