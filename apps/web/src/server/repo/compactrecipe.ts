@@ -1,6 +1,9 @@
-import type { CompactRecipe, ParsedCompactRecipe } from "@cubby/schemas/codec";
+import {
+  type ParsedCompactRecipe,
+  sanitizeSectionName,
+} from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { RecipeRef } from "@cubby/schemas/cookbook";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { unsafeIngredientId } from "@cubby/schemas/identifiers";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import { wasm } from "~/lib/wasm";
@@ -96,33 +99,39 @@ export const upsertRecipeFromCompact = async (
 };
 
 /**
- * Cookbook conversion that links cross-recipe references. Unlike
- * {@link convertParsedCompactToRecipeInput}, it works from the *raw*
- * `CompactRecipe` (so it can match `RecipeRef.line` against the verbatim
- * ingredient line) and, when a line references another recipe in the same book
- * that already exists, emits a recipe-linked ingredient instead of a flat one.
+ * Convert a raw `CookbookRecipe` (the parser's JSON shape) directly into a
+ * `RecipeCreateInput` — no `CompactRecipe` intermediary. Parses ingredient lines
+ * and the freeform yield via WASM, find-or-creates ingredients (memoized), and
+ * links cross-recipe references: when an ingredient `line` matches one of the
+ * recipe's `references` whose target title already exists in this book, it
+ * becomes a recipe-linked ingredient instead of a flat one.
  */
-const convertCookbookCompactToRecipeInput = async (
-  compact: CompactRecipe,
+const cookbookRecipeToRecipeInput = async (
+  cr: CookbookRecipe,
   book: string,
-  references: RecipeRef[],
   db: Database,
 ): Promise<RecipeCreateInput> => {
   const lineToTitle = new Map(
-    references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
+    cr.references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
   );
   const titleToId = await getCookbookRecipeIdsByTitle(db, book);
+
+  // Freeform yield ("Makes about 12") → structured, via the same Rust parser
+  // the web scraper uses. Omitted when unparseable.
+  const parsedYield = cr.meta.recipe_yield
+    ? wasm.parse_yield(cr.meta.recipe_yield)
+    : undefined;
 
   return await withTransaction(db, async (tx) => {
     const { resolvePlain, resolveLink } = makeIngredientResolvers(tx);
     return {
-      name: compact.name,
+      name: cr.meta.title,
       meta: { url: null },
-      yield: compact.recipe_yield ?? null,
-      servings: compact.servings ?? null,
+      yield: parsedYield?.recipe_yield ?? null,
+      servings: parsedYield?.servings ?? null,
       sections: await Promise.all(
-        compact.sections.map(async (section) => ({
-          name: section.name ?? null,
+        cr.sections.map(async (section) => ({
+          name: sanitizeSectionName(section.name),
           instructions: section.instructions.map((instruction) => ({
             instruction,
           })),
@@ -151,19 +160,13 @@ const convertCookbookCompactToRecipeInput = async (
   });
 };
 
-export const upsertCookbookRecipeWithRefs = async (
-  compact: CompactRecipe,
+export const upsertCookbookRecipeFromCookbook = async (
+  cr: CookbookRecipe,
   bookName: string,
-  references: RecipeRef[],
   db: Database,
   actor: ActorContext,
 ) => {
-  const recipeInput = await convertCookbookCompactToRecipeInput(
-    compact,
-    bookName,
-    references,
-    db,
-  );
+  const recipeInput = await cookbookRecipeToRecipeInput(cr, bookName, db);
 
   // (book, title)-scoped upsert + "Book" provenance.
   return await upsertCookbookRecipe(recipeInput, bookName, db, actor);

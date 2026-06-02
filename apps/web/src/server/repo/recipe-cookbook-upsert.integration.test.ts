@@ -1,5 +1,5 @@
-import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import {
   unsafeIngredientId,
   unsafeRecipeId,
@@ -196,10 +196,15 @@ describe("upsertCookbookRecipe", () => {
     expect(titles.sort()).toEqual(["Pancakes", "Waffles"]);
   });
 
-  // A raw cookbook CompactRecipe (ingredient lines are strings, parsed server-side).
-  const compact = (name: string, ingredients: string[]): CompactRecipe => ({
-    name,
-    sections: [{ name: null, ingredients, instructions: [] }],
+  // A raw CookbookRecipe (the parser's shape; lines parsed server-side).
+  const cookbook = (
+    name: string,
+    ingredients: string[],
+    references: CookbookRecipe["references"] = [],
+  ): CookbookRecipe => ({
+    meta: { title: name },
+    sections: [{ ingredients, instructions: [] }],
+    references,
   });
 
   const piecrustRef = {
@@ -211,25 +216,26 @@ describe("upsertCookbookRecipe", () => {
   it("links a cross-recipe reference as a sub-recipe (two-pass)", async () => {
     // Pass 1: both recipes imported flat (no references resolved yet).
     const piecrust = await insertCookbookRecipe(
-      compact("The Only Piecrust", ["2 cups flour"]),
+      cookbook("The Only Piecrust", ["2 cups flour"]),
       "Book A",
-      [],
       db,
       TEST_ACTOR,
     );
     await insertCookbookRecipe(
-      compact("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
+      cookbook("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
       "Book A",
-      [],
       db,
       TEST_ACTOR,
     );
 
     // Pass 2: re-import the galette with its reference → links to the piecrust.
     const galette = await insertCookbookRecipe(
-      compact("Apple Galette", ["1 recipe The Only Piecrust", "3 apples"]),
+      cookbook(
+        "Apple Galette",
+        ["1 recipe The Only Piecrust", "3 apples"],
+        [piecrustRef],
+      ),
       "Book A",
-      [piecrustRef],
       db,
       TEST_ACTOR,
     );
@@ -248,7 +254,7 @@ describe("upsertCookbookRecipe", () => {
     // race on the unique name index and 500 (regression for Dessert Person).
     const { id } = await insertCookbookRecipe(
       {
-        name: "Poppy Seed Almond Cake",
+        meta: { title: "Poppy Seed Almond Cake" },
         sections: [
           {
             name: "Cake",
@@ -264,9 +270,9 @@ describe("upsertCookbookRecipe", () => {
             instructions: [],
           },
         ],
+        references: [],
       },
       "Book A",
-      [],
       db,
       TEST_ACTOR,
     );
@@ -286,15 +292,18 @@ describe("upsertCookbookRecipe", () => {
 
   it("leaves a reference whose target isn't imported as a flat ingredient", async () => {
     const galette = await insertCookbookRecipe(
-      compact("Galette", ["1 recipe Missing Dough"]),
+      cookbook(
+        "Galette",
+        ["1 recipe Missing Dough"],
+        [
+          {
+            title: "Missing Dough",
+            line: "1 recipe Missing Dough",
+            confidence: "title_match",
+          },
+        ],
+      ),
       "Book A",
-      [
-        {
-          title: "Missing Dough",
-          line: "1 recipe Missing Dough",
-          confidence: "title_match",
-        },
-      ],
       db,
       TEST_ACTOR,
     );

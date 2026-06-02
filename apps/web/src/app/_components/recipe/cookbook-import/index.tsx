@@ -1,8 +1,6 @@
-import type { CompactRecipe } from "@cubby/schemas/codec";
 import {
   type CookbookRecipe,
   cookbookRecipesSchema,
-  cookbookRecipeToCompact,
 } from "@cubby/schemas/cookbook";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -62,19 +60,6 @@ export function CookbookImport() {
   // transition so the click stays responsive and the preview streams in instead
   // of freezing the tab.
   const [isLoading, startLoading] = useTransition();
-
-  const compacts = useMemo<CompactRecipe[]>(
-    () =>
-      recipes?.map((r) =>
-        cookbookRecipeToCompact(
-          r,
-          r.meta.recipe_yield
-            ? wasm.parse_yield(r.meta.recipe_yield)
-            : undefined,
-        ),
-      ) ?? [],
-    [recipes],
-  );
 
   // Titles already imported from this book — so we can flag re-imports as updates.
   const trimmedBook = book.trim();
@@ -156,16 +141,16 @@ export function CookbookImport() {
     const bookName = book.trim();
     const indices = [...selected].sort((a, b) => a - b);
 
-    // Pass 1: create/update every selected recipe with flat ingredients.
-    // Sequential to keep ingredient find-or-create races minimal.
+    // Pass 1: create/update every selected recipe. Cross-recipe references only
+    // resolve to recipes that already exist, so on a fresh book this pass is
+    // effectively flat. Sequential to keep ingredient find-or-create races minimal.
     const succeeded = new Set<number>();
     for (const i of indices) {
       setResults((prev) => new Map(prev).set(i, { status: "importing" }));
       try {
         const { id } = await insertCookbook.mutateAsync({
-          recipe: compacts[i],
+          recipe: recipes[i],
           book: bookName,
-          references: [],
         });
         setResults((prev) => new Map(prev).set(i, { status: "done", id }));
         succeeded.add(i);
@@ -179,16 +164,15 @@ export function CookbookImport() {
       }
     }
 
-    // Pass 2: every selected recipe now has an id, so re-import the ones that
-    // reference others — those lines link to the existing book recipes instead
-    // of creating flat ingredients. Linking is best-effort (keep pass-1 result).
+    // Pass 2: every selected recipe now has an id, so re-import the ones with
+    // references — their lines now link to the existing book recipes. Best-effort
+    // (keep the pass-1 result on failure).
     for (const i of indices) {
       if (!succeeded.has(i) || recipes[i].references.length === 0) continue;
       try {
         await insertCookbook.mutateAsync({
-          recipe: compacts[i],
+          recipe: recipes[i],
           book: bookName,
-          references: recipes[i].references,
         });
       } catch {
         // ignore — the recipe is already imported; only the links failed
@@ -295,7 +279,6 @@ export function CookbookImport() {
                 // biome-ignore lint/suspicious/noArrayIndexKey: recipes are a fixed ordered list from one upload
                 key={i}
                 recipe={recipe}
-                compact={compacts[i]}
                 selected={selected.has(i)}
                 onToggle={() => toggle(i)}
                 result={results.get(i)}
@@ -319,7 +302,6 @@ export function CookbookImport() {
 
 function RecipeCard({
   recipe,
-  compact,
   selected,
   onToggle,
   result,
@@ -327,7 +309,6 @@ function RecipeCard({
   linkableTitles,
 }: {
   recipe: CookbookRecipe;
-  compact: CompactRecipe;
   selected: boolean;
   onToggle: () => void;
   result: ImportResult | undefined;
@@ -339,18 +320,18 @@ function RecipeCard({
   const namesForHighlighting = useMemo(
     () =>
       dedupe(
-        compact.sections
+        recipe.sections
           .flatMap((s) => s.ingredients)
           .map((line) => wasm.parse_ingredient(line).name)
           .filter((n) => n.length > 0),
       ),
-    [compact],
+    [recipe],
   );
 
   // Parse instructions to rich text once per section (not on every render).
   const richBySection = useMemo(
     () =>
-      compact.sections.map((section) =>
+      recipe.sections.map((section) =>
         section.instructions.map((line) => {
           try {
             return formatRichText(
@@ -361,7 +342,7 @@ function RecipeCard({
           }
         }),
       ),
-    [compact, namesForHighlighting],
+    [recipe, namesForHighlighting],
   );
 
   return (
@@ -416,7 +397,7 @@ function RecipeCard({
         <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
           {/* Ingredients */}
           <div className="space-y-2">
-            {compact.sections.map((section, si) => (
+            {recipe.sections.map((section, si) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: sections are a fixed ordered list
               <div key={si} className="space-y-0.5">
                 {section.name && (
@@ -431,7 +412,7 @@ function RecipeCard({
 
           {/* Instructions */}
           <div className="space-y-2">
-            {compact.sections.map((section, si) =>
+            {recipe.sections.map((section, si) =>
               section.instructions.length > 0 ? (
                 // biome-ignore lint/suspicious/noArrayIndexKey: sections are a fixed ordered list
                 <div key={si} className="space-y-0.5">

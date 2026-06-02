@@ -5,7 +5,7 @@
 
 import type { CompactRecipe } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
-import type { RecipeRef } from "@cubby/schemas/cookbook";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { type RecipeId, unsafeRecipeId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -34,7 +34,7 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
-  upsertCookbookRecipeWithRefs,
+  upsertCookbookRecipeFromCookbook,
   upsertRecipeFromCompact,
 } from "~/server/repo/compactrecipe";
 import {
@@ -168,25 +168,19 @@ export const insertCompactRecipe = (
  * Insert a recipe extracted from an EPUB cookbook, scoped to its book so
  * re-imports upsert by (book, title). See {@link upsertCookbookRecipe}.
  *
- * `references` are cross-recipe pointers (recipe-epub's `resolve_references`):
- * any ingredient line matching a reference whose target recipe already exists in
- * the book is linked as a sub-recipe instead of a flat ingredient. Pass empty on
- * the first pass; re-import with references once all the book's recipes exist.
+ * The recipe's own `references` (recipe-epub's `resolve_references`) drive
+ * sub-recipe linking: an ingredient line matching a reference whose target
+ * recipe already exists in the book becomes a sub-recipe link instead of a flat
+ * ingredient. Re-import after all the book's recipes exist to resolve forward
+ * references.
  */
 export const insertCookbookRecipe = (
-  recipeInput: CompactRecipe,
+  cookbookRecipe: CookbookRecipe,
   bookName: string,
-  references: RecipeRef[],
   db: Database,
   actor: ActorContext,
 ) => {
-  return upsertCookbookRecipeWithRefs(
-    recipeInput,
-    bookName,
-    references,
-    db,
-    actor,
-  );
+  return upsertCookbookRecipeFromCookbook(cookbookRecipe, bookName, db, actor);
 };
 
 /**

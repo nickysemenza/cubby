@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { type CompactRecipe, sanitizeSectionName } from "./codec";
 
 // Mirrors the `CookbookRecipe` JSON emitted by `food-cli scrape-epub --json`
 // (the `recipe-epub` crate in the ingredient-parser repo). Ingredient and
@@ -58,37 +57,3 @@ export type CookbookRecipe = z.infer<typeof cookbookRecipeSchema>;
 
 // What an uploaded `--json` file contains.
 export const cookbookRecipesSchema = z.array(cookbookRecipeSchema);
-
-/** Structured yield parsed from the cookbook's freeform yield string. */
-export interface ParsedYield {
-  recipe_yield?: { value: number; unit: string };
-  servings?: number;
-}
-
-/**
- * Map an extracted `CookbookRecipe` onto cubby's `CompactRecipe` so it can flow
- * through the existing parse + find-or-create + upsert pipeline.
- *
- * - `meta` (url) is omitted: the cookbook's `url` is a synthetic `source#doc_path`
- *   that fails `compactMeta`'s `z.url()`. Book provenance is carried separately
- *   (SourceType="Book", SourceData=<book name>) by the import endpoint.
- * - `image` is omitted (EPUB extraction has none).
- * - Yield is freeform text in the cookbook, so the caller parses it (via the
- *   WASM `parse_yield`, kept out of this pure schema package) and passes the
- *   structured result in.
- */
-export const cookbookRecipeToCompact = (
-  cr: CookbookRecipe,
-  parsedYield?: ParsedYield,
-): CompactRecipe => {
-  return {
-    name: cr.meta.title,
-    sections: cr.sections.map((section) => ({
-      name: sanitizeSectionName(section.name),
-      ingredients: section.ingredients,
-      instructions: section.instructions,
-    })),
-    recipe_yield: parsedYield?.recipe_yield,
-    servings: parsedYield?.servings,
-  };
-};
