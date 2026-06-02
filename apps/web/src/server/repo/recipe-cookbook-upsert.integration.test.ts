@@ -243,6 +243,47 @@ describe("upsertCookbookRecipe", () => {
     expect(ingredients.some((ing) => ing.type === "ingredient")).toBe(true);
   });
 
+  it("handles the same ingredient appearing in multiple sections", async () => {
+    // "almond extract" is in both sections — concurrent find-or-create used to
+    // race on the unique name index and 500 (regression for Dessert Person).
+    const { id } = await insertCookbookRecipe(
+      {
+        name: "Poppy Seed Almond Cake",
+        sections: [
+          {
+            name: "Cake",
+            ingredients: [
+              "3 cups all-purpose flour",
+              "1½ teaspoons almond extract",
+            ],
+            instructions: [],
+          },
+          {
+            name: "Glaze",
+            ingredients: ["¾ cup powdered sugar", "½ teaspoon almond extract"],
+            instructions: [],
+          },
+        ],
+      },
+      "Book A",
+      [],
+      db,
+      TEST_ACTOR,
+    );
+
+    const full = await getRecipeByID(db, unsafeRecipeId(id));
+    const almonds = full!.sections
+      .flatMap((s) => s.ingredients)
+      .filter(
+        (ing) =>
+          ing.type === "ingredient" &&
+          ing.ingredient?.name === "almond extract",
+      );
+    // Both sections reference the one shared ingredient row.
+    expect(almonds).toHaveLength(2);
+    expect(almonds[0]?.ingredient?.id).toBe(almonds[1]?.ingredient?.id);
+  });
+
   it("leaves a reference whose target isn't imported as a flat ingredient", async () => {
     const galette = await insertCookbookRecipe(
       compact("Galette", ["1 recipe Missing Dough"]),
