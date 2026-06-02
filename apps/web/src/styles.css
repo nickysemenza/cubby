@@ -23,6 +23,10 @@
   --text-2xs--line-height: 0.875rem;
   --text-3xs: 0.5rem; /* 8px */
   --text-3xs--line-height: 0.75rem;
+
+  /* Signature easing - a gentle settle with the faintest overshoot, so motion
+     feels alive and cozy rather than mechanical. Use via `ease-cozy`. */
+  --ease-cozy: cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 
 /*
@@ -83,6 +87,23 @@
       0 0 0 2px var(--background),
       0 0 0 4px oklch(from var(--brand-terracotta) l c h / 0.2),
       0 0 12px -2px oklch(from var(--brand-terracotta) l c h / 0.15);
+  }
+
+  /* Respect users who prefer reduced motion - neutralize our animations.
+     !important is required so this wins over the animation/transition utilities. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
+      animation-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
+      animation-iteration-count: 1 !important;
+      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
+      transition-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: a11y reduced-motion guard must override animation utilities */
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -358,22 +379,33 @@
     z-index: 1;
   }
 
-  /* Subtle noise texture overlay */
-  .noise-texture {
+  /* Global paper grain - a faint fixed film over the whole app so the cream
+     reads like paper, not flat screen. Very subtle (felt, not seen). */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.022;
+    pointer-events: none;
+    z-index: 9999;
+    mix-blend-mode: multiply;
+  }
+
+  /* Tactile card emboss - a faint top inner-light "shelf lip" so cards read
+     like physical cards on a shelf, not flat panels. Styled via the design
+     layer (not the shadcn card component). The ::after is clipped to the
+     card's rounded corners by its overflow-hidden. */
+  [data-slot="card"] {
     position: relative;
   }
-  .noise-texture::after {
+  [data-slot="card"]::after {
     content: "";
     position: absolute;
     inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-    opacity: 0.02;
+    border-radius: inherit;
     pointer-events: none;
-    z-index: 0;
-  }
-  .noise-texture > * {
-    position: relative;
-    z-index: 1;
+    box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.5);
   }
 
   /* Table row hover - warm gradient accent */

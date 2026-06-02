@@ -21,42 +21,40 @@ const entityEmptyConfig: Record<Entity, EntityEmptyConfig> = {
   recipe: {
     title: "Your recipe book awaits",
     description:
-      "Start building your collection of favorite recipes. Import from a URL or create from scratch.",
+      "Start a collection of recipes you love. Import one from a URL, or write it from scratch.",
     actionLabel: "Create Recipe",
   },
   product: {
-    title: "No products tracked yet",
+    title: "Nothing on the shelves yet",
     description:
-      "Add products to track inventory and pricing. Scan barcodes or add manually.",
+      "Add the things you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
     actionLabel: "Add Product",
   },
   ingredient: {
-    title: "Ingredient library is empty",
+    title: "Your pantry list is empty",
     description:
-      "Build your ingredient library to connect recipes with products and nutrition data.",
+      "Build a list of ingredients to connect your recipes with what's in stock.",
     actionLabel: "Add Ingredient",
   },
   location: {
-    title: "Set up your storage spaces",
+    title: "Nowhere to put things yet",
     description:
-      "Create locations to organize where you store things. Pantry, fridge, garage - you decide.",
+      "Create spaces to organize where everything lives — pantry, fridge, garage, you decide.",
     actionLabel: "Create Location",
   },
   inventory: {
-    title: "Nothing in stock",
+    title: "Your cubbies are empty",
     description:
-      "Start tracking what you have and where. Scan barcodes or add items manually.",
+      "Start tracking what you have and where it lives. Scan a barcode or add it by hand.",
     actionLabel: "Add to Inventory",
   },
   image: {
-    title: "No images uploaded",
-    description:
-      "Upload images to attach them to recipes, products, and locations.",
+    title: "No photos yet",
+    description: "Add photos to attach them to recipes, products, and places.",
   },
   "usda-food": {
-    title: "No USDA foods found",
-    description:
-      "Search the USDA database for nutrition information and food data.",
+    title: "Nothing found in the USDA database",
+    description: "Search for a food to pull in its nutrition details.",
   },
 };
 
@@ -119,9 +117,9 @@ function FilteredEmptyState({
 }) {
   return (
     <Empty variant="minimal" className="py-6">
-      <EmptyTitle>No results found</EmptyTitle>
+      <EmptyTitle>Nothing matched</EmptyTitle>
       <EmptyDescription>
-        Try adjusting your search or filters to find what you're looking for.
+        Try a different search, or clear the filters to see everything.
       </EmptyDescription>
       {onClearFilters && (
         <EmptyActions>

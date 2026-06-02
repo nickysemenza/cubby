@@ -157,7 +157,7 @@ export function IngredientPreviewTable({
         queryClient.invalidateQueries({
           queryKey: [queryKeys.ingredient.getByName],
         });
-        toast.success("Ingredient created!");
+        toast.success("Ingredient added.");
         setCreateDialogOpen(false);
       },
     }),

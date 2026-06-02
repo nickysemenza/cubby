@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 
 /** Base className for pill styling - use for custom pill-like elements (e.g., Links) */
 export const pillClassName =
-  "inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-xs";
+  "group inline-flex items-center gap-1 rounded border border-border/50 px-1 py-px text-xs";
 
 interface PillProps {
   icon?: React.ReactNode;
@@ -32,7 +32,11 @@ export function Pill({
           : undefined
       }
     >
-      {icon && <span className="shrink-0">{icon}</span>}
+      {icon && (
+        <span className="shrink-0 transition-transform duration-150 ease-cozy group-hover:rotate-3 group-hover:scale-110">
+          {icon}
+        </span>
+      )}
       <span className={cn("min-w-0", compact && "max-w-32 truncate")}>
         {children}
       </span>

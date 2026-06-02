@@ -180,7 +180,7 @@ export function CookbookImport() {
     }
 
     setImporting(false);
-    toast.success("Cookbook import finished");
+    toast.success("Cookbook unpacked.");
   };
 
   return (

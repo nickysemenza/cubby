@@ -271,7 +271,7 @@ export function GlobalCommandMenu({
 
             {/* Empty state */}
             {isEmpty && !isLoading && !shortcodeResult && !notionResults && (
-              <CommandEmpty>No results found.</CommandEmpty>
+              <CommandEmpty>Nothing matched — try another word.</CommandEmpty>
             )}
 
             {/* Shortcode result - appears at top when typing a valid shortcode */}

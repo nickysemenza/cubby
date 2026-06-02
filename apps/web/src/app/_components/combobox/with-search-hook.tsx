@@ -273,7 +273,7 @@ export function WithIngredientSearch({ children }: WithEntitySearchProps) {
   const createMutation = useMutation(
     api.ingredient.create.mutationOptions({
       onSuccess: (newIngredient: IngredientWithRecipesAndProductOut) => {
-        toast.success(`Created new ingredient: ${newIngredient.name}`);
+        toast.success(`Added ${newIngredient.name} to your pantry.`);
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({
           queryKey: [queryKeys.ingredient.list],
@@ -331,7 +331,7 @@ export function WithLocationSearch({ children }: WithEntitySearchProps) {
   const createMutation = useMutation(
     api.location.create.mutationOptions({
       onSuccess: (newLocation: LocationOut) => {
-        toast.success(`Created new location: ${newLocation.name}`);
+        toast.success(`Made a place for ${newLocation.name}.`);
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({ queryKey: [queryKeys.location.list] });
         resolveWithEntity(buildLocationComboboxItem(newLocation));
@@ -387,7 +387,7 @@ export function WithProductSearch({ children }: WithEntitySearchProps) {
   const createMutation = useMutation(
     api.product.create.mutationOptions({
       onSuccess: (newProduct: ProductTopLevelOut) => {
-        toast.success(`Created new product: ${newProduct.name}`);
+        toast.success(`Added ${newProduct.name} to your shelves.`);
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         queryClient.invalidateQueries({ queryKey: [queryKeys.product.list] });
         resolveWithEntity(buildProductComboboxItem(newProduct));

@@ -69,7 +69,7 @@ export const DetailPage: FC<DetailPageProps> = ({
           <Card
             key={section.title}
             className={cn(
-              "transition-all duration-150",
+              "transition-all duration-200 ease-cozy",
               "md:hover:-translate-y-0.5 md:hover:shadow-md",
               "fade-in slide-in-from-bottom-2 animate-in",
             )}

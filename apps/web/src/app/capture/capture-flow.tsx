@@ -196,7 +196,7 @@ function CaptureItemCard({ proposal }: { proposal: ProposedItem }) {
   const create = useMutation(
     api.inventory.create.mutationOptions({
       onSuccess: () => {
-        toast.success(`Added ${proposal.name} to inventory`);
+        toast.success(`Tucked ${proposal.name} into your cubby.`);
         setAdded(true);
       },
       onError: (error) => toast.error(error.message),

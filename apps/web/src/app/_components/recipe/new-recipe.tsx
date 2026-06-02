@@ -12,7 +12,7 @@ export default function NewRecipeForm() {
     { id: string }
   >("recipe", api.recipe.create.mutationOptions(), {
     onSuccess: () => {
-      toast.success("Recipe created successfully!");
+      toast.success("Recipe added to your book.");
     },
     onError: () => {
       toast.error("Failed to create recipe");

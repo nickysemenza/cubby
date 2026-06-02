@@ -35,7 +35,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
   const updateProductMutation = useMutation(
     api.product.update.mutationOptions({
       onSuccess: () => {
-        toast.success("Product updated");
+        toast.success("Saved your changes.");
         // Wrap key in array to match tRPC's nested structure: [["entity", "list"], {...}]
         void queryClient.invalidateQueries({
           queryKey: [queryKeys.product.list],

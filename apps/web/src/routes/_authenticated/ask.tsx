@@ -43,8 +43,8 @@ function AskPage() {
       <PageHero
         variant="list"
         title="Ask Cubby"
-        eyebrow="Debug"
-        meta={[{ icon: Sparkles, label: "Agent over read-only MCP tools" }]}
+        eyebrow="Your helpful companion"
+        meta={[{ icon: Sparkles, label: "Ask me where anything is" }]}
       />
 
       <form onSubmit={submit} className="flex gap-2">

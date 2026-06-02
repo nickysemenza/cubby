@@ -31,7 +31,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   const describeMutation = useMutation(
     api.ai.describeLocation.mutationOptions({
       onSuccess: () => {
-        toast.success("Location description updated");
+        toast.success("Description saved.");
         void queryClient.invalidateQueries({
           queryKey: api.location.getByID.queryKey({ id: locationId }),
         });

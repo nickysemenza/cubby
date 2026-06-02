@@ -11,10 +11,20 @@ export const Route = createFileRoute("/")({
 function Home() {
   return (
     <PageWrapper className="gradient-mesh space-y-6">
+      {/* Warm greeting */}
+      <div className="page-header-accent pb-2">
+        <p className="mb-1 font-medium text-muted-foreground text-xs uppercase tracking-[0.18em]">
+          Keep everything in its place
+        </p>
+        <h1 className="font-bold font-heading text-3xl tracking-tight sm:text-4xl">
+          Welcome home.
+        </h1>
+      </div>
+
       {/* Entity Stats */}
       <section>
         <h2 className="mb-3 font-medium text-muted-foreground text-sm">
-          Overview
+          Here's everything you're keeping
         </h2>
         <EntityCount />
       </section>

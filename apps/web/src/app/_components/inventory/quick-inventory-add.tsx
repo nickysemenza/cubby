@@ -107,7 +107,7 @@ export function QuickInventoryAdd({
   const addMutation = useMutation(
     api.inventory.create.mutationOptions({
       onSuccess: () => {
-        toast.success("Item added to inventory");
+        toast.success("Tucked it into your cubby.");
         selectForm.reset({
           product: undefined,
           amount: { value: 1, unit: "" },

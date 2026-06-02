@@ -118,7 +118,7 @@ export function PendingImageUpload({
         setPendingImages(updatedImages);
         onImagesChange?.(updatedImages);
         setImageUrl("");
-        toast.success("Image imported successfully!");
+        toast.success("Photo added.");
       } catch (error) {
         toast.error(`Import failed: ${getErrorMessage(error)}`);
       } finally {
@@ -206,7 +206,7 @@ export function PendingImageUpload({
         }
 
         // Show success message
-        toast.success("Image uploaded successfully!");
+        toast.success("Photo added.");
 
         return newImage;
       } catch (error) {

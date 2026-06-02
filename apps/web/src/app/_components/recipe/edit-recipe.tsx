@@ -20,7 +20,7 @@ export default function EditRecipeForm({
     entityId: recipe.id,
     mutationOptions: api.recipe.update.mutationOptions(),
     onSuccess: () => {
-      toast.success("Recipe updated successfully!");
+      toast.success("Recipe saved.");
       onCancel();
     },
     // Only invalidate recipe queries to avoid triggering problematic ingredient queries
