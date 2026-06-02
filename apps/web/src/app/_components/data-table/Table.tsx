@@ -400,6 +400,7 @@ export default function RTable<TItem>(props: TTableProps<TItem>) {
           />
 
           {/* Scrollable container for virtualization */}
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: scroll container hosts keyboard row navigation (arrow keys/Enter), not a semantic control */}
           <div
             ref={tableContainerRef}
             className="overflow-auto outline-none"

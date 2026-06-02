@@ -1,5 +1,5 @@
 import { cva, type VariantProps } from "class-variance-authority";
-import * as React from "react";
+import type * as React from "react";
 import { Image } from "~/components/ui/image";
 import { cn } from "~/lib/utils";
 
@@ -55,45 +55,40 @@ interface InteractiveImageProps
   imageClassName?: string;
 }
 
-export const InteractiveImage = React.forwardRef<
-  HTMLDivElement,
-  InteractiveImageProps
->(
-  (
-    {
-      className,
-      aspectRatio,
-      hoverEffect,
-      transition,
-      src,
-      alt,
-      imageTransition = "scale",
-      imageClassName,
-      ...props
-    },
-    ref,
-  ) => {
-    return (
-      <div
+export const InteractiveImage = ({
+  className,
+  aspectRatio,
+  hoverEffect,
+  transition,
+  src,
+  alt,
+  imageTransition = "scale",
+  imageClassName,
+  ref,
+  ...props
+}: InteractiveImageProps & {
+  ref?: React.Ref<HTMLDivElement>;
+}) => {
+  return (
+    <div
+      className={cn(
+        interactiveImageVariants({ aspectRatio, hoverEffect, transition }),
+        className,
+      )}
+      ref={ref}
+      {...props}
+    >
+      <Image
+        src={src}
+        alt={alt}
         className={cn(
-          interactiveImageVariants({ aspectRatio, hoverEffect, transition }),
-          className,
+          "absolute inset-0 h-full w-full object-cover",
+          imageContentVariants({ transition: imageTransition }),
+          imageClassName,
         )}
-        ref={ref}
-        {...props}
-      >
-        <Image
-          src={src}
-          alt={alt}
-          className={cn(
-            "absolute inset-0 h-full w-full object-cover",
-            imageContentVariants({ transition: imageTransition }),
-            imageClassName,
-          )}
-        />
-      </div>
-    );
-  },
-);
+      />
+    </div>
+  );
+};
 
 InteractiveImage.displayName = "InteractiveImage";

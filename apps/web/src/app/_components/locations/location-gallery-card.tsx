@@ -1,7 +1,7 @@
 import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/combo";
 import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, useMemo } from "react";
+import { type Ref, useMemo } from "react";
 import type { z } from "zod";
 import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
@@ -28,13 +28,14 @@ interface LocationGalleryCardProps {
  * - Grid of product images with names
  * - Inventory value summary
  */
-export const LocationGalleryCard = forwardRef<
-  HTMLDivElement,
-  LocationGalleryCardProps
->(function LocationGalleryCard(
-  { location, inventoryItems, isHighlighted, isFaded, className },
+export const LocationGalleryCard = function LocationGalleryCard({
+  location,
+  inventoryItems,
+  isHighlighted,
+  isFaded,
+  className,
   ref,
-) {
+}: LocationGalleryCardProps & { ref?: Ref<HTMLDivElement> }) {
   // Group inventory items by product for display
   const productImages = useMemo(() => {
     const productMap = new Map<
@@ -164,4 +165,4 @@ export const LocationGalleryCard = forwardRef<
       </div>
     </div>
   );
-});
+};

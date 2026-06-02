@@ -45,6 +45,7 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
       elements.push(
         <ul key={`ul-${i}`} className="list-disc space-y-0.5 pl-5">
           {items.map((item, j) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
             <li key={j}>{item.text}</li>
           ))}
         </ul>,
@@ -61,6 +62,7 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
       elements.push(
         <ol key={`ol-${i}`} className="list-decimal space-y-0.5 pl-5">
           {items.map((item, j) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
             <li key={j}>{item.text}</li>
           ))}
         </ol>,
@@ -77,6 +79,7 @@ function BlockList({ blocks }: { blocks: NotionBlock[] }) {
       elements.push(
         <div key={`todo-${i}`} className="space-y-1">
           {items.map((item, j) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion content, never reordered; blocks have no id
             <div key={j} className="flex items-center gap-2">
               {item.checked ? (
                 <CheckSquare className="h-4 w-4 shrink-0 text-green-500" />
@@ -183,6 +186,7 @@ function BlockRenderer({ block }: { block: NotionBlock }) {
       return (
         <div className="grid grid-cols-2 gap-4">
           {block.children.map((child, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: static parsed Notion column blocks, never reordered; blocks have no id
             <BlockRenderer key={i} block={child} />
           ))}
         </div>

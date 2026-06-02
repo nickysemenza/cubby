@@ -173,7 +173,7 @@ describe("location deletion", () => {
       expect(retrievedLocation.id).toEqual(location.id);
     });
 
-    it("should prevent deletion if location has child locations", async () => {
+    it("orphans child locations to top-level when the parent is deleted", async () => {
       const createCaller = createCallerFactory(locationRouter);
       const caller = createCaller(
         createTestTRPCContext(db, {
@@ -190,21 +190,33 @@ describe("location deletion", () => {
       });
 
       // Create a child location
-      await caller.create({
+      const childLocation = await caller.create({
         name: "Child Location",
         type: "shelf" as const,
         parentId: parentLocation.id,
         pendingImageIds: [],
       });
 
-      // Try to delete the parent - should fail
-      await expect(caller.delete({ ids: [parentLocation.id] })).rejects.toThrow(
-        "child locations",
-      );
+      // Deleting the parent succeeds: children are orphaned (parentId -> null)
+      // and become top-level locations rather than blocking the delete.
+      await expect(
+        caller.delete({ ids: [parentLocation.id] }),
+      ).resolves.toBeUndefined();
 
-      // Verify parent still exists
-      const retrievedParent = await caller.getByID({ id: parentLocation.id });
-      expect(retrievedParent.id).toEqual(parentLocation.id);
+      // Parent is gone from the list
+      const locations = await caller.list({
+        filters: {},
+        sort: { orderBy: "name", direction: "asc" },
+        pagination: { pageSize: 100, pageIndex: 0 },
+      });
+      expect(
+        locations.items.find((l) => l.id === parentLocation.id),
+      ).toBeUndefined();
+
+      // Child still exists and is now a top-level location (no parent).
+      const retrievedChild = await caller.getByID({ id: childLocation.id });
+      expect(retrievedChild.id).toEqual(childLocation.id);
+      expect(retrievedChild.parent).toBeUndefined();
     });
   });
 

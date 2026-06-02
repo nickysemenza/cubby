@@ -205,21 +205,19 @@ function DevtoolsWrapper() {
   // Wrapped in a Fragment so the JSX is still valid after
   // @tanstack/devtools-vite strips <TanStackDevtools/> from production builds.
   return (
-    <>
-      <TanStackDevtools
-        config={{
-          position: "bottom-right",
-          openHotkey: [],
-        }}
-        plugins={[
-          {
-            name: "Tanstack Router",
-            render: <TanStackRouterDevtoolsPanel />,
-          },
-          TanStackQueryDevtools,
-        ]}
-      />
-    </>
+    <TanStackDevtools
+      config={{
+        position: "bottom-right",
+        openHotkey: [],
+      }}
+      plugins={[
+        {
+          name: "Tanstack Router",
+          render: <TanStackRouterDevtoolsPanel />,
+        },
+        TanStackQueryDevtools,
+      ]}
+    />
   );
 }
 

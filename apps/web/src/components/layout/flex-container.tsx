@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "~/lib/utils";
 import {
   type FlexContainerVariants,
@@ -9,10 +9,14 @@ interface FlexContainerProps
   extends React.HTMLAttributes<HTMLDivElement>,
     FlexContainerVariants {}
 
-export const FlexContainer = React.forwardRef<
-  HTMLDivElement,
-  FlexContainerProps
->(({ className, align, justify, gap, ...props }, ref) => {
+export const FlexContainer = ({
+  className,
+  align,
+  justify,
+  gap,
+  ref,
+  ...props
+}: FlexContainerProps & { ref?: React.Ref<HTMLDivElement> }) => {
   return (
     <div
       className={cn(flexContainerVariants({ align, justify, gap }), className)}
@@ -20,6 +24,6 @@ export const FlexContainer = React.forwardRef<
       {...props}
     />
   );
-});
+};
 
 FlexContainer.displayName = "FlexContainer";

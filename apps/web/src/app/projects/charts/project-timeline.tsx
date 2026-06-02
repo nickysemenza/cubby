@@ -79,7 +79,13 @@ export function ProjectTimeline({ projects }: { projects: NotionProject[] }) {
 
   return (
     <div ref={containerRef} className="overflow-x-auto">
-      <svg width={width} height={chartHeight}>
+      <svg
+        width={width}
+        height={chartHeight}
+        role="img"
+        aria-label="Project timeline"
+      >
+        <title>Project timeline</title>
         {/* Grid lines */}
         {ticks.map((tick) => (
           <g key={tick.label}>

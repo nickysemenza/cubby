@@ -1,7 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
 import * as d3Force from "d3-force";
 import { Network, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useContainerDimensions } from "~/hooks/useContainerDimensions";
 import { getStatusChartColor } from "~/lib/status-colors";
 import type { NotionProject } from "~/server/clients/notion";
@@ -90,6 +97,8 @@ function ForceGraph({
   });
   const navigate = useNavigate();
   const svgRef = useRef<SVGSVGElement>(null);
+  // Strip non-alphanumerics so the id is safe inside an SVG url(#...) reference.
+  const arrowheadId = `arrow-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [nodePositions, setNodePositions] = useState<GraphNode[]>([]);
@@ -266,7 +275,7 @@ function ForceGraph({
       >
         <defs>
           <marker
-            id="arrowhead"
+            id={arrowheadId}
             viewBox="0 0 10 7"
             refX="10"
             refY="3.5"
@@ -288,7 +297,7 @@ function ForceGraph({
         />
 
         {/* Links */}
-        {linkPositions.map((link, i) => {
+        {linkPositions.map((link) => {
           const source = link.source as GraphNode;
           const target = link.target as GraphNode;
           if (source.x == null || target.x == null) return null;
@@ -307,14 +316,14 @@ function ForceGraph({
 
           return (
             <line
-              key={`link-${i}`}
+              key={`${source.id}->${target.id}`}
               x1={source.x}
               y1={source.y}
               x2={x2}
               y2={y2}
               stroke={isHighlighted ? "var(--foreground)" : "var(--border)"}
               strokeWidth={isHighlighted ? 2.5 : 1.5}
-              markerEnd="url(#arrowhead)"
+              markerEnd={`url(#${arrowheadId})`}
               style={{ transition: "stroke 0.15s, stroke-width 0.15s" }}
             />
           );
@@ -327,6 +336,7 @@ function ForceGraph({
           const isDone = node.status === "Done";
 
           return (
+            // biome-ignore lint/a11y/noStaticElementInteractions: SVG graph node; hover/click drive the force-graph visualization, not a semantic control
             <g
               key={node.id}
               transform={`translate(${node.x}, ${node.y})`}

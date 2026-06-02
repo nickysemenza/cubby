@@ -1,4 +1,4 @@
-import * as React from "react";
+import type * as React from "react";
 import { cn } from "~/lib/utils";
 import {
   type SpacedContainerVariants,
@@ -9,10 +9,12 @@ interface SpacedContainerProps
   extends React.HTMLAttributes<HTMLDivElement>,
     SpacedContainerVariants {}
 
-export const SpacedContainer = React.forwardRef<
-  HTMLDivElement,
-  SpacedContainerProps
->(({ className, space, ...props }, ref) => {
+export const SpacedContainer = ({
+  className,
+  space,
+  ref,
+  ...props
+}: SpacedContainerProps & { ref?: React.Ref<HTMLDivElement> }) => {
   return (
     <div
       className={cn(spacedContainerVariants({ space }), className)}
@@ -20,6 +22,6 @@ export const SpacedContainer = React.forwardRef<
       {...props}
     />
   );
-});
+};
 
 SpacedContainer.displayName = "SpacedContainer";

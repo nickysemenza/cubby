@@ -380,17 +380,17 @@ export class NotionClient {
         const p = page.properties;
         return {
           id: page.id,
-          name: getTitle(p["Name"]),
-          status: getStatus(p["Status"]),
-          kind: getSelect(p["kind"]),
-          location: getMultiSelect(p["location"]),
+          name: getTitle(p.Name),
+          status: getStatus(p.Status),
+          kind: getSelect(p.kind),
+          location: getMultiSelect(p.location),
           costEstimate: getNumber(p["cost estimate"]),
-          date: getDateStart(p["Date"]),
-          dateEnd: getDateEnd(p["Date"]),
+          date: getDateStart(p.Date),
+          dateEnd: getDateEnd(p.Date),
           icon: getPageIcon(page),
           coverImage: getPageCover(page),
           blockedBy: getRelationIds(p["Blocked by"]),
-          blocking: getRelationIds(p["Blocking"]),
+          blocking: getRelationIds(p.Blocking),
           notionUrl: getPageUrl(page),
         };
       });
@@ -405,11 +405,11 @@ export class NotionClient {
         const p = page.properties;
         return {
           id: page.id,
-          name: getTitle(p["Name"]),
-          status: getStatus(p["Status"]),
-          due: getDateStart(p["Due"]),
-          category: getSelect(p["category"]),
-          projectName: getRelationId(p["project"]),
+          name: getTitle(p.Name),
+          status: getStatus(p.Status),
+          due: getDateStart(p.Due),
+          category: getSelect(p.category),
+          projectName: getRelationId(p.project),
           notionUrl: getPageUrl(page),
         };
       });
@@ -426,14 +426,14 @@ export class NotionClient {
         const p = page.properties;
         return {
           id: page.id,
-          name: getTitle(p["Name"]),
-          cost: getNumber(p["cost"]),
-          date: getDateStart(p["Date"]),
-          category: getSelect(p["category"]),
-          subcategory: getSelect(p["subcategory"]),
-          purchaser: getSelect(p["purchaser"]),
-          projectName: getRelationId(p["Project"]),
-          url: getUrl(p["URL"]),
+          name: getTitle(p.Name),
+          cost: getNumber(p.cost),
+          date: getDateStart(p.Date),
+          category: getSelect(p.category),
+          subcategory: getSelect(p.subcategory),
+          purchaser: getSelect(p.purchaser),
+          projectName: getRelationId(p.Project),
+          url: getUrl(p.URL),
           notionUrl: getPageUrl(page),
         };
       });

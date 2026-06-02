@@ -548,7 +548,8 @@ describe("importInventoryFromCSV", () => {
       expect(result.created).toBe(150);
       expect(result.items).toHaveLength(150);
 
-      // Verify all products were created
+      // Verify all products were created (assert the total count, not the
+      // paginated page which is capped at pageSize).
       const products = await productList(
         db,
         undefined,
@@ -558,7 +559,7 @@ describe("importInventoryFromCSV", () => {
         { orderBy: "createdAt", direction: "asc" },
         { pageIndex: 0, pageSize: 100 },
       );
-      expect(products.data).toHaveLength(150);
+      expect(products.count).toBe(150);
 
       // Verify all inventory entries were created
       const inventory = await inventoryentryList(
@@ -567,7 +568,7 @@ describe("importInventoryFromCSV", () => {
         { orderBy: "createdAt", direction: "asc" },
         { pageIndex: 0, pageSize: 100 },
       );
-      expect(inventory.data).toHaveLength(150);
+      expect(inventory.count).toBe(150);
     });
   });
 });
