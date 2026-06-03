@@ -1,6 +1,6 @@
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import useDebounce from "~/hooks/useDebounce";
 import { useTRPC } from "~/trpc/react";
 import { type QuickAction, quickActions } from "./quick-actions";
 
@@ -17,7 +17,9 @@ interface UseGlobalSearchResult {
 
 export function useGlobalSearch(searchQuery: string): UseGlobalSearchResult {
   const api = useTRPC();
-  const debouncedQuery = useDebounce(searchQuery, DEBOUNCE_MS);
+  const [debouncedQuery] = useDebouncedValue(searchQuery, {
+    wait: DEBOUNCE_MS,
+  });
 
   // Only search when we have a debounced query with at least 1 character
   const shouldSearch = debouncedQuery.length > 0;

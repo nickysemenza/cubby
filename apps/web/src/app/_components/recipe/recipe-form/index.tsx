@@ -7,6 +7,7 @@ import type {
   recipeSectionInput,
 } from "@cubby/schemas/recipe";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Import, Plus, Trash } from "lucide-react";
 import { type FC, useId, useMemo, useState } from "react";
@@ -37,7 +38,6 @@ import { Field, FieldLabel } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
-import useDebounce from "~/hooks/useDebounce";
 import { useImageState } from "~/hooks/useImageState";
 import { wasm } from "~/lib/wasm";
 import { useTRPC } from "~/trpc/react";
@@ -158,7 +158,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const [textImportInstructions, setTextImportInstructions] = useState("");
 
   // Debounced ingredient lines for live preview
-  const debouncedIngredients = useDebounce(textImportIngredients, 200);
+  const [debouncedIngredients] = useDebouncedValue(textImportIngredients, {
+    wait: 200,
+  });
   const ingredientLines = useMemo(
     () =>
       debouncedIngredients
@@ -169,7 +171,9 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   );
 
   // Instruction lines for preview
-  const debouncedInstructions = useDebounce(textImportInstructions, 200);
+  const [debouncedInstructions] = useDebouncedValue(textImportInstructions, {
+    wait: 200,
+  });
   const instructionLines = useMemo(
     () =>
       debouncedInstructions

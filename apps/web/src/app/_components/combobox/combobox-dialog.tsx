@@ -1,8 +1,8 @@
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { Check, ChevronsUpDown } from "lucide-react";
 import * as React from "react";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Button } from "~/components/ui/button";
-import useDebounce from "~/hooks/useDebounce";
 import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "./combobox-types";
 
@@ -60,7 +60,7 @@ export function DialogCompatibleCombobox<TId extends string = string>({
 }) {
   const [open, setOpen] = React.useState(false);
   const [inputValue, setInputValue] = React.useState("");
-  const debouncedInput = useDebounce(inputValue, 300);
+  const [debouncedInput] = useDebouncedValue(inputValue, { wait: 300 });
   const listboxId = React.useId();
 
   // Use a ref to store the dialog and input elements

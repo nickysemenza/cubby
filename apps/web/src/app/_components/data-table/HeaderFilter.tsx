@@ -1,9 +1,9 @@
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import type { Column } from "@tanstack/react-table";
 import { X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
-import useDebounce from "~/hooks/useDebounce";
 import type { FilterConfig } from "./columnHelpers";
 
 interface HeaderFilterProps<TData> {
@@ -19,7 +19,7 @@ export function HeaderFilter<TData>({
   const externalValue = (column.getFilterValue() as string) ?? "";
 
   const [value, setValue] = useState<string>(externalValue);
-  const debouncedValue = useDebounce(value, 500);
+  const [debouncedValue] = useDebouncedValue(value, { wait: 500 });
 
   // Track last synced external value to detect external changes
   const lastExternalRef = useRef(externalValue);

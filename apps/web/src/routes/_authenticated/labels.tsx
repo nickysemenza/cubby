@@ -2,6 +2,7 @@ import { unsafeLocationId } from "@cubby/schemas/identifiers";
 import type { LocationType } from "@cubby/schemas/location";
 import type { ProductCategory } from "@cubby/schemas/product";
 import { getShortcodeUrl, parseShortcode } from "@cubby/shared";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -34,7 +35,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import useDebounce from "~/hooks/useDebounce";
 import { generateLabelCsv, generateQrDataUrl } from "~/lib/label-generator";
 import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
@@ -171,7 +171,7 @@ function AddLabelsPopover({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounce(search, 300);
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 });
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Focus search input when popover opens
