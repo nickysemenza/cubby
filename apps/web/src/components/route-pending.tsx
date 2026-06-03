@@ -1,6 +1,29 @@
 import { PageWrapper } from "~/components/layout/page-wrapper";
 import { Skeleton } from "~/components/ui/skeleton";
 
+/** Router-wide default pending component (see `defaultPendingComponent`).
+ * Shown during a route transition when the destination isn't ready yet — most
+ * visibly on mobile, where there's no hover to preload the chunk before the tap.
+ * Detail routes override this with `DetailPagePending`; this neutral header +
+ * content blocks reads as "loading" on any other route without implying a shape. */
+export function RoutePending() {
+  return (
+    <PageWrapper>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="h-9 w-56" />
+        </div>
+        <div className="space-y-3">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      </div>
+    </PageWrapper>
+  );
+}
+
 /** Standard pending/loading component for detail pages.
  * Mirrors the real detail layout (eyebrow + title, then a 2-column card grid)
  * so the transition into the loaded page doesn't jump. */

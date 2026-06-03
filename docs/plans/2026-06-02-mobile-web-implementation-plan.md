@@ -116,9 +116,9 @@ The big N+1 is already fixed, so this is targeted.
 >
 > **Remaining candidates (not yet done):** Sentry SDK is eagerly initialized in [`router.tsx`](../../apps/web/src/router.tsx) (replay integration is the heavy part — already prod-only-sampled). A proper treemap (`rollup-plugin-visualizer`, temporary) would confirm the next-biggest critical-path items before cutting further.
 
-### C2 — `useTransition` navigation skeletons
+### C2 — Route-transition skeletons — ✅ DONE
 
-List fetch already shows skeletons, but **route transitions** don't. Wrap navigation in `useTransition` and surface the existing skeleton primitives ([loading-skeletons.tsx](../../apps/web/src/components/feedback/loading-skeletons.tsx)) during the pending state so tapping into a detail page doesn't flash blank. Hook into TanStack Router's pending/`defaultPendingComponent` rather than hand-rolling.
+The router had **no `defaultPendingComponent`** — detail routes set their own (`DetailPagePending`), but everything else (lists, `/`, `/search`, `/ask`) showed blank during the chunk/loader pending phase. Added a neutral `RoutePending` ([route-pending.tsx](../../apps/web/src/components/route-pending.tsx)) as the router-wide default + tuned thresholds ([router.tsx](../../apps/web/src/router.tsx)): `defaultPendingMs: 200` (preloaded/instant navs show nothing) and `defaultPendingMinMs: 400` (no flicker once shown). Verified on the dev server: a cold nav keeps the shell (nav + footer) intact and shows a pulsing skeleton in the content area instead of a blank flash; fast/preloaded navs show nothing.
 
 ### C3 — Residual N+1 audit
 

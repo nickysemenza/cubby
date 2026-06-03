@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/tanstackstart-react";
 import { createRouter } from "@tanstack/react-router";
 import { setupRouterSsrQueryIntegration } from "@tanstack/react-router-ssr-query";
 import { RouteErrorComponent } from "~/components/route-error";
+import { RoutePending } from "~/components/route-pending";
 import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 
 // Import the generated route tree
@@ -25,6 +26,12 @@ export const getRouter = () => {
     defaultPreload: "intent",
     defaultViewTransition: true,
     defaultErrorComponent: RouteErrorComponent,
+    // Route-transition skeleton instead of a blank flash. Thresholds chosen so
+    // preloaded (instant) navs show nothing, only genuinely-not-ready ones do;
+    // pendingMinMs holds it long enough to avoid a flicker once shown.
+    defaultPendingComponent: RoutePending,
+    defaultPendingMs: 200,
+    defaultPendingMinMs: 400,
   });
 
   // Initialize Sentry on client only. Dev keeps error reporting AND tracing,
