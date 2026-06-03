@@ -14,7 +14,6 @@ import {
 import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
 import type { TRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import * as React from "react";
-import { GlobalCommandMenu } from "~/app/_components/command-menu";
 import { AppFooter } from "~/app/_components/footer";
 import { MainNav } from "~/app/_components/MainNav";
 import { BottomNav } from "~/app/_components/navigation/bottom-nav";
@@ -25,6 +24,14 @@ import type { TRPCRouter } from "~/integrations/trpc/router";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import { Provider } from "../integrations/tanstack-query/root-provider";
 import appCss from "../styles.css?url";
+
+// Lazy: the command menu pulls in cmdk + react-markdown + the agent stream,
+// none of which is needed for first paint. Loaded on first ⌘K / search click.
+const GlobalCommandMenu = React.lazy(() =>
+  import("~/app/_components/command-menu").then((m) => ({
+    default: m.GlobalCommandMenu,
+  })),
+);
 
 interface MyRouterContext {
   queryClient: QueryClient;
@@ -165,6 +172,28 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [commandMenuOpen, setCommandMenuOpen] = React.useState(false);
+  // Only mount (and thus fetch the chunk for) the command menu once it's first
+  // requested. `mounted` latches true so it stays mounted after the first open.
+  const [commandMenuMounted, setCommandMenuMounted] = React.useState(false);
+
+  const openCommandMenu = React.useCallback(() => {
+    setCommandMenuMounted(true);
+    setCommandMenuOpen(true);
+  }, []);
+
+  // Shell-owned ⌘K hotkey (toggles), so the shortcut works before the lazily
+  // loaded menu has mounted. The menu no longer registers its own listener.
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCommandMenuMounted(true);
+        setCommandMenuOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   return (
     <Provider queryClient={queryClient}>
@@ -172,10 +201,7 @@ function RootComponent() {
         <div className="flex min-h-dvh flex-col">
           <div className="border-b">
             <div className="mx-auto flex h-16 w-full max-w-7xl items-center px-4 md:px-6">
-              <MainNav
-                className="mx-0"
-                onSearchClick={() => setCommandMenuOpen(true)}
-              />
+              <MainNav className="mx-0" onSearchClick={openCommandMenu} />
             </div>
           </div>
           <main className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
@@ -184,10 +210,14 @@ function RootComponent() {
           <AppFooter />
         </div>
         <BottomNav />
-        <GlobalCommandMenu
-          open={commandMenuOpen}
-          onOpenChange={setCommandMenuOpen}
-        />
+        {commandMenuMounted && (
+          <React.Suspense fallback={null}>
+            <GlobalCommandMenu
+              open={commandMenuOpen}
+              onOpenChange={setCommandMenuOpen}
+            />
+          </React.Suspense>
+        )}
         <Toaster />
         <DevtoolsWrapper />
       </DebugContextProvider>

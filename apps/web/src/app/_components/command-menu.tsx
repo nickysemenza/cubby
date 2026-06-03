@@ -153,17 +153,9 @@ export function GlobalCommandMenu({
     }
   };
 
-  React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen(!open);
-      }
-    };
-
-    document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
-  }, [open, setOpen]);
+  // The ⌘K hotkey is owned by the app shell (__root.tsx) so the shortcut works
+  // before this (lazily loaded) menu has mounted. Don't register it here too,
+  // or it would double-toggle once mounted.
 
   // Reset search and answer mode when dialog closes
   React.useEffect(() => {
