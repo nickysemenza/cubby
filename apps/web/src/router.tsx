@@ -7,6 +7,11 @@ import * as TanstackQuery from "./integrations/tanstack-query/root-provider";
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
 
+// Defined by Vite only for CF builds (build:cf), absent under `vite dev`.
+// We gate SW registration on this rather than import.meta.env.PROD, which is
+// unreliably false in this build (it also zeroes the Sentry replay rates).
+declare const __CF_WORKERS__: boolean | undefined;
+
 // Create a new router instance
 export const getRouter = () => {
   const rqContext = TanstackQuery.getContext();
@@ -48,6 +53,24 @@ export const getRouter = () => {
         : (breadcrumb) =>
             breadcrumb.category === "console" ? null : breadcrumb,
     });
+
+    // Register the app-shell service worker. Gate on the CF build (the SW only
+    // exists there; `vite dev` has no /sw.js and SW + HMR is noisy anyway).
+    // Best-effort: a failed registration must not break boot.
+    const isCfBuild =
+      typeof __CF_WORKERS__ !== "undefined" && __CF_WORKERS__ === true;
+    if (isCfBuild && "serviceWorker" in navigator) {
+      const register = () =>
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      // This module executes during hydration, which can be AFTER `load` has
+      // already fired — in which case a `load` listener would never run. So
+      // register immediately when the document is already complete.
+      if (document.readyState === "complete") {
+        register();
+      } else {
+        window.addEventListener("load", register, { once: true });
+      }
+    }
   }
 
   setupRouterSsrQueryIntegration({

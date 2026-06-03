@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#3a3530" />
+    <title>Offline · Cubby</title>
+    <style>
+      :root {
+        --bg: #faf8f5;
+        --ink: #3a3530;
+        --muted: #5c5550;
+        --accent: #c2603d;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: ui-sans-serif, system-ui, -apple-system, "Nunito Variable", sans-serif;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem
+          max(1.5rem, env(safe-area-inset-bottom));
+        text-align: center;
+        -webkit-font-smoothing: antialiased;
+      }
+      main { max-width: 22rem; }
+      svg { width: 4rem; height: 4rem; margin: 0 auto 1.25rem; display: block; }
+      h1 {
+        font-family: "Fraunces Variable", ui-serif, Georgia, serif;
+        font-size: 1.6rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem;
+        letter-spacing: -0.01em;
+      }
+      p { color: var(--muted); margin: 0 0 1.75rem; line-height: 1.5; }
+      button {
+        appearance: none;
+        border: 2px solid var(--ink);
+        background: var(--ink);
+        color: var(--bg);
+        font: inherit;
+        font-weight: 600;
+        padding: 0.65rem 1.4rem;
+        border-radius: 0.6rem;
+        cursor: pointer;
+        box-shadow: 3px 3px 0 var(--accent);
+        transition: transform 0.06s ease, box-shadow 0.06s ease;
+      }
+      button:active {
+        transform: translate(2px, 2px);
+        box-shadow: 1px 1px 0 var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <rect x="0" y="0" width="64" height="64" rx="10" fill="#3a3530" />
+        <rect x="8" y="10" width="48" height="3" rx="1" fill="#5c5550" />
+        <rect x="8" y="30" width="48" height="3" rx="1" fill="#5c5550" />
+        <rect x="8" y="50" width="48" height="3" rx="1" fill="#5c5550" />
+        <rect x="12" y="15" width="10" height="13" rx="2" fill="#c2603d" />
+        <circle cx="32" cy="22" r="6" fill="#d98a68" />
+        <rect x="42" y="17" width="10" height="11" rx="2" fill="#fdfbf7" />
+        <circle cx="16" cy="42" r="5" fill="#d98a68" />
+        <rect x="26" y="35" width="12" height="13" rx="2" fill="#c2603d" />
+        <rect x="44" y="38" width="8" height="10" rx="2" fill="#fdfbf7" />
+      </svg>
+      <h1>You're offline</h1>
+      <p>Cubby needs a connection to load your pantry. Check your network and try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>
