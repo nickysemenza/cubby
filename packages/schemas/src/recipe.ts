@@ -91,6 +91,15 @@ export const recipeOut = z
 
 export type RecipeOut = z.infer<typeof recipeOut>;
 
+// A cookbook as seen on the browse index: its name (the Book recipes'
+// `SourceData`) and how many non-deleted recipes came from it. Not a DB entity —
+// derived by grouping recipes on read.
+export const cookbookSummary = z.object({
+  book: z.string(),
+  recipeCount: z.number().int().nonnegative(),
+});
+export type CookbookSummary = z.infer<typeof cookbookSummary>;
+
 export type SectionIngredientType = z.infer<
   typeof sectionIngredientOut
 >["type"];

@@ -1,4 +1,5 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { Link } from "@tanstack/react-router";
 import { BookOpen, Clock, ExternalLink, Users } from "lucide-react";
 import { Image } from "~/components/ui/image";
 
@@ -47,10 +48,14 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
         </a>
       )}
       {recipe.source?.type === "book" && (
-        <div className="flex items-center gap-1.5">
+        <Link
+          to="/cookbooks/$book"
+          params={{ book: recipe.source.book }}
+          className="flex items-center gap-1.5 hover:underline"
+        >
           <BookOpen size={16} />
           <span>{recipe.source.book}</span>
-        </div>
+        </Link>
       )}
     </div>
   );

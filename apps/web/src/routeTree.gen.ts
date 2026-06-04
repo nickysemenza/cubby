@@ -34,6 +34,7 @@ import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authe
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
+import { Route as AuthenticatedCookbooksIndexRouteImport } from './routes/_authenticated/cookbooks.index'
 import { Route as ApiTrpcSplatRouteImport } from './routes/api/trpc/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -57,6 +58,7 @@ import { Route as AuthenticatedInventoryIdRouteImport } from './routes/_authenti
 import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
 import { Route as AuthenticatedIngredientsIdRouteImport } from './routes/_authenticated/ingredients.$id'
 import { Route as AuthenticatedImagesIdRouteImport } from './routes/_authenticated/images.$id'
+import { Route as AuthenticatedCookbooksBookRouteImport } from './routes/_authenticated/cookbooks.$book'
 import { Route as AuthenticatedAccountAccountViewRouteImport } from './routes/_authenticated/account.$accountView'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
@@ -193,6 +195,12 @@ const AuthenticatedImagesIndexRoute =
     path: '/images/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCookbooksIndexRoute =
+  AuthenticatedCookbooksIndexRouteImport.update({
+    id: '/cookbooks/',
+    path: '/cookbooks/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const ApiTrpcSplatRoute = ApiTrpcSplatRouteImport.update({
   id: '/api/trpc/$',
   path: '/api/trpc/$',
@@ -322,6 +330,12 @@ const AuthenticatedImagesIdRoute = AuthenticatedImagesIdRouteImport.update({
   path: '/images/$id',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedCookbooksBookRoute =
+  AuthenticatedCookbooksBookRouteImport.update({
+    id: '/cookbooks/$book',
+    path: '/cookbooks/$book',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAccountAccountViewRoute =
   AuthenticatedAccountAccountViewRouteImport.update({
     id: '/account/$accountView',
@@ -358,6 +372,7 @@ export interface FileRoutesByFullPath {
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/cookbooks/$book': typeof AuthenticatedCookbooksBookRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
@@ -381,6 +396,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/images/': typeof AuthenticatedImagesIndexRoute
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -410,6 +426,7 @@ export interface FileRoutesByTo {
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/cookbooks/$book': typeof AuthenticatedCookbooksBookRoute
   '/images/$id': typeof AuthenticatedImagesIdRoute
   '/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
   '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
@@ -433,6 +450,7 @@ export interface FileRoutesByTo {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
   '/images': typeof AuthenticatedImagesIndexRoute
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
@@ -464,6 +482,7 @@ export interface FileRoutesById {
   '/api/panel': typeof ApiPanelRoute
   '/auth/$authView': typeof AuthAuthViewRoute
   '/_authenticated/account/$accountView': typeof AuthenticatedAccountAccountViewRoute
+  '/_authenticated/cookbooks/$book': typeof AuthenticatedCookbooksBookRoute
   '/_authenticated/images/$id': typeof AuthenticatedImagesIdRoute
   '/_authenticated/ingredients/$id': typeof AuthenticatedIngredientsIdRoute
   '/_authenticated/ingredients/new': typeof AuthenticatedIngredientsNewRoute
@@ -487,6 +506,7 @@ export interface FileRoutesById {
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
   '/api/trpc/$': typeof ApiTrpcSplatRoute
+  '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
   '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -518,6 +538,7 @@ export interface FileRouteTypes {
     | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
+    | '/cookbooks/$book'
     | '/images/$id'
     | '/ingredients/$id'
     | '/ingredients/new'
@@ -541,6 +562,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
+    | '/cookbooks/'
     | '/images/'
     | '/ingredients/'
     | '/inventory/'
@@ -570,6 +592,7 @@ export interface FileRouteTypes {
     | '/api/panel'
     | '/auth/$authView'
     | '/account/$accountView'
+    | '/cookbooks/$book'
     | '/images/$id'
     | '/ingredients/$id'
     | '/ingredients/new'
@@ -593,6 +616,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
+    | '/cookbooks'
     | '/images'
     | '/ingredients'
     | '/inventory'
@@ -623,6 +647,7 @@ export interface FileRouteTypes {
     | '/api/panel'
     | '/auth/$authView'
     | '/_authenticated/account/$accountView'
+    | '/_authenticated/cookbooks/$book'
     | '/_authenticated/images/$id'
     | '/_authenticated/ingredients/$id'
     | '/_authenticated/ingredients/new'
@@ -646,6 +671,7 @@ export interface FileRouteTypes {
     | '/api/auth/$'
     | '/api/debug/timing'
     | '/api/trpc/$'
+    | '/_authenticated/cookbooks/'
     | '/_authenticated/images/'
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
@@ -848,6 +874,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImagesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/cookbooks/': {
+      id: '/_authenticated/cookbooks/'
+      path: '/cookbooks'
+      fullPath: '/cookbooks/'
+      preLoaderRoute: typeof AuthenticatedCookbooksIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/api/trpc/$': {
       id: '/api/trpc/$'
       path: '/api/trpc/$'
@@ -1009,6 +1042,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImagesIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/cookbooks/$book': {
+      id: '/_authenticated/cookbooks/$book'
+      path: '/cookbooks/$book'
+      fullPath: '/cookbooks/$book'
+      preLoaderRoute: typeof AuthenticatedCookbooksBookRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/account/$accountView': {
       id: '/_authenticated/account/$accountView'
       path: '/account/$accountView'
@@ -1045,6 +1085,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedAccountAccountViewRoute: typeof AuthenticatedAccountAccountViewRoute
+  AuthenticatedCookbooksBookRoute: typeof AuthenticatedCookbooksBookRoute
   AuthenticatedImagesIdRoute: typeof AuthenticatedImagesIdRoute
   AuthenticatedIngredientsIdRoute: typeof AuthenticatedIngredientsIdRoute
   AuthenticatedIngredientsNewRoute: typeof AuthenticatedIngredientsNewRoute
@@ -1065,6 +1106,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedRecipesImportCookbookRoute: typeof AuthenticatedRecipesImportCookbookRoute
   AuthenticatedRecipesNewRoute: typeof AuthenticatedRecipesNewRoute
   AuthenticatedUsdaIdRoute: typeof AuthenticatedUsdaIdRoute
+  AuthenticatedCookbooksIndexRoute: typeof AuthenticatedCookbooksIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
@@ -1090,6 +1132,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedAccountAccountViewRoute: AuthenticatedAccountAccountViewRoute,
+  AuthenticatedCookbooksBookRoute: AuthenticatedCookbooksBookRoute,
   AuthenticatedImagesIdRoute: AuthenticatedImagesIdRoute,
   AuthenticatedIngredientsIdRoute: AuthenticatedIngredientsIdRoute,
   AuthenticatedIngredientsNewRoute: AuthenticatedIngredientsNewRoute,
@@ -1112,6 +1155,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedRecipesImportCookbookRoute,
   AuthenticatedRecipesNewRoute: AuthenticatedRecipesNewRoute,
   AuthenticatedUsdaIdRoute: AuthenticatedUsdaIdRoute,
+  AuthenticatedCookbooksIndexRoute: AuthenticatedCookbooksIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,

@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  BookOpen,
   Camera,
   ExternalLink,
   Hammer,
@@ -56,6 +57,13 @@ const recipes: NavItem = {
   label: "Recipes",
   icon: entities.recipe.lucideIcon,
   isActive: (p) => p.startsWith("/recipes"),
+};
+
+const cookbooks: NavItem = {
+  href: "/cookbooks",
+  label: "Cookbooks",
+  icon: BookOpen,
+  isActive: (p) => p.startsWith("/cookbooks"),
 };
 
 const meals: NavItem = {
@@ -179,7 +187,13 @@ export const moreNavItems: NavItem[] = [
   images,
 ];
 
-export const kitchenItems: NavItem[] = [ingredients, recipes, meals, usda];
+export const kitchenItems: NavItem[] = [
+  ingredients,
+  recipes,
+  cookbooks,
+  meals,
+  usda,
+];
 
 export const reportsItems: NavItem[] = [
   dashboard,

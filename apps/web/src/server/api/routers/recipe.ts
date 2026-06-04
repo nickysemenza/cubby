@@ -14,6 +14,7 @@ import {
   ingredientCooccurrenceSchema,
 } from "@cubby/schemas/ingredient-cooccurrence";
 import {
+  cookbookSummary,
   recipeCreateInput,
   recipeOut,
   recipeUpdateInput,
@@ -23,13 +24,16 @@ import { createAppError } from "~/server/errors/app-error";
 import {
   createRecipe,
   deleteRecipes,
+  deleteRecipesByCookbook,
   getAllTags,
   getCookbookRecipeTitles,
   getIngredientCooccurrence,
   getRecipeByID,
   getRecipeByShortcode,
+  getRecipesByIDs,
   insertCompactRecipe,
   insertCookbookRecipe,
+  listCookbooks,
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
@@ -44,6 +48,8 @@ import { createTRPCRouter, protectedProcedure, systemProcedure } from "../trpc";
 // Define filters schema for recipes
 const recipeFiltersSchema = z.object({
   nameFilter: z.string().optional(),
+  // Scope the list to one cookbook (browse-by-source / cookbook detail page).
+  book: z.string().optional(),
 });
 
 // Create standardized CRUD procedures using factory
@@ -111,6 +117,22 @@ const getCookbookTitles = protectedProcedure
     return await getCookbookRecipeTitles(ctx.db, input.book);
   });
 
+// Distinct cookbooks with recipe counts, for the browse-by-source index.
+const listCookbooksEndpoint = protectedProcedure
+  .output(z.array(cookbookSummary))
+  .query(async ({ ctx }) => {
+    return await listCookbooks(ctx.db);
+  });
+
+// Bulk-delete every recipe imported from one cookbook (cascades to sections,
+// ingredients, and images via the shared deleteRecipes path).
+const deleteByCookbook = protectedProcedure
+  .input(z.object({ book: z.string().min(1) }))
+  .output(z.object({ deleted: z.number().int().nonnegative() }))
+  .mutation(async ({ ctx, input }) => {
+    return await deleteRecipesByCookbook(ctx.db, input.book, ctx.actorContext);
+  });
+
 // LLM passthrough for the in-browser EPUB extractor: the client builds each
 // chunk's request in WASM (`recipebridge.chunk_epub`) and sends it here so the
 // gateway key stays server-side. Returns the raw forced-tool `input`
@@ -158,6 +180,16 @@ const getByShortcode = protectedProcedure
     return await getRecipeByShortcode(ctx.db, input.shortcode);
   });
 
+// Batched fetch by id — mirrors ingredient.getManyByIDs. Used by client-side
+// cost rollup to resolve sub-recipes (recipe-as-ingredient) without an N+1
+// fan-out of getByID calls. Missing/deleted ids are omitted from the result.
+const getManyByIDs = protectedProcedure
+  .input(z.object({ ids: z.array(recipeId) }))
+  .output(z.array(recipeOut))
+  .query(async ({ ctx, input }) => {
+    return await getRecipesByIDs(ctx.db, input.ids);
+  });
+
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<RecipeId>(async (services, ids) => {
   await deleteRecipes(services.db, ids, services.actorContext);
@@ -167,11 +199,14 @@ export const recipeRouter = createTRPCRouter({
   insertCompact,
   insertCookbook,
   getCookbookTitles,
+  listCookbooks: listCookbooksEndpoint,
+  deleteByCookbook,
   extractCookbookChunk: extractCookbookChunkProc,
   scrape,
   seed,
   getByID,
   getByShortcode,
+  getManyByIDs,
   list,
   create,
   update,

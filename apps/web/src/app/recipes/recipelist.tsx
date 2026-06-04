@@ -31,9 +31,15 @@ import { TruncatedList } from "../_components/TruncatedList";
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
   actions?: ReactNode;
+  /**
+   * Scope the list to a single cookbook (its `SourceData` name). Set on the
+   * cookbook detail / browse-by-source page; the table then shows only that
+   * book's recipes. Undefined on the main recipes page (shows everything).
+   */
+  bookFilter?: string;
 }
 
-export function RecipeList({ actions }: RecipeListProps) {
+export function RecipeList({ actions, bookFilter }: RecipeListProps) {
   const api = useTRPC();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -212,6 +218,9 @@ export function RecipeList({ actions }: RecipeListProps) {
     queryOptions: api.recipe.list.queryOptions,
     buildFilters: (ts) => ({
       nameFilter: ts.getColumnFilter("name"),
+      // Constant scope when rendered on a cookbook page; merged with the
+      // table's own name filter so search-within-a-book still works.
+      ...(bookFilter ? { book: bookFilter } : {}),
     }),
     columns,
     nameClassName: "w-64",

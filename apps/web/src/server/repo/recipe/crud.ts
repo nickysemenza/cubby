@@ -79,6 +79,24 @@ export const getRecipeByID = async (
 };
 
 /**
+ * Get many recipes by ID in one query. Returns the full ingredient graph (incl.
+ * the `ingredient.Recipe` discriminator) but omits images — used by client-side
+ * cost rollup to resolve sub-recipes (recipe-as-ingredient). Missing/deleted ids
+ * are simply absent from the result.
+ */
+export const getRecipesByIDs = async (
+  db: Database,
+  ids: RecipeId[],
+): Promise<RecipeOut[]> => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(inArray(recipe.id, ids), notDeleted(recipe)),
+    ...relations.recipe.list,
+  });
+  return rows.map(dbRecipeToAPI);
+};
+
+/**
  * Find a recipe by shortcode and return its ID.
  */
 const findRecipeByShortcode = async (
@@ -113,6 +131,29 @@ export const getCookbookRecipeTitles = async (
     columns: { name: true },
   });
   return rows.map((r) => r.name);
+};
+
+/**
+ * Distinct cookbooks (by `SourceData`) with their non-deleted recipe count.
+ * Powers the cookbook browse index. No `Cookbook` table — a Book recipe's
+ * provenance is the `SourceData` string, so the list is a GROUP BY over it.
+ */
+export const listCookbooks = async (
+  db: Database,
+): Promise<Array<{ book: string; recipeCount: number }>> => {
+  const rows = await getDb(db)
+    .select({
+      book: recipe.SourceData,
+      recipeCount: sql<number>`count(*)::int`,
+    })
+    .from(recipe)
+    .where(and(eq(recipe.SourceType, "Book"), notDeleted(recipe)))
+    .groupBy(recipe.SourceData)
+    .orderBy(recipe.SourceData);
+  // SourceData is non-null for Book rows in practice; guard the type anyway.
+  return rows.filter(
+    (r): r is { book: string; recipeCount: number } => r.book !== null,
+  );
 };
 
 // Normalize a title for cross-recipe reference matching (trim + lowercase).
@@ -195,9 +236,19 @@ export const recipeList = async (
   const dbClient = getDb(db);
 
   // Build where conditions - always filter out deleted items
-  const whereClause = buildSearchConditions(recipe, [
-    { column: recipe.name, term: filters.nameFilter },
-  ]);
+  const whereClause = buildSearchConditions(
+    recipe,
+    [{ column: recipe.name, term: filters.nameFilter }],
+    [
+      // Scope to one cookbook when browsing by source.
+      filters.book
+        ? and(
+            eq(recipe.SourceType, "Book"),
+            eq(recipe.SourceData, filters.book),
+          )
+        : undefined,
+    ],
+  );
 
   // Build orderBy using central sortableFields config
   const orderByClause = buildOrderBy(recipe, sort, [
@@ -657,4 +708,28 @@ export const deleteRecipes = async (
 
     await logAuditEntries(tx, actor, auditEntries);
   });
+};
+
+/**
+ * Soft-delete every non-deleted recipe imported from a given cookbook
+ * (SourceType='Book', SourceData=book). Delegates to {@link deleteRecipes} so
+ * the section/ingredient/image cascade, transaction, and audit trail are shared.
+ * Returns the number of recipes deleted.
+ */
+export const deleteRecipesByCookbook = async (
+  db: Database,
+  book: string,
+  actor: ActorContext,
+): Promise<{ deleted: number }> => {
+  const rows = await getDb(db).query.recipe.findMany({
+    where: and(
+      eq(recipe.SourceType, "Book"),
+      eq(recipe.SourceData, book),
+      notDeleted(recipe),
+    ),
+    columns: { id: true },
+  });
+  const ids = rows.map((r) => unsafeRecipeId(r.id));
+  await deleteRecipes(db, ids, actor);
+  return { deleted: ids.length };
 };
