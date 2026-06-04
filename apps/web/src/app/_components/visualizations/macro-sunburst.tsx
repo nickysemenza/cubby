@@ -53,7 +53,7 @@ export default function MacroSunburst({ ingredients }: MacroSunburstProps) {
 
     for (const ing of ingredients) {
       const nutrientResult = ing.priceInfo?.nutrient;
-      if (!nutrientResult?.success) continue;
+      if (!nutrientResult?.isOk()) continue;
 
       const nutrients = nutrientResult.value;
       const name =

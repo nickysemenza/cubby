@@ -199,7 +199,7 @@ function ConversionDialogContent({
                           <span className="font-medium">{Meta.label}</span>
                         </span>
                         <span>
-                          {result?.success
+                          {result?.isOk()
                             ? wasm.format_amount(result.value)
                             : "Not convertible"}
                         </span>

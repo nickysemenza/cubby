@@ -1,13 +1,9 @@
-export type Result<T, E = string> =
-  | { success: true; value: T; error?: never }
-  | { success: false; value?: never; error: E };
+import type { Result as NeverthrowResult } from "neverthrow";
 
-export const withSuccess = <T, E = string>(value: T): Result<T, E> => ({
-  success: true,
-  value,
-});
-
-export const withFailure = <T, E = string>(error: E): Result<T, E> => ({
-  success: false,
-  error,
-});
+/**
+ * Project-wide `Result` is `neverthrow`'s `Result` with a `string` error
+ * default, so the common case (`Result<WAmount>`, string-message failures)
+ * stays single-arg. Construct with `ok`/`err` imported directly from
+ * `neverthrow`; inspect with `.isOk()`/`.isErr()` and read `.value`/`.error`.
+ */
+export type Result<T, E = string> = NeverthrowResult<T, E>;

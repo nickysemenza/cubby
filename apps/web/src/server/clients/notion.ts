@@ -5,6 +5,8 @@ import type {
 } from "@notionhq/client/build/src/api-endpoints/blocks";
 import type { PageObjectResponse } from "@notionhq/client/build/src/api-endpoints/common";
 import type { QueryDataSourceResponse } from "@notionhq/client/build/src/api-endpoints/data-sources";
+import { LRUCache } from "lru-cache";
+import pRetry from "p-retry";
 import { getErrorMessage } from "~/lib/error-utils";
 import { getTracer, TraceNames } from "~/server/tracing";
 
@@ -252,18 +254,23 @@ function blockToNotionBlock(block: BlockObjectResponse): NotionBlock | null {
 
 // -- Cache (module-level, survives across requests in dev) --
 
-const cache = new Map<string, { data: unknown; expires: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// `lru-cache` handles expiry (`ttl`) and bounding (`max`) — the old Map was
+// unbounded and checked `Date.now()` by hand. Cached values are non-nullish
+// query results, so a `get` returning `undefined` unambiguously means miss/expired.
+const cache = new LRUCache<string, NonNullable<unknown>>({
+  max: 100,
+  ttl: CACHE_TTL,
+});
 
-function getCached<T>(key: string): T | undefined {
-  const entry = cache.get(key);
-  if (entry && Date.now() < entry.expires) return entry.data as T;
-  cache.delete(key);
-  return undefined;
-}
-
-function setCache(key: string, data: unknown): void {
-  cache.set(key, { data, expires: Date.now() + CACHE_TTL });
+/**
+ * Transient Notion errors worth retrying (timeouts, gateway, rate limits).
+ * Exported for unit testing — this classification is the behavior preserved
+ * across the move to `p-retry`; the backoff/attempt-count timing is now
+ * p-retry's responsibility, not ours.
+ */
+export function isRetryableNotionError(error: Error): boolean {
+  return /timed out|504|502|rate_limited|429/.test(error.message);
 }
 
 // -- Client --
@@ -299,11 +306,11 @@ export class NotionClient {
     operation: string,
     fn: () => Promise<T>,
   ): Promise<T> {
-    const cached = getCached<T>(key);
+    const cached = cache.get(key) as T | undefined;
     if (cached !== undefined) return cached;
 
     const result = await this.traced(operation, fn);
-    setCache(key, result);
+    cache.set(key, result as NonNullable<unknown>);
     return result;
   }
 
@@ -332,7 +339,7 @@ export class NotionClient {
   }
 
   /** Single page query with retry on 504/timeout. */
-  private async queryWithRetry(
+  private queryWithRetry(
     dataSourceId: string,
     cursor: string | undefined,
     opts?: {
@@ -341,35 +348,33 @@ export class NotionClient {
         direction: "ascending" | "descending";
       }>;
     },
-    retries = 3,
   ): Promise<QueryDataSourceResponse> {
-    for (let attempt = 0; attempt < retries; attempt++) {
-      try {
-        return await this.client.dataSources.query({
+    // `p-retry` counts retries *after* the first attempt, so `retries: 2` =
+    // 3 total attempts, with `minTimeout`/`factor` giving 1s then 2s backoff —
+    // matching the old hand-rolled loop. Only transient errors are retried;
+    // `shouldRetry: false` rejects with the original error for everything else.
+    return pRetry(
+      () =>
+        this.client.dataSources.query({
           data_source_id: dataSourceId,
           page_size: 100,
           start_cursor: cursor,
           ...opts,
-        });
-      } catch (e: unknown) {
-        const isRetryable =
-          e instanceof Error &&
-          (e.message.includes("timed out") ||
-            e.message.includes("504") ||
-            e.message.includes("502") ||
-            e.message.includes("rate_limited") ||
-            e.message.includes("429"));
-
-        if (!isRetryable || attempt === retries - 1) throw e;
-
-        const delay = 1000 * 2 ** attempt; // 1s, 2s, 4s
-        console.warn(
-          `[notion] Retry ${attempt + 1}/${retries} after ${delay}ms: ${getErrorMessage(e)}`,
-        );
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-    throw new Error("unreachable");
+        }),
+      {
+        retries: 2,
+        minTimeout: 1000,
+        factor: 2,
+        shouldRetry: ({ error }) => isRetryableNotionError(error),
+        onFailedAttempt: ({ error, attemptNumber, retriesLeft }) => {
+          if (retriesLeft > 0 && isRetryableNotionError(error)) {
+            console.warn(
+              `[notion] Retry ${attemptNumber} (${retriesLeft} left): ${getErrorMessage(error)}`,
+            );
+          }
+        },
+      },
+    );
   }
 
   async queryProjects(): Promise<NotionProject[]> {

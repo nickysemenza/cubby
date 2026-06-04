@@ -53,7 +53,7 @@ export default function RecipeCostTreemap({
       const rowKey = ing.id;
 
       const priceResult = ing.priceInfo?.price;
-      if (priceResult?.success && priceResult.value.value > 0) {
+      if (priceResult?.isOk() && priceResult.value.value > 0) {
         const cost = priceResult.value.value;
         pricedItems.push({
           name,

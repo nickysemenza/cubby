@@ -58,8 +58,8 @@ describe("convertAmountToNutrients", () => {
 
     const result = convertAmountToNutrients(amount, mappings);
 
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       // 2 cups = 250g, 250g / 100 * 10 = 25g protein
       expect(result.value["203"]).toBeCloseTo(25, 0);
       // 2 cups = 250g, 250g / 100 * 200 = 500 kcal
@@ -81,8 +81,10 @@ describe("convertAmountToNutrients", () => {
 
     const result = convertAmountToNutrients(amount, mappings);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toBe("No nutrient conversions succeeded");
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe("No nutrient conversions succeeded");
+    }
   });
 
   test("handles empty mappings array", () => {
@@ -91,7 +93,7 @@ describe("convertAmountToNutrients", () => {
 
     const result = convertAmountToNutrients(amount, mappings);
 
-    expect(result.success).toBe(false);
+    expect(result.isOk()).toBe(false);
   });
 
   test("kcal requires 'kcal' unit (not 'kcal kcal') because WASM uses Unit::KCal internally", () => {
@@ -115,7 +117,7 @@ describe("convertAmountToNutrients", () => {
 
     const badResult = convertAmountToNutrients(amount, badMappings);
     // Should fail because "kcal kcal" doesn't match Unit::KCal
-    expect(badResult.success).toBe(false);
+    expect(badResult.isOk()).toBe(false);
 
     // This WORKS: "kcal" parses to Unit::KCal
     const goodMappings: UnitMapping[] = [
@@ -128,8 +130,8 @@ describe("convertAmountToNutrients", () => {
     ];
 
     const goodResult = convertAmountToNutrients(amount, goodMappings);
-    expect(goodResult.success).toBe(true);
-    if (goodResult.success) {
+    expect(goodResult.isOk()).toBe(true);
+    if (goodResult.isOk()) {
       // Nutrient code "208" is kcal
       expect(goodResult.value["208"]).toBe(200);
     }
@@ -166,14 +168,14 @@ describe("getGramAndNutrient", () => {
     const result = getGramAndNutrient(amount, mappings, undefined);
 
     // Assert
-    expect(result.gram.success).toBe(true);
-    if (result.gram.success) {
+    expect(result.gram.isOk()).toBe(true);
+    if (result.gram.isOk()) {
       expect(result.gram.value.unit).toBe("g");
       expect(result.gram.value.value).toBe(240);
     }
 
-    expect(result.nutrient.success).toBe(true);
-    if (result.nutrient.success) {
+    expect(result.nutrient.isOk()).toBe(true);
+    if (result.nutrient.isOk()) {
       // 1 cup = 240g, 240g / 100 * 10 = 24g protein
       expect(result.nutrient.value["203"]).toBeCloseTo(24, 0);
       // 1 cup = 240g, 240g / 100 * 200 = 480 kcal
@@ -191,10 +193,12 @@ describe("getGramAndNutrient", () => {
     const result = getGramAndNutrient(amount, mappings, product);
 
     // Assert
-    expect(result.gram.success).toBe(false);
-    expect(result.gram.error).toContain("Error converting to weight:");
+    expect(result.gram.isErr()).toBe(true);
+    if (result.gram.isErr()) {
+      expect(result.gram.error).toContain("Error converting to weight:");
+    }
 
-    expect(result.nutrient.success).toBe(false);
+    expect(result.nutrient.isOk()).toBe(false);
   });
 
   test("weight succeeds independently from nutrients", () => {
@@ -214,15 +218,17 @@ describe("getGramAndNutrient", () => {
     const result = getGramAndNutrient(amount, mappings, undefined);
 
     // Assert - Weight conversion should succeed
-    expect(result.gram.success).toBe(true);
-    if (result.gram.success) {
+    expect(result.gram.isOk()).toBe(true);
+    if (result.gram.isOk()) {
       expect(result.gram.value.unit).toBe("g");
       expect(result.gram.value.value).toBe(240);
     }
 
     // Nutrient conversion should fail due to missing nutrient mappings
-    expect(result.nutrient.success).toBe(false);
-    expect(result.nutrient.error).toBe("No nutrient conversions succeeded");
+    expect(result.nutrient.isErr()).toBe(true);
+    if (result.nutrient.isErr()) {
+      expect(result.nutrient.error).toBe("No nutrient conversions succeeded");
+    }
   });
 
   test("nutrients succeed independently from weight", () => {
@@ -249,11 +255,11 @@ describe("getGramAndNutrient", () => {
     const result = getGramAndNutrient(amount, mappings, undefined);
 
     // Assert - Weight conversion should fail (no path to grams)
-    expect(result.gram.success).toBe(false);
+    expect(result.gram.isOk()).toBe(false);
 
     // Nutrient conversion should succeed via direct mapping
-    expect(result.nutrient.success).toBe(true);
-    if (result.nutrient.success) {
+    expect(result.nutrient.isOk()).toBe(true);
+    if (result.nutrient.isOk()) {
       expect(result.nutrient.value["203"]).toBeCloseTo(15, 0);
       expect(result.nutrient.value["208"]).toBeCloseTo(200, 0);
     }
@@ -277,8 +283,8 @@ describe("convertAmountToPrice", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     // Assert
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       expect(result.value.unit).toBe("$");
       expect(result.value.value).toBe(2.99);
     }
@@ -293,8 +299,10 @@ describe("convertAmountToPrice", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     // Assert
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Error converting to money:");
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toContain("Error converting to money:");
+    }
   });
 });
 
@@ -305,8 +313,10 @@ describe("WASM Error Scenarios", () => {
 
     const result = convertAmountToPrice(amount, mappings);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Failed to convert");
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toContain("Failed to convert");
+    }
   });
 
   test("handles incompatible unit mappings", () => {
@@ -322,8 +332,10 @@ describe("WASM Error Scenarios", () => {
 
     const result = convertAmountToPrice(amount, mappings);
 
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Failed to convert");
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toContain("Failed to convert");
+    }
   });
 
   test("handles zero values in mappings", () => {
@@ -340,7 +352,7 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     // This might succeed or fail depending on WASM implementation
-    if (result.success) {
+    if (result.isOk()) {
       // If it succeeds, it should handle zero gracefully
       expect(result.value).toBeDefined();
     } else {
@@ -362,8 +374,8 @@ describe("WASM Error Scenarios", () => {
 
     const result = convertAmountToPrice(amount, mappings);
 
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       // Very large number conversions have floating point precision limits
       // The result is close to the expected value but not exact
       expect(result.value.value).toBeGreaterThan(29e9); // At least 29 billion
@@ -385,8 +397,8 @@ describe("WASM Error Scenarios", () => {
 
     const result = convertAmountToPrice(amount, mappings);
 
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       // Very small values might be rounded to zero by WASM/floating point precision
       expect(result.value.value).toBeGreaterThanOrEqual(0);
       expect(result.value.unit).toBe("$");
@@ -407,8 +419,8 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     // WASM actually handles case-insensitive unit matching
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       expect(result.value.value).toBe(2.99);
       expect(result.value.unit).toBe("$");
     }
@@ -439,8 +451,8 @@ describe("WASM Error Scenarios", () => {
 
     const result = convertAmountToPrice(amount, mappings);
 
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       // 1 cup -> 240ml -> 0.24 liter -> 0.24 * 3.99 = $0.9576
       // WASM returns $0.94-0.96 depending on environment precision
       expect(result.value.value).toBeGreaterThanOrEqual(0.94);
@@ -469,8 +481,10 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     // Should fail to convert to money since there's no path to money
-    expect(result.success).toBe(false);
-    expect(result.error).toContain("Failed to convert");
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toContain("Failed to convert");
+    }
   });
 
   test("handles custom unit names", () => {
@@ -487,8 +501,8 @@ describe("WASM Error Scenarios", () => {
     const result = convertAmountToPrice(amount, mappings);
 
     // WASM handles custom unit names as "Other" type and can convert them
-    expect(result.success).toBe(true);
-    if (result.success) {
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
       expect(result.value.value).toBe(2.99);
       expect(result.value.unit).toBe("$");
     }

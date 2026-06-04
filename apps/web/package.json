@@ -106,6 +106,8 @@
     "json-edit-react": "^1.29.0",
     "lru-cache": "^11.5.1",
     "lucide-react": "^0.577.0",
+    "neverthrow": "^8.2.0",
+    "p-retry": "^8.0.0",
     "papaparse": "^5.5.3",
     "pg": "^8.18.0",
     "qrcode": "^1.5.4",

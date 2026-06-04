@@ -8,9 +8,10 @@ import {
   type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
+import { err, ok } from "neverthrow";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
-import { type Result, withFailure, withSuccess } from "~/misc/result-types";
+import type { Result } from "~/misc/result-types";
 import type {
   IngredientWithFoodOut,
   ProductWithMappingsAndFoodOut,
@@ -76,12 +77,12 @@ export const convertAmountToNutrients = (
 
     // Check if we got any nutrients
     if (Object.keys(nutrients).length === 0) {
-      return withFailure("No nutrient conversions succeeded");
+      return err("No nutrient conversions succeeded");
     }
 
-    return withSuccess(nutrients);
+    return ok(nutrients);
   } catch (e) {
-    return withFailure(`Error converting to nutrients: ${e}`);
+    return err(`Error converting to nutrients: ${e}`);
   }
 };
 
@@ -102,9 +103,9 @@ export const safeConvertAmount = (
 ): Result<WAmount> => {
   try {
     const result = wasm.conv_amount_to_kind(mappings, kind, amount);
-    return withSuccess(result);
+    return ok(result);
   } catch (e) {
-    return withFailure(`Error converting to ${kind}: ${e}`);
+    return err(`Error converting to ${kind}: ${e}`);
   }
 };
 
@@ -177,9 +178,9 @@ const getIngredientMeasures = (
   if (!firstAmount) {
     const error = `ingredient ${ingredient.id} has no amounts`;
     return {
-      price: withFailure(error),
-      gram: withFailure(error),
-      nutrient: withFailure(error),
+      price: err(error),
+      gram: err(error),
+      nutrient: err(error),
     };
   }
 
@@ -226,19 +227,19 @@ export const calculateTotals = (
         ingMap,
       );
 
-      if (price.success) {
+      if (price.isOk()) {
         prices.push(price.value);
       } else {
         missingByType.price.push(ingName);
       }
 
-      if (gram.success) {
+      if (gram.isOk()) {
         grams.push(gram.value);
       } else {
         missingByType.weight.push(ingName);
       }
 
-      if (nutrient.success) {
+      if (nutrient.isOk()) {
         nutrients.push(nutrient.value);
       } else {
         missingByType.nutrients.push(ingName);

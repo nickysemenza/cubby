@@ -154,16 +154,16 @@ export class AvailabilityService {
     // no weight path (e.g. a count item whose product has only a price mapping).
     const allMappings = products.flatMap((p) => p.mappings);
     const needWeight = safeConvertAmount(need, allMappings, "weight");
-    const basisUnit = needWeight.success ? needWeight.value.unit : need.unit;
-    const needValue = needWeight.success ? needWeight.value.value : need.value;
+    const basisUnit = needWeight.isOk() ? needWeight.value.unit : need.unit;
+    const needValue = needWeight.isOk() ? needWeight.value.value : need.value;
 
     let haveTotal = 0;
     let anyConvertible = false;
     for (const product of products) {
       for (const onHand of product.amounts) {
-        if (needWeight.success) {
+        if (needWeight.isOk()) {
           const grams = safeConvertAmount(onHand, product.mappings, "weight");
-          if (grams.success) {
+          if (grams.isOk()) {
             haveTotal += grams.value.value;
             anyConvertible = true;
           }

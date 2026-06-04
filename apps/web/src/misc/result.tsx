@@ -5,7 +5,7 @@ export const renderValueOrError = <T, E = string>(
   result: Result<T, E>,
   renderValue: (value: T) => JSX.Element | string,
 ) => {
-  if (result.success) {
+  if (result.isOk()) {
     return renderValue(result.value);
   }
   return <div className="text-destructive">{`${result.error}`}</div>;
@@ -21,7 +21,7 @@ export const renderValueOrMissing = <T, E = string>(
   result: Result<T, E>,
   renderValue: (value: T) => JSX.Element | string,
 ) => {
-  if (result.success) {
+  if (result.isOk()) {
     return renderValue(result.value);
   }
   return (

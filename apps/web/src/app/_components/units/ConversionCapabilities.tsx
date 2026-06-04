@@ -78,7 +78,7 @@ export const ConversionCapabilities = memo(function ConversionCapabilities({
       );
       return {
         ...test,
-        success: result.success,
+        success: result.isOk(),
       };
     });
   }, [mappings, compact]);
