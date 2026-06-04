@@ -227,7 +227,8 @@ const getSubRecipeMappings = (
   return buildYieldMappings(sub.yield, subTotals);
 };
 
-type IngredientMeasures = {
+/** Price, weight, and nutrient results for one ingredient (or sub-recipe). */
+type IngredientPriceInfo = {
   price: Result<WAmount>;
   gram: Result<WAmount>;
   nutrient: Result<NutrientsPer100>;
@@ -244,7 +245,7 @@ type IngredientMeasures = {
 const measuresFromMappings = (
   amount: Amount,
   mappings: UnitMapping[],
-): IngredientMeasures => {
+): IngredientPriceInfo => {
   try {
     const targets = getNutrientTargets();
     const all = wasm.conv_amount_all(
@@ -293,7 +294,7 @@ const getIngredientMeasures = (
   ingMap: Record<string, IngredientWithFoodOut>,
   recipeMap: Record<string, RecipeOut> = {},
   visited: Set<string> = new Set(),
-): IngredientMeasures => {
+): IngredientPriceInfo => {
   const firstAmount = ingredient.amounts[0];
 
   if (!firstAmount) {
@@ -409,12 +410,6 @@ export const calculateTotals = (
     totalIngredients: ingredients.length,
     missingByType,
   };
-};
-
-type IngredientPriceInfo = {
-  price: Result<WAmount>;
-  gram: Result<WAmount>;
-  nutrient: Result<NutrientsPer100>;
 };
 
 export type IngredientDataItem = SectionIngredientOut & {
