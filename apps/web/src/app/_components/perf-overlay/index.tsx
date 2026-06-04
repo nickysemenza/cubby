@@ -284,11 +284,8 @@ function SlowTab({ snap }: { snap: PerfSnapshot }) {
     <table className="w-full">
       <tbody>
         {events.map((e, i) => (
-          <tr
-            // biome-ignore lint/suspicious/noArrayIndexKey: chronological log, no stable id; `at` alone collides within a tick
-            key={`${e.at}-${i}`}
-            className="border-border/30 border-t"
-          >
+          // Composite key: `at` alone collides for events in the same tick.
+          <tr key={`${e.at}-${i}`} className="border-border/30 border-t">
             <td className="py-0.5 pr-1 align-middle">
               <span
                 className="font-semibold text-[9px] uppercase"
