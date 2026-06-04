@@ -81,8 +81,12 @@ const tracedCall = (
   return tracer.startActiveSpan(TraceNames.wasm(name), (span) => {
     const recording = span.isRecording();
     const start = performance.now();
+    let threw = false;
     try {
       return method(...args);
+    } catch (err) {
+      threw = true;
+      throw err;
     } finally {
       const durationMs = performance.now() - start;
       // The expensive attribute work (`flatten` + `setAttributes`) is gated on
@@ -95,7 +99,7 @@ const tracedCall = (
           data: flatten(args),
         });
       }
-      if (getFlag("perfOverlay")) recordWasmExec(name, durationMs);
+      if (getFlag("perfOverlay")) recordWasmExec(name, durationMs, threw);
       // Flag-gated (default on in dev, off in CF prod) — flippable on /settings.
       if (getFlag("wasmSlowWarn") && durationMs > SLOW_WASM_THRESHOLD_MS) {
         // eslint-disable-next-line no-console

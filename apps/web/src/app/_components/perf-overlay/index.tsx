@@ -16,6 +16,7 @@ import { setFlag } from "~/lib/flags";
 import {
   type PerfSnapshot,
   reset,
+  type SlowEvent,
   setPaused,
   snapshot,
   startCollectors,
@@ -42,8 +43,8 @@ const CORNER_CLASS: Record<Corner, string> = {
   "bottom-right": "bottom-2 right-2",
 };
 
-type Tab = "WASM" | "Queries" | "Renders" | "Runtime" | "Vitals";
-const TABS: Tab[] = ["WASM", "Queries", "Renders", "Runtime", "Vitals"];
+type Tab = "WASM" | "Queries" | "Renders" | "Runtime" | "Vitals" | "Slow";
+const TABS: Tab[] = ["Slow", "WASM", "Queries", "Renders", "Runtime", "Vitals"];
 
 const ms = (n: number) => `${n.toFixed(1)}ms`;
 
@@ -58,7 +59,7 @@ export function PerfOverlay() {
     "bottom-left",
   );
   const [minimized, setMinimized] = useLocalStorage("perfOverlayMin", false);
-  const [tab, setTab] = useState<Tab>("WASM");
+  const [tab, setTab] = useState<Tab>("Slow");
   const [paused, setPausedState] = useState(false);
   const [snap, setSnap] = useState<PerfSnapshot>(() => snapshot());
   const queryClient = useQueryClient();
@@ -212,6 +213,7 @@ export function PerfOverlay() {
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-1.5">
+        {tab === "Slow" && <SlowTab snap={snap} />}
         {tab === "WASM" && <WasmTab snap={snap} />}
         {tab === "Queries" && <QueriesTab snap={snap} live={live} />}
         {tab === "Renders" && <RendersTab snap={snap} />}
@@ -261,6 +263,61 @@ function Bar({ pct, tone = 1 }: { pct: number; tone?: number }) {
   );
 }
 
+const SLOW_TONE: Record<SlowEvent["kind"], number> = {
+  query: 1,
+  wasm: 2,
+  render: 4,
+};
+const SLOW_TAG: Record<SlowEvent["kind"], string> = {
+  query: "qry",
+  wasm: "wasm",
+  render: "rndr",
+};
+
+/** Chronological log of jank events (≥16ms) across WASM, queries and renders. */
+function SlowTab({ snap }: { snap: PerfSnapshot }) {
+  const events = snap.slowest;
+  if (events.length === 0)
+    return <Empty label="No jank (≥16ms) yet — interact or load a page." />;
+  const now = performance.now();
+  return (
+    <table className="w-full">
+      <tbody>
+        {events.map((e, i) => (
+          <tr
+            // biome-ignore lint/suspicious/noArrayIndexKey: chronological log, no stable id; `at` alone collides within a tick
+            key={`${e.at}-${i}`}
+            className="border-border/30 border-t"
+          >
+            <td className="py-0.5 pr-1 align-middle">
+              <span
+                className="font-semibold text-[9px] uppercase"
+                style={{ color: `var(--chart-${SLOW_TONE[e.kind]})` }}
+              >
+                {SLOW_TAG[e.kind]}
+              </span>
+            </td>
+            <td className="truncate py-0.5" title={e.label}>
+              {e.label}
+            </td>
+            <td className="whitespace-nowrap pl-1 text-right text-[10px] text-muted-foreground">
+              {Math.round((now - e.at) / 1000)}s
+            </td>
+            <td
+              className={cn(
+                "whitespace-nowrap pl-1 text-right font-semibold",
+                e.ms > 100 ? "text-destructive" : "text-amber-600",
+              )}
+            >
+              {ms(e.ms)}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function WasmTab({ snap }: { snap: PerfSnapshot }) {
   const rows = Object.entries(snap.wasm).sort(
     (a, b) => b[1].executions - a[1].executions,
@@ -289,7 +346,17 @@ function WasmTab({ snap }: { snap: PerfSnapshot }) {
             const avg = s.executions > 0 ? s.totalMs / s.executions : 0;
             return (
               <tr key={name} className="border-border/30 border-t">
-                <td className="truncate py-0.5">{name}</td>
+                <td className="truncate py-0.5">
+                  {name}
+                  {s.throws > 0 && (
+                    <span
+                      className="ml-1 text-[9px] text-destructive"
+                      title={`${s.throws} executions threw (uncached, re-run each call)`}
+                    >
+                      ⚠{s.throws}
+                    </span>
+                  )}
+                </td>
                 <td className="text-right">{s.executions}</td>
                 <td className="text-right text-muted-foreground">{ms(avg)}</td>
                 <td
@@ -380,40 +447,70 @@ function RendersTab({ snap }: { snap: PerfSnapshot }) {
   const rows = Object.entries(snap.renders).sort(
     (a, b) => b[1].count - a[1].count,
   );
-  if (rows.length === 0)
+  // React <Profiler> is a no-op in the production build, so renders are dev-only.
+  const caveat = import.meta.env.DEV
+    ? "dev build · render times ~2–4× prod"
+    : "Renders are only captured in dev builds.";
+  if (rows.length === 0) {
     return (
-      <Empty label="No profiled renders — wrap a subtree in PerfProfiler." />
+      <Empty
+        label={
+          import.meta.env.DEV
+            ? "No profiled renders yet — load a page."
+            : caveat
+        }
+      />
     );
+  }
   const maxCount = rows[0][1].count;
   return (
-    <table className="w-full">
-      <thead className="text-[10px] text-muted-foreground">
-        <tr className="text-left">
-          <th className="font-normal">component</th>
-          <th className="text-right font-normal">renders</th>
-          <th className="text-right font-normal">avg</th>
-          <th className="text-right font-normal">max</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(([id, s]) => (
-          <tr key={id} className="border-border/30 border-t align-top">
-            <td className="py-0.5">
-              <div className="truncate">{id}</div>
-              <Bar
-                pct={(s.count / maxCount) * 100}
-                tone={s.count > 10 ? 4 : 3}
-              />
-            </td>
-            <td className="text-right font-semibold">{s.count}</td>
-            <td className="text-right text-muted-foreground">
-              {ms(s.count > 0 ? s.totalMs / s.count : 0)}
-            </td>
-            <td className="text-right text-muted-foreground">{ms(s.maxMs)}</td>
+    <div>
+      <table className="w-full">
+        <thead className="text-[10px] text-muted-foreground">
+          <tr className="text-left">
+            <th className="font-normal">component</th>
+            <th className="text-right font-normal">renders</th>
+            <th className="text-right font-normal">avg</th>
+            <th className="text-right font-normal">max</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map(([id, s]) => (
+            <tr key={id} className="border-border/30 border-t align-top">
+              <td className="py-0.5">
+                <div className="flex items-center gap-1">
+                  <span className="truncate">{id}</span>
+                  {s.lastPhase && (
+                    <span
+                      className={cn(
+                        "shrink-0 rounded-sm px-1 text-[9px]",
+                        s.lastPhase === "nested-update"
+                          ? "bg-destructive/15 text-destructive"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {s.lastPhase}
+                    </span>
+                  )}
+                </div>
+                <Bar
+                  pct={(s.count / maxCount) * 100}
+                  tone={s.count > 10 ? 4 : 3}
+                />
+              </td>
+              <td className="text-right font-semibold">{s.count}</td>
+              <td className="text-right text-muted-foreground">
+                {ms(s.count > 0 ? s.totalMs / s.count : 0)}
+              </td>
+              <td className="text-right text-muted-foreground">
+                {ms(s.maxMs)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="px-1 pt-1 text-[9px] text-muted-foreground">{caveat}</div>
+    </div>
   );
 }
 

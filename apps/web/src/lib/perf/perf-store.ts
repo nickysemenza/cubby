@@ -16,6 +16,13 @@ export interface WasmStat {
   coldMs: number; // duration of the first (cold) execution
   hits: number;
   misses: number;
+  throws: number; // executions that threw (e.g. failed conversions — never cached)
+}
+export interface SlowEvent {
+  kind: "wasm" | "query" | "render";
+  label: string;
+  ms: number;
+  at: number; // performance.now() when recorded
 }
 export interface RenderStat {
   count: number;
@@ -46,11 +53,14 @@ export interface PerfSnapshot {
   queries: Record<string, QueryStat>;
   runtime: RuntimeStat;
   vitals: VitalsStat;
+  slowest: SlowEvent[];
   paused: boolean;
 }
 
 const FANOUT_WINDOW_MS = 1000;
 const FANOUT_THRESHOLD = 5;
+const SLOW_EVENT_MS = 16; // one 60fps frame
+const SLOW_LOG_MAX = 40;
 
 const wasm = new Map<string, WasmStat>();
 const renders = new Map<string, RenderStat>();
@@ -58,22 +68,44 @@ const queries = new Map<string, QueryStat>();
 const queryTimestamps = new Map<string, number[]>();
 const runtime: RuntimeStat = { fps: 0, longTasks: 0, heapUsedMB: null };
 const vitals: VitalsStat = { lcp: null, inp: null, cls: null };
+const slowLog: SlowEvent[] = [];
 let cacheSize = 0;
 let paused = false;
 
 function emptyWasm(): WasmStat {
-  return { executions: 0, totalMs: 0, maxMs: 0, coldMs: 0, hits: 0, misses: 0 };
+  return {
+    executions: 0,
+    totalMs: 0,
+    maxMs: 0,
+    coldMs: 0,
+    hits: 0,
+    misses: 0,
+    throws: 0,
+  };
+}
+
+/** Append jank events (≥ one frame) to a bounded chronological ring buffer. */
+function recordSlow(kind: SlowEvent["kind"], label: string, ms: number): void {
+  if (ms < SLOW_EVENT_MS) return;
+  slowLog.push({ kind, label, ms, at: performance.now() });
+  if (slowLog.length > SLOW_LOG_MAX) slowLog.shift();
 }
 
 /** Record an actual WASM execution (cache miss or non-cacheable method). */
-export function recordWasmExec(method: string, durationMs: number): void {
+export function recordWasmExec(
+  method: string,
+  durationMs: number,
+  threw = false,
+): void {
   if (paused) return;
   const s = wasm.get(method) ?? emptyWasm();
   if (s.executions === 0) s.coldMs = durationMs;
   s.executions += 1;
   s.totalMs += durationMs;
   if (durationMs > s.maxMs) s.maxMs = durationMs;
+  if (threw) s.throws += 1;
   wasm.set(method, s);
+  recordSlow("wasm", method, durationMs);
 }
 
 export function recordWasmCache(
@@ -106,6 +138,7 @@ export function recordRender(
   if (durationMs > s.maxMs) s.maxMs = durationMs;
   s.lastPhase = phase;
   renders.set(id, s);
+  recordSlow("render", `${id}:${phase}`, durationMs);
 }
 
 export function recordQuery(procedure: string, durationMs: number): void {
@@ -124,6 +157,7 @@ export function recordQuery(procedure: string, durationMs: number): void {
   const ts = queryTimestamps.get(procedure) ?? [];
   ts.push(now);
   queryTimestamps.set(procedure, ts);
+  recordSlow("query", procedure, durationMs);
 }
 
 export function reset(): void {
@@ -131,6 +165,7 @@ export function reset(): void {
   renders.clear();
   queries.clear();
   queryTimestamps.clear();
+  slowLog.length = 0;
   runtime.longTasks = 0;
   cacheSize = 0;
 }
@@ -162,6 +197,7 @@ export function snapshot(): PerfSnapshot {
       heapUsedMB: mem ? Math.round(mem.usedJSHeapSize / 1024 / 1024) : null,
     },
     vitals: { ...vitals },
+    slowest: slowLog.slice().reverse(), // most-recent-first
     paused,
   };
 }
