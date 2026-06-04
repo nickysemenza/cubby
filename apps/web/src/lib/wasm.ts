@@ -69,7 +69,7 @@ const cacheableMethods = new Set<string>(CACHEABLE_METHODS);
 // Bounded LRU keyed by `${method}:${JSON.stringify(args)}`. Results are never
 // nullish (the cached methods return strings/numbers/objects), so a `get`
 // returning undefined unambiguously means "miss".
-const resultCache = new LRUCache<string, NonNullable<unknown>>({ max: 512 });
+const resultCache = new LRUCache<string, NonNullable<unknown>>({ max: 2048 });
 
 /** Invoke the real WASM method inside a trace span (+ dev slow-call warning). */
 const tracedCall = (

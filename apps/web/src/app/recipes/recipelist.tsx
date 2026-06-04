@@ -3,7 +3,7 @@ import { getNutrientValueByKey } from "@cubby/usda-schemas";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink, Scale } from "lucide-react";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Skeleton } from "~/components/ui/skeleton";
 import { queryKeys } from "~/lib/query-keys";
 import {
@@ -232,13 +232,40 @@ export function RecipeList({ actions }: RecipeListProps) {
     infinite: true,
   });
 
+  // `data` (the flattened infinite-query result) gets a fresh array reference on
+  // every refetch/stream tick even when its content is unchanged. Depending on it
+  // directly made this effect re-run ~16× per page load — re-fetching every
+  // ingredient and recomputing every recipe's cost each time (a render storm plus
+  // thousands of WASM conversions). Trigger on a stable content signature instead
+  // and read the latest `data` through a ref.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const dataSignature = useMemo(
+    () =>
+      data
+        .map(
+          (r) =>
+            `${r.id}:${r.sections
+              .flatMap((s) =>
+                s.ingredients.map((i) =>
+                  i.type === "ingredient" ? i.ingredient.id : "",
+                ),
+              )
+              .join("-")}`,
+        )
+        .join(","),
+    [data],
+  );
+
   // Load ingredient data and calculate totals in a single effect
+  // biome-ignore lint/correctness/useExhaustiveDependencies: triggers on dataSignature; reads data via dataRef
   useEffect(() => {
     let cancelled = false;
+    const recipes = dataRef.current;
 
     async function loadAndCalculate() {
       // No recipes - nothing to calculate
-      if (data.length === 0) {
+      if (recipes.length === 0) {
         setIngredientMap({});
         setRecipeTotalsMap({});
         setIsLoadingTotals(false);
@@ -251,7 +278,7 @@ export function RecipeList({ actions }: RecipeListProps) {
       try {
         // Extract unique ingredient IDs from all recipes
         const ingredientIds = new Set<string>();
-        for (const recipe of data) {
+        for (const recipe of recipes) {
           for (const section of recipe.sections) {
             for (const ing of section.ingredients) {
               if (ing.type === "ingredient") {
@@ -277,7 +304,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         setIngredientMap(ingMap);
 
         // Step 2: Calculate totals for all recipes (even if no ingredients)
-        const entries = data.map((recipe) => {
+        const entries = recipes.map((recipe) => {
           const recipeIngredients = recipe.sections.flatMap(
             (s) => s.ingredients,
           );
@@ -310,7 +337,7 @@ export function RecipeList({ actions }: RecipeListProps) {
     return () => {
       cancelled = true;
     };
-  }, [trpcClient, data]);
+  }, [trpcClient, dataSignature]);
 
   return (
     <div>
