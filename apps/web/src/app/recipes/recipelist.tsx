@@ -12,6 +12,7 @@ import {
   calculateTotals,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
+import { chunk, ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
@@ -289,21 +290,16 @@ export function RecipeList({ actions }: RecipeListProps) {
           }
         }
 
-        // Step 1: Load all ingredient data via batched getManyByIDs. Chunk the
-        // ids (sorted → stable cache keys) so each query's URL stays under the
-        // batch link's maxURLLength; the link splits the chunks across requests.
-        // Replaces ~one getByID per ingredient (hundreds of DB queries) with a
-        // handful of batched round-trips; ensureQueryData caches each chunk.
+        // Step 1: Load all ingredient data via batched getManyByIDs, chunked
+        // (sorted → stable cache keys) to stay under the batch link's
+        // maxURLLength. Replaces ~one getByID per ingredient (hundreds of DB
+        // queries) with a handful of batched round-trips; ensureQueryData caches
+        // each chunk so revisits reuse it.
         const ids = Array.from(ingredientIds).sort();
-        const CHUNK_SIZE = 50;
-        const chunks: string[][] = [];
-        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-          chunks.push(ids.slice(i, i + CHUNK_SIZE));
-        }
         const chunkResults = await Promise.all(
-          chunks.map((chunk) =>
+          chunk(ids, ID_CHUNK_SIZE).map((idChunk) =>
             queryClient.ensureQueryData(
-              api.ingredient.getManyByIDs.queryOptions({ ids: chunk }),
+              api.ingredient.getManyByIDs.queryOptions({ ids: idChunk }),
             ),
           ),
         );

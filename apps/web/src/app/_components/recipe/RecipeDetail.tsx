@@ -17,7 +17,7 @@ import {
   createIngredientData,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
-import { dedupe } from "~/misc/array-helpers";
+import { chunk, dedupe, ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import { AuditLogList } from "../audit-log/audit-log-list";
@@ -181,9 +181,14 @@ const RecipeDetailInner: React.FC<{
     return dedupe(ids);
   }, [ingredients]);
 
+  // Batched: one getManyByIDs per chunk of ids (sorted → stable cache keys)
+  // instead of one getByID per ingredient. Fewer queries also means fewer
+  // streaming re-renders on this page.
   const ingredientQueryOptions = useMemo(
     () =>
-      ingredientIds.map((id) => api.ingredient.getByID.queryOptions({ id })),
+      chunk([...ingredientIds].sort(), ID_CHUNK_SIZE).map((ids) =>
+        api.ingredient.getManyByIDs.queryOptions({ ids }),
+      ),
     [api, ingredientIds],
   );
 
@@ -192,17 +197,16 @@ const RecipeDetailInner: React.FC<{
     combine: (results) => {
       if (ingredientIds.length === 0) return {};
       if (results.some((q) => q.isLoading)) return undefined;
-      const ingredientsArray = results
-        .map((q) => q.data)
-        .filter((d): d is IngredientWithFoodOut => d != null);
-      if (ingredientsArray.length !== ingredientIds.length) return undefined;
-      return ingredientsArray.reduce(
-        (acc, ingredient) => {
-          acc[ingredient.id] = ingredient;
-          return acc;
-        },
-        {} as Record<string, IngredientWithFoodOut>,
-      );
+      // getManyByIDs omits missing/deleted ids, so build from what's returned.
+      return results
+        .flatMap((q) => q.data ?? [])
+        .reduce(
+          (acc, ingredient) => {
+            acc[ingredient.id] = ingredient;
+            return acc;
+          },
+          {} as Record<string, IngredientWithFoodOut>,
+        );
     },
   });
 

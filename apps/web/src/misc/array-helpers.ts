@@ -13,6 +13,22 @@ export type Flatten<T> = T extends Array<infer U> ? U : T;
 export const dedupe = <T>(arr: T[]): T[] => Array.from(new Set(arr));
 
 /**
+ * Splits an array into consecutive chunks of at most `size`. Used to keep
+ * batched tRPC queries (e.g. `getManyByIDs`) under the batch link's
+ * `maxURLLength` — each chunk becomes one query the link can split across
+ * requests. Sort the input first if you want stable cache keys.
+ */
+export const chunk = <T>(arr: readonly T[], size: number): T[][] => {
+  if (size <= 0) return [arr.slice()];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+};
+
+/** Max ids per batched `getManyByIDs` query (UUIDs → well under maxURLLength). */
+export const ID_CHUNK_SIZE = 50;
+
+/**
  * Sums a numeric value across items, grouped by a derived key.
  * Items whose key is null/undefined are skipped; null/undefined values count as 0.
  * Pre-filter the input when you want to exclude zero/empty values entirely.

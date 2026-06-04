@@ -19,7 +19,7 @@ import {
   calculateTotals,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
-import { dedupe } from "~/misc/array-helpers";
+import { chunk, dedupe, ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 
@@ -96,10 +96,12 @@ function RecipeComparePage() {
     );
   }, [allIngredients]);
 
+  // Batched: one getManyByIDs per chunk of ids (sorted → stable cache keys)
+  // instead of one getByID per unique ingredient across all compared recipes.
   const ingredientQueryOptions = useMemo(
     () =>
-      uniqueIngredientIds.map((id) =>
-        api.ingredient.getByID.queryOptions({ id }),
+      chunk([...uniqueIngredientIds].sort(), ID_CHUNK_SIZE).map((ids) =>
+        api.ingredient.getManyByIDs.queryOptions({ ids }),
       ),
     [api, uniqueIngredientIds],
   );
@@ -109,18 +111,16 @@ function RecipeComparePage() {
     combine: (results) => {
       if (uniqueIngredientIds.length === 0) return {};
       if (results.some((q) => q.isLoading)) return undefined;
-      const ingredientsArray = results
-        .map((q) => q.data)
-        .filter((d): d is IngredientWithFoodOut => d != null);
-      if (ingredientsArray.length !== uniqueIngredientIds.length)
-        return undefined;
-      return ingredientsArray.reduce(
-        (acc, ingredient) => {
-          acc[ingredient.id] = ingredient;
-          return acc;
-        },
-        {} as Record<string, IngredientWithFoodOut>,
-      );
+      // getManyByIDs omits missing/deleted ids, so build from what's returned.
+      return results
+        .flatMap((q) => q.data ?? [])
+        .reduce(
+          (acc, ingredient) => {
+            acc[ingredient.id] = ingredient;
+            return acc;
+          },
+          {} as Record<string, IngredientWithFoodOut>,
+        );
     },
   });
 
