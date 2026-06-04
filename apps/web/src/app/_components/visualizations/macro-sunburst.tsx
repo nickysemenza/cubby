@@ -28,6 +28,11 @@ interface MacroNode {
   name: string;
   macro?: MacroKey;
   ingredientId?: string;
+  // Stable identity for ingredient (depth-2) leaves: the recipeSectionIngredient
+  // row id, unique per row. `ingredientId`/`name` are NOT unique — the same
+  // ingredient can appear in multiple sections (or twice in one), so keying arcs
+  // by them produced React "duplicate key" warnings. Macro (depth-1) nodes omit it.
+  rowKey?: string;
   value: number;
   unit: string;
   children?: MacroNode[];
@@ -73,6 +78,8 @@ export default function MacroSunburst({ ingredients }: MacroSunburstProps) {
           macros[macroKey].ingredients.push({
             name,
             ingredientId: id,
+            // ing.id is the recipeSectionIngredient row id — unique per row.
+            rowKey: ing.id,
             value,
             unit: getMacroUnit(macroKey),
           });
@@ -269,15 +276,21 @@ function Sunburst({ data }: SunburstProps) {
         <g
           transform={`translate(${dimensions.width / 2}, ${dimensions.height / 2})`}
         >
-          {nodes.map((node, i) => {
+          {nodes.map((node) => {
             const isHovered =
               hoveredNode?.data.name === node.data.name &&
               hoveredNode?.depth === node.depth;
             const labelPos = getLabelPosition(node);
+            // Unique across the flattened descendant list (depth-1 macro arcs +
+            // depth-2 ingredient arcs). One row contributes a leaf under up to
+            // four macros, so combine the parent macro with the row id.
+            const nodeKey =
+              node.depth === 1
+                ? `macro:${node.data.macro}`
+                : `${node.parent?.data.macro}:${node.data.rowKey ?? node.data.name}`;
 
             return (
-              // biome-ignore lint/suspicious/noArrayIndexKey: d3 hierarchy nodes may share names across macros
-              <g key={i}>
+              <g key={nodeKey}>
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: D3 sunburst visualization hover interaction */}
                 <path
                   d={arc(node)}
