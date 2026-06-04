@@ -6,6 +6,11 @@ import { Package, Printer } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useMemo } from "react";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { syncPriceToMappings } from "~/lib/price-mapping-utils";
 import { queryKeys } from "~/lib/query-keys";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
@@ -82,6 +87,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       // Custom columns (image, name prepended; unitMappings, createdAt appended by hook)
       createFilterableSelectColumn(columnHelper, "category", {
         header: "Category",
+        className: "w-32",
         placeholder: "Filter by category...",
         selectOptions: [
           { value: "", label: "All categories" },
@@ -100,9 +106,11 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createSingleEntityPillColumn(columnHelper, "ingredient", "ingredient", {
         header: "Ingredient",
+        className: "w-32",
         mobile: { slot: "meta", priority: 45 },
       }),
       createTextColumn(columnHelper, "manufacturer", {
+        className: "min-w-0 w-40 truncate",
         mobile: { slot: "subtitle", priority: 30 },
         filterConfig: { placeholder: "Filter manufacturer..." },
         editable: {
@@ -115,6 +123,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         },
       }),
       createExternalLinkColumn(columnHelper, "upc", "/usda/upc/$code", {
+        className: "w-32",
         filterConfig: { placeholder: "Filter UPC..." },
         editable: {
           onSave: async (newValue, product) => {
@@ -127,6 +136,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createExternalLinkColumn(columnHelper, "ndb_number", "/usda/ndb/$code", {
         header: "NDB",
+        className: "w-32",
         editable: {
           onSave: async (newValue, product) => {
             await updateProductMutation.mutateAsync({
@@ -137,6 +147,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
         },
       }),
       createTextColumn(columnHelper, "model", {
+        className: "min-w-0 w-40 truncate",
         editable: {
           onSave: async (newValue, product) => {
             await updateProductMutation.mutateAsync({
@@ -149,13 +160,23 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       columnHelper.accessor("notes", {
         header: "Notes",
         enableSorting: false,
+        meta: { className: "min-w-0 w-40" },
         cell: ({ row }) => {
           const notes = row.original.notes;
           if (!notes) return null;
           return (
-            <span className="text-muted-foreground text-sm">
-              {notes.length > 60 ? `${notes.substring(0, 60)}...` : notes}
-            </span>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span className="block truncate text-muted-foreground" />
+                }
+              >
+                {notes}
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                {notes}
+              </TooltipContent>
+            </Tooltip>
           );
         },
       }),
@@ -179,6 +200,7 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
       }),
       createSingleEntityPillColumn(columnHelper, "food", "usda-food", {
         header: "USDA Food",
+        className: "w-32",
         mobile: { slot: "meta", priority: 70 },
       }),
       createInventoryEntriesColumn(
@@ -298,7 +320,12 @@ export function ProductList({ initialCategory, actions }: ProductListProps) {
     deletable: deletableConfig,
     extraActions,
     infinite: true,
-    initialColumnVisibility: { ndb_number: false },
+    initialColumnVisibility: {
+      ndb_number: false,
+      model: false,
+      manufacturer: false,
+      createdAt: false,
+    },
     groupConfig,
   });
 

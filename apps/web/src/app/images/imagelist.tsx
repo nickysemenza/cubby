@@ -41,6 +41,7 @@ export default function ImageList() {
             );
           },
           meta: {
+            className: "min-w-0 w-64 truncate",
             mobile: { slot: "title", priority: 0 },
             filterConfig: {
               placeholder: "Filter by filename...",
@@ -56,6 +57,7 @@ export default function ImageList() {
         columnHelper.accessor("contentType", {
           header: "Type",
           meta: {
+            className: "w-28",
             mobile: { slot: "subtitle", priority: 10 },
           },
           cell: ({ getValue }) => <span>{getValue()}</span>,
@@ -64,6 +66,7 @@ export default function ImageList() {
         columnHelper.accessor("size", {
           header: "Size",
           meta: {
+            className: "w-24",
             mobile: { slot: "trailing", priority: 5 },
           },
           cell: ({ getValue }) => <span>{formatBytes(getValue())}</span>,
@@ -72,6 +75,7 @@ export default function ImageList() {
         columnHelper.accessor("status", {
           header: "Status",
           meta: {
+            className: "w-28",
             mobile: { slot: "meta", priority: 20 },
           },
           cell: ({ getValue }) => {
@@ -90,6 +94,7 @@ export default function ImageList() {
             id: "entity",
             header: "Associated Entity",
             meta: {
+              className: "w-40",
               mobile: { slot: "meta", priority: 30 },
             },
             cell: ({ getValue }) => {

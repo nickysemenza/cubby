@@ -64,10 +64,12 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.accessor((ingredient) => getIngredientName(ingredient), {
       id: "ing name",
       header: "Ingredient",
+      meta: { className: "min-w-0 truncate" },
       cell: (info) => info.getValue(),
     }),
     columnHelper.accessor("amounts", {
       header: "Amounts",
+      meta: { className: "w-32" },
       cell: (info) => {
         const amounts = info.getValue();
 
@@ -85,6 +87,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "dollars",
       header: "Cost",
+      meta: { className: "w-24" },
       cell: (props) => {
         const measure = props.row.original.priceInfo?.price;
         return (
@@ -95,6 +98,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "grams",
       header: "Weight",
+      meta: { className: "w-24" },
       cell: (props) => {
         const measure = props.row.original.priceInfo?.gram;
         return (
@@ -105,6 +109,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "nutrient",
       header: "Nutrition",
+      meta: { className: "w-40" },
       cell: (props) => {
         const nutrientResult = props.row.original.priceInfo?.nutrient;
         return (
@@ -118,6 +123,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "ingredientDetails",
       header: "Ingredient Details",
+      meta: { className: "w-40" },
       cell: (props) => {
         const row = props.row.original;
 
@@ -142,6 +148,7 @@ export const RecipeIngredientList: React.FC<{
     columnHelper.display({
       id: "mappings",
       header: "Unit Mappings",
+      meta: { className: "w-40" },
       cell: (props) => {
         if (ingMap === undefined) {
           return "loading";

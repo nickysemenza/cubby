@@ -119,6 +119,7 @@ export function InventoryItemList() {
       columnHelper.accessor("amount", {
         header: "Qty",
         meta: {
+          className: "w-36",
           mobile: { slot: "trailing", priority: 10 },
         },
         cell: (info) => {
@@ -140,7 +141,7 @@ export function InventoryItemList() {
       columnHelper.accessor("product", {
         enableSorting: false,
         meta: {
-          className: "min-w-0 w-56 max-w-72",
+          className: "min-w-0 w-64",
           mobile: { slot: "meta", priority: 50 },
           filterConfig: { placeholder: "Filter product..." },
         },

@@ -69,6 +69,12 @@ interface UseEntityListOptions<TData extends BaseListRow, TFilters> {
   infinite?: boolean;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;
+  /**
+   * Width class for the standard name column. Defaults to auto (`min-w-0`),
+   * which is right for dense tables. Pass a fixed width (e.g. `w-64`) on sparse
+   * tables (few columns) so the name doesn't balloon under the fixed layout.
+   */
+  nameClassName?: string;
   /** Group configuration — enables group toggle and server-side group ordering */
   groupConfig?: GroupConfig<TData>;
   /** Enable delete functionality - adds row menu item, bulk action, and dialog */
@@ -144,6 +150,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
   deletable,
   infinite = false,
   initialColumnVisibility,
+  nameClassName,
   groupConfig,
 }: UseEntityListOptions<TData, TFilters>): UseEntityListReturn<TData> {
   const [grouped, setGrouped] = useState(false);
@@ -273,6 +280,7 @@ export function useEntityList<TData extends BaseListRow, TFilters>({
     combinedExtraActions,
     mappingsMap: effectiveMappingsMap,
     hasUnitMappings,
+    nameClassName,
   });
 
   // Memoize getRowId to prevent recreating on every render

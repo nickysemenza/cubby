@@ -66,6 +66,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         header: "Tags",
         enableSorting: false,
         meta: {
+          className: "w-48",
           mobile: { slot: "subtitle", priority: 10 },
         },
         cell: (info) => {
@@ -86,6 +87,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         header: "Yield",
         enableSorting: false,
         meta: {
+          className: "w-24",
           mobile: { slot: "meta", priority: 20 },
         },
         cell: (info) => {
@@ -101,6 +103,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         header: "Cost",
         enableSorting: false,
         meta: {
+          className: "w-24",
           mobile: { slot: "trailing", priority: 5 },
         },
         cell: (info) => {
@@ -131,6 +134,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         header: "Calories",
         enableSorting: false,
         meta: {
+          className: "w-28",
           mobile: { slot: "trailing", priority: 10 },
         },
         cell: (info) => {
@@ -163,6 +167,7 @@ export function RecipeList({ actions }: RecipeListProps) {
         header: "Source",
         enableSorting: false,
         meta: {
+          className: "w-44",
           mobile: { slot: "meta", priority: 30 },
         },
         cell: (info) => {
@@ -209,6 +214,7 @@ export function RecipeList({ actions }: RecipeListProps) {
       nameFilter: ts.getColumnFilter("name"),
     }),
     columns,
+    nameClassName: "w-64",
     filters: [
       { id: "name", placeholder: "Filter by recipe name..." },
       { id: "meta", placeholder: "Filter by source..." },

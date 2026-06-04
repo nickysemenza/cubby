@@ -78,6 +78,7 @@ export function IngredientList() {
       columnHelper.accessor("aliases", {
         header: "Aliases",
         meta: {
+          className: "w-48",
           mobile: { slot: "subtitle", priority: 20 },
         },
         cell: (info) => (

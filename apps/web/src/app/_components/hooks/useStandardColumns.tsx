@@ -53,6 +53,12 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   mappingsMap: Record<string, UnitMapping[]> | null;
   /** Whether unit mappings should be shown */
   hasUnitMappings: boolean;
+  /**
+   * Width class for the standard name column. Defaults to auto (`min-w-0`).
+   * Pass a fixed width (e.g. `w-64`) on sparse tables so the name doesn't
+   * balloon to absorb all leftover space under the fixed table layout.
+   */
+  nameClassName?: string;
 }
 
 /**
@@ -74,6 +80,7 @@ export function useStandardColumns<TData extends BaseListRow>({
   combinedExtraActions,
   mappingsMap,
   hasUnitMappings,
+  nameClassName,
 }: UseStandardColumnsOptions<TData>): AnyColumnDef<TData>[] {
   // Stabilize filters array - only update when serialized content changes
   // This prevents re-renders when consumer passes new array literal each render
@@ -129,12 +136,10 @@ export function useStandardColumns<TData extends BaseListRow>({
     if (standardColumns.includes("name")) {
       const nameFilterConfig = getFilterConfig("name");
       cols.push(
-        createNameColumn(
-          columnHelper,
-          entity,
-          "name" as keyof TData,
-          nameFilterConfig ? { filterConfig: nameFilterConfig } : undefined,
-        ),
+        createNameColumn(columnHelper, entity, "name" as keyof TData, {
+          ...(nameFilterConfig ? { filterConfig: nameFilterConfig } : {}),
+          className: nameClassName,
+        }),
       );
     }
 
@@ -180,5 +185,6 @@ export function useStandardColumns<TData extends BaseListRow>({
     stableFilters,
     enableRowSelection,
     combinedExtraActions,
+    nameClassName,
   ]);
 }

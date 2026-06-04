@@ -98,6 +98,7 @@ export function LocationInventoryTable({
 
       createSingleEntityPillColumn(columnHelper, "product", "product", {
         header: "Product",
+        className: "min-w-0 w-64",
       }),
 
       createEditableAmountColumn(columnHelper, "amount", {

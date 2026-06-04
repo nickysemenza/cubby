@@ -7,6 +7,9 @@ type TableProps = React.ComponentProps<"table"> & {
   containerClassName?: string;
 };
 
+// `table-fixed` makes columns share the available width and truncate, so the
+// table always fits its container instead of growing and forcing horizontal
+// scroll. Pair with `min-w-0` cells (the default below) for clean truncation.
 function Table({ className, containerClassName, ...props }: TableProps) {
   return (
     <div
@@ -15,10 +18,7 @@ function Table({ className, containerClassName, ...props }: TableProps) {
     >
       <table
         data-slot="table"
-        className={cn(
-          "w-full min-w-fit caption-bottom text-xs",
-          className,
-        )}
+        className={cn("w-full table-fixed caption-bottom text-xs", className)}
         {...props}
       />
     </div>

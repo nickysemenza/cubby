@@ -78,12 +78,15 @@ export function LocationList() {
         },
       }),
       createEntityPillColumn(columnHelper, "children", "location", {
+        className: "w-40",
         mobile: { slot: "meta", priority: 55 },
       }),
       createSingleEntityPillColumn(columnHelper, "parent", "location", {
+        className: "w-36",
         mobile: { slot: "subtitle", priority: 20 },
       }),
       createFilterableSelectColumn(columnHelper, "type", {
+        className: "w-32",
         placeholder: "Filter by type...",
         selectOptions: locationTypeOptionsWithTheme,
         renderCell: (type) => <LocationTypeBadge type={type} />,
@@ -113,12 +116,13 @@ export function LocationList() {
       }),
       createTextColumn(columnHelper, "aiDescription", {
         header: "AI Description",
-        className: "max-w-[300px]",
+        className: "min-w-0 w-56 truncate",
         mobile: { slot: "meta", priority: 70 },
       }),
       createCreatedAtColumn(columnHelper),
       createTimestampColumn(columnHelper, "lastBulkInventory", {
         header: "Last Bulk Inventory",
+        className: "w-32",
         fallback: "Never",
         mobile: { slot: "meta", priority: 90 },
       }),

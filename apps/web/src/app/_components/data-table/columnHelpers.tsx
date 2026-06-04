@@ -98,6 +98,13 @@ export function createNameColumn<T extends BaseRow>(
   options?: {
     /** Filter configuration for inline header filter */
     filterConfig?: FilterConfig;
+    /**
+     * Override the column width class. Defaults to `min-w-0` (auto): under the
+     * fixed table layout the name then absorbs leftover space and is the widest
+     * column. On sparse tables (few columns) pass an explicit width like `w-64`
+     * so the name doesn't balloon and the columns scale proportionally instead.
+     */
+    className?: string;
     /** Enable inline editing */
     editable?: {
       onSave: (newValue: string, row: T) => Promise<void>;
@@ -111,7 +118,7 @@ export function createNameColumn<T extends BaseRow>(
     id: String(fieldName),
     enableSorting: true,
     meta: {
-      className: "min-w-0 w-48 max-w-72",
+      className: options?.className ?? "min-w-0",
       filterConfig: options?.filterConfig,
       mobile: options?.mobile ?? { slot: "title", priority: 0 },
     },
@@ -191,6 +198,9 @@ export function createCreatedAtColumn<T extends BaseRow>(
     id: "createdAt",
     header: "Created",
     meta: {
+      // Relative timestamps are short ("5 months ago"); without a cap the
+      // fixed-layout table hands this column an equal share of leftover width.
+      className: "w-32",
       mobile: { slot: "hidden" },
     },
     cell: (info) => {
@@ -909,6 +919,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
   accessor: keyof T,
   options: {
     header?: string;
+    className?: string;
     onSave: (newAmount: Amount, row: T) => Promise<void>;
     /** Get unit mappings for price display (optional) */
     getUnitMappings?: (row: T) => UnitMapping[];
@@ -918,7 +929,7 @@ export function createEditableAmountColumn<T extends Record<string, unknown>>(
     id: String(accessor),
     header: options.header ?? "Amount",
     meta: {
-      className: "font-mono tabular-nums",
+      className: cn("w-40 font-mono tabular-nums", options.className),
     },
     cell: (info) => {
       const amount = info.getValue();
