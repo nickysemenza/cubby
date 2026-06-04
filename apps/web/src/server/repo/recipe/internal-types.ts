@@ -38,7 +38,10 @@ export type RecipeDeepDB = typeof recipe.$inferSelect & {
       ingredients: Array<SectionIngredientDB>;
     }
   >;
-  images: Array<{
+  // Optional: the recipe LIST query (relations.recipe.list) omits images since
+  // the table never renders them; the detail query (relations.recipe.full)
+  // still includes them. extractImagesFromJoinTable() returns [] when absent.
+  images?: Array<{
     image: typeof image.$inferSelect;
   }>;
 };

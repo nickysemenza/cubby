@@ -103,6 +103,28 @@ export const relations = {
         },
       },
     },
+    // Lean variant for the recipe LIST: same nested ingredient graph as `full`
+    // (the `ingredient.Recipe` join is load-bearing — it drives the
+    // "ingredient" vs "recipe" discriminator in sectionIngredientToAPI), but
+    // omits `images`, which the list table never renders. Keeps the wire
+    // payload and one per-recipe lateral join off the hot list query.
+    list: {
+      with: {
+        sections: {
+          with: {
+            ingredients: {
+              with: {
+                ingredient: {
+                  with: {
+                    Recipe: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   },
   location: {
     full: {

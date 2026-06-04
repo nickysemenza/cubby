@@ -16,6 +16,18 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false,
   },
+  session: {
+    // Read session validity from a short-lived signed cookie instead of hitting
+    // the DB on every getSession. Removes the serialized session+user lookups
+    // that prefix every authenticated request. Works on CF Workers — it's just
+    // a signed cookie, no KV/DB. Trade-off: session/user data (e.g. profile
+    // edits, revocation) can be up to maxAge stale; pass ?disableCookieCache to
+    // force a fresh read where freshness matters.
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes
+    },
+  },
   plugins: [
     apiKey({
       enableSessionForAPIKeys: true,

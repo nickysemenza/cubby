@@ -213,7 +213,7 @@ export const recipeList = async (
       orderBy: orderByClause,
       limit: take,
       offset: skip,
-      ...relations.recipe.full,
+      ...relations.recipe.list,
     }),
     dbClient
       .select({ count: sql<number>`count(*)::int` })
