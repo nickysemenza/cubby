@@ -50,31 +50,49 @@ export class USDAClient {
           }
         }
 
-        const response = await fetch(args.path, {
-          ...args,
-          signal: AbortSignal.timeout(5_000),
-        });
+        try {
+          const response = await fetch(args.path, {
+            ...args,
+            signal: AbortSignal.timeout(5_000),
+          });
 
-        // Cache successful getFood responses for 24 hours
-        if (cache && isGetFood && response.ok) {
-          const body = await response.clone().text();
-          cache.put(
-            args.path,
-            new Response(body, {
-              status: response.status,
-              headers: {
-                "Content-Type": "application/json",
-                "Cache-Control": "public, max-age=86400",
-              },
-            }),
-          );
+          // Cache successful getFood responses for 24 hours
+          if (cache && isGetFood && response.ok) {
+            const body = await response.clone().text();
+            cache.put(
+              args.path,
+              new Response(body, {
+                status: response.status,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Cache-Control": "public, max-age=86400",
+                },
+              }),
+            );
+          }
+
+          return {
+            status: response.status,
+            body: await response.json(),
+            headers: response.headers,
+          };
+        } catch (error) {
+          // usda-db is scale-to-zero (~50s cold start) and food enrichment is
+          // best-effort. Convert a thrown fetch error (e.g. AbortSignal timeout
+          // when the machine is cold, or a network error) into a synthetic
+          // non-200 so every caller degrades to `null`/`nulls` via its existing
+          // status check, rather than propagating a 500 up through list queries.
+          if (error instanceof Error && error.name === "TimeoutError") {
+            console.warn(`[USDA] Timeout after 5000ms for ${args.path}`);
+          } else {
+            console.warn(`[USDA] Request failed for ${args.path}:`, error);
+          }
+          return {
+            status: 503,
+            body: null,
+            headers: new Headers(),
+          };
         }
-
-        return {
-          status: response.status,
-          body: await response.json(),
-          headers: response.headers,
-        };
       },
     });
   }
