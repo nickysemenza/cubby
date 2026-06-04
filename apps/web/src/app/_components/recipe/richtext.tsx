@@ -1,8 +1,9 @@
 import type { RichItem } from "@cubby/recipebridge";
+import type { ReadonlyDeep } from "type-fest";
 import { assertNever } from "~/lib/assert";
 import { tryFormatAmount } from "../inventory/format-amount";
 
-export const formatRichText = (text: RichItem[]) => {
+export const formatRichText = (text: ReadonlyDeep<RichItem[]>) => {
   return text.map((t, x) => {
     const { kind } = t;
     switch (kind) {
@@ -19,13 +20,13 @@ export const formatRichText = (text: RichItem[]) => {
           </span>
         );
       case "Measure": {
-        const val = t.value.pop();
-        if (!val) {
+        // Read the last amount without mutating t.value — wasm.parse_rich_text
+        // results are cached/shared and must be treated as immutable.
+        const last = t.value.at(-1);
+        if (!last) {
           return null;
         }
-        if (val.unit === "whole") {
-          val.unit = "";
-        }
+        const val = last.unit === "whole" ? { ...last, unit: "" } : last;
         return (
           <span
             className="rounded-sm bg-secondary box-decoration-clone px-1 font-medium text-secondary-foreground"

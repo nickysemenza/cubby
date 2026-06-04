@@ -79,10 +79,13 @@ const createServingMapping = (
 
   try {
     const p = wasm.parse_ingredient(serving.household_serving_fulltext);
-    const b = p.amounts.pop();
-    if (b === undefined) {
+    // Copy the last amount without mutating p.amounts — wasm.parse_ingredient
+    // results are cached/shared and must be treated as immutable.
+    const last = p.amounts.at(-1);
+    if (last === undefined) {
       return undefined;
     }
+    const b = { ...last };
     const servingSizeUnit = branded_food_serving_size_unit.parse(
       serving.serving_size_unit,
     );

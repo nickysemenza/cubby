@@ -1,6 +1,7 @@
 import type { WAmount } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
+import type { ReadonlyDeep } from "type-fest";
 import {
   Tooltip,
   TooltipContent,
@@ -47,9 +48,11 @@ export const showAmountAndPrice = (
  * Safely formats a measure, returning error string on failure.
  * Re-attaches "each" - WASM renders bare counts (Unit::Whole) unit-less.
  */
-export const tryFormatAmount = (amount: WAmount): string => {
+export const tryFormatAmount = (amount: ReadonlyDeep<WAmount>): string => {
   try {
-    const formatted = wasm.format_amount(amount);
+    // Copy to a mutable WAmount: `amount` may be a frozen/readonly cached value,
+    // and format_amount's generated signature takes a mutable WAmount.
+    const formatted = wasm.format_amount({ ...amount });
     // "each" parses to Unit::Whole, which renders unit-less ("3", "2 - 4");
     // re-attach the user's "each" so it stays visible ("3 each", "2 - 4 each").
     if (amount.unit === "each") {
@@ -62,8 +65,10 @@ export const tryFormatAmount = (amount: WAmount): string => {
 };
 
 /** Format a parsed ingredient's amounts (e.g. "1.333 cup, 173 g"), joined. */
-export const formatAmounts = (amounts: WAmount[], sep = ", "): string =>
-  amounts.map(tryFormatAmount).join(sep);
+export const formatAmounts = (
+  amounts: ReadonlyDeep<WAmount[]>,
+  sep = ", ",
+): string => amounts.map(tryFormatAmount).join(sep);
 
 /**
  * Helper function for rendering a hoverable unit icon with tooltip

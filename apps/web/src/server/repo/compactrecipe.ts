@@ -150,7 +150,8 @@ const cookbookRecipeToRecipeInput = async (
                 type: "ingredient" as const,
                 ingredientId: unsafeIngredientId(ingredientId),
                 recipeId: null,
-                amounts: parsed.amounts,
+                // Copy out of the readonly cached result into the mutable input.
+                amounts: parsed.amounts.map((a) => ({ ...a })),
               };
             }),
           ),

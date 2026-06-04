@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import type { ReadonlyDeep } from "type-fest";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
 import {
@@ -28,7 +29,7 @@ import type { IngItem } from "./types";
 
 interface ParsedIngredient {
   raw: string;
-  parsed: WIngredient;
+  parsed: ReadonlyDeep<WIngredient>;
 }
 
 interface IngredientMatch {
@@ -81,7 +82,7 @@ function useParsedIngredientMatches(ingredientLines: string[]) {
 
 interface ParsedIngredientWithMatch {
   raw: string;
-  parsed: WIngredient;
+  parsed: ReadonlyDeep<WIngredient>;
   match: {
     id: string;
     name: string;

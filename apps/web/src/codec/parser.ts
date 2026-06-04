@@ -11,7 +11,8 @@ export const parseCompactRecipe = (raw: CompactRecipe): ParsedCompactRecipe => {
         const parsed = wasm.parse_ingredient(ingredient);
         return {
           name: parsed.name,
-          amounts: parsed.amounts,
+          // Copy out of the readonly cached result into the mutable codec shape.
+          amounts: parsed.amounts.map((a) => ({ ...a })),
         };
       }),
       instructions: section.instructions,
