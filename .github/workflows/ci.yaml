@@ -100,7 +100,10 @@ jobs:
     name: Unit Tests - web
     needs: [build-wasm]
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # NOTE: no job-level `continue-on-error` — it would force needs.<job>.result
+    # to 'success' even on failure, defeating the check-tests gate. The test step
+    # below keeps step-level continue-on-error so coverage still uploads on
+    # failure; the final "Fail if tests failed" step then fails the job honestly.
     outputs:
       test-passed: ${{ steps.test.outcome == 'success' }}
     services:
@@ -169,12 +172,19 @@ jobs:
           flags: web
           name: web-coverage
 
+      - name: Fail if tests failed
+        if: steps.test.outcome != 'success'
+        run: |
+          echo "::error::Unit tests failed — see the 'Run tests for web' step above"
+          exit 1
+
   test-unit-aux:
     name: Unit Tests - ${{ matrix.package.name }}
     if: needs.detect-changes.outputs.aux-packages == 'true'
     needs: [build-wasm, detect-changes]
     runs-on: ubuntu-latest
-    continue-on-error: true
+    # NOTE: no job-level `continue-on-error` (see test-unit-web). result must stay
+    # honest so the check-tests gate can catch a failing matrix leg.
     strategy:
       matrix:
         package:
@@ -224,6 +234,12 @@ jobs:
           working-directory: ${{ matrix.package.path }}
           flags: ${{ matrix.package.name }}
           name: ${{ matrix.package.name }}-coverage
+
+      - name: Fail if tests failed
+        if: steps.test.outcome != 'success'
+        run: |
+          echo "::error::Unit tests failed for ${{ matrix.package.name }} — see the 'Run tests' step above"
+          exit 1
 
   test-e2e:
     name: E2E Tests
