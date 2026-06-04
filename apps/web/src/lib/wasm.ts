@@ -8,6 +8,8 @@
 import { flatten } from "flat";
 import { LRUCache } from "lru-cache";
 import type { ReadonlyDeep } from "type-fest";
+import { getFlag } from "~/lib/flags";
+import { recordWasmCache, recordWasmExec } from "~/lib/perf/perf-store";
 import { getTracer, TraceNames } from "~/server/tracing";
 
 type WasmType = typeof import("@cubby/recipebridge");
@@ -35,10 +37,8 @@ const instance: WasmType = await import("@cubby/recipebridge");
 /** For tests - now a no-op since WASM loads at module init */
 export const ensureWasm = (): Promise<void> => Promise.resolve();
 
-const IS_DEV = process.env.NODE_ENV === "development";
-
 /**
- * Warn (dev only) when a single synchronous WASM call exceeds one 60fps frame
+ * Warn when a single synchronous WASM call exceeds one 60fps frame
  * (~16ms) and thus janks the UI. Set above normal-but-slow calls (parse_rich_text
  * runs ~2-8ms on long instructions) so the warning flags real frame drops rather
  * than spamming every recipe page. Tunable.
@@ -95,9 +95,9 @@ const tracedCall = (
           data: flatten(args),
         });
       }
-      // Same dev gate as the tRPC loggerLink (root-provider.tsx): on in local
-      // dev, silent in CF prod (NODE_ENV === "production").
-      if (IS_DEV && durationMs > SLOW_WASM_THRESHOLD_MS) {
+      if (getFlag("perfOverlay")) recordWasmExec(name, durationMs);
+      // Flag-gated (default on in dev, off in CF prod) — flippable on /settings.
+      if (getFlag("wasmSlowWarn") && durationMs > SLOW_WASM_THRESHOLD_MS) {
         // eslint-disable-next-line no-console
         console.warn(`[wasm] ${name} took ${durationMs.toFixed(1)}ms`, ...args);
       }
@@ -125,10 +125,14 @@ export const wasm: ImmutableWasm<WasmType> = new Proxy(instance, {
       const key = `${name}:${JSON.stringify(args)}`;
       const cached = resultCache.get(key); // updates recency on hit
       if (cached !== undefined) {
+        if (getFlag("perfOverlay"))
+          recordWasmCache(name, true, resultCache.size);
         return cached;
       }
       const result = tracedCall(name, fn, args);
       resultCache.set(key, result as NonNullable<unknown>);
+      if (getFlag("perfOverlay"))
+        recordWasmCache(name, false, resultCache.size);
       return result;
     };
   },

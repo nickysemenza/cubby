@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   ScanBarcode,
   Search,
+  Settings,
   TrendingUp,
   Utensils,
 } from "lucide-react";
@@ -148,6 +149,13 @@ const apiPanel: NavItem = {
   isActive: () => false,
 };
 
+const settings: NavItem = {
+  href: "/settings",
+  label: "Settings",
+  icon: Settings,
+  isActive: (pathname) => pathname.startsWith("/settings"),
+};
+
 // Export groupings for consumers
 export const bottomNavItems: NavItem[] = [
   scan,
@@ -180,4 +188,9 @@ export const reportsItems: NavItem[] = [
   problems,
 ];
 
-export const desktopMoreItems: NavItem[] = [captureShelf, images, apiPanel];
+export const desktopMoreItems: NavItem[] = [
+  captureShelf,
+  images,
+  apiPanel,
+  settings,
+];

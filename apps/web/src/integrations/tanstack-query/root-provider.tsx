@@ -15,6 +15,7 @@ import { TRPCProvider } from "~/integrations/trpc/react";
 import type { TRPCRouter } from "~/integrations/trpc/router";
 import { authClient } from "~/lib/auth-client";
 import { getAppErrorDetails, getErrorMessage } from "~/lib/error-utils";
+import { getFlag } from "~/lib/flags";
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
 const Link = ({
@@ -52,9 +53,11 @@ function getUrl() {
 const trpcClient = createTRPCClient<TRPCRouter>({
   links: [
     loggerLink({
+      // Verbose logging is flag-controlled (queryLogger, default on in dev);
+      // errors always log. Flippable on /settings, even in prod.
       enabled: (op) =>
         !import.meta.env.SSR &&
-        (process.env.NODE_ENV === "development" ||
+        (getFlag("queryLogger") ||
           (op.direction === "down" && op.result instanceof Error)),
     }),
     httpBatchStreamLink({

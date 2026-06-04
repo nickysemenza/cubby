@@ -435,6 +435,9 @@ importers:
       vite-tsconfig-paths:
         specifier: ^6.1.0
         version: 6.1.0(typescript@5.9.3)(vite@7.3.1(@types/node@25.9.1)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.44.1)(tsx@4.22.0)(yaml@2.9.0))
+      web-vitals:
+        specifier: ^5.3.0
+        version: 5.3.0
       zod:
         specifier: ^4.3.6
         version: 4.4.3
@@ -9335,6 +9338,9 @@ packages:
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
+
+  web-vitals@5.3.0:
+    resolution: {integrity: sha512-q6LWsLatGYZp5VGBIOvbTj6JBV2nOmC8KvWztXBmwJcfFAzhwKwbOxhUH306XY3CcaZDUlSmSuNPBsCn0bFu+g==}
 
   web-worker@1.5.0:
     resolution: {integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==}
@@ -18930,6 +18936,8 @@ snapshots:
     optional: true
 
   web-streams-polyfill@3.3.3: {}
+
+  web-vitals@5.3.0: {}
 
   web-worker@1.5.0: {}
 

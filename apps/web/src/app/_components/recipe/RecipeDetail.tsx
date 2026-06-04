@@ -10,6 +10,7 @@ import {
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
+import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
   type CalculateTotalsResult,
   calculateTotals,
@@ -151,7 +152,7 @@ export const RECIPE_VIEW_OPTIONS: ViewSwitcherOption<RecipeViewMode>[] = [
   { value: "charts", label: "Charts", icon: BarChart3 },
 ];
 
-const RecipeDetail: React.FC<{
+const RecipeDetailInner: React.FC<{
   recipe: RecipeOut;
   /** Controlled view mode (e.g. URL-driven on the detail route). */
   view?: RecipeViewMode;
@@ -328,5 +329,16 @@ const RecipeDetail: React.FC<{
     </div>
   );
 };
+
+// Profiled boundary so the perf overlay can attribute the recipe-detail render
+// churn (the query-streaming re-render storm) to this subtree by name.
+const RecipeDetail: React.FC<React.ComponentProps<typeof RecipeDetailInner>> = (
+  props,
+) => (
+  // biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id
+  <PerfProfiler id="RecipeDetail">
+    <RecipeDetailInner {...props} />
+  </PerfProfiler>
+);
 
 export default RecipeDetail;

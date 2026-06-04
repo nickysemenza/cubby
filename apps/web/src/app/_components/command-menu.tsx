@@ -4,6 +4,7 @@ import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  Activity,
   ArrowLeft,
   BookOpen,
   ClipboardList,
@@ -15,6 +16,7 @@ import {
   Settings,
   ShoppingCart,
   Sparkles,
+  Wrench,
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
@@ -31,6 +33,7 @@ import {
 import { Spinner } from "~/components/ui/spinner";
 import { EntityIcon, entities } from "~/entities/entities";
 import { useDebug } from "~/hooks/useDebug";
+import { setFlag, useFlag } from "~/lib/flags";
 import { formatCurrency } from "~/lib/utils";
 import { useTRPC } from "~/trpc/react";
 import { useGlobalSearch } from "./command-menu/use-global-search";
@@ -58,6 +61,7 @@ export function GlobalCommandMenu({
   const [search, setSearch] = React.useState("");
   const navigate = useNavigate();
   const { isDevtoolsVisible, toggleDevtools } = useDebug();
+  const perfOverlayOn = useFlag("perfOverlay");
 
   const { results, filteredActions, isLoading, isEmpty } =
     useGlobalSearch(search);
@@ -488,11 +492,31 @@ export function GlobalCommandMenu({
                 <CommandGroup heading="Settings">
                   <CommandItem
                     onSelect={() => {
-                      toggleDevtools();
+                      navigate({ to: "/settings" });
                       setOpen(false);
                     }}
                   >
                     <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                  </CommandItem>
+                  <CommandItem
+                    onSelect={() => {
+                      setFlag("perfOverlay", !perfOverlayOn);
+                      setOpen(false);
+                    }}
+                  >
+                    <Activity className="h-4 w-4" />
+                    <span>
+                      {perfOverlayOn ? "Hide" : "Show"} performance overlay
+                    </span>
+                  </CommandItem>
+                  <CommandItem
+                    onSelect={() => {
+                      toggleDevtools();
+                      setOpen(false);
+                    }}
+                  >
+                    <Wrench className="h-4 w-4" />
                     <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
                   </CommandItem>
                 </CommandGroup>

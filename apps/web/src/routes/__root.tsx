@@ -21,6 +21,8 @@ import { RouteErrorComponent } from "~/components/route-error";
 import { Toaster } from "~/components/ui/sonner";
 import { DebugContextProvider, useDebug } from "~/hooks/useDebug";
 import type { TRPCRouter } from "~/integrations/trpc/router";
+import { useFlag } from "~/lib/flags";
+import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import TanStackQueryDevtools from "../integrations/tanstack-query/devtools";
 import { Provider } from "../integrations/tanstack-query/root-provider";
 import appCss from "../styles.css?url";
@@ -32,6 +34,24 @@ const GlobalCommandMenu = React.lazy(() =>
     default: m.GlobalCommandMenu,
   })),
 );
+
+// Lazy + flag-gated: the perf overlay and its web-vitals collector only load when
+// the `perfOverlay` flag is on (flippable on /settings, any environment).
+const PerfOverlay = React.lazy(() =>
+  import("~/app/_components/perf-overlay").then((m) => ({
+    default: m.PerfOverlay,
+  })),
+);
+
+function PerfOverlayMount() {
+  const enabled = useFlag("perfOverlay");
+  if (!enabled) return null;
+  return (
+    <React.Suspense fallback={null}>
+      <PerfOverlay />
+    </React.Suspense>
+  );
+}
 
 interface MyRouterContext {
   queryClient: QueryClient;
@@ -205,7 +225,10 @@ function RootComponent() {
             </div>
           </div>
           <main className="w-full flex-1 px-4 pt-4 pb-20 md:px-6 md:pb-4">
-            <Outlet />
+            {/* biome-ignore lint/correctness/useUniqueElementIds: React <Profiler> id, not a DOM id */}
+            <PerfProfiler id="route">
+              <Outlet />
+            </PerfProfiler>
           </main>
           <AppFooter />
         </div>
@@ -219,6 +242,7 @@ function RootComponent() {
           </React.Suspense>
         )}
         <Toaster />
+        <PerfOverlayMount />
         <DevtoolsWrapper />
       </DebugContextProvider>
     </Provider>
