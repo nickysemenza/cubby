@@ -1,5 +1,6 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ExternalLink, Scale } from "lucide-react";
@@ -12,7 +13,7 @@ import {
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useTRPC, useTRPCClient } from "~/trpc/react";
+import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
@@ -33,7 +34,7 @@ interface RecipeListProps {
 
 export function RecipeList({ actions }: RecipeListProps) {
   const api = useTRPC();
-  const trpcClient = useTRPCClient();
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const columnHelper = createColumnHelper<RecipeOut>();
   const { onRowClick, PreviewSheet } = useEntityPreview("recipe");
@@ -288,10 +289,15 @@ export function RecipeList({ actions }: RecipeListProps) {
           }
         }
 
-        // Step 1: Load all ingredient data (may be empty if no ingredients)
+        // Step 1: Load all ingredient data (may be empty if no ingredients).
+        // ensureQueryData reads the React Query cache first, so repeat /recipes
+        // visits and detail-page navigation reuse ingredient data instead of
+        // refetching (the old raw trpcClient.query bypassed the cache entirely).
         const ingredients = await Promise.all(
           Array.from(ingredientIds).map((id) =>
-            trpcClient.ingredient.getByID.query({ id }),
+            queryClient.ensureQueryData(
+              api.ingredient.getByID.queryOptions({ id }),
+            ),
           ),
         );
 
@@ -337,7 +343,7 @@ export function RecipeList({ actions }: RecipeListProps) {
     return () => {
       cancelled = true;
     };
-  }, [trpcClient, dataSignature]);
+  }, [queryClient, api, dataSignature]);
 
   return (
     <div>
