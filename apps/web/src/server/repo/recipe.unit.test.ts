@@ -33,6 +33,10 @@ describe("recipe repository helpers", () => {
         meta: {
           url: "https://example.com/recipe",
         },
+        source: {
+          type: "website",
+          url: "https://example.com/recipe",
+        },
       });
     });
 
@@ -65,6 +69,9 @@ describe("recipe repository helpers", () => {
         tags: null,
         meta: {
           url: null,
+        },
+        source: {
+          type: "other",
         },
       });
     });
