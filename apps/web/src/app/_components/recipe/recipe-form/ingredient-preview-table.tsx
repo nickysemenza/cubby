@@ -1,6 +1,6 @@
-import type { WAmount, WIngredient } from "@cubby/recipebridge";
+import type { WIngredient } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -21,21 +21,10 @@ import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 import { CreateIngredientDialog } from "../../combobox/with-search-hook";
 import { EntityPillLink } from "../../EntityPill";
+import { formatAmounts } from "../../inventory/format-amount";
 import { NoneState } from "../../NoneState";
+import { useIngredientMatches } from "../use-ingredient-matches";
 import type { IngItem } from "./types";
-
-// Format a single amount like "2 cups" or "2-3 cups" (for ranges)
-function formatAmount(a: WAmount): string {
-  if (a.upper_value !== undefined && a.upper_value !== a.value) {
-    return `${a.value}-${a.upper_value} ${a.unit}`;
-  }
-  return `${a.value} ${a.unit}`;
-}
-
-// Format all amounts, joined with ", "
-function formatAmounts(amounts: WAmount[]): string {
-  return amounts.map(formatAmount).join(", ");
-}
 
 interface ParsedIngredient {
   raw: string;
@@ -57,8 +46,6 @@ interface IngredientMatch {
  * while a missing key means "still loading".
  */
 function useParsedIngredientMatches(ingredientLines: string[]) {
-  const api = useTRPC();
-
   const parsedIngredients = useMemo<ParsedIngredient[]>(
     () =>
       ingredientLines.map((line) => ({
@@ -73,37 +60,21 @@ function useParsedIngredientMatches(ingredientLines: string[]) {
     [parsedIngredients],
   );
 
-  // useQueries returns a new array every render; combine applies structural
-  // sharing to keep ingredientMatchMap referentially stable (see CLAUDE.md).
-  const { ingredientMatchMap, isLoading } = useQueries({
-    queries: uniqueIngredientNames.map((name) => ({
-      ...api.ingredient.getByName.queryOptions({ nameFilter: name }),
-      staleTime: 30000,
-      enabled: name.length > 0,
-    })),
-    combine: (results) => {
-      const map = new Map<string, IngredientMatch | null>();
-      uniqueIngredientNames.forEach((name, index) => {
-        const query = results[index];
-        if (query && !query.isLoading) {
-          map.set(
-            name,
-            query.data
-              ? {
-                  id: query.data.id,
-                  name: query.data.name,
-                  aliases: query.data.aliases,
-                }
-              : null,
-          );
-        }
-      });
-      return {
-        ingredientMatchMap: map,
-        isLoading: results.some((q) => q.isLoading),
-      };
-    },
-  });
+  // One batched `matchNames` lookup (shared with the cookbook importer) instead
+  // of one `getByName` per name.
+  const { matchMap, isLoading } = useIngredientMatches(uniqueIngredientNames);
+
+  // Re-key by the original-case parsed name for this module's consumers. A
+  // missing key means "still loading"; `null` means "looked up, not found".
+  const ingredientMatchMap = useMemo(() => {
+    const map = new Map<string, IngredientMatch | null>();
+    if (!isLoading) {
+      for (const name of uniqueIngredientNames) {
+        map.set(name, matchMap.get(name.toLowerCase()) ?? null);
+      }
+    }
+    return map;
+  }, [uniqueIngredientNames, matchMap, isLoading]);
 
   return { parsedIngredients, ingredientMatchMap, isLoading };
 }

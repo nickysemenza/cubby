@@ -410,3 +410,151 @@ pub fn amount_kind(amount: WAmount) -> Result<WAmountKind, String> {
 pub fn parse_unit_mapping(input: String) -> Result<WUnitMapping, String> {
     Ok(parse_unit_mapping_internal(&input)?.into())
 }
+
+// ===========================================================================
+// EPUB cookbook extraction (client-side pipeline; LLM call proxied via Cubby)
+//
+// The browser drives the loop: `chunk_epub` splits an uploaded .epub into text
+// chunks each carrying a ready-to-send LLM request; the orchestrator sends each
+// request to Cubby's `extractCookbookChunk` proxy (which holds the gateway key);
+// `assemble_recipes` folds the per-chunk model outputs back into recipes. All
+// recipe logic stays in Rust — TS only moves bytes.
+// ===========================================================================
+
+use recipe_epub::{
+    assemble_recipes as assemble_recipes_internal, build_chunk_request,
+    chunk_epub as chunk_epub_internal, parse_recipes_payload, Link as EpubLink,
+};
+use sha2::{Digest, Sha256};
+
+/// One LLM request for a cookbook chunk (mirrors `recipe_epub::ChunkRequest`).
+/// Sent verbatim to Cubby's `extractCookbookChunk` proxy.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WChunkRequest {
+    pub system: String,
+    pub user: String,
+    pub tool_name: String,
+    /// JSON Schema for the forced tool's input, as a JSON **string** — serde
+    /// would otherwise marshal a `serde_json::Value` object across the wasm
+    /// boundary as a JS `Map` (breaks `JSON.stringify` + tRPC validation). The
+    /// orchestrator `JSON.parse`s it once before sending.
+    pub tool_schema: String,
+}
+
+/// An internal EPUB hyperlink (mirrors `recipe_epub::Link`).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WCookbookLink {
+    pub text: String,
+    pub href: String,
+}
+
+/// A unit of cookbook text to extract: a stable `id` (sha256 of the text, for
+/// the orchestrator's session cache), provenance, and the ready-to-send request.
+/// `assemble_recipes` consumes the same chunks back, paired with model output.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WCookbookChunk {
+    pub id: String,
+    pub doc_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub title_hint: Option<String>,
+    pub links: Vec<WCookbookLink>,
+    pub request: WChunkRequest,
+}
+
+/// `WCookbookChunk[]` (`transparent`).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(transparent)]
+pub struct WCookbookChunks(pub Vec<WCookbookChunk>);
+
+/// The model's output for one chunk: the `id` it answers, plus the raw forced-
+/// tool `input` object (`{ recipes: [...] }`) the proxy returned.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WChunkResult {
+    pub id: String,
+    /// The forced tool's `input` object as returned by the LLM proxy.
+    #[tsify(type = "unknown")]
+    pub input: serde_json::Value,
+}
+
+/// `WChunkResult[]` (`transparent`).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+#[serde(transparent)]
+pub struct WChunkResults(pub Vec<WChunkResult>);
+
+/// Phase 1: unzip the EPUB and split it into text chunks, each carrying its
+/// ready-to-send LLM request. Pure — no network, no filesystem.
+#[wasm_bindgen]
+pub fn chunk_epub(bytes: &[u8]) -> Result<WCookbookChunks, String> {
+    let chunks = chunk_epub_internal(bytes).map_err(|e| e.to_string())?;
+    let out = chunks
+        .into_iter()
+        .map(|c| {
+            let req = build_chunk_request(&c);
+            // Stable id over the chunk text → the orchestrator's session-cache
+            // key (don't re-pay an already-extracted chunk on a retry).
+            let id = Sha256::digest(c.text.as_bytes())
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>();
+            WCookbookChunk {
+                id,
+                doc_path: c.doc_path,
+                title_hint: c.title_hint,
+                links: c
+                    .links
+                    .into_iter()
+                    .map(|l| WCookbookLink {
+                        text: l.text,
+                        href: l.href,
+                    })
+                    .collect(),
+                request: WChunkRequest {
+                    system: req.system,
+                    user: req.user,
+                    tool_name: req.tool_name,
+                    tool_schema: serde_json::to_string(&req.tool_schema)
+                        .unwrap_or_else(|_| "{}".to_string()),
+                },
+            }
+        })
+        .collect();
+    Ok(WCookbookChunks(out))
+}
+
+/// Phase 2: fold the per-chunk model outputs into final recipes and resolve
+/// cross-recipe references. `chunks` is the same array `chunk_epub` returned;
+/// `results` pairs each chunk `id` with the model's raw tool output. Returns
+/// `CookbookRecipe[]` (validate with `cookbookRecipesSchema` on the TS side).
+#[wasm_bindgen]
+pub fn assemble_recipes(
+    chunks: WCookbookChunks,
+    results: WChunkResults,
+    source: String,
+) -> Result<JsValue, String> {
+    let mut by_id: std::collections::HashMap<String, serde_json::Value> =
+        results.0.into_iter().map(|r| (r.id, r.input)).collect();
+    let mut per_chunk = Vec::with_capacity(chunks.0.len());
+    let mut links: Vec<EpubLink> = Vec::new();
+    for c in chunks.0 {
+        let recipes = match by_id.remove(&c.id) {
+            Some(input) => parse_recipes_payload(input).map_err(|e| e.to_string())?,
+            None => Vec::new(),
+        };
+        per_chunk.push((c.doc_path, recipes));
+        for l in c.links {
+            links.push(EpubLink {
+                text: l.text,
+                href: l.href,
+            });
+        }
+    }
+    let recipes = assemble_recipes_internal(per_chunk, links, &source);
+    to_js(&recipes, "assembled recipes")
+}

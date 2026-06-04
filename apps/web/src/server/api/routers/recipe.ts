@@ -33,6 +33,7 @@ import {
   recipeList,
   updateRecipe,
 } from "~/server/repo/recipe";
+import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
 import { scrapeToCompact } from "~/server/utils/scraper";
 import {
   createDeleteProcedure,
@@ -110,6 +111,30 @@ const getCookbookTitles = protectedProcedure
     return await getCookbookRecipeTitles(ctx.db, input.book);
   });
 
+// LLM passthrough for the in-browser EPUB extractor: the client builds each
+// chunk's request in WASM (`recipebridge.chunk_epub`) and sends it here so the
+// gateway key stays server-side. Returns the raw forced-tool `input`
+// (`{ recipes: [...] }`) for the WASM `assemble_recipes` to parse — no recipe
+// logic lives here. One short, network-bound request per chunk.
+const extractCookbookChunkProc = protectedProcedure
+  .input(
+    z.object({
+      system: z.string(),
+      user: z.string(),
+      toolName: z.string(),
+      // The forced tool's JSON Schema, built in WASM and forwarded verbatim.
+      toolSchema: z.record(z.string(), z.unknown()),
+    }),
+  )
+  .mutation(async ({ input }) => {
+    return await extractCookbookChunk({
+      system: input.system,
+      user: input.user,
+      toolName: input.toolName,
+      toolSchema: input.toolSchema,
+    });
+  });
+
 // Import co-occurrence schema and types
 
 const getIngredientCooccurrenceEndpoint = protectedProcedure
@@ -142,6 +167,7 @@ export const recipeRouter = createTRPCRouter({
   insertCompact,
   insertCookbook,
   getCookbookTitles,
+  extractCookbookChunk: extractCookbookChunkProc,
   scrape,
   seed,
   getByID,

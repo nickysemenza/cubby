@@ -1,186 +1,486 @@
+import type { WCookbookChunk } from "@cubby/recipebridge";
 import {
   type CookbookRecipe,
+  cookbookBundleSchema,
   cookbookRecipesSchema,
 } from "@cubby/schemas/cookbook";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
-import { AlertCircle, Check, Import, Upload } from "lucide-react";
-import { useId, useMemo, useState, useTransition } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { Upload } from "lucide-react";
+import { useCallback, useId, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Spinner } from "~/components/ui/spinner";
-import { Textarea } from "~/components/ui/textarea";
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
-import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
-import { IngredientPreviewTable } from "../recipe-form/ingredient-preview-table";
-import { formatRichText } from "../richtext";
+import { BookGroupCard } from "./book-group-card";
+import type {
+  Book,
+  ChunkRequestInput,
+  ExtractPhase,
+  ImportResult,
+} from "./types";
 
-type ImportResult =
-  | { status: "importing" }
-  | { status: "done"; id: string }
-  | { status: "error"; message: string };
-
-// food-cli passes the .epub file path as `source`; turn it into a clean,
-// editable book label that stays stable across re-imports.
-const deriveBookName = (source: string | undefined): string => {
-  if (!source) return "";
+// food-cli / the WASM extractor pass the .epub filename as `source`; turn it
+// into a clean, editable book label that stays stable across re-imports.
+const deriveBookName = (source: string): string => {
   const base = source.split(/[/\\]/).pop() ?? source;
   return base.replace(/\.epub$/i, "");
 };
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Run `fn` over `items` with at most `limit` in flight, preserving order. */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(Math.max(limit, 1), items.length) }, worker),
+  );
+  return results;
+}
+
+/** Retry with exponential backoff; resolves with the first success. */
+async function withRetry<R>(fn: () => Promise<R>, attempts = 3): Promise<R> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastErr = error;
+      if (attempt < attempts - 1) await sleep(500 * 2 ** attempt);
+    }
+  }
+  throw lastErr;
+}
+
+// Session cache of chunk-id → raw LLM tool output. Keyed by the sha256 the WASM
+// computes over the chunk text, so a manual "retry this book" (or two books
+// sharing boilerplate) doesn't re-pay an already-extracted chunk this session.
+// Not persisted — this is a one-off import flow.
+const chunkCache = new Map<string, unknown>();
+
+// Chunks per book extracted concurrently. Matches the native `recipe-epub`
+// extractor's default (`Options.concurrency`). Books extract one at a time, so
+// this is the ceiling on simultaneous gateway calls — comfortably within
+// Gemini-flash rate limits. (In dev over HTTP/1.1 the browser caps ~6 in-flight
+// to one origin anyway; prod is HTTP/2 and multiplexes.)
+const CHUNK_CONCURRENCY = 8;
+
+// Min gap between live-preview re-assembles during extraction. Each re-assemble
+// re-renders the whole growing card list (re-parsing every ingredient line), so
+// without this an 8-chunk burst would fire 8 heavy renders back-to-back.
+const PREVIEW_THROTTLE_MS = 600;
+
 /**
- * Import recipes extracted from an EPUB cookbook. The user runs
- * `food-cli scrape-epub book.epub --json` locally, uploads the resulting JSON
- * here, reviews the parsed recipes, and imports a selected subset. Each goes
- * through `recipe.insertCookbook`, which upserts by (book, title).
+ * Import cookbooks by dragging `.epub` files straight into Cubby. Each book is
+ * extracted entirely in the browser: WASM (`recipebridge.chunk_epub`) splits the
+ * EPUB into text chunks carrying ready-to-send LLM requests; the orchestration
+ * loop here sends each through `recipe.extractCookbookChunk` (which holds the
+ * gateway key) with retry + a session cache; `recipebridge.assemble_recipes`
+ * folds the per-chunk outputs back into recipes. The reviewed recipes import via
+ * `recipe.insertCookbook`, upserting by (book, title). A flat/bundled JSON file
+ * is still accepted as a power-user path.
  */
 export function CookbookImport() {
   const api = useTRPC();
+  const extractChunk = useMutation(
+    api.recipe.extractCookbookChunk.mutationOptions(),
+  );
   const insertCookbook = useMutation(
     api.recipe.insertCookbook.mutationOptions(),
   );
-  const fileId = useId();
-  const bookId = useId();
-  const pasteId = useId();
 
-  const [recipes, setRecipes] = useState<CookbookRecipe[] | null>(null);
-  const [book, setBook] = useState("");
-  const [pasted, setPasted] = useState("");
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [results, setResults] = useState<Map<number, ImportResult>>(new Map());
-  const [importing, setImporting] = useState(false);
-  // Rendering hundreds of parsed-ingredient tables is heavy; mark it a
-  // transition so the click stays responsive and the preview streams in instead
-  // of freezing the tab.
-  const [isLoading, startLoading] = useTransition();
+  const [books, setBooks] = useState<Book[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputId = useId();
+  const jsonInputId = useId();
 
-  // Titles already imported from this book — so we can flag re-imports as updates.
-  const trimmedBook = book.trim();
-  const { data: existingTitles } = useQuery(
-    api.recipe.getCookbookTitles.queryOptions(
-      { book: trimmedBook },
-      { enabled: recipes != null && trimmedBook.length > 0 },
-    ),
-  );
-  const existingTitleSet = useMemo(
-    () => new Set((existingTitles ?? []).map((t) => t.trim())),
-    [existingTitles],
+  // Mutate one book in place by source key; always produces a new array so React
+  // re-renders, and a new Set/Map where those change (no in-place mutation).
+  const updateBook = useCallback((source: string, patch: (b: Book) => Book) => {
+    setBooks((prev) => prev.map((b) => (b.source === source ? patch(b) : b)));
+  }, []);
+
+  const setExtract = useCallback(
+    (source: string, extract: ExtractPhase) =>
+      updateBook(source, (b) => ({ ...b, extract })),
+    [updateBook],
   );
 
-  // A cross-recipe reference only links if its target recipe will exist after
-  // import: either it's a selected recipe in this batch, or already in the book.
-  const linkableTitles = useMemo(() => {
-    const titles = new Set<string>();
-    for (const t of existingTitleSet) titles.add(t.trim().toLowerCase());
-    if (recipes) {
-      for (const i of selected) {
-        titles.add(recipes[i].meta.title.trim().toLowerCase());
+  // Extract one EPUB end to end: chunk in WASM, run the LLM per chunk through the
+  // proxy (concurrent, retried, cached, failures degrade to empty), then
+  // assemble. A failed chunk yields no recipes rather than sinking the book.
+  const extractBook = useCallback(
+    async (source: string, bytes: Uint8Array) => {
+      let chunks: WCookbookChunk[];
+      const tEpub = performance.now();
+      try {
+        chunks = wasm.chunk_epub(bytes);
+      } catch (error) {
+        setExtract(source, {
+          status: "error",
+          message: getErrorMessage(error),
+        });
+        return;
       }
-    }
-    return titles;
-  }, [recipes, selected, existingTitleSet]);
+      const chunkEpubMs = performance.now() - tEpub;
+      if (chunks.length === 0) {
+        setExtract(source, {
+          status: "error",
+          message: "No text found in EPUB",
+        });
+        return;
+      }
 
-  // Parse + validate cookbook JSON from either an uploaded file or pasted text
-  // (e.g. `food-cli scrape-epub book.epub --json | pbcopy`).
-  const loadFromText = (text: string) => {
+      let done = 0;
+      let failed = 0;
+      setExtract(source, { status: "extracting", done, total: chunks.length });
+
+      // --- profiling: per-call latency, live concurrency, assemble cost ---
+      const tBook = performance.now();
+      const latencies: number[] = [];
+      let inFlight = 0;
+      let maxInFlight = 0;
+      let assembleMs = 0;
+      const chunkSizes = chunks.map((c) => c.request.user.length);
+
+      // Freeze measurement: 'longtask' entries are main-thread blocks >50ms.
+      let longTasks = 0;
+      let longTaskMs = 0;
+      let maxLongTaskMs = 0;
+      let observer: PerformanceObserver | undefined;
+      try {
+        observer = new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) {
+            longTasks++;
+            longTaskMs += e.duration;
+            if (e.duration > maxLongTaskMs) maxLongTaskMs = e.duration;
+          }
+        });
+        observer.observe({ entryTypes: ["longtask"] });
+      } catch {
+        // longtask API unsupported (e.g. Safari) — skip freeze metrics.
+      }
+
+      // Results accumulate as chunks land (order-independent — `assemble_recipes`
+      // matches them to chunks by id). `assemble_recipes` is pure, so we re-run it
+      // on the partial set to stream recipes into the preview live. Cross-chunk
+      // merges + reference links only fully resolve on the final pass; the live
+      // preview self-corrects. Throttled so an 8-chunk burst collapses to one
+      // re-render (each re-render re-parses every line, so they're not free).
+      const results: { id: string; input: unknown }[] = [];
+      let lastPreviewAt = 0;
+
+      const reassemble = (final: boolean) => {
+        if (!final) {
+          const now = performance.now();
+          if (now - lastPreviewAt < PREVIEW_THROTTLE_MS) return;
+          lastPreviewAt = now;
+        }
+        let recipes: CookbookRecipe[];
+        try {
+          const tA = performance.now();
+          recipes = cookbookRecipesSchema.parse(
+            wasm.assemble_recipes(chunks, results, source),
+          );
+          assembleMs += performance.now() - tA;
+        } catch (error) {
+          // A transient partial-parse hiccup is fine mid-flight; only surface it
+          // if the *final* assemble fails.
+          if (final) {
+            setExtract(source, {
+              status: "error",
+              message: getErrorMessage(error),
+            });
+          }
+          return;
+        }
+        updateBook(source, (b) => ({
+          ...b,
+          recipes,
+          // Auto-select everything; the import button is gated on `ready`, so
+          // re-selecting all each pass doesn't fight the user.
+          selected: new Set(recipes.map((_, i) => i)),
+          ...(final
+            ? { extract: { status: "ready", failedChunks: failed } as const }
+            : {}),
+        }));
+        if (final && recipes.length === 0) {
+          toast.warning(`No recipes found in ${deriveBookName(source)}`);
+        }
+      };
+
+      await mapLimit(chunks, CHUNK_CONCURRENCY, async (chunk) => {
+        let input: unknown;
+        const cached = chunkCache.get(chunk.id);
+        if (cached !== undefined) {
+          input = cached;
+        } else {
+          const request: ChunkRequestInput = {
+            system: chunk.request.system,
+            user: chunk.request.user,
+            toolName: chunk.request.tool_name,
+            // WASM emits the schema as a JSON string (a serde_json::Value would
+            // cross as a JS Map); parse it back to a plain object.
+            toolSchema: JSON.parse(chunk.request.tool_schema) as Record<
+              string,
+              unknown
+            >,
+          };
+          inFlight++;
+          if (inFlight > maxInFlight) maxInFlight = inFlight;
+          const tCall = performance.now();
+          try {
+            input = await withRetry(() => extractChunk.mutateAsync(request));
+            chunkCache.set(chunk.id, input);
+          } catch {
+            // Exhausted retries — skip this chunk (its recipes are lost, the rest
+            // of the book proceeds), matching the native extractor.
+            failed++;
+            input = { recipes: [] };
+          } finally {
+            latencies.push(performance.now() - tCall);
+            inFlight--;
+          }
+        }
+        results.push({ id: chunk.id, input });
+        done++;
+        setExtract(source, {
+          status: "extracting",
+          done,
+          total: chunks.length,
+        });
+        reassemble(false); // stream this chunk's recipes into the preview
+      });
+
+      reassemble(true); // authoritative final assemble + mark ready
+
+      // --- profiling summary ---
+      // Flush any pending longtask entries, then stop observing.
+      observer?.takeRecords?.().forEach((e) => {
+        longTasks++;
+        longTaskMs += e.duration;
+        if (e.duration > maxLongTaskMs) maxLongTaskMs = e.duration;
+      });
+      observer?.disconnect();
+      const wallMs = performance.now() - tBook;
+      const sorted = [...latencies].sort((a, b) => a - b);
+      const totalCallMs = latencies.reduce((a, b) => a + b, 0);
+      const pct = (p: number) =>
+        Math.round(
+          sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))] ??
+            0,
+        );
+      const sumSizes = chunkSizes.reduce((a, b) => a + b, 0);
+      console.info(`[cookbook-profile] ${deriveBookName(source)}`, {
+        chunks: chunks.length,
+        networkCalls: latencies.length,
+        cacheHits: chunks.length - latencies.length,
+        wallS: +(wallMs / 1000).toFixed(1),
+        chunkEpubMs: Math.round(chunkEpubMs),
+        assembleMsTotal: Math.round(assembleMs),
+        avgChunkChars: Math.round(sumSizes / chunks.length),
+        callLatencyMs: {
+          p50: pct(0.5),
+          p95: pct(0.95),
+          max: Math.round(sorted.at(-1) ?? 0),
+          avg: Math.round(totalCallMs / (latencies.length || 1)),
+        },
+        // CHUNK_CONCURRENCY is the cap; effective is what we actually got
+        // (total call time ÷ wall time). Lower than the cap ⇒ throttled by the
+        // browser's HTTP/1.1 conn limit (dev) or the gateway's rate limit.
+        concurrencyCap: CHUNK_CONCURRENCY,
+        maxInFlight,
+        // Freezes: main-thread blocks >50ms during extraction. count high or
+        // maxMs large ⇒ the UI janked (re-render / parse cost).
+        freezes: {
+          count: longTasks,
+          totalMs: Math.round(longTaskMs),
+          maxMs: Math.round(maxLongTaskMs),
+        },
+        effectiveConcurrency:
+          wallMs > 0 ? +(totalCallMs / wallMs).toFixed(1) : 0,
+      });
+    },
+    [extractChunk, setExtract, updateBook],
+  );
+
+  // Add dropped/picked .epub files as books and start extracting each.
+  const addEpubFiles = useCallback(
+    async (files: File[]) => {
+      const epubs = files.filter((f) => /\.epub$/i.test(f.name));
+      if (epubs.length === 0) {
+        toast.error("Drop one or more .epub files");
+        return;
+      }
+      const newBooks: Book[] = epubs
+        // Skip a file already loaded (same name) so a re-drop doesn't duplicate.
+        .filter((f) => !books.some((b) => b.source === f.name))
+        .map((f) => ({
+          source: f.name,
+          name: deriveBookName(f.name),
+          recipes: [],
+          selected: new Set<number>(),
+          results: new Map<number, ImportResult>(),
+          extract: { status: "pending" },
+          expanded: true,
+        }));
+      if (newBooks.length === 0) return;
+      setBooks((prev) => [...prev, ...newBooks]);
+
+      // Extract sequentially across books to keep the gateway load bounded
+      // (chunks within a book already run concurrently).
+      for (const book of newBooks) {
+        const file = epubs.find((f) => f.name === book.source);
+        if (!file) continue;
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        await extractBook(book.source, bytes);
+      }
+    },
+    [books, extractBook],
+  );
+
+  // Power-user path: a flat CookbookRecipe[] or a {book,recipes}[] bundle.
+  const loadJson = useCallback(async (file: File) => {
     let data: unknown;
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(await file.text());
     } catch {
       toast.error("Could not parse JSON");
       return;
     }
-    const parsed = cookbookRecipesSchema.safeParse(data);
-    if (!parsed.success) {
-      toast.error("Not a valid cookbook export (food-cli --json)");
+    const parsed = cookbookBundleSchema.safeParse(data);
+    if (!parsed.success || parsed.data.length === 0) {
+      toast.error("Not a valid cookbook export");
       return;
     }
-    if (parsed.data.length === 0) {
-      toast.error("No recipes found");
-      return;
+    // Group recipes by their per-recipe source (fixes the old one-book-name-for-
+    // all bug): each distinct source becomes its own book.
+    const bySource = new Map<string, CookbookRecipe[]>();
+    for (const r of parsed.data) {
+      const key = r.source ?? "(unknown)";
+      const list = bySource.get(key);
+      if (list) list.push(r);
+      else bySource.set(key, [r]);
     }
-    const loaded = parsed.data;
-    startLoading(() => {
-      setRecipes(loaded);
-      setBook(deriveBookName(loaded[0]?.source));
-      setSelected(new Set(loaded.map((_, i) => i)));
-      setResults(new Map());
-    });
-  };
+    const loaded: Book[] = [...bySource.entries()].map(([source, recipes]) => ({
+      source,
+      name: deriveBookName(source),
+      recipes,
+      selected: new Set(recipes.map((_, i) => i)),
+      results: new Map<number, ImportResult>(),
+      extract: { status: "ready" as const, failedChunks: 0 },
+      expanded: true,
+    }));
+    setBooks((prev) => [
+      ...prev,
+      ...loaded.filter((l) => !prev.some((b) => b.source === l.source)),
+    ]);
+  }, []);
 
-  const handleFile = async (file: File) => loadFromText(await file.text());
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      void addEpubFiles([...e.dataTransfer.files]);
+    },
+    [addEpubFiles],
+  );
 
-  const toggle = (i: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(i)) {
-        next.delete(i);
-      } else {
-        next.add(i);
+  // Import one book's selected recipes, two passes so cross-recipe references
+  // resolve within the book (insertCookbook upserts by (book, title)).
+  const importBook = useCallback(
+    async (source: string) => {
+      const book = books.find((b) => b.source === source);
+      if (!book) return;
+      const bookName = book.name.trim();
+      if (!bookName) {
+        toast.error("Book name is required");
+        return;
       }
-      return next;
-    });
-  };
+      const indices = [...book.selected].sort((a, b) => a - b);
+      if (indices.length === 0) return;
 
-  const allSelected = recipes != null && selected.size === recipes.length;
-  const toggleAll = () => {
-    if (!recipes) return;
-    setSelected(allSelected ? new Set() : new Set(recipes.map((_, i) => i)));
-  };
+      const setResult = (i: number, result: ImportResult) =>
+        updateBook(source, (b) => ({
+          ...b,
+          results: new Map(b.results).set(i, result),
+        }));
 
-  const runImport = async () => {
-    if (!recipes || !book.trim()) return;
-    setImporting(true);
-    const bookName = book.trim();
-    const indices = [...selected].sort((a, b) => a - b);
-
-    // Pass 1: create/update every selected recipe. Cross-recipe references only
-    // resolve to recipes that already exist, so on a fresh book this pass is
-    // effectively flat. Sequential to keep ingredient find-or-create races minimal.
-    const succeeded = new Set<number>();
-    for (const i of indices) {
-      setResults((prev) => new Map(prev).set(i, { status: "importing" }));
-      try {
-        const { id } = await insertCookbook.mutateAsync({
-          recipe: recipes[i],
-          book: bookName,
-        });
-        setResults((prev) => new Map(prev).set(i, { status: "done", id }));
-        succeeded.add(i);
-      } catch (error) {
-        setResults((prev) =>
-          new Map(prev).set(i, {
-            status: "error",
-            message: getErrorMessage(error),
-          }),
-        );
+      const succeeded = new Set<number>();
+      for (const i of indices) {
+        setResult(i, { status: "importing" });
+        try {
+          const { id } = await insertCookbook.mutateAsync({
+            recipe: book.recipes[i],
+            book: bookName,
+          });
+          setResult(i, { status: "done", id });
+          succeeded.add(i);
+        } catch (error) {
+          setResult(i, { status: "error", message: getErrorMessage(error) });
+        }
       }
-    }
-
-    // Pass 2: every selected recipe now has an id, so re-import the ones with
-    // references — their lines now link to the existing book recipes. Best-effort
-    // (keep the pass-1 result on failure).
-    for (const i of indices) {
-      if (!succeeded.has(i) || recipes[i].references.length === 0) continue;
-      try {
-        await insertCookbook.mutateAsync({
-          recipe: recipes[i],
-          book: bookName,
-        });
-      } catch {
-        // ignore — the recipe is already imported; only the links failed
+      // Pass 2: re-import recipes with references so their links now resolve.
+      for (const i of indices) {
+        if (!succeeded.has(i) || book.recipes[i].references.length === 0)
+          continue;
+        try {
+          await insertCookbook.mutateAsync({
+            recipe: book.recipes[i],
+            book: bookName,
+          });
+        } catch {
+          // already imported; only the links failed — keep the pass-1 result
+        }
       }
-    }
+      toast.success(`Imported ${succeeded.size} from ${bookName}`);
+    },
+    [books, insertCookbook, updateBook],
+  );
 
-    setImporting(false);
-    toast.success("Cookbook unpacked.");
+  // Stable ref so memoized RecipeCards don't re-render every streaming pass just
+  // because the parent re-rendered (the rest of `handlers` can be inline).
+  const toggleRecipe = useCallback(
+    (source: string, i: number) =>
+      updateBook(source, (b) => {
+        const selected = new Set(b.selected);
+        if (selected.has(i)) selected.delete(i);
+        else selected.add(i);
+        return { ...b, selected };
+      }),
+    [updateBook],
+  );
+
+  const handlers = {
+    rename: (source: string, name: string) =>
+      updateBook(source, (b) => ({ ...b, name })),
+    toggleRecipe,
+    toggleAll: (source: string) =>
+      updateBook(source, (b) => ({
+        ...b,
+        selected:
+          b.selected.size === b.recipes.length
+            ? new Set<number>()
+            : new Set(b.recipes.map((_, i) => i)),
+      })),
+    toggleExpanded: (source: string) =>
+      updateBook(source, (b) => ({ ...b, expanded: !b.expanded })),
+    remove: (source: string) =>
+      setBooks((prev) => prev.filter((b) => b.source !== source)),
+    import: importBook,
   };
 
   return (
@@ -188,272 +488,74 @@ export function CookbookImport() {
       <div>
         <h1 className="font-semibold text-xl">Import cookbook</h1>
         <p className="text-muted-foreground text-sm">
-          Upload the JSON from{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">
-            food-cli scrape-epub book.epub --json
-          </code>
-          , review, and import the recipes you want.
+          Drag{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">.epub</code>{" "}
+          cookbooks here — Cubby extracts the recipes with AI, then you review
+          and import.
         </p>
       </div>
 
-      <div className="space-y-3 rounded border border-border p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor={fileId}>Cookbook JSON file</Label>
-            <Input
-              id={fileId}
-              type="file"
-              accept=".json,application/json"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleFile(file);
-              }}
-            />
-          </div>
-          {recipes != null && (
-            <div className="space-y-1.5">
-              <Label htmlFor={bookId}>Book name</Label>
-              <Input
-                id={bookId}
-                value={book}
-                onChange={(e) => setBook(e.target.value)}
-                placeholder="e.g. Salt Fat Acid Heat"
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor={pasteId}>…or paste JSON</Label>
-          <Textarea
-            id={pasteId}
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-            placeholder="food-cli scrape-epub book.epub --json | pbcopy, then paste here"
-            // Clamp height: field-sizing-content would otherwise grow to fit the
-            // whole pasted blob — we don't need to see it.
-            className="max-h-16 resize-none font-mono text-xs"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!pasted.trim() || isLoading}
-            onClick={() => loadFromText(pasted)}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: drop zone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={onDrop}
+        className={cn(
+          "flex flex-col items-center gap-2 rounded border border-border border-dashed p-8 text-muted-foreground transition-colors",
+          isDragging && "border-accent bg-accent/10 text-accent-foreground",
+        )}
+      >
+        <Upload className="h-6 w-6" />
+        <p className="text-sm">Drag .epub cookbooks here, or choose files.</p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Label
+            htmlFor={fileInputId}
+            className="cursor-pointer rounded border border-border px-3 py-1.5 font-medium text-foreground text-sm hover:bg-muted"
           >
-            {isLoading && <Spinner className="mr-1" />}
-            Load pasted JSON
-          </Button>
+            Choose .epub files
+          </Label>
+          <Input
+            id={fileInputId}
+            type="file"
+            accept=".epub,application/epub+zip"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) void addEpubFiles([...e.target.files]);
+              e.target.value = "";
+            }}
+          />
+          <Label
+            htmlFor={jsonInputId}
+            className="cursor-pointer text-muted-foreground text-xs underline hover:text-foreground"
+          >
+            or import JSON
+          </Label>
+          <Input
+            id={jsonInputId}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void loadJson(file);
+              e.target.value = "";
+            }}
+          />
         </div>
       </div>
 
-      {recipes != null && (
-        <>
-          <div className="flex items-center justify-between gap-3 border-border border-y py-2">
-            <div className="flex items-center gap-2 text-sm">
-              <Checkbox
-                aria-label="Select all recipes"
-                checked={allSelected}
-                onCheckedChange={toggleAll}
-              />
-              {selected.size} of {recipes.length} selected
-            </div>
-            <Button
-              type="button"
-              size="sm"
-              onClick={runImport}
-              disabled={importing || selected.size === 0 || !book.trim()}
-            >
-              {importing ? (
-                <Spinner className="mr-1" />
-              ) : (
-                <Import className="mr-1 h-4 w-4" />
-              )}
-              Import {selected.size} selected
-            </Button>
-          </div>
-
-          <div className="space-y-3">
-            {recipes.map((recipe, i) => (
-              <RecipeCard
-                // biome-ignore lint/suspicious/noArrayIndexKey: recipes are a fixed ordered list from one upload
-                key={i}
-                recipe={recipe}
-                selected={selected.has(i)}
-                onToggle={() => toggle(i)}
-                result={results.get(i)}
-                alreadyImported={existingTitleSet.has(recipe.meta.title.trim())}
-                linkableTitles={linkableTitles}
-              />
-            ))}
-          </div>
-        </>
-      )}
-
-      {recipes == null && (
-        <div className="flex flex-col items-center gap-2 rounded border border-border border-dashed p-8 text-muted-foreground">
-          <Upload className="h-6 w-6" />
-          <p className="text-sm">Choose a cookbook JSON file to begin.</p>
-        </div>
-      )}
+      {books.map((book) => (
+        <BookGroupCard
+          key={book.source}
+          book={book}
+          handlers={handlers}
+          importing={insertCookbook.isPending}
+        />
+      ))}
     </div>
-  );
-}
-
-function RecipeCard({
-  recipe,
-  selected,
-  onToggle,
-  result,
-  alreadyImported,
-  linkableTitles,
-}: {
-  recipe: CookbookRecipe;
-  selected: boolean;
-  onToggle: () => void;
-  result: ImportResult | undefined;
-  alreadyImported: boolean;
-  linkableTitles: Set<string>;
-}) {
-  // Ingredient names across the whole recipe, so instructions in one section can
-  // highlight ingredients defined in another (matches the recipe-form preview).
-  const namesForHighlighting = useMemo(
-    () =>
-      dedupe(
-        recipe.sections
-          .flatMap((s) => s.ingredients)
-          .map((line) => wasm.parse_ingredient(line).name)
-          .filter((n) => n.length > 0),
-      ),
-    [recipe],
-  );
-
-  // Parse instructions to rich text once per section (not on every render).
-  const richBySection = useMemo(
-    () =>
-      recipe.sections.map((section) =>
-        section.instructions.map((line) => {
-          try {
-            return formatRichText(
-              wasm.parse_rich_text(line, namesForHighlighting),
-            );
-          } catch {
-            return [line] as ReturnType<typeof formatRichText>;
-          }
-        }),
-      ),
-    [recipe, namesForHighlighting],
-  );
-
-  return (
-    <Card size="sm">
-      <CardHeader className="flex-row items-center gap-2 space-y-0">
-        <Checkbox checked={selected} onCheckedChange={onToggle} />
-        <div className="flex flex-1 items-baseline gap-2">
-          <CardTitle>{recipe.meta.title}</CardTitle>
-          {recipe.meta.recipe_yield && (
-            <span className="text-muted-foreground text-xs">
-              {recipe.meta.recipe_yield}
-            </span>
-          )}
-          {alreadyImported && (
-            <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 text-xs">
-              already imported · will update
-            </span>
-          )}
-        </div>
-        <ImportStatus result={result} />
-      </CardHeader>
-      <CardContent>
-        {recipe.references.length > 0 && (
-          <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
-            <span className="text-muted-foreground">Uses:</span>
-            {recipe.references.map((ref) => {
-              const linkable = linkableTitles.has(
-                ref.title.trim().toLowerCase(),
-              );
-              return (
-                <span
-                  key={ref.title}
-                  title={
-                    linkable
-                      ? `Will link (${ref.confidence})`
-                      : "Target recipe not in this import — stays an ingredient"
-                  }
-                  className={cn(
-                    "rounded-sm px-1.5 py-0.5 font-medium",
-                    linkable
-                      ? "bg-accent/20 text-accent-foreground"
-                      : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  → {ref.title}
-                  {!linkable && " (not imported)"}
-                </span>
-              );
-            })}
-          </div>
-        )}
-        <div className="grid gap-x-4 gap-y-2 md:grid-cols-2">
-          {/* Ingredients */}
-          <div className="space-y-2">
-            {recipe.sections.map((section, si) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: sections are a fixed ordered list
-              <div key={si} className="space-y-0.5">
-                {section.name && (
-                  <div className="font-medium text-muted-foreground text-xs">
-                    {section.name}
-                  </div>
-                )}
-                <IngredientPreviewTable ingredientLines={section.ingredients} />
-              </div>
-            ))}
-          </div>
-
-          {/* Instructions */}
-          <div className="space-y-2">
-            {recipe.sections.map((section, si) =>
-              section.instructions.length > 0 ? (
-                // biome-ignore lint/suspicious/noArrayIndexKey: sections are a fixed ordered list
-                <div key={si} className="space-y-0.5">
-                  {section.name && (
-                    <div className="font-medium text-muted-foreground text-xs">
-                      {section.name}
-                    </div>
-                  )}
-                  <ol className="list-decimal space-y-0.5 pl-4 text-muted-foreground text-xs leading-snug">
-                    {richBySection[si]?.map((rich, ii) => (
-                      // biome-ignore lint/suspicious/noArrayIndexKey: instructions are ordered by line
-                      <li key={ii}>{rich}</li>
-                    ))}
-                  </ol>
-                </div>
-              ) : null,
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ImportStatus({ result }: { result: ImportResult | undefined }) {
-  if (!result) return null;
-  if (result.status === "importing") return <Spinner />;
-  if (result.status === "done") {
-    return (
-      <Link
-        to="/recipes/$id"
-        params={{ id: result.id }}
-        className="flex items-center gap-1 text-green-600 text-sm"
-      >
-        <Check className="h-4 w-4" /> Imported
-      </Link>
-    );
-  }
-  return (
-    <span className="flex items-center gap-1 text-destructive text-sm">
-      <AlertCircle className="h-4 w-4" /> {result.message}
-    </span>
   );
 }

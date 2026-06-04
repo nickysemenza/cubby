@@ -1,5 +1,5 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
-import { Clock, ExternalLink, Users } from "lucide-react";
+import { BookOpen, Clock, ExternalLink, Users } from "lucide-react";
 import { Image } from "~/components/ui/image";
 
 interface RecipeHeroProps {
@@ -45,6 +45,12 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           <ExternalLink size={16} />
           <span>Source</span>
         </a>
+      )}
+      {recipe.source?.type === "book" && (
+        <div className="flex items-center gap-1.5">
+          <BookOpen size={16} />
+          <span>{recipe.source.book}</span>
+        </div>
       )}
     </div>
   );

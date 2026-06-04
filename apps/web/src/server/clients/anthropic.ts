@@ -26,6 +26,13 @@ import {
 } from "@tanstack/ai-anthropic";
 import { env } from "~/env";
 
+// Cubby's Cloudflare AI Gateway base (no provider suffix). Append the provider
+// path: `/anthropic`, `/google-ai-studio/v1beta/openai`, etc. Shared by the
+// `@tanstack/ai` adapter below and the cookbook-extraction proxy
+// (`~/server/utils/cookbook-llm`) so both route through the same gateway + key.
+export const AI_GATEWAY_BASE_URL =
+  "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby";
+
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
 export const CATEGORY_DESCRIPTIONS = {
@@ -141,8 +148,7 @@ class AnthropicClient {
     }
     if (!this.adapter) {
       this.adapter = createAnthropicChat("claude-haiku-4-5", this.apiKey, {
-        baseURL:
-          "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/anthropic",
+        baseURL: `${AI_GATEWAY_BASE_URL}/anthropic`,
       });
     }
     return this.adapter;

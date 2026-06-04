@@ -67,6 +67,10 @@ export const tryFormatAmount = (amount: WAmount): string => {
   }
 };
 
+/** Format a parsed ingredient's amounts (e.g. "1.333 cup, 173 g"), joined. */
+export const formatAmounts = (amounts: WAmount[], sep = ", "): string =>
+  amounts.map(tryFormatAmount).join(sep);
+
 /**
  * Helper function for rendering a hoverable unit icon with tooltip
  */

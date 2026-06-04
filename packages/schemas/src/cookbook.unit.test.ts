@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import cookbookSample from "./__fixtures__/cookbook.sample.json";
-import { cookbookRecipesSchema } from "./cookbook";
+import { cookbookBundleSchema, cookbookRecipesSchema } from "./cookbook";
 
 describe("cookbookRecipesSchema", () => {
   // Drift alarm for the unspoken syntax agreement with ../ingredient-parser.
@@ -71,6 +71,56 @@ describe("cookbookRecipesSchema", () => {
         sections: [{ ingredients: ["a"] }],
         references: [{ title: "Y", line: "1 Y", confidence: "guess" }],
       },
+    ]);
+
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("cookbookBundleSchema", () => {
+  const recipe = (title: string, source?: string) => ({
+    meta: { title },
+    sections: [{ ingredients: ["1 egg"] }],
+    ...(source ? { source } : {}),
+  });
+
+  test("passes a flat CookbookRecipe[] through unchanged", () => {
+    const result = cookbookBundleSchema.safeParse([
+      recipe("A", "one.epub"),
+      recipe("B", "two.epub"),
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(result.data?.map((r) => r.source)).toEqual(["one.epub", "two.epub"]);
+  });
+
+  test("flattens a {book, recipes}[] bundle and stamps source from book", () => {
+    const result = cookbookBundleSchema.safeParse([
+      { book: "Book One", recipes: [recipe("A"), recipe("B")] },
+      { book: "Book Two", recipes: [recipe("C")] },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(result.data).toHaveLength(3);
+    // Each recipe inherits its bundle entry's book as `source`.
+    expect(result.data?.map((r) => r.source)).toEqual([
+      "Book One",
+      "Book One",
+      "Book Two",
+    ]);
+  });
+
+  test("keeps a recipe's own source over the bundle book", () => {
+    const result = cookbookBundleSchema.safeParse([
+      { book: "Fallback", recipes: [recipe("A", "explicit.epub")] },
+    ]);
+
+    expect(result.data?.[0]?.source).toBe("explicit.epub");
+  });
+
+  test("rejects a bundle whose recipe is malformed", () => {
+    const result = cookbookBundleSchema.safeParse([
+      { book: "X", recipes: [{ meta: { title: "no sections" } }] },
     ]);
 
     expect(result.success).toBe(false);

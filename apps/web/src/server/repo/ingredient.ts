@@ -177,6 +177,48 @@ export const getIngredientByName = async (db: Database, name: string) => {
   return res ? await dbIngredientToAPI(db, res) : null;
 };
 
+/**
+ * Batch counterpart to {@link getIngredientByName}: match many names in ONE
+ * query (exact, case-insensitive, on name or alias). Returns a map from each
+ * requested name to its match (or null). Used by the cookbook importer to show
+ * the matched/new status for a whole book's ingredients without firing one
+ * request per ingredient per recipe card.
+ */
+export type IngredientNameMatch = {
+  id: string;
+  name: string;
+  aliases: string[];
+};
+
+export const getIngredientMatches = async (
+  db: Database,
+  names: string[],
+): Promise<Record<string, IngredientNameMatch | null>> => {
+  const map: Record<string, IngredientNameMatch | null> = {};
+  for (const n of names) map[n] = null;
+  if (names.length === 0) return map;
+
+  const rows = await getDb(db).query.ingredient.findMany({
+    where: buildIngredientWhere(true, names[0], names.slice(1)),
+    columns: { id: true, name: true, aliases: true },
+  });
+
+  // Index each row by its lowercased name + aliases, then assign every requested
+  // name that matches. Aliases are returned so callers (e.g. instruction
+  // highlighting) can recognize a matched ingredient by any of its names.
+  const byKey = new Map<string, IngredientNameMatch>();
+  for (const row of rows) {
+    const match = { id: row.id, name: row.name, aliases: row.aliases };
+    for (const key of [row.name, ...row.aliases]) {
+      byKey.set(key.toLowerCase(), match);
+    }
+  }
+  for (const n of names) {
+    map[n] = byKey.get(n.toLowerCase()) ?? null;
+  }
+  return map;
+};
+
 export const createIngredient = async (
   db: Database | DrizzleTransaction,
   data: z.infer<typeof ingredientBase>,

@@ -57,3 +57,23 @@ export type CookbookRecipe = z.infer<typeof cookbookRecipeSchema>;
 
 // What an uploaded `--json` file contains.
 export const cookbookRecipesSchema = z.array(cookbookRecipeSchema);
+
+// Optional power-user JSON-upload path: accept either the flat `CookbookRecipe[]`
+// (what `food-cli` emits, and what the in-browser WASM extractor produces) or a
+// `{ book, recipes }[]` bundle, normalizing both to a flat array. For a bundle
+// entry, stamp its `book` onto each recipe's `source` so the importer's
+// group-by-source logic is uniform. The primary drag-EPUB path doesn't touch
+// this — it passes a flat `CookbookRecipe[]` straight from WASM.
+const cookbookBundleEntry = z.object({
+  book: z.string(),
+  recipes: cookbookRecipesSchema,
+});
+export const cookbookBundleSchema = z
+  .union([cookbookRecipesSchema, z.array(cookbookBundleEntry)])
+  .transform((data): CookbookRecipe[] =>
+    data.length > 0 && "recipes" in (data[0] as object)
+      ? (data as z.infer<typeof cookbookBundleEntry>[]).flatMap((b) =>
+          b.recipes.map((r) => ({ ...r, source: r.source ?? b.book })),
+        )
+      : (data as CookbookRecipe[]),
+  );

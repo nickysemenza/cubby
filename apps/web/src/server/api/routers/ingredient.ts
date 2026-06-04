@@ -9,7 +9,11 @@
 import { type IngredientId, ingredientId } from "@cubby/schemas/identifiers";
 import { ingredientBase } from "@cubby/schemas/ingredient";
 import { z } from "zod";
-import { deleteIngredients, mergeIngredients } from "~/server/repo/ingredient";
+import {
+  deleteIngredients,
+  getIngredientMatches,
+  mergeIngredients,
+} from "~/server/repo/ingredient";
 import { ingredientWithFoodOut } from "~/server/services/ingredient.service";
 import {
   createDeleteProcedure,
@@ -85,6 +89,27 @@ const getByName = protectedProcedure
     return await ctx.services.ingredient.getIngredientByName(input.nameFilter);
   });
 
+// Batch name→match lookup in one query. The cookbook importer uses this to show
+// the matched/new status for a whole book's ingredients at once, instead of one
+// getByName per ingredient per recipe card (hundreds of round-trips).
+const matchNames = protectedProcedure
+  .input(z.object({ names: z.array(z.string()) }))
+  .output(
+    z.record(
+      z.string(),
+      z
+        .object({
+          id: z.string(),
+          name: z.string(),
+          aliases: z.array(z.string()),
+        })
+        .nullable(),
+    ),
+  )
+  .query(async ({ ctx, input }) => {
+    return await getIngredientMatches(ctx.db, input.names);
+  });
+
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<IngredientId>(
   async (services, ids) => {
@@ -95,6 +120,7 @@ const deleteItem = createDeleteProcedure<IngredientId>(
 
 export const ingredientRouter = createTRPCRouter({
   getByName,
+  matchNames,
   getByID,
   list,
   merge,

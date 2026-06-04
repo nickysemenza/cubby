@@ -16,6 +16,7 @@ import {
 } from "~/server/repo/database-helpers";
 
 import type { RecipeDeepDB, SectionIngredientDB } from "./internal-types";
+import { recipeSourceFromDb } from "./source";
 
 type RecipeSelect = typeof recipe.$inferSelect;
 
@@ -60,6 +61,9 @@ export const dbRecipeToAPIShallow: (
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
+    // Strong provenance union — surfaces the book name for cookbook recipes
+    // (meta.url only ever held web URLs).
+    source: recipeSourceFromDb({ SourceType, SourceData }),
     ...restOfRecipe,
   };
 };
@@ -78,6 +82,7 @@ export const dbRecipeToAPI = (recipeData: RecipeDeepDB): RecipeOut => {
     meta: {
       url: SourceType === "Website" ? SourceData : null,
     },
+    source: recipeSourceFromDb({ SourceType, SourceData }),
     images: extractImagesFromJoinTable(images),
     sections: mapRelation(sections, (section) => {
       const { ingredients, instructions, ...restOfSection } = section;

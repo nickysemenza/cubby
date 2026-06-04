@@ -23,10 +23,25 @@ export const recipeMeta = z.object({ url: z.url().nullable() }).nullable();
 export const recipeServings = z.number().int().positive();
 export const recipeTags = z.array(z.string());
 
+// A recipe's provenance as a strong discriminated union — invalid pairings
+// (a Book with no book, a Website with no URL) are unrepresentable. Maps to/from
+// the DB's `SourceType` + `SourceData` columns via the repo-side codec
+// (`~/server/repo/recipe/source`); no migration. This is what finally exposes a
+// cookbook recipe's book name in the API (`meta.url` only ever held web URLs).
+export const recipeSource = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("book"), book: z.string().min(1) }),
+  z.object({ type: z.literal("website"), url: z.url() }),
+  z.object({ type: z.literal("other") }),
+]);
+export type RecipeSource = z.infer<typeof recipeSource>;
+
 const ingredientOut = baseEntitySchema;
 
 export const recipeTopLevel = baseEntitySchema.extend({
   meta: recipeMeta,
+  // Strong provenance, derived from the DB columns on read. Output-only for now
+  // (`meta.url` still drives the write path); nullish so older rows are lenient.
+  source: recipeSource.nullish(),
   yield: recipeYieldSchema.nullish(),
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
