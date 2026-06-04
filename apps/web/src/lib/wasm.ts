@@ -59,6 +59,7 @@ const CACHEABLE_METHODS = [
   "parse_rich_text",
   "conv_amount_to_kind",
   "conv_amount_to_nutrients",
+  "conv_amount_all",
   "format_amount",
   "format_amount_value",
 ] as const;

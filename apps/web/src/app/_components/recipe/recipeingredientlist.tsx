@@ -1,4 +1,4 @@
-import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import {
   createColumnHelper,
   getCoreRowModel,
@@ -30,20 +30,23 @@ import { getIngredientName } from "./recipe-utils";
 export const RecipeIngredientList: React.FC<{
   ingredients: SectionIngredientOut[];
   ingMap: Record<string, IngredientWithFoodOut> | undefined;
-}> = ({ ingredients, ingMap }) => {
+  // Sub-recipe graphs, so recipe-as-ingredient rows + the summary roll up their
+  // own cost/calories (scaled by amount/yield) instead of showing as missing.
+  recipeMap?: Record<string, RecipeOut>;
+}> = ({ ingredients, ingMap, recipeMap }) => {
   // Load ingredient data
   const data = useMemo(
-    () => (ingMap ? createIngredientData(ingredients, ingMap) : []),
-    [ingredients, ingMap],
+    () => (ingMap ? createIngredientData(ingredients, ingMap, recipeMap) : []),
+    [ingredients, ingMap, recipeMap],
   );
 
   // Load totals
   const totals = useMemo(
     () =>
       ingMap
-        ? calculateTotals(ingredients, ingMap, getIngredientName)
+        ? calculateTotals(ingredients, ingMap, getIngredientName, recipeMap)
         : undefined,
-    [ingredients, ingMap],
+    [ingredients, ingMap, recipeMap],
   );
 
   // Load unit mappings

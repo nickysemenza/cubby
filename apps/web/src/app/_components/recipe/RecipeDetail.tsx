@@ -1,6 +1,5 @@
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { getNutrientValueByKey } from "@cubby/usda-schemas";
-import { useQueries } from "@tanstack/react-query";
 import { BarChart3, BookOpen, Newspaper, Table2 } from "lucide-react";
 import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
@@ -17,11 +16,9 @@ import {
   createIngredientData,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
-import { chunk, dedupe, ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
-import { useTRPC } from "~/trpc/react";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import EntityImageList from "../EntityImageList";
+import { useRecipeCostingData } from "../hooks/useRecipeCostingData";
 import { NYTView } from "./NYTView";
 import { RecipeMagazineView } from "./RecipeMagazineView";
 import { RecipeTagList } from "./recipe-tag";
@@ -158,7 +155,6 @@ const RecipeDetailInner: React.FC<{
   view?: RecipeViewMode;
   onViewChange?: (view: RecipeViewMode) => void;
 }> = ({ recipe, view: controlledView, onViewChange }) => {
-  const api = useTRPC();
   // Controlled when the parent supplies view/onViewChange; otherwise self-managed
   // (e.g. the search preview panel embeds this without URL state).
   const [internalView, setInternalView] = useState<RecipeViewMode>("magazine");
@@ -173,53 +169,25 @@ const RecipeDetailInner: React.FC<{
   // Get recipe images from the recipe object
   const recipeImages = recipe.images;
 
-  // Load ingredient data asynchronously (for table and charts views)
-  const ingredientIds = useMemo(() => {
-    const ids = ingredients
-      .filter((i) => i.type === "ingredient")
-      .map((i) => i.ingredient.id);
-    return dedupe(ids);
-  }, [ingredients]);
-
-  // Batched: one getManyByIDs per chunk of ids (sorted → stable cache keys)
-  // instead of one getByID per ingredient. Fewer queries also means fewer
-  // streaming re-renders on this page.
-  const ingredientQueryOptions = useMemo(
-    () =>
-      chunk([...ingredientIds].sort(), ID_CHUNK_SIZE).map((ids) =>
-        api.ingredient.getManyByIDs.queryOptions({ ids }),
-      ),
-    [api, ingredientIds],
-  );
-
-  const data = useQueries({
-    queries: ingredientQueryOptions,
-    combine: (results) => {
-      if (ingredientIds.length === 0) return {};
-      if (results.some((q) => q.isLoading)) return undefined;
-      // getManyByIDs omits missing/deleted ids, so build from what's returned.
-      return results
-        .flatMap((q) => q.data ?? [])
-        .reduce(
-          (acc, ingredient) => {
-            acc[ingredient.id] = ingredient;
-            return acc;
-          },
-          {} as Record<string, IngredientWithFoodOut>,
-        );
-    },
-  });
+  // Load ingredient data plus the graph of any sub-recipes used as ingredients,
+  // so cost/calories roll up correctly (table and charts views). `ingMap` is
+  // null until the first load completes.
+  const recipesForCosting = useMemo(() => [recipe], [recipe]);
+  const { ingMap, recipeMap } = useRecipeCostingData(recipesForCosting);
 
   // Load enriched ingredient data for charts (with price/nutrition info)
   const ingredientDataItems = useMemo(
-    () => (data ? createIngredientData(ingredients, data) : []),
-    [ingredients, data],
+    () => (ingMap ? createIngredientData(ingredients, ingMap, recipeMap) : []),
+    [ingredients, ingMap, recipeMap],
   );
 
   // Calculate totals for charts
   const totals = useMemo(
-    () => (data ? calculateTotals(ingredients, data, getIngredientName) : null),
-    [ingredients, data],
+    () =>
+      ingMap
+        ? calculateTotals(ingredients, ingMap, getIngredientName, recipeMap)
+        : null,
+    [ingredients, ingMap, recipeMap],
   );
 
   return (
@@ -249,7 +217,11 @@ const RecipeDetailInner: React.FC<{
               <EntityImageList images={recipeImages} />
             </div>
           )}
-          <RecipeIngredientList ingredients={ingredients} ingMap={data} />
+          <RecipeIngredientList
+            ingredients={ingredients}
+            ingMap={ingMap ?? undefined}
+            recipeMap={recipeMap}
+          />
         </>
       )}
       {viewMode === "charts" && (

@@ -70,6 +70,35 @@ impl From<Measure> for WAmount {
     }
 }
 
+/// One nutrient target's conversion (e.g. "g protein"), or null when no path
+/// exists. A Vec (not a map) so tsify derives the boundary type cleanly —
+/// serde_wasm_bindgen serializes a HashMap as an ES Map, not an object.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WNutrientConversion {
+    pub target: String,
+    pub amount: Option<WAmount>,
+}
+
+/// One entry per requested nutrient target (the return of
+/// `conv_amount_to_nutrients`). Transparent newtype so a bare list can cross the
+/// wasm boundary as `WNutrientConversion[]` (same pattern as `WCookbookChunks`).
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+#[serde(transparent)]
+pub struct WNutrientConversions(pub Vec<WNutrientConversion>);
+
+/// Every costing measure for one amount, from a single `conv_amount_all` call.
+/// Each field is the converted amount, or null when no conversion path exists.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi)]
+pub struct WAmountAll {
+    pub money: Option<WAmount>,
+    pub weight: Option<WAmount>,
+    pub calories: Option<WAmount>,
+    pub nutrients: Vec<WNutrientConversion>,
+}
+
 /// A parsed ingredient (mirrors `Ingredient`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]
@@ -237,26 +266,20 @@ impl From<Chunk> for RichItem {
 #[serde(transparent)]
 pub struct RichItems(pub Vec<RichItem>);
 
-// Hand-authored boundary types that can't be derived: `AmountKind` (a
-// `nutrient:${string}` template-literal union) and `NutrientConversionResult`.
+// Hand-authored boundary type that can't be derived: `AmountKind`, a
+// `nutrient:${string}` template-literal union.
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(typescript_type = "AmountKind")]
     pub type WAmountKind;
-    #[wasm_bindgen(typescript_type = "NutrientConversionResult")]
-    pub type NutrientConversionResult;
 }
 
 #[wasm_bindgen(typescript_custom_section)]
 const HAND_AUTHORED_TS: &str = r#"
 type AmountKind = "weight" | "volume" | "money" | "calories" | "time" | "temperature" | "length" | "other" | `nutrient:${string}`;
-
-/** Result from conv_amount_to_nutrients - maps target unit to converted amount or null */
-type NutrientConversionResult = Record<string, WAmount | null>;
 "#;
 
-// serde boundary, still used by the hand-authored types (AmountKind, the
-// nutrient Record, the islands array).
+// serde boundary: AmountKind input + the islands array (`to_js`).
 fn from_js<T: for<'de> Deserialize<'de>>(v: impl Into<JsValue>, ctx: &str) -> Result<T, String> {
     serde_wasm_bindgen::from_value(v.into()).map_err(|e| format!("Failed to parse {ctx}: {e}"))
 }
@@ -314,34 +337,62 @@ pub fn conv_amount_to_kind(
         .map(WAmount::from)
 }
 
-/// Convert an amount to multiple nutrient targets in a single call. Returns a map
-/// of target unit -> converted amount (or null if conversion failed).
+/// Convert an amount to multiple nutrient targets in a single call (graph built
+/// once). Returns one entry per target — the converted amount, or null when no
+/// conversion path exists.
 #[wasm_bindgen]
 pub fn conv_amount_to_nutrients(
     mappings: WUnitMappings,
     nutrient_targets: Vec<String>, // ["g protein", "mg sodium", "kcal kcal"]
     amount_w: WAmount,
-) -> Result<NutrientConversionResult, String> {
+) -> WNutrientConversions {
     let measure = amount_w.to_measure();
     let graph = make_graph(&mappings.to_pairs());
+    WNutrientConversions(
+        nutrient_targets
+            .into_iter()
+            .map(|target| WNutrientConversion {
+                amount: convert_measure_with_graph(
+                    &measure,
+                    MeasureKind::Nutrient(target.clone()),
+                    &graph,
+                )
+                .map(WAmount::from),
+                target,
+            })
+            .collect(),
+    )
+}
 
-    // Build the JS object manually: serde_wasm_bindgen has issues with
-    // HashMap<String, Option<_>>, and the keys are caller-supplied target strings.
-    let result = js_sys::Object::new();
-    for target in nutrient_targets {
-        let kind = MeasureKind::Nutrient(target.clone());
-        let converted = convert_measure_with_graph(&measure, kind, &graph);
+/// Convert an amount to every costing measure (money, weight, calories, and each
+/// nutrient target) in a single call, building the unit-mapping graph ONCE and
+/// reusing it for all conversions. Collapses the recipe-costing hot path's
+/// per-ingredient fan-out (money + weight + nutrients + calories = 4 boundary
+/// crossings, each rebuilding the graph) into one. Each field is the converted
+/// `WAmount`, or null when no conversion path exists.
+#[wasm_bindgen]
+pub fn conv_amount_all(
+    mappings: WUnitMappings,
+    nutrient_targets: Vec<String>, // non-kcal targets, e.g. ["g protein", "mg sodium"]
+    amount_w: WAmount,
+) -> WAmountAll {
+    let measure = amount_w.to_measure();
+    let graph = make_graph(&mappings.to_pairs()); // built ONCE, reused below
+    let convert =
+        |kind: MeasureKind| convert_measure_with_graph(&measure, kind, &graph).map(WAmount::from);
 
-        let js_value = match converted {
-            Some(m) => to_js(&WAmount::from(&m), "amount")?,
-            None => JsValue::NULL,
-        };
-
-        js_sys::Reflect::set(&result, &JsValue::from_str(&target), &js_value)
-            .map_err(|_| "Failed to set property on result object")?;
+    WAmountAll {
+        money: convert(MeasureKind::Money),
+        weight: convert(MeasureKind::Weight),
+        calories: convert(MeasureKind::Calories),
+        nutrients: nutrient_targets
+            .into_iter()
+            .map(|target| WNutrientConversion {
+                amount: convert(MeasureKind::Nutrient(target.clone())),
+                target,
+            })
+            .collect(),
     }
-
-    Ok(JsValue::from(result).into())
 }
 
 /// Convert an amount to a specific unit target (e.g., "g protein").

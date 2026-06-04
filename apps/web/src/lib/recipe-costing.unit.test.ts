@@ -3,8 +3,9 @@ import {
   unsafeIngredientId,
   unsafeProductId,
   unsafeProductShortcode,
+  unsafeRecipeId,
 } from "@cubby/schemas/identifiers";
-import type { SectionIngredientOut } from "@cubby/schemas/recipe";
+import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
@@ -1030,5 +1031,244 @@ describe("calculateTotals", () => {
     expect(result.missingByType.price).toEqual(["problematic ingredient"]);
     expect(result.missingByType.weight).toEqual(["problematic ingredient"]);
     expect(result.missingByType.nutrients).toEqual(["problematic ingredient"]);
+  });
+});
+
+describe("calculateTotals with sub-recipes", () => {
+  const mockGetIngredientName = (ingredient: SectionIngredientOut): string =>
+    ingredient.type === "ingredient"
+      ? ingredient.ingredient.name
+      : "sub-recipe";
+
+  // Builds an IngredientWithFoodOut with the given unit mappings (weight, price,
+  // and per-100g nutrient mappings incl. kcal). Mirrors the fixture shape used by
+  // the plain-ingredient tests above.
+  const buildIngredient = (
+    idStr: string,
+    name: string,
+    mappings: { a: Amount; b: Amount }[],
+    nutrientsPer100: Record<string, number>,
+  ): IngredientWithFoodOut => ({
+    id: unsafeIngredientId(idStr),
+    name,
+    recipe: null,
+    appearsInRecipes: [],
+    aliases: [],
+    product: [
+      {
+        id: unsafeProductId(`prod-${idStr}`),
+        name,
+        shortcode: unsafeProductShortcode("P-TEST"),
+        food: {
+          legacyFoodInfo: null,
+          nutritionInfo: { nutrientsPer100, nutrientSummary: [] },
+          fdc_id: 0,
+          brandedFoodInfo: null,
+          foodInfo: { data_type: "branded_food", description: "" },
+          portionInfoRaw: [],
+        },
+        upc: null,
+        ndb_number: null,
+        manufacturer: "",
+        category: null,
+        model: null,
+        expectedQuantity: null,
+        price: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        images: [],
+        externalIds: [],
+        unitMappings: mappings.map((m, i) => ({
+          id: `${idStr}-map${i}`,
+          a: m.a,
+          b: m.b,
+          source: "test",
+          sourceMetadata: { type: "manual" as const },
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      },
+    ],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  // A section ingredient referencing a plain ingredient.
+  const ingredientEntry = (
+    idStr: string,
+    name: string,
+    amounts: Amount[],
+  ): SectionIngredientOut => ({
+    id: idStr,
+    type: "ingredient",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ingredient: {
+      id: unsafeIngredientId(idStr),
+      name,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    recipe: null,
+    amounts,
+  });
+
+  // A section ingredient referencing a sub-recipe (recipe-as-ingredient).
+  const subRecipeEntry = (
+    sub: RecipeOut,
+    amounts: Amount[],
+  ): SectionIngredientOut => ({
+    id: `link-${sub.id}`,
+    type: "recipe",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ingredient: null,
+    recipe: sub,
+    amounts,
+  });
+
+  const makeSubRecipe = (
+    idStr: string,
+    name: string,
+    yieldValue: RecipeOut["yield"],
+    ingredients: SectionIngredientOut[],
+  ): RecipeOut => ({
+    id: unsafeRecipeId(idStr),
+    name,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    meta: null,
+    yield: yieldValue,
+    images: [],
+    sections: [
+      {
+        id: `${idStr}-sec`,
+        name: null,
+        instructions: [],
+        ingredients,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ],
+  });
+
+  test("rolls sub-recipe cost + calories into the parent totals, scaled by yield", async () => {
+    // tomato: 1 cup = 100 g = $1; 100 g = 10 g protein = 50 kcal
+    const tomato = buildIngredient(
+      "tomato",
+      "tomato",
+      [
+        { a: { value: 1, unit: "cup" }, b: { value: 100, unit: "gram" } },
+        { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
+        { a: { value: 100, unit: "g" }, b: { value: 10, unit: "g protein" } },
+        { a: { value: 100, unit: "g" }, b: { value: 50, unit: "kcal" } },
+      ],
+      { "203": 10, "208": 50 },
+    );
+    // pasta: 1 scoop = 100 g = $3; 100 g = 5 g protein = 100 kcal. "scoop" is a
+    // non-builtin unit so WASM uses the mapping (not a builtin like pound→gram).
+    const pasta = buildIngredient(
+      "pasta",
+      "pasta",
+      [
+        { a: { value: 1, unit: "scoop" }, b: { value: 100, unit: "gram" } },
+        { a: { value: 1, unit: "scoop" }, b: { value: 3, unit: "dollar" } },
+        { a: { value: 100, unit: "g" }, b: { value: 5, unit: "g protein" } },
+        { a: { value: 100, unit: "g" }, b: { value: 100, unit: "kcal" } },
+      ],
+      { "203": 5, "208": 100 },
+    );
+
+    const ingMap: Record<string, IngredientWithFoodOut> = {
+      tomato,
+      pasta,
+    };
+
+    // Sub-recipe "tomato sauce" yields 4 cups; uses 4 cups of tomato.
+    // Its totals: $4, 400 g, 40 g protein, 200 kcal.
+    const sauce = makeSubRecipe(
+      "sauce",
+      "tomato sauce",
+      { value: 4, unit: "cup" },
+      [ingredientEntry("tomato", "tomato", [{ value: 4, unit: "cup" }])],
+    );
+
+    const recipeMap: Record<string, RecipeOut> = { sauce };
+
+    // Parent "pasta dish": 1 pound pasta + 2 cups of the 4-cup sauce (= half).
+    const parentIngredients: SectionIngredientOut[] = [
+      ingredientEntry("pasta", "pasta", [{ value: 1, unit: "scoop" }]),
+      subRecipeEntry(sauce, [{ value: 2, unit: "cup" }]),
+    ];
+
+    const result = await calculateTotals(
+      parentIngredients,
+      ingMap,
+      mockGetIngredientName,
+      recipeMap,
+    );
+
+    // pasta $3 + half of sauce ($4 → $2) = $5
+    expect(result.price).toBeCloseTo(5, 2);
+    // pasta 100 g + half of sauce (400 g → 200 g) = 300 g
+    expect(result.weight).toBeCloseTo(300, 1);
+    // protein: pasta 5 g + half of sauce (40 g → 20 g) = 25 g
+    expect(result.nutrients["203"]).toBeCloseTo(25, 1);
+    // kcal: pasta 100 + half of sauce (200 → 100) = 200
+    expect(result.nutrients["208"]).toBeCloseTo(200, 1);
+    // The sub-recipe contributed — it is NOT flagged as missing.
+    expect(result.missingByType.price).toEqual([]);
+    expect(result.missingByType.weight).toEqual([]);
+    expect(result.missingByType.nutrients).toEqual([]);
+    expect(result.totalIngredients).toBe(2);
+  });
+
+  test("guards against cycles (A → B → A) without hanging", async () => {
+    const recipeA = makeSubRecipe("recA", "A", { value: 1, unit: "batch" }, []);
+    const recipeB = makeSubRecipe("recB", "B", { value: 1, unit: "batch" }, [
+      subRecipeEntry(recipeA, [{ value: 1, unit: "batch" }]),
+    ]);
+    // Close the loop: A uses B, B uses A.
+    recipeA.sections[0].ingredients.push(
+      subRecipeEntry(recipeB, [{ value: 1, unit: "batch" }]),
+    );
+
+    const recipeMap: Record<string, RecipeOut> = {
+      recA: recipeA,
+      recB: recipeB,
+    };
+
+    // Should terminate (the visited-set cycle guard breaks the loop), not hang.
+    const result = await calculateTotals(
+      recipeA.sections[0].ingredients,
+      {},
+      mockGetIngredientName,
+      recipeMap,
+    );
+
+    expect(result).toBeDefined();
+    expect(typeof result.price).toBe("number");
+  });
+
+  test("flags a yield-less sub-recipe as missing instead of guessing", async () => {
+    // No yield → can't scale → treated as unconvertible (missing), contributes $0.
+    const sauce = makeSubRecipe("sauce", "tomato sauce", null, [
+      ingredientEntry("tomato", "tomato", [{ value: 1, unit: "cup" }]),
+    ]);
+
+    const recipeMap: Record<string, RecipeOut> = { sauce };
+
+    const result = await calculateTotals(
+      [subRecipeEntry(sauce, [{ value: 2, unit: "cup" }])],
+      {},
+      mockGetIngredientName,
+      recipeMap,
+    );
+
+    expect(result.price).toBe(0);
+    expect(result.weight).toBe(0);
+    expect(result.missingByType.price).toEqual(["sub-recipe"]);
+    expect(result.missingByType.weight).toEqual(["sub-recipe"]);
+    expect(result.missingByType.nutrients).toEqual(["sub-recipe"]);
   });
 });

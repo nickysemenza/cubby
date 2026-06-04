@@ -10,6 +10,7 @@ import {
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { useMemo } from "react";
 import { z } from "zod";
+import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import { getIngredientName } from "~/app/_components/recipe/recipe-utils";
 import { EntityLayout } from "~/components/layouts/entity-layout";
 import { Button } from "~/components/ui/button";
@@ -19,8 +20,7 @@ import {
   calculateTotals,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
-import { chunk, dedupe, ID_CHUNK_SIZE } from "~/misc/array-helpers";
-import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
+import { dedupe } from "~/misc/array-helpers";
 import { useTRPC } from "~/trpc/react";
 
 const searchParamsSchema = z.object({
@@ -80,60 +80,21 @@ function RecipeComparePage() {
     }),
   });
 
-  // Load ingredient data for all recipes
-  const allIngredients = useMemo(() => {
-    return recipes.flatMap((recipe) =>
-      recipe.sections.flatMap((section) => section.ingredients),
-    );
-  }, [recipes]);
-
-  // Extract unique ingredient IDs - stringify to use as stable dependency key
-  const uniqueIngredientIds = useMemo(() => {
-    return dedupe(
-      allIngredients
-        .filter((i) => i.type === "ingredient")
-        .map((i) => i.ingredient.id),
-    );
-  }, [allIngredients]);
-
-  // Batched: one getManyByIDs per chunk of ids (sorted → stable cache keys)
-  // instead of one getByID per unique ingredient across all compared recipes.
-  const ingredientQueryOptions = useMemo(
-    () =>
-      chunk([...uniqueIngredientIds].sort(), ID_CHUNK_SIZE).map((ids) =>
-        api.ingredient.getManyByIDs.queryOptions({ ids }),
-      ),
-    [api, uniqueIngredientIds],
-  );
-
-  const ingredientData = useQueries({
-    queries: ingredientQueryOptions,
-    combine: (results) => {
-      if (uniqueIngredientIds.length === 0) return {};
-      if (results.some((q) => q.isLoading)) return undefined;
-      // getManyByIDs omits missing/deleted ids, so build from what's returned.
-      return results
-        .flatMap((q) => q.data ?? [])
-        .reduce(
-          (acc, ingredient) => {
-            acc[ingredient.id] = ingredient;
-            return acc;
-          },
-          {} as Record<string, IngredientWithFoodOut>,
-        );
-    },
-  });
+  // Load ingredient data plus any sub-recipe graphs across all compared recipes,
+  // so cost/calories roll up correctly. `ingMap` is null until first load.
+  const { ingMap, recipeMap } = useRecipeCostingData(recipes);
 
   // Calculate totals for each recipe
   const recipesWithTotals: RecipeWithTotals[] = useMemo(() => {
-    if (!ingredientData || recipes.length === 0) return [];
+    if (!ingMap || recipes.length === 0) return [];
 
     return recipes.map((recipe) => {
       const ingredients = recipe.sections.flatMap((s) => s.ingredients);
       const totals = calculateTotals(
         ingredients,
-        ingredientData,
+        ingMap,
         getIngredientName,
+        recipeMap,
       );
       return {
         recipe,
@@ -141,7 +102,7 @@ function RecipeComparePage() {
         effectiveServings: getEffectiveServings(recipe),
       };
     });
-  }, [recipes, ingredientData]);
+  }, [recipes, ingMap, recipeMap]);
 
   // Remove a recipe from comparison
   const handleRemove = (recipeId: string) => {

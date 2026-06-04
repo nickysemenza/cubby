@@ -174,8 +174,15 @@ const MissingDataFooter: React.FC<{
               · {category.names.length}
             </span>
           </span>
-          {category.names.map((name) => (
-            <Badge key={name} variant="outline" className="font-normal">
+          {category.names.map((name, index) => (
+            <Badge
+              // Names can repeat (a recipe may list the same ingredient twice),
+              // so the name alone isn't unique; this list is static (no reorder).
+              // biome-ignore lint/suspicious/noArrayIndexKey: names aren't unique and the list is static
+              key={`${name}-${index}`}
+              variant="outline"
+              className="font-normal"
+            >
               {name}
             </Badge>
           ))}

@@ -12,13 +12,13 @@ import {
   calculateTotals,
 } from "~/lib/recipe-costing";
 import { formatCurrency } from "~/lib/utils";
-import { chunk, ID_CHUNK_SIZE } from "~/misc/array-helpers";
 import type { IngredientWithFoodOut } from "~/server/services/ingredient.service";
 import { useTRPC } from "~/trpc/react";
 import RTable from "../_components/data-table/Table";
 import { useDeletableConfig } from "../_components/hooks/useDeletableConfig";
 import { useEntityList } from "../_components/hooks/useEntityList";
 import { useEntityPreview } from "../_components/hooks/useEntityPreview";
+import { loadRecipeCostingData } from "../_components/hooks/useRecipeCostingData";
 import { useStableColumnState } from "../_components/hooks/useStableColumnState";
 import { NoneState } from "../_components/NoneState";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
@@ -265,7 +265,7 @@ export function RecipeList({ actions, bookFilter }: RecipeListProps) {
             `${r.id}:${r.sections
               .flatMap((s) =>
                 s.ingredients.map((i) =>
-                  i.type === "ingredient" ? i.ingredient.id : "",
+                  i.type === "ingredient" ? i.ingredient.id : `r${i.recipe.id}`,
                 ),
               )
               .join("-")}`,
@@ -293,42 +293,23 @@ export function RecipeList({ actions, bookFilter }: RecipeListProps) {
       setIsLoadingTotals(true);
 
       try {
-        // Extract unique ingredient IDs from all recipes
-        const ingredientIds = new Set<string>();
-        for (const recipe of recipes) {
-          for (const section of recipe.sections) {
-            for (const ing of section.ingredients) {
-              if (ing.type === "ingredient") {
-                ingredientIds.add(ing.ingredient.id);
-              }
-            }
-          }
-        }
-
-        // Step 1: Load all ingredient data via batched getManyByIDs, chunked
-        // (sorted → stable cache keys) to stay under the batch link's
-        // maxURLLength. Replaces ~one getByID per ingredient (hundreds of DB
-        // queries) with a handful of batched round-trips; ensureQueryData caches
-        // each chunk so revisits reuse it.
-        const ids = Array.from(ingredientIds).sort();
-        const chunkResults = await Promise.all(
-          chunk(ids, ID_CHUNK_SIZE).map((idChunk) =>
-            queryClient.ensureQueryData(
-              api.ingredient.getManyByIDs.queryOptions({ ids: idChunk }),
-            ),
-          ),
+        // Load all ingredient data plus the full graph of any sub-recipes used
+        // as ingredients (recipe-as-ingredient), batched & cached. Replaces ~one
+        // getByID per ingredient with a handful of batched round-trips;
+        // ensureQueryData caches each chunk so revisits reuse it.
+        const { ingMap, recipeMap } = await loadRecipeCostingData(
+          recipes,
+          api,
+          queryClient,
         );
-        const ingredients = chunkResults.flat();
 
         if (cancelled) return;
 
-        const ingMap = Object.fromEntries(
-          ingredients.map((ing) => [ing.id, ing]),
-        ) as Record<string, IngredientWithFoodOut>;
-
         setIngredientMap(ingMap);
 
-        // Step 2: Calculate totals for all recipes (even if no ingredients)
+        // Calculate totals for all recipes (even if no ingredients). recipeMap
+        // lets sub-recipe cost/calories roll into the parent totals, scaled by
+        // amount/yield.
         const entries = recipes.map((recipe) => {
           const recipeIngredients = recipe.sections.flatMap(
             (s) => s.ingredients,
@@ -337,6 +318,7 @@ export function RecipeList({ actions, bookFilter }: RecipeListProps) {
             recipeIngredients,
             ingMap,
             getIngredientName,
+            recipeMap,
           );
           return [recipe.id, totals] as const;
         });
