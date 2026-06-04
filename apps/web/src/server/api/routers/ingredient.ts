@@ -110,6 +110,16 @@ const matchNames = protectedProcedure
     return await getIngredientMatches(ctx.db, input.names);
   });
 
+// Batched id→ingredient lookup in one query (+ one cross-ingredient USDA enrich).
+// The recipe list uses this to load every ingredient for its cost/calorie columns
+// in a single round-trip instead of one getByID per ingredient (hundreds).
+const getManyByIDs = protectedProcedure
+  .input(z.object({ ids: z.array(ingredientId) }))
+  .output(z.array(ingredientWithFoodOut))
+  .query(async ({ ctx, input }) => {
+    return await ctx.services.ingredient.getIngredientsByIDs(input.ids);
+  });
+
 // Delete procedure using standalone factory
 const deleteItem = createDeleteProcedure<IngredientId>(
   async (services, ids) => {
@@ -122,6 +132,7 @@ export const ingredientRouter = createTRPCRouter({
   getByName,
   matchNames,
   getByID,
+  getManyByIDs,
   list,
   merge,
   create,

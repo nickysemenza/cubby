@@ -17,6 +17,7 @@ import {
   createIngredient as createIngredientRepo,
   getIngredientByID as getIngredientByIDRepo,
   getIngredientByName as getIngredientByNameRepo,
+  getIngredientsByIDs as getIngredientsByIDsRepo,
   ingredientList as ingredientListRepo,
   updateIngredient as updateIngredientRepo,
 } from "../repo/ingredient";
@@ -64,6 +65,23 @@ export class IngredientService {
       ...ingredient,
       product: enrichedProducts,
     };
+  }
+
+  /**
+   * Batched `getIngredientByID`: one DB query for all ids + one cross-ingredient
+   * USDA enrichment pass (via batchEnrichNestedItems), instead of N×(query+enrich).
+   * Used by the recipe list to compute the cost/calorie columns in one round-trip.
+   */
+  async getIngredientsByIDs(
+    ids: IngredientId[],
+  ): Promise<IngredientWithFoodOut[]> {
+    const ingredients = await getIngredientsByIDsRepo(this.db, ids);
+    return batchEnrichNestedItems(
+      ingredients,
+      (ing) => ing.product,
+      (products) => this.enrichProductsWithFood(products),
+      (ing, enrichedProducts) => ({ ...ing, product: enrichedProducts }),
+    );
   }
 
   async getIngredientByName(

@@ -169,6 +169,23 @@ export const getIngredientByID = async (db: Database, id: IngredientId) => {
   return await dbIngredientToAPI(db, ingredientData);
 };
 
+/**
+ * Batched sibling of `getIngredientByID`: fetches many ingredients (with full
+ * relations) in ONE query via `inArray`, instead of one findFirst per id.
+ * Missing/deleted ids are silently omitted. Order is not guaranteed.
+ */
+export const getIngredientsByIDs = async (
+  db: Database,
+  ids: IngredientId[],
+) => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db).query.ingredient.findMany({
+    where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
+    ...relations.ingredient.full,
+  });
+  return await Promise.all(rows.map((row) => dbIngredientToAPI(db, row)));
+};
+
 export const getIngredientByName = async (db: Database, name: string) => {
   const res = await getDb(db).query.ingredient.findFirst({
     where: buildIngredientWhere(true, name),

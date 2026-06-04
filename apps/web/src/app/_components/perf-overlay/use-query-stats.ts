@@ -1,5 +1,6 @@
+import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { recordQuery } from "~/lib/perf/perf-store";
 
 export interface LiveQueryStats {
@@ -16,35 +17,17 @@ function procedureName(queryKey: unknown): string {
 }
 
 /**
- * Subscribes to the query + mutation caches to (a) return live counts and
- * (b) record per-procedure fetch durations into the perf store (also feeding the
- * fan-out detector). Cheap; only mounted while the overlay is open.
+ * Records per-procedure fetch durations into the perf store (also feeding the
+ * fan-out detector). The subscribe callback runs inside React Query's synchronous
+ * notify cascade, so it MUST NOT call setState — it only writes to the (non-React)
+ * perf store. Live counts are read separately via `readLiveQueryStats` on a poll.
  */
-export function useQueryStats(): LiveQueryStats {
+export function useQueryTimingRecorder(): void {
   const queryClient = useQueryClient();
-  const [live, setLive] = useState<LiveQueryStats>({
-    total: 0,
-    inFlight: 0,
-    mutationsPending: 0,
-  });
-
   useEffect(() => {
     const queryCache = queryClient.getQueryCache();
-    const mutationCache = queryClient.getMutationCache();
     const starts = new Map<string, number>(); // queryHash → fetch start time
-
-    const recompute = () => {
-      const queries = queryCache.getAll();
-      const inFlight = queries.filter(
-        (q) => q.state.fetchStatus === "fetching",
-      ).length;
-      const mutationsPending = mutationCache
-        .getAll()
-        .filter((m) => m.state.status === "pending").length;
-      setLive({ total: queries.length, inFlight, mutationsPending });
-    };
-
-    const unsubQueries = queryCache.subscribe((event) => {
+    return queryCache.subscribe((event) => {
       const query = event.query;
       const hash = query.queryHash;
       if (query.state.fetchStatus === "fetching") {
@@ -56,16 +39,19 @@ export function useQueryStats(): LiveQueryStats {
           recordQuery(procedureName(query.queryKey), performance.now() - start);
         }
       }
-      recompute();
     });
-    const unsubMutations = mutationCache.subscribe(recompute);
-    recompute();
-
-    return () => {
-      unsubQueries();
-      unsubMutations();
-    };
   }, [queryClient]);
+}
 
-  return live;
+/** Pure read of current live query/mutation counts — call from the poll, not a subscribe. */
+export function readLiveQueryStats(queryClient: QueryClient): LiveQueryStats {
+  const queries = queryClient.getQueryCache().getAll();
+  const inFlight = queries.filter(
+    (q) => q.state.fetchStatus === "fetching",
+  ).length;
+  const mutationsPending = queryClient
+    .getMutationCache()
+    .getAll()
+    .filter((m) => m.state.status === "pending").length;
+  return { total: queries.length, inFlight, mutationsPending };
 }

@@ -289,17 +289,25 @@ export function RecipeList({ actions }: RecipeListProps) {
           }
         }
 
-        // Step 1: Load all ingredient data (may be empty if no ingredients).
-        // ensureQueryData reads the React Query cache first, so repeat /recipes
-        // visits and detail-page navigation reuse ingredient data instead of
-        // refetching (the old raw trpcClient.query bypassed the cache entirely).
-        const ingredients = await Promise.all(
-          Array.from(ingredientIds).map((id) =>
+        // Step 1: Load all ingredient data via batched getManyByIDs. Chunk the
+        // ids (sorted → stable cache keys) so each query's URL stays under the
+        // batch link's maxURLLength; the link splits the chunks across requests.
+        // Replaces ~one getByID per ingredient (hundreds of DB queries) with a
+        // handful of batched round-trips; ensureQueryData caches each chunk.
+        const ids = Array.from(ingredientIds).sort();
+        const CHUNK_SIZE = 50;
+        const chunks: string[][] = [];
+        for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+          chunks.push(ids.slice(i, i + CHUNK_SIZE));
+        }
+        const chunkResults = await Promise.all(
+          chunks.map((chunk) =>
             queryClient.ensureQueryData(
-              api.ingredient.getByID.queryOptions({ id }),
+              api.ingredient.getManyByIDs.queryOptions({ ids: chunk }),
             ),
           ),
         );
+        const ingredients = chunkResults.flat();
 
         if (cancelled) return;
 

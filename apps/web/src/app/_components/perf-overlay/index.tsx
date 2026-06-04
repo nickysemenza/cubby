@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   ClipboardCopy,
@@ -21,7 +22,11 @@ import {
   stopCollectors,
 } from "~/lib/perf/perf-store";
 import { cn } from "~/lib/utils";
-import { useQueryStats } from "./use-query-stats";
+import {
+  type LiveQueryStats,
+  readLiveQueryStats,
+  useQueryTimingRecorder,
+} from "./use-query-stats";
 
 type Corner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const CORNERS: Corner[] = [
@@ -56,17 +61,27 @@ export function PerfOverlay() {
   const [tab, setTab] = useState<Tab>("WASM");
   const [paused, setPausedState] = useState(false);
   const [snap, setSnap] = useState<PerfSnapshot>(() => snapshot());
-  const live = useQueryStats();
+  const queryClient = useQueryClient();
+  const [live, setLive] = useState<LiveQueryStats>(() =>
+    readLiveQueryStats(queryClient),
+  );
+  useQueryTimingRecorder();
 
   useEffect(() => {
     startCollectors();
     return () => stopCollectors();
   }, []);
 
+  // Single poll refreshes both the perf snapshot and the live query counts, so
+  // nothing calls setState inside React Query's notify cascade (which would warn
+  // about updating other components mid-render).
   useEffect(() => {
-    const id = setInterval(() => setSnap(snapshot()), 500);
+    const id = setInterval(() => {
+      setSnap(snapshot());
+      setLive(readLiveQueryStats(queryClient));
+    }, 500);
     return () => clearInterval(id);
-  }, []);
+  }, [queryClient]);
 
   const cycleCorner = () =>
     setCorner(CORNERS[(CORNERS.indexOf(corner) + 1) % CORNERS.length]);
@@ -302,7 +317,7 @@ function QueriesTab({
   live,
 }: {
   snap: PerfSnapshot;
-  live: ReturnType<typeof useQueryStats>;
+  live: LiveQueryStats;
 }) {
   const rows = Object.entries(snap.queries).sort(
     (a, b) => b[1].fetches - a[1].fetches,
