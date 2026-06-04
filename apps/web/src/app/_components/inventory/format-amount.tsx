@@ -50,12 +50,6 @@ export const showAmountAndPrice = (
 export const tryFormatAmount = (amount: WAmount): string => {
   try {
     const formatted = wasm.format_amount(amount);
-    // WASM renders money with a trailing symbol ("0.01 $"); show it as proper
-    // currency instead ("$0.01"), matching how amounts read everywhere else.
-    const money = formatted.match(/^(.+?)\s*\$$/);
-    if (money) {
-      return `$${money[1]}`;
-    }
     // "each" parses to Unit::Whole, which renders unit-less ("3", "2 - 4");
     // re-attach the user's "each" so it stays visible ("3 each", "2 - 4 each").
     if (amount.unit === "each") {

@@ -21,3 +21,15 @@ describe("tryFormatAmount — bare-count ('whole') rendering", () => {
     expect(tryFormatAmount({ value: 3, unit: "each" })).toBe("3 each");
   });
 });
+
+describe("tryFormatAmount — money rendering", () => {
+  // The Rust formatter renders money symbol-first ("$5"), so tryFormatAmount no
+  // longer post-processes a trailing "$". These lock in that contract.
+  it("renders dollars symbol-first", () => {
+    expect(tryFormatAmount({ value: 5, unit: "$" })).toBe("$5");
+  });
+
+  it("renders cents as a decimal, not a fraction", () => {
+    expect(tryFormatAmount({ value: 0.01, unit: "$" })).toBe("$0.01");
+  });
+});
