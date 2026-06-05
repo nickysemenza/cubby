@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { Link } from "@tanstack/react-router";
+import { IconPattern } from "~/components/common/icon-pattern";
 import { Button } from "~/components/ui/button";
 import {
   Empty,
@@ -92,7 +93,8 @@ export function EntityEmptyState({
   const actionHref = `/${entityDef.basePath}/new`;
 
   return (
-    <Empty variant="warm" className="py-8">
+    <Empty variant="warm" className="relative isolate overflow-hidden py-8">
+      <IconPattern className="-z-10" />
       <EmptyMedia variant="icon">
         <EntityIcon entity={entity} colored className="size-5" />
       </EmptyMedia>
