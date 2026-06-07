@@ -1,3 +1,5 @@
+import type { SourceName } from "./sources";
+
 // Common product data extracted from external APIs
 export interface ExternalProductData {
   name: string;
@@ -7,7 +9,7 @@ export interface ExternalProductData {
   description: string | null;
   priceDollars: number | null; // USD
   imageUrl: string | null;
-  source: "upcitemdb";
+  source: SourceName;
   sourceData: string; // Full JSON response
 }
 

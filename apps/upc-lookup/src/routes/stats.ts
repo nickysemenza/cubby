@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type { Env } from "../types";
 import { createDb, schema } from "../db";
 import type { StatsResponse } from "../schemas/product";
@@ -16,12 +16,18 @@ export async function getStats(
     .from(schema.products);
   const totalProducts = totalResult[0]?.count ?? 0;
 
-  // Get counts by source
-  const upcitemdbResult = await db
-    .select({ count: sql<number>`count(*)` })
+  // Get counts grouped by source (open-ended — supports any registered source)
+  const sourceRows = await db
+    .select({
+      source: schema.products.source,
+      count: sql<number>`count(*)`,
+    })
     .from(schema.products)
-    .where(eq(schema.products.source, "upcitemdb"));
-  const upcitemdbCount = upcitemdbResult[0]?.count ?? 0;
+    .groupBy(schema.products.source);
+  const bySource: Record<string, number> = {};
+  for (const row of sourceRows) {
+    bySource[row.source] = row.count;
+  }
 
   // Get count of products with images (R2 objects)
   const imagesResult = await db
@@ -32,9 +38,7 @@ export async function getStats(
 
   return {
     totalProducts,
-    bySource: {
-      upcitemdb: upcitemdbCount,
-    },
+    bySource,
     storageUsed: {
       d1Rows: totalProducts,
       r2Objects,

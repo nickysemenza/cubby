@@ -25,6 +25,27 @@ export const apiKeyAuth = createMiddleware<{ Bindings: Env }>(
 );
 
 /**
+ * Auth for the MCP endpoint. Accepts the API key via either the `X-API-Key`
+ * header or `Authorization: Bearer <key>` (standard MCP clients send the latter).
+ */
+export const mcpAuth = createMiddleware<{ Bindings: Env }>(async (c, next) => {
+  const authHeader = c.req.header("Authorization");
+  const bearer = authHeader?.startsWith("Bearer ")
+    ? authHeader.slice(7)
+    : undefined;
+  const apiKey = c.req.header("X-API-Key") ?? bearer;
+
+  if (!apiKey) {
+    return c.json({ error: "Missing API key", code: "MISSING_API_KEY" }, 401);
+  }
+  if (apiKey !== c.env.API_KEY) {
+    return c.json({ error: "Invalid API key", code: "INVALID_API_KEY" }, 401);
+  }
+
+  await next();
+});
+
+/**
  * Cookie-based authentication middleware for admin UI.
  * Checks for valid session cookie, redirects to login if missing.
  */

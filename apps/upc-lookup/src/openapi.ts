@@ -24,13 +24,15 @@ A UPC/barcode lookup API with caching. Provides product information including na
 - Look up products by UPC/EAN barcode
 - Search cached products by name or brand
 - View cache statistics
-- Automatic caching from UPCitemdb
+- Automatic caching from a pluggable source registry (currently UPCitemdb)
+- Admin UI at \`/admin\` and an MCP endpoint at \`/mcp\` for managing the cache
 
 ## Pricing
 All prices are returned in USD (e.g., \`priceDollars: 19.99\`).
 
 ## Authentication
 All endpoints require an API key passed in the \`X-API-Key\` header.
+The \`/mcp\` endpoint also accepts \`Authorization: Bearer <key>\`.
     `.trim(),
   },
   servers: [
@@ -119,6 +121,13 @@ All endpoints require an API key passed in the \`X-API-Key\` header.
             description: "Maximum results (1-100, default 20)",
             schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
           },
+          {
+            name: "offset",
+            in: "query",
+            required: false,
+            description: "Number of results to skip (default 0)",
+            schema: { type: "integer", minimum: 0, default: 0 },
+          },
         ],
         responses: {
           "200": {
@@ -198,6 +207,27 @@ All endpoints require an API key passed in the \`X-API-Key\` header.
         },
       },
     },
+    "/mcp": {
+      post: {
+        operationId: "mcp",
+        summary: "MCP endpoint (Streamable HTTP)",
+        description:
+          "Model Context Protocol endpoint. Exposes tools for agents to look up, search, create, update, re-fetch, delete cached products, and read stats — full parity with the admin UI. Use an MCP client; accepts the API key via X-API-Key or Authorization: Bearer.",
+        tags: ["MCP"],
+        security: [{ apiKey: [] }, { bearerAuth: [] }],
+        responses: {
+          "200": { description: "MCP JSON-RPC response" },
+          "401": {
+            description: "Missing or invalid API key",
+            content: {
+              "application/json": {
+                schema: zodToJsonSchema(errorResponseSchema),
+              },
+            },
+          },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -206,6 +236,11 @@ All endpoints require an API key passed in the \`X-API-Key\` header.
         in: "header",
         name: "X-API-Key",
         description: "API key for authentication",
+      },
+      bearerAuth: {
+        type: "http",
+        scheme: "bearer",
+        description: "API key as a bearer token (accepted by /mcp)",
       },
     },
   },

@@ -1,9 +1,8 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
 import type { Env } from "../types";
-import { createDb, schema } from "../db";
-import { lookupExternalProduct } from "../api";
-import { storeImage, getImageUrl } from "../storage/images";
+import { createDb } from "../db";
+import { resolveProduct } from "../services/products";
+import { getImageUrl } from "../storage/images";
 import type {
   ProductLookupResponse,
   ProductNotFoundResponse,
@@ -30,69 +29,26 @@ lookup.get("/:upc", async (c) => {
   }
 
   const db = createDb(c.env.DB);
+  const result = await resolveProduct(db, c.env, upc);
 
-  // Check D1 cache first
-  const cached = await db.query.products.findFirst({
-    where: eq(schema.products.upc, upc),
-  });
-
-  if (cached) {
-    const response: ProductLookupResponse = {
-      upc: cached.upc,
-      name: cached.name,
-      manufacturer: cached.manufacturer,
-      brand: cached.brand,
-      category: cached.category,
-      description: cached.description,
-      priceDollars: cached.priceDollars,
-      imageUrl: cached.imageKey ? getImageUrl(cached.imageKey, baseUrl) : null,
-      source: cached.source as "upcitemdb",
-      cached: true,
-    };
-    return c.json(response);
-  }
-
-  // Cache miss - lookup from external APIs
-  const externalData = await lookupExternalProduct(upc);
-
-  if (!externalData) {
+  if (!result) {
     const notFound: ProductNotFoundResponse = { found: false, upc };
     return c.json(notFound, 404);
   }
 
-  // Store image in R2 (non-blocking failure)
-  let imageKey: string | null = null;
-  if (externalData.imageUrl) {
-    imageKey = await storeImage(upc, externalData.imageUrl, c.env);
-  }
-
-  // Store in D1 cache
-  await db.insert(schema.products).values({
-    upc,
-    name: externalData.name,
-    manufacturer: externalData.manufacturer,
-    brand: externalData.brand,
-    category: externalData.category,
-    description: externalData.description,
-    priceDollars: externalData.priceDollars,
-    imageKey,
-    source: externalData.source,
-    sourceData: externalData.sourceData,
-  });
-
+  const { product, cached } = result;
   const response: ProductLookupResponse = {
-    upc,
-    name: externalData.name,
-    manufacturer: externalData.manufacturer,
-    brand: externalData.brand,
-    category: externalData.category,
-    description: externalData.description,
-    priceDollars: externalData.priceDollars,
-    imageUrl: imageKey ? getImageUrl(imageKey, baseUrl) : null,
-    source: externalData.source,
-    cached: false,
+    upc: product.upc,
+    name: product.name,
+    manufacturer: product.manufacturer,
+    brand: product.brand,
+    category: product.category,
+    description: product.description,
+    priceDollars: product.priceDollars,
+    imageUrl: product.imageKey ? getImageUrl(product.imageKey, baseUrl) : null,
+    source: product.source,
+    cached,
   };
-
   return c.json(response);
 });
 

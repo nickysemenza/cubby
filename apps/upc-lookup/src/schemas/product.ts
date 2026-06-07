@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { SOURCE_NAMES } from "../api/sources";
 
-// Product source enum
-export const productSourceSchema = z.enum(["upcitemdb"]);
+// Product source enum — derived from the source registry (../api/sources) so it
+// can never drift from the runtime list of valid sources.
+export const productSourceSchema = z.enum(SOURCE_NAMES);
 export type ProductSource = z.infer<typeof productSourceSchema>;
 
 // Successful lookup response
@@ -47,9 +49,9 @@ export type SearchResponse = z.infer<typeof searchResponseSchema>;
 // Stats response
 export const statsResponseSchema = z.object({
   totalProducts: z.number(),
-  bySource: z.object({
-    upcitemdb: z.number(),
-  }),
+  // Per-source counts keyed by source name (open record — new sources don't
+  // require a schema change).
+  bySource: z.record(z.string(), z.number()),
   storageUsed: z.object({
     d1Rows: z.number(),
     r2Objects: z.number(),

@@ -20,6 +20,7 @@ export const products = sqliteTable(
   (table) => [
     index("idx_products_name").on(table.name),
     index("idx_products_manufacturer").on(table.manufacturer),
+    index("idx_products_brand").on(table.brand),
   ],
 );
 

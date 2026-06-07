@@ -12,6 +12,7 @@ search.get("/", async (c) => {
   const baseUrl = new URL(c.req.url).origin;
   const limitStr = c.req.query("limit");
   const limit = Math.min(Math.max(parseInt(limitStr || "20", 10), 1), 100);
+  const offset = Math.max(parseInt(c.req.query("offset") || "0", 10) || 0, 0);
 
   if (!query || query.trim().length === 0) {
     return c.json(
@@ -31,6 +32,7 @@ search.get("/", async (c) => {
       like(schema.products.brand, searchPattern),
     ),
     limit,
+    offset,
   });
 
   // Get total count
@@ -57,7 +59,7 @@ search.get("/", async (c) => {
       description: p.description,
       priceDollars: p.priceDollars,
       imageUrl: p.imageKey ? getImageUrl(p.imageKey, baseUrl) : null,
-      source: p.source as "upcitemdb",
+      source: p.source,
     })),
     total,
   };

@@ -1,9 +1,14 @@
-import type { ExternalProductData, UPCitemdbResponse } from "./types";
-import { extractBestPrice } from "./price";
+import type { ExternalProductData, UPCitemdbResponse } from "../types";
+import { extractBestPrice } from "../price";
+import type { ProductSource } from "./types";
 
 const UPCITEMDB_API_URL = "https://api.upcitemdb.com/prod/trial/lookup";
 const TIMEOUT_MS = 5000;
 
+/**
+ * Look up product data from UPCitemdb.
+ * Free trial tier: ~100 requests/day (cached results don't count against it).
+ */
 export async function lookupUPCitemdb(
   upc: string,
 ): Promise<ExternalProductData | null> {
@@ -68,3 +73,8 @@ export async function lookupUPCitemdb(
     return null;
   }
 }
+
+export const upcitemdb = {
+  name: "upcitemdb",
+  lookup: lookupUPCitemdb,
+} as const satisfies ProductSource;
