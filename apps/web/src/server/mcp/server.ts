@@ -1,3 +1,4 @@
+import { recipeCreateInput, recipeUpdateInput } from "@cubby/schemas/recipe";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -141,6 +142,19 @@ function slimRecipe(r: Record<string, unknown>) {
     yield: r.yield,
     servings: r.servings,
     tags: r.tags,
+  };
+}
+
+/** Strip heavy fields from ingredients (drops USDA food + nested recipe data). */
+function slimIngredient(i: Record<string, unknown>) {
+  const products = (i.product as Record<string, unknown>[] | undefined) ?? [];
+  const appearsIn = (i.appearsInRecipes as unknown[] | undefined) ?? [];
+  return {
+    id: i.id,
+    name: i.name,
+    aliases: i.aliases,
+    products: products.map((p) => ({ id: p.id, name: p.name })),
+    recipeCount: appearsIn.length,
   };
 }
 
@@ -633,6 +647,133 @@ function registerTools(server: McpServer) {
   );
 
   // ---------------------------------------------------------------------------
+  // Ingredient tools
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "search_ingredients",
+    "Search ingredients by name. Returns id, name, aliases, linked products, and recipe count.",
+    {
+      nameFilter: z
+        .string()
+        .optional()
+        .describe("Filter by ingredient name (substring)"),
+      missingProductsOnly: z
+        .boolean()
+        .optional()
+        .describe("Only return ingredients with no linked products"),
+      pageIndex,
+      pageSize,
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.ingredient.list({
+        filters: {
+          nameFilter: params.nameFilter,
+          missingProductsOnly: params.missingProductsOnly,
+        },
+        sort: { orderBy: "name", direction: "asc" },
+        pagination: {
+          pageIndex: params.pageIndex ?? 0,
+          pageSize: params.pageSize ?? 50,
+        },
+      });
+      return json({
+        meta: result.meta,
+        items: result.items.map((i: Record<string, unknown>) =>
+          slimIngredient(i),
+        ),
+      });
+    }),
+  );
+
+  server.tool(
+    "get_ingredient",
+    "Get a single ingredient by ID, including linked products and recipes it appears in.",
+    { id: z.string().describe("Ingredient ID") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.ingredient.getByID({ id: params.id });
+      return json(slimIngredient(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "create_ingredient",
+    "Create a new ingredient. Use search_ingredients first to avoid duplicates.",
+    {
+      name: z.string().describe("Ingredient name"),
+      aliases: z
+        .array(z.string())
+        .optional()
+        .describe("Alternate names for this ingredient"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.ingredient.create({
+        name: params.name,
+        aliases: params.aliases ?? [],
+      });
+      return json(slimIngredient(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "update_ingredient",
+    "Update an ingredient's name or aliases.",
+    {
+      id: z.string().describe("Ingredient ID"),
+      name: z.string().optional().describe("New name"),
+      aliases: z
+        .array(z.string())
+        .optional()
+        .describe("New aliases (replaces)"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const { id, ...rest } = params;
+      const data = Object.fromEntries(
+        Object.entries(rest).filter(([, v]) => v !== undefined),
+      );
+      const result = await caller.ingredient.update({ id, data });
+      return json(slimIngredient(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "merge_ingredients",
+    "Merge duplicate ingredients into one. Aliases are absorbed into the target, and their recipes/products are re-pointed to it.",
+    {
+      target: z.string().describe("ID of the ingredient to keep"),
+      aliases: z
+        .array(z.string())
+        .min(1)
+        .describe("IDs of duplicate ingredients to merge into the target"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.ingredient.merge({
+        target: params.target,
+        aliases: params.aliases,
+      });
+      return json(slimIngredient(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "delete_ingredients",
+    "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
+    {
+      ids: z.array(z.string()).describe("Array of ingredient IDs to delete"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      await caller.ingredient.delete({ ids: params.ids });
+      return json({ deleted: (params.ids as string[]).length });
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
   // Recipe tools (read-only)
   // ---------------------------------------------------------------------------
 
@@ -698,6 +839,154 @@ function registerTools(server: McpServer) {
       const result = await caller.suggestions.getMakeable({
         minCoverage: params.minCoverage,
         limit: params.limit,
+      });
+      return json(result);
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Recipe tools (write)
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "scrape_recipe",
+    "Parse a recipe from a URL into structured form WITHOUT saving it. Returns the parsed recipe — use import_recipe to also save it.",
+    { url: z.string().url().describe("Recipe page URL") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.scrape(params.url);
+      return json(result);
+    }),
+  );
+
+  server.tool(
+    "import_recipe",
+    "Scrape a recipe from a URL and save it in one step. Returns the new recipe's id.",
+    { url: z.string().url().describe("Recipe page URL") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const compact = await caller.recipe.scrape(params.url);
+      const result = await caller.recipe.insertCompact(compact);
+      return json({ id: result.id });
+    }),
+  );
+
+  server.tool(
+    "create_recipe",
+    "Create a recipe from structured input (sections with ingredient IDs and instructions). Use search_ingredients to resolve ingredient IDs first.",
+    recipeCreateInput.shape,
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.create(params);
+      return json(slimRecipe(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "update_recipe",
+    "Update a recipe's fields. Only provided fields are changed.",
+    {
+      id: z.string().describe("Recipe ID"),
+      ...recipeUpdateInput.shape.data.shape,
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const { id, ...rest } = params;
+      const data = Object.fromEntries(
+        Object.entries(rest).filter(([, v]) => v !== undefined),
+      );
+      const result = await caller.recipe.update({ id, data });
+      return json(slimRecipe(result as Record<string, unknown>));
+    }),
+  );
+
+  server.tool(
+    "delete_recipe",
+    "Soft-delete recipes by IDs.",
+    { ids: z.array(z.string()).describe("Array of recipe IDs to delete") },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      await caller.recipe.delete({ ids: params.ids });
+      return json({ deleted: (params.ids as string[]).length });
+    }),
+  );
+
+  server.tool(
+    "list_cookbooks",
+    "List cookbooks (recipe sources) with the number of recipes from each.",
+    {},
+    withErrorHandling(async (_params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.listCookbooks();
+      return json(result);
+    }),
+  );
+
+  server.tool(
+    "get_recipe_tags",
+    "List all distinct recipe tags in use.",
+    {},
+    withErrorHandling(async (_params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.recipe.getAllTags();
+      return json(result);
+    }),
+  );
+
+  // ---------------------------------------------------------------------------
+  // Data quality tools
+  // ---------------------------------------------------------------------------
+
+  server.tool(
+    "list_problems",
+    "List data-quality problems across products, inventory, and locations (e.g. duplicates, invalid UPCs, orphaned products, stale prices). Use countsOnly for cheap triage, or type to fetch a single category.",
+    {
+      countsOnly: z
+        .boolean()
+        .optional()
+        .describe(
+          "Return only per-type counts and a total, not the full lists",
+        ),
+      type: z
+        .string()
+        .optional()
+        .describe(
+          "Return only this problem category (e.g. 'orphanedProducts', 'invalidUPCs'). Ignored when countsOnly is true.",
+        ),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      if (params.countsOnly) {
+        return json(await caller.problems.getProblemsCount());
+      }
+      const all = await caller.problems.getAllProblems();
+      if (typeof params.type === "string") {
+        const slice = (all as Record<string, unknown>)[params.type];
+        if (slice === undefined) {
+          return json({
+            error: `Unknown problem type '${params.type}'`,
+            availableTypes: Object.keys(all as Record<string, unknown>),
+          });
+        }
+        return json({ [params.type]: slice });
+      }
+      return json(all);
+    }),
+  );
+
+  server.tool(
+    "find_duplicate_inventory",
+    "Find unique products (expectedQuantity = 1) that appear in more than one location — likely duplicates to consolidate.",
+    {
+      excludeLocationId: z
+        .string()
+        .optional()
+        .describe("Ignore duplicates that involve this location"),
+    },
+    withErrorHandling(async (params, extra) => {
+      const caller = getCaller(extra);
+      const result = await caller.inventory.findDuplicates({
+        excludeLocationId: params.excludeLocationId,
       });
       return json(result);
     }),
