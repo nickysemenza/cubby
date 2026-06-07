@@ -72,9 +72,14 @@ export const apikey = pgTable("apikey", {
   start: text("start"),
   prefix: text("prefix"),
   key: text("key").notNull(),
-  userId: text("user_id")
+  // better-auth 1.6 api-key plugin: owner field is `referenceId` (user or org id),
+  // replacing the old `userId`. In default ("user") references mode this is the
+  // user id, so the FK + cascade preserves the prior delete-cascade behavior.
+  referenceId: text("reference_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  // Required by the plugin (defaults to "default"); identifies the key's config group.
+  configId: text("config_id").notNull().default("default"),
   refillInterval: integer("refill_interval"),
   refillAmount: integer("refill_amount"),
   lastRefillAt: timestamp("last_refill_at"),
