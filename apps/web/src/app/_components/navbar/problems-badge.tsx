@@ -58,6 +58,11 @@ export const ProblemsBadge = () => {
     if (problems.byType.emptyLocations > 0) {
       tooltipParts.push(`${problems.byType.emptyLocations} empty location`);
     }
+    if (problems.byType.malformedIngredientNames > 0) {
+      tooltipParts.push(
+        `${problems.byType.malformedIngredientNames} malformed ingredient name${problems.byType.malformedIngredientNames > 1 ? "s" : ""}`,
+      );
+    }
   }
 
   const tooltipText = hasProblems

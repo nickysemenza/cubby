@@ -17,6 +17,7 @@ import { InvalidInventoryAmountsList } from "./components/invalid-inventory-amou
 import { InvalidUPCsList } from "./components/invalid-upcs-list";
 import { InventoryWithStaleValuationsList } from "./components/inventory-with-stale-valuations-list";
 import { LocationsWithoutAiDescriptionList } from "./components/locations-without-ai-description-list";
+import { MalformedIngredientNamesList } from "./components/malformed-ingredient-names-list";
 import { OrphanedProductsList } from "./components/orphaned-products-list";
 import { ProductsWithIslandedMappingsList } from "./components/products-with-islanded-mappings-list";
 import { ProductsWithNoImagesList } from "./components/products-with-no-images-list";
@@ -113,6 +114,11 @@ export function ProblemsOverview() {
       id: "ai-descriptions",
       label: "AI Descriptions",
       count: (problems.locationsWithoutAiDescription ?? []).length,
+    },
+    {
+      id: "malformed-ingredients",
+      label: "Ingredient Names",
+      count: (problems.malformedIngredientNames ?? []).length,
     },
   ].filter((cat) => cat.count > 0);
 
@@ -262,6 +268,15 @@ export function ProblemsOverview() {
       >
         <LocationsWithoutAiDescriptionList
           locations={problems.locationsWithoutAiDescription ?? []}
+        />
+      </div>
+      <div
+        ref={(el) => {
+          sectionRefs.current["malformed-ingredients"] = el;
+        }}
+      >
+        <MalformedIngredientNamesList
+          ingredients={problems.malformedIngredientNames ?? []}
         />
       </div>
     </div>

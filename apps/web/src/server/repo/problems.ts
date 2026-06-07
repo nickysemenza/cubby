@@ -3,11 +3,13 @@ import { upc as upcSchema } from "@cubby/usda-schemas";
 import { and, eq, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import {
+  ingredient,
   inventoryEntry,
   location,
   locationImage,
   product,
   productUnitMappings,
+  recipeSectionIngredient,
 } from "~/server/db/schema";
 import {
   getDb,
@@ -38,6 +40,7 @@ interface AllProblems {
   inventoryWithStaleValuations: InventoryWithStaleValuation[];
   productsWithIslandedMappings: ProductWithIslandedMappings[];
   locationsWithoutAiDescription: LocationWithoutAiDescription[];
+  malformedIngredientNames: MalformedIngredientName[];
   totalProblems: number;
 }
 
@@ -737,9 +740,126 @@ interface ProblemsCount {
     inventoryWithStaleValuations: number;
     productsWithIslandedMappings: number;
     locationsWithoutAiDescription: number;
+    malformedIngredientNames: number;
   };
   total: number;
 }
+
+// An ingredient whose name looks like a parser/import artifact rather than a
+// real food (e.g. "very chives", "recipes Flaky Pie Dough", a bare "medium").
+export interface MalformedIngredientName {
+  id: string;
+  name: string;
+  reason: string;
+  // A sample raw import line from one of this ingredient's occurrences, when
+  // captured — shows what the mangled name was parsed from. Null for rows
+  // imported before raw-line capture.
+  rawLine: string | null;
+}
+
+// Bare descriptor words that are valid *modifiers* ("medium onion") but never a
+// whole ingredient on their own — when one stands alone the food noun was lost.
+const BARE_DESCRIPTOR_WORDS = new Set([
+  "medium",
+  "large",
+  "small",
+  "whole",
+  "ripe",
+]);
+
+// Preparation verbs. If a leading adverb is followed by one of these it's a
+// legitimate prep phrase ("finely grated lemon zest"), not a stranded adverb.
+const PREP_VERB_RE =
+  /(grat|ground|grind|chopp|slic|pack|shred|minc|\bdic|crush|toast)/i;
+
+/**
+ * Heuristic classifier for parser-mangled ingredient names. Returns a short
+ * human reason when the name looks broken, else null.
+ *
+ * Tuned to the ingredient parser's deliberate philosophy: size-word-led names
+ * ("medium onion") and genuine "X or Y" ingredient alternatives ("amaretto or
+ * dark rum") are intentionally NOT flagged — only clear breakage is.
+ */
+export const classifyMalformedIngredientName = (
+  rawName: string,
+): string | null => {
+  const name = rawName.trim();
+  if (!name) return "empty name";
+  if (BARE_DESCRIPTOR_WORDS.has(name.toLowerCase())) {
+    return "bare size word — the ingredient noun was dropped";
+  }
+  if (/^recipe:/i.test(name)) {
+    return "leftover 'Recipe:' cross-reference prefix";
+  }
+  if (/^[\d½¼¾⅓⅔⅛⅜⅝⅞]/.test(name)) {
+    return "name starts with a quantity";
+  }
+  if (/\s(and|or|plus|with|for)$/i.test(name)) {
+    return "trailing conjunction — line was split mid-phrase";
+  }
+  if (
+    /\bor\b/i.test(name) &&
+    /\b(teaspoons?|tablespoons?|cups?|ounces?|inch|grams?|pounds?|tsp|tbsp)\b/i.test(
+      name,
+    )
+  ) {
+    return "unsplit 'X or N unit Y' alternative clause";
+  }
+  if (
+    /^(coarsely|very|really|thinly|roughly|finely|freshly|lightly|loosely|tightly)\b/i.test(
+      name,
+    ) &&
+    !PREP_VERB_RE.test(name)
+  ) {
+    return "stranded adverb — the preparation verb was dropped";
+  }
+  if (
+    /^(recipes?|pieces?|loaf|loaves|sprigs?|strips?|sticks?|cans?|sheets?)\s+\S/i.test(
+      name,
+    )
+  ) {
+    return "quantity unit stranded at the start of the name";
+  }
+  return null;
+};
+
+const findMalformedIngredientNames = async (
+  db: Database,
+): Promise<MalformedIngredientName[]> => {
+  // ~hundreds of rows; classify in app code so the heuristics stay in one place.
+  // Exclude recipe-link ingredients: they're system-generated as "Recipe: <name>"
+  // and would otherwise trip the "Recipe:" heuristic on every sub-recipe link.
+  const rows = await getDb(db)
+    .select({
+      id: ingredient.id,
+      name: ingredient.name,
+      // A sample captured raw line from any occurrence of this ingredient.
+      rawLine: sql<string | null>`(
+        SELECT r."rawLine" FROM ${recipeSectionIngredient} r
+        WHERE r."ingredientId" = ${ingredient.id}
+          AND r."deletedAt" IS NULL AND r."rawLine" IS NOT NULL
+        LIMIT 1
+      )`,
+    })
+    .from(ingredient)
+    .where(and(notDeleted(ingredient), isNull(ingredient.recipeId)));
+
+  const problems: MalformedIngredientName[] = [];
+  for (const row of rows) {
+    const reason = classifyMalformedIngredientName(row.name);
+    if (reason)
+      problems.push({
+        id: row.id,
+        name: row.name,
+        reason,
+        rawLine: row.rawLine,
+      });
+  }
+  return problems;
+};
+
+const countMalformedIngredientNames = async (db: Database): Promise<number> =>
+  (await findMalformedIngredientNames(db)).length;
 
 // Optimized count-only query for badge display
 export const findAllProblemsCount = async (
@@ -758,6 +878,7 @@ export const findAllProblemsCount = async (
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
+    malformedIngredientNames,
   ] = await Promise.all([
     countDuplicateUniqueProducts(db),
     countOrphanedProducts(db),
@@ -771,6 +892,7 @@ export const findAllProblemsCount = async (
     findInventoryWithStaleValuations(db).then((r) => r.length),
     countProductsWithIslandedMappings(db),
     countLocationsWithoutAiDescription(db),
+    countMalformedIngredientNames(db),
   ]);
 
   const byType = {
@@ -786,6 +908,7 @@ export const findAllProblemsCount = async (
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
+    malformedIngredientNames,
   };
 
   const total =
@@ -800,7 +923,8 @@ export const findAllProblemsCount = async (
     productsWithStalePrices +
     inventoryWithStaleValuations +
     productsWithIslandedMappings +
-    locationsWithoutAiDescription;
+    locationsWithoutAiDescription +
+    malformedIngredientNames;
 
   return { byType, total };
 };
@@ -821,6 +945,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     inventoryWithStaleValuationsRaw,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
+    malformedIngredientNames,
   ] = await Promise.all([
     findDuplicateUniqueProducts(db),
     findOrphanedProducts(db),
@@ -834,6 +959,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     findInventoryWithStaleValuations(db),
     findProductsWithIslandedMappings(db),
     findLocationsWithoutAiDescription(db),
+    findMalformedIngredientNames(db),
   ]);
 
   // Transform to problem types
@@ -864,7 +990,8 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     productsWithStalePrices.length +
     inventoryWithStaleValuations.length +
     productsWithIslandedMappings.length +
-    locationsWithoutAiDescription.length;
+    locationsWithoutAiDescription.length +
+    malformedIngredientNames.length;
 
   return {
     duplicateUniqueProducts,
@@ -879,6 +1006,7 @@ export const findAllProblems = async (db: Database): Promise<AllProblems> => {
     inventoryWithStaleValuations,
     productsWithIslandedMappings,
     locationsWithoutAiDescription,
+    malformedIngredientNames,
     totalProblems,
   };
 };
