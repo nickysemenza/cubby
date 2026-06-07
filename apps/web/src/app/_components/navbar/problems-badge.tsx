@@ -58,9 +58,9 @@ export const ProblemsBadge = () => {
     if (problems.byType.emptyLocations > 0) {
       tooltipParts.push(`${problems.byType.emptyLocations} empty location`);
     }
-    if (problems.byType.malformedIngredientNames > 0) {
+    if (problems.byType.staleIngredientParses > 0) {
       tooltipParts.push(
-        `${problems.byType.malformedIngredientNames} malformed ingredient name${problems.byType.malformedIngredientNames > 1 ? "s" : ""}`,
+        `${problems.byType.staleIngredientParses} stale parse${problems.byType.staleIngredientParses > 1 ? "s" : ""}`,
       );
     }
   }

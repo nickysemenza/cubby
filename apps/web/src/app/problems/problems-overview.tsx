@@ -17,13 +17,13 @@ import { InvalidInventoryAmountsList } from "./components/invalid-inventory-amou
 import { InvalidUPCsList } from "./components/invalid-upcs-list";
 import { InventoryWithStaleValuationsList } from "./components/inventory-with-stale-valuations-list";
 import { LocationsWithoutAiDescriptionList } from "./components/locations-without-ai-description-list";
-import { MalformedIngredientNamesList } from "./components/malformed-ingredient-names-list";
 import { OrphanedProductsList } from "./components/orphaned-products-list";
 import { ProductsWithIslandedMappingsList } from "./components/products-with-islanded-mappings-list";
 import { ProductsWithNoImagesList } from "./components/products-with-no-images-list";
 import { ProductsWithStalePricesList } from "./components/products-with-stale-prices-list";
 import { ProductsWithWrongCategoryList } from "./components/products-with-wrong-category-list";
 import { ProductsWithoutMappingsList } from "./components/products-without-mappings-list";
+import { StaleIngredientParsesList } from "./components/stale-ingredient-parses-list";
 
 export function ProblemsOverview() {
   const api = useTRPC();
@@ -116,9 +116,9 @@ export function ProblemsOverview() {
       count: (problems.locationsWithoutAiDescription ?? []).length,
     },
     {
-      id: "malformed-ingredients",
-      label: "Ingredient Names",
-      count: (problems.malformedIngredientNames ?? []).length,
+      id: "stale-parses",
+      label: "Stale Parses",
+      count: (problems.staleIngredientParses ?? []).length,
     },
   ].filter((cat) => cat.count > 0);
 
@@ -272,11 +272,11 @@ export function ProblemsOverview() {
       </div>
       <div
         ref={(el) => {
-          sectionRefs.current["malformed-ingredients"] = el;
+          sectionRefs.current["stale-parses"] = el;
         }}
       >
-        <MalformedIngredientNamesList
-          ingredients={problems.malformedIngredientNames ?? []}
+        <StaleIngredientParsesList
+          items={problems.staleIngredientParses ?? []}
         />
       </div>
     </div>

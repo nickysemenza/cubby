@@ -895,7 +895,7 @@ function registerTools(server: McpServer) {
 
   server.tool(
     "list_problems",
-    "List data-quality problems across products, inventory, locations, and ingredients (e.g. duplicates, invalid UPCs, orphaned products, stale prices, malformed ingredient names from bad recipe parses). Use countsOnly for cheap triage, or type to fetch a single category.",
+    "List data-quality problems across products, inventory, locations, and recipes (e.g. duplicates, invalid UPCs, orphaned products, stale prices, stale ingredient parses where re-parsing the original line would now yield a different name). Use countsOnly for cheap triage, or type to fetch a single category.",
     {
       countsOnly: z
         .boolean()
@@ -907,7 +907,7 @@ function registerTools(server: McpServer) {
         .string()
         .optional()
         .describe(
-          "Return only this problem category (e.g. 'orphanedProducts', 'invalidUPCs', 'malformedIngredientNames'). Ignored when countsOnly is true.",
+          "Return only this problem category (e.g. 'orphanedProducts', 'invalidUPCs', 'staleIngredientParses'). Ignored when countsOnly is true.",
         ),
     },
     withErrorHandling(async (params, extra) => {

@@ -110,11 +110,14 @@ const locationWithoutAiDescriptionSchema = z.object({
   imageCount: z.number(),
 });
 
-const malformedIngredientNameSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  reason: z.string(),
-  rawLine: z.string().nullable(),
+const staleIngredientParseSchema = z.object({
+  recipeSectionIngredientId: z.string(),
+  recipeId: z.string(),
+  recipeName: z.string(),
+  ingredientId: z.string(),
+  storedName: z.string(),
+  rawLine: z.string(),
+  parsedName: z.string(),
 });
 
 // Combined output schema for all problems
@@ -131,7 +134,7 @@ const allProblemsSchema = z.object({
   productsWithWrongCategory: z.array(productWithWrongCategorySchema),
   productsWithIslandedMappings: z.array(productWithIslandedMappingsSchema),
   locationsWithoutAiDescription: z.array(locationWithoutAiDescriptionSchema),
-  malformedIngredientNames: z.array(malformedIngredientNameSchema),
+  staleIngredientParses: z.array(staleIngredientParseSchema),
   totalProblems: z.number(),
 });
 
@@ -160,7 +163,7 @@ const getProblemsCount = protectedProcedure
         inventoryWithStaleValuations: z.number(),
         productsWithIslandedMappings: z.number(),
         locationsWithoutAiDescription: z.number(),
-        malformedIngredientNames: z.number(),
+        staleIngredientParses: z.number(),
       }),
     }),
   )
