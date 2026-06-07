@@ -29,7 +29,7 @@
   },
   "pnpm": {
     "overrides": {
-      "vite": "^7.3.0"
+      "vite": "^8.0.0"
     },
     "packageExtensions": {
       "@hookform/resolvers": {
