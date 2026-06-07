@@ -5,17 +5,6 @@
  * Import from this file for all database operations.
  */
 
-// Batch lookup helpers
-export {
-  batchFindIngredients,
-  batchFindInventoryEntries,
-  batchFindLocations,
-  batchFindProductsByNameManufacturer,
-  createProductKey,
-  type InventoryLookupMap,
-  type LocationLookupMap,
-  type ProductLookupMap,
-} from "./batch-lookups";
 // Core database access
 export { getDb, unwrapDb, withTransaction } from "./core";
 // CRUD operations
@@ -23,7 +12,6 @@ export {
   associatePendingImages,
   batchInsert,
   batchUpdateWithCaseWhen,
-  batchUpsertInventory,
   insertAndReturn,
   updateAndReturn,
 } from "./crud";

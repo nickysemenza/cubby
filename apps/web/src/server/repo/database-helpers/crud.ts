@@ -4,15 +4,14 @@
  */
 
 import type { InferInsertModel, InferSelectModel, SQL } from "drizzle-orm";
-import { and, getTableName, inArray, sql } from "drizzle-orm";
+import { getTableName, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { image, inventoryEntry } from "~/server/db/schema";
+import { image } from "~/server/db/schema";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
-import { notDeleted } from "./query";
 
 /**
  * Insert a single record and return it.
@@ -128,101 +127,6 @@ export async function associatePendingImages<T extends PgTable>(
     .update(image)
     .set({ status: "UPLOADED" })
     .where(inArray(image.id, pendingImageIds));
-}
-
-/**
- * Batch upsert inventory entries using PostgreSQL's ON CONFLICT.
- * More efficient than individual inserts/updates.
- *
- * Creates new inventory entries or updates existing ones based on the
- * unique constraint (productId, locationId).
- */
-export async function batchUpsertInventory<
-  T extends {
-    productId: string;
-    locationId: string;
-    amount: { value: number; unit: string };
-    valuation: number | null;
-  },
->(dbOrTx: DrizzleClient | DrizzleTransaction, entries: T[]): Promise<void> {
-  if (entries.length === 0) return;
-
-  return withTrace(TraceNames.db("batchUpsertInventory"), async (span) => {
-    span.setAttribute("db.batch_size", entries.length);
-
-    const now = new Date();
-
-    // Query existing entries to determine which need insert vs update
-    // Note: Can't use ON CONFLICT with partial unique index (deletedAt IS NULL)
-    const existingEntries = await dbOrTx
-      .select({
-        id: inventoryEntry.id,
-        productId: inventoryEntry.productId,
-        locationId: inventoryEntry.locationId,
-      })
-      .from(inventoryEntry)
-      .where(
-        and(
-          inArray(
-            inventoryEntry.productId,
-            entries.map((e) => e.productId),
-          ),
-          inArray(
-            inventoryEntry.locationId,
-            entries.map((e) => e.locationId),
-          ),
-          notDeleted(inventoryEntry),
-        ),
-      );
-
-    // Create lookup for existing entries
-    const existingMap = new Map(
-      existingEntries.map((e) => [`${e.productId}|${e.locationId}`, e.id]),
-    );
-
-    // Separate into inserts and updates
-    const toInsert: Array<(typeof entries)[0]> = [];
-    const toUpdate: Array<{ id: string; entry: (typeof entries)[0] }> = [];
-
-    for (const entry of entries) {
-      const key = `${entry.productId}|${entry.locationId}`;
-      const existingId = existingMap.get(key);
-      if (existingId) {
-        toUpdate.push({ id: existingId, entry });
-      } else {
-        toInsert.push(entry);
-      }
-    }
-
-    // Batch insert new entries
-    if (toInsert.length > 0) {
-      await dbOrTx.insert(inventoryEntry as PgTable).values(
-        toInsert.map((entry) => ({
-          productId: entry.productId,
-          locationId: entry.locationId,
-          amount: entry.amount,
-          valuation: entry.valuation,
-          createdAt: now,
-          updatedAt: now,
-          deletedAt: null,
-        })),
-      );
-    }
-
-    // Batch update existing entries
-    if (toUpdate.length > 0) {
-      const updates = toUpdate.map(({ id, entry }) => ({
-        id,
-        amount: entry.amount,
-        valuation: entry.valuation,
-      }));
-
-      await batchUpdateWithCaseWhen(dbOrTx, inventoryEntry, updates);
-    }
-
-    span.setAttribute("db.inserted_count", toInsert.length);
-    span.setAttribute("db.updated_count", toUpdate.length);
-  });
 }
 
 /**
