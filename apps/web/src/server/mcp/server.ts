@@ -158,6 +158,83 @@ function slimIngredient(i: Record<string, unknown>) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// CRUD tool-handler factories
+//
+// Most entity tools share the same get-by-id / list / update / delete shapes,
+// differing only in which router they call and how rows are slimmed. These
+// factories capture that body so each server.tool() carries just its name,
+// description, and input schema.
+// ---------------------------------------------------------------------------
+
+type Row = Record<string, unknown>;
+type Slim = (row: Row) => unknown;
+const identity: Slim = (row) => row;
+
+/** Schema for a single `{ id }` input field. */
+const idParam = (label: string) => z.string().describe(`${label} ID`);
+/** Schema for a `{ ids }` input field on delete tools. */
+const idsParam = (label: string) =>
+  z.array(z.string()).describe(`Array of ${label} IDs to delete`);
+
+/** Handler for `get_*` tools: fetch one row by id, then slim it. */
+function getByIdHandler(routerName: string, slim: Slim = identity) {
+  return withErrorHandling(async (params, extra) => {
+    const result = await getCaller(extra)[routerName].getByID({
+      id: params.id,
+    });
+    return json(slim(result as Row));
+  });
+}
+
+/** Handler for `delete_*` tools: soft-delete by ids, report the count. */
+function deleteHandler(routerName: string) {
+  return withErrorHandling(async (params, extra) => {
+    const ids = params.ids as string[];
+    await getCaller(extra)[routerName].delete({ ids });
+    return json({ deleted: ids.length });
+  });
+}
+
+/** Handler for `update_*` tools: drop undefined fields, update, then slim. */
+function updateHandler(routerName: string, slim: Slim = identity) {
+  return withErrorHandling(async (params, extra) => {
+    const { id, ...rest } = params;
+    const data = Object.fromEntries(
+      Object.entries(rest).filter(([, v]) => v !== undefined),
+    );
+    const result = await getCaller(extra)[routerName].update({ id, data });
+    return json(slim(result as Row));
+  });
+}
+
+/** Handler for paginated `list_*`/`search_*` tools returning `{ meta, items }`. */
+function listHandler(
+  routerName: string,
+  slim: Slim,
+  config: {
+    orderBy: string;
+    direction?: "asc" | "desc";
+    buildFilters: (params: Row) => Record<string, unknown>;
+    defaultPageSize?: number;
+  },
+) {
+  return withErrorHandling(async (params, extra) => {
+    const result = await getCaller(extra)[routerName].list({
+      filters: config.buildFilters(params),
+      sort: { orderBy: config.orderBy, direction: config.direction ?? "asc" },
+      pagination: {
+        pageIndex: (params.pageIndex as number) ?? 0,
+        pageSize: (params.pageSize as number) ?? config.defaultPageSize ?? 50,
+      },
+    });
+    return json({
+      meta: result.meta,
+      items: (result.items as Row[]).map(slim),
+    });
+  });
+}
+
 export function createMcpServer() {
   const server = new McpServer({
     name: "cubby",
@@ -214,38 +291,22 @@ function registerTools(server: McpServer) {
       pageIndex,
       pageSize,
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.inventory.list({
-        filters: {
-          productNameFilter: params.productName,
-          locationNameFilter: params.locationName,
-          locationIdFilter: params.locationId,
-        },
-        sort: { orderBy: "createdAt", direction: "desc" },
-        pagination: {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 50,
-        },
-      });
-      return json({
-        meta: result.meta,
-        items: result.items.map((i: Record<string, unknown>) =>
-          slimInventory(i),
-        ),
-      });
+    listHandler("inventory", slimInventory, {
+      orderBy: "createdAt",
+      direction: "desc",
+      buildFilters: (p) => ({
+        productNameFilter: p.productName,
+        locationNameFilter: p.locationName,
+        locationIdFilter: p.locationId,
+      }),
     }),
   );
 
   server.tool(
     "get_inventory_entry",
     "Get a single inventory entry by ID.",
-    { id: z.string().describe("Inventory entry ID") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.inventory.getByID({ id: params.id });
-      return json(slimInventory(result as Record<string, unknown>));
-    }),
+    { id: idParam("Inventory entry") },
+    getByIdHandler("inventory", slimInventory),
   );
 
   server.tool(
@@ -308,16 +369,8 @@ function registerTools(server: McpServer) {
   server.tool(
     "delete_inventory_entries",
     "Soft-delete inventory entries by IDs.",
-    {
-      ids: z
-        .array(z.string())
-        .describe("Array of inventory entry IDs to delete"),
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      await caller.inventory.delete({ ids: params.ids });
-      return json({ deleted: (params.ids as string[]).length });
-    }),
+    { ids: idsParam("inventory entry") },
+    deleteHandler("inventory"),
   );
 
   server.tool(
@@ -372,37 +425,22 @@ function registerTools(server: McpServer) {
       pageIndex,
       pageSize,
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.product.list({
-        filters: {
-          nameFilter: params.name,
-          manufacturerFilter: params.manufacturer,
-          upcFilter: params.upc,
-          categoryFilter: params.category,
-        },
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 50,
-        },
-      });
-      return json({
-        meta: result.meta,
-        items: result.items.map((p: Record<string, unknown>) => slimProduct(p)),
-      });
+    listHandler("product", slimProduct, {
+      orderBy: "name",
+      buildFilters: (p) => ({
+        nameFilter: p.name,
+        manufacturerFilter: p.manufacturer,
+        upcFilter: p.upc,
+        categoryFilter: p.category,
+      }),
     }),
   );
 
   server.tool(
     "get_product",
     "Get a product by ID.",
-    { id: z.string().describe("Product ID") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.product.getByID({ id: params.id });
-      return json(slimProduct(result as Record<string, unknown>));
-    }),
+    { id: idParam("Product") },
+    getByIdHandler("product", slimProduct),
   );
 
   server.tool(
@@ -469,28 +507,14 @@ function registerTools(server: McpServer) {
           "External identifiers. Replaces all existing IDs when provided.",
         ),
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const { id, ...data } = params;
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([, v]) => v !== undefined),
-      );
-      const result = await caller.product.update({ id, data: cleanData });
-      return json(slimProduct(result as Record<string, unknown>));
-    }),
+    updateHandler("product", slimProduct),
   );
 
   server.tool(
     "delete_products",
     "Soft-delete products by IDs. Fails if products have inventory entries.",
-    {
-      ids: z.array(z.string()).describe("Array of product IDs to delete"),
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      await caller.product.delete({ ids: params.ids });
-      return json({ deleted: (params.ids as string[]).length });
-    }),
+    { ids: idsParam("product") },
+    deleteHandler("product"),
   );
 
   server.tool(
@@ -553,12 +577,8 @@ function registerTools(server: McpServer) {
   server.tool(
     "get_location",
     "Get a location by ID, including parent info.",
-    { id: z.string().describe("Location ID") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.location.getByID({ id: params.id });
-      return json(slimLocation(result as Record<string, unknown>));
-    }),
+    { id: idParam("Location") },
+    getByIdHandler("location", slimLocation),
   );
 
   server.tool(
@@ -595,28 +615,14 @@ function registerTools(server: McpServer) {
       type: z.string().optional().describe("New type"),
       parentId: z.string().optional().describe("New parent location ID"),
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const { id, ...data } = params;
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([, v]) => v !== undefined),
-      );
-      const result = await caller.location.update({ id, data: cleanData });
-      return json(slimLocation(result as Record<string, unknown>));
-    }),
+    updateHandler("location", slimLocation),
   );
 
   server.tool(
     "delete_locations",
     "Soft-delete locations by IDs. Fails if locations have inventory entries.",
-    {
-      ids: z.array(z.string()).describe("Array of location IDs to delete"),
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      await caller.location.delete({ ids: params.ids });
-      return json({ deleted: (params.ids as string[]).length });
-    }),
+    { ids: idsParam("location") },
+    deleteHandler("location"),
   );
 
   // ---------------------------------------------------------------------------
@@ -665,37 +671,20 @@ function registerTools(server: McpServer) {
       pageIndex,
       pageSize,
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.ingredient.list({
-        filters: {
-          nameFilter: params.nameFilter,
-          missingProductsOnly: params.missingProductsOnly,
-        },
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 50,
-        },
-      });
-      return json({
-        meta: result.meta,
-        items: result.items.map((i: Record<string, unknown>) =>
-          slimIngredient(i),
-        ),
-      });
+    listHandler("ingredient", slimIngredient, {
+      orderBy: "name",
+      buildFilters: (p) => ({
+        nameFilter: p.nameFilter,
+        missingProductsOnly: p.missingProductsOnly,
+      }),
     }),
   );
 
   server.tool(
     "get_ingredient",
     "Get a single ingredient by ID, including linked products and recipes it appears in.",
-    { id: z.string().describe("Ingredient ID") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.ingredient.getByID({ id: params.id });
-      return json(slimIngredient(result as Record<string, unknown>));
-    }),
+    { id: idParam("Ingredient") },
+    getByIdHandler("ingredient", slimIngredient),
   );
 
   server.tool(
@@ -729,15 +718,7 @@ function registerTools(server: McpServer) {
         .optional()
         .describe("New aliases (replaces)"),
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const { id, ...rest } = params;
-      const data = Object.fromEntries(
-        Object.entries(rest).filter(([, v]) => v !== undefined),
-      );
-      const result = await caller.ingredient.update({ id, data });
-      return json(slimIngredient(result as Record<string, unknown>));
-    }),
+    updateHandler("ingredient", slimIngredient),
   );
 
   server.tool(
@@ -763,14 +744,8 @@ function registerTools(server: McpServer) {
   server.tool(
     "delete_ingredients",
     "Soft-delete ingredients by IDs. Fails if an ingredient is used in recipes or linked to products.",
-    {
-      ids: z.array(z.string()).describe("Array of ingredient IDs to delete"),
-    },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      await caller.ingredient.delete({ ids: params.ids });
-      return json({ deleted: (params.ids as string[]).length });
-    }),
+    { ids: idsParam("ingredient") },
+    deleteHandler("ingredient"),
   );
 
   // ---------------------------------------------------------------------------
@@ -788,32 +763,17 @@ function registerTools(server: McpServer) {
       pageIndex,
       pageSize,
     },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.recipe.list({
-        filters: { nameFilter: params.query },
-        sort: { orderBy: "name", direction: "asc" },
-        pagination: {
-          pageIndex: params.pageIndex ?? 0,
-          pageSize: params.pageSize ?? 50,
-        },
-      });
-      return json({
-        meta: result.meta,
-        items: result.items.map((r: Record<string, unknown>) => slimRecipe(r)),
-      });
+    listHandler("recipe", slimRecipe, {
+      orderBy: "name",
+      buildFilters: (p) => ({ nameFilter: p.query }),
     }),
   );
 
   server.tool(
     "get_recipe",
     "Get a recipe by ID, including sections, ingredients, and instructions.",
-    { id: z.string().describe("Recipe ID") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      const result = await caller.recipe.getByID({ id: params.id });
-      return json(result);
-    }),
+    { id: idParam("Recipe") },
+    getByIdHandler("recipe"),
   );
 
   server.tool(
@@ -903,12 +863,8 @@ function registerTools(server: McpServer) {
   server.tool(
     "delete_recipe",
     "Soft-delete recipes by IDs.",
-    { ids: z.array(z.string()).describe("Array of recipe IDs to delete") },
-    withErrorHandling(async (params, extra) => {
-      const caller = getCaller(extra);
-      await caller.recipe.delete({ ids: params.ids });
-      return json({ deleted: (params.ids as string[]).length });
-    }),
+    { ids: idsParam("recipe") },
+    deleteHandler("recipe"),
   );
 
   server.tool(
